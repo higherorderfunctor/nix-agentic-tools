@@ -41,6 +41,7 @@
 
   engine = builtins.fromJSON (builtins.readFile ./engine-limits.json);
   inherit (engine) limits;
+  syntax = import ./syntax.nix {inherit lib;};
 
   diag = severity: basis: code: where: message: {inherit basis code message severity where;};
   err = diag "error" "engine";
@@ -358,6 +359,30 @@ in rec {
     stopContextDiags = concatLists (map (
         e: let
           includeDescendants = e.tag == "repeat";
+          stopWhenTemplate =
+            if
+              e.tag
+              == "repeat"
+              && (e.node.stop or null) != null
+              && (e.node.stop.when.contains or null) != null
+            then e.node.stop.when.contains.template
+            else null;
+          literalTemplateDiags =
+            if stopWhenTemplate == null
+            then []
+            else if syntax.isJsWhitespaceOnly stopWhenTemplate
+            then [
+              (pol "W-STOP-WHEN-LITERAL-TEMPLATE" e.where
+                ("repeat '${e.id}' has an empty or whitespace-only stopWhen template; the engine "
+                  + "resolves it as literal {{}} text, so the condition can never match"))
+            ]
+            else if lib.hasInfix "{" stopWhenTemplate || lib.hasInfix "}" stopWhenTemplate
+            then [
+              (pol "W-STOP-WHEN-TEMPLATE-BRACES" e.where
+                ("repeat '${e.id}' has a stopWhen template containing a brace; the engine's reference "
+                  + "grammar excludes braces, so it resolves as literal text and the condition can never match"))
+            ]
+            else [];
           templates =
             if e.tag == "step"
             then optional ((e.node.completion.fileCheck or null) != null) e.node.completion.fileCheck.path
@@ -368,7 +393,8 @@ in rec {
             else [];
           exprs = lib.unique (concatLists (map refsIn templates));
         in
-          concatLists (map (expr: checkStopRef e includeDescendants expr) exprs)
+          literalTemplateDiags
+          ++ concatLists (map (expr: checkStopRef e includeDescendants expr) exprs)
       )
       entries);
 
@@ -398,7 +424,12 @@ in rec {
         else if !(lib.any visible artifactProducers.${c.target})
         then [(err "E-STOP-CONTEXT-ARTIFACT-NOT-VISIBLE" e.where "'${e.id}' stop condition references {{${expr}}}, but no declaring step is itself, earlier, or inside its own repeat body")]
         else []
-      else [];
+      else
+        optionals (!(lib.elem c.target declaredInputs)) [
+          (pol "W-UNDECLARED-INPUT-REF" e.where
+            ("'${e.id}' stop condition references {{${expr}}}, which is not a declared input; it stays "
+              + "LITERAL at runtime and the condition can never match"))
+        ];
 
     # ── policy-basis lints ────────────────────────────────────────────────
     policyDiags =

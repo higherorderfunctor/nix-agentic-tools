@@ -49,40 +49,41 @@
 # model catalog is not statically checkable at all and is reported as a
 # documented gap rather than guessed at.
 #
-# ── Strictness ledger: where this type is stricter than the engine ──────────
+# ── Strictness ledger: where this type is stricter than engine load ─────────
 #
 # The default posture is engine fidelity, because rejecting a definition the
 # engine RUNS is as much a bug as accepting one it refuses. These types are
-# deliberately stricter in a few places, and the rule deciding when that is
-# warranted is narrow:
-#
-#   be stricter than the engine only where the engine's acceptance is a
-#   SILENT failure — something that parses, runs, and then never does what
-#   it says.
-#
-# The whole set, so the property stays auditable:
+# deliberately stricter at the sites below. Most prevent a silent expensive
+# failure; some move a guaranteed later throw to authoring time; `name` is a
+# deliberate label-quality guardrail. This is the complete current set:
 #
 #   fileCheck.jsonPath   a segment LIST, and segments reject '$', '*' and
 #                        brackets. `"$.drained"` is accepted by the engine and
 #                        reads a property literally named `$`, resolving
 #                        undefined so the loop never stops.
-#   stop.when.contains.template
-#                        rejects braces. A brace makes the expression classify
-#                        as a BARE reference, which is never an error and is
-#                        left as literal text — so the condition silently never
-#                        matches.
-#   agent / name / prompt-bearing strings
-#                        `nonEmptyStr` where the engine allows `""`. An empty
-#                        agent name resolves to nothing at launch.
+#   fileCheck.value      required here although the engine's `z.unknown()` key
+#                        accepts omission; omission makes the intended target
+#                        impossible to distinguish from an explicit undefined.
+#   non-empty strings    fileCheck.path, stop-condition containsText, watcher
+#                        refs/URL/ignored authors, artifact values, agent/name,
+#                        and step/workflow modelId + effortLevel. The engine
+#                        accepts empty strings at load; these either become
+#                        silent conditions, guaranteed later lookup failures,
+#                        or unusable labels.
+#   crux-cr.crId         a NON-EMPTY value must match `^CR-[0-9]+$`, moving the
+#                        poll-time `assertValidCrId` throw to authoring time.
+#   integral Nix ints    `maxIterations` rejects an integral-valued Nix float
+#                        that JavaScript's `Number.isInteger` would accept.
 #
-# Everything else tracks the engine exactly, including cases where that means
-# accepting something ugly — see `watchIdRef`, which permits a lone brace
-# because the engine does and because such an id still resolves.
+# `prompt` and `description` deliberately remain plain strings. A stopWhen
+# contains-expression is also accepted verbatim and linted by analyze.nix when
+# it would resolve as literal text forever.
 {lib}: let
   inherit (lib) mkOption types;
 
   engine = builtins.fromJSON (builtins.readFile ./engine-limits.json);
   inherit (engine) enums limits;
+  syntax = import ./syntax.nix {inherit lib;};
 
   # ── Cross-field invariants on submodules need `apply`, not the type ──────
   #
@@ -142,23 +143,16 @@
       && !(lib.hasInfix "." s)
       && !(lib.hasInfix "{{" s)
       && !(lib.hasInfix "}}" s)
-      && builtins.match ".*[[:space:]].*" s == null)
+      && !(syntax.hasJsWhitespace s))
     // {description = "watch id referenceable from stopWhen (non-empty, no '.', no whitespace, no '{{' or '}}')";};
 
   # A `{{...}}` reference expression, WITHOUT its delimiters.
   #
-  # Braces are rejected: the engine's reference grammar is
-  # `\{\{\s*([^{}]+?)\s*\}\}`, so an expression containing one can never
-  # match it. In a stopWhen the string still PARSES — `parseStopWhen` slices on
-  # the first `}}` rather than using that regex — and the expression then
-  # classifies as a BARE reference, which is never an error and resolves to
-  # literal text. So `{{a{b}} contains DONE` compares the literal string
-  # `{{a{b}}` against the needle forever. Silent, so it is refused here; see
-  # the strictness ledger at the top of this file.
-  referenceExpr =
-    types.addCheck types.str
-    (s: s != "" && !(lib.hasInfix "{" s) && !(lib.hasInfix "}" s))
-    // {description = "reference expression without braces (they are added at render time)";};
+  # Kept as a string for engine fidelity. Empty, braced, and undeclared bare
+  # expressions parse and run but resolve as literal text forever; analyze.nix
+  # emits policy diagnostics for those cases rather than making wire import
+  # throw at the option boundary.
+  referenceExpr = types.str;
 
   # `jsonPath` is NOT JSONPath. The engine does `split(".")` then a plain
   # property walk, so "$.drained" reads a property literally named "$",

@@ -73,6 +73,7 @@
     inherit steps;
   };
   baseline = wrap [(step "a" {})];
+  unicodeWhitespaceWatchId = builtins.fromJSON "\"wait\\u00a0for\\u00a0it\"";
 
   # ── vendor corpus ─────────────────────────────────────────────────────────
   vendorDir = ./fixtures/kiro-workflows/vendor;
@@ -453,24 +454,6 @@ in
           }
         ];
       };
-    # A braced expression parses but classifies as a BARE reference, so the
-    # condition silently never matches. Refused at type level.
-    kiro-workflow-reject-braced-contains-template =
-      reject "braced-contains-template"
-      (wrap [
-        {
-          repeat = {
-            id = "r";
-            maxIterations = 2;
-            onMaxIterations = "abort";
-            stop.when.contains = {
-              template = "a{b";
-              text = "DONE";
-            };
-            steps = [(step "s" {})];
-          };
-        }
-      ]);
     kiro-workflow-reject-dotted-watch-reference =
       reject "dotted-watch-reference"
       (wrap [
@@ -484,6 +467,34 @@ in
           };
         }
       ]);
+    kiro-workflow-reject-unicode-whitespace-watch-reference =
+      reject "unicode-whitespace-watch-reference"
+      (wrap [
+        {
+          repeat = {
+            id = "r";
+            maxIterations = 2;
+            onMaxIterations = "abort";
+            steps = [];
+            stop.when.watchTerminal = unicodeWhitespaceWatchId;
+          };
+        }
+      ]);
+    kiro-workflow-reject-unicode-whitespace-watch-wire =
+      reject "unicode-whitespace-watch-wire"
+      (W.parse.fromAttrs {
+        name = "w";
+        steps = [
+          {
+            type = "repeat";
+            id = "r";
+            maxIterations = 2;
+            onMaxIterations = "abort";
+            steps = [];
+            stopWhen = "${unicodeWhitespaceWatchId}.terminal";
+          }
+        ];
+      });
 
     # ── Tree-level diagnostics ─────────────────────────────────────────────
     kiro-workflow-emits-step-cap =
@@ -590,6 +601,67 @@ in
         }
       ])
       "E-STOP-WHEN-WATCH-ID";
+    kiro-workflow-emits-braced-stop-when-template =
+      emits "braced-stop-when-template"
+      (wrap [
+        {
+          repeat = {
+            id = "r";
+            maxIterations = 2;
+            onMaxIterations = "abort";
+            stop.when.contains = {
+              template = "a{b";
+              text = "DONE";
+            };
+            steps = [(step "s" {})];
+          };
+        }
+      ])
+      "W-STOP-WHEN-TEMPLATE-BRACES";
+    kiro-workflow-emits-empty-stop-when-template =
+      emits "empty-stop-when-template"
+      (wrap [
+        {
+          repeat = {
+            id = "r";
+            maxIterations = 2;
+            onMaxIterations = "abort";
+            stop.when.contains = {
+              template = "";
+              text = "DONE";
+            };
+            steps = [(step "s" {})];
+          };
+        }
+      ])
+      "W-STOP-WHEN-LITERAL-TEMPLATE";
+    kiro-workflow-stop-when-bare-input-references = mkTest "stop-when-bare-input-references" (
+      let
+        workflow = declared: {
+          name = "w";
+          inputs =
+            if declared
+            then {target = "string";}
+            else {};
+          steps = [
+            {
+              repeat = {
+                id = "r";
+                maxIterations = 2;
+                onMaxIterations = "abort";
+                stop.when.contains = {
+                  template = "target";
+                  text = "DONE";
+                };
+                steps = [(step "s" {})];
+              };
+            }
+          ];
+        };
+      in
+        lib.elem "W-UNDECLARED-INPUT-REF" (codesOf (workflow false))
+        && !(lib.elem "W-UNDECLARED-INPUT-REF" (codesOf (workflow true)))
+    );
     kiro-workflow-emits-unknown-template-ref =
       emits "unknown-template-ref" (wrap [(step "a" {prompt = "see {{ghost.output}}";})]) "E-TEMPLATE-REF-UNKNOWN";
     kiro-workflow-diagnostic-where-uses-node-id = mkTest "diagnostic-where-uses-node-id" (
