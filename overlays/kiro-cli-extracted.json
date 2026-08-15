@@ -18,6 +18,7 @@
   "rolloutFeatures": [
     "auto_agent_upgrade",
     "c2s",
+    "cloud_config",
     "infra_safety",
     "kas",
     "lite",
