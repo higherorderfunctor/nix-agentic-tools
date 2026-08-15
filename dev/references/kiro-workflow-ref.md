@@ -464,7 +464,7 @@ content rather than assuming the whole response is yours.
 **Agents in a workflow never talk to each other.** There is no peer channel and
 no mailbox. `send_message`, the one tool that sounds like one, addresses the
 engine and drives the calling step's own lifecycle (§2). Everything moves
-through one of four places, and choosing between them is most of workflow
+through one of three places, and choosing between them is most of workflow
 design:
 
 | Channel                | Shape                                | Good for                                     |
@@ -473,20 +473,20 @@ design:
 | **Artifacts**          | `{{artifacts.<name>}}` → a path      | anything large; passing an absolute location |
 | **The filesystem**     | the agents just read and write it    | loops, queues, accumulating state            |
 
-**A fourth row used to sit here and has been deleted: the step-level `input`
+The **filesystem** row is not a workaround — it is the **shipped idiom**, and
+the bundled recipes use it.
+
+**A row used to sit in this table and has been deleted: the step-level `input`
 field.** It was real at KAS 2.15.1, where it took precedence over `prompt` and
 existed to pipe a `watch` payload into the following step. It has since been
 REMOVED, and the schema now rejects any step carrying it with a migration
-message naming the template system as its replacement. A `step` requires
-`prompt` and nothing else. Piping a watch payload is now `{{<watch_id>.output}}`
+message naming the template system as its replacement. `prompt` is required and
+has no alternative field. Piping a watch payload is now `{{<watch_id>.output}}`
 inside the prompt like any other reference.
 
 This correction matters more than most, because the removed field was asserted
 in three separate places in this document and would have been copied straight
 into a schema. Verified against the KAS 2.18.0 Zod on 2026-08-14.
-
-The fourth row is not a workaround — it is the **shipped idiom**, and the
-bundled recipes use it.
 
 ### Template variables, and the envelope
 
@@ -940,7 +940,7 @@ never from whether a loop artifact happens to be there (ledger §7.4).
 **What is _not_ established:** the ledger documents the reviewer→next-writer
 direction only. Nothing records how the writer's output reaches the reviewer in
 that observed run. Treat the writer→reviewer leg as your design choice among the
-four channels above, not as something measured.
+three channels above, not as something measured.
 
 ## 4. Composition and reuse
 
