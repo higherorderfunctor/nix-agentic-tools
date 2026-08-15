@@ -7,15 +7,45 @@ applyTo: "checks/fixtures/kiro-workflows/**,checks/kiro-workflow-schema.nix,pack
 
 # Kiro workflow typed schema
 
-> **Last verified:** 2026-08-14 (commit pending — first version, written against
-> **kiro-cli 2.18.0 / KAS 2.18.0** by reading the shipped engine bundle
-> directly). If you change `packages/kiro-cli/lib/workflow/**`,
+> **Last verified:** 2026-08-14 (commit pending — body re-checked against the
+> post-review heads of the two implementation branches, which this doc branch
+> does not yet contain, and two claims corrected. The `input` bullet asserted
+> that both reference documents teaching the removed field were already
+> corrected; only `dev/references/kiro-workflow-ref.md` is, so the bullet is
+> restated as a durable "surviving `prompt` / `input` text is stale" rule that
+> holds both before and after the second correction lands. And "they share
+> `engine-limits.json`, so they cannot drift" is narrowed to what that file
+> actually pins — the caps, enums and watch intervals — because the two ports DO
+> differ by one diagnostic code: `E-STOP-WHEN-SYNTAX` is TypeScript-only, for
+> malformed assembled wire strings the authored Nix sum type cannot represent.
+> Neither port claims whole code-set equality; the Effect side says so
+> explicitly. Re-checked and still true: the caps, the single placement rule,
+> the `repeat`-with-neither-stop-form rule, and the bare-`{{name}}` trap — the
+> new `W-STOP-WHEN-LITERAL-TEMPLATE` warning covers empty or whitespace-only
+> `stopWhen` templates, not undeclared names, so it does not touch that bullet).
+> Prior: 2026-08-14 (commit 37b2bc39 — the `addCheck` trap was REFUTED as
+> stated. It said `check` is a flat no-op because the module system calls it on
+> each raw definition, where a submodule predicate sees `{}` and passes. The
+> real mechanism is position-dependent: when the submodule is the option's own
+> type, `fixupOptionType` rebuilds it and DISCARDS the check, so it never runs
+> at all; inside an `attrTag` member it does run, but against the raw
+> pre-default attrset. The conclusion survived — `apply` is still the only
+> post-merge hook — but the count did not: four invariant sites, not three).
+> Prior: 2026-08-14 (commit pending — first version, written against **kiro-cli
+> 2.18.0 / KAS 2.18.0** by reading the shipped engine bundle directly).
+>
+> If you change `packages/kiro-cli/lib/workflow/**`,
 > `packages/kiro-cli/schema/**`, or `checks/kiro-workflow-schema.nix` and this
 > fragment is not updated in the same commit, stop and fix it.
 
 Two implementations of one contract: `packages/kiro-cli/lib/workflow/` (Nix
 option types) and `packages/kiro-cli/schema/` (Effect `Schema`). They share
-`engine-limits.json`, so they cannot drift from each other.
+`engine-limits.json`, so the constants it pins — caps, enums, watch intervals —
+cannot drift between them. Nothing else is mechanically tied: the diagnostic
+codes are kept parallel by review, not by a cross-language runner, and they are
+not identical. `E-STOP-WHEN-SYNTAX` is TypeScript-only, because it reports on
+malformed assembled wire strings the authored Nix sum type cannot represent in
+the first place.
 
 **The format is in no public documentation.** 194 Kiro doc pages contain zero
 occurrences of every schema identifier; workflows are absent from the CLI 3.0
@@ -106,8 +136,12 @@ working definitions, including vendor-shipped ones. Match on `code`, never on
 - A `repeat` may define **neither** stop form. Both vendor authoring documents
   claim exactly one is required; they are wrong, and the vendor's own
   `autoresearch` recipe ships with neither.
-- The step-level `input` field is **removed** and now rejected loudly. Two
-  documents in this repo still taught it; both are corrected.
+- The step-level `input` field is **removed** and now rejected loudly. Two of
+  this repo's reference documents taught it —
+  `dev/references/kiro-workflow-ref.md` and `dev/references/kiro-workflows.md`.
+  If either still offers `prompt` / `input` as alternatives, that text is stale,
+  not a second opinion; row `P-02` of the ref's §8 register is the run that
+  settles it against a live engine.
 - `modelId` and `effortLevel` are deliberately bare strings. The model catalog
   is fetched from the control plane at runtime (compiled-in default: empty), and
   the legal effort set is per-model and server-supplied. A literal union would
