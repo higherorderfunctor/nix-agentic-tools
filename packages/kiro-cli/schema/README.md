@@ -62,9 +62,13 @@ const wf = defineWorkflow({
 });
 ```
 
-Pass the object literal **directly**. Assigning it to an intermediate `const`
-without `as const` widens `"step"` to `string`, and the walkers then have
-nothing to walk — the checks degrade to no-ops silently.
+Pass the object literal **directly**, or preserve an imported JSON-shaped value
+as a deeply readonly literal. Exact tuples receive exact proofs for the step
+cap, depth cap, id uniqueness, and interactive-step placement. Widened arrays
+and union-shaped subtrees are not silently accepted: `defineWorkflow` reports
+the affected rule as statically indeterminate and requires the value to go
+through `validate` at runtime. The walkers still inspect every known tuple
+suffix, so an unknown subtree cannot hide a later violation that is provable.
 
 ## Checking it
 
