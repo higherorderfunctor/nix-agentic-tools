@@ -700,10 +700,41 @@ So when there is no automatic review, run this before marking a PR ready:
    title and count — a review that reports only confirmed findings is
    indistinguishable from one that found nothing.
 
-**Cheapest correct default:** three finder lenses plus the refute/defend pair
-per finding. Scale the finder count with blast radius, not with diff size — a
-thirty-line change to a shared `lib/` file earns more lenses than a
-thousand-line docs PR.
+#### Sizing — STANDARD by default, thorough only when asked
+
+**The cost blows up in the CONTEST phase, not the finders.** Finders are bounded
+by however many lenses you pick. Findings are NOT bounded, and a refute+defend
+pair per finding is `2 × findings`. Measured on a 94-line docs PR: 3 lenses
+produced ~28 findings, so the run cost **59 agents** — the finders were 3 of
+them. A verbose finder triples the bill. Bound the contest phase first, and only
+then think about lenses.
+
+**STANDARD — the default, target 5-9 agents total:**
+
+1. **2-3 finders, on a CHEAPER MODEL (Sonnet).** Finder work is mechanical: open
+   the cited line, check whether it says what the PR claims. Reserve the strong
+   model for contest and synthesis, where judgement actually decides something.
+2. **Deduplicate before contesting.** Several lenses over one diff overlap
+   heavily, and contesting the same defect three times is pure waste.
+3. **Triage by severity.** Contest BLOCKER and SHOULD-FIX. NITs are REPORTED,
+   not litigated.
+4. **Batch the contest** — one agent takes ~5 findings, not one agent each.
+5. **Two-agent refute/defend for BLOCKERs only.** Below that, a single agent
+   argues both sides and returns a verdict plus the strongest counter-argument.
+   That is weaker — one context means correlated errors — which is precisely why
+   the genuine blockers keep the two-agent treatment.
+
+**THOROUGH — only when the operator asks.** Per-finding refute/defend on
+everything, more lenses, strong model throughout. Still deduplicate, and still
+cap the total: an uncapped fan-out has no terminus.
+
+**Scale lenses with BLAST RADIUS, not diff size.** A thirty-line change to a
+shared `lib/` file earns more than a thousand-line docs PR; a fragment edit
+warrants one or two.
+
+**Do not ask which tier to use per PR.** Standard is the default and the
+operator says "thorough" when they want it — asking is friction paid on every
+review.
 
 **Do not skip this because the change is "just docs".** The failure this repo
 actually experienced was a design document whose PR sequence sent a later
