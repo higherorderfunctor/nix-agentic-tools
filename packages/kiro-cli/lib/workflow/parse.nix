@@ -62,7 +62,7 @@
     inherit (fc) path value;
     # The wire form is a '.'-separated property walk; the authored form is the
     # segment list that makes the JSONPath spelling unrepresentable.
-    jsonPath = splitString "." fc.jsonPath;
+    jsonPath = lib.filter (segment: segment != "") (splitString "." fc.jsonPath);
   };
 
   parseStopCondition = c:

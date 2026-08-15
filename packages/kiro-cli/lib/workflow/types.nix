@@ -433,10 +433,10 @@
             };
             crId = mkOption {
               type =
-                types.nullOr (types.addCheck types.str (s: builtins.match "CR-[0-9]+" s != null)
-                  // {description = "CR id matching ^CR-[0-9]+$";});
+                types.nullOr (types.addCheck types.str (s: s == "" || builtins.match "CR-[0-9]+" s != null)
+                  // {description = "empty, or a CR id matching ^CR-[0-9]+$";});
               default = null;
-              description = "CR id.";
+              description = "CR id. Empty falls back to crRef, matching resolveCrId.";
             };
           };
       };
@@ -686,7 +686,7 @@
         '';
       };
       description = mkOption {
-        type = types.nullOr nonEmptyStr;
+        type = types.nullOr types.str;
         default = null;
       };
       inputs = mkOption {
