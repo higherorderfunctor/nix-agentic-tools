@@ -221,6 +221,12 @@ export interface Analysis {
 export const analyze = (workflow: Workflow): Analysis => {
   const entries = flatten(workflow.steps);
   const byId = new Map(entries.map((e) => [e.id, e]));
+  // The engine overwrites nodeById/lineageById on every occurrence, so the
+  // Map deliberately keeps the LAST node carrying an id. Producer status is
+  // independent: its monotone set keeps an id if ANY occurrence produces.
+  const producerIds = new Set(
+    entries.filter((e) => isProducer(e.node)).map((e) => e.id),
+  );
   const stepEntries = entries.filter((e) => e.node.type === "step");
   const watchIds = new Set(
     entries.filter((e) => e.node.type === "watch").map((e) => e.id),
@@ -365,7 +371,7 @@ export const analyze = (workflow: Workflow): Analysis => {
             e.id,
             `step '${e.id}' references {{${expr}}}, but no node has id '${c.target}'`,
           );
-        } else if (!isProducer(t.node)) {
+        } else if (!producerIds.has(c.target)) {
           err(
             "E-TEMPLATE-REF-NOT-PRODUCER",
             e.id,
@@ -423,6 +429,10 @@ export const analyze = (workflow: Workflow): Analysis => {
     }
     for (const expr of [...new Set(templates.flatMap(refsIn))]) {
       const c = classify(expr);
+      const visible = (target: Entry): boolean =>
+        target.id === e.id ||
+        precedes(target.lineage, e.lineage) ||
+        (includeDescendants && isDescendantOf(e.lineage, target.lineage));
       if (c.kind === "previous") {
         err(
           "E-STOP-CONTEXT-PREVIOUS",
@@ -437,23 +447,32 @@ export const analyze = (workflow: Workflow): Analysis => {
             e.id,
             `'${e.id}' stop condition references {{${expr}}}, but no node has id '${c.target}'`,
           );
-        } else if (!isProducer(t.node)) {
+        } else if (!producerIds.has(c.target)) {
           err(
             "E-STOP-CONTEXT-REF-NOT-PRODUCER",
             e.id,
             `'${e.id}' stop condition references {{${expr}}}, which produces no output`,
           );
-        } else if (
-          !(
-            t.id === e.id ||
-            precedes(t.lineage, e.lineage) ||
-            (includeDescendants && isDescendantOf(e.lineage, t.lineage))
-          )
-        ) {
+        } else if (!visible(t)) {
           err(
             "E-STOP-CONTEXT-REF-NOT-VISIBLE",
             e.id,
             `'${e.id}' stop condition references {{${expr}}}, which is neither itself, nor earlier, nor inside its own body`,
+          );
+        }
+      } else if (c.kind === "artifact") {
+        const declarers = artifactProducers.get(c.target);
+        if (declarers === undefined) {
+          err(
+            "E-STOP-CONTEXT-ARTIFACT-UNKNOWN",
+            e.id,
+            `'${e.id}' stop condition references {{${expr}}}, but no step declares artifact '${c.target}'`,
+          );
+        } else if (!declarers.some(visible)) {
+          err(
+            "E-STOP-CONTEXT-ARTIFACT-NOT-VISIBLE",
+            e.id,
+            `'${e.id}' stop condition references {{${expr}}}, but no declaring step is itself, earlier, or inside its own repeat body`,
           );
         }
       }

@@ -288,11 +288,14 @@ describe("precedes — the engine's happens-before", () => {
   });
 });
 
-const codesOf = (w: unknown): string[] => {
+const diagnosticsOf = (w: unknown) => {
   const decoded = decodeWorkflow(w);
   if (Either.isLeft(decoded)) throw new Error(`decode failed: ${decoded.left}`);
-  return analyze(decoded.right).diagnostics.map((d) => d.code);
+  return analyze(decoded.right).diagnostics;
 };
+
+const codesOf = (w: unknown): string[] =>
+  diagnosticsOf(w).map((diagnostic) => diagnostic.code);
 
 const step = (id: string, extra: Record<string, unknown> = {}) => ({
   type: "step",
@@ -334,6 +337,28 @@ describe("analyze: whole-tree rules", () => {
         ]),
       ),
     ).toContain("E-NODE-DUPLICATE-ID");
+  });
+
+  test("duplicate ids use last-wins lineage and any-occurrence producer status", () => {
+    const producerFirst = withSteps([
+      step("dup"),
+      step("dup", { captureOutput: false }),
+      step("consumer", { prompt: "{{dup.output}}" }),
+    ]);
+    const producerLast = withSteps([
+      step("dup", { captureOutput: false }),
+      step("dup"),
+      step("consumer", { prompt: "{{dup.output}}" }),
+    ]);
+    const lastIsLater = withSteps([
+      step("dup"),
+      step("consumer", { prompt: "{{dup.output}}" }),
+      step("dup"),
+    ]);
+
+    expect(codesOf(producerFirst)).not.toContain("E-TEMPLATE-REF-NOT-PRODUCER");
+    expect(codesOf(producerLast)).not.toContain("E-TEMPLATE-REF-NOT-PRODUCER");
+    expect(codesOf(lastIsLater)).toContain("E-TEMPLATE-REF-NOT-PRECEDING");
   });
 
   test("E-INTERACTIVE-STEP-IN-PARALLEL — the only orientation rule, checked on ANY ancestor", () => {
@@ -416,6 +441,33 @@ describe("analyze: whole-tree rules", () => {
     expect(codesOf(withSteps(steps))).toContain(code);
   });
 
+  test("per-node diagnostic locations use node ids at every depth", () => {
+    const diagnostics = diagnosticsOf(
+      withSteps([
+        step("top", { prompt: "{{ghost.output}}" }),
+        {
+          type: "sequence",
+          id: "s",
+          steps: [step("deep", { prompt: "{{ghost2.output}}" })],
+        },
+      ]),
+    ).filter((diagnostic) => diagnostic.code === "E-TEMPLATE-REF-UNKNOWN");
+
+    expect(diagnostics.map((diagnostic) => diagnostic.where)).toEqual([
+      "top",
+      "deep",
+    ]);
+  });
+
+  test("empty template references are ignored", () => {
+    expect(
+      codesOf(withSteps([step("empty", { prompt: "{{}}" })])),
+    ).not.toContain("W-UNDECLARED-INPUT-REF");
+    expect(
+      codesOf(withSteps([step("space", { prompt: "{{ }}" })])),
+    ).not.toContain("W-UNDECLARED-INPUT-REF");
+  });
+
   test("a declared input reference is clean", () => {
     const decoded = decodeWorkflow({
       name: "w",
@@ -437,6 +489,50 @@ describe("analyze: whole-tree rules", () => {
     ]);
     expect(codesOf(ok)).toEqual([]);
     expect(codesOf(bad)).toContain("E-ARTIFACT-REF-NOT-PRECEDING");
+  });
+
+  test("stop-context artifacts must be declared and visible", () => {
+    const fileCheck = (path: string) => ({
+      path,
+      jsonPath: "done",
+      value: true,
+    });
+    const missing = withSteps([
+      step("a", {
+        completion: { fileCheck: fileCheck("{{artifacts.nope}}") },
+      }),
+    ]);
+    const later = withSteps([
+      step("a", {
+        completion: { fileCheck: fileCheck("{{artifacts.later}}") },
+      }),
+      step("b", { artifacts: { later: "later.json" } }),
+    ]);
+    const self = withSteps([
+      step("a", {
+        artifacts: { own: "own.json" },
+        completion: { fileCheck: fileCheck("{{artifacts.own}}") },
+      }),
+    ]);
+    const descendant = withSteps([
+      {
+        type: "repeat",
+        id: "r",
+        maxIterations: 2,
+        onMaxIterations: "abort",
+        stopCondition: { fileCheck: fileCheck("{{artifacts.child}}") },
+        steps: [step("child", { artifacts: { child: "child.json" } })],
+      },
+    ]);
+
+    expect(codesOf(missing)).toContain("E-STOP-CONTEXT-ARTIFACT-UNKNOWN");
+    expect(codesOf(later)).toContain("E-STOP-CONTEXT-ARTIFACT-NOT-VISIBLE");
+    for (const valid of [self, descendant]) {
+      expect(codesOf(valid)).not.toContain("E-STOP-CONTEXT-ARTIFACT-UNKNOWN");
+      expect(codesOf(valid)).not.toContain(
+        "E-STOP-CONTEXT-ARTIFACT-NOT-VISIBLE",
+      );
+    }
   });
 
   test("W-STOP-WHEN-TEMPLATE-BRACES — parses, but can never match", () => {
