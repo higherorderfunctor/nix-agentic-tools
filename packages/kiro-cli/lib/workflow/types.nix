@@ -72,8 +72,13 @@
 #                        accepts empty strings at load; these either become
 #                        silent conditions, guaranteed later lookup failures,
 #                        or unusable labels.
-#   crux-cr.crId         a NON-EMPTY value must match `^CR-[0-9]+$`, moving the
-#                        poll-time `assertValidCrId` throw to authoring time.
+#   crux-cr.crId         a NON-EMPTY value must match `^CR-[0-9]+$`, and an
+#                        EMPTY one needs a `crRef` beside it. Both move a
+#                        guaranteed watch-start throw to authoring time:
+#                        `assertValidCrId` for the first, and
+#                        "neither `crId` nor `crRef` provided" for the second,
+#                        which the engine's Zod refine lets through because it
+#                        tests presence while `resolveCrId` tests length.
 #   stop.when.contains.template
 #                        rejects `{{` and `}}`, which `render.nix` supplies.
 #                        An authored copy either makes the rendered stopWhen
@@ -451,8 +456,16 @@
       };
     };
     "crux-cr" = mkOption {
-      description = "Watch a code review. Requires one of crRef or crId.";
-      apply = invariant "crux-cr watcher requires at least one of crRef, crId" (c: c.crRef != null || c.crId != null);
+      description = "Watch a code review. Requires a crRef or a non-empty crId.";
+      # Tests USEFULNESS, not presence, which is where this parts company with
+      # the engine's Zod refine (`crRef !== undefined || crId !== undefined`).
+      # `resolveCrId` skips an id it considers empty and then throws
+      # "crux-cr: neither `crId` nor `crRef` provided", so `crId = ""` alone
+      # loads and is guaranteed to die at watch start. `crRef` + `crId = ""`
+      # really does resolve and is accepted.
+      apply =
+        invariant "crux-cr watcher requires a crRef or a NON-EMPTY crId"
+        (c: c.crRef != null || (c.crId != null && c.crId != ""));
       type = types.submodule {
         options =
           watchBaseOptions
@@ -467,7 +480,7 @@
                 types.nullOr (types.addCheck types.str (s: s == "" || builtins.match "CR-[0-9]+" s != null)
                   // {description = "empty, or a CR id matching ^CR-[0-9]+$";});
               default = null;
-              description = "CR id. Empty falls back to crRef, matching resolveCrId.";
+              description = "CR id. Empty falls back to crRef, matching resolveCrId, so an empty value is only usable with a crRef beside it.";
             };
           };
       };

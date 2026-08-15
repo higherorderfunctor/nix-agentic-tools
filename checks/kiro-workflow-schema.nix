@@ -440,6 +440,11 @@ in
           };
         }
       ]);
+    # `resolveCrId` skips an id it considers empty, so `""` beside a `crRef`
+    # really does resolve — but `""` on its own falls through to a guaranteed
+    # "neither `crId` nor `crRef` provided" throw at watch start. The engine's
+    # Zod refine passes both because it tests PRESENCE; these two fixtures pin
+    # the difference, and each is the other's shape-matched control.
     kiro-workflow-accept-empty-cr-id-with-cr-ref =
       accept "empty-cr-id-with-cr-ref"
       (wrap [
@@ -450,6 +455,16 @@ in
               crId = "";
               crRef = "cr.json";
             };
+          };
+        }
+      ]);
+    kiro-workflow-reject-empty-cr-id-alone =
+      reject "empty-cr-id-alone"
+      (wrap [
+        {
+          watch = {
+            id = "w";
+            watcher.crux-cr = {crId = "";};
           };
         }
       ]);
