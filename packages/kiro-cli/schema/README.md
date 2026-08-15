@@ -85,7 +85,7 @@ CI `build` job — a real cost for a schema whose consumer is not yet decided.
 ```bash
 cd packages/kiro-cli/schema
 nix shell nixpkgs#bun -c bun install
-nix shell nixpkgs#bun -c bun test          # 75 runtime tests
+nix shell nixpkgs#bun -c bun test          # 77 runtime tests
 nix shell nixpkgs#typescript -c tsc --noEmit  # types + compile-time tests
 ```
 

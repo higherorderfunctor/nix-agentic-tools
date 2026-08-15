@@ -219,11 +219,24 @@ const CruxCrConfig = Schema.Struct({
     ),
   ),
 }).pipe(
+  /**
+   * USEFULNESS, not presence. The engine's own refine tests presence
+   * (`crRef !== undefined || crId !== undefined`), so it admits `crId: ""`
+   * with no `crRef` — and then `resolveCrId` gates on
+   * `crId !== undefined && crId.length > 0`, falls through to the `crRef`
+   * branch, finds nothing, and throws ``crux-cr: neither `crId` nor `crRef`
+   * provided`` at the first poll. That pairing has no run in which it
+   * succeeds, so it is refused at authoring time — the same reason the
+   * `crId` pattern check exists.
+   *
+   * `crRef` + `crId: ""` stays ACCEPTED for the same reason: the empty id
+   * falls through and the `crRef` branch really does resolve it.
+   */
   Schema.filter(
     (c) =>
       c.crRef !== undefined ||
-      c.crId !== undefined ||
-      "crux-cr requires one of crRef, crId",
+      (c.crId !== undefined && c.crId.length > 0) ||
+      "crux-cr requires a crRef, or a non-empty crId",
   ),
 );
 

@@ -259,7 +259,7 @@ describe("schema: per-node rules", () => {
       true,
     ],
     [
-      "crux-cr with crRef and an empty crId",
+      "crux-cr with crRef and an empty crId — the empty id falls through to crRef",
       {
         type: "watch",
         id: "w",
@@ -267,6 +267,16 @@ describe("schema: per-node rules", () => {
         config: { crId: "", crRef: "cr.json" },
       },
       true,
+    ],
+    [
+      "crux-cr with an empty crId and NO crRef — resolveCrId can only throw",
+      { type: "watch", id: "w", handler: "crux-cr", config: { crId: "" } },
+      false,
+    ],
+    [
+      "crux-cr with neither crRef nor crId",
+      { type: "watch", id: "w", handler: "crux-cr", config: {} },
+      false,
     ],
   ])("watch: %s", (_label, node, ok) => {
     expect(decodes(withSteps([node]))).toBe(ok);
