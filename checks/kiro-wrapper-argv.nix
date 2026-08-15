@@ -339,9 +339,12 @@ in
     expect "extraPackages-only launcher transparent" 'acp' "$P" acp
     expect "extraPackages-only chat transparent" 'mcp|list' "$PC" mcp list
 
-    # ── the two wrappers COMPOSED, as they do in a real profile ─────────────
-    # The launcher finds kiro-cli-chat on PATH, so both wrappers run and their
-    # injections meet in one argv. Under v3 that pairing is fatal on `acp`:
+    # ── the two wrappers composed at the wrapper layer ──────────────────────
+    # This pins their argv contract when PATH dispatch traverses both wrappers.
+    # Current Linux buildFHSEnv startup puts its raw /usr/bin/kiro-cli-chat
+    # ahead of the inherited outer wrapper, so this is deliberately not an FHS
+    # integration assertion. When both do run, their injections meet in one
+    # argv. Under v3 that pairing is fatal on `acp`:
     # upstream declares --agent-engine=v3 mutually exclusive with --trust-tools,
     # so `kiro-cli acp` died with "not supported with --agent-engine=v3".
     # Under home-manager little is lost by withholding it — trustedMcpTools is
