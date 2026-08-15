@@ -7,13 +7,32 @@ applyTo: "checks/fixtures/kiro-workflows/**,checks/kiro-workflow-schema.nix,pack
 
 # Kiro workflow typed schema
 
-> **Last verified:** 2026-08-14 (commit pending — body re-checked against the
-> post-review heads of the two implementation branches, which this doc branch
-> does not yet contain, and two claims corrected. The `input` bullet asserted
-> that both reference documents teaching the removed field were already
-> corrected; only `dev/references/kiro-workflow-ref.md` is, so the bullet is
-> restated as a durable "surviving `prompt` / `input` text is stale" rule that
-> holds both before and after the second correction lands. And "they share
+> **Last verified:** 2026-08-14 (commit pending — the operator's scope ruling is
+> now the frame. The Nix port is a GENERATOR ONLY, authored attrset to wire JSON
+> in one direction; the Effect port is the bidirectional half and is where input
+> this repo did not author — an existing file, or one an LLM produced on the fly
+> — belongs. `parse.nix` is demoted to test-only scaffolding for the vendor
+> check, and the opening paragraph, the transport row and the transport section
+> all say so. Two claims went with it, both false rather than merely narrow:
+> `parse.nix` was never the inverse of `render.nix`, and the vendor corpus was
+> never checked byte-identically — that check compares Nix values, and the
+> rendered JSON is byte-equal to 0 of the 7 fixtures. Nothing replaces them; the
+> section now states the coverage property the check actually establishes. The
+> `merge` half of the `addCheck` trap is corrected against the nix branch's
+> `types.nix` (commit 670e0519): `type.merge` IS called for every defined
+> option, and the override goes missing because `fixupOptionType` already
+> replaced the type object. The entry below is narrowed in the same pass — it
+> claimed the BODY had been re-checked against the implementation heads, when
+> the sweep was an enumerated set of claims that never included the merge
+> mechanism, which is exactly how that bullet survived a round that contained
+> its correction). Prior: 2026-08-14 (commit c2634c97 — an enumerated set of
+> claims, not the whole body, re-checked against the post-review heads of the
+> two implementation branches, which this doc branch does not yet contain, and
+> two of them corrected. The `input` bullet asserted that both reference
+> documents teaching the removed field were already corrected; only
+> `dev/references/kiro-workflow-ref.md` is, so the bullet is restated as a
+> durable "surviving `prompt` / `input` text is stale" rule that holds both
+> before and after the second correction lands. And "they share
 > `engine-limits.json`, so they cannot drift" is narrowed to what that file
 > actually pins — the caps, enums and watch intervals — because the two ports DO
 > differ by one diagnostic code: `E-STOP-WHEN-SYNTAX` is TypeScript-only, for
@@ -38,14 +57,25 @@ applyTo: "checks/fixtures/kiro-workflows/**,checks/kiro-workflow-schema.nix,pack
 > `packages/kiro-cli/schema/**`, or `checks/kiro-workflow-schema.nix` and this
 > fragment is not updated in the same commit, stop and fix it.
 
-Two implementations of one contract: `packages/kiro-cli/lib/workflow/` (Nix
-option types) and `packages/kiro-cli/schema/` (Effect `Schema`). They share
-`engine-limits.json`, so the constants it pins — caps, enums, watch intervals —
-cannot drift between them. Nothing else is mechanically tied: the diagnostic
-codes are kept parallel by review, not by a cross-language runner, and they are
-not identical. `E-STOP-WHEN-SYNTAX` is TypeScript-only, because it reports on
-malformed assembled wire strings the authored Nix sum type cannot represent in
-the first place.
+Two ports of one contract, with **different jobs** — read this before deciding
+where a change belongs.
+
+`packages/kiro-cli/lib/workflow/` (Nix option types) is a **generator**:
+authored attrset in, `.workflow.json` out, one direction. It exists so a
+workflow can be written declaratively, in the module system, alongside the rest
+of a Kiro configuration. It is not a consumer of workflow JSON.
+
+`packages/kiro-cli/schema/` (Effect `Schema`) is the **bidirectional** half, and
+is where input this repo did not author belongs — an existing definition on
+disk, or one an LLM produced on the fly. That breadth is why Effect was picked
+for it; it is not a second opinion on the Nix types.
+
+They share `engine-limits.json`, so the constants it pins — caps, enums, watch
+intervals — cannot drift between them. Nothing else is mechanically tied: the
+diagnostic codes are kept parallel by review, not by a cross-language runner,
+and they are not identical. `E-STOP-WHEN-SYNTAX` is TypeScript-only, because it
+reports on malformed assembled wire strings the authored Nix sum type cannot
+represent in the first place.
 
 **The format is in no public documentation.** 194 Kiro doc pages contain zero
 occurrences of every schema identifier; workflows are absent from the CLI 3.0
@@ -55,12 +85,12 @@ plausible-sounding doc claim about this format is fabricated.
 
 ## The three-layer split, in both languages
 
-| Layer     | Nix                        | TypeScript      | Proves                            |
-| --------- | -------------------------- | --------------- | --------------------------------- |
-| shape     | `types.nix`                | `schema.ts`     | what ONE node proves about itself |
-| tree      | `analyze.nix`              | `analyze.ts`    | counts, ids, orientation, refs    |
-| compile   | —                          | `type-level.ts` | the tree rules, at compile time   |
-| transport | `render.nix` / `parse.nix` | —               | authored shape <-> wire JSON      |
+| Layer     | Nix                     | TypeScript              | Proves                            |
+| --------- | ----------------------- | ----------------------- | --------------------------------- |
+| shape     | `types.nix`             | `schema.ts`             | what ONE node proves about itself |
+| tree      | `analyze.nix`           | `analyze.ts`            | counts, ids, orientation, refs    |
+| compile   | —                       | `type-level.ts`         | the tree rules, at compile time   |
+| transport | `render.nix` (out only) | `schema.ts` (both ways) | authored shape vs wire JSON       |
 
 An option type sees one node at a time and never its siblings or ancestors, so
 everything tree-shaped has to live in the analyzer. That is not a limitation
@@ -86,10 +116,21 @@ per-variant field optional and defers shape to an assertion, which is the
 failure mode this file exists to prevent. `attrTag` gets exactly-one-variant and
 per-variant required fields at TYPE level.
 
-`parse.nix` is the inverse, so existing `.kiro/workflows/*.workflow.json` can be
-checked and so parse -> render round-trips are testable. The vendor corpus
-round-trips byte-identically; that property is what proves the divergence is
-faithful.
+`parse.nix` reads wire JSON back into the authored shape, and it is **test-only
+scaffolding**: its only caller is the vendor check, which needs some way to get
+the seven shipped recipes into the option types. It is not the other half of a
+bidirectional port and must not be grown into one — reading input this repo did
+not author is the Effect port's job, per the scope split above. If you find it
+exported from the barrel, that is history, not an invitation.
+
+What the vendor check establishes is COVERAGE: each of the seven recipes the
+engine ships parses, type-checks against these option types, and analyzes clean
+of engine-basis errors, so every definition the vendor actually ships is
+expressible in the authored shape. It then compares the rendered result against
+the source recipe minus `planRevision` (machine state with no authored option).
+That comparison is on Nix values. It is not a byte comparison and never was —
+the rendered JSON is byte-equal to 0 of the 7 fixtures, and nothing here needs
+it to be.
 
 ## The `basis` taxonomy
 
@@ -107,9 +148,13 @@ working definitions, including vendor-shipped ones. Match on `code`, never on
   `fixupOptionType` rebuilds it and discards the check. Inside an `attrTag`
   member the check instead runs against the raw, pre-default attrset. Neither
   position sees the merged value, so neither is reliable for a cross-field
-  invariant. Overriding `merge` does not help: the module system evaluates the
-  nested option tree without calling the outer `type.merge`. **`apply` is the
-  only post-merge hook and behaves consistently at all four invariant sites.**
+  invariant. Overriding `merge` does not help either, and it fails to the SAME
+  discard rather than to a missing call: `type.merge` IS called for every
+  defined option — hang an unconditional `throw` off a plain `types.str` and it
+  fires — but `fixupOptionType` has already replaced the submodule's type
+  object, so the merge that runs belongs to the rebuilt submodule and the
+  override is no longer attached to anything. **`apply` is the only post-merge
+  hook and behaves consistently at all four invariant sites.**
 - **Nix regexes are POSIX ERE.** `\{` is not a defined escape and makes the
   whole pattern invalid at runtime; a backslash inside a bracket expression is a
   LITERAL backslash, so `[^.$*\[\]]+` does not mean what it looks like and
