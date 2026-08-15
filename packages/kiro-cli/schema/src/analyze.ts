@@ -331,11 +331,25 @@ export const analyze = (workflow: Workflow): Analysis => {
       // resolves to literal text, so the condition compares that literal
       // against the needle forever.
       //
-      // The Nix port refuses this outright, because its AUTHORED shape takes
-      // the expression as its own field and can reject it before the string
-      // is ever built. Here the input is the already-assembled wire string
-      // from a file the engine will happily run, so it is a policy diagnostic
-      // rather than a decode failure. Same defect, different direction.
+      // This arm is the SINGLE-brace case (`a{b`), and there both ports agree
+      // that it is POLICY: the engine loads the definition and runs it, the
+      // condition simply never fires. Nix warns under this same code from its
+      // authored field.
+      //
+      // A DOUBLE brace never reaches this arm. An authored template that
+      // already carries `{{…}}` renders to `{{{{p.output}}}} contains DONE`;
+      // slicing on the first `}}` leaves the remainder `}} contains DONE`,
+      // which fails the ` contains ` infix, so the engine's own validator
+      // refuses it (WorkflowStopWhenInvalidError) before the first step runs.
+      // The syntax arm above has therefore already reported it as
+      // E-STOP-WHEN-SYNTAX with an `engine` basis. Nix refuses that artifact
+      // too, from the authored field, before the wire string is assembled.
+      //
+      // The ports agree on WHICH artifacts are refused, not on how a refusal
+      // travels: Nix throws during evaluation where this port returns a value
+      // diagnostic, because the input here is the already-assembled wire
+      // string. That transport split is deliberately deferred, not an
+      // oversight.
       pol(
         "W-STOP-WHEN-TEMPLATE-BRACES",
         e.id,

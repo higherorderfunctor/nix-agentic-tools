@@ -307,6 +307,10 @@ describe("stopWhen grammar — exactly two shapes parse", () => {
     ["a.output contains X", "left side is not a template"],
     ["prefix {{a.output}}.terminal", "template not at offset 0"],
     ["{{a.output contains X", "unclosed template"],
+    [
+      "{{{{a.output}}}} contains X",
+      "doubled braces — the wire spelling authored into a field that wraps it",
+    ],
     ["wait\u00a0for\u00a0it.terminal", "Unicode whitespace in watch id"],
   ])("%s is rejected (%s)", (input) => {
     expect(typeof parseStopWhen(input)).toBe("string");
@@ -632,7 +636,7 @@ describe("analyze: whole-tree rules", () => {
     }
   });
 
-  test("W-STOP-WHEN-TEMPLATE-BRACES — parses, but can never match", () => {
+  test("braced stopWhen templates — one brace warns, two are an engine error", () => {
     const mk = (template: string) =>
       withSteps([
         {
@@ -650,6 +654,19 @@ describe("analyze: whole-tree rules", () => {
     expect(codesOf(mk("s.output"))).not.toContain(
       "W-STOP-WHEN-TEMPLATE-BRACES",
     );
+    // A DOUBLE brace is a different rule, not a louder version of this one.
+    // `{{{{p.output}}}} contains DONE` is what the Nix renderer emits when the
+    // authored template already carries the wire spelling, and the engine's
+    // parser refuses it: slicing on the first `}}` leaves `}} contains DONE`,
+    // which fails the ` contains ` infix. So it is an engine-basis ERROR here
+    // rather than the policy warning above.
+    expect(
+      diagnosticsOf(mk("{{p.output}}")).map((d) => [
+        d.code,
+        d.severity,
+        d.basis,
+      ]),
+    ).toEqual([["E-STOP-WHEN-SYNTAX", "error", "engine"]]);
   });
 
   test("empty and whitespace stopWhen templates stay literal forever", () => {
