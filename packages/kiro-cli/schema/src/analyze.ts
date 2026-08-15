@@ -5,10 +5,10 @@
  * For graph shapes both ports can represent, they intentionally share
  * diagnostic codes, the `basis` taxonomy, and depth-first walk order. The
  * sibling suites exercise those contracts independently; there is currently no
- * cross-language comparison runner. TypeScript additionally diagnoses two
- * malformed assembled `stopWhen` strings (`E-STOP-WHEN-SYNTAX` and
- * `W-STOP-WHEN-TEMPLATE-BRACES`) that the authored Nix type rejects before
- * analysis, so literal whole-code-set equality is neither claimed nor possible.
+ * cross-language comparison runner. TypeScript additionally diagnoses
+ * malformed assembled `stopWhen` syntax (`E-STOP-WHEN-SYNTAX`) that the
+ * authored Nix sum type makes unrepresentable, so literal whole-code-set
+ * equality is neither claimed nor possible.
  *
  * `basis` (adopted from fixtures/kiro-primitives/workflows/contract.jq):
  *   engine      the engine performs an equivalent check and will refuse
@@ -314,7 +314,13 @@ export const analyze = (workflow: Workflow): Analysis => {
       );
       continue;
     }
-    if (
+    if (parsed.form === "contains" && parsed.template.trim().length === 0) {
+      pol(
+        "W-STOP-WHEN-LITERAL-TEMPLATE",
+        e.id,
+        `repeat '${e.id}' has an empty or whitespace-only stopWhen template; the engine resolves it as literal {{}} text, so the condition can never match`,
+      );
+    } else if (
       parsed.form === "contains" &&
       (parsed.template.includes("{") || parsed.template.includes("}"))
     ) {
@@ -479,6 +485,12 @@ export const analyze = (workflow: Workflow): Analysis => {
             `'${e.id}' stop condition references {{${expr}}}, but no declaring step is itself, earlier, or inside its own repeat body`,
           );
         }
+      } else if (!declaredInputs.has(c.target)) {
+        pol(
+          "W-UNDECLARED-INPUT-REF",
+          e.id,
+          `'${e.id}' stop condition references {{${expr}}}, which is not a declared input; it stays LITERAL at runtime and the condition can never match`,
+        );
       }
     }
   }

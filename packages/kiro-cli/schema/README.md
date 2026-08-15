@@ -32,9 +32,9 @@ constants on a version bump.
 
 `src/analyze.ts` is a deliberate twin of `../lib/workflow/analyze.nix` for graph
 shapes both ports represent: shared diagnostic codes, the same `basis` taxonomy,
-and the same walk order. TypeScript has two additional assembled-wire `stopWhen`
-diagnostics for strings the authored Nix type rejects before analysis; the
-suites are parallel but no cross-language runner compares them.
+and the same walk order. TypeScript additionally reports `E-STOP-WHEN-SYNTAX`
+for malformed assembled strings the authored Nix sum type makes unrepresentable.
+The suites are parallel but no cross-language runner compares them.
 
 ## Usage
 
@@ -85,7 +85,7 @@ CI `build` job — a real cost for a schema whose consumer is not yet decided.
 ```bash
 cd packages/kiro-cli/schema
 nix shell nixpkgs#bun -c bun install
-nix shell nixpkgs#bun -c bun test          # 65 runtime tests
+nix shell nixpkgs#bun -c bun test          # 74 runtime tests
 nix shell nixpkgs#typescript -c tsc --noEmit  # types + compile-time tests
 ```
 
