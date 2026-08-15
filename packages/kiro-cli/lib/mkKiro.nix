@@ -1317,16 +1317,20 @@ in
         default = [];
         example = lib.literalExpression "with pkgs; [file which]";
         description = ''
-          Packages whose binary directories are prepended to Kiro's PATH.
-          The inherited PATH is preserved after this prefix, or an explicit
-          `environmentVariables.PATH` is used as the base when configured.
+          Packages whose binary directories are added to Kiro's PATH. The
+          launcher initially prepends them while preserving the inherited
+          PATH, or uses an explicit `environmentVariables.PATH` as the base
+          when configured.
 
           This is the reliable way to expose tools inside Kiro's Linux FHS
           visibility sandbox: `/nix/store` is mounted and PATH is inherited,
-          while host `/usr` is replaced by the synthesized root. The prefix is
-          scoped to Kiro's launcher and is never exported into the Home Manager
-          session or devenv project shell. On Darwin, where Kiro has no FHS
-          wrapper, the same runtime-local PATH prefix still applies.
+          while host `/usr` is replaced by the synthesized root. Linux FHS
+          startup can put its synthesized command directories ahead afterward,
+          so this option supplies missing tools rather than overriding tools
+          already in that root. The addition is scoped to Kiro's launcher and
+          is never exported into the Home Manager session or devenv project
+          shell. On Darwin, where Kiro has no FHS wrapper, the runtime-local
+          prefix remains first.
         '';
       };
       # V3 next-gen agent — appends `--v3` to the top-level `kiro-cli`

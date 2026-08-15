@@ -96,6 +96,12 @@ explicit value becomes the preserved base instead. The wrapper references each
 package, so its store path is rooted; bubblewrap preserves the resulting PATH
 and bind-mounts `/nix`, so the tools remain executable inside the FHS root.
 
+This supplies commands missing from the synthesized root; it is not an override
+mechanism for commands already there. After the outer launcher runs, the FHS
+`/init` sources `/etc/profile`, which puts
+`/run/wrappers/bin:/usr/bin:/usr/sbin` ahead of the inherited entries. A
+same-named FHS command therefore wins over the added package on Linux.
+
 This is runtime-local: it changes neither the Home Manager session nor the
 devenv project shell. Adding the same packages to `home.packages` or devenv's
 `packages` also works when user- or project-wide availability is wanted, since

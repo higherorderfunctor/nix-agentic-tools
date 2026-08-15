@@ -116,10 +116,11 @@ in
     # The Linux buildFHSEnv wrapper preserves PATH and bind-mounts /nix, so a
     # store-backed prefix survives into the synthesized FHS root even though
     # host /usr is shadowed there. Emit this AFTER the ordinary and secret env
-    # exports: an explicit PATH becomes the base, while extraPackages remains
-    # the guaranteed prefix. The conditional expansion avoids a trailing colon
-    # (and therefore an implicit current-directory PATH entry) when PATH is
-    # unset or empty.
+    # exports: an explicit PATH becomes the base, while extraPackages is first
+    # at this launcher boundary. Linux FHS startup can prepend its synthesized
+    # command directories afterward. The conditional expansion avoids a
+    # trailing colon (and therefore an implicit current-directory PATH entry)
+    # when PATH is unset or empty.
     pathExport = lib.optionalString hasExtraPackages ''
       export PATH=${lib.escapeShellArg (lib.makeBinPath extraPackages)}''${PATH:+:"$PATH"}
     '';

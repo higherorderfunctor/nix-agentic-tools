@@ -202,10 +202,10 @@ The ai module fans out TWO kinds of configuration:
 - `ai.claude.package` / `ai.codex.package` / `ai.copilot.package` /
   `ai.kiro.package` — package override; Codex installs it directly while the
   established runtimes route it through their native factory wiring.
-- `ai.kiro.extraPackages` — store-backed tools prepended to Kiro's runtime PATH
-  in both backends. It is Kiro-specific because it closes the Linux
-  `buildFHSEnv` visibility gap; it remains independent of `ai.shell`, which
-  selects an executable rather than supplying commands.
+- `ai.kiro.extraPackages` — store-backed tools added to Kiro's runtime PATH in
+  both backends. It is Kiro-specific because it closes the Linux `buildFHSEnv`
+  visibility gap; it remains independent of `ai.shell`, which selects an
+  executable rather than supplying commands.
 - `ai.codex.settings` — typed stable keys plus a TOML-compatible native freeform
   tail. Home Manager reconciles exact declared leaves into a writable
   `${configDir}/config.toml`; devenv writes a statically Nix-owned

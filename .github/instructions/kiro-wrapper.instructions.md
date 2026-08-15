@@ -103,6 +103,12 @@ explicit value becomes the preserved base instead. The wrapper references each
 package, so its store path is rooted; bubblewrap preserves the resulting PATH
 and bind-mounts `/nix`, so the tools remain executable inside the FHS root.
 
+This supplies commands missing from the synthesized root; it is not an override
+mechanism for commands already there. After the outer launcher runs, the FHS
+`/init` sources `/etc/profile`, which puts
+`/run/wrappers/bin:/usr/bin:/usr/sbin` ahead of the inherited entries. A
+same-named FHS command therefore wins over the added package on Linux.
+
 This is runtime-local: it changes neither the Home Manager session nor the
 devenv project shell. Adding the same packages to `home.packages` or devenv's
 `packages` also works when user- or project-wide availability is wanted, since
@@ -372,8 +378,14 @@ Bundle mechanics live in `packages/kiro-cli/lib/identityBundle.nix`.
 launcher and direct chat wrappers. Their store-backed `bin` directories are
 prepended after ordinary and secret environment exports, so an explicit
 `ai.kiro.environmentVariables.PATH` becomes the base and the requested packages
-still win. With no explicit PATH, the caller's inherited value remains after the
-prefix.
+are first at that wrapper boundary. With no explicit PATH, the caller's
+inherited value remains after the prefix.
+
+That is not final override precedence on Linux. The upstream FHS `/init` then
+sources `/etc/profile`, which puts `/run/wrappers/bin:/usr/bin:/usr/sbin` ahead
+of the inherited entries. The requested package remains visible, but a
+same-named command already in the synthesized root wins. This option is for
+supplying missing tools; Darwin has no later FHS reordering.
 
 The empty list is inert and produces no wrapper by itself. A non-empty list
 creates the wrapper even when no env, argv, identity, or secret injection is
