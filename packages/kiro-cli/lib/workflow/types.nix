@@ -325,14 +325,20 @@
           Keep it relative. The engine resolves a relative path against the
           workspace root by construction, and step agents run with that same
           cwd, so the writing step and the check agree with no interpolation.
-          An absolute or escaping path fails the run at LAUNCH; a path that
-          skips the containment check instead evaluates false FOREVER, with
-          no error, burning every iteration the loop has.
+          An absolute or `..`-carrying path is refused at LAUNCH only when it
+          RESOLVES outside the allowed roots — the workspace roots plus
+          `additionalDirectories` — so an absolute path pointing back inside
+          the workspace passes. A path the containment check SKIPS is not
+          validated at all, and if it then names a file that never appears the
+          condition evaluates false for every iteration with no error.
 
           A leading `{{template}}` is what skips that check. A templated path
           is nevertheless ACCEPTED here and rendered through unchanged —
           `analyze.nix` flags it as the `policy`-basis lint
-          `W-FILE-CHECK-PATH-UNSAFE` instead.
+          `W-FILE-CHECK-PATH-UNSAFE` instead. That lint is a SHAPE test, not
+          the engine's containment rule, and it over-reports: see the comment
+          on `unsafePath` in `analyze.nix` for the measured false-positive rate
+          against the vendor corpus.
 
           Accepting it is forced, not a preference: the vendor's own
           `feature-pipeline` and `ralph` recipes both ship templated
