@@ -1,8 +1,22 @@
 {
   lib,
   pkgs,
-}: package: grammars: let
+}: package: grammars: pathMappings: let
   grammarLanguages = map (grammar: grammar.language or "") grammars;
+  mappingPatterns = lib.concatMap (mapping: mapping.patterns or []) pathMappings;
+  pathMappingsValid =
+    lib.all (
+      mapping:
+        builtins.isAttrs mapping
+        && lib.elem (mapping.content or null) ["code" "config" "docs"]
+        && builtins.isString (mapping.language or null)
+        && mapping.language != ""
+        && builtins.isList (mapping.patterns or null)
+        && mapping.patterns != []
+        && lib.all (pattern: builtins.isString pattern && pattern != "") mapping.patterns
+    )
+    pathMappings;
+  pathMappingPatternsUnique = lib.length (lib.unique mappingPatterns) == lib.length mappingPatterns;
   grammarEntries =
     map
     (grammar: {
@@ -11,6 +25,9 @@
       symbol = "tree_sitter_${lib.replaceStrings ["-"] ["_"] grammar.language}";
     })
     grammars;
+  customizationFingerprint = builtins.hashString "sha256" (builtins.toJSON {
+    inherit grammarEntries pathMappings;
+  });
   grammarLoader = pkgs.writeText "semble-extra-grammars.py" ''
     # cspell:ignore argtypes pythonapi restype
     from __future__ import annotations
@@ -56,22 +73,61 @@
         capsule = _load_capsule(entry["parser"], entry["symbol"])
         return Parser(Language(capsule))
   '';
+  pathMappingLoader = pkgs.writeText "semble-path-mappings.py" ''
+    from __future__ import annotations
+
+    from fnmatch import fnmatchcase
+    from pathlib import Path
+    from typing import Any
+
+    CUSTOMIZATION_FINGERPRINT = "${customizationFingerprint}"
+    _MAPPINGS: list[dict[str, Any]] = ${builtins.toJSON pathMappings}
+
+
+    def _find_mapping(file_path: Path, root: Path | None = None) -> dict[str, Any] | None:
+        try:
+            relative = file_path.relative_to(root).as_posix() if root is not None else file_path.as_posix()
+        except ValueError:
+            relative = file_path.as_posix()
+
+        for mapping in _MAPPINGS:
+            for pattern in mapping["patterns"]:
+                candidate = relative if "/" in pattern else file_path.name
+                if fnmatchcase(candidate, pattern):
+                    return mapping
+        return None
+
+
+    def get_mapped_language(file_path: Path, root: Path | None = None) -> str | None:
+        mapping = _find_mapping(file_path, root)
+        return None if mapping is None else mapping["language"]
+
+
+    def get_mapped_content(file_path: Path, root: Path) -> str | None:
+        mapping = _find_mapping(file_path, root)
+        return None if mapping is None else mapping["content"]
+  '';
 in
-  if grammars == []
+  if grammars == [] && pathMappings == []
   then package
   else
     assert lib.assertMsg (package ? overridePythonAttrs)
-    "semble.withGrammars requires a Python package exposing overridePythonAttrs";
+    "semble.customizePackage requires a Python package exposing overridePythonAttrs";
     assert lib.assertMsg (lib.all (language: language != "") grammarLanguages)
-    "semble.withGrammars grammar packages must expose a non-empty language attribute";
+    "semble.customizePackage grammar packages must expose a non-empty language attribute";
     assert lib.assertMsg (lib.length (lib.unique grammarLanguages) == lib.length grammarLanguages)
-    "semble.withGrammars grammar language names must be unique";
+    "semble.customizePackage grammar language names must be unique";
+    assert lib.assertMsg pathMappingsValid
+    "semble.customizePackage path mappings require code/config/docs content, a non-empty language, and non-empty string patterns";
+    assert lib.assertMsg pathMappingPatternsUnique
+    "semble.customizePackage path mapping patterns must be unique";
       (package.overridePythonAttrs (old: {
         patches = (old.patches or []) ++ [../patches/extra-grammars.patch];
         postPatch =
           (old.postPatch or "")
           + ''
             ${pkgs.coreutils}/bin/cp ${grammarLoader} src/semble/extra_grammars.py
+            ${pkgs.coreutils}/bin/cp ${pathMappingLoader} src/semble/path_mappings.py
           '';
       }))
       // {
@@ -82,5 +138,6 @@ in
           (package.passthru or {})
           // {
             sembleExtraGrammarLanguages = grammarLanguages;
+            semblePathMappings = pathMappings;
           };
       }

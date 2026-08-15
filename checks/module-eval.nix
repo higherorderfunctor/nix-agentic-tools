@@ -1,7 +1,7 @@
 # End-to-end module eval tests. Each test evaluates the full HM module
 # (sharedOptions + every package's modules/homeManager) against a
 # synthetic config and asserts the resulting option tree + config.
-# cspell:ignore batchmode
+# cspell:ignore batchmode sembleignore
 {
   lib,
   pkgs,
@@ -2805,6 +2805,13 @@ in {
             tree-sitter-awk
             tree-sitter-jq
           ];
+          pathMappings = [
+            {
+              content = "config";
+              language = "json";
+              patterns = ["flake.lock"];
+            }
+          ];
           runtimes = ["codex"];
         };
       };
@@ -2814,6 +2821,7 @@ in {
     in
       hmPackage.sembleExtraGrammarLanguages
       == ["awk" "jq"]
+      && hmPackage.semblePathMappings == grammarConfig.semble.pathMappings
       && hmPackage.passthru.updateFlakeInput == "llm-agents"
       && hm.home.activation ? sembleCacheGuard
       && lib.hasInfix "semble-cache-guard" hm.home.activation.sembleCacheGuard.text
@@ -2821,12 +2829,74 @@ in {
       && lib.hasSuffix "/bin/semble-mcp" devenv.ai.codex.mcpServers.semble.command
   );
 
+  module-semble-path-mapping-validation = mkTest "semble-path-mapping-validation" (
+    let
+      empty =
+        (evalDevenv {
+          semble = {
+            enable = true;
+            pathMappings = [
+              {
+                content = "code";
+                language = "";
+                patterns = [];
+              }
+            ];
+          };
+        }).config;
+      duplicate =
+        (evalHm {
+          semble = {
+            enable = true;
+            pathMappings = [
+              {
+                content = "code";
+                language = "bash";
+                patterns = [".envrc"];
+              }
+              {
+                content = "config";
+                language = "json";
+                patterns = [".envrc"];
+              }
+            ];
+          };
+        }).config;
+    in
+      builtins.any (assertion: !assertion.assertion && lib.hasInfix "non-empty language" assertion.message) empty.assertions
+      && builtins.any (assertion: !assertion.assertion && lib.hasInfix "patterns must be unique" assertion.message) duplicate.assertions
+  );
+
   module-semble-extra-grammars-load = let
-    withGrammars = import ../packages/semble/lib/withGrammars.nix {inherit lib pkgs;};
-    sembleWithGrammars = withGrammars pkgs.ai.semble (with pkgs.tree-sitter-grammars; [
-      tree-sitter-awk
-      tree-sitter-jq
-    ]);
+    customizePackage = import ../packages/semble/lib/withGrammars.nix {inherit lib pkgs;};
+    pathMappings = [
+      {
+        content = "code";
+        language = "bash";
+        patterns = [".envrc" "checks/hooks/pre-edit"];
+      }
+      {
+        content = "config";
+        language = "gitignore";
+        patterns = [".gitignore" ".sembleignore"];
+      }
+      {
+        content = "config";
+        language = "json";
+        patterns = ["flake.lock"];
+      }
+      {
+        content = "docs";
+        language = "markdown";
+        patterns = ["*.fixture.py" "*.md.fixture"];
+      }
+    ];
+    sembleWithGrammars =
+      customizePackage pkgs.ai.semble (with pkgs.tree-sitter-grammars; [
+        tree-sitter-awk
+        tree-sitter-jq
+      ])
+      pathMappings;
   in
     assert sembleWithGrammars.passthru.updateFlakeInput == "llm-agents";
       pkgs.runCommand "module-test-semble-extra-grammars-load" {} ''
@@ -2835,9 +2905,28 @@ in {
 
         # Reuse the wrapped entry point's interpreter and complete Python path,
         # replacing only its CLI dispatch tail with this parser smoke test.
+        ${pkgs.coreutils}/bin/mkdir -p repo/checks/hooks repo/docs
+        ${pkgs.coreutils}/bin/touch \
+          repo/.envrc \
+          repo/.gitignore \
+          repo/.sembleignore \
+          repo/checks/hooks/pre-edit \
+          repo/docs/example.fixture.py \
+          repo/docs/example.md.fixture \
+          repo/flake.lock
         ${pkgs.coreutils}/bin/head -n 3 ${sembleWithGrammars}/bin/.semble-wrapped > test-grammars.py
         ${pkgs.coreutils}/bin/cat >> test-grammars.py <<'PY'
+        import json
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        from semble.cache import _metadata_matches
         from semble.chunking.core import _cached_get_parser
+        from semble.index.file_walker import walk_files
+        from semble.index.files import detect_language, get_extensions
+        from semble.index.index import SembleIndex
+        from semble.path_mappings import CUSTOMIZATION_FINGERPRINT
+        from semble.types import ContentType
 
         samples = {
             "awk": b"BEGIN { print 1 }",
@@ -2847,6 +2936,60 @@ in {
             parser = _cached_get_parser(language)
             assert parser is not None, language
             assert parser.parse(source).root_node.type == "program", language
+
+        root = Path("repo").resolve()
+        expected = {
+            ".envrc": "bash",
+            ".gitignore": "gitignore",
+            ".sembleignore": "gitignore",
+            "checks/hooks/pre-edit": "bash",
+            "docs/example.fixture.py": "markdown",
+            "docs/example.md.fixture": "markdown",
+            "flake.lock": "json",
+        }
+        for relative, language in expected.items():
+            assert detect_language(root / relative, root) == language, relative
+        assert detect_language(root / "ordinary.py", root) == "python"
+
+        def walked(content: str) -> set[str]:
+            content_type = ContentType(content)
+            return {
+                path.relative_to(root).as_posix()
+                for path in walk_files(
+                    root,
+                    get_extensions((content_type,)),
+                    content=(content,),
+                )
+            }
+
+        assert walked("code") == {".envrc", "checks/hooks/pre-edit"}
+        assert walked("docs") == {"docs/example.fixture.py", "docs/example.md.fixture"}
+        assert walked("config") == {".gitignore", ".sembleignore", "flake.lock"}
+        assert {
+            path.relative_to(root).as_posix()
+            for path in walk_files(root, [".py"])
+        } == {"docs/example.fixture.py"}
+
+        class EmptyIndex:
+            def save(self, path: Path) -> None:
+                path.write_bytes(b"")
+
+        persisted = Path("persisted")
+        fake_index = SimpleNamespace(
+            _bm25_index=EmptyIndex(),
+            _semantic_index=EmptyIndex(),
+            _root=root,
+            _model_path="test-model",
+            _content=(ContentType.CODE,),
+            _manifest={},
+            chunks=[],
+        )
+        SembleIndex.save(fake_index, persisted)
+        metadata = json.loads((persisted / "metadata.json").read_text())
+        assert metadata["nix_customization"] == CUSTOMIZATION_FINGERPRINT
+        assert _metadata_matches(metadata, "test-model", (ContentType.CODE,))
+        metadata["nix_customization"] = "different-package"
+        assert not _metadata_matches(metadata, "test-model", (ContentType.CODE,))
         PY
         ${pkgs.coreutils}/bin/chmod +x test-grammars.py
         ./test-grammars.py

@@ -4,6 +4,27 @@
 }: let
   runtimeType = lib.types.enum ["claude" "codex" "kiro"];
   runtimeListType = lib.types.listOf runtimeType;
+  pathMappingType = lib.types.submodule {
+    options = {
+      content = lib.mkOption {
+        type = lib.types.enum ["code" "config" "docs"];
+        description = "Semble content category containing the matched files.";
+      };
+      language = lib.mkOption {
+        type = lib.types.str;
+        description = "Tree-sitter language name used to parse matched files.";
+      };
+      patterns = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        description = ''
+          Filename globs or repository-relative path globs. Patterns without a
+          slash match basenames at any depth; patterns with a slash match from
+          the indexed repository root. Matching uses fnmatch semantics, where
+          `*` can span `/`; use an exact path when directory depth matters.
+        '';
+      };
+    };
+  };
   featureOptions = description: {
     enable = lib.mkOption {
       type = lib.types.nullOr lib.types.bool;
@@ -41,6 +62,24 @@ in {
       description = ''
         Additional Tree-sitter grammar packages used by Semble. Each package
         must expose a `language` attribute and a compiled `parser` output.
+      '';
+    };
+    pathMappings = lib.mkOption {
+      type = lib.types.listOf pathMappingType;
+      default = [];
+      example = lib.literalExpression ''
+        [
+          {
+            content = "config";
+            language = "json";
+            patterns = ["flake.lock" "devenv.lock"];
+          }
+        ]
+      '';
+      description = ''
+        Ordered path-to-language overrides for extensionless files, compound
+        extensions, or repository-specific naming. The first matching entry
+        wins and its content category controls which Semble indexes include it.
       '';
     };
     runtimes = lib.mkOption {

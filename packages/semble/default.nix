@@ -1,6 +1,8 @@
 # Per-package barrel for Semble's declarative integrations. The binary itself
 # remains the unchanged llm-agents.nix flake output exposed by the overlay.
-{
+let
+  customizePackage = import ./lib/withGrammars.nix;
+in {
   docs = ./docs;
 
   lib.ai = {
@@ -8,7 +10,8 @@
     semble =
       import ./lib/integrations.nix
       // {
-        withGrammars = import ./lib/withGrammars.nix;
+        inherit customizePackage;
+        withGrammars = args: package: grammars: (customizePackage args) package grammars [];
       };
   };
 

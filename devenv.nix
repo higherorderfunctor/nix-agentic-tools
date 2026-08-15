@@ -1,3 +1,4 @@
+# cspell:ignore sembleignore
 {
   config,
   pkgs,
@@ -428,6 +429,39 @@ in {
     grammars = with pkgs.tree-sitter-grammars; [
       tree-sitter-awk
       tree-sitter-jq
+    ];
+    pathMappings = [
+      {
+        content = "code";
+        language = "bash";
+        patterns = [
+          ".envrc"
+          "checks/fixtures/claude-hooks/post-edit"
+          "checks/fixtures/claude-hooks/pre-edit"
+        ];
+      }
+      {
+        content = "config";
+        language = "gitignore";
+        patterns = [
+          ".gitignore"
+          ".sembleignore"
+          "docs/.gitignore"
+        ];
+      }
+      {
+        content = "config";
+        language = "json";
+        patterns = [
+          "devenv.lock"
+          "flake.lock"
+        ];
+      }
+      {
+        content = "docs";
+        language = "markdown";
+        patterns = ["*.md.fixture"];
+      }
     ];
     # AGENTS.md already carries the repository's Semble search workflow from
     # the generated stacked-workflows fragment. Avoid asking devenv `files.*`
