@@ -57,10 +57,10 @@
 # failure; some move a guaranteed later throw to authoring time; `name` is a
 # deliberate label-quality guardrail. This is the complete current set:
 #
-#   fileCheck.jsonPath   a segment LIST, and segments reject '$', '*' and
-#                        brackets. `"$.drained"` is accepted by the engine and
-#                        reads a property literally named `$`, resolving
-#                        undefined so the loop never stops.
+#   fileCheck.jsonPath   a segment LIST; segments reject a LEADING '$', plus
+#                        any '*' or bracket. `"$.drained"` is accepted by the
+#                        engine and reads a property literally named `$`,
+#                        resolving undefined so the loop never stops.
 #   fileCheck.value      required here although the engine's `z.unknown()` key
 #                        accepts omission; omission makes the intended target
 #                        impossible to distinguish from an explicit undefined.
