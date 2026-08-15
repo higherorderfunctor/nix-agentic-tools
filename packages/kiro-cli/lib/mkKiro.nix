@@ -1312,6 +1312,27 @@ in
         default = {};
         description = "Environment variables baked into the kiro launcher wrapper. Scoped to the Kiro process and the commands it spawns; never exported into the project shell.";
       };
+      extraPackages = lib.mkOption {
+        type = lib.types.listOf lib.types.package;
+        default = [];
+        example = lib.literalExpression "with pkgs; [file which]";
+        description = ''
+          Packages whose binary directories are added to Kiro's PATH. The
+          launcher initially prepends them while preserving the inherited
+          PATH, or uses an explicit `environmentVariables.PATH` as the base
+          when configured.
+
+          This is the reliable way to expose tools inside Kiro's Linux FHS
+          visibility sandbox: `/nix/store` is mounted and PATH is inherited,
+          while host `/usr` is replaced by the synthesized root. Linux FHS
+          startup can put its synthesized command directories ahead afterward,
+          so this option supplies missing tools rather than overriding tools
+          already in that root. The addition is scoped to Kiro's launcher and
+          is never exported into the Home Manager session or devenv project
+          shell. On Darwin, where Kiro has no FHS wrapper, the runtime-local
+          prefix remains first.
+        '';
+      };
       # V3 next-gen agent — appends `--v3` to the top-level `kiro-cli`
       # launcher. The granular `--agent-engine`/`--mode` flags live ONLY on the
       # `chat` subcommand and are rejected by the launcher, so the launcher's
@@ -1544,7 +1565,7 @@ in
         # ride along with the --v3/--trust-tools flag injections. Shared
         # wrapper helper (also used by the devenv backend).
         kiroPackage = wrapKiroPackage {
-          inherit (cfg) v3 trustedMcpTools;
+          inherit (cfg) extraPackages v3 trustedMcpTools;
           package = resolvePackage cfg;
           environmentVariables = kiroEnvironment {inherit moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell;};
           inherit (kiroSecrets) secretEnv;
@@ -1773,7 +1794,7 @@ in
             {
               packages = [
                 (wrapKiroPackage {
-                  inherit (cfg) v3 trustedMcpTools;
+                  inherit (cfg) extraPackages v3 trustedMcpTools;
                   package = resolvePackage cfg;
                   # Baked into the launcher, NOT devenv's `env` attrset. This
                   # module does not write the project shell's environment —

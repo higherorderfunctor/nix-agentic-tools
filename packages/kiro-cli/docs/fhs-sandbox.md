@@ -1,10 +1,16 @@
 # The nixpkgs FHS sandbox: what kiro can and cannot see
 
-> **Last verified:** 2026-08-11 (commit pending — first revision, measured
-> against the 2.16.2 `fhsenv-rootfs` derivation by reading the generated bwrap
-> script and probing from inside the sandbox. Supersedes the "has NOT been
-> measured" caveat in [`launcher-argv.md`](launcher-argv.md)). If you bump
-> kiro-cli or touch `overlays/kiro-cli.nix`, re-measure rather than assuming.
+> **Last verified:** 2026-08-14 (commit pending — adds the consumer-facing
+> `ai.kiro.extraPackages` path for making store-backed tools visible without
+> rebuilding the FHS root, records its wrapper/PATH precedence, and clarifies
+> that the FHS copy of `kiro-cli-chat` shadows the outer chat wrapper during
+> launcher dispatch. Adds a structural CI guard for the upstream `/nix`, init,
+> and inherited-PATH contracts). Prior: 2026-08-11 (commit pending — first
+> revision, measured against the 2.16.2 `fhsenv-rootfs` derivation by reading
+> the generated bwrap script and probing from inside the sandbox. Supersedes the
+> "has NOT been measured" caveat in [`launcher-argv.md`](launcher-argv.md)). If
+> you bump kiro-cli or touch `overlays/kiro-cli.nix`, re-measure rather than
+> assuming.
 
 **This is not Kiro's sandbox.** It is an upstream nixpkgs wrapper: since the
 package split, `pkgs.ai.kiro-cli` on Linux is a `symlinkJoin` of per-command
@@ -72,6 +78,62 @@ dead or pointing elsewhere:
 
 The second row is the dangerous one: no error, a different build of the same
 tool. A version-sensitive step changes behavior instead of failing.
+
+The same ordering affects Kiro's own dispatch. The synthesized `/usr/bin`
+contains the raw `kiro-cli-chat`, so a normal `kiro-cli` launch finds it before
+the inherited profile PATH reaches this repo's outer chat wrapper. Directly
+invoking the outer `kiro-cli-chat` entry still traverses that wrapper.
+
+## Supplying missing tools
+
+Use `ai.kiro.extraPackages` for tools Kiro needs but the synthesized root does
+not provide:
+
+```nix
+ai.kiro.extraPackages = with pkgs; [
+  file
+  iproute2
+  tree
+  which
+];
+```
+
+The Kiro launcher prepends `lib.makeBinPath` of those packages to PATH and then
+preserves the caller's PATH. If `ai.kiro.environmentVariables.PATH` is set, that
+explicit value becomes the preserved base instead. The wrapper references each
+package, so its store path is rooted; bubblewrap preserves the resulting PATH
+and bind-mounts `/nix`, so the tools remain executable inside the FHS root.
+
+This supplies commands missing from the synthesized root; it is not an override
+mechanism for commands already there. After the outer launcher runs, the FHS
+`/init` sources `/etc/profile`, which puts
+`/run/wrappers/bin:/usr/bin:/usr/sbin` ahead of the inherited entries. A
+same-named FHS command therefore wins over the added package on Linux.
+
+`checks/kiro-fhs-contract.nix` guards the upstream assumptions behind this
+behavior. It inspects the realized Linux launcher and fails if bubblewrap stops
+binding `/nix`, adds a known PATH-clearing or replacement argument, changes how
+the generated `/etc` is mounted, moves `/etc/profile` sourcing after Kiro's
+exec, adds another init/profile PATH mutation, or removes the incoming PATH from
+the profile assignment. Those structural changes therefore force this document
+and the implementation to be re-measured instead of silently invalidating
+`extraPackages`.
+
+The check is deliberately structural. It does not execute bubblewrap inside a
+Nix build sandbox, where nested user-namespace support is not portable. The
+wrapper sentinel test covers the configured prefix and inherited tail; the FHS
+contract check pins the current launcher/init/profile literals and their
+ordering. Together they cover the known structural bridge, not kernel-level
+execution of it.
+
+This is runtime-local: it changes neither the Home Manager session nor the
+devenv project shell. Adding the same packages to `home.packages` or devenv's
+`packages` also works when user- or project-wide availability is wanted, since
+those store-backed profile entries already survive into Kiro.
+
+Do not model this as arbitrary host paths. Visibility under `/home` or `/opt`
+does not guarantee a host-built binary can load its libraries, and host `/usr`
+is the directory the FHS wrapper replaces.
 
 ## `/usr/local` is unreachable, and the obvious escape hatch hard-fails
 
