@@ -72,14 +72,14 @@ working definitions, including vendor-shipped ones. Match on `code`, never on
 
 ## Traps that cost real time here
 
-- **`lib.types.addCheck` is a NO-OP for cross-field submodule invariants.** It
-  hooks `check`, which the module system calls on each RAW definition — for a
-  submodule that is the attrset the user literally wrote, before defaults. A
-  predicate there sees `{}` and passes. Overriding `merge` does not help either:
-  for a submodule the module system evaluates the nested option tree and never
-  calls `type.merge` at all (verified with an unconditional `throw` that never
-  fired). **`apply` is the only post-merge hook.** Three invariants here
-  evaluated as silent no-ops before that was understood.
+- **`lib.types.addCheck` is position-dependent for submodules.** When a
+  submodule is an option's own type (including through `nullOr` or `listOf`),
+  `fixupOptionType` rebuilds it and discards the check. Inside an `attrTag`
+  member the check instead runs against the raw, pre-default attrset. Neither
+  position sees the merged value, so neither is reliable for a cross-field
+  invariant. Overriding `merge` does not help: the module system evaluates the
+  nested option tree without calling the outer `type.merge`. **`apply` is the
+  only post-merge hook and behaves consistently at all four invariant sites.**
 - **Nix regexes are POSIX ERE.** `\{` is not a defined escape and makes the
   whole pattern invalid at runtime; a backslash inside a bracket expression is a
   LITERAL backslash, so `[^.$*\[\]]+` does not mean what it looks like and
