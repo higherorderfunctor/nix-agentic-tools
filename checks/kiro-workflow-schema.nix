@@ -12,10 +12,10 @@
 #            a shallow tryEval passes silently.
 #   VENDOR   the seven recipes inlined in the engine bundle must parse,
 #            type-check, analyze clean of engine-basis errors, and RENDER
-#            BACK byte-identically. The engine self-validates these at module
-#            init, so any of them failing here proves the schema wrong rather
-#            than the recipe wrong. This is the strongest signal available
-#            without a live engine.
+#            BACK byte-identically. The engine shape-parses these at module init
+#            but does not structurally analyze them until launch. They are the
+#            highest-fidelity corpus available, but a failure warrants checking
+#            both the local rule and the vendor recipe.
 #
 # A tryEval-based reject harness needs shape-matched positive controls, because
 # "threw for the reason I meant" and "threw for an unrelated reason" are
@@ -54,6 +54,8 @@
   reject = name: wf: mkTest "reject-${name}" (!(forces wf));
 
   codesOf = wf: map (d: d.code) (W.analyze.analyze (eval wf)).diagnostics;
+  messagesFor = wf: code:
+    map (d: d.message) (builtins.filter (d: d.code == code) (W.analyze.analyze (eval wf)).diagnostics);
   whereFor = wf: code:
     map (d: d.where) (builtins.filter (d: d.code == code) (W.analyze.analyze (eval wf)).diagnostics);
   emits = name: wf: code: mkTest "emits-${name}" (lib.elem code (codesOf wf));
@@ -211,6 +213,17 @@ in
       in
         parsedPath == ["state" "done"] && renderedPath == "state.done"
     );
+    kiro-workflow-accept-jsonpath-dollar-after-head =
+      accept "jsonpath-dollar-after-head"
+      (wrap [
+        (step "a" {
+          completion.fileCheck = {
+            path = "p.json";
+            jsonPath = ["state" "$value"];
+            value = true;
+          };
+        })
+      ]);
 
     # ── REJECT: per-node type rules ────────────────────────────────────────
     kiro-workflow-reject-two-tags =
@@ -249,6 +262,19 @@ in
           };
         }
       ]);
+    kiro-workflow-reject-removed-input-field-on-wire = mkTest "reject-removed-input-field-on-wire" (!(builtins.tryEval (builtins.deepSeq (W.parse.fromAttrs {
+        name = "w";
+        steps = [
+          {
+            type = "step";
+            id = "a";
+            agent = "ag";
+            prompt = "p";
+            input = "x";
+          }
+        ];
+      })
+      true)).success);
     kiro-workflow-reject-max-iterations-zero =
       reject "max-iterations-zero"
       (wrap [
@@ -661,6 +687,19 @@ in
       in
         lib.elem "W-UNDECLARED-INPUT-REF" (codesOf (workflow false))
         && !(lib.elem "W-UNDECLARED-INPUT-REF" (codesOf (workflow true)))
+    );
+    kiro-workflow-stop-condition-signal-message = mkTest "stop-condition-signal-message" (
+      messagesFor
+      (wrap [
+        (step "a" {
+          completion = {
+            completionSignal = "success";
+            containsText = "DONE";
+          };
+        })
+      ])
+      "W-STOP-CONDITION-SIGNAL-FIRST"
+      == ["step 'a' sets completionSignal alongside another stop form; the signal is tested first and may bypass the others when it matches"]
     );
     kiro-workflow-emits-unknown-template-ref =
       emits "unknown-template-ref" (wrap [(step "a" {prompt = "see {{ghost.output}}";})]) "E-TEMPLATE-REF-UNKNOWN";

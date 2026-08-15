@@ -6,8 +6,8 @@
 #   1. It lets the Nix analyzer check definitions that ALREADY EXIST — the
 #      hand-written ones under `.kiro/workflows/`, and the seven vendor
 #      recipes inlined in the engine bundle, which are the highest-fidelity
-#      conformance corpus available because the engine self-validates them at
-#      module init.
+#      conformance corpus available. The engine shape-parses them at module
+#      init but does not run its structural analyzer until launch.
 #   2. `parse` then `render` must round-trip. That property is what proves the
 #      authored/wire divergence is a faithful re-encoding rather than a
 #      lossy one, and it is tested rather than asserted.
@@ -74,6 +74,8 @@
   parseNode = n:
     if !(hasAttr "type" n)
     then throw "kiro workflow: node is missing its `type` discriminator: ${builtins.toJSON n}"
+    else if n.type == "step" && hasAttr "input" n
+    then throw "kiro workflow: step '${n.id or "<missing>"}' uses removed field `input`; use `prompt`"
     else if n.type == "step"
     then {
       step =
