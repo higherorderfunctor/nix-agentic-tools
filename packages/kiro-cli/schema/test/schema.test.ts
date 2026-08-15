@@ -82,6 +82,10 @@ describe("schema: per-node rules", () => {
     ).toBe(true);
   });
 
+  test("accepts an empty optional description", () => {
+    expect(decodes({ ...minimal, description: "" })).toBe(true);
+  });
+
   const repeat = (extra: Record<string, unknown>) =>
     withSteps([
       {
@@ -175,6 +179,43 @@ describe("schema: per-node rules", () => {
     ).toBe(true);
   });
 
+  test.each([".drained", "drained.", "state..drained"])(
+    "accepts the engine-normalized property walk %s",
+    (jsonPath) => {
+      const fileCheck = { path: "a.json", jsonPath, value: true };
+      expect(
+        decodes(
+          withSteps([
+            {
+              type: "step",
+              id: "a",
+              agent: "ag",
+              prompt: "p",
+              completion: { fileCheck },
+            },
+          ]),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  test("rejects a property walk with no non-empty segment", () => {
+    const fileCheck = { path: "a.json", jsonPath: "..", value: true };
+    expect(
+      decodes(
+        withSteps([
+          {
+            type: "step",
+            id: "a",
+            agent: "ag",
+            prompt: "p",
+            completion: { fileCheck },
+          },
+        ]),
+      ),
+    ).toBe(false);
+  });
+
   test.each([
     [
       "unknown handler",
@@ -214,6 +255,16 @@ describe("schema: per-node rules", () => {
     [
       "crux-cr with a valid crId",
       { type: "watch", id: "w", handler: "crux-cr", config: { crId: "CR-12" } },
+      true,
+    ],
+    [
+      "crux-cr with crRef and an empty crId",
+      {
+        type: "watch",
+        id: "w",
+        handler: "crux-cr",
+        config: { crId: "", crRef: "cr.json" },
+      },
       true,
     ],
   ])("watch: %s", (_label, node, ok) => {
