@@ -438,6 +438,26 @@ in
       ]) "E-NESTING-DEPTH";
     kiro-workflow-emits-duplicate-id =
       emits "duplicate-id" (wrap [(step "a" {}) (step "a" {})]) "E-NODE-DUPLICATE-ID";
+    kiro-workflow-duplicate-id-order-is-second-occurrence = mkTest "duplicate-id-order-is-second-occurrence" (
+      let
+        duplicateMessages =
+          map (d: d.message)
+          (builtins.filter
+            (d: d.code == "E-NODE-DUPLICATE-ID")
+            (W.analyze.analyze (eval (wrap [
+              (step "a" {})
+              (step "b" {})
+              (step "b" {})
+              (step "a" {})
+            ])))
+            .diagnostics);
+      in
+        duplicateMessages
+        == [
+          "duplicate node id 'b'; ids must be unique across the WHOLE tree, not just among siblings"
+          "duplicate node id 'a'; ids must be unique across the WHOLE tree, not just among siblings"
+        ]
+    );
     kiro-workflow-duplicate-id-lineage-is-last-wins =
       emits "duplicate-id-lineage-is-last-wins"
       (wrap [
