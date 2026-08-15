@@ -629,7 +629,7 @@ in
           "duplicate node id 'a'; ids must be unique across the WHOLE tree, not just among siblings"
         ]
     );
-    kiro-workflow-duplicate-id-lineage-is-last-wins =
+    kiro-workflow-emits-duplicate-id-lineage-is-last-wins =
       emits "duplicate-id-lineage-is-last-wins"
       (wrap [
         (step "dup" {})
