@@ -71,10 +71,11 @@ bump; the constants are the durable part, byte offsets are not.
 Those constants and fixtures now back two artifacts that encode the contract as
 something executable, so the next reader can run it rather than trust it:
 `packages/kiro-cli/lib/workflow/` (Nix option types + tree analyzer + a
-wire-JSON parser/renderer) and `packages/kiro-cli/schema/` (Effect `Schema`,
-with the tree rules additionally enforced at TypeScript compile time). Both are
-checked against those seven recipes, which round-trip byte-identically. Design
-notes and the traps are in `packages/kiro-cli/docs/kiro-workflow-schema.md`.
+wire-JSON generator, one direction only) and `packages/kiro-cli/schema/` (Effect
+`Schema`, bidirectional, with the tree rules additionally enforced at TypeScript
+compile time). Both are checked against those seven recipes: each one is
+expressible in the schema and analyzes clean. Design notes and the traps are in
+`packages/kiro-cli/docs/kiro-workflow-schema.md`.
 
 **If you are holding a COPY of this file, compare that date against yours.**
 This document is `dev/`-scoped and has no export path, so nothing propagates a
