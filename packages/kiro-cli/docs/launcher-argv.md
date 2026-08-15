@@ -547,14 +547,17 @@ parse rejection from an accepted flag.
 
 ## Tests
 
+- `checks/kiro-fhs-contract.nix` — structurally inspects the realized upstream
+  Linux launcher, init, and profile. It pins the `/nix` bind and inherited PATH
+  bridge that `extraPackages` depends on without claiming to execute bubblewrap
+  inside the Nix build sandbox.
 - `checks/kiro-wrapper-argv.nix` — the real wrapper against a stub package that
   prints its argv. Covers which SIDE of the subcommand each flag lands on, the
-  that nothing emits `--tui`, the value-flag skip, `--`, idempotence, and the
-  env-export path. String-matching the generated bash cannot catch a flag
-  emitted on the wrong side; running it can.
+  absence of `--tui`, the value-flag skip, `--`, idempotence, and the env/PATH
+  export paths. String-matching the generated bash cannot catch a flag emitted
+  on the wrong side; running it can.
 - `checks/module-eval.nix` (`module-kiro-wrapper-*`) — pins the SHAPE of the
-  generated bash, including that reverse emission order is what makes prepends
-  compose to `--tui --v3`.
+  generated bash and the wrapper trigger conditions.
 
 ## Do not break the exec line
 
