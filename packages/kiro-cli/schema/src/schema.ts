@@ -1,0 +1,416 @@
+/**
+ * Effect `Schema` for the Kiro workflow definition format.
+ *
+ * Unlike the Nix side, this schema is over the WIRE shape — it decodes a real
+ * `.workflow.json`. Where the wire shape is loose, the looseness is recovered
+ * with a discriminated union (`watch` splits on `handler`) or a filter, and
+ * every such choice is annotated with what the engine actually does.
+ *
+ * Layering matches the Nix side deliberately, so the two stay comparable:
+ *
+ *   Schema (here)      what one node proves about itself
+ *   analyze (here)     what only the whole tree proves + policy lints
+ *   ./type-level.ts     the subset of the tree rules that fit at COMPILE time
+ *
+ * Ground truth is the shipped KAS bundle; the format is in no public doc.
+ */
+import { Schema } from "effect";
+import {
+  ENGINE,
+  MAX_NESTING_DEPTH,
+  MAX_REPEAT_ITERATIONS,
+  MAX_STEP_NODES,
+} from "./limits.js";
+
+// ── Scalars ─────────────────────────────────────────────────────────────────
+
+const NonEmptyString = Schema.String.pipe(
+  Schema.filter((s) => s.length > 0 || "must not be empty"),
+);
+
+/**
+ * The crux-cr id pattern, compiled once from the SHARED engine-limits.json.
+ *
+ * The json stores it UNANCHORED (`CR-[0-9]+`) because the two consumers anchor
+ * differently: Nix's `builtins.match` is whole-string by definition, so it uses
+ * the value verbatim, while here it has to be wrapped. Anchoring in the json
+ * would make Nix demand a literal `^`.
+ *
+ * It also spells the digit class `[0-9]` rather than `\d`. Those are the same
+ * set for a non-unicode JS regex, but only if you already know that — the
+ * explicit class is what makes the two ports legibly identical.
+ */
+const CR_ID_RE = new RegExp(`^${ENGINE.watch.crIdPattern}$`);
+
+/**
+ * `maxIterations`. The engine's `.int().positive().max(1000)` — 1000 is
+ * inclusive-legal and the vendor's own `autoresearch` recipe sits exactly
+ * there, so an exclusive bound would reject a shipped recipe.
+ */
+const MaxIterations = Schema.Int.pipe(
+  Schema.positive(),
+  Schema.lessThanOrEqualTo(MAX_REPEAT_ITERATIONS),
+).annotations({ identifier: "MaxIterations" });
+
+const PositiveNumber = Schema.Number.pipe(Schema.positive());
+
+/**
+ * `jsonPath` is NOT JSONPath: the engine does `split(".")` then a plain
+ * property walk. `"$.drained"` therefore reads a property literally named
+ * `$`, resolves undefined, and the loop never stops — silently, forever.
+ *
+ * This is a HARD rejection at DECODE time, not a `policy`-basis diagnostic.
+ * The distinction matters because the two behave differently: a policy
+ * diagnostic is advisory and `validate(..., { strict: false })` tolerates it,
+ * whereas this fails `decodeWorkflow` outright and no option relaxes it.
+ *
+ * It is therefore one of the few places this schema is deliberately STRICTER
+ * than the engine. The rule governing that, shared with the Nix port's
+ * strictness ledger:
+ *
+ *   be stricter than the engine only where the engine's acceptance is a
+ *   SILENT failure — something that parses, runs, and then never does what
+ *   it says.
+ *
+ * `"$.drained"` qualifies: legal JSON, accepted by the engine, and it hangs
+ * the loop forever without an error. A property genuinely named `$` is the
+ * price, and no vendor recipe uses one.
+ *
+ * An EMPTY SEGMENT — `".done"`, `"done."`, `"state..done"`, `""`, `"..."` —
+ * is the one deliberate EXCEPTION to that rule, and it is operator-approved
+ * rather than derived from it. The engine's `walkJsonPath` does
+ * `split(".").filter((s) => s.length > 0)`, so it resolves every one of those
+ * exactly as if the empty segments were not written, and an interior one is
+ * therefore not a silent failure at all. It is refused anyway because this is
+ * an authoring and generation tool whose output is MACHINE GENERATED and
+ * never hand-written: `"state.done"` is the convention, and a doubled dot
+ * means whatever assembled the path is broken upstream. Surfacing that beats
+ * collapsing it silently — this port is the one an LLM's output reaches
+ * first, so the message below is the actual product surface.
+ */
+const JsonPath = Schema.String.pipe(
+  Schema.filter(
+    (s) =>
+      s.split(".").every((segment) => segment.length > 0) ||
+      `jsonPath ${JSON.stringify(s)} has an empty '.'-separated segment — expected a property walk like "state.done", with no leading, trailing or doubled '.' and no empty path`,
+  ),
+  Schema.filter(
+    (s) =>
+      (!s.startsWith("$") &&
+        !s.includes("[") &&
+        !s.includes("]") &&
+        !s.includes("*")) ||
+      `jsonPath ${JSON.stringify(s)} is not JSONPath — expected a property walk like "state.done". Drop '$', brackets and wildcards.`,
+  ),
+).annotations({ identifier: "JsonPath" });
+
+// ── Stop conditions ─────────────────────────────────────────────────────────
+
+export const FileCheck = Schema.Struct({
+  path: NonEmptyString,
+  jsonPath: JsonPath,
+  /** An ARRAY here means "any of these candidates" to the engine, not "match this array". */
+  value: Schema.Unknown,
+}).annotations({ identifier: "FileCheck" });
+
+export const StopCondition = Schema.Struct({
+  containsText: Schema.optional(NonEmptyString),
+  fileCheck: Schema.optional(FileCheck),
+  completionSignal: Schema.optional(
+    Schema.Literal("success", "need_input", "error"),
+  ),
+})
+  .pipe(
+    Schema.filter(
+      (c) =>
+        c.containsText !== undefined ||
+        c.fileCheck !== undefined ||
+        c.completionSignal !== undefined ||
+        "a stop condition requires at least one of containsText, fileCheck, completionSignal",
+    ),
+  )
+  .annotations({ identifier: "StopCondition" });
+
+// ── Nodes ───────────────────────────────────────────────────────────────────
+
+export interface StepNode {
+  readonly type: "step";
+  readonly id: string;
+  readonly agent: string;
+  readonly prompt: string;
+  readonly artifacts?: { readonly [k: string]: string };
+  readonly captureOutput?: boolean;
+  readonly completion?: Schema.Schema.Type<typeof StopCondition>;
+  readonly modelId?: string;
+  readonly effortLevel?: string;
+  /** Removed legacy field. Declared so its presence is a loud parse error. */
+  readonly input?: never;
+}
+
+export interface SequenceNode {
+  readonly type: "sequence";
+  readonly id: string;
+  readonly steps: ReadonlyArray<WorkflowNode>;
+}
+
+export interface RepeatNode {
+  readonly type: "repeat";
+  readonly id: string;
+  readonly steps: ReadonlyArray<WorkflowNode>;
+  readonly maxIterations: number;
+  readonly onMaxIterations: "abort" | "continue" | "pause";
+  readonly stopCondition?: Schema.Schema.Type<typeof StopCondition>;
+  readonly stopWhen?: string;
+}
+
+export interface ParallelNode {
+  readonly type: "parallel";
+  readonly id: string;
+  readonly branches: ReadonlyArray<WorkflowNode>;
+  readonly joinPolicy: "all" | "allSettled" | "any";
+}
+
+export interface GithubPrWatchNode {
+  readonly type: "watch";
+  readonly id: string;
+  readonly handler: "github-pr";
+  readonly config: {
+    readonly prRef?: string;
+    readonly url?: string;
+    readonly includeOwnActivity?: boolean;
+    readonly ignoreAuthors?: ReadonlyArray<string>;
+    readonly pollIntervalSec?: number;
+    readonly commandTimeoutSec?: number;
+  };
+  readonly idleTimeoutSec?: number;
+}
+
+export interface CruxCrWatchNode {
+  readonly type: "watch";
+  readonly id: string;
+  readonly handler: "crux-cr";
+  readonly config: {
+    readonly crRef?: string;
+    readonly crId?: string;
+    readonly pollIntervalSec?: number;
+    readonly commandTimeoutSec?: number;
+  };
+  readonly idleTimeoutSec?: number;
+}
+
+export type WatchNode = GithubPrWatchNode | CruxCrWatchNode;
+
+export type WorkflowNode =
+  | StepNode
+  | SequenceNode
+  | RepeatNode
+  | ParallelNode
+  | WatchNode;
+
+/**
+ * `pollIntervalSec` below the registry minimum is a hard config error, not a
+ * clamp. Shared by both handlers via the engine's passthrough base schema.
+ */
+const PollIntervalSec = Schema.Number.pipe(
+  Schema.greaterThanOrEqualTo(ENGINE.watch.minPollIntervalSec),
+);
+
+const WatchBase = {
+  pollIntervalSec: Schema.optional(PollIntervalSec),
+  commandTimeoutSec: Schema.optional(PositiveNumber),
+};
+
+const GithubPrConfig = Schema.Struct({
+  ...WatchBase,
+  prRef: Schema.optional(NonEmptyString),
+  url: Schema.optional(NonEmptyString),
+  includeOwnActivity: Schema.optional(Schema.Boolean),
+  ignoreAuthors: Schema.optional(Schema.Array(NonEmptyString)),
+}).pipe(
+  Schema.filter(
+    (c) =>
+      c.prRef !== undefined ||
+      c.url !== undefined ||
+      "github-pr requires one of prRef, url",
+  ),
+);
+
+const CruxCrConfig = Schema.Struct({
+  ...WatchBase,
+  crRef: Schema.optional(NonEmptyString),
+  crId: Schema.optional(
+    Schema.String.pipe(
+      Schema.filter(
+        (s) =>
+          s.length === 0 ||
+          CR_ID_RE.test(s) ||
+          `a non-empty crId must match ^${ENGINE.watch.crIdPattern}$`,
+      ),
+    ),
+  ),
+}).pipe(
+  /**
+   * USEFULNESS, not presence. The engine's own refine tests presence
+   * (`crRef !== undefined || crId !== undefined`), so it admits `crId: ""`
+   * with no `crRef` — and then `resolveCrId` gates on
+   * `crId !== undefined && crId.length > 0`, falls through to the `crRef`
+   * branch, finds nothing, and throws ``crux-cr: neither `crId` nor `crRef`
+   * provided`` at the first poll. That pairing has no run in which it
+   * succeeds, so it is refused at authoring time — the same reason the
+   * `crId` pattern check exists.
+   *
+   * `crRef` + `crId: ""` stays ACCEPTED for the same reason: the empty id
+   * falls through and the `crRef` branch really does resolve it.
+   */
+  Schema.filter(
+    (c) =>
+      c.crRef !== undefined ||
+      (c.crId !== undefined && c.crId.length > 0) ||
+      "crux-cr requires a crRef, or a non-empty crId",
+  ),
+);
+
+const StepNodeSchema: Schema.Schema<StepNode> = Schema.Struct({
+  type: Schema.Literal("step"),
+  id: Schema.String,
+  agent: NonEmptyString,
+  /**
+   * REQUIRED. The engine tests only `=== undefined`, so an empty string
+   * passes both its schema and its validator — matched here rather than
+   * tightened, since rejecting what the engine accepts is its own bug.
+   */
+  prompt: Schema.String,
+  artifacts: Schema.optional(
+    Schema.Record({ key: Schema.String, value: NonEmptyString }),
+  ),
+  captureOutput: Schema.optional(Schema.Boolean),
+  completion: Schema.optional(StopCondition),
+  /**
+   * Deliberately NOT literal unions. The model catalog is fetched from the
+   * control plane at runtime and the compiled-in default is EMPTY, and the
+   * legal effort set is per-model and server-supplied. A literal union here
+   * would reject ids and levels the server accepts.
+   */
+  modelId: Schema.optional(NonEmptyString),
+  effortLevel: Schema.optional(NonEmptyString),
+  /**
+   * The step-level `input` field was removed and the engine now rejects it
+   * loudly with a migration message. `optional(Never)` reproduces that: the
+   * key is unrepresentable in the type AND fails at decode.
+   */
+  input: Schema.optional(Schema.Never),
+}) as unknown as Schema.Schema<StepNode>;
+
+const SequenceNodeSchema: Schema.Schema<SequenceNode> = Schema.Struct({
+  type: Schema.Literal("sequence"),
+  id: Schema.String,
+  steps: Schema.Array(
+    Schema.suspend((): Schema.Schema<WorkflowNode> => WorkflowNodeSchema),
+  ),
+}) as unknown as Schema.Schema<SequenceNode>;
+
+const RepeatNodeSchema: Schema.Schema<RepeatNode> = Schema.Struct({
+  type: Schema.Literal("repeat"),
+  id: Schema.String,
+  steps: Schema.Array(
+    Schema.suspend((): Schema.Schema<WorkflowNode> => WorkflowNodeSchema),
+  ),
+  maxIterations: MaxIterations,
+  /** REQUIRED — the engine's Zod gives it no default. */
+  onMaxIterations: Schema.Literal("abort", "continue", "pause"),
+  stopCondition: Schema.optional(StopCondition),
+  /** Free-form here; the grammar is enforced by `analyze`, as the engine does. */
+  stopWhen: Schema.optional(NonEmptyString),
+}).pipe(
+  Schema.filter(
+    (r) =>
+      r.stopCondition === undefined ||
+      r.stopWhen === undefined ||
+      "a repeat must not define both stopCondition and stopWhen (defining NEITHER is legal)",
+  ),
+) as unknown as Schema.Schema<RepeatNode>;
+
+const ParallelNodeSchema: Schema.Schema<ParallelNode> = Schema.Struct({
+  type: Schema.Literal("parallel"),
+  id: Schema.String,
+  branches: Schema.Array(
+    Schema.suspend((): Schema.Schema<WorkflowNode> => WorkflowNodeSchema),
+  ),
+  joinPolicy: Schema.Literal("all", "allSettled", "any"),
+}) as unknown as Schema.Schema<ParallelNode>;
+
+/**
+ * The wire shape carries `handler: string` and `config: record(unknown)` as
+ * two loose fields. Exactly two handlers ship, each with its own config
+ * schema, so splitting into a union discriminated on `handler` recovers
+ * per-handler field checking that the wire shape throws away.
+ *
+ * `config` is REQUIRED here though the engine's Zod marks it optional: both
+ * shipped handlers refine "at least one of" over their config, so an absent
+ * config fails the engine's separate `validateWatchConfigs` pass anyway.
+ */
+const WatchNodeSchema: Schema.Schema<WatchNode> = Schema.Union(
+  Schema.Struct({
+    type: Schema.Literal("watch"),
+    id: Schema.String,
+    handler: Schema.Literal("github-pr"),
+    config: GithubPrConfig,
+    idleTimeoutSec: Schema.optional(PositiveNumber),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("watch"),
+    id: Schema.String,
+    handler: Schema.Literal("crux-cr"),
+    config: CruxCrConfig,
+    idleTimeoutSec: Schema.optional(PositiveNumber),
+  }),
+) as unknown as Schema.Schema<WatchNode>;
+
+export const WorkflowNodeSchema: Schema.Schema<WorkflowNode> = Schema.Union(
+  StepNodeSchema,
+  SequenceNodeSchema,
+  RepeatNodeSchema,
+  ParallelNodeSchema,
+  WatchNodeSchema,
+).annotations({ identifier: "WorkflowNode" });
+
+// ── The workflow root ───────────────────────────────────────────────────────
+
+export interface Workflow {
+  readonly name: string;
+  readonly description?: string;
+  readonly inputs?: { readonly [k: string]: string };
+  readonly steps: ReadonlyArray<WorkflowNode>;
+  readonly modelId?: string;
+  readonly effortLevel?: string;
+}
+
+export const WorkflowSchema: Schema.Schema<Workflow> = Schema.Struct({
+  name: NonEmptyString,
+  description: Schema.optional(Schema.String),
+  /**
+   * A DECLARATION map, name -> free-form type hint. The engine never merges
+   * these in as defaults; they are only the allow-list for its
+   * undeclared-reference warning. Values must be strings.
+   */
+  inputs: Schema.optional(
+    Schema.Record({ key: Schema.String, value: Schema.String }),
+  ),
+  steps: Schema.Array(WorkflowNodeSchema),
+  modelId: Schema.optional(NonEmptyString),
+  effortLevel: Schema.optional(NonEmptyString),
+  /**
+   * `planRevision` is deliberately absent. The runner overwrites it with 0 at
+   * creation, so an authored value is discarded — it is a runtime pairing
+   * token between workflow-state.json and workflow-definition.json.
+   *
+   * The engine's Zod strips unknown keys rather than rejecting them, so a
+   * definition carrying it still parses; it simply never round-trips.
+   */
+}).annotations({
+  identifier: "Workflow",
+}) as unknown as Schema.Schema<Workflow>;
+
+export const decodeWorkflow = Schema.decodeUnknownEither(WorkflowSchema);
+
+export { MAX_NESTING_DEPTH, MAX_REPEAT_ITERATIONS, MAX_STEP_NODES };
