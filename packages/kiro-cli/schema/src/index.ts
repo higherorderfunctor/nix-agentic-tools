@@ -19,10 +19,11 @@ import type { CheckWorkflow } from "./type-level.js";
 /**
  * Author a workflow with the tree rules checked AT COMPILE TIME.
  *
- * `const W` keeps the literal narrow — without it every `type: "step"` widens
- * to `string` and the walkers have nothing to walk. Pass an object literal
- * directly; assigning it to an intermediate `const` without `as const` widens
- * it and the checks silently degrade to no-ops.
+ * `const W` keeps a direct object literal narrow. Deeply readonly imported
+ * JSON-shaped literals work too. Widened arrays and union-shaped subtrees are
+ * rejected as statically indeterminate instead of silently passing; decode and
+ * `validate` those values at runtime. Known tuple suffixes are still checked,
+ * so an unknown subtree cannot hide a later provable violation.
  *
  * A violation surfaces as a type error on the argument whose text carries the
  * reason, e.g.
@@ -35,7 +36,7 @@ import type { CheckWorkflow } from "./type-level.js";
  */
 export const defineWorkflow = <const W extends Workflow>(
   workflow: W & CheckWorkflow<W>,
-): W => workflow as W;
+): W => workflow;
 
 export type ValidationResult =
   | {
