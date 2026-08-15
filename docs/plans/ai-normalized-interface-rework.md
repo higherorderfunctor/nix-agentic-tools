@@ -628,7 +628,48 @@ must be resolved in the same PR, by one of:
 
 Option 1 is the only one that does not lose a working feature.
 
-### A3b. #920 must land before A3
+### A3b. #920's Home Manager path defect — fixed, and NOT a prerequisite
+
+> **Shipped as PR #948 — and NOT as a prerequisite for anything.** This section
+> is retained as the record of the defect and its fix; its original claim that
+> #920 gates A3 was audited on 2026-08-15 and does not hold (see the sequencing
+> note below). The two literals now interpolate `cfg.configDir`, and the four
+> `checks/module-eval.nix` accessors moved to `.copilot/instructions/`.
+>
+> Four refinements the original section did not specify, recorded so they are
+> not re-litigated:
+>
+> 1. **The `configDir` pin is GATED on there being content to lose** — it
+>    requires the default only when a named instruction or a rule exists. An
+>    unconditional pin would break a consumer using `configDir` purely as the
+>    wrapper-aimed MCP root, which still works because `--additional-mcp-config`
+>    is handed the path explicitly.
+> 2. **Its accepted cost is a false positive**, named here rather than left to
+>    be rediscovered: a consumer who sets `COPILOT_HOME` themselves has a real
+>    reason to move `configDir`, and Nix cannot see that variable. The escape,
+>    if that consumer appears, is to widen the assertion — not to un-gate it.
+> 3. **The four existing accessors were not merely re-pointed.** Three now also
+>    assert the `$HOME/.github/` key is ABSENT; re-pointing alone would let a
+>    regression that wrote BOTH paths pass. A new check,
+>    `module-copilot-hm-config-dir-pinned-when-rules-present`, covers the
+>    assertion with two passing arms as its positive control, since a
+>    failure-asserting test is satisfied for free by a harness that produces no
+>    assertions at all.
+> 4. **The gate covers THREE artifact classes, not two.** Named instructions,
+>    rules, AND the composed context file (`<configDir>/<contextFilename>`,
+>    default `copilot-instructions.md`) are all discovered by Copilot walking
+>    its own home. An earlier revision of the assertion covered only the first
+>    two and described them as "the only artifacts here", which left
+>    `ai.context` alone reproducing the very defect being fixed — it is emitted
+>    in a different `mkMerge` branch, which is what made it easy to miss.
+>
+> **The destination was re-measured, and it is live.**
+> `$HOME/.copilot/instructions/**/*.instructions.md` is in copilot-cli 1.0.80's
+> own discovery enumeration, and a marker file placed there reaches the outgoing
+> system prompt. Worth doing rather than assuming: the defect being fixed was a
+> write to a path nobody reads, so "the new path is read" is exactly the premise
+> that must not be inherited on trust. Evidence and method are in
+> `dev/fragments/ai-clis/copilot-config-delivery.md`.
 
 Copilot rules and named instructions are **dead on Home Manager**:
 `packages/copilot-cli/lib/mkCopilot.nix:281` and `:294` write to
@@ -641,9 +682,25 @@ Verified 2026-08-14: still present on `main`, and **four
 the buggy path in**. So the rework will not fix it incidentally — it needs its
 own change, and the tests must change with it.
 
-**The sequencing is the point:** A3 landing first would migrate Copilot's Home
-Manager content _from a live file into the dead one_, converting a
-partly-working surface into a fully-dead one.
+**The sequencing claim — "5 must follow 2" — was AUDITED 2026-08-15 and does not
+hold.** It is recorded here as withdrawn rather than deleted, because the
+underlying observation is still true and only the dependency was wrong.
+
+The observation: A3 landing first would migrate Copilot's Home Manager content
+_from a live file into a dead one_. What the audit found:
+
+- the live→dead move is only **unnamed** `ai.instructions` (`mkCopilot.nix:307`
+  live versus `:281`/`:294` dead) — named instructions and rules were already
+  dead→dead, so there was less at stake than the claim implied;
+- it does not touch the **devenv** arm, which is the github.com reviewer path
+  and the only Copilot surface the maintainer consumes;
+- and it is dischargeable **inside** A3 by the same concat-into-the-live-file
+  treatment §A3a already mandates for kimchi — so even where it bites, it needs
+  no separate PR ahead of A3.
+
+**Consequence:** #920 is ordinary work that stands on its own merits, not a
+gate. It shipped as #948 with zero dependents. Do not reintroduce it as a
+prerequisite.
 
 #### Sized 2026-08-14 — smaller than this section implied, and it is ONE PR
 

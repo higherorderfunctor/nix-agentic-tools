@@ -210,7 +210,9 @@ in {
   # ── Rule submodule type ────────────────────────────────────────────
   # Attrs-shaped analog of instructionModule. Each entry becomes one file
   # in the per-ecosystem rules directory (.claude/rules/<name>.md,
-  # .kiro/steering/<name>.md, .github/instructions/<name>.instructions.md).
+  # .kiro/steering/<name>.md, and for Copilot
+  # instructions/<name>.instructions.md under configDir on Home Manager or
+  # projectDir on devenv).
   # The attribute name becomes the filename stem. `text` accepts either
   # inline markdown lines or a path to a file.
   #

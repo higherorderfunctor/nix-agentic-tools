@@ -7,11 +7,18 @@ applyTo: "checks/module-eval.nix,lib/ai/agent.nix,lib/ai/ai-common.nix,lib/ai/ap
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-14 (commit pending — adds the Kiro-specific
-> `extraPackages` runtime PATH prefix, shared by both backends through the
-> existing launcher wrapper and deliberately not promoted to `ai.shell` or a
-> cross-runtime pool). Prior: 2026-08-05 (commit pending — Codex's beta
-> permission model is LOCKED OUT: `ai.codex.profiles`,
+> **Last verified:** 2026-08-14 (commit pending — Copilot's `ai.instructions` /
+> `ai.rules` destination is per-BACKEND and this entry named only one of them.
+> Home Manager wrote a hardcoded `.github/instructions/`, which resolves to
+> `$HOME/.github/instructions/` — a directory copilot-cli never reads — so every
+> named instruction and every rule was emitted and then ignored. It now routes
+> through `ai.copilot.configDir`, matching every other HM artifact this module
+> writes. See `copilot-config-delivery.md` for why the two backends address
+> genuinely different consumers). Prior: 2026-08-14 (commit pending — adds the
+> Kiro-specific `extraPackages` runtime PATH prefix, shared by both backends
+> through the existing launcher wrapper and deliberately not promoted to
+> `ai.shell` or a cross-runtime pool). Prior: 2026-08-05 (commit pending —
+> Codex's beta permission model is LOCKED OUT: `ai.codex.profiles`,
 > `ai.codex.settings.default_permissions`, and `ai.codex.settings.permissions`
 > stay typed and still emit, but every entry point now asserts. A layer carrying
 > the beta model OVERRIDES rather than merges the legacy sandbox settings
@@ -332,10 +339,12 @@ enabled ecosystem whose native model preserves the option's semantics):
 - `ai.instructions` — list of instruction records (text plus optional name, path
   scoping, description, and Kiro `inclusion`). Transformed per ecosystem via
   `lib/ai/transformers/`: Claude gets `.claude/rules/<name>.md` with YAML
-  frontmatter; Copilot gets `.github/instructions/<name>.instructions.md`; Kiro
-  gets `.kiro/steering/<name>.md` (via the CLI module); Codex concatenates
-  entries into its single AGENTS.md without frontmatter. Scoped entries become
-  explicit prose unless `skipIfUnsupported = true` omits them. Kiro derives
+  frontmatter; Copilot gets `instructions/<name>.instructions.md` under
+  `ai.copilot.configDir` on Home Manager and under `ai.copilot.projectDir` on
+  devenv — the two backends address different CONSUMERS, not one path; Kiro gets
+  `.kiro/steering/<name>.md` (via the CLI module); Codex concatenates entries
+  into its single AGENTS.md without frontmatter. Scoped entries become explicit
+  prose unless `skipIfUnsupported = true` omits them. Kiro derives
   `always`/`fileMatch` from paths when inclusion is null; an explicit
   `always`/`auto`/`fileMatch`/`manual` value overrides only Kiro's load
   strategy, while the other ecosystems continue translating paths normally.
@@ -928,10 +937,15 @@ touch L1/L2b; emission stays stable.
 
 ## `ai.shell` — the one override-wins surface
 
-> **Last verified:** 2026-08-10 (commit pending — first landing of `ai.shell`.
-> If you add another nullable-scalar `ai.*` option, change which runtimes
-> consume this one, or touch `resolveOverride`, update this fragment in the same
-> commit.)
+> **Last verified:** 2026-08-14 (commit pending — the escape hatch at the end of
+> the Copilot section was half-wrong: at 1.0.80 the plain `@github/copilot` npm
+> tarball is a 24K loader shim, not readable JS. The readable app code is in the
+> per-platform dep — and, better, the SEA self-extracts a byte-identical copy on
+> first run, so no download is needed at all. The Copilot `ai.shell` gap itself
+> is UNCHANGED and still open). Prior: 2026-08-10 (commit pending — first
+> landing of `ai.shell`. If you add another nullable-scalar `ai.*` option,
+> change which runtimes consume this one, or touch `resolveOverride`, update
+> this fragment in the same commit.)
 
 ### It is deliberately NOT collision-as-failure
 
@@ -1106,9 +1120,20 @@ single-executable CLIs. Codex, by contrast, is a Rust binary whose string table
 IS readable (`codex` = 1030 hits), which is why its mechanism could be settled
 the same way.
 
-To close the gap, read the universal npm tarball (`github-copilot-<ver>.tgz`)
-that upstream nixpkgs switched to; it ships readable JS. Do not re-run a
-plaintext scan of the SEA.
+To close the gap, read the app code — do not re-run a plaintext scan of the SEA.
+**The cheapest route is that the SEA self-extracts its payload on first run**,
+to `~/.cache/copilot/pkg/<platform>/<version>/`; `app.js` there is ~9 MB of
+minified but fully searchable JS, alongside the Rust core `runtime.node` where
+discovery actually lives. Measured 2026-08-14 against 1.0.80, with
+`copilot-instructions.md`, `no-custom-instructions` and
+`No authentication information found` as positive controls — all three hit,
+where the same scan of the SEA itself returns zero for every one of them.
+
+Do not reach for the plain `@github/copilot` npm tarball for this: at 1.0.80 it
+is a 24K loader shim. The readable JS is in the per-platform optional dep
+(`@github/copilot-linux-x64`), and its `app.js` is sha256-identical to the
+self-extracted copy — so the self-extract route buys the same bytes with no
+download.
 
 ### Verifying a change here
 

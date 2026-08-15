@@ -129,6 +129,7 @@ formedness
 frepo
 frontloaded
 frontmatter
+getdents
 getkimchi
 getpid
 gitbook

@@ -359,8 +359,11 @@ override file.
      Shipped 8f0c16b, 7dad0b8.
    - **Copilot:** context → `<configDir>/<contextFilename>`
      (copilot-instructions.md default); rules →
-     `.github/instructions/<name>.instructions.md` via `copilotTransformer`.
-     Shipped 7dad0b8, 419010a.
+     `<configDir>/instructions/<name>.instructions.md` on Home Manager and
+     `<projectDir>/instructions/<name>.instructions.md` on devenv, via
+     `copilotTransformer`. Shipped 7dad0b8, 419010a; the Home Manager arm was a
+     hardcoded `.github/instructions/` until #920 — under HM that resolved to
+     `$HOME/.github/`, which copilot-cli never reads.
    - **Codex:** shared/per-app context, instructions, and rules lower into
      `~/.codex/AGENTS.md` for Home Manager and project-root `AGENTS.md` for
      devenv. Scoped content degrades to explicit prose unless
@@ -375,9 +378,10 @@ override file.
 
 ### Not yet shipped
 
-- **Copilot-global concat** — Copilot rules currently emit to
-  `.github/instructions/` at project scope with native `applyTo:`. There is no
-  global concat target requiring Codex-style prose degradation.
+- **Copilot-global concat** — Copilot rules emit one file per rule with native
+  `applyTo:`, under `projectDir` at project scope and under `configDir` at user
+  scope. There is no global concat target requiring Codex-style prose
+  degradation.
 - **Deprecation of legacy `ai.instructions` list-shape** — `instructions` and
   `rules` coexist today. Deprecation warning and migration guide not yet added.
 
