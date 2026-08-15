@@ -172,13 +172,13 @@ working, and nothing in this document depends on it.
 A workflow is
 `{ name, description?, inputs?, modelId?, effortLevel?, steps[] }`.
 
-| type       | required fields                                                                               | notes                                                                         |
-| ---------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `step`     | `id`, `agent`, and at least one of `prompt` / `input`                                         | optional `artifacts`, `captureOutput`, `completion`, `modelId`, `effortLevel` |
-| `repeat`   | `id`, `steps`, `maxIterations` (1–1000), `onMaxIterations`, plus a stop condition (see below) | `onMaxIterations`: `abort` \| `continue` \| `pause`                           |
-| `sequence` | `id`, `steps`                                                                                 | ordered                                                                       |
-| `parallel` | `id`, `branches`, `joinPolicy`                                                                | `all` \| `allSettled` \| `any`                                                |
-| `watch`    | `id`, `handler`, `config`                                                                     | non-LLM polling, e.g. `github-pr`                                             |
+| type       | required fields                                                                               | notes                                                                                          |
+| ---------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `step`     | `id`, `agent`, `prompt`                                                                       | removed `input`; optional `artifacts`, `captureOutput`, `completion`, `modelId`, `effortLevel` |
+| `repeat`   | `id`, `steps`, `maxIterations` (1–1000), `onMaxIterations`, plus a stop condition (see below) | `onMaxIterations`: `abort` \| `continue` \| `pause`                                            |
+| `sequence` | `id`, `steps`                                                                                 | ordered                                                                                        |
+| `parallel` | `id`, `branches`, `joinPolicy`                                                                | `all` \| `allSettled` \| `any`                                                                 |
+| `watch`    | `id`, `handler`, `config`                                                                     | non-LLM polling, e.g. `github-pr`                                                              |
 
 **The two tool schemas disagree about whether a `repeat` stop condition is
 mandatory, and the validator is the lenient one (Measured).** `run_workflow`
@@ -328,10 +328,10 @@ programmatically.
 ### 3.4 What validation does and does not check (Contract, exceptions Measured)
 
 `validate_workflow` **does** check schema conformance, the caps in §3.2, that
-every step has at least one of `prompt` / `input`, that a `repeat` does not
-define both stop forms, that `stopWhen` watch references resolve to real watch
-ids, the ordering rules in §3.3, and that `fileCheck` paths are not provably
-outside the workspace roots (§7.1).
+every step has a `prompt` and does not use the removed `input` field, that a
+`repeat` does not define both stop forms, that `stopWhen` watch references
+resolve to real watch ids, the ordering rules in §3.3, and that `fileCheck`
+paths are not provably outside the workspace roots (§7.1).
 
 It does **not** check agent names, watch handler configs, `modelId`,
 `effortLevel`, or bare `{{identifier}}` references — those pass through as
