@@ -15,6 +15,28 @@
 # symlinkJoin wrapper that injects `--additional-mcp-config` so the
 # rendered mcp-config.json actually gets loaded by the copilot
 # binary at runtime.
+#
+# ── PROVISIONAL: backend is standing in for PRODUCT ──────────────────
+#
+# "Copilot" is TWO products under one option namespace, and this module
+# currently distinguishes them by BACKEND rather than by name:
+#
+#   Home Manager  → copilot-cli        reads `~/.copilot/…`
+#   devenv        → github.com Copilot reads the repo's `.github/…`
+#
+# That mapping is true of how people happen to install each product, not
+# of anything intrinsic, and it is exactly the conflation issue #920
+# describes ("two runtimes under one name"). The intended fix is a real
+# split into separate runtimes — `copilot-github` and `copilot` — which
+# has NOT been designed yet; #920 stays open for it.
+#
+# So read the emission paths below, and the tests that pin them, as a
+# PLACEHOLDER that happens to be right for the common case — not as an
+# endorsement of backend-as-product. When the split lands, those paths
+# move to the runtime that owns them and the assertions move with them.
+#
+# The github.com arm (devenv, `.github/instructions/`) is the one the
+# maintainer actually consumes today; the CLI arm is fixed but unused.
 {
   lib,
   pkgs,
@@ -219,20 +241,31 @@ lib.ai.app.mkAiApp {
                 through Home Manager. Configure it through the devenv module.
               '';
             }
-            # Named instructions and rules are the only artifacts here that
-            # Copilot discovers by walking its own home rather than by being
-            # handed a path. `mcp-config.json` survives a moved `configDir`
-            # because the wrapper points `--additional-mcp-config` straight at
-            # it; there is no instructions equivalent of that flag, and this
-            # module deliberately does not set `COPILOT_HOME` (that would fork
-            # auth and session state — see copilot-config-delivery.md). So a
-            # non-default `configDir` writes these files somewhere nothing
-            # reads, which is the exact defect this path was just fixed for.
+            # THREE artifact classes here are discovered by Copilot walking its
+            # own home rather than by being handed a path: named instructions,
+            # rules, and the composed context file
+            # (`<configDir>/<contextFilename>`, default
+            # `copilot-instructions.md` — see the measured discovery list in
+            # copilot-config-delivery.md). `mcp-config.json` survives a moved
+            # `configDir` because the wrapper points `--additional-mcp-config`
+            # straight at it; there is no instructions equivalent of that flag,
+            # and this module deliberately does not set `COPILOT_HOME` (that
+            # would fork auth and session state). So a non-default `configDir`
+            # writes any of the three somewhere nothing reads, which is the
+            # exact defect this path was just fixed for.
+            #
+            # The context file is easy to miss because it is emitted in a
+            # different `mkMerge` branch (the `hasContext || hasUnnamed` one
+            # below) from the instructions and rules writers. An earlier version
+            # of this assertion covered only the first two and called them "the
+            # only artifacts here", which left `ai.context` alone reproducing
+            # the very defect being fixed.
             #
             # Gated on there being content to lose: a consumer using
             # `configDir` purely as the wrapper-aimed MCP root is unaffected,
-            # and the failure arrives at the moment the first instruction or
-            # rule would go dead rather than at an unrelated config change.
+            # and the failure arrives at the moment the first instruction, rule
+            # or context line would go dead rather than at an unrelated config
+            # change.
             #
             # This whole block rides `mkIf cfg.enable` (mkBackendTransform.nix
             # wraps `customConfig`), unlike the shared-pool collision
@@ -241,24 +274,26 @@ lib.ai.app.mkAiApp {
             # emitted here while Copilot is off, so there is nothing to lose.
             {
               assertion =
-                (namedInstructions == [] && mergedRules == {})
+                (namedInstructions == [] && mergedRules == {} && !hasContext && !hasUnnamed)
                 || cfg.configDir == ".copilot";
               message = ''
                 ai.copilot.configDir is "${cfg.configDir}", but Copilot CLI
-                discovers named instructions and rules only under its own home
-                (`~/.copilot/instructions/`). Home Manager cannot relocate that
-                home, so these files would be written and never read:
+                discovers instructions, rules and its context file only under
+                its own home (`~/.copilot/`). Home Manager cannot relocate that
+                home, so these would be written and never read:
 
-                ${lib.concatMapStringsSep "\n" (n: "  - ${n}.instructions.md") (
+                ${lib.concatMapStringsSep "\n" (n: "  - ${n}") (
                   lib.sort (a: b: a < b) (
-                    map (i: i.name) namedInstructions ++ lib.attrNames mergedRules
+                    map (i: "${i.name}.instructions.md") namedInstructions
+                    ++ map (n: "${n}.instructions.md") (lib.attrNames mergedRules)
+                    ++ lib.optional (hasContext || hasUnnamed) cfg.contextFilename
                   )
                 )}
 
                 Either leave ai.copilot.configDir at its ".copilot" default, or
-                drop the named ai.instructions / ai.rules entries above from
-                this Home Manager configuration. Project-scope instructions go
-                through the devenv module, which writes them under
+                drop the ai.context / ai.instructions / ai.rules entries above
+                from this Home Manager configuration. Project-scope instructions
+                go through the devenv module, which writes them under
                 ai.copilot.projectDir instead.
               '';
             }

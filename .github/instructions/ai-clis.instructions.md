@@ -135,29 +135,25 @@ The two are consistent — routing is parsed, and the unscoped bucket is inlined
 anyway — but do not restate either half without the other, and do not restate
 the second as though this fragment measured it.
 
-**Why this matters for the named-only migration, and what it does NOT license.**
-`docs/plans/ai-normalized-interface-rework.md` §A3 settles the direction:
-`instructions` is DELETED, not aliased, and for Claude and Copilot "one composed
-always-loaded file becomes N always-on rule files". So after that migration
-every always-on rule is a named file carrying a universal `applyTo` — the
-inlined bucket described above. That cost is known and already accepted in §A3b,
-on the measured ground that Copilot's PROJECT tier behaves identically today, so
-the migration does not make anything lossy that was not already.
+**What the frontmatter-inlining does NOT license.** Do not read it as an
+argument for routing always-on content through the context file instead.
+`ai.context` is a single global baseline, not a pool, and pushing rule content
+there to dodge frontmatter rebuilds the composed-single-file shape that named
+files exist to replace. The convention is named files; the transformer already
+emits `applyTo: "**"` for `paths == null` (`lib/ai/transformers/copilot.nix`),
+and that is what puts them in the injected tier at all.
 
-Do not read the frontmatter-inlining as an argument for keeping always-on
-content in the context file instead. `ai.context` is a single global baseline,
-not a pool, and routing rule content there to dodge frontmatter would
-reintroduce exactly the composed-single-file shape §A3 is retiring. The
-convention is named files; the transformer already emits `applyTo: "**"` for
-`paths == null` (`lib/ai/transformers/copilot.nix`), which is what puts them in
-the injected tier at all.
+**The Home Manager destination is live.** Named files land under
+`<configDir>/instructions/`, which is in copilot-cli 1.0.80's own discovery
+enumeration — it was the dead `$HOME/.github/` directory until 2026-08-15. Any
+scheme that emits N always-on named files for Copilot on Home Manager therefore
+has a working destination; that was not true before, and it is the fact worth
+carrying forward from that fix.
 
-**What this PR contributes to that migration is the destination being live.**
-Those N named files land under `<configDir>/instructions/` on Home Manager —
-which was the dead `$HOME/.github/` directory until this change. That is the
-concrete mechanism behind the plan's "5 must follow 2" ordering constraint:
-retiring `instructions` first would have moved Claude and Copilot always-on
-content out of a working composed file and into a directory nothing reads.
+Scope note, so this is not read as endorsing a particular migration: whether
+`ai.instructions` is retired in favour of keyed `rules` is an OPEN design
+question at the time of writing, not a settled direction. This fragment records
+what Copilot does, not what the option set should become.
 
 **The fix comes with a gated assertion, and the gate is the interesting part.**
 `mcp-config.json` survives a moved `configDir` because the wrapper hands Copilot
