@@ -1,8 +1,15 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-08-05 (commit pending — `devenv-test` still reports on
-> update PRs but is no longer one of the four required status contexts). Prior:
-> 2026-08-03 (commit pending — removes package targets' scheduling-only
+> **Last verified:** 2026-08-14 (commit pending — the required-context count was
+> stale in BOTH places it appeared here: there are SIX, not four, because both
+> `kiro-patched` contexts were promoted 2026-08-13 with PR #895. Found while
+> landing PR #946; `.github/workflows/update.yml` disagreed a third way, saying
+> "five" and naming the demoted `devenv-test` inside the safety rationale for
+> unattended auto-merge. Three surfaces, three different wrong answers, none of
+> them checked against the ruleset — so this entry records the query rather than
+> just the number). Prior: 2026-08-05 (commit pending — `devenv-test` still
+> reports on update PRs but is no longer one of the required status contexts).
+> Prior: 2026-08-03 (commit pending — removes package targets' scheduling-only
 > nixpkgs/nix-update predecessors and the ineffective base-checkout format/build
 > finalizer). Prior: 2026-08-03 (commit pending — makes the hidden update report
 > artifact upload real and fails loudly when the report is absent). Prior:
@@ -115,7 +122,15 @@ PRs trigger ci.yml's `pull_request` event, which runs builds on both linux and
 darwin runners, plus the always-reporting `devenv-test` workflow. That runtime
 gate performs its expensive work only when the pull request touches a relevant
 path; otherwise it succeeds after a changed-files API query. It is not a merge
-gate; PRs can merge only after the four required status contexts pass.
+gate; PRs can merge only after the six required status contexts pass — `build`
+and `kiro-patched` on both systems, plus `test` and `gitleaks`. Do not take that
+list on trust; read it back, because it has been wrong here before:
+
+```bash
+gh api "repos/OWNER/REPO/rulesets/<id>" \
+  --jq '.rules[] | select(.type=="required_status_checks")
+        | [.parameters.required_status_checks[].context]'
+```
 
 ### Non-blocking annotation steps
 
