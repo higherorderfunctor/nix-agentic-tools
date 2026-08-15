@@ -6,11 +6,20 @@ description: >-
   cachix/install-nix-action's install-nix.sh exits 0 WITHOUT writing any config
   when nix is already on PATH ("Aborting: Nix is already installed"). A runner
   image that ships nix would therefore turn the install step green while
-  silently dropping every extra_nix_config line — no numtide substituter, no
-  accept-flake-config — and the first symptom would be an unexplained cache miss
-  or an eval failure far from the cause. The action this replaced on darwin
-  failed loudly instead (nix-quick-install.sh exits 1), so this assertion is
-  what preserves that property.
+  silently dropping every extra_nix_config line, and the first symptom would be
+  an eval failure far from the cause. The action this replaced on darwin failed
+  loudly instead (nix-quick-install.sh exits 1), so this assertion is what
+  preserves that property.
+
+  SCOPE: this asserts what the INSTALLER STEP wrote, at the moment it ran, and
+  nothing about what is in effect later — cachix-action runs next in ci.yml's
+  build job and REASSIGNS `substituters`, discarding anything the installer put
+  there. Do not add substituter patterns here expecting them to prove those
+  caches are active; they would prove only that a line was written, and this
+  repo's substituters deliberately live in flake.nix's `nixConfig`, which never
+  appears in `nix config show` at all. `accept-flake-config` is the setting
+  worth asserting, because it is what makes those flake-declared substituters
+  apply.
 
   Same doctrine as the cache positive control in ci.yml: a step that can only
   pass is worse than no step at all. So this one was checked against its own
@@ -39,15 +48,32 @@ runs:
         conf="$(nix config show)"
 
         rc=0
+        seen=0
         while IFS= read -r pattern; do
           [ -n "$pattern" ] || continue
-          if ! printf '%s\n' "$conf" | command grep -Eq -- "$pattern"; then
+          seen=$((seen + 1))
+          # Herestring, NOT `printf | grep -q`. Under `pipefail` that pipeline
+          # is the SIGPIPE trap documented at length in ci.yml: grep -q exits on
+          # first match, printf takes SIGPIPE, pipefail reports 141, and the
+          # leading `!` inverts a successful match into a reported MISS. An
+          # early match is the worst case and both call sites require
+          # `^accept-flake-config = true`, which `nix config show` sorts first.
+          if ! command grep -Eq -- "$pattern" <<< "$conf"; then
             echo "::error::nix config has no line matching '${pattern}' -" \
               "the installer step reported success without applying its" \
               "configuration"
             rc=1
           fi
         done <<< "$REQUIRE"
+
+        # An empty `require` would evaluate zero patterns and exit 0 — the
+        # can-only-pass shape this action exists to prevent, turned on itself.
+        if [ "$seen" -eq 0 ]; then
+          echo "::error::assert-nix-config: 'require' resolved empty, so the" \
+            "assertion evaluated zero patterns and would have passed" \
+            "unconditionally"
+          exit 1
+        fi
 
         if [ "$rc" -ne 0 ]; then
           echo "::group::nix config show"

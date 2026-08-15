@@ -76,7 +76,8 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
 
 - **`ifd`**
   - Match: `.github/actions/warm-ifd/**`, `.github/workflows/ci.yml`,
-    `.github/workflows/update.yml`, `overlays/*.nix`, `overlays/**/*.nix`
+    `.github/workflows/devenv-test.yml`, `.github/workflows/update.yml`,
+    `overlays/*.nix`, `overlays/**/*.nix`
   - Read:
     [`dev/fragments/overlays/ifd-patterns.md`](dev/fragments/overlays/ifd-patterns.md)
 

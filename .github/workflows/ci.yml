@@ -38,6 +38,31 @@ jobs:
             runner: macos-latest
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    # cache.numtide.com lives HERE, not on the installer step and not in
+    # flake.nix. dev/fragments/flake/binary-cache.md is explicit that it belongs
+    # on the CI package-build runners ONLY — putting it in `nixConfig` would
+    # push it onto every consumer of this flake, when consumers should need
+    # nothing but the project cache that the mirror step below populates.
+    #
+    # It was on the installer step until 2026-08-14 and was INERT there:
+    # cachix-action runs after the installer and exports NIX_USER_CONF_FILES
+    # pointing at a conf that ASSIGNS `substituters` instead of extending it,
+    # discarding `extra_nix_config`. Measured on run 31865858320 — the effective
+    # config read `substituters = https://cache.nixos.org
+    # https://nix-agentic-tools.cachix.org` on BOTH legs and cache.numtide.com
+    # appeared nowhere in `nix config show`. So Semble, whose whole reason for
+    # keeping Numtide's derivation identity is to be substituted from there, was
+    # never actually served by it.
+    #
+    # NIX_CONFIG is applied by nix ON TOP of whatever the conf files resolve to,
+    # so cachix-action cannot clobber it no matter what order the steps run in.
+    # It is also self-verifying: unlike flake `nixConfig`, NIX_CONFIG DOES show
+    # up in `nix config show`, so the Diagnostic dump at the end of this job is
+    # the check — grep its `substituters =` line for cache.numtide.com.
+    env:
+      NIX_CONFIG: |
+        extra-substituters = https://cache.numtide.com
+        extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
     steps:
       - uses: actions/checkout@v6
 
@@ -120,17 +145,23 @@ jobs:
       # runner.os: this step now serves both legs and x86_64-linux has always
       # run `auto`. Also new on darwin is `always-allow-substitutes = true`,
       # which changes which paths this leg pushes to cachix.
+      # cache.numtide.com is deliberately NOT here — see the job-level
+      # NIX_CONFIG above for why putting it on this step never worked.
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
-            extra-substituters = https://cache.numtide.com
-            extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
 
+      # `accept-flake-config` is the ONE setting worth asserting here, and it
+      # is load-bearing rather than incidental: every substituter this repo
+      # relies on now arrives through flake.nix's `nixConfig`, so if this
+      # single line goes missing they ALL silently vanish and the job merely
+      # gets slower. Asserting a substituter directly would prove less — none
+      # of them appear in `nix config show` even when working, precisely
+      # because flake nixConfig is not written into nix.conf.
       - uses: ./.github/actions/assert-nix-config
         with:
           require: |
-            ^substituters =.*cache\.numtide\.com
             ^accept-flake-config = true
 
       - uses: cachix/cachix-action@v17
@@ -181,41 +212,74 @@ jobs:
             --cachix-cache nix-agentic-tools \
             --no-link
 
-      # Diagnostic dump — runs on success/fail/cancel/timeout, same shape as
-      # update.yml's. The big-lock deadlock this job's installer choice exists
-      # to prevent left exactly ONE line of evidence ("waiting for exclusive
-      # access to the Nix store...") and then 56 minutes of silence, so
-      # diagnosing it meant reconstructing the process tree from GitHub's
-      # orphan-reaper output. Capture that state directly instead. It is also
-      # the tell for a RETURN of the hazard from a direction we do not
-      # control: nix-eval-jobs's version comes from nix-fast-build's own
-      # flake.lock, so print it.
+      # Diagnostic dump — runs on success/fail/cancel/timeout. The big-lock
+      # deadlock this job's installer choice exists to prevent left exactly ONE
+      # line of evidence ("waiting for exclusive access to the Nix store...")
+      # and then 56 minutes of silence, so diagnosing it meant reconstructing
+      # the process tree from GitHub's orphan-reaper output. Capture that state
+      # directly instead. It is also the tell for a RETURN of the hazard from a
+      # direction we do not control: nix-eval-jobs's version comes from
+      # nix-fast-build's own flake.lock, so print it.
       #
-      # `set +e` is deliberate and matches update.yml: a diagnostic that can
-      # fail is a diagnostic that masks the failure it was added to explain.
+      # `set +e` is deliberate, matching update.yml's dump: a diagnostic that
+      # can fail is a diagnostic that masks the failure it was added to
+      # explain. The `|| echo` fallbacks are the other half of that and are NOT
+      # tidiness — without them a probe that found nothing and a probe that
+      # never ran render identically, as blank space. (The `same shape as
+      # update.yml` claim once made here was too strong: update.yml uses
+      # bare-command + fallback and has no `command -v` guards at all. What is
+      # shared is `always()`, `set +e`, `::group::`, and now the fallbacks.)
       - name: Diagnostic dump
         if: always()
         run: |
           set +e
           echo "::group::nix / cachix processes"
-          ps -Ao pid,ppid,etime,command | command grep -E 'nix|cachix' | command grep -v grep
+          ps -Ao pid,ppid,etime,command | command grep -E 'nix|cachix' \
+            | command grep -v grep || echo "(none)"
           echo "::endgroup::"
           echo "::group::versions in play"
-          nix --version
-          command -v nix-eval-jobs >/dev/null && nix-eval-jobs --version
+          nix --version || echo "(nix: unavailable)"
+          # Glob the store; do NOT probe PATH. nix-fast-build puts
+          # nix-eval-jobs on PATH only inside its own `nix run`, which has
+          # exited by the time this step runs, so `command -v nix-eval-jobs`
+          # short-circuits silently — measured on run 31865858320, where this
+          # group printed the nix version alone while the build log 100 lines
+          # above named nix-eval-jobs-2.34.3. A store glob also cannot block on
+          # the very big-lock this dump exists to diagnose, which a store query
+          # could.
+          ls -d /nix/store/*-nix-eval-jobs-* 2>/dev/null \
+            || echo "(nix-eval-jobs: not realized)"
           echo "::endgroup::"
           echo "::group::store lock holders"
-          command -v lsof >/dev/null && lsof /nix/var/nix/db/big-lock
+          # `sudo -n`, not bare lsof. Under the multi-user daemon this job's
+          # installer now provisions, the ONLY process holding big-lock is
+          # root's nix-daemon, and a non-root lsof cannot enumerate root's
+          # descriptors: it prints nothing and exits 1, which is
+          # indistinguishable from "no contention". Measured empty on run
+          # 31865858320 while nix-daemon was live in the group above. `-n` so a
+          # password prompt can never eat the 60m ceiling.
+          if command -v lsof >/dev/null; then
+            sudo -n lsof /nix/var/nix/db/big-lock || echo "(no holders reported)"
+          else
+            echo "(lsof absent)"
+          fi
           echo "::endgroup::"
           echo "::group::nix config"
-          nix config show
+          nix config show || echo "(nix config show failed)"
           echo "::endgroup::"
 
-      # Semble intentionally keeps Numtide's derivation identity, so package
-      # builds substitute it from cache.numtide.com. On authenticated main
-      # builds, explicitly mirror the realized runtime closure into this
-      # project's cache; Cachix skips closure paths already served by the
-      # runner's other configured caches.
+      # Semble intentionally keeps Numtide's derivation identity so its paths
+      # can be substituted from cache.numtide.com rather than rebuilt — which
+      # only started actually happening on 2026-08-14, see the job-level
+      # NIX_CONFIG above.
+      #
+      # This mirror is what kept Semble available in the meantime, and it stays
+      # regardless: consumers of this flake are given the project cache and
+      # nothing else, so the closure has to be here even once numtide is
+      # working for our own builds.
+      # On authenticated main builds, explicitly mirror the realized runtime
+      # closure into this project's cache; Cachix skips closure paths already
+      # served by the runner's other configured caches.
       - name: Mirror Semble into project cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
@@ -627,8 +691,13 @@ jobs:
           echo "heron_brook mitigation review due ${review_by} (today ${today}) — OK."
 
   # The `devenv test` runtime gate lives in its OWN workflow
-  # (devenv-test.yml). Its job always reports because branch protection
-  # requires that context, but it detects changed paths before checkout so only
+  # (devenv-test.yml). Its job always reports because branch protection USED to
+  # require that context — it was required 2026-08-03 and demoted 2026-08-05,
+  # and the six contexts required today are `build` and `kiro-patched` on both
+  # systems plus `test` and `gitleaks`. The always-report shape is kept anyway,
+  # deliberately: a genuinely skipped required check never reports a conclusion
+  # and blocks the PR forever, so re-promoting the context needs no rework. It
+  # detects changed paths before checkout so only
   # PRs touching instruction-file materialization surfaces pay its cold-closure
   # cost. `nix flake check` (the test job above) remains THE validation
   # entrypoint.

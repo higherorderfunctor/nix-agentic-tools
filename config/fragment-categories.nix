@@ -164,7 +164,8 @@ _: {
     # pays it down. Split out of `overlays` because the fragment asserts a
     # same-commit update duty on paths `overlays/**` never matched — the
     # shared `.github/actions/warm-ifd/action.yml` composite and the warm
-    # steps that consume it in ci.yml / update.yml. A fragment claiming
+    # steps that consume it in ci.yml / devenv-test.yml / update.yml — five
+    # call sites across three workflows. A fragment claiming
     # authority over a path it does not scope is unreachable from the very
     # edit it governs, and that is not hypothetical: PR #946 edited
     # warm-ifd/action.yml and loaded none of it. Scoping it here rather than
@@ -174,6 +175,7 @@ _: {
       scopes = [
         ".github/actions/warm-ifd/**"
         ".github/workflows/ci.yml"
+        ".github/workflows/devenv-test.yml"
         ".github/workflows/update.yml"
         "overlays/*.nix"
         "overlays/**/*.nix"
@@ -328,8 +330,11 @@ _: {
       scopes = ["**/*.nix"];
       sources = ["nix-standards"];
     };
-    # overlays: cache-hit parity + IFD patterns. Scoped to overlay
-    # package files and overlays/ (version helpers that trigger IFD).
+    # overlays: cache-hit parity, the overlay pattern, and the unfree guard.
+    # Scoped to overlay package files under overlays/. IFD guidance is NOT
+    # here any more — it moved to the `ifd` row above, which re-scopes these
+    # same two globs plus the CI paths that warm the IFD cache, so an
+    # overlays editor still gets it.
     # Excludes content-only fragments dirs, and deliberately does NOT scope
     # `packages/*/overlay.nix` (stacked-workflows) — those are content
     # overlays with no `ourPkgs` seam. Three globs

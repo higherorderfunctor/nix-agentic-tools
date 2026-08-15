@@ -11,7 +11,10 @@
 # pinned 2.x rev runs green (proven live on PR #438).
 #
 # Cost containment: every pull request gets the stable `devenv-test` status
-# context required by branch protection, but the first step checks changed
+# context. It is NOT a required check — required 2026-08-03, demoted
+# 2026-08-05 — and the always-report shape below is retained on purpose so
+# re-promotion needs no rework: a genuinely skipped required check never
+# reports a conclusion and would block every PR. The first step checks changed
 # paths and skips the entire Nix closure unless a materialization surface moved
 # (a docs/plans PR pays for one GitHub API call, not the ~30-minute cold
 # closure). Pushes remain paths-filtered. The processes leg is skipped under
