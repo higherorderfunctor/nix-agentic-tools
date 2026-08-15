@@ -17,11 +17,11 @@
 #            than the recipe wrong. This is the strongest signal available
 #            without a live engine.
 #
-# A tryEval-based reject harness needs its own positive control, because
+# A tryEval-based reject harness needs shape-matched positive controls, because
 # "threw for the reason I meant" and "threw for an unrelated reason" are
-# indistinguishable. `accept-baseline` is that control: it is the same shape
-# every reject case mutates, so if it ever stops evaluating, every REJECT
-# below becomes vacuous and this check says so.
+# indistinguishable. `accept-baseline` controls step-shaped rejects; explicit
+# empty repeat and parallel controls force the collection shapes used by their
+# reject families; the watch section carries its own accepted watch control.
 {
   lib,
   pkgs,
@@ -98,8 +98,35 @@
 in
   vendorTests
   // {
-    # The positive control. If this fails, every reject case below is vacuous.
+    # The positive control for step-shaped reject fixtures.
     kiro-workflow-accept-baseline = accept "baseline" baseline;
+
+    # Variant controls for reject fixtures that intentionally use empty child
+    # collections. A non-empty vendor recipe cannot prove these shapes remain
+    # valid.
+    kiro-workflow-accept-empty-parallel =
+      accept "empty-parallel"
+      (wrap [
+        {
+          parallel = {
+            id = "p";
+            branches = [];
+            joinPolicy = "allSettled";
+          };
+        }
+      ]);
+    kiro-workflow-accept-empty-repeat =
+      accept "empty-repeat"
+      (wrap [
+        {
+          repeat = {
+            id = "r";
+            maxIterations = 2;
+            onMaxIterations = "abort";
+            steps = [];
+          };
+        }
+      ]);
 
     # ── ACCEPT: things the engine permits and a naive schema would refuse ───
     #
@@ -436,6 +463,16 @@ in
           };
         }) (step "leaf" {}) (lib.range 1 8))
       ]) "E-NESTING-DEPTH";
+    kiro-workflow-silent-at-nesting-depth =
+      silentOn "at-nesting-depth"
+      (wrap [
+        (lib.foldl' (inner: i: {
+          sequence = {
+            id = "d${toString i}";
+            steps = [inner];
+          };
+        }) (step "leaf" {}) (lib.range 1 7))
+      ]) "E-NESTING-DEPTH";
     kiro-workflow-emits-duplicate-id =
       emits "duplicate-id" (wrap [(step "a" {}) (step "a" {})]) "E-NODE-DUPLICATE-ID";
     kiro-workflow-duplicate-id-order-is-second-occurrence = mkTest "duplicate-id-order-is-second-occurrence" (
@@ -490,7 +527,14 @@ in
           parallel = {
             id = "p";
             joinPolicy = "allSettled";
-            branches = [(step "a" {completion.containsText = "x";})];
+            branches = [
+              {
+                sequence = {
+                  id = "nested";
+                  steps = [(step "a" {completion.containsText = "x";})];
+                };
+              }
+            ];
           };
         }
       ])
