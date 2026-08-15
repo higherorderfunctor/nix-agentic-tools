@@ -7,10 +7,11 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-06-23 (commit pending). If you touch
-> `packages/kimchi/lib/mkKimchi.nix`, `packages/kimchi/modules/**`, or the
-> Kimchi credential / wrapper handling and this fragment isn't updated in the
-> same commit, stop and fix it.
+> **Last verified:** 2026-08-15 (commit pending — records Kimchi's normalized
+> pool capability census and the deliberate absence of rules). Prior: 2026-06-23
+> (commit pending). If you touch `packages/kimchi/lib/mkKimchi.nix`,
+> `packages/kimchi/modules/**`, or the Kimchi credential / wrapper handling and
+> this fragment isn't updated in the same commit, stop and fix it.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -33,6 +34,18 @@ The `harness/` tree is **mutable at runtime** — Kimchi rewrites `settings.json
 `helpers.mkSettingsActivationScript` (jq `.[0] * .[1]` merge) on HM and a static
 write on devenv — never a raw symlink-to-store. The immutable parts (`mcp.json`,
 `AGENTS.md`, `skills/`) are static `home.file` / `files.*`.
+
+## Normalized pool capability boundary
+
+The app record's `supportedPools` is exactly `context`, `environmentVariables`,
+`instructions`, `mcpServers`, and `skills`. Kimchi has no native path-scoped
+rules, portable agents, LSP, portable hooks, normalized settings, or
+shell-selection landing key. Those per-runtime normalized options are absent;
+root values for them remain valid and silently degrade for Kimchi.
+
+In particular, `ai.kimchi.rules` and `ai.kimchi.rulesDir` do not exist. Do not
+restore them in anticipation of future rules support: Kimchi's rules support is
+deliberately unimplemented.
 
 ## Gotcha: config.json is NESTED, not flat
 

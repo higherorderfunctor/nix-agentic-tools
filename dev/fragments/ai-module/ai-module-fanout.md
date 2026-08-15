@@ -1,6 +1,9 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-14 (commit pending — Copilot's `ai.instructions` /
+> **Last verified:** 2026-08-15 (commit pending — every normalized pool now
+> crosses into a runtime only when that app record lists it in `supportedPools`;
+> unsupported root fanout degrades while the matching per-runtime option is
+> absent). Prior: 2026-08-14 (commit pending — Copilot's `ai.instructions` /
 > `ai.rules` destination is per-BACKEND and this entry named only one of them.
 > Home Manager wrote a hardcoded `.github/instructions/`, which resolves to
 > `$HOME/.github/instructions/` — a directory copilot-cli never reads — so every
@@ -116,10 +119,10 @@
 > this fragment isn't updated in the same commit, stop and fix it.
 
 The `ai.*` HM module provides a unified interface that fans out shared AI-CLI
-configuration to each enabled ecosystem (Claude, Codex, Copilot, Kiro). It is
-NOT a thin wrapper — the gating semantics, default-setting behavior, and fanout
-patterns are load-bearing and got bitten into production by a silent no-op bug.
-Read this fragment before changing the gating.
+configuration to each capable enabled ecosystem (Claude, Codex, Copilot, Kimchi,
+Kiro). It is NOT a thin wrapper — the gating semantics, default-setting
+behavior, and fanout patterns are load-bearing and got bitten into production by
+a silent no-op bug. Read this fragment before changing the gating.
 
 ### Codex extracted facts need reverse coverage
 
@@ -387,6 +390,21 @@ enabled ecosystem whose native model preserves the option's semantics):
 Cross-ecosystem scalar defaults and per-entry fanouts use `mkDefault` so per-CLI
 overrides take precedence. Collection pools use their documented collision or
 concatenation semantics instead.
+
+### Per-pool capability gate
+
+Every app record carries one `supportedPools` list. The shared transformer uses
+it for the per-runtime option schema, collision merge, callback fanout, and
+shell resolution. A per-runtime pool write that the runtime cannot consume is
+therefore an unknown-option error. A ROOT pool value stays portable and degrades
+to the neutral value for an incapable runtime.
+
+Kimchi is the sharp example: it supports `context`, `environmentVariables`,
+`instructions`, `mcpServers`, and `skills`, but not `rules`. Consequently root
+`ai.rules` remains valid when Kimchi is enabled, while `ai.kimchi.rules` and
+`ai.kimchi.rulesDir` do not exist. Capability tests pair every eval-failure
+assertion with a supported-runtime positive control so harness failure cannot
+masquerade as correct exclusion.
 
 ### Assertion semantics
 

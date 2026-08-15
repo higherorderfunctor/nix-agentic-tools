@@ -1,6 +1,9 @@
 ## ai.\* Collision Semantics
 
-> **Last verified:** 2026-08-14 (commit pending — records where a MODULE may
+> **Last verified:** 2026-08-15 (commit pending — collision checks now follow
+> each app record's `supportedPools`: unsupported root fanout degrades without a
+> collision assertion because the corresponding per-runtime option does not
+> exist). Prior: 2026-08-14 (commit pending — records where a MODULE may
 > contribute, now that `lib/ai/mkSkillPackageModule.nix` writes the per-CLI
 > pools. That looks like the exact shape `shell-option.md` bans, and the
 > discriminator — always-on default versus opt-in behind an explicit enable — is
@@ -29,6 +32,10 @@ silent override. The factory used to merge the top-level pool with the per-CLI
 pool via `config.ai.<pool> // cfg.<pool>`, letting a later per-CLI contribution
 silently overwrite a same-name top-level entry. User directive: "mixing and
 collision should be a failure. we don't merge over keys."
+
+This rule applies only where a runtime supports the pool. Unsupported
+per-runtime options are absent, and root fanout to that runtime degrades before
+any merge or collision check.
 
 ### Where a MODULE in this repo may contribute
 
@@ -112,7 +119,7 @@ mergeCheck = poolName: topPool: cliPool:
     cliName = appRecord.name;
   };
 
-rulesMerge = mergeCheck "rules" config.ai.rules cfg.rules;
+rulesMerge = mergePool "rules" config.ai.rules cfg.rules;
 # ...
 collisionAssertions = rulesMerge.assertions ++ ... ;
 ```
@@ -136,14 +143,16 @@ delete the duplicate.
 1. Declare `ai.<pool>` in `lib/ai/sharedOptions.nix` (attrset shape).
 2. Declare `ai.<cli>.<pool>` in the mkAiApp baseline
    (`lib/ai/app/mkBackendTransform.nix`, in the `options.ai.${appRecord.name}`
-   attrset — ONE declaration serves both backends and every app) OR in the
-   per-CLI factory (for CLI-specific shape, like kiro's `agents`, whose typed
-   record models Kiro's own v3 agent schema rather than the portable one).
-3. Add `<pool>Merge = mergeCheck "<pool>" config.ai.<pool> cfg.<pool>;` to the
+   attrset, gated by `supportsPool`) OR in the per-CLI factory (for CLI-specific
+   shape, like kiro's `agents`, whose typed record models Kiro's own v3 agent
+   schema rather than the portable one).
+3. Add the pool to `supportedPools` for each app record that consumes it.
+4. Add `<pool>Merge = mergePool "<pool>" config.ai.<pool> cfg.<pool>;` to the
    transform.
-4. Append `<pool>Merge.assertions` to `collisionAssertions`.
-5. Set `merged<Pool> = <pool>Merge.merged;`.
-6. Add a collision test in `checks/module-eval.nix`.
+5. Append `<pool>Merge.assertions` to `collisionAssertions`.
+6. Set `merged<Pool> = <pool>Merge.merged;`.
+7. Add collision and supported/unsupported option tests in
+   `checks/module-eval.nix`.
 
 ### Pitfall
 

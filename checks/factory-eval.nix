@@ -479,6 +479,7 @@ in {
     let
       record = ai.app.mkAiApp {
         name = "testapp";
+        supportedPools = [];
         transformers.markdown = ai.transformers.claude;
         defaults = {
           package = pkgs.hello;
@@ -486,13 +487,17 @@ in {
         };
       };
     in
-      record ? name && record ? transformers && record ? defaults
+      record ? name
+      && record ? transformers
+      && record ? defaults
+      && record.supportedPools == []
   );
 
   factory-mkAiApp-builds-option-tree = mkTest "mkAiApp-builds-option-tree" (
     let
       record = ai.app.mkAiApp {
         name = "testapp";
+        supportedPools = ["mcpServers"];
         transformers.markdown = ai.transformers.claude;
         defaults = {
           package = pkgs.hello;
@@ -517,6 +522,7 @@ in {
     let
       record = ai.app.mkAiApp {
         name = "testapp";
+        supportedPools = [];
         transformers.markdown = ai.transformers.claude;
         defaults = {package = pkgs.hello;};
         options = {
@@ -543,6 +549,7 @@ in {
     let
       record = ai.app.mkAiApp {
         name = "testapp";
+        supportedPools = ["mcpServers"];
         transformers.markdown = ai.transformers.claude;
         defaults = {package = pkgs.hello;};
         options = {
@@ -595,6 +602,7 @@ in {
     let
       record = ai.app.mkAiApp {
         name = "testapp";
+        supportedPools = [];
         transformers.markdown = ai.transformers.claude;
         defaults = {
           package = pkgs.hello;
@@ -618,6 +626,7 @@ in {
     let
       record = ai.app.mkAiApp {
         name = "testapp";
+        supportedPools = [];
         transformers.markdown = ai.transformers.claude;
         defaults = {
           package = pkgs.hello;

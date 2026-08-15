@@ -1018,9 +1018,16 @@ in
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "kiro";
-    # Honest: both backend callbacks consume `resolvedShell` via
-    # `kiroEnvironment` below. See mkAiApp.nix's record-shape note.
-    supportsShell = true;
+    supportedPools = [
+      "context"
+      "environmentVariables"
+      "instructions"
+      "lspServers"
+      "mcpServers"
+      "rules"
+      "shell"
+      "skills"
+    ];
     transformers.markdown = lib.ai.transformers.kiro;
     defaults = {
       package = pkgs.ai.kiro-cli;

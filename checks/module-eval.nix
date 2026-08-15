@@ -9860,6 +9860,81 @@ in {
       !probe.success
   );
 
+  # `supportedPools` now owns every normalized per-runtime option gate, not
+  # shell alone. Each failure has an identical supported-runtime control so an
+  # unrelated eval failure cannot make the exclusion look correct.
+  module-ai-rules-accepted-for-claude = mkTest "ai-rules-accepted-for-claude" (
+    let
+      probe =
+        builtins.tryEval
+        (evalHm {
+          ai.claude = {
+            enable = true;
+            rules.test.text = "test";
+          };
+        })
+      .config.home.packages;
+    in
+      probe.success
+  );
+
+  module-ai-rules-excluded-for-kimchi = mkTest "ai-rules-excluded-for-kimchi" (
+    let
+      probe =
+        builtins.tryEval
+        (evalHm {
+          ai.kimchi = {
+            enable = true;
+            rules.test.text = "test";
+          };
+        })
+      .config.home.packages;
+    in
+      !probe.success
+  );
+
+  module-ai-rules-root-degrades-for-kimchi = mkTest "ai-rules-root-degrades-for-kimchi" (
+    let
+      result = evalHm {
+        ai.kimchi.enable = true;
+        ai.rules.test.text = "test";
+      };
+    in
+      builtins.length result.config.home.packages
+      == 1
+      && !(result.config.ai.kimchi ? rules)
+  );
+
+  module-ai-rules-dir-accepted-for-claude = mkTest "ai-rules-dir-accepted-for-claude" (
+    let
+      probe =
+        builtins.tryEval
+        (evalHm {
+          ai.claude = {
+            enable = true;
+            rulesDir = ./fixtures;
+          };
+        })
+      .config.home.packages;
+    in
+      probe.success
+  );
+
+  module-ai-rules-dir-excluded-for-kimchi = mkTest "ai-rules-dir-excluded-for-kimchi" (
+    let
+      probe =
+        builtins.tryEval
+        (evalHm {
+          ai.kimchi = {
+            enable = true;
+            rulesDir = ./fixtures;
+          };
+        })
+      .config.home.packages;
+    in
+      !probe.success
+  );
+
   # Collision between Dir-generated and explicit single.
   module-claude-skillsdir-collides-with-explicit-single = mkTest "claude-skillsdir-collides-with-explicit-single" (
     let

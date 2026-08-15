@@ -15,12 +15,10 @@
 #     transformers;                  # { markdown = <lib.ai.transformers.<ecosystem>>; }
 #     defaults ? {};                 # {package?, outputPath?} — shared across backends
 #     options ? {};                  # shared option declarations (both backends see these)
-#     supportsShell ? false;         # opt in to ai.<name>.shell + the `resolvedShell`
-#                                    # callback argument. Set it ONLY when the backend
-#                                    # callbacks actually deliver the value to a knob
-#                                    # the runtime reads; an app that leaves it false
-#                                    # gets no option at all, so a consumer setting one
-#                                    # gets an eval error instead of a silent no-op.
+#     supportedPools ? [];           # normalized ai.* pools the runtime consumes.
+#                                    # Unsupported per-runtime pool options are absent;
+#                                    # root values for them degrade instead of fanning out.
+#                                    # Same-named native options in `options` are independent.
 #     hm = {
 #       options ? {};                # HM-only option additions
 #       defaults ? {};               # HM-only default overrides
@@ -50,11 +48,9 @@ _: {
   transformers,
   defaults ? {},
   options ? {},
+  supportedPools ? [],
   hm ? {},
   devenv ? {},
-  # See the record-shape note above: opt-in, and only honest when the
-  # backend callbacks consume `resolvedShell`.
-  supportsShell ? false,
   # The package set the factory was built with, carried on the record so
   # backend transforms can build derivations WITHOUT taking `pkgs` as a
   # module argument.
@@ -75,5 +71,5 @@ _: {
   # need it must degrade rather than throw.
   pkgs ? null,
 }: {
-  inherit name transformers defaults options hm devenv pkgs supportsShell;
+  inherit name transformers defaults options supportedPools hm devenv pkgs;
 }
