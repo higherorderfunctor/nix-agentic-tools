@@ -20,15 +20,34 @@
 
   # Stand-in for the real kiro-cli: prints the argv it received (one ARG line
   # per token, so an empty or space-bearing argument stays unambiguous) plus one
-  # baked env var, which is how the env-export path is asserted.
+  # baked env var plus PATH lookups, which is how the env-export and
+  # extraPackages paths are asserted.
   # `${KIRO_WRAPPER_TEST-unset}` keeps its default so the `-u` in strict mode
   # reports an unbaked env var rather than aborting the stub.
   echoArgv = pkgs.writeShellScript "kiro-cli-stub-argv" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
     printf 'ENV=%s\n' "''${KIRO_WRAPPER_TEST-unset}"
+    printf 'AMBIENT=%s\n' "$(command -v kiro-ambient-sentinel || :)"
+    printf 'EXTRA=%s\n' "$(command -v kiro-path-sentinel || :)"
     for nat_a in "$@"; do printf 'ARG=%s\n' "$nat_a"; done
   '';
+  ambientSentinel = pkgs.writeShellApplication {
+    name = "kiro-ambient-sentinel";
+    bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+    text = ''
+      shopt -s inherit_errexit 2>/dev/null || :
+      printf 'ambient\n'
+    '';
+  };
+  extraSentinel = pkgs.writeShellApplication {
+    name = "kiro-path-sentinel";
+    bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+    text = ''
+      shopt -s inherit_errexit 2>/dev/null || :
+      printf 'extra\n'
+    '';
+  };
   stubPackage = pkgs.runCommandLocal "kiro-cli-stub" {} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
@@ -182,6 +201,9 @@
   trustWrapped = wrap {trustedMcpTools = ["fs_read" "@srv"];};
   # env only: the wrapper exists to export, and must inject nothing at all.
   envWrapped = wrap {environmentVariables.KIRO_WRAPPER_TEST = "baked";};
+  # extraPackages only: the wrapper prepends its bins without discarding the
+  # caller's PATH, and must inject no argv.
+  pathWrapped = wrap {extraPackages = [extraSentinel];};
 in
   pkgs.runCommandLocal "kiro-wrapper-argv-check" {
     nativeBuildInputs = [pkgs.coreutils pkgs.gnugrep pkgs.gnused];
@@ -217,6 +239,8 @@ in
     T=${trustWrapped}/bin/kiro-cli-chat
     E=${envWrapped}/bin/kiro-cli
     EC=${envWrapped}/bin/kiro-cli-chat
+    P=${pathWrapped}/bin/kiro-cli
+    PC=${pathWrapped}/bin/kiro-cli-chat
 
     # ── the global lands BEFORE the subcommand, never after ─────────────────
     # This is the regression that mattered: `kiro-cli acp --v3` is "error:
@@ -295,6 +319,25 @@ in
         bad "env not exported by $bin"
       fi
     done
+
+    # ── extraPackages prepends store bins and preserves ambient PATH ─────────
+    for bin in "$P" "$PC"; do
+      output="$(PATH=${ambientSentinel}/bin "$bin")"
+      extra="$(printf '%s\n' "$output" | sed -n 's/^EXTRA=//p')"
+      ambient="$(printf '%s\n' "$output" | sed -n 's/^AMBIENT=//p')"
+      if [ "$extra" = ${lib.getExe extraSentinel} ]; then
+        ok "extra package visible from $(basename "$bin")"
+      else
+        bad "extra package missing from $bin: got [$extra]"
+      fi
+      if [ "$ambient" = ${lib.getExe ambientSentinel} ]; then
+        ok "ambient PATH preserved by $(basename "$bin")"
+      else
+        bad "ambient PATH lost by $bin: got [$ambient]"
+      fi
+    done
+    expect "extraPackages-only launcher transparent" 'acp' "$P" acp
+    expect "extraPackages-only chat transparent" 'mcp|list' "$PC" mcp list
 
     # ── the two wrappers COMPOSED, as they do in a real profile ─────────────
     # The launcher finds kiro-cli-chat on PATH, so both wrappers run and their

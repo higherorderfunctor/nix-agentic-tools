@@ -6476,6 +6476,38 @@ in {
       && (first.name or "") == "kiro-cli-wrapped"
   );
 
+  # HM: extraPackages creates a wrapper carrying the store-backed PATH prefix.
+  module-kiro-hm-extra-packages-reach-wrapper = let
+    result = evalHm {
+      ai.kiro = {
+        enable = true;
+        extraPackages = [pkgs.which];
+      };
+    };
+  in
+    mkWrapperGrepTest {
+      name = "kiro-hm-extra-packages-reach-wrapper";
+      package = builtins.head result.config.home.packages;
+      bin = "kiro-cli";
+      needles = ["PATH" "${pkgs.which}/bin"];
+    };
+
+  # Devenv uses the same option and wrapper path as Home Manager.
+  module-kiro-devenv-extra-packages-reach-wrapper = let
+    result = evalDevenv {
+      ai.kiro = {
+        enable = true;
+        extraPackages = [pkgs.which];
+      };
+    };
+  in
+    mkWrapperGrepTest {
+      name = "kiro-devenv-extra-packages-reach-wrapper";
+      package = builtins.head result.config.packages;
+      bin = "kiro-cli";
+      needles = ["PATH" "${pkgs.which}/bin"];
+    };
+
   # HM: no wrapper when nothing to wrap.
   module-kiro-hm-no-wrapper-when-nothing-to-wrap = mkTest "kiro-hm-no-wrapper-when-nothing-to-wrap" (
     let

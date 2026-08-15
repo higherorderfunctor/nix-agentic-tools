@@ -7,6 +7,11 @@
 # session, so it was retired on 2026-08-10. devenv also still needs the flag
 # injection so `devenv shell` launches the v3 TUI exactly like HM does.
 #
+# `extraPackages` is a separate PATH prefix, not another environment-variable
+# entry. Keeping it separate lets the generated wrapper prepend store-backed
+# tools to either the inherited PATH or an explicit `environmentVariables.PATH`
+# without capturing the evaluator's PATH or replacing the caller's environment.
+#
 # ── The argv contract ──────────────────────────────────────────────────────
 # `--v3` is a LAUNCHER-GLOBAL option, so it is injected BEFORE any subcommand.
 # Appending it instead is what made `kiro-cli acp` die with "error: unexpected
@@ -66,15 +71,17 @@ in
     v3,
     trustedMcpTools,
     environmentVariables ? {},
+    extraPackages ? [],
     secretEnv ? {},
     identityMaterializer ? null,
   }: let
     hasEnv = environmentVariables != {};
+    hasExtraPackages = extraPackages != [];
     hasSecret = secretEnv != {};
     hasV3 = v3;
     hasTrust = trustedMcpTools != [];
     hasIdentity = identityMaterializer != null;
-    needsWrapper = hasEnv || hasSecret || hasTrust || hasV3 || hasIdentity;
+    needsWrapper = hasEnv || hasExtraPackages || hasSecret || hasTrust || hasV3 || hasIdentity;
     trustToolsCsv = lib.concatStringsSep "," trustedMcpTools;
     # env baked as `export`s (was makeWrapper `--set`), so the hand-written
     # wrapper can ALSO position the flags. makeWrapper only appends
@@ -105,6 +112,17 @@ in
           then "export ${lib.escapeShellArg var}=\"$(${pkgs.coreutils}/bin/cat ${lib.escapeShellArg cred.file})\""
           else "export ${lib.escapeShellArg var}=\"$(${lib.escapeShellArg cred.helper})\"")
         secretEnv);
+
+    # The Linux buildFHSEnv wrapper preserves PATH and bind-mounts /nix, so a
+    # store-backed prefix survives into the synthesized FHS root even though
+    # host /usr is shadowed there. Emit this AFTER the ordinary and secret env
+    # exports: an explicit PATH becomes the base, while extraPackages remains
+    # the guaranteed prefix. The conditional expansion avoids a trailing colon
+    # (and therefore an implicit current-directory PATH entry) when PATH is
+    # unset or empty.
+    pathExport = lib.optionalString hasExtraPackages ''
+      export PATH=${lib.escapeShellArg (lib.makeBinPath extraPackages)}''${PATH:+:"$PATH"}
+    '';
 
     # Point the engine at a bundle whose identity sentence has been replaced.
     # Materialization is LAZY (at launch) rather than at activation, because the
@@ -240,6 +258,7 @@ in
           ["set -euETo pipefail" "shopt -s inherit_errexit 2>/dev/null || :"]
           ++ lib.optional (envExports != "") envExports
           ++ lib.optional (secretExports != "") secretExports
+          ++ lib.optional (pathExport != "") pathExport
           ++ lib.optional (injection != "") injection
           ++ ["exec -a \"$0\" ${lib.escapeShellArg realBin} \"$@\""]
         )
@@ -252,14 +271,14 @@ in
         name = "kiro-cli-wrapped";
         paths = [package];
         postBuild = ''
-          ${lib.optionalString (hasEnv || hasSecret || hasV3 || hasIdentity) ''
+          ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret || hasV3 || hasIdentity) ''
             rm -f "$out/bin/kiro-cli"
             ln -s ${mkWrapper "kiro-cli-launcher" {
               realBin = "${package}/bin/kiro-cli";
               injection = launcherInjection;
             }} "$out/bin/kiro-cli"
           ''}
-          ${lib.optionalString (hasEnv || hasSecret || hasTrust || hasIdentity) ''
+          ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret || hasTrust || hasIdentity) ''
             rm -f "$out/bin/kiro-cli-chat"
             ln -s ${mkWrapper "kiro-cli-chat-wrapper" {
               realBin = "${package}/bin/kiro-cli-chat";

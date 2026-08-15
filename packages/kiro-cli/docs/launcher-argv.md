@@ -1,6 +1,9 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-08-11 (commit pending — the sandbox's effect on PATH
+> **Last verified:** 2026-08-14 (commit pending — the launcher now prepends
+> `ai.kiro.extraPackages` to PATH in both wrapper entry points while preserving
+> the ambient or explicitly configured base; this changes environment only,
+> never argv). Prior: 2026-08-11 (commit pending — the sandbox's effect on PATH
 > resolution is no longer unverified, so the prior entry's "treat it as
 > unverified there" is retired: PATH is **preserved** inside, and a decoy still
 > resolves provided it sits outside a shadowed directory and can load its
@@ -185,6 +188,24 @@ does not cover it. The module-eval tests do:
 the option is set, and `module-kiro-identity-default-is-stock` asserts it stays
 byte-identical to stock when it is not — which is what protects the cache hit.
 Bundle mechanics live in `packages/kiro-cli/lib/identityBundle.nix`.
+
+### `extraPackages` — a PATH prefix, not an FHS rebuild
+
+`ai.kiro.extraPackages` adds one more environment-only injection to both the
+launcher and direct chat wrappers. Their store-backed `bin` directories are
+prepended after ordinary and secret environment exports, so an explicit
+`ai.kiro.environmentVariables.PATH` becomes the base and the requested packages
+still win. With no explicit PATH, the caller's inherited value remains after the
+prefix.
+
+The empty list is inert and produces no wrapper by itself. A non-empty list
+creates the wrapper even when no env, argv, identity, or secret injection is
+configured. It does not alter argv, and `checks/kiro-wrapper-argv.nix` runs both
+entry points to assert the prefix and inherited tail together.
+
+On Linux this crosses the upstream FHS visibility boundary because `/nix` is
+mounted and PATH is preserved; it does not merge packages into the synthesized
+root. See [`fhs-sandbox.md`](fhs-sandbox.md) for why that distinction matters.
 
 ## THE TWO WRAPPERS COMPOSE — reason about the chain, not the binaries
 

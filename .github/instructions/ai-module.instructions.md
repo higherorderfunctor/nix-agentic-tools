@@ -7,47 +7,51 @@ applyTo: "checks/module-eval.nix,lib/ai/agent.nix,lib/ai/ai-common.nix,lib/ai/ap
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-05 (commit pending — Codex's beta permission model
-> is LOCKED OUT: `ai.codex.profiles`, `ai.codex.settings.default_permissions`,
-> and `ai.codex.settings.permissions` stay typed and still emit, but every entry
-> point now asserts. A layer carrying the beta model OVERRIDES rather than
-> merges the legacy sandbox settings beneath it, and a Nix evaluation cannot see
-> across config layers to catch that — measured with `codex sandbox` 0.146.1,
-> where this repo's own former profile silently dropped the module-contributed
-> `~/.cache/nix` root). Prior: 2026-08-05 (commit pending — Codex's devenv
-> Nix-cache resolver remains environment-backed in production but accepts a
-> test-only `specialArgs` override through the module's ellipsis instead of
-> declaring an unsatisfied formal module argument; ordinary module evaluation
-> now has an explicit regression test alongside deterministic XDG/HOME cases).
-> Prior: 2026-08-05 (commit pending — Codex's backend-native writable roots are
-> now gated by `ai.codex.enable`, so merely configuring dormant Codex settings
-> cannot create an active sandbox root set). Prior: 2026-08-05 (commit pending —
-> sandbox-safe Git SSH now forces batch mode so agent-backed authentication
-> works but missing credentials fail without an interactive dialog). Prior:
-> 2026-08-05 (commit pending — every enabled AI harness now receives a
-> sandbox-safe Git SSH default in both backends; Codex contributes its
-> backend-native Nix cache and devenv Git metadata roots, while enabled
-> integrations such as glab add their effective writable state). Prior:
-> 2026-08-04 (commit pending — `ai.kiro.agents` is now a typed record modelling
-> Kiro's v3 agent schema, with `name` defaulted from the attr key because Kiro's
-> Rust CLI requires that field while its Node/ACP parser treats it as optional;
-> the `ai.agents` Kiro exclusion is re-justified on tool VOCABULARY rather than
-> on JSON-vs-record shape). Prior: 2026-08-02 (commit pending — Codex beta
-> permission profiles remain explicit security boundaries: they do not compose
-> with legacy `sandbox_workspace_write` integration roots, so a selected profile
-> must grant the Semble cache itself). Prior: 2026-08-02 (commit pending —
-> portable agent tool lists render native allowlist frontmatter only when
-> non-empty, so both `null` and `[]` preserve unrestricted Claude/Copilot
-> behavior). Prior: 2026-08-02 (commit pending — Semble automatically grants its
-> cache when a selected Codex integration uses the workspace-write sandbox, with
-> user-global XDG cache ownership in HM and project-local state plus an
-> environment override in devenv). Prior: 2026-08-02 (commit pending — portable
-> semantic agents may restrict Claude and Copilot with their shared `tools`
-> vocabulary while Codex deliberately omits that field and Kiro retains its
-> native JSON model). Prior: 2026-08-02 (commit pending — Semble keeps Claude
-> and Codex instructions unnamed for their single-file composers but names its
-> Kiro instruction so directory-native steering emits `semble.md` instead of the
-> generic `instructions.md`). Prior: 2026-08-02 (commit pending — records plain
+> **Last verified:** 2026-08-14 (commit pending — adds the Kiro-specific
+> `extraPackages` runtime PATH prefix, shared by both backends through the
+> existing launcher wrapper and deliberately not promoted to `ai.shell` or a
+> cross-runtime pool). Prior: 2026-08-05 (commit pending — Codex's beta
+> permission model is LOCKED OUT: `ai.codex.profiles`,
+> `ai.codex.settings.default_permissions`, and `ai.codex.settings.permissions`
+> stay typed and still emit, but every entry point now asserts. A layer carrying
+> the beta model OVERRIDES rather than merges the legacy sandbox settings
+> beneath it, and a Nix evaluation cannot see across config layers to catch that
+> — measured with `codex sandbox` 0.146.1, where this repo's own former profile
+> silently dropped the module-contributed `~/.cache/nix` root). Prior:
+> 2026-08-05 (commit pending — Codex's devenv Nix-cache resolver remains
+> environment-backed in production but accepts a test-only `specialArgs`
+> override through the module's ellipsis instead of declaring an unsatisfied
+> formal module argument; ordinary module evaluation now has an explicit
+> regression test alongside deterministic XDG/HOME cases). Prior: 2026-08-05
+> (commit pending — Codex's backend-native writable roots are now gated by
+> `ai.codex.enable`, so merely configuring dormant Codex settings cannot create
+> an active sandbox root set). Prior: 2026-08-05 (commit pending — sandbox-safe
+> Git SSH now forces batch mode so agent-backed authentication works but missing
+> credentials fail without an interactive dialog). Prior: 2026-08-05 (commit
+> pending — every enabled AI harness now receives a sandbox-safe Git SSH default
+> in both backends; Codex contributes its backend-native Nix cache and devenv
+> Git metadata roots, while enabled integrations such as glab add their
+> effective writable state). Prior: 2026-08-04 (commit pending —
+> `ai.kiro.agents` is now a typed record modelling Kiro's v3 agent schema, with
+> `name` defaulted from the attr key because Kiro's Rust CLI requires that field
+> while its Node/ACP parser treats it as optional; the `ai.agents` Kiro
+> exclusion is re-justified on tool VOCABULARY rather than on JSON-vs-record
+> shape). Prior: 2026-08-02 (commit pending — Codex beta permission profiles
+> remain explicit security boundaries: they do not compose with legacy
+> `sandbox_workspace_write` integration roots, so a selected profile must grant
+> the Semble cache itself). Prior: 2026-08-02 (commit pending — portable agent
+> tool lists render native allowlist frontmatter only when non-empty, so both
+> `null` and `[]` preserve unrestricted Claude/Copilot behavior). Prior:
+> 2026-08-02 (commit pending — Semble automatically grants its cache when a
+> selected Codex integration uses the workspace-write sandbox, with user-global
+> XDG cache ownership in HM and project-local state plus an environment override
+> in devenv). Prior: 2026-08-02 (commit pending — portable semantic agents may
+> restrict Claude and Copilot with their shared `tools` vocabulary while Codex
+> deliberately omits that field and Kiro retains its native JSON model). Prior:
+> 2026-08-02 (commit pending — Semble keeps Claude and Codex instructions
+> unnamed for their single-file composers but names its Kiro instruction so
+> directory-native steering emits `semble.md` instead of the generic
+> `instructions.md`). Prior: 2026-08-02 (commit pending — records plain
 > convenience modules such as Semble contributing selected per-runtime defaults
 > without enabling those runtimes). Prior: 2026-08-02 (commit pending — Codex
 > named profile files now use one typed settings schema across HM and devenv: HM
@@ -205,6 +209,10 @@ The ai module fans out TWO kinds of configuration:
 - `ai.claude.package` / `ai.codex.package` / `ai.copilot.package` /
   `ai.kiro.package` — package override; Codex installs it directly while the
   established runtimes route it through their native factory wiring.
+- `ai.kiro.extraPackages` — store-backed tools prepended to Kiro's runtime PATH
+  in both backends. It is Kiro-specific because it closes the Linux
+  `buildFHSEnv` visibility gap; it remains independent of `ai.shell`, which
+  selects an executable rather than supplying commands.
 - `ai.codex.settings` — typed stable keys plus a TOML-compatible native freeform
   tail. Home Manager reconciles exact declared leaves into a writable
   `${configDir}/config.toml`; devenv writes a statically Nix-owned
