@@ -62,13 +62,15 @@ const wf = defineWorkflow({
 });
 ```
 
-Pass the object literal **directly**, or preserve an imported JSON-shaped value
-as a deeply readonly literal. Exact tuples receive exact proofs for the step
-cap, depth cap, id uniqueness, and interactive-step placement. Widened arrays
-and union-shaped subtrees are not silently accepted: `defineWorkflow` reports
-the affected rule as statically indeterminate and requires the value to go
-through `validate` at runtime. The walkers still inspect every known tuple
-suffix, so an unknown subtree cannot hide a later violation that is provable.
+Pass the object literal **directly**, or use a generated TypeScript module or
+loader that preserves a JSON-shaped value as a deeply readonly literal. Plain
+`resolveJsonModule` imports widen string discriminants and cannot recover the
+literal proof. Send those through `validate` at runtime instead. Exact tuples
+receive exact proofs for the step cap, depth cap, id uniqueness, and
+interactive-step placement. Widened arrays and union-shaped subtrees are not
+silently accepted: `defineWorkflow` reports the affected rule as statically
+indeterminate. The scanner still inspects every known tuple suffix, so an
+unknown subtree cannot hide a later violation that is provable.
 
 ## Checking it
 
@@ -80,7 +82,7 @@ CI `build` job — a real cost for a schema whose consumer is not yet decided.
 ```bash
 cd packages/kiro-cli/schema
 nix shell nixpkgs#bun -c bun install
-nix shell nixpkgs#bun -c bun test          # 59 runtime tests
+nix shell nixpkgs#bun -c bun test          # 65 runtime tests
 nix shell nixpkgs#typescript -c tsc --noEmit  # types + compile-time tests
 ```
 
