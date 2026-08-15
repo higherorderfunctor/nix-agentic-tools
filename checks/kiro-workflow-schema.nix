@@ -108,6 +108,20 @@
       }
     ];
 
+  # Same idea for the fileCheck jsonPath family: the segment list is the ONLY
+  # variable, so `accept-jsonpath-dollar-after-head` is the shape-matched
+  # positive control for every `reject-jsonpath-*` fixture below it.
+  jsonPathFixture = segments:
+    wrap [
+      (step "a" {
+        completion.fileCheck = {
+          path = "p.json";
+          jsonPath = segments;
+          value = true;
+        };
+      })
+    ];
+
   unicodeWhitespaceWatchId = builtins.fromJSON "\"wait\\u00a0for\\u00a0it\"";
 
   # ── vendor corpus ─────────────────────────────────────────────────────────
@@ -228,6 +242,11 @@ in
         };
       }
     ]);
+    # Pins an INTERNAL implementation detail of the test-only wire reader, not
+    # a supported behavior: it collapses empty wire segments the way the engine
+    # does so a wire document carrying a redundant dot still reads. The
+    # authored surface refuses all four spellings outright — see the
+    # `reject-jsonpath-*-empty-segment` fixtures directly below.
     kiro-workflow-parse-normalizes-jsonpath-empty-segments = mkTest "parse-normalizes-jsonpath-empty-segments" (
       let
         parsed = eval (parse.fromAttrs {
@@ -253,15 +272,7 @@ in
     );
     kiro-workflow-accept-jsonpath-dollar-after-head =
       accept "jsonpath-dollar-after-head"
-      (wrap [
-        (step "a" {
-          completion.fileCheck = {
-            path = "p.json";
-            jsonPath = ["state" "$value"];
-            value = true;
-          };
-        })
-      ]);
+      (jsonPathFixture ["state" "$value"]);
 
     # ── REJECT: per-node type rules ────────────────────────────────────────
     kiro-workflow-reject-two-tags =
@@ -391,30 +402,38 @@ in
     kiro-workflow-reject-empty-stop-condition = reject "empty-stop-condition" (wrap [(step "a" {completion = {};})]);
     kiro-workflow-reject-jsonpath-dollar =
       reject "jsonpath-dollar"
-      (wrap [
-        (step "a" {
-          completion.fileCheck = {
-            path = "p.json";
-            jsonPath = ["$.drained"];
-            value = true;
-          };
-        })
-      ]);
+      (jsonPathFixture ["$.drained"]);
+    # The four empty-segment spellings, each rejected on its own. The engine
+    # ACCEPTS all four and resolves the first three correctly — `walkJsonPath`
+    # filters empty segments — so this family is the deliberate,
+    # operator-approved exception to "be stricter only where the engine's
+    # acceptance is silent". The reasoning is in the `fileCheck.jsonPath` row of
+    # the strictness ledger in types.nix; the short version is that these paths
+    # are machine-generated, so an empty segment means the generator is broken
+    # and should say so rather than be quietly collapsed.
+    kiro-workflow-reject-jsonpath-leading-empty-segment =
+      reject "jsonpath-leading-empty-segment"
+      (jsonPathFixture ["" "done"]);
+    kiro-workflow-reject-jsonpath-trailing-empty-segment =
+      reject "jsonpath-trailing-empty-segment"
+      (jsonPathFixture ["done" ""]);
+    kiro-workflow-reject-jsonpath-internal-empty-segment =
+      reject "jsonpath-internal-empty-segment"
+      (jsonPathFixture ["state" "" "done"]);
+    # The all-empty path has two authored spellings — a list of nothing, and a
+    # list of one empty segment — caught by different predicates
+    # (`jsonPathType`'s `xs != []` and `jsonPathSegment`'s `s != ""`), so both
+    # are pinned.
     kiro-workflow-reject-jsonpath-empty =
       reject "jsonpath-empty"
-      (wrap [
-        (step "a" {
-          completion.fileCheck = {
-            path = "p.json";
-            jsonPath = [];
-            value = true;
-          };
-        })
-      ]);
-    # The wire spelling of the same rule, and the one the engine really does
-    # accept: `".."` filters to no segments at all, so `walkJsonPath` leaves
-    # the cursor at the document root and the check deep-equals the whole
-    # parsed file. `parse-normalizes-jsonpath-empty-segments` is the
+      (jsonPathFixture []);
+    kiro-workflow-reject-jsonpath-only-empty-segment =
+      reject "jsonpath-only-empty-segment"
+      (jsonPathFixture [""]);
+    # The wire spelling of the all-empty rule, and the one the engine really
+    # does accept: `".."` filters to no segments at all, so `walkJsonPath`
+    # leaves the cursor at the document root and the check deep-equals the
+    # whole parsed file. `parse-normalizes-jsonpath-empty-segments` is the
     # shape-matched control — same import path, same fileCheck, one surviving
     # segment.
     kiro-workflow-reject-jsonpath-all-empty-on-wire =

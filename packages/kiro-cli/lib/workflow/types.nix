@@ -53,23 +53,43 @@
 # ── Strictness ledger: where this type is stricter than engine load ─────────
 #
 # The default posture is engine fidelity, because rejecting a definition the
-# engine RUNS is as much a bug as accepting one it refuses. These types are
-# deliberately stricter at the sites below. Most prevent a silent expensive
-# failure; some move a guaranteed later throw to authoring time; `name` is a
-# deliberate label-quality guardrail. This is the complete current set:
+# engine RUNS is as much a bug as accepting one it refuses. The house rule for
+# departing from it: be stricter only where the engine's acceptance is a SILENT
+# failure. These types are deliberately stricter at the sites below. Most obey
+# that rule; some move a guaranteed later throw to authoring time; `name` is a
+# deliberate label-quality guardrail; empty jsonPath segments are an explicit,
+# operator-approved EXCEPTION, flagged as such in their row. This is the
+# complete current set:
 #
-#   fileCheck.jsonPath   a NON-EMPTY segment LIST; the first segment rejects a
-#                        LEADING '$', and every segment rejects '*' or
-#                        brackets. Two engine-accepted spellings are refused
-#                        here, and both are the same silent forever-false
-#                        condition. `"$.drained"` reads a property literally
-#                        named `$`, which resolves undefined so the loop never
-#                        stops. An ALL-EMPTY path (`""`, `"."`, `".."`) is
-#                        engine-legal too — `walkJsonPath` filters empty
-#                        segments, so the cursor never leaves the document
-#                        root and the check deep-equals the WHOLE parsed file
-#                        against `value`, which is not what any author means
-#                        by a property check.
+#   fileCheck.jsonPath   a NON-EMPTY list of NON-EMPTY segments; the first
+#                        segment rejects a LEADING '$', and every segment
+#                        rejects '*' or brackets.
+#
+#                        '$' is the house-rule case: `"$.drained"` reads a
+#                        property literally named `$`, which resolves undefined
+#                        so the loop never stops — silent, and expensive.
+#
+#                        EMPTY SEGMENTS ARE THE EXCEPTION, and it is deliberate
+#                        rather than an oversight. The engine ACCEPTS them and
+#                        RESOLVES THEM FINE — `walkJsonPath` does
+#                        `split(".").filter(s => s.length > 0)` — so a leading
+#                        `.done`, a trailing `done.` and an internal
+#                        `state..done` all run correctly there. We refuse every
+#                        one of them anyway, because this is an authoring and
+#                        generation tool whose output is machine-generated:
+#                        `state.done` is the expected convention, and a doubled
+#                        dot is not a spelling preference but a sign that
+#                        whatever produced the path is broken. Surfacing that
+#                        beats silently collapsing it. Do NOT "restore engine
+#                        fidelity" here — this row exists so a future reader
+#                        knows the divergence was chosen, not missed.
+#
+#                        The ALL-EMPTY path (`""`, `"."`, `"..."`) falls under
+#                        the same rejection and is additionally the one empty
+#                        case that IS silent in the usual way: the cursor never
+#                        leaves the document root, so the check deep-equals the
+#                        WHOLE parsed file against `value`, which is not what
+#                        any author means by a property check.
 #   fileCheck.value      required here although the engine's `z.unknown()` key
 #                        accepts omission; omission makes the intended target
 #                        impossible to distinguish from an explicit undefined.
@@ -213,6 +233,11 @@
   # resolve to undefined. '$' is rejected only at the path head; in a later
   # segment it is an ordinary property-name prefix to the engine.
   #
+  # `s != ""` is the empty-segment rule, and it is the one place in this file
+  # where being stricter than the engine is NOT justified by a silent failure —
+  # the engine filters empties and resolves the path correctly. See its ledger
+  # row for why it is refused here regardless.
+  #
   # That last part is a HARD rejection at type level, not a `policy`-basis
   # lint — a definition using it does not evaluate at all, and no `strict`
   # toggle relaxes it. Saying "policy" here would be wrong twice over: in this
@@ -242,13 +267,15 @@
       && !(lib.hasInfix "*" s)
       && !(lib.hasInfix "[" s)
       && !(lib.hasInfix "]" s))
-    // {description = "property name (no '.', '*' or brackets — this is NOT JSONPath)";};
+    // {description = "non-empty property name (no '.', '*' or brackets — this is NOT JSONPath)";};
 
   # addCheck IS correct here — a list definition is its own final value.
   #
-  # `xs != []` is the all-empty rule from the ledger. `parse.nix` drops empty
-  # wire segments, so `""`, `"."` and `".."` all arrive here as `[]`; the
-  # engine walks that to the document root and compares the whole file.
+  # `xs != []` is the all-empty rule from the ledger; `jsonPathSegment` above
+  # covers the leading, trailing and internal empties. The test-only wire
+  # reader in ./parse.nix collapses empty wire segments, so `""`, `"."` and
+  # `"..."` all arrive here as `[]` and are refused at this line; the engine
+  # would walk that to the document root and compare the whole file.
   jsonPathType =
     types.addCheck (types.listOf jsonPathSegment) (xs: xs != [] && !(lib.hasPrefix "$" (builtins.head xs)))
     // {description = "non-empty list of property-name segments whose first segment does not start with '$', joined with '.' at render time";};

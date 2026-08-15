@@ -69,11 +69,16 @@
     # The wire form is a '.'-separated property walk; the authored form is the
     # segment list that makes the JSONPath spelling unrepresentable.
     #
-    # The filter is what makes this function non-injective — see the header.
-    # An empty segment is a redundant dot the engine itself discards, so
-    # dropping it on import is the normalization, not a loss; an ALL-empty path
-    # collapses to `[]`, which `jsonPathType` then refuses (a listed
-    # stricter-than-engine rule).
+    # Dropping empty segments here is an INTERNAL IMPLEMENTATION DETAIL of this
+    # test-only reader, not a feature anyone may rely on. It mirrors the
+    # engine's own `split(".").filter(s => s.length > 0)` so that a wire
+    # document carrying a redundant dot still reads.
+    #
+    # The AUTHORED surface refuses an empty segment OUTRIGHT — leading,
+    # trailing, internal and all-empty alike — and that is deliberate; see the
+    # `fileCheck.jsonPath` row of the strictness ledger in ./types.nix for why.
+    # An ALL-empty wire path collapses to `[]` here, which `jsonPathType` then
+    # refuses, so the two surfaces agree on that case rather than diverging.
     jsonPath = lib.filter (segment: segment != "") (splitString "." fc.jsonPath);
   };
 
