@@ -108,10 +108,14 @@
   #   pre-default attrset. Neither position provides the merged value needed
   #   for a reliable cross-field invariant.
   #
-  #   Overriding `merge` does not help either: for a submodule the module
-  #   system evaluates the nested option tree and never calls `type.merge` at
-  #   all. Verified by hanging an unconditional `throw` off it, which never
-  #   fired.
+  #   Overriding `merge` does not help either, and it fails to the SAME
+  #   discard rather than to a missing call. The module system calls
+  #   `type.merge` for every defined option — hang an unconditional `throw`
+  #   off a plain `types.str` and it fires — but for an option-owned submodule
+  #   `fixupOptionType` has already replaced the type object, so the merge
+  #   that runs is the REBUILT submodule's, the one that evaluates the nested
+  #   option tree. The override never fires because it is no longer attached,
+  #   not because nothing is merged. Verified both halves by evaluation.
   #
   # `apply` is the one hook that receives the MERGED value. It lives on the
   # option rather than on the type, so each use site opts in — verified to
