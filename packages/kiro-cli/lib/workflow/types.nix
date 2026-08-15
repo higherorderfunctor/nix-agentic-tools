@@ -544,9 +544,13 @@
               description = "Path to a JSON file naming the CR, resolved inside the workspace roots at POLL time.";
             };
             crId = mkOption {
+              # The pattern comes from the shared engine-limits.json and is
+              # stored UNANCHORED, because `builtins.match` is whole-string by
+              # definition while the Effect port has to wrap it in ^...$. Do not
+              # re-spell it here; that duplication drifted once already.
               type =
-                types.nullOr (types.addCheck types.str (s: s == "" || builtins.match "CR-[0-9]+" s != null)
-                  // {description = "empty, or a CR id matching ^CR-[0-9]+$";});
+                types.nullOr (types.addCheck types.str (s: s == "" || builtins.match engine.watch.crIdPattern s != null)
+                  // {description = "empty, or a CR id matching ^${engine.watch.crIdPattern}$";});
               default = null;
               description = "CR id. Empty falls back to crRef, matching resolveCrId, so an empty value is only usable with a crRef beside it.";
             };
