@@ -5,7 +5,11 @@
 
   lib.ai = {
     mcpServers.mkSemble = import ./lib/mkSemble.nix;
-    semble = import ./lib/integrations.nix;
+    semble =
+      import ./lib/integrations.nix
+      // {
+        withGrammars = import ./lib/withGrammars.nix;
+      };
   };
 
   modules = {

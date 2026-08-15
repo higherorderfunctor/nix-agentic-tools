@@ -1,0 +1,22 @@
+diff --git a/src/semble/chunking/core.py b/src/semble/chunking/core.py
+index 6f4e122..16584ef 100644
+--- a/src/semble/chunking/core.py
++++ b/src/semble/chunking/core.py
+@@ -7,2 +7,3 @@
+ from semble_grammars import LanguageNotFoundError, UnsupportedPlatformError, get_parser
++from semble.extra_grammars import get_parser as get_extra_parser
+ from tree_sitter import Node, Parser
+@@ -27,7 +28,12 @@ def _cached_get_parser(language: str) -> Parser | None:
+     try:
+         return get_parser(language)
+     except LanguageNotFoundError:
+-        logger.warning("Language %s not found, falling back to line chunking", language)
++        try:
++            return get_extra_parser(language)
++        except LanguageNotFoundError:
++            logger.warning("Language %s not found, falling back to line chunking", language)
++        except Exception:
++            logger.error("Uncaught exception in extra grammar parser", exc_info=True)
+     except UnsupportedPlatformError:
+         logger.warning("No bundled grammars for this platform, falling back to line chunking")
+     except Exception:

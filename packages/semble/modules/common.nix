@@ -3,6 +3,7 @@
   # backend that MOVES the cache off semble's own default has to tell semble
   # about it (see `relocatesCache`).
   cacheLocation,
+  installCacheInvalidation,
   installPackage,
   # True when `cacheLocation` is a relocation rather than semble's default.
   # Relocating means semble must be told, and the only honest place to put
@@ -18,6 +19,10 @@
   ...
 }: let
   cfg = config.semble;
+  grammarLanguages = map (grammar: grammar.language or "") cfg.grammars;
+  grammarLanguagesValid = lib.all (language: language != "") grammarLanguages;
+  grammarLanguagesUnique = lib.length (lib.unique grammarLanguages) == lib.length grammarLanguages;
+  grammarPackageOverridable = cfg.grammars == [] || cfg.package ? overridePythonAttrs;
   records = import ../lib/integrations.nix;
   runtimes = ["claude" "codex" "kiro"];
 
@@ -33,6 +38,10 @@
     featureEnabled feature && lib.elem runtime (featureRuntimes feature);
   featureActive = feature:
     featureEnabled feature && featureRuntimes feature != [];
+  integrationActive =
+    featureActive cfg.instructions
+    || featureActive cfg.mcp
+    || featureActive cfg.subagent;
   codexSelected = lib.any (feature: selected "codex" feature) [
     cfg.instructions
     cfg.mcp
@@ -41,6 +50,41 @@
   mkDefaultRecursive = lib.mapAttrsRecursive (_path: lib.mkDefault);
 
   cacheDir = cacheLocation {inherit config lib;};
+  withGrammars = import ../lib/withGrammars.nix {inherit lib pkgs;};
+  grammarPackage =
+    if grammarPackageOverridable && grammarLanguagesValid && grammarLanguagesUnique
+    then withGrammars cfg.package cfg.grammars
+    else cfg.package;
+
+  cacheGuard = pkgs.writeShellApplication {
+    name = "semble-cache-guard";
+    bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+    text = ''
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      cache_dir=${lib.escapeShellArg cacheDir}
+      expected=${lib.escapeShellArg "${grammarPackage}"}
+      stamp="$cache_dir/.nix-package"
+      previous=
+
+      ${pkgs.coreutils}/bin/mkdir -p "$cache_dir"
+      if [ -r "$stamp" ]; then
+        IFS= read -r previous < "$stamp" || :
+      fi
+
+      if [ "$previous" != "$expected" ]; then
+        printf 'Semble package changed; clearing indexes in %s\n' "$cache_dir"
+        SEMBLE_CACHE_LOCATION="$cache_dir" \
+          ${grammarPackage}/bin/semble clear index >/dev/null
+
+        temporary="$(${pkgs.coreutils}/bin/mktemp "$cache_dir/.nix-package.XXXXXX")"
+        trap '${pkgs.coreutils}/bin/rm -f "$temporary"' EXIT
+        printf '%s\n' "$expected" > "$temporary"
+        ${pkgs.coreutils}/bin/mv -f "$temporary" "$stamp"
+        trap - EXIT
+      fi
+    '';
+  };
 
   # A relocating backend relocates UNCONDITIONALLY. The intent is a
   # project-local cache, full stop — nothing about it is Codex-specific.
@@ -62,16 +106,17 @@
   # `env` block of its own, since its command already carries the setting.
   semblePackage =
     if !relocatesCache
-    then cfg.package
+    then grammarPackage
     else
       pkgs.symlinkJoin {
         # Named after what it wraps, so a `semble.package` override stays
         # OBSERVABLE once the package is no longer installed bare. A fixed
         # name would make the override untestable — the wrapped derivation
         # would look identical whatever went into it.
-        name = "${lib.getName cfg.package}-wrapped";
-        paths = [cfg.package];
+        name = "${lib.getName grammarPackage}-wrapped";
+        paths = [grammarPackage];
         nativeBuildInputs = [pkgs.makeWrapper];
+        passthru = grammarPackage.passthru or {};
         postBuild = ''
           for bin in "$out"/bin/*; do
             wrapProgram "$bin" \
@@ -115,12 +160,29 @@ in {
 
   config = lib.mkMerge (
     [
-      (lib.mkIf (
-          featureActive cfg.instructions
-          || featureActive cfg.mcp
-          || featureActive cfg.subagent
-        )
-        (installPackage semblePackage))
+      {
+        assertions = [
+          {
+            assertion = grammarPackageOverridable;
+            message = "semble.grammars requires semble.package to expose overridePythonAttrs.";
+          }
+          {
+            assertion = grammarLanguagesValid;
+            message = "semble.grammars packages must expose a non-empty language attribute.";
+          }
+          {
+            assertion = grammarLanguagesUnique;
+            message = "semble.grammars language names must be unique.";
+          }
+        ];
+      }
+      (lib.mkIf integrationActive
+        (lib.mkMerge [
+          (installPackage semblePackage)
+          (installCacheInvalidation {
+            inherit cacheGuard lib;
+          })
+        ]))
       # Uniform across backends now that the location is a plain value rather
       # than a round-trip through the shell environment.
       (lib.mkIf codexSelected {

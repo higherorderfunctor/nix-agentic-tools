@@ -29,6 +29,20 @@ in {
       defaultText = lib.literalExpression "pkgs.ai.semble";
       description = "Semble package installed when at least one selected integration is active.";
     };
+    grammars = lib.mkOption {
+      type = lib.types.listOf lib.types.package;
+      default = [];
+      example = lib.literalExpression ''
+        with pkgs.tree-sitter-grammars; [
+          tree-sitter-awk
+          tree-sitter-jq
+        ]
+      '';
+      description = ''
+        Additional Tree-sitter grammar packages used by Semble. Each package
+        must expose a `language` attribute and a compiled `parser` output.
+      '';
+    };
     runtimes = lib.mkOption {
       type = runtimeListType;
       default = ["claude" "codex" "kiro"];

@@ -1,9 +1,11 @@
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-08-05 (commit pending — re-verifies that Codex's
-> environment resolver and sandbox-root fanout create no `files.*` artifact
-> while its test override moves out of the formal module argument set). Prior:
-> 2026-08-05 (commit pending — Codex and glab sandbox-root fanout is
+> **Last verified:** 2026-08-14 (commit pending — Semble's shell-entry cache
+> guard remains an environment/settings lifecycle effect and creates no
+> `files.*` artifact). Prior: 2026-08-05 (commit pending — re-verifies that
+> Codex's environment resolver and sandbox-root fanout create no `files.*`
+> artifact while its test override moves out of the formal module argument set).
+> Prior: 2026-08-05 (commit pending — Codex and glab sandbox-root fanout is
 > settings/environment integration and deliberately creates no `files.*`
 > artifact). Prior: 2026-08-02 (commit pending — Semble's devenv facet keeps its
 > sandbox-writable cache in project state and exports the same path through

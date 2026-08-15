@@ -305,6 +305,10 @@
         # mono-repo combined package (nix-update target)
         modelcontextprotocol-all-mcps = pkgs.ai.mcpServers.modelContextProtocol.all-mcps;
         modelcontextprotocol-filesystem-mcp = pkgs.ai.mcpServers.modelContextProtocol.filesystem-mcp;
+        # Future custom Semble grammars that are not already in nixpkgs must be
+        # exposed here so the authenticated package sweep publishes them to
+        # Cachix. Do not expose nixpkgs grammars again; the nixpkgs follow
+        # already supplies those store paths. Keep patched Semble check-only.
         # Instruction file derivations (from dev/generate.nix).
         # Each ecosystem produces a content directory consumed by the
         # `generate:instructions:*` devenv tasks.

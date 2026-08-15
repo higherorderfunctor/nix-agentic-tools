@@ -470,6 +470,11 @@ jobs:
         with:
           systems: x86_64-linux aarch64-darwin
 
+      # The Semble extra-grammar smoke check builds a patched Semble here and
+      # parses real AWK and jq samples. This job's Cachix client is read-only
+      # (no authToken), and that patched derivation is deliberately absent from
+      # flake packages, so it is tested without being published. Its nixpkgs
+      # grammar inputs are already available through the Cachix nixpkgs follow.
       - name: Run flake checks
         run: nix flake check
 
