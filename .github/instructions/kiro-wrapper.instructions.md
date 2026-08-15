@@ -333,7 +333,7 @@ multiple times". The wrapper therefore implements no precedence of its own.
 
 The `acp` condition is resolved from **argv at runtime**, not from the Nix
 config — see
-[the composition section](#the-two-wrappers-compose--reason-about-the-chain-not-the-binaries).
+[the post-split dispatch section](#post-split-linux-does-not-compose-the-outer-wrappers).
 
 Two different rules, for two different reasons — do not "make them consistent":
 

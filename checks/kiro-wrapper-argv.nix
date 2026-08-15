@@ -56,19 +56,18 @@
     ln -s ${echoArgv} "$out/bin/kiro-cli-chat"
   '';
 
-  # A launcher stub that DISPATCHES, so the two wrappers compose the way they do
-  # in a real profile. The real `kiro-cli` resolves `kiro-cli-chat` through PATH
-  # — verified by removing the wrapped bin dir from PATH, which makes it fail
-  # with "No such file or directory" rather than falling back to its own store
-  # dir. So `kiro-cli acp` runs the launcher wrapper AND the chat wrapper, and
-  # their injections land in ONE argv.
+  # A launcher stub that DISPATCHES, preserving the measured pre-split
+  # forwarding contract and exercising how the two wrappers interact when PATH
+  # dispatch traverses both. Current Linux buildFHSEnv startup instead finds its
+  # raw /usr/bin/kiro-cli-chat before the inherited outer wrapper, so this stub
+  # is not a model of that FHS resolution boundary.
   #
   # Testing each binary alone cannot see that: it is what let a `--v3` prepend
   # and a `--trust-tools` append meet on `acp` and abort the command.
   #
   # The launcher does NOT relay argv — it injects, translates and drops. Every
-  # row below was measured by putting a printing `kiro-cli-chat` first on PATH
-  # and reading the argv it received from the real 2.15.2 launcher:
+  # row below was measured pre-split by putting a printing `kiro-cli-chat` first
+  # on PATH and reading the argv it received from the real 2.15.2 launcher:
   #
   #   kiro-cli                      ->  chat
   #   kiro-cli --                   ->  chat
