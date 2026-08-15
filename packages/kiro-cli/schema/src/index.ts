@@ -19,11 +19,13 @@ import type { CheckWorkflow } from "./type-level.js";
 /**
  * Author a workflow with the tree rules checked AT COMPILE TIME.
  *
- * `const W` keeps a direct object literal narrow. Deeply readonly imported
- * JSON-shaped literals work too. Widened arrays and union-shaped subtrees are
- * rejected as statically indeterminate instead of silently passing; decode and
- * `validate` those values at runtime. Known tuple suffixes are still checked,
- * so an unknown subtree cannot hide a later provable violation.
+ * `const W` keeps a direct object literal narrow. A generated module or loader
+ * that preserves deeply readonly JSON-shaped literals works too; TypeScript's
+ * built-in `resolveJsonModule` widens string discriminants, so plain JSON
+ * imports must instead go through `validate`. Widened arrays and union-shaped
+ * subtrees are rejected as statically indeterminate instead of silently
+ * passing. Known tuple suffixes are still checked, so an unknown subtree cannot
+ * hide a later provable violation.
  *
  * A violation surfaces as a type error on the argument whose text carries the
  * reason, e.g.
