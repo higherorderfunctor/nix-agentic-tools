@@ -75,6 +75,27 @@
     inherit steps;
   };
   baseline = wrap [(step "a" {})];
+
+  # The authored stopWhen contains-form, with the template as the ONLY
+  # variable. Every fixture below that exercises the template rule differs in
+  # nothing else, so the shape is written once and each of them doubles as the
+  # others' shape-matched control.
+  stopWhenTemplate = template:
+    wrap [
+      {
+        repeat = {
+          id = "r";
+          maxIterations = 2;
+          onMaxIterations = "abort";
+          stop.when.contains = {
+            inherit template;
+            text = "DONE";
+          };
+          steps = [(step "s" {})];
+        };
+      }
+    ];
+
   unicodeWhitespaceWatchId = builtins.fromJSON "\"wait\\u00a0for\\u00a0it\"";
 
   # ── vendor corpus ─────────────────────────────────────────────────────────
@@ -627,40 +648,48 @@ in
         }
       ])
       "E-STOP-WHEN-WATCH-ID";
+    # A LONE brace is engine-legal and merely resolves literally, so it stays a
+    # warning and the definition must still evaluate.
     kiro-workflow-emits-braced-stop-when-template =
       emits "braced-stop-when-template"
-      (wrap [
-        {
-          repeat = {
-            id = "r";
-            maxIterations = 2;
-            onMaxIterations = "abort";
-            stop.when.contains = {
-              template = "a{b";
-              text = "DONE";
-            };
-            steps = [(step "s" {})];
-          };
-        }
-      ])
+      (stopWhenTemplate "a{b")
       "W-STOP-WHEN-TEMPLATE-BRACES";
     kiro-workflow-emits-empty-stop-when-template =
       emits "empty-stop-when-template"
-      (wrap [
-        {
-          repeat = {
-            id = "r";
-            maxIterations = 2;
-            onMaxIterations = "abort";
-            stop.when.contains = {
-              template = "";
-              text = "DONE";
-            };
-            steps = [(step "s" {})];
-          };
-        }
-      ])
+      (stopWhenTemplate "")
       "W-STOP-WHEN-LITERAL-TEMPLATE";
+    # A DOUBLE brace is a different failure and must not evaluate at all.
+    # `render.nix` wraps this field, so `"{{p.output}}"` — copying the wire
+    # spelling into a field that already supplies the delimiters — renders
+    # `{{{{p.output}}}} contains DONE`, which the engine's `parseStopWhen`
+    # refuses at LOAD (its first `}}` leaves a remainder of `}} contains DONE`,
+    # failing the ` contains ` test). The warning above cannot see this: it
+    # fires on the same fixture while `assertValid` still passes.
+    kiro-workflow-accept-stop-when-template-without-delimiters =
+      accept "stop-when-template-without-delimiters"
+      (stopWhenTemplate "p.output");
+    kiro-workflow-reject-stop-when-template-open-delimiter =
+      reject "stop-when-template-open-delimiter"
+      (stopWhenTemplate "{{p.output}}");
+    kiro-workflow-reject-stop-when-template-close-delimiter =
+      reject "stop-when-template-close-delimiter"
+      (stopWhenTemplate "p.output}}");
+    # The rule exists because this port's own wire parser throws on this port's
+    # own rendered output. Rendering has to be done on a hand-built attrset,
+    # since the option type is what now refuses the authored value.
+    kiro-workflow-render-of-braced-stop-when-template-is-unparseable = mkTest "render-of-braced-stop-when-template-is-unparseable" (
+      let
+        wire = W.render.renderStopWhen {
+          contains = {
+            template = "{{p.output}}";
+            text = "DONE";
+          };
+        };
+      in
+        wire
+        == "{{{{p.output}}}} contains DONE"
+        && !(builtins.tryEval (builtins.deepSeq (W.parse.parseStopWhen "probe" wire) true)).success
+    );
     kiro-workflow-stop-when-bare-input-references = mkTest "stop-when-bare-input-references" (
       let
         workflow = declared: {
