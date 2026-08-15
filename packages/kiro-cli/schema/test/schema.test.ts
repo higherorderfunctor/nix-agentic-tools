@@ -2,9 +2,10 @@
  * Conformance tests.
  *
  * The load-bearing suite is "vendor recipes" — the seven definitions inlined
- * in the engine bundle. The engine self-validates them at module init, so a
- * schema that rejects any of them is provably wrong, and a schema that
- * accepts all of them has been checked against every shape the vendor ships.
+ * in the engine bundle. The engine shape-parses them at module init but does
+ * not run its structural analyzer until launch. They are the highest-fidelity
+ * corpus available, and accepting all of them checks every shape the vendor
+ * ships.
  */
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
@@ -28,7 +29,7 @@ const minimal = {
 
 const withSteps = (steps: unknown) => ({ name: "w", steps });
 
-describe("vendor recipes (the engine's own, guaranteed-conformant corpus)", () => {
+describe("vendor recipes (the engine's shipped corpus)", () => {
   const files = readdirSync(VENDOR_DIR).filter((f) =>
     f.endsWith(".workflow.json"),
   );
@@ -485,6 +486,27 @@ describe("analyze: whole-tree rules", () => {
         ]),
       ),
     ).toContain("E-STOP-WHEN-WATCH-ID");
+  });
+
+  test("mixed stop-condition message reflects short-circuit OR semantics", () => {
+    const messages = diagnosticsOf(
+      withSteps([
+        step("a", {
+          completion: {
+            completionSignal: "success",
+            containsText: "DONE",
+          },
+        }),
+      ]),
+    )
+      .filter(
+        (diagnostic) => diagnostic.code === "W-STOP-CONDITION-SIGNAL-FIRST",
+      )
+      .map((diagnostic) => diagnostic.message);
+
+    expect(messages).toEqual([
+      "step 'a' sets completionSignal alongside another stop form; the signal is tested first and may bypass the others when it matches",
+    ]);
   });
 
   test.each([

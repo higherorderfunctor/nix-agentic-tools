@@ -567,7 +567,7 @@ export const analyze = (workflow: Workflow): Analysis => {
       pol(
         "W-STOP-CONDITION-SIGNAL-FIRST",
         e.id,
-        `step '${e.id}' sets completionSignal alongside another stop form; the signal is tested FIRST and returns, making the others dead`,
+        `step '${e.id}' sets completionSignal alongside another stop form; the signal is tested first and may bypass the others when it matches`,
       );
     }
 
