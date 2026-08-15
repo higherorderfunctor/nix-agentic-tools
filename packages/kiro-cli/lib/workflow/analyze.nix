@@ -71,10 +71,7 @@
               id = v.id or "<missing>";
               siblingIndex = i;
               siblings = ns;
-              where =
-                if parentLineage == []
-                then "steps[${toString i}]"
-                else "${v.id or "?"}";
+              where = v.id or "?";
             };
             kids =
               if tag == "sequence" || tag == "repeat"
@@ -134,7 +131,7 @@
   refsIn = s: let
     parts = builtins.split "[{][{]([^{}]*)[}][}]" s;
   in
-    map (m: lib.trim (head m)) (filter isList parts);
+    filter (expr: expr != "") (map (m: lib.trim (head m)) (filter isList parts));
 
   # Ordered exactly as the engine's if-chain. `artifacts.` is tested BEFORE
   # the generic `.output` suffix, so `{{artifacts.foo.output}}` is the
@@ -167,7 +164,11 @@ in rec {
 
   analyze = workflow: let
     entries = flatten workflow.steps;
-    byId = lib.listToAttrs (map (e: lib.nameValuePair e.id e) entries);
+    # The engine overwrites nodeById/lineageById on every occurrence, so
+    # existence and ordering use the LAST node carrying an id. Producer status
+    # is independent: its monotone set keeps an id if ANY occurrence produces.
+    byId = lib.foldl' (acc: e: acc // {${e.id} = e;}) {} entries;
+    producerIds = lib.unique (map (e: e.id) (filter isProducer entries));
     stepEntries = filter (e: e.tag == "step") entries;
     watchIds = map (e: e.id) (filter (e: e.tag == "watch") entries);
     declaredInputs = attrNames (workflow.inputs or {});
@@ -292,7 +293,7 @@ in rec {
       then
         if !(byId ? ${c.target})
         then [(err "E-TEMPLATE-REF-UNKNOWN" e.where "step '${e.id}' references {{${expr}}}, but no node has id '${c.target}'")]
-        else if !(isProducer byId.${c.target})
+        else if !(lib.elem c.target producerIds)
         then [
           (err "E-TEMPLATE-REF-NOT-PRODUCER" e.where
             ("step '${e.id}' references {{${expr}}}, but '${c.target}' produces no output"
@@ -362,10 +363,17 @@ in rec {
       then
         if !(byId ? ${c.target})
         then [(err "E-STOP-CONTEXT-REF-UNKNOWN" e.where "'${e.id}' stop condition references {{${expr}}}, but no node has id '${c.target}'")]
-        else if !(isProducer byId.${c.target})
+        else if !(lib.elem c.target producerIds)
         then [(err "E-STOP-CONTEXT-REF-NOT-PRODUCER" e.where "'${e.id}' stop condition references {{${expr}}}, which produces no output")]
         else if !(visible byId.${c.target})
         then [(err "E-STOP-CONTEXT-REF-NOT-VISIBLE" e.where "'${e.id}' stop condition references {{${expr}}}, which is neither itself, nor earlier, nor inside its own body")]
+        else []
+      else if c.kind == "artifact"
+      then
+        if !(artifactProducers ? ${c.target})
+        then [(err "E-STOP-CONTEXT-ARTIFACT-UNKNOWN" e.where "'${e.id}' stop condition references {{${expr}}}, but no step declares artifact '${c.target}'")]
+        else if !(lib.any visible artifactProducers.${c.target})
+        then [(err "E-STOP-CONTEXT-ARTIFACT-NOT-VISIBLE" e.where "'${e.id}' stop condition references {{${expr}}}, but no declaring step is itself, earlier, or inside its own repeat body")]
         else []
       else [];
 

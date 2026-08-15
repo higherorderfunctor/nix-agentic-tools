@@ -54,6 +54,8 @@
   reject = name: wf: mkTest "reject-${name}" (!(forces wf));
 
   codesOf = wf: map (d: d.code) (W.analyze.analyze (eval wf)).diagnostics;
+  whereFor = wf: code:
+    map (d: d.where) (builtins.filter (d: d.code == code) (W.analyze.analyze (eval wf)).diagnostics);
   emits = name: wf: code: mkTest "emits-${name}" (lib.elem code (codesOf wf));
   silentOn = name: wf: code: mkTest "silent-${name}" (!(lib.elem code (codesOf wf)));
 
@@ -436,6 +438,31 @@ in
       ]) "E-NESTING-DEPTH";
     kiro-workflow-emits-duplicate-id =
       emits "duplicate-id" (wrap [(step "a" {}) (step "a" {})]) "E-NODE-DUPLICATE-ID";
+    kiro-workflow-duplicate-id-lineage-is-last-wins =
+      emits "duplicate-id-lineage-is-last-wins"
+      (wrap [
+        (step "dup" {})
+        (step "consumer" {prompt = "{{dup.output}}";})
+        (step "dup" {})
+      ])
+      "E-TEMPLATE-REF-NOT-PRECEDING";
+    kiro-workflow-duplicate-id-producer-is-any-occurrence = mkTest "duplicate-id-producer-is-any-occurrence" (
+      let
+        code = "E-TEMPLATE-REF-NOT-PRODUCER";
+        producerFirst = wrap [
+          (step "dup" {})
+          (step "dup" {captureOutput = false;})
+          (step "consumer" {prompt = "{{dup.output}}";})
+        ];
+        producerLast = wrap [
+          (step "dup" {captureOutput = false;})
+          (step "dup" {})
+          (step "consumer" {prompt = "{{dup.output}}";})
+        ];
+      in
+        !(lib.elem code (codesOf producerFirst))
+        && !(lib.elem code (codesOf producerLast))
+    );
     kiro-workflow-emits-interactive-in-parallel =
       emits "interactive-in-parallel"
       (wrap [
@@ -464,6 +491,27 @@ in
       "E-STOP-WHEN-WATCH-ID";
     kiro-workflow-emits-unknown-template-ref =
       emits "unknown-template-ref" (wrap [(step "a" {prompt = "see {{ghost.output}}";})]) "E-TEMPLATE-REF-UNKNOWN";
+    kiro-workflow-diagnostic-where-uses-node-id = mkTest "diagnostic-where-uses-node-id" (
+      whereFor
+      (wrap [
+        (step "top" {prompt = "{{ghost.output}}";})
+        {
+          sequence = {
+            id = "s";
+            steps = [(step "deep" {prompt = "{{ghost2.output}}";})];
+          };
+        }
+      ])
+      "E-TEMPLATE-REF-UNKNOWN"
+      == ["top" "deep"]
+    );
+    kiro-workflow-empty-template-ref-is-ignored = mkTest "empty-template-ref-is-ignored" (
+      let
+        code = "W-UNDECLARED-INPUT-REF";
+      in
+        !(lib.elem code (codesOf (wrap [(step "empty" {prompt = "{{}}";})])))
+        && !(lib.elem code (codesOf (wrap [(step "space" {prompt = "{{ }}";})])))
+    );
     kiro-workflow-emits-backward-template-ref =
       emits "backward-template-ref" (wrap [(step "a" {prompt = "see {{b.output}}";}) (step "b" {})]) "E-TEMPLATE-REF-NOT-PRECEDING";
     kiro-workflow-emits-cross-branch-template-ref =
@@ -482,6 +530,45 @@ in
       emits "non-producer-ref"
       (wrap [(step "a" {captureOutput = false;}) (step "b" {prompt = "see {{a.output}}";})])
       "E-TEMPLATE-REF-NOT-PRODUCER";
+    kiro-workflow-stop-context-artifact-visibility = mkTest "stop-context-artifact-visibility" (
+      let
+        unknown = "E-STOP-CONTEXT-ARTIFACT-UNKNOWN";
+        notVisible = "E-STOP-CONTEXT-ARTIFACT-NOT-VISIBLE";
+        fileCheck = path: {
+          inherit path;
+          jsonPath = ["done"];
+          value = true;
+        };
+        missing = wrap [(step "a" {completion.fileCheck = fileCheck "{{artifacts.nope}}";})];
+        later = wrap [
+          (step "a" {completion.fileCheck = fileCheck "{{artifacts.later}}";})
+          (step "b" {artifacts.later = "later.json";})
+        ];
+        self = wrap [
+          (step "a" {
+            artifacts.own = "own.json";
+            completion.fileCheck = fileCheck "{{artifacts.own}}";
+          })
+        ];
+        descendant = wrap [
+          {
+            repeat = {
+              id = "r";
+              maxIterations = 2;
+              onMaxIterations = "abort";
+              stop.condition.fileCheck = fileCheck "{{artifacts.child}}";
+              steps = [(step "child" {artifacts.child = "child.json";})];
+            };
+          }
+        ];
+      in
+        lib.elem unknown (codesOf missing)
+        && lib.elem notVisible (codesOf later)
+        && !(lib.elem unknown (codesOf self))
+        && !(lib.elem notVisible (codesOf self))
+        && !(lib.elem unknown (codesOf descendant))
+        && !(lib.elem notVisible (codesOf descendant))
+    );
     kiro-workflow-emits-stranded-verify =
       emits "stranded-verify"
       (wrap [
