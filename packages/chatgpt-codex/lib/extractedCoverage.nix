@@ -131,8 +131,8 @@
       #
       # `--profile` and `--permission-profile` keep this disposition even
       # though their declarative counterparts (`ai.codex.profiles`,
-      # `ai.codex.settings.default_permissions`,
-      # `ai.codex.settings.permissions`) are currently
+      # `ai.codex.nativeSettings.default_permissions`,
+      # `ai.codex.nativeSettings.permissions`) are currently
       # LOCKED OUT by assertion. The classification records that a typed
       # representation EXISTS, not that it is reachable; see the lockout
       # comment in ./mkCodex.nix. Do not reclassify them as unrepresented —
@@ -141,8 +141,8 @@
       # `--approve-for-me` is the one entry whose durable counterpart is a PAIR
       # of typed settings rather than a single key. Its help — route approval
       # requests through automatic review using the workspace-write sandbox —
-      # is exactly `ai.codex.settings.approvals_reviewer = "auto_review"` plus
-      # `ai.codex.settings.sandbox_mode = "workspace-write"`, both live and
+      # is exactly `ai.codex.nativeSettings.approvals_reviewer = "auto_review"` plus
+      # `ai.codex.nativeSettings.sandbox_mode = "workspace-write"`, both live and
       # reachable. Grepping for a lone `approve_for_me` config key finds
       # nothing; that absence is not evidence the flag is unrepresented. It is
       # also why this flag does NOT share
@@ -286,7 +286,7 @@
     fields = {
       default = "provenance only; omitting a Nix leaf preserves the pinned binary's native default";
       maturity = "routes stable names to typed options and every other maturity to the boolean freeform escape hatch";
-      name = "stable names become typed ai.codex.settings.features keys; all names remain accepted by the freeform boolean table";
+      name = "stable names become typed ai.codex.nativeSettings.features keys; all names remain accepted by the freeform boolean table";
     };
     maturities = {
       deprecated = "freeform only; never advertise deprecated toggles as first-class options";

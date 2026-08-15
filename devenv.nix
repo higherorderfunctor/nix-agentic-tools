@@ -304,7 +304,7 @@ in {
     claude.enable = true;
     codex = {
       enable = true;
-      # Legacy sandbox model, matching every other repository the maintainer
+      # Native legacy sandbox model, matching every other repository the maintainer
       # runs. This replaced a named permission profile — see the lockout
       # comment in packages/chatgpt-codex/lib/mkCodex.nix for why the beta
       # model is now unreachable, and note the concrete regression it caused
@@ -316,7 +316,7 @@ in {
       # project-local Semble cache are contributed automatically once their
       # owning integrations are enabled. Only the worktree collection remains
       # consumer policy here.
-      settings = {
+      nativeSettings = {
         approval_policy = "never";
         model = "gpt-5.6-sol";
         model_reasoning_effort = "high";

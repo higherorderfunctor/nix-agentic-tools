@@ -1,9 +1,9 @@
 # Typed model + thinking config / effort-pin reconciliation — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use
-> superpowers:subagent-driven-development (recommended) or
-> superpowers:executing-plans to implement this plan task-by-task. Steps use
-> checkbox (`- [ ]`) syntax for tracking.
+> **Status:** **COMPLETED 2026-06-18; historical execution record.** Do not
+> execute these unchecked task boxes. Runtime-native paths in the record were
+> refreshed for the 2026-08-15 `nativeSettings` split; the closing execution
+> status remains authoritative for what landed.
 
 **Goal:** Make Claude's `settings.effortLevel` actually stick (defeat the
 per-model launch-effort pin), type it as a real enum, add soft-enum model hints
@@ -408,15 +408,15 @@ In `packages/copilot-cli/lib/mkCopilot.nix`, add a `helpers` import to the HM
 ```
 
 Then replace the inline activation block (the
-`(lib.mkIf (cfg.settings != {}) (let settingsJsonText = …; in { home.activation.copilotSettingsMerge = … ''…''; }))`
+`(lib.mkIf (cfg.nativeSettings != {}) (let settingsJsonText = …; in { home.activation.copilotSettingsMerge = … ''…''; }))`
 at lines ~315-338) with:
 
 ```nix
-        (lib.mkIf (cfg.settings != {}) {
+        (lib.mkIf (cfg.nativeSettings != {}) {
           home.activation.copilotSettingsMerge =
             lib.hm.dag.entryAfter ["writeBoundary"] (helpers.mkSettingsActivationScript {
               configFile = "${cfg.configDir}/settings.json";
-              settingsJson = builtins.toJSON cfg.settings;
+              settingsJson = builtins.toJSON cfg.nativeSettings;
               jq = "${pkgs.jq}/bin/jq";
               coreutils = pkgs.coreutils;
             });
@@ -876,13 +876,13 @@ In the HM `config` block, `aiCommon` is already imported. Change the delegation
 
 ```nix
             # was: inherit (cfg) settings;
-            settings = aiCommon.filterNulls cfg.settings;
+            settings = aiCommon.filterNulls cfg.nativeSettings;
 ```
 
 (The devenv side already does
-`aiCommon.filterNulls (removeAttrs cfg.settings …)` — no change needed there.
-The `ENABLE_LSP_TOOL` env block remains a separate module-merge contribution and
-composes with the filtered settings.)
+`aiCommon.filterNulls (removeAttrs cfg.nativeSettings …)` — no change needed
+there. The `ENABLE_LSP_TOOL` env block remains a separate module-merge
+contribution and composes with the filtered settings.)
 
 - [ ] **Step 6: Write the new eval tests (failing first)**
 
@@ -902,8 +902,8 @@ other `module-claude-hm-*` tests):
             };
           };
         in
-          builtins.deepSeq ev.config.ai.claude.settings.effortLevel
-          ev.config.ai.claude.settings.effortLevel
+          builtins.deepSeq ev.config.ai.claude.nativeSettings.effortLevel
+          ev.config.ai.claude.nativeSettings.effortLevel
       );
     in
       attempt.success == false

@@ -58,8 +58,8 @@ in {
         (import ../../lib/mkGlab.nix {inherit lib pkgs cfg;})
       ];
     })
-    (lib.mkIf (cfg.enable && lib.hasAttrByPath ["ai" "codex" "settings"] options && config.ai.codex.enable) {
-      ai.codex.settings._integration_writable_roots = lib.mkAfter [cfg.configDir];
+    (lib.mkIf (cfg.enable && lib.hasAttrByPath ["ai" "codex" "internal"] options && config.ai.codex.enable) {
+      ai.codex.internal._integration_writable_roots = lib.mkAfter [cfg.configDir];
     })
   ];
 }

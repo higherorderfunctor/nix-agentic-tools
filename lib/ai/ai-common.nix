@@ -279,6 +279,20 @@ in {
 
   # ── Settings utilities ──────────────────────────────────────────────
 
+  # Closed normalized settings shared by the root and every runtime scope.
+  # Native settings live in each factory's separate `nativeSettings` option.
+  normalizedSettingsType = lib.types.submodule {
+    options.reasoningEffort = lib.mkOption {
+      type = lib.types.nullOr (lib.types.enum ["high" "low" "medium" "xhigh"]);
+      default = null;
+      description = ''
+        Portable reasoning effort across runtimes that persist the same
+        semantic values. Runtime-specific values belong in
+        `ai.<runtime>.nativeSettings`.
+      '';
+    };
+  };
+
   # Flatten nested Nix attrsets into dot-notation keys for CLIs that
   # expect flat JSON (e.g., Kiro's cli.json uses `"chat.enableTangentMode"`
   # not `{"chat":{"enableTangentMode":...}}`). Supports grouping:

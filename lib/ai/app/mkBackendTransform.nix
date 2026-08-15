@@ -26,7 +26,7 @@
 #       defaults ? {};         # backend-only default overrides
 #       config ? _: {};        # consumer callback:
 #                              #   {cfg, config, merged*, topContext, topHooks,
-#                              #    topSettings}
+#                              #    resolvedSettings}
 #                              #   → module attrs
 #     };
 #     <other-backend> ? { ... };   # ignored here
@@ -230,6 +230,20 @@
       }
     else null;
 
+  # Normalized settings narrow the root one field at a time. This is a
+  # translation input only: factories render supported fields into their
+  # nativeSettings option at mkDefault priority, and native option merging
+  # arbitrates against consumer-authored values.
+  resolvedSettings =
+    if supportsPool "settings"
+    then {
+      reasoningEffort = aiCommon.resolveOverride {
+        topValue = config.ai.settings.reasoningEffort;
+        cliValue = cfg.settings.reasoningEffort;
+      };
+    }
+    else {};
+
   # Module-contributed process env, delivered on the internal channel rather
   # than through `ai.<cli>.environmentVariables` — see the note on
   # `_sandboxSafeSshCommand` in sharedOptions.nix for why injecting into a
@@ -260,10 +274,6 @@
     if supportsPool "hooks"
     then config.ai.hooks
     else {};
-  topSettings =
-    if supportsPool "settings"
-    then config.ai.settings
-    else {};
 
   backendSpec = appRecord.${backend} or {};
   backendOptions = backendSpec.options or {};
@@ -277,7 +287,7 @@
   # options — e.g. the devenv materializer's conditional `devenv:files`
   # task edge needs `config.files != {}`.
   customConfig = backendConfigFn {
-    inherit cfg config mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables moduleEnvironmentVariables mergedAgents resolvedShell topContext topHooks topSettings;
+    inherit cfg config mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables moduleEnvironmentVariables mergedAgents resolvedSettings resolvedShell topContext topHooks;
   };
 in {
   options.ai.${appRecord.name} =
@@ -288,6 +298,21 @@ in {
         default = package;
         description = "The ${appRecord.name} package.";
       };
+      internal = lib.mkOption {
+        type = lib.types.submodule {
+          options._integration_writable_roots = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [];
+            internal = true;
+            visible = false;
+            description = "Writable roots contributed by integrations for runtimes that support them.";
+          };
+        };
+        default = {};
+        internal = true;
+        visible = false;
+        description = "Internal module-to-runtime integration channel.";
+      };
     }
     // lib.optionalAttrs (supportsPool "mcpServers") {
       mcpServers = lib.mkOption {
@@ -296,6 +321,20 @@ in {
         });
         default = {};
         description = "${appRecord.name}-specific MCP servers (merged with top-level ai.mcpServers; collisions fail).";
+      };
+    }
+    // lib.optionalAttrs (supportsPool "settings") {
+      settings = lib.mkOption {
+        type = aiCommon.normalizedSettingsType;
+        default = {};
+        description = ''
+          Normalized ${appRecord.name} settings. A non-null field overrides
+          the matching `ai.settings` default for this runtime; null inherits
+          the root value. Supported fields translate into native keys at
+          `mkDefault` priority. Set the corresponding key under
+          `ai.${appRecord.name}.nativeSettings`, including an explicit null,
+          to arbitrate against the derived value.
+        '';
       };
     }
     // lib.optionalAttrs (supportsPool "instructions") {

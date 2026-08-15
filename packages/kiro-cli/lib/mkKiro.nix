@@ -1025,6 +1025,7 @@ in
       "lspServers"
       "mcpServers"
       "rules"
+      "settings"
       "shell"
       "skills"
     ];
@@ -1224,7 +1225,7 @@ in
       # `hm.config` (runtime-merge via `jq -s '.[0] * .[1]'` to
       # preserve user runtime settings across rebuilds) and by the
       # static write in `devenv.config`.
-      settings = lib.mkOption {
+      nativeSettings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
           options = {
@@ -1558,7 +1559,7 @@ in
         hooksTargetDir = hookTargetDir cfg;
         hookEntries = mkHookEntries cfg;
 
-        filteredSettings = aiCommon.filterNulls cfg.settings;
+        filteredSettings = aiCommon.filterNulls cfg.nativeSettings;
         # Kiro cli.json uses flat dot-notation keys ("chat.enableTangentMode")
         # not nested JSON. Flatten so consumers can write clean Nix:
         #   settings.chat.enableTangentMode = true;
@@ -1725,7 +1726,7 @@ in
             # HM-only: gated on non-empty settings so consumers who enable
             # ai.kiro just for MCP fanout don't clobber an externally-
             # managed cli.json. Matches upstream Claude HM behavior
-            # (settings.json only written when cfg.settings != {}).
+            # (settings.json only written when cfg.nativeSettings != {}).
             # Devenv-side is unconditional (project-local, harmless).
             (lib.mkIf (filteredSettings != {}) {
               home.activation.kiroSettingsMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
@@ -1764,7 +1765,7 @@ in
         hooksTargetDir = hookTargetDir cfg;
         hookEntries = mkHookEntries cfg;
 
-        filteredSettings = aiCommon.filterNulls cfg.settings;
+        filteredSettings = aiCommon.filterNulls cfg.nativeSettings;
         flatSettings = aiCommon.flattenDotKeys filteredSettings;
 
         # Resolve credential http headers → `${env:VAR}` placeholders in

@@ -240,12 +240,6 @@
   codexSettingsType = lib.types.submodule {
     freeformType = tomlFormat.type;
     options = {
-      _integration_writable_roots = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [];
-        internal = true;
-        description = "Writable roots contributed by integrations and applied only in workspace-write mode.";
-      };
       agents = lib.mkOption {
         type = lib.types.nullOr (lib.types.submodule {
           freeformType = tomlFormat.type;
@@ -394,7 +388,22 @@
       };
     };
   };
-  stripIntegrationRoots = settings: removeAttrs settings ["_integration_writable_roots"];
+  applyIntegrationRoots = settings: integrationRoots: let
+    workspaceSettings = settings.sandbox_workspace_write;
+    existingRoots =
+      if workspaceSettings == null
+      then []
+      else workspaceSettings.writable_roots;
+  in
+    if settings.sandbox_mode == "workspace-write" && integrationRoots != []
+    then
+      settings
+      // {
+        sandbox_workspace_write =
+          (lib.optionalAttrs (workspaceSettings != null) workspaceSettings)
+          // {writable_roots = lib.unique (existingRoots ++ integrationRoots);};
+      }
+    else settings;
   hasPermissionProfiles = settings:
     helpers.filterNulls (lib.filterAttrs
       (name: _: builtins.elem name ["default_permissions" "permissions"])
@@ -941,7 +950,6 @@ in
       profiles = lib.mkOption {
         type = lib.types.attrsOf codexSettingsType;
         default = {};
-        apply = lib.mapAttrs (_name: stripIntegrationRoots);
         description = ''
           LOCKED OUT. Setting this fails evaluation. A named profile is a
           config LAYER, and Codex resolves a layer carrying the beta
@@ -959,7 +967,7 @@ in
           materializes the same whole-file artifacts into the user CODEX_HOME
           before shell entry because Codex does not discover named profiles in
           trusted project configuration. Known settings are typed identically
-          to `ai.codex.settings`; unknown TOML-compatible keys remain available.
+          to `ai.codex.nativeSettings`; unknown TOML-compatible keys remain available.
         '';
       };
       projectDocMaxBytes = lib.mkOption {
@@ -970,27 +978,9 @@ in
           before Codex can silently truncate content beyond this limit.
         '';
       };
-      settings = lib.mkOption {
+      nativeSettings = lib.mkOption {
         type = codexSettingsType;
         default = {};
-        apply = settings: let
-          integrationRoots = settings._integration_writable_roots;
-          cleanSettings = stripIntegrationRoots settings;
-          workspaceSettings = cleanSettings.sandbox_workspace_write;
-          existingRoots =
-            if workspaceSettings == null
-            then []
-            else workspaceSettings.writable_roots;
-        in
-          if cleanSettings.sandbox_mode == "workspace-write" && integrationRoots != []
-          then
-            cleanSettings
-            // {
-              sandbox_workspace_write =
-                (lib.optionalAttrs (workspaceSettings != null) workspaceSettings)
-                // {writable_roots = lib.unique (existingRoots ++ integrationRoots);};
-            }
-          else cleanSettings;
         description = ''
           Codex config.toml settings. Common stable keys are typed; unknown
           TOML-compatible keys are accepted as a native escape hatch. Home
@@ -1014,49 +1004,45 @@ in
       resolvedShell,
       topContext,
       topHooks,
-      topSettings,
+      resolvedSettings,
       ...
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
       configFile = "${cfg.configDir}/config.toml";
-      hasNativeMcpServers = cfg.settings ? mcp_servers;
+      hasNativeMcpServers = cfg.nativeSettings ? mcp_servers;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
-      settings = helpers.filterNulls (cfg.settings
+      settings = helpers.filterNulls ((applyIntegrationRoots cfg.nativeSettings cfg.internal._integration_writable_roots)
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
         });
       settingsStateName = "codex-config-${builtins.hashString "sha256" configFile}";
     in {
-      ai.codex.settings = lib.mkMerge [
-        (lib.mkIf cfg.enable {
-          _integration_writable_roots = lib.mkAfter ["${config.xdg.cacheHome}/nix"];
-        })
-        (lib.mkIf (topSettings.reasoningEffort != null) {
-          model_reasoning_effort = lib.mkDefault topSettings.reasoningEffort;
-        })
-      ];
+      ai.codex.internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter ["${config.xdg.cacheHome}/nix"]);
+      ai.codex.nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
+        model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
+      };
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
         ++ mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
         ++ mkProfileAssertions cfg.profiles
-        ++ mkBetaPermissionLockout "ai.codex.settings" cfg.settings
+        ++ mkBetaPermissionLockout "ai.codex.nativeSettings" cfg.nativeSettings
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
           {
             assertion = mergedServers == {} || !hasNativeMcpServers;
-            message = "ai.codex.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
+            message = "ai.codex.nativeSettings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
           }
           {
-            inherit (mkSandboxModelAssertion "ai.codex.settings" cfg.settings) assertion message;
+            inherit (mkSandboxModelAssertion "ai.codex.nativeSettings" cfg.nativeSettings) assertion message;
           }
           {
             assertion = !(cfg.execpolicyRules ? default);
             message = "ai.codex.execpolicyRules.default is reserved in Home Manager because Codex writes user allow-list decisions to rules/default.rules; choose another rule filename";
           }
           {
-            assertion = effectiveHooks == {} || !(cfg.settings ? hooks);
-            message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.settings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
+            assertion = effectiveHooks == {} || !(cfg.nativeSettings ? hooks);
+            message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.nativeSettings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
           }
         ];
       home = {
@@ -1112,13 +1098,13 @@ in
       resolvedShell,
       topContext,
       topHooks,
-      topSettings,
+      resolvedSettings,
       ...
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
-      hasNativeMcpServers = cfg.settings ? mcp_servers;
+      hasNativeMcpServers = cfg.nativeSettings ? mcp_servers;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
-      settings = helpers.filterNulls (cfg.settings
+      settings = helpers.filterNulls ((applyIntegrationRoots cfg.nativeSettings cfg.internal._integration_writable_roots)
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
         });
@@ -1135,43 +1121,39 @@ in
         then "${environmentHome}/.cache/nix"
         else null;
     in {
-      ai.codex.settings = lib.mkMerge [
-        (lib.mkIf cfg.enable {
-          _integration_writable_roots = lib.mkAfter (
-            ["${config.devenv.root}/.git"]
-            ++ lib.optional (nixCacheRoot != null) nixCacheRoot
-          );
-        })
-        (lib.mkIf (topSettings.reasoningEffort != null) {
-          model_reasoning_effort = lib.mkDefault topSettings.reasoningEffort;
-        })
-      ];
+      ai.codex.internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter (
+        ["${config.devenv.root}/.git"]
+        ++ lib.optional (nixCacheRoot != null) nixCacheRoot
+      ));
+      ai.codex.nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
+        model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
+      };
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
         ++ mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
         ++ mkProfileAssertions cfg.profiles
-        ++ mkBetaPermissionLockout "ai.codex.settings" cfg.settings
+        ++ mkBetaPermissionLockout "ai.codex.nativeSettings" cfg.nativeSettings
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
           {
             assertion = mergedServers == {} || !hasNativeMcpServers;
-            message = "ai.codex.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
+            message = "ai.codex.nativeSettings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
           }
           {
-            inherit (mkSandboxModelAssertion "ai.codex.settings" cfg.settings) assertion message;
+            inherit (mkSandboxModelAssertion "ai.codex.nativeSettings" cfg.nativeSettings) assertion message;
           }
           {
             assertion = ignoredSettings == [];
             message = ''
-              ai.codex.settings contains keys Codex ignores in project config:
+              ai.codex.nativeSettings contains keys Codex ignores in project config:
               ${lib.concatStringsSep ", " ignoredSettings}. Move them to the
               Home Manager user-level configuration.
             '';
           }
           {
-            assertion = effectiveHooks == {} || !(cfg.settings ? hooks);
-            message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.settings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
+            assertion = effectiveHooks == {} || !(cfg.nativeSettings ? hooks);
+            message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.nativeSettings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
           }
         ];
       files = lib.mkMerge [

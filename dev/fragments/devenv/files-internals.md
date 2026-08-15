@@ -1,20 +1,23 @@
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-08-14 (commit pending — Semble's shell-entry cache
-> guard remains an environment/settings lifecycle effect and creates no
-> `files.*` artifact). Prior: 2026-08-05 (commit pending — re-verifies that
-> Codex's environment resolver and sandbox-root fanout create no `files.*`
-> artifact while its test override moves out of the formal module argument set).
-> Prior: 2026-08-05 (commit pending — Codex and glab sandbox-root fanout is
-> settings/environment integration and deliberately creates no `files.*`
-> artifact). Prior: 2026-08-02 (commit pending — Semble's devenv facet keeps its
-> sandbox-writable cache in project state and exports the same path through
-> `SEMBLE_CACHE_LOCATION`; this is environment/settings fanout, not a `files.*`
-> artifact). Prior: 2026-07-21 (commit pending — corrects the Kiro-symlink
-> citation to kirodotdev/Kiro#9787 with the engine qualifier, and the
-> `files.<name>.source` claim; earlier revision added auto-regeneration via
-> `gen` import). devenv internals are pinned to whatever version is in
-> flake.lock; if you touch `modules/devenv/**`,
+> **Last verified:** 2026-08-15 (commit pending — Codex, glab, and Semble
+> writable-root fanout now travels through the hidden
+> `ai.codex.internal._integration_writable_roots` channel and is folded into
+> native config at emission; it still creates no `files.*` artifact). Prior:
+> 2026-08-14 (commit pending — Semble's shell-entry cache guard remains an
+> environment/settings lifecycle effect and creates no `files.*` artifact).
+> Prior: 2026-08-05 (commit pending — re-verifies that Codex's environment
+> resolver and sandbox-root fanout create no `files.*` artifact while its test
+> override moves out of the formal module argument set). Prior: 2026-08-05
+> (commit pending — Codex and glab sandbox-root fanout is settings/environment
+> integration and deliberately creates no `files.*` artifact). Prior: 2026-08-02
+> (commit pending — Semble's devenv facet keeps its sandbox-writable cache in
+> project state and exports the same path through `SEMBLE_CACHE_LOCATION`; this
+> is environment/settings fanout, not a `files.*` artifact). Prior: 2026-07-21
+> (commit pending — corrects the Kiro-symlink citation to kirodotdev/Kiro#9787
+> with the engine qualifier, and the `files.<name>.source` claim; earlier
+> revision added auto-regeneration via `gen` import). devenv internals are
+> pinned to whatever version is in flake.lock; if you touch `modules/devenv/**`,
 > `lib/hm-helpers.nix:mkDevenvSkillEntries`, `devenv.nix` `files` block, or
 > anywhere that uses `files.*.source` and this fragment isn't updated in the
 > same commit, stop and fix it.

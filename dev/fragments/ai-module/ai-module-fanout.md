@@ -1,60 +1,63 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — every normalized pool now
-> crosses into a runtime only when that app record lists it in `supportedPools`;
-> unsupported root fanout degrades while the matching per-runtime option is
-> absent). Prior: 2026-08-14 (commit pending — Copilot's `ai.instructions` /
-> `ai.rules` destination is per-BACKEND and this entry named only one of them.
-> Home Manager wrote a hardcoded `.github/instructions/`, which resolves to
-> `$HOME/.github/instructions/` — a directory copilot-cli never reads — so every
-> named instruction and every rule was emitted and then ignored. It now routes
-> through `ai.copilot.configDir`, matching every other HM artifact this module
-> writes. See `copilot-config-delivery.md` for why the two backends address
-> genuinely different consumers). Prior: 2026-08-14 (commit pending — adds the
+> **Last verified:** 2026-08-15 (commit pending — every normalized pool crosses
+> into a runtime only when its app record lists it in `supportedPools`; all five
+> runtimes now list the closed normalized `settings` submodule, runtime-native
+> passthrough moved to `nativeSettings`, per-runtime fields resolve against the
+> root independently, and Codex integration roots travel through a hidden
+> internal channel before native TOML emission). Prior: 2026-08-14 (commit
+> pending — Copilot's `ai.instructions` / `ai.rules` destination is per-BACKEND
+> and this entry named only one of them. Home Manager wrote a hardcoded
+> `.github/instructions/`, which resolves to `$HOME/.github/instructions/` — a
+> directory copilot-cli never reads — so every named instruction and every rule
+> was emitted and then ignored. It now routes through `ai.copilot.configDir`,
+> matching every other HM artifact this module writes. See
+> `copilot-config-delivery.md` for why the two backends address genuinely
+> different consumers). Prior: 2026-08-14 (commit pending — adds the
 > Kiro-specific `extraPackages` runtime PATH prefix, shared by both backends
 > through the existing launcher wrapper and deliberately not promoted to
 > `ai.shell` or a cross-runtime pool). Prior: 2026-08-05 (commit pending —
 > Codex's beta permission model is LOCKED OUT: `ai.codex.profiles`,
-> `ai.codex.settings.default_permissions`, and `ai.codex.settings.permissions`
-> stay typed and still emit, but every entry point now asserts. A layer carrying
-> the beta model OVERRIDES rather than merges the legacy sandbox settings
-> beneath it, and a Nix evaluation cannot see across config layers to catch that
-> — measured with `codex sandbox` 0.146.1, where this repo's own former profile
-> silently dropped the module-contributed `~/.cache/nix` root). Prior:
-> 2026-08-05 (commit pending — Codex's devenv Nix-cache resolver remains
-> environment-backed in production but accepts a test-only `specialArgs`
-> override through the module's ellipsis instead of declaring an unsatisfied
-> formal module argument; ordinary module evaluation now has an explicit
-> regression test alongside deterministic XDG/HOME cases). Prior: 2026-08-05
-> (commit pending — Codex's backend-native writable roots are now gated by
-> `ai.codex.enable`, so merely configuring dormant Codex settings cannot create
-> an active sandbox root set). Prior: 2026-08-05 (commit pending — sandbox-safe
-> Git SSH now forces batch mode so agent-backed authentication works but missing
-> credentials fail without an interactive dialog). Prior: 2026-08-05 (commit
-> pending — every enabled AI harness now receives a sandbox-safe Git SSH default
-> in both backends; Codex contributes its backend-native Nix cache and devenv
-> Git metadata roots, while enabled integrations such as glab add their
-> effective writable state). Prior: 2026-08-04 (commit pending —
-> `ai.kiro.agents` is now a typed record modelling Kiro's v3 agent schema, with
-> `name` defaulted from the attr key because Kiro's Rust CLI requires that field
-> while its Node/ACP parser treats it as optional; the `ai.agents` Kiro
-> exclusion is re-justified on tool VOCABULARY rather than on JSON-vs-record
-> shape). Prior: 2026-08-02 (commit pending — Codex beta permission profiles
-> remain explicit security boundaries: they do not compose with legacy
-> `sandbox_workspace_write` integration roots, so a selected profile must grant
-> the Semble cache itself). Prior: 2026-08-02 (commit pending — portable agent
-> tool lists render native allowlist frontmatter only when non-empty, so both
-> `null` and `[]` preserve unrestricted Claude/Copilot behavior). Prior:
-> 2026-08-02 (commit pending — Semble automatically grants its cache when a
-> selected Codex integration uses the workspace-write sandbox, with user-global
-> XDG cache ownership in HM and project-local state plus an environment override
-> in devenv). Prior: 2026-08-02 (commit pending — portable semantic agents may
-> restrict Claude and Copilot with their shared `tools` vocabulary while Codex
-> deliberately omits that field and Kiro retains its native JSON model). Prior:
-> 2026-08-02 (commit pending — Semble keeps Claude and Codex instructions
-> unnamed for their single-file composers but names its Kiro instruction so
-> directory-native steering emits `semble.md` instead of the generic
-> `instructions.md`). Prior: 2026-08-02 (commit pending — records plain
+> `ai.codex.nativeSettings.default_permissions`, and
+> `ai.codex.nativeSettings.permissions` stay typed and still emit, but every
+> entry point now asserts. A layer carrying the beta model OVERRIDES rather than
+> merges the legacy sandbox settings beneath it, and a Nix evaluation cannot see
+> across config layers to catch that — measured with `codex sandbox` 0.146.1,
+> where this repo's own former profile silently dropped the module-contributed
+> `~/.cache/nix` root). Prior: 2026-08-05 (commit pending — Codex's devenv
+> Nix-cache resolver remains environment-backed in production but accepts a
+> test-only `specialArgs` override through the module's ellipsis instead of
+> declaring an unsatisfied formal module argument; ordinary module evaluation
+> now has an explicit regression test alongside deterministic XDG/HOME cases).
+> Prior: 2026-08-05 (commit pending — Codex's backend-native writable roots are
+> now gated by `ai.codex.enable`, so merely configuring dormant Codex settings
+> cannot create an active sandbox root set). Prior: 2026-08-05 (commit pending —
+> sandbox-safe Git SSH now forces batch mode so agent-backed authentication
+> works but missing credentials fail without an interactive dialog). Prior:
+> 2026-08-05 (commit pending — every enabled AI harness now receives a
+> sandbox-safe Git SSH default in both backends; Codex contributes its
+> backend-native Nix cache and devenv Git metadata roots, while enabled
+> integrations such as glab add their effective writable state). Prior:
+> 2026-08-04 (commit pending — `ai.kiro.agents` is now a typed record modelling
+> Kiro's v3 agent schema, with `name` defaulted from the attr key because Kiro's
+> Rust CLI requires that field while its Node/ACP parser treats it as optional;
+> the `ai.agents` Kiro exclusion is re-justified on tool VOCABULARY rather than
+> on JSON-vs-record shape). Prior: 2026-08-02 (commit pending — Codex beta
+> permission profiles remain explicit security boundaries: they do not compose
+> with legacy `sandbox_workspace_write` integration roots, so a selected profile
+> must grant the Semble cache itself). Prior: 2026-08-02 (commit pending —
+> portable agent tool lists render native allowlist frontmatter only when
+> non-empty, so both `null` and `[]` preserve unrestricted Claude/Copilot
+> behavior). Prior: 2026-08-02 (commit pending — Semble automatically grants its
+> cache when a selected Codex integration uses the workspace-write sandbox, with
+> user-global XDG cache ownership in HM and project-local state plus an
+> environment override in devenv). Prior: 2026-08-02 (commit pending — portable
+> semantic agents may restrict Claude and Copilot with their shared `tools`
+> vocabulary while Codex deliberately omits that field and Kiro retains its
+> native JSON model). Prior: 2026-08-02 (commit pending — Semble keeps Claude
+> and Codex instructions unnamed for their single-file composers but names its
+> Kiro instruction so directory-native steering emits `semble.md` instead of the
+> generic `instructions.md`). Prior: 2026-08-02 (commit pending — records plain
 > convenience modules such as Semble contributing selected per-runtime defaults
 > without enabling those runtimes). Prior: 2026-08-02 (commit pending — Codex
 > named profile files now use one typed settings schema across HM and devenv: HM
@@ -216,8 +219,8 @@ The ai module fans out TWO kinds of configuration:
   both backends. It is Kiro-specific because it closes the Linux `buildFHSEnv`
   visibility gap; it remains independent of `ai.shell`, which selects an
   executable rather than supplying commands.
-- `ai.codex.settings` — typed stable keys plus a TOML-compatible native freeform
-  tail. Home Manager reconciles exact declared leaves into a writable
+- `ai.codex.nativeSettings` — typed stable keys plus a TOML-compatible native
+  freeform tail. Home Manager reconciles exact declared leaves into a writable
   `${configDir}/config.toml`; devenv writes a statically Nix-owned
   trusted-project `.codex/config.toml`. An empty first HM generation is a no-op,
   while an empty later generation uses the ownership manifest to remove formerly
@@ -278,16 +281,16 @@ The ai module fans out TWO kinds of configuration:
   native `name`, while `description` and `instructions` lower to the two other
   required native fields. Reserved core fields cannot be redefined in `codex`.
   Global concurrency, model/effort defaults, and interruption behavior live in
-  the typed `ai.codex.settings.agents` table.
+  the typed `ai.codex.nativeSettings.agents` table.
 - `ai.codex.hooks.<Event>` — Codex-native matcher groups and command handlers,
   appended after portable `ai.hooks` groups and emitted in adjacent
   `hooks.json`. Typed native additions include `commandWindows`,
   `statusMessage`, and `additionalContextLimit`; a JSON-compatible tail remains
   for forward compatibility. Typed hooks cannot coexist with inline
-  `ai.codex.settings.hooks` at one layer because Codex loads both additively and
-  warns rather than applying normal config precedence. Nix ownership does not
-  make these native-policy hooks: Codex still requires `/hooks` review and
-  hash-based trust before user/project handlers run.
+  `ai.codex.nativeSettings.hooks` at one layer because Codex loads both
+  additively and warns rather than applying normal config precedence. Nix
+  ownership does not make these native-policy hooks: Codex still requires
+  `/hooks` review and hash-based trust before user/project handlers run.
 - `ai.copilot.projectDir` — the project-native `.github` root used by devenv for
   context, rules, agents, and skills. It is declared identically in both
   backends so generated option discovery and types cannot drift, but only devenv
@@ -298,12 +301,16 @@ The ai module fans out TWO kinds of configuration:
 **Cross-ecosystem options** (live at `ai.*` top level and fan out to each
 enabled ecosystem whose native model preserves the option's semantics):
 
-- `ai.settings.reasoningEffort` — the portable `low` / `medium` / `high` /
-  `xhigh` intersection lowered to Claude `effortLevel` and Codex
-  `model_reasoning_effort`. Values that only one runtime persists (`max` and
-  `ultra` in Codex) remain native-only. A native per-runtime value has normal
-  option priority over the aggregate `mkDefault`; explicitly setting the native
-  key to `null` excludes that runtime from the fanout.
+- `ai.settings.reasoningEffort` — the root portable `low` / `medium` / `high` /
+  `xhigh` value. Every runtime exposes the same field at
+  `ai.<runtime>.settings.reasoningEffort`; a non-null per-runtime value wins for
+  only that runtime, while null inherits the root through `resolveOverride`.
+  Claude and Codex lower the resolved value to native `effortLevel` and
+  `model_reasoning_effort`; runtimes without a lossless lowering retain the
+  normalized value without emitting a native key. Values that only one runtime
+  persists remain under that runtime's `nativeSettings`. An explicit native
+  Claude/Codex effort key still has normal option priority over the derived
+  normalized default, and a native null excludes that runtime from emission.
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
   and repository-local `.agents/skills` in devenv; Claude, Copilot, and Kiro use
@@ -364,9 +371,9 @@ enabled ecosystem whose native model preserves the option's semantics):
   approval fields live under each server's `codex` block and lower from camel
   case to native snake case. Literal `httpHeaders` are store-visible;
   `envHttpHeaders` and `bearerTokenEnvVar` name environment variables so secret
-  values never enter generated TOML. Direct `ai.codex.settings.mcp_servers`
-  cannot be combined with either typed pool because their table ownership would
-  be ambiguous.
+  values never enter generated TOML. Direct
+  `ai.codex.nativeSettings.mcp_servers` cannot be combined with either typed
+  pool because their table ownership would be ambiguous.
 - `ai.lspServers` — typed LSP definitions, translated to Claude, Copilot, and
   Kiro native config. Codex is deliberately excluded: its current public config
   reference and pinned CLI expose no LSP-server registration surface, so
@@ -376,8 +383,8 @@ enabled ecosystem whose native model preserves the option's semantics):
   joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
   is a different thing and still is — that filters what SPAWNED commands
   inherit, while this pool configures the CLI process itself. Claude is the one
-  exclusion: it has no wrapper here, and `ai.claude.settings.env` is its native
-  equivalent.
+  exclusion: it has no wrapper here, and `ai.claude.nativeSettings.env` is its
+  native equivalent.
 
   **Never reach for Home Manager session variables or devenv `env` to deliver a
   runtime variable** — not for Codex, not for anything. An earlier revision of
@@ -524,14 +531,16 @@ plus the effective process user's Nix cache. The devenv cache follows
 deliberately repository-local; a parent directory used for several worktrees
 remains an explicit consumer policy choice.
 
-Enabled integrations can append their own runtime-owned state through the same
-internal root pool. The glab facets add the effective `glab.configDir`, so a
-devenv consumer may point project-local glab at an existing Home Manager
-`~/.config/glab-cli` and reuse its authentication without another login. The
-default devenv glab directory remains project-local state. These automatic roots
-apply only to the legacy workspace-write settings. Named permission profiles
-remain explicit security boundaries and must declare equivalent paths
-themselves.
+Enabled integrations can append their own runtime-owned state through the hidden
+`ai.codex.internal._integration_writable_roots` pool. It is module plumbing
+rather than a user setting, is omitted from generated option docs, and is folded
+into native `sandbox_workspace_write.writable_roots` only when Codex emits its
+config. The glab facets add the effective `glab.configDir`, so a devenv consumer
+may point project-local glab at an existing Home Manager `~/.config/glab-cli`
+and reuse its authentication without another login. The default devenv glab
+directory remains project-local state. These automatic roots apply only to the
+legacy workspace-write settings. Named permission profiles remain explicit
+security boundaries and must declare equivalent paths themselves.
 
 **Worked example — stacked-workflows skills.** Because a skills value set in one
 backend is invisible to the other, the stacked-workflows package contributes its

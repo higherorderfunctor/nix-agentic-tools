@@ -7,61 +7,64 @@ applyTo: "checks/module-eval.nix,lib/ai/agent.nix,lib/ai/ai-common.nix,lib/ai/ap
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — every normalized pool now
-> crosses into a runtime only when that app record lists it in `supportedPools`;
-> unsupported root fanout degrades while the matching per-runtime option is
-> absent). Prior: 2026-08-14 (commit pending — Copilot's `ai.instructions` /
-> `ai.rules` destination is per-BACKEND and this entry named only one of them.
-> Home Manager wrote a hardcoded `.github/instructions/`, which resolves to
-> `$HOME/.github/instructions/` — a directory copilot-cli never reads — so every
-> named instruction and every rule was emitted and then ignored. It now routes
-> through `ai.copilot.configDir`, matching every other HM artifact this module
-> writes. See `copilot-config-delivery.md` for why the two backends address
-> genuinely different consumers). Prior: 2026-08-14 (commit pending — adds the
+> **Last verified:** 2026-08-15 (commit pending — every normalized pool crosses
+> into a runtime only when its app record lists it in `supportedPools`; all five
+> runtimes now list the closed normalized `settings` submodule, runtime-native
+> passthrough moved to `nativeSettings`, per-runtime fields resolve against the
+> root independently, and Codex integration roots travel through a hidden
+> internal channel before native TOML emission). Prior: 2026-08-14 (commit
+> pending — Copilot's `ai.instructions` / `ai.rules` destination is per-BACKEND
+> and this entry named only one of them. Home Manager wrote a hardcoded
+> `.github/instructions/`, which resolves to `$HOME/.github/instructions/` — a
+> directory copilot-cli never reads — so every named instruction and every rule
+> was emitted and then ignored. It now routes through `ai.copilot.configDir`,
+> matching every other HM artifact this module writes. See
+> `copilot-config-delivery.md` for why the two backends address genuinely
+> different consumers). Prior: 2026-08-14 (commit pending — adds the
 > Kiro-specific `extraPackages` runtime PATH prefix, shared by both backends
 > through the existing launcher wrapper and deliberately not promoted to
 > `ai.shell` or a cross-runtime pool). Prior: 2026-08-05 (commit pending —
 > Codex's beta permission model is LOCKED OUT: `ai.codex.profiles`,
-> `ai.codex.settings.default_permissions`, and `ai.codex.settings.permissions`
-> stay typed and still emit, but every entry point now asserts. A layer carrying
-> the beta model OVERRIDES rather than merges the legacy sandbox settings
-> beneath it, and a Nix evaluation cannot see across config layers to catch that
-> — measured with `codex sandbox` 0.146.1, where this repo's own former profile
-> silently dropped the module-contributed `~/.cache/nix` root). Prior:
-> 2026-08-05 (commit pending — Codex's devenv Nix-cache resolver remains
-> environment-backed in production but accepts a test-only `specialArgs`
-> override through the module's ellipsis instead of declaring an unsatisfied
-> formal module argument; ordinary module evaluation now has an explicit
-> regression test alongside deterministic XDG/HOME cases). Prior: 2026-08-05
-> (commit pending — Codex's backend-native writable roots are now gated by
-> `ai.codex.enable`, so merely configuring dormant Codex settings cannot create
-> an active sandbox root set). Prior: 2026-08-05 (commit pending — sandbox-safe
-> Git SSH now forces batch mode so agent-backed authentication works but missing
-> credentials fail without an interactive dialog). Prior: 2026-08-05 (commit
-> pending — every enabled AI harness now receives a sandbox-safe Git SSH default
-> in both backends; Codex contributes its backend-native Nix cache and devenv
-> Git metadata roots, while enabled integrations such as glab add their
-> effective writable state). Prior: 2026-08-04 (commit pending —
-> `ai.kiro.agents` is now a typed record modelling Kiro's v3 agent schema, with
-> `name` defaulted from the attr key because Kiro's Rust CLI requires that field
-> while its Node/ACP parser treats it as optional; the `ai.agents` Kiro
-> exclusion is re-justified on tool VOCABULARY rather than on JSON-vs-record
-> shape). Prior: 2026-08-02 (commit pending — Codex beta permission profiles
-> remain explicit security boundaries: they do not compose with legacy
-> `sandbox_workspace_write` integration roots, so a selected profile must grant
-> the Semble cache itself). Prior: 2026-08-02 (commit pending — portable agent
-> tool lists render native allowlist frontmatter only when non-empty, so both
-> `null` and `[]` preserve unrestricted Claude/Copilot behavior). Prior:
-> 2026-08-02 (commit pending — Semble automatically grants its cache when a
-> selected Codex integration uses the workspace-write sandbox, with user-global
-> XDG cache ownership in HM and project-local state plus an environment override
-> in devenv). Prior: 2026-08-02 (commit pending — portable semantic agents may
-> restrict Claude and Copilot with their shared `tools` vocabulary while Codex
-> deliberately omits that field and Kiro retains its native JSON model). Prior:
-> 2026-08-02 (commit pending — Semble keeps Claude and Codex instructions
-> unnamed for their single-file composers but names its Kiro instruction so
-> directory-native steering emits `semble.md` instead of the generic
-> `instructions.md`). Prior: 2026-08-02 (commit pending — records plain
+> `ai.codex.nativeSettings.default_permissions`, and
+> `ai.codex.nativeSettings.permissions` stay typed and still emit, but every
+> entry point now asserts. A layer carrying the beta model OVERRIDES rather than
+> merges the legacy sandbox settings beneath it, and a Nix evaluation cannot see
+> across config layers to catch that — measured with `codex sandbox` 0.146.1,
+> where this repo's own former profile silently dropped the module-contributed
+> `~/.cache/nix` root). Prior: 2026-08-05 (commit pending — Codex's devenv
+> Nix-cache resolver remains environment-backed in production but accepts a
+> test-only `specialArgs` override through the module's ellipsis instead of
+> declaring an unsatisfied formal module argument; ordinary module evaluation
+> now has an explicit regression test alongside deterministic XDG/HOME cases).
+> Prior: 2026-08-05 (commit pending — Codex's backend-native writable roots are
+> now gated by `ai.codex.enable`, so merely configuring dormant Codex settings
+> cannot create an active sandbox root set). Prior: 2026-08-05 (commit pending —
+> sandbox-safe Git SSH now forces batch mode so agent-backed authentication
+> works but missing credentials fail without an interactive dialog). Prior:
+> 2026-08-05 (commit pending — every enabled AI harness now receives a
+> sandbox-safe Git SSH default in both backends; Codex contributes its
+> backend-native Nix cache and devenv Git metadata roots, while enabled
+> integrations such as glab add their effective writable state). Prior:
+> 2026-08-04 (commit pending — `ai.kiro.agents` is now a typed record modelling
+> Kiro's v3 agent schema, with `name` defaulted from the attr key because Kiro's
+> Rust CLI requires that field while its Node/ACP parser treats it as optional;
+> the `ai.agents` Kiro exclusion is re-justified on tool VOCABULARY rather than
+> on JSON-vs-record shape). Prior: 2026-08-02 (commit pending — Codex beta
+> permission profiles remain explicit security boundaries: they do not compose
+> with legacy `sandbox_workspace_write` integration roots, so a selected profile
+> must grant the Semble cache itself). Prior: 2026-08-02 (commit pending —
+> portable agent tool lists render native allowlist frontmatter only when
+> non-empty, so both `null` and `[]` preserve unrestricted Claude/Copilot
+> behavior). Prior: 2026-08-02 (commit pending — Semble automatically grants its
+> cache when a selected Codex integration uses the workspace-write sandbox, with
+> user-global XDG cache ownership in HM and project-local state plus an
+> environment override in devenv). Prior: 2026-08-02 (commit pending — portable
+> semantic agents may restrict Claude and Copilot with their shared `tools`
+> vocabulary while Codex deliberately omits that field and Kiro retains its
+> native JSON model). Prior: 2026-08-02 (commit pending — Semble keeps Claude
+> and Codex instructions unnamed for their single-file composers but names its
+> Kiro instruction so directory-native steering emits `semble.md` instead of the
+> generic `instructions.md`). Prior: 2026-08-02 (commit pending — records plain
 > convenience modules such as Semble contributing selected per-runtime defaults
 > without enabling those runtimes). Prior: 2026-08-02 (commit pending — Codex
 > named profile files now use one typed settings schema across HM and devenv: HM
@@ -223,8 +226,8 @@ The ai module fans out TWO kinds of configuration:
   both backends. It is Kiro-specific because it closes the Linux `buildFHSEnv`
   visibility gap; it remains independent of `ai.shell`, which selects an
   executable rather than supplying commands.
-- `ai.codex.settings` — typed stable keys plus a TOML-compatible native freeform
-  tail. Home Manager reconciles exact declared leaves into a writable
+- `ai.codex.nativeSettings` — typed stable keys plus a TOML-compatible native
+  freeform tail. Home Manager reconciles exact declared leaves into a writable
   `${configDir}/config.toml`; devenv writes a statically Nix-owned
   trusted-project `.codex/config.toml`. An empty first HM generation is a no-op,
   while an empty later generation uses the ownership manifest to remove formerly
@@ -285,16 +288,16 @@ The ai module fans out TWO kinds of configuration:
   native `name`, while `description` and `instructions` lower to the two other
   required native fields. Reserved core fields cannot be redefined in `codex`.
   Global concurrency, model/effort defaults, and interruption behavior live in
-  the typed `ai.codex.settings.agents` table.
+  the typed `ai.codex.nativeSettings.agents` table.
 - `ai.codex.hooks.<Event>` — Codex-native matcher groups and command handlers,
   appended after portable `ai.hooks` groups and emitted in adjacent
   `hooks.json`. Typed native additions include `commandWindows`,
   `statusMessage`, and `additionalContextLimit`; a JSON-compatible tail remains
   for forward compatibility. Typed hooks cannot coexist with inline
-  `ai.codex.settings.hooks` at one layer because Codex loads both additively and
-  warns rather than applying normal config precedence. Nix ownership does not
-  make these native-policy hooks: Codex still requires `/hooks` review and
-  hash-based trust before user/project handlers run.
+  `ai.codex.nativeSettings.hooks` at one layer because Codex loads both
+  additively and warns rather than applying normal config precedence. Nix
+  ownership does not make these native-policy hooks: Codex still requires
+  `/hooks` review and hash-based trust before user/project handlers run.
 - `ai.copilot.projectDir` — the project-native `.github` root used by devenv for
   context, rules, agents, and skills. It is declared identically in both
   backends so generated option discovery and types cannot drift, but only devenv
@@ -305,12 +308,16 @@ The ai module fans out TWO kinds of configuration:
 **Cross-ecosystem options** (live at `ai.*` top level and fan out to each
 enabled ecosystem whose native model preserves the option's semantics):
 
-- `ai.settings.reasoningEffort` — the portable `low` / `medium` / `high` /
-  `xhigh` intersection lowered to Claude `effortLevel` and Codex
-  `model_reasoning_effort`. Values that only one runtime persists (`max` and
-  `ultra` in Codex) remain native-only. A native per-runtime value has normal
-  option priority over the aggregate `mkDefault`; explicitly setting the native
-  key to `null` excludes that runtime from the fanout.
+- `ai.settings.reasoningEffort` — the root portable `low` / `medium` / `high` /
+  `xhigh` value. Every runtime exposes the same field at
+  `ai.<runtime>.settings.reasoningEffort`; a non-null per-runtime value wins for
+  only that runtime, while null inherits the root through `resolveOverride`.
+  Claude and Codex lower the resolved value to native `effortLevel` and
+  `model_reasoning_effort`; runtimes without a lossless lowering retain the
+  normalized value without emitting a native key. Values that only one runtime
+  persists remain under that runtime's `nativeSettings`. An explicit native
+  Claude/Codex effort key still has normal option priority over the derived
+  normalized default, and a native null excludes that runtime from emission.
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
   and repository-local `.agents/skills` in devenv; Claude, Copilot, and Kiro use
@@ -371,9 +378,9 @@ enabled ecosystem whose native model preserves the option's semantics):
   approval fields live under each server's `codex` block and lower from camel
   case to native snake case. Literal `httpHeaders` are store-visible;
   `envHttpHeaders` and `bearerTokenEnvVar` name environment variables so secret
-  values never enter generated TOML. Direct `ai.codex.settings.mcp_servers`
-  cannot be combined with either typed pool because their table ownership would
-  be ambiguous.
+  values never enter generated TOML. Direct
+  `ai.codex.nativeSettings.mcp_servers` cannot be combined with either typed
+  pool because their table ownership would be ambiguous.
 - `ai.lspServers` — typed LSP definitions, translated to Claude, Copilot, and
   Kiro native config. Codex is deliberately excluded: its current public config
   reference and pinned CLI expose no LSP-server registration surface, so
@@ -383,8 +390,8 @@ enabled ecosystem whose native model preserves the option's semantics):
   joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
   is a different thing and still is — that filters what SPAWNED commands
   inherit, while this pool configures the CLI process itself. Claude is the one
-  exclusion: it has no wrapper here, and `ai.claude.settings.env` is its native
-  equivalent.
+  exclusion: it has no wrapper here, and `ai.claude.nativeSettings.env` is its
+  native equivalent.
 
   **Never reach for Home Manager session variables or devenv `env` to deliver a
   runtime variable** — not for Codex, not for anything. An earlier revision of
@@ -531,14 +538,16 @@ plus the effective process user's Nix cache. The devenv cache follows
 deliberately repository-local; a parent directory used for several worktrees
 remains an explicit consumer policy choice.
 
-Enabled integrations can append their own runtime-owned state through the same
-internal root pool. The glab facets add the effective `glab.configDir`, so a
-devenv consumer may point project-local glab at an existing Home Manager
-`~/.config/glab-cli` and reuse its authentication without another login. The
-default devenv glab directory remains project-local state. These automatic roots
-apply only to the legacy workspace-write settings. Named permission profiles
-remain explicit security boundaries and must declare equivalent paths
-themselves.
+Enabled integrations can append their own runtime-owned state through the hidden
+`ai.codex.internal._integration_writable_roots` pool. It is module plumbing
+rather than a user setting, is omitted from generated option docs, and is folded
+into native `sandbox_workspace_write.writable_roots` only when Codex emits its
+config. The glab facets add the effective `glab.configDir`, so a devenv consumer
+may point project-local glab at an existing Home Manager `~/.config/glab-cli`
+and reuse its authentication without another login. The default devenv glab
+directory remains project-local state. These automatic roots apply only to the
+legacy workspace-write settings. Named permission profiles remain explicit
+security boundaries and must declare equivalent paths themselves.
 
 **Worked example — stacked-workflows skills.** Because a skills value set in one
 backend is invisible to the other, the stacked-workflows package contributes its
@@ -576,17 +585,18 @@ after a consumer's own root instructions rather than before them.
 
 ## ai.\* Collision Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — collision checks now follow
-> each app record's `supportedPools`: unsupported root fanout degrades without a
-> collision assertion because the corresponding per-runtime option does not
-> exist). Prior: 2026-08-14 (commit pending — records where a MODULE may
-> contribute, now that `lib/ai/mkSkillPackageModule.nix` writes the per-CLI
-> pools. That looks like the exact shape `shell-option.md` bans, and the
-> discriminator — always-on default versus opt-in behind an explicit enable — is
-> written down in the new section below because the ban's reasoning does not
-> carry across it. Also records the provenance guard, which makes the root-write
-> prohibition structural rather than reviewed-for). Prior: 2026-08-10 (commit
-> pending — TWO corrections. The call site was never `hmTransform.nix` +
+> **Last verified:** 2026-08-15 (commit pending — collision checks follow each
+> app record's `supportedPools`, while normalized `ai.settings` is a
+> scalar-field exception: each nullable field resolves independently, with a
+> non-null per-runtime value overriding the root and null inheriting it). Prior:
+> 2026-08-14 (commit pending — records where a MODULE may contribute, now that
+> `lib/ai/mkSkillPackageModule.nix` writes the per-CLI pools. That looks like
+> the exact shape `shell-option.md` bans, and the discriminator — always-on
+> default versus opt-in behind an explicit enable — is written down in the new
+> section below because the ban's reasoning does not carry across it. Also
+> records the provenance guard, which makes the root-write prohibition
+> structural rather than reviewed-for). Prior: 2026-08-10 (commit pending — TWO
+> corrections. The call site was never `hmTransform.nix` +
 > `devenvTransform.nix`; both are 16-line re-exports of
 > `mkBackendTransform.nix`, which is where the merge AND the per-CLI baseline
 > option surface actually live, so step 2 of the checklist pointed at files that
@@ -666,12 +676,15 @@ Applies to every attrset-shaped shared pool in `ai.*`:
 `ai.instructions` is a list, not an attrset, so list concat stays as-is.
 `ai.context` is single-valued.
 
-`ai.shell` is the deliberate SCALAR exception and resolves the other way —
-per-runtime silently overrides the root, via `resolveOverride` rather than
-`mergeWithCollisionCheck`. A pool key names an independent entry, so overriding
+`ai.shell` and the fields in normalized `ai.settings` are deliberate SCALAR
+exceptions and resolve the other way — per-runtime silently overrides the root,
+via `resolveOverride` rather than `mergeWithCollisionCheck`. Resolution happens
+per field, so one runtime may override `reasoningEffort` without replacing any
+future normalized sibling. A pool key names an independent entry, so overriding
 one loses data; a nullable scalar has nothing to lose, and making the pair
 collide would leave no way to express "this default, except here". See
-`shell-option.md`, and do not "fix" it into the table above.
+`shell-option.md` for the same precedence rule, and do not "fix" either surface
+into the table above.
 
 `ai.hooks` is the deliberate attrset exception: event keys identify additive
 lifecycle streams, not replaceable entries. For a shared and runtime-specific
@@ -853,13 +866,14 @@ path types".
 
 > **Last verified:** 2026-08-15 (commit pending — L2 root pools now cross into
 > L3 only for runtimes whose app record lists that pool in `supportedPools`;
-> unsupported root fanout degrades and the L2b/L3 options are absent). Prior:
-> 2026-08-01 (commit pending — records the portable hooks exception: per-event
-> matcher-group lists append instead of key-colliding, and agents may carry a
-> typed semantic record). Prior: 2026-04-21 (commit pending — refactor of
-> ai-factory-collision plan §4). If you add a new Dir option or change how
-> per-file Dir expansion fans through the layers, update this fragment in the
-> same commit.
+> unsupported root fanout degrades and the L2b/L3 options are absent. The closed
+> normalized `settings` schema is deliberately listed by all five runtimes even
+> when a particular field lowers only for a subset). Prior: 2026-08-01 (commit
+> pending — records the portable hooks exception: per-event matcher-group lists
+> append instead of key-colliding, and agents may carry a typed semantic
+> record). Prior: 2026-04-21 (commit pending — refactor of ai-factory-collision
+> plan §4). If you add a new Dir option or change how per-file Dir expansion
+> fans through the layers, update this fragment in the same commit.
 
 ### Canonical 4-layer shape
 
@@ -913,6 +927,11 @@ path types".
   before `ai.<cli>.hooks.<Event>` groups. This is intentional composition, not
   an attrset-entry collision; only the exact portable Claude/Codex event
   vocabulary is accepted at L2.
+- **Normalized settings are a uniform scalar-field surface.** Every runtime
+  declares the same closed `settings` submodule. Each field resolves root versus
+  per-runtime with `resolveOverride`; native lowering remains per-runtime and
+  may support only a subset of fields. Runtime-shaped passthrough is separate
+  under `nativeSettings` and is not a normalized pool.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over
@@ -940,6 +959,8 @@ path types".
    supported CLI handles it the same way) or in each per-CLI factory (if the
    shape differs).
 3. Add `X` to `supportedPools` only on app records whose callbacks consume it.
+   The uniform normalized `settings` schema is the explicit exception: every
+   runtime declares it, while each field's native lowering may be narrower.
 4. Add L4 emission in each supporting per-CLI factory's customConfig.
 5. Wire the L2↔L3 merge through mergeWithCollisionCheck in both transforms, or
    document and test the concern's intentional composition rule (hooks append
@@ -969,28 +990,27 @@ touch L1/L2b; emission stays stable.
 
 <!-- Fragment: dev/fragments/ai-module/shell-option.md -->
 
-## Per-runtime pool capability gating
+## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-08-15 (commit pending — generalizes the shell-only
-> `supportsShell` flag into each app record's `supportedPools` list. The same
-> record data now gates option declaration, root fanout, collision checks, and
-> shell resolution; Kimchi consequently loses its dead `rules`/`rulesDir`
-> options while root `ai.rules` still degrades silently for it). Prior:
-> 2026-08-14 (commit pending — the escape hatch at the end of the Copilot
-> section was half-wrong: at 1.0.80 the plain `@github/copilot` npm tarball is a
-> 24K loader shim, not readable JS. The readable app code is in the per-platform
-> dep — and, better, the SEA self-extracts a byte-identical copy on first run,
-> so no download is needed at all. The Copilot `ai.shell` gap itself is
-> UNCHANGED and still open). Prior: 2026-08-10 (commit pending — first landing
-> of `ai.shell`. If you add another nullable-scalar `ai.*` option, change which
-> runtimes consume this one, or touch `resolveOverride`, update this fragment in
-> the same commit.)
+> **Last verified:** 2026-08-15 (commit pending — `supportedPools` now gates all
+> normalized pool declarations and fanout, while the new normalized `settings`
+> surface is deliberately present on every runtime and resolves nullable fields
+> per runtime through the same override rule as `ai.shell`). Prior: 2026-08-14
+> (commit pending — the escape hatch at the end of the Copilot section was
+> half-wrong: at 1.0.80 the plain `@github/copilot` npm tarball is a 24K loader
+> shim, not readable JS. The readable app code is in the per-platform dep — and,
+> better, the SEA self-extracts a byte-identical copy on first run, so no
+> download is needed at all. The Copilot `ai.shell` gap itself is UNCHANGED and
+> still open). Prior: 2026-08-10 (commit pending — first landing of `ai.shell`.
+> If you add another nullable-scalar `ai.*` option, change which runtimes
+> consume this one, or touch `resolveOverride`, update this fragment in the same
+> commit.)
 
 ### One record is the capability source
 
-Every `mkAiApp` record declares the normalized pools its runtime actually
-consumes in `supportedPools`. `mkBackendTransform.nix` reads that build-time
-list in four places:
+Every `mkAiApp` record declares the normalized pools its runtime exposes in
+`supportedPools`. `mkBackendTransform.nix` reads that build-time list in four
+places:
 
 - only supported per-runtime pool options are declared;
 - only supported pools participate in shared/per-runtime collision checks;
@@ -1008,26 +1028,36 @@ category as `backend`. It forces neither `config` nor the factory's `pkgs`, so
 it cannot reintroduce the `_module.args` recursion documented against
 `proxyIsSupported`.
 
-A same-named native option does not imply normalized-pool support. For example,
-`ai.copilot.settings` remains Copilot's native freeform surface while Copilot
-does not consume normalized root `ai.settings`; only `supportedPools` governs
-the normalized fanout.
+A same-named native option does not imply normalized-pool support.
+Runtime-shaped passthrough now lives under `nativeSettings`, independently of
+the capability list. Normalized `settings` is the deliberate uniform exception:
+all five runtimes list it so the same closed schema is available at every
+runtime scope, even when a particular field currently has a lossless native
+lowering only for a subset such as Claude and Codex.
 
 ### `ai.shell` is deliberately NOT collision-as-failure
 
 Every attrset-shaped `ai.*` pool treats a shared/per-CLI duplicate key as an
-error — see `collision-semantics.md`. `ai.shell` is the **one exception**, and
-the exception is structural rather than a preference: a pool key names an
-independent entry, so silently overriding one loses data. A nullable scalar has
-nothing to lose. `ai.claude.shell` is not a second entry competing with
-`ai.shell`; it is the same knob at a narrower scope, and making the pair collide
-would leave no way to express "this default, except here" — the entire point of
-the option.
+error — see `collision-semantics.md`. `ai.shell` and each normalized
+`ai.settings` field are the exceptions, and the exception is structural rather
+than a preference: a pool key names an independent entry, so silently overriding
+one loses data. A nullable scalar has nothing to lose. `ai.claude.shell` is not
+a second entry competing with `ai.shell`; it is the same knob at a narrower
+scope, and making the pair collide would leave no way to express "this default,
+except here" — the entire point of the option.
 
 Resolution lives in `lib/ai/ai-common.nix:resolveOverride` (non-null per-CLI
 wins, `null` inherits the root, `null` at both levels means "not configured").
 Do not inline the `if` at call sites; the contrast with the merge helper beside
 it is the thing worth keeping easy to grep for.
+
+Normalized settings use that helper per field. For example,
+`ai.claude.settings.reasoningEffort = "low"` overrides a root
+`ai.settings.reasoningEffort = "high"` for Claude only; Codex still inherits
+`"high"`. A null runtime value inherits the root. This is distinct from
+`nativeSettings`, which carries runtime-shaped passthrough and typed-native keys
+and participates in native option-priority rules only after normalized values
+have been resolved.
 
 ### Shell is one capability entry
 
@@ -1035,13 +1065,13 @@ it is the thing worth keeping easy to grep for.
 only when `shell` appears in the app record's `supportedPools`. There is no
 sibling shell-specific capability flag.
 
-| runtime | knob                       | delivery                         |
-| ------- | -------------------------- | -------------------------------- |
-| Claude  | `CLAUDE_CODE_SHELL`        | `settings.env` → `settings.json` |
-| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`         |
-| Kiro    | `SHELL` (own process env)  | launcher wrapper `export`        |
-| Copilot | **unknown — verified gap** | excluded                         |
-| Kimchi  | unassessed                 | excluded                         |
+| runtime | knob                       | delivery                               |
+| ------- | -------------------------- | -------------------------------------- |
+| Claude  | `CLAUDE_CODE_SHELL`        | `nativeSettings.env` → `settings.json` |
+| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`               |
+| Kiro    | `SHELL` (own process env)  | launcher wrapper `export`              |
+| Copilot | **unknown — verified gap** | excluded                               |
+| Kimchi  | unassessed                 | excluded                               |
 
 Four runtimes were asked for; five go through `mkAiApp`. Kimchi is easy to miss
 because the issue that requested this never mentioned it.
@@ -1124,7 +1154,7 @@ three runtimes demonstrably do not perform.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it
-  has no wrapper here and `settings.env` is its native equivalent.
+  has no wrapper here and `nativeSettings.env` is its native equivalent.
 - **One precedence rule, everywhere: module defaults merge UNDER the consumer's
   `environmentVariables`, so an explicit entry wins.** Codex briefly did the
   reverse — typed option last, on the reasoning that the typed surface is more
