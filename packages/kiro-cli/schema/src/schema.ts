@@ -61,16 +61,32 @@ const PositiveNumber = Schema.Number.pipe(Schema.positive());
  * `"$.drained"` qualifies: legal JSON, accepted by the engine, and it hangs
  * the loop forever without an error. A property genuinely named `$` is the
  * price, and no vendor recipe uses one.
+ *
+ * An EMPTY SEGMENT — `".done"`, `"done."`, `"state..done"`, `""`, `"..."` —
+ * is the one deliberate EXCEPTION to that rule, and it is operator-approved
+ * rather than derived from it. The engine's `walkJsonPath` does
+ * `split(".").filter((s) => s.length > 0)`, so it resolves every one of those
+ * exactly as if the empty segments were not written, and an interior one is
+ * therefore not a silent failure at all. It is refused anyway because this is
+ * an authoring and generation tool whose output is MACHINE GENERATED and
+ * never hand-written: `"state.done"` is the convention, and a doubled dot
+ * means whatever assembled the path is broken upstream. Surfacing that beats
+ * collapsing it silently — this port is the one an LLM's output reaches
+ * first, so the message below is the actual product surface.
  */
-const JsonPath = NonEmptyString.pipe(
+const JsonPath = Schema.String.pipe(
+  Schema.filter(
+    (s) =>
+      s.split(".").every((segment) => segment.length > 0) ||
+      `jsonPath ${JSON.stringify(s)} has an empty '.'-separated segment — expected a property walk like "state.done", with no leading, trailing or doubled '.' and no empty path`,
+  ),
   Schema.filter(
     (s) =>
       (!s.startsWith("$") &&
         !s.includes("[") &&
         !s.includes("]") &&
-        !s.includes("*") &&
-        s.split(".").some((segment) => segment.length > 0)) ||
-      `jsonPath ${JSON.stringify(s)} is not JSONPath — it needs a non-empty property segment and supports only a '.'-separated property walk. Drop '$', brackets and wildcards.`,
+        !s.includes("*")) ||
+      `jsonPath ${JSON.stringify(s)} is not JSONPath — expected a property walk like "state.done". Drop '$', brackets and wildcards.`,
   ),
 ).annotations({ identifier: "JsonPath" });
 
