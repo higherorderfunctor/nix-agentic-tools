@@ -135,8 +135,8 @@
 in rec {
   inherit renderNode renderStopCondition renderStopWhen renderWorkflow;
 
-  # Wire-shape attrset. Feed to builtins.toJSON, or compare against a
-  # `builtins.fromJSON` of a real definition for a round-trip test.
+  # Wire-shape attrset. Feed to `builtins.toJSON`, or inspect it directly when
+  # a caller needs the structure rather than the serialization.
   toAttrs = renderWorkflow;
 
   # The serializer. `toJSON` produces one line; the engine's own normalized
