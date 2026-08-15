@@ -105,10 +105,11 @@ definitions inlined in the engine bundle. The engine shape-parses them at module
 init but does not run its structural analyzer until launch. They are the
 highest-fidelity available corpus rather than an oracle: a failure warrants
 checking both the local rule and the vendor recipe. Both halves of this pair
-check against all seven. The Nix half additionally parses each recipe into its
-authored shape and renders it back, checking the result equals the original
-attribute set with `planRevision` dropped — runtime state the authored shape has
-no option for.
+check against all seven. The Nix half reads each recipe through a test-only wire
+reader (Nix generates workflow JSON; it never consumes it as a product feature)
+and forces both the authored value and the render, so a type error or a render
+throw on real vendor input is caught. It does not compare the rendered result
+against the file: reproducing the input is not a property this schema offers.
 
 They are also a useful map of what the vendor actually uses: no `sequence` node
 anywhere, no nested repeats, no nested parallels, max observed depth 3 against a
