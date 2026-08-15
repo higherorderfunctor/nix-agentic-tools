@@ -107,15 +107,20 @@
 #                        which the engine's Zod refine lets through because it
 #                        tests presence while `resolveCrId` tests length.
 #   stop.when.contains.template
-#                        rejects `{{` and `}}`, which `render.nix` supplies.
-#                        An authored copy either makes the rendered stopWhen
-#                        unparseable — `"{{p.output}}"` renders
-#                        `{{{{p.output}}}} contains DONE`, which the engine
-#                        REFUSES TO LOAD — or silently re-partitions the
-#                        expression so the authored `text` is not the literal
-#                        compared. A LONE brace is still accepted, because the
-#                        engine loads it and it only resolves literally; that
-#                        stays the `W-STOP-WHEN-TEMPLATE-BRACES` lint.
+#                        rejects `{{` and `}}` as INFIXES and also a TRAILING
+#                        `}`, all three of which `render.nix` turns into a
+#                        stopWhen string the engine REFUSES TO LOAD. An
+#                        authored `"{{p.output}}"` renders
+#                        `{{{{p.output}}}} contains DONE`; an authored
+#                        `"p.output}"` renders `{{p.output}}} contains DONE`,
+#                        where the delimiter forms by adjacency at the seam and
+#                        the engine's first-`}}` slice is left with
+#                        `} contains DONE`. A near miss re-partitions the
+#                        expression instead, so the authored `text` is not the
+#                        literal compared. A LONE brace ELSEWHERE is still
+#                        accepted, because the engine loads it and it only
+#                        resolves literally; that stays the
+#                        `W-STOP-WHEN-TEMPLATE-BRACES` lint.
 #   integral Nix ints    `maxIterations` rejects an integral-valued Nix float
 #                        that JavaScript's `Number.isInteger` would accept.
 #
@@ -202,10 +207,10 @@
   # Empty and undeclared bare expressions behave the same way. All three are
   # `policy`-basis lints in analyze.nix, not option-boundary throws.
   #
-  # A `{{` or `}}` is REFUSED, because the render step already owns those two
-  # delimiters and an authored copy re-enters the grammar it is being wrapped
-  # into. The natural mistake is pasting the wire spelling into a field that
-  # wraps: `template = "{{p.output}}"` renders
+  # A `{{` or `}}` INFIX is REFUSED, because the render step already owns those
+  # two delimiters and an authored copy re-enters the grammar it is being
+  # wrapped into. The natural mistake is pasting the wire spelling into a field
+  # that wraps: `template = "{{p.output}}"` renders
   # `{{{{p.output}}}} contains DONE`, whose first `}}` sits at offset 12, so
   # the remainder is `}} contains DONE`, which fails the ` contains ` test and
   # the engine REFUSES TO LOAD the definition. Where a delimiter does not
@@ -214,13 +219,32 @@
   # DONE`, so the authored `text` field is not what gets compared. Either way
   # the authored value is not the one that runs.
   #
-  # This port's own `parse.nix` is the cheapest proof: without this rule
-  # `render.nix` emits stopWhen strings the wire parser sitting beside it
+  # A TRAILING `}` is refused for the same reason, and the infix rule ALONE
+  # does not cover it: the delimiter can also form by ADJACENCY at the seam
+  # `render.nix` creates when it appends its own `}}`. `template = "p.output}"`
+  # carries no `}}` of its own, renders `{{p.output}}} contains DONE`, and the
+  # engine's `input.indexOf("}}")` takes the FIRST occurrence — so it reads the
+  # template as `{{p.output}}` and is left with `} contains DONE`, which fails
+  # `startsWith(" contains ")`. REFUSED AT LOAD, exactly like the infix case.
+  #
+  # Found by sweeping every template of length 1-3 over the alphabet
+  # `[a { } . space]`: 155 values, of which the infix rule accepted 24 whose
+  # rendered string the engine cannot read back, and every one of the 24 ended
+  # in `}`. With this suffix rule the sweep returns zero. The invariant it
+  # restores is worth stating plainly, because it is the one this type owes
+  # `render.nix`: EVERY value accepted here must render to a wire string that
+  # parses back to the same template and the same text.
+  #
+  # A lone brace ANYWHERE ELSE still passes — `a{b` and `a}b` both render and
+  # read back intact — so this stays narrower than "no braces at all".
+  #
+  # This port's own `parse.nix` is the cheapest proof: without these rules
+  # `render.nix` emits stopWhen strings the wire reader sitting beside it
   # throws on.
   referenceExpr =
     types.addCheck types.str
-    (s: !(lib.hasInfix "{{" s) && !(lib.hasInfix "}}" s))
-    // {description = "reference expression carrying neither '{{' nor '}}' (render.nix adds the delimiters)";};
+    (s: !(lib.hasInfix "{{" s) && !(lib.hasInfix "}}" s) && !(lib.hasSuffix "}" s))
+    // {description = "reference expression carrying neither '{{' nor '}}' and not ending in '}' (render.nix adds the delimiters)";};
 
   # `jsonPath` is NOT JSONPath. The engine does `split(".")` then a plain
   # property walk, so "$.drained" reads a property literally named "$",

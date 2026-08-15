@@ -108,6 +108,21 @@
       }
     ];
 
+  # A template the option type refuses, paired with the wire string `render.nix`
+  # builds from it: the string must be exactly what is expected AND must fail to
+  # read back, which is the whole justification for refusing the template.
+  renderedStopWhenIsUnparseable = template: expected: let
+    wire = W.render.renderStopWhen {
+      contains = {
+        inherit template;
+        text = "DONE";
+      };
+    };
+  in
+    wire
+    == expected
+    && !(builtins.tryEval (builtins.deepSeq (parse.parseStopWhen "probe" wire) true)).success;
+
   # Same idea for the fileCheck jsonPath family: the segment list is the ONLY
   # variable, so `accept-jsonpath-dollar-after-head` is the shape-matched
   # positive control for every `reject-jsonpath-*` fixture below it.
@@ -749,22 +764,29 @@ in
     kiro-workflow-reject-stop-when-template-close-delimiter =
       reject "stop-when-template-close-delimiter"
       (stopWhenTemplate "p.output}}");
-    # The rule exists because this port's own wire reader throws on this port's
-    # own rendered output. Rendering has to be done on a hand-built attrset,
-    # since the option type is what now refuses the authored value.
-    kiro-workflow-render-of-braced-stop-when-template-is-unparseable = mkTest "render-of-braced-stop-when-template-is-unparseable" (
-      let
-        wire = W.render.renderStopWhen {
-          contains = {
-            template = "{{p.output}}";
-            text = "DONE";
-          };
-        };
-      in
-        wire
-        == "{{{{p.output}}}} contains DONE"
-        && !(builtins.tryEval (builtins.deepSeq (parse.parseStopWhen "probe" wire) true)).success
-    );
+    # A TRAILING lone brace is the same failure reached by ADJACENCY rather than
+    # by an infix: it carries no `}}` of its own, but `render.nix` appends one,
+    # so `"p.output}"` renders `{{p.output}}} contains DONE` and the engine's
+    # first-`}}` slice is left with `} contains DONE`. The `"a{b"` fixture above
+    # structurally cannot see this — its brace is not at the seam.
+    kiro-workflow-reject-stop-when-template-trailing-brace =
+      reject "stop-when-template-trailing-brace"
+      (stopWhenTemplate "p.output}");
+    # The bare minimal case, which is what a sweep of short templates finds
+    # first and what makes the rule a suffix rule rather than a "no brace next
+    # to a dot" rule.
+    kiro-workflow-reject-stop-when-template-is-only-a-brace =
+      reject "stop-when-template-is-only-a-brace"
+      (stopWhenTemplate "}");
+    # These rules exist because this port's own wire reader throws on this
+    # port's own rendered output. Rendering has to be done on a hand-built
+    # attrset, since the option type is what now refuses the authored value.
+    kiro-workflow-render-of-braced-stop-when-template-is-unparseable =
+      mkTest "render-of-braced-stop-when-template-is-unparseable"
+      (renderedStopWhenIsUnparseable "{{p.output}}" "{{{{p.output}}}} contains DONE");
+    kiro-workflow-render-of-trailing-brace-stop-when-template-is-unparseable =
+      mkTest "render-of-trailing-brace-stop-when-template-is-unparseable"
+      (renderedStopWhenIsUnparseable "p.output}" "{{p.output}}} contains DONE");
     kiro-workflow-stop-when-bare-input-references = mkTest "stop-when-bare-input-references" (
       let
         workflow = declared: {
