@@ -119,11 +119,12 @@ exported from the barrel, that is history, not an invitation.
 What the vendor check establishes is COVERAGE: each of the seven recipes the
 engine ships parses, type-checks against these option types, and analyzes clean
 of engine-basis errors, so every definition the vendor actually ships is
-expressible in the authored shape. It then compares the rendered result against
-the source recipe minus `planRevision` (machine state with no authored option).
-That comparison is on Nix values. It is not a byte comparison and never was —
-the rendered JSON is byte-equal to 0 of the 7 fixtures, and nothing here needs
-it to be.
+expressible in the authored shape. Rendering is forced too, so a render throw on
+real vendor input is caught. The rendered result is **not** compared against the
+source recipe — reproducing the input is not a property this schema offers, and
+nothing here needs it to be. An earlier revision of this check did compare, and
+this paragraph described that comparison after it was removed; if you find a
+claim here about what the check compares, verify it against the check.
 
 ## The `basis` taxonomy
 
