@@ -1,9 +1,14 @@
 ## `ai.shell` — the one override-wins surface
 
-> **Last verified:** 2026-08-10 (commit pending — first landing of `ai.shell`.
-> If you add another nullable-scalar `ai.*` option, change which runtimes
-> consume this one, or touch `resolveOverride`, update this fragment in the same
-> commit.)
+> **Last verified:** 2026-08-14 (commit pending — the escape hatch at the end of
+> the Copilot section was half-wrong: at 1.0.80 the plain `@github/copilot` npm
+> tarball is a 24K loader shim, not readable JS. The readable app code is in the
+> per-platform dep — and, better, the SEA self-extracts a byte-identical copy on
+> first run, so no download is needed at all. The Copilot `ai.shell` gap itself
+> is UNCHANGED and still open). Prior: 2026-08-10 (commit pending — first
+> landing of `ai.shell`. If you add another nullable-scalar `ai.*` option,
+> change which runtimes consume this one, or touch `resolveOverride`, update
+> this fragment in the same commit.)
 
 ### It is deliberately NOT collision-as-failure
 
@@ -178,9 +183,20 @@ single-executable CLIs. Codex, by contrast, is a Rust binary whose string table
 IS readable (`codex` = 1030 hits), which is why its mechanism could be settled
 the same way.
 
-To close the gap, read the universal npm tarball (`github-copilot-<ver>.tgz`)
-that upstream nixpkgs switched to; it ships readable JS. Do not re-run a
-plaintext scan of the SEA.
+To close the gap, read the app code — do not re-run a plaintext scan of the SEA.
+**The cheapest route is that the SEA self-extracts its payload on first run**,
+to `~/.cache/copilot/pkg/<platform>/<version>/`; `app.js` there is ~9 MB of
+minified but fully searchable JS, alongside the Rust core `runtime.node` where
+discovery actually lives. Measured 2026-08-14 against 1.0.80, with
+`copilot-instructions.md`, `no-custom-instructions` and
+`No authentication information found` as positive controls — all three hit,
+where the same scan of the SEA itself returns zero for every one of them.
+
+Do not reach for the plain `@github/copilot` npm tarball for this: at 1.0.80 it
+is a 24K loader shim. The readable JS is in the per-platform optional dep
+(`@github/copilot-linux-x64`), and its `app.js` is sha256-identical to the
+self-extracted copy — so the self-extract route buys the same bytes with no
+download.
 
 ### Verifying a change here
 

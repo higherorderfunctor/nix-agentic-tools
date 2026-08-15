@@ -3895,6 +3895,58 @@ in {
       && !(devenv.config.files ? ".github/instructions/security.instructions.md")
   );
 
+  # Named instructions and rules are the one HM artifact class Copilot finds by
+  # walking its own home, so a moved `configDir` makes them undeliverable — the
+  # same silent-loss defect that `$HOME/.github/instructions/` was. The
+  # assertion is GATED on there being content to lose, so all three arms below
+  # are load-bearing and the two passing ones are the positive control: an
+  # assertion test satisfied by a harness that produces no assertions at all
+  # proves nothing on its own.
+  module-copilot-hm-config-dir-pinned-when-rules-present = mkTest "copilot-hm-config-dir-pinned-when-rules-present" (
+    let
+      configDirFires = evaluated:
+        builtins.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "ai.copilot.configDir is" assertion.message)
+        evaluated.config.assertions;
+      # (1) moved home + content to lose → fails, and names the dead file.
+      moved = evalHm {
+        ai.copilot = {
+          configDir = ".copilot-elsewhere";
+          enable = true;
+          rules.security.text = "Validate all user input.";
+        };
+      };
+      movedFailure =
+        lib.findFirst (assertion:
+          !assertion.assertion
+          && lib.hasInfix "ai.copilot.configDir is" assertion.message)
+        null
+        moved.config.assertions;
+      # (2) moved home, nothing to lose → passes. The gate is real.
+      movedEmpty = evalHm {
+        ai.copilot = {
+          configDir = ".copilot-elsewhere";
+          enable = true;
+        };
+      };
+      # (3) default home + the same content → passes, and the file is live.
+      pinned = evalHm {
+        ai.copilot = {
+          enable = true;
+          rules.security.text = "Validate all user input.";
+        };
+      };
+    in
+      movedFailure
+      != null
+      && lib.hasInfix ''ai.copilot.configDir is ".copilot-elsewhere"'' movedFailure.message
+      && lib.hasInfix "security.instructions.md" movedFailure.message
+      && !(configDirFires movedEmpty)
+      && !(configDirFires pinned)
+      && (pinned.config.home.file.".copilot/instructions/security.instructions.md" or null) != null
+  );
+
   module-kiro-default-disabled = mkTest "kiro-default-disabled" (
     !(evalHm {}).config.ai.kiro.enable
     && !(evalDevenv {}).config.ai.kiro.enable
@@ -4076,7 +4128,7 @@ in {
   # Copilot HM parity (§6a.3). The single native context file
   # (`.copilot/copilot-instructions.md`) must hold context + unnamed; there must
   # be NO aggregate at `.config/github-copilot/copilot-instructions.md`; named →
-  # `.github/instructions/<name>.instructions.md`. RED today: the context writer
+  # `.copilot/instructions/<name>.instructions.md`. RED today: the context writer
   # carries only context (unnamed missing) and the aggregate file exists.
   module-copilot-hm-compose-context-and-unnamed = mkTest "copilot-hm-compose-context-and-unnamed" (
     let
@@ -4100,11 +4152,14 @@ in {
         };
       };
       contextFile = (evaluated.config.home.file.".copilot/copilot-instructions.md" or {}).text or "";
-      instrFile = evaluated.config.home.file.".github/instructions/named-rule.instructions.md" or null;
+      instrFile = evaluated.config.home.file.".copilot/instructions/named-rule.instructions.md" or null;
     in
       lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
       && lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile
       && !(evaluated.config.home.file ? ".config/github-copilot/copilot-instructions.md")
+      # `$HOME/.github/` is not a directory copilot-cli reads; the old
+      # hardcode is gone and must not come back alongside the live path.
+      && !(evaluated.config.home.file ? ".github/instructions/named-rule.instructions.md")
       && instrFile != null
       && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (instrFile.text or "")
   );
@@ -5342,11 +5397,12 @@ in {
           }
         ];
       };
-      instrFile = result.config.home.file.".github/instructions/my-rule.instructions.md" or null;
+      instrFile = result.config.home.file.".copilot/instructions/my-rule.instructions.md" or null;
     in
       instrFile
       != null
       && lib.hasInfix "Be concise" (instrFile.text or "")
+      && !(result.config.home.file ? ".github/instructions/my-rule.instructions.md")
   );
 
   module-copilot-hm-writes-skills = mkTest "copilot-hm-writes-skills" (
@@ -6628,7 +6684,7 @@ in {
       };
       claude = (result.config.home.file.".claude/rules/semantic.md" or {}).text or "";
       codex = (result.config.home.file.".codex/AGENTS.md" or {}).text or "";
-      copilot = (result.config.home.file.".github/instructions/semantic.instructions.md" or {}).text or "";
+      copilot = (result.config.home.file.".copilot/instructions/semantic.instructions.md" or {}).text or "";
       kiro = (result.config.ai.kiro.steeringFiles."semantic.md" or {}).text or "";
     in
       lib.hasInfix "paths:" claude
@@ -8367,7 +8423,7 @@ in {
       && lib.hasInfix "inclusion: fileMatch" (ruleFile.text or "")
   );
 
-  # Copilot HM: top-level ai.rules → .github/instructions/<name>.instructions.md.
+  # Copilot HM: top-level ai.rules → .copilot/instructions/<name>.instructions.md.
   module-copilot-hm-writes-rules-from-top-level = mkTest "copilot-hm-writes-rules-from-top-level" (
     let
       result = evalHm {
@@ -8377,12 +8433,13 @@ in {
           paths = ["**/*.ts"];
         };
       };
-      ruleFile = result.config.home.file.".github/instructions/security.instructions.md" or null;
+      ruleFile = result.config.home.file.".copilot/instructions/security.instructions.md" or null;
     in
       ruleFile
       != null
       && lib.hasInfix "Validate all user input" (ruleFile.text or "")
       && lib.hasInfix "applyTo:" (ruleFile.text or "")
+      && !(result.config.home.file ? ".github/instructions/security.instructions.md")
   );
 
   # Per-CLI rules merge with top-level; per-CLI wins on collision.

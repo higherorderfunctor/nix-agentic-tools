@@ -630,6 +630,36 @@ Option 1 is the only one that does not lose a working feature.
 
 ### A3b. #920 must land before A3
 
+> **LANDED AS PR 2.** The two literals now interpolate `cfg.configDir`, and the
+> four `checks/module-eval.nix` accessors moved to `.copilot/instructions/`.
+> Three refinements this section did not specify, recorded so they are not
+> re-litigated:
+>
+> 1. **The `configDir` pin is GATED on there being content to lose** — it
+>    requires the default only when a named instruction or a rule exists. An
+>    unconditional pin would break a consumer using `configDir` purely as the
+>    wrapper-aimed MCP root, which still works because `--additional-mcp-config`
+>    is handed the path explicitly.
+> 2. **Its accepted cost is a false positive**, named here rather than left to
+>    be rediscovered: a consumer who sets `COPILOT_HOME` themselves has a real
+>    reason to move `configDir`, and Nix cannot see that variable. The escape,
+>    if that consumer appears, is to widen the assertion — not to un-gate it.
+> 3. **The four existing accessors were not merely re-pointed.** Three now also
+>    assert the `$HOME/.github/` key is ABSENT; re-pointing alone would let a
+>    regression that wrote BOTH paths pass. A new check,
+>    `module-copilot-hm-config-dir-pinned-when-rules-present`, covers the
+>    assertion with two passing arms as its positive control, since a
+>    failure-asserting test is satisfied for free by a harness that produces no
+>    assertions at all.
+>
+> **The destination was re-measured for this PR, and it is live.**
+> `$HOME/.copilot/instructions/**/*.instructions.md` is in copilot-cli 1.0.80's
+> own discovery enumeration, and a marker file placed there reaches the outgoing
+> system prompt. Worth doing rather than assuming: the defect being fixed was a
+> write to a path nobody reads, so "the new path is read" is exactly the premise
+> that must not be inherited on trust. Evidence and method are in
+> `dev/fragments/ai-clis/copilot-config-delivery.md`.
+
 Copilot rules and named instructions are **dead on Home Manager**:
 `packages/copilot-cli/lib/mkCopilot.nix:281` and `:294` write to
 `$HOME/.github/instructions/…`, which copilot-cli never reads. The devenv path

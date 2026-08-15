@@ -1,10 +1,17 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-14 (commit pending — adds the Kiro-specific
-> `extraPackages` runtime PATH prefix, shared by both backends through the
-> existing launcher wrapper and deliberately not promoted to `ai.shell` or a
-> cross-runtime pool). Prior: 2026-08-05 (commit pending — Codex's beta
-> permission model is LOCKED OUT: `ai.codex.profiles`,
+> **Last verified:** 2026-08-14 (commit pending — Copilot's `ai.instructions` /
+> `ai.rules` destination is per-BACKEND and this entry named only one of them.
+> Home Manager wrote a hardcoded `.github/instructions/`, which resolves to
+> `$HOME/.github/instructions/` — a directory copilot-cli never reads — so every
+> named instruction and every rule was emitted and then ignored. It now routes
+> through `ai.copilot.configDir`, matching every other HM artifact this module
+> writes. See `copilot-config-delivery.md` for why the two backends address
+> genuinely different consumers). Prior: 2026-08-14 (commit pending — adds the
+> Kiro-specific `extraPackages` runtime PATH prefix, shared by both backends
+> through the existing launcher wrapper and deliberately not promoted to
+> `ai.shell` or a cross-runtime pool). Prior: 2026-08-05 (commit pending —
+> Codex's beta permission model is LOCKED OUT: `ai.codex.profiles`,
 > `ai.codex.settings.default_permissions`, and `ai.codex.settings.permissions`
 > stay typed and still emit, but every entry point now asserts. A layer carrying
 > the beta model OVERRIDES rather than merges the legacy sandbox settings
@@ -325,10 +332,12 @@ enabled ecosystem whose native model preserves the option's semantics):
 - `ai.instructions` — list of instruction records (text plus optional name, path
   scoping, description, and Kiro `inclusion`). Transformed per ecosystem via
   `lib/ai/transformers/`: Claude gets `.claude/rules/<name>.md` with YAML
-  frontmatter; Copilot gets `.github/instructions/<name>.instructions.md`; Kiro
-  gets `.kiro/steering/<name>.md` (via the CLI module); Codex concatenates
-  entries into its single AGENTS.md without frontmatter. Scoped entries become
-  explicit prose unless `skipIfUnsupported = true` omits them. Kiro derives
+  frontmatter; Copilot gets `instructions/<name>.instructions.md` under
+  `ai.copilot.configDir` on Home Manager and under `ai.copilot.projectDir` on
+  devenv — the two backends address different CONSUMERS, not one path; Kiro gets
+  `.kiro/steering/<name>.md` (via the CLI module); Codex concatenates entries
+  into its single AGENTS.md without frontmatter. Scoped entries become explicit
+  prose unless `skipIfUnsupported = true` omits them. Kiro derives
   `always`/`fileMatch` from paths when inclusion is null; an explicit
   `always`/`auto`/`fileMatch`/`manual` value overrides only Kiro's load
   strategy, while the other ecosystems continue translating paths normally.

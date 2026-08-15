@@ -97,7 +97,10 @@ in {
         Each attribute becomes one file in the ecosystem's native rules
         directory (Claude: `.claude/rules/<name>.md`, Kiro:
         `.kiro/steering/<name>.md`, Copilot:
-        `.github/instructions/<name>.instructions.md`). Codex instead appends
+        `instructions/<name>.instructions.md` under `ai.copilot.configDir`
+        in Home Manager and under `ai.copilot.projectDir` in devenv, because
+        Copilot CLI reads its own home while github.com's code review reads
+        the committed project tree). Codex instead appends
         rules alphabetically to its single AGENTS.md, degrading path scopes to
         explicit prose unless `skipIfUnsupported` requests omission. Per-app
         overrides (ai.<name>.rules) merge on top; collisions are a failure.

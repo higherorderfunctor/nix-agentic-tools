@@ -1,7 +1,16 @@
 ## Copilot config delivery — two consumers, one product name
 
-> **Last verified:** 2026-08-05 (commit pending — the wrapper both backends use
-> now lives in ONE place, `packages/copilot-cli/lib/wrapPackage.nix`, and is
+> **Last verified:** 2026-08-14 (commit pending — `configDir` is TWO different
+> things and the sentence below that called it "neither" was only true of
+> devenv's. Home Manager defaults it to `.copilot`, which IS the CLI's home;
+> devenv defaults it to `.config/github-copilot`, which nothing reads. Named
+> instructions and rules moved onto the HM `configDir` after landing in
+> `$HOME/.github/instructions/` — a directory with no user-global meaning at all
+> — and a gated assertion now pins `configDir` when there is content that would
+> go dead. Records the measured instruction-discovery list for 1.0.80, and a
+> MUCH cheaper way to read this SEA's app code than the npm tarball: it
+> self-extracts). Prior: 2026-08-05 (commit pending — the wrapper both backends
+> use now lives in ONE place, `packages/copilot-cli/lib/wrapPackage.nix`, and is
 > exercised behaviorally by `checks/copilot-wrapper-argv.nix`. It had been
 > inlined once per backend, and that duplication is why the identical pair of
 > defects — builder-expanded `$HOME`, missing `@` prefix — shipped twice, as
@@ -25,12 +34,149 @@ directories look redundant when they are not.
 | **copilot-cli** (local agent harness)   | `$HOME/.copilot/*`, plus `--additional-mcp-config`                                         | no — `$HOME`      |
 | **github.com Copilot code review** (CI) | `projectDir` = `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md` | **yes, required** |
 
-`configDir` (`.config/github-copilot/`) belongs to NEITHER by discovery. It is
-gitignored, so the server-side reviewer cannot see it even in principle, and the
-CLI does not look there. It exists solely as a target for CLI wrapper flags.
-
 So: do not "consolidate" the two directories, and do not move reviewer content
 out of `.github/`.
+
+### `configDir` names two different directories, one per backend
+
+This is the second trap, and it sits underneath the first.
+`ai.copilot.configDir` is one option NAME with two defaults, and only one of
+them is a directory the CLI reads:
+
+| backend      | default                                  | is it the CLI's home?                         |
+| ------------ | ---------------------------------------- | --------------------------------------------- |
+| Home Manager | `.copilot` (HOME-relative)               | **yes** — `COPILOT_HOME`'s canonical location |
+| devenv       | `.config/github-copilot` (root-relative) | no — wrapper-aimed only                       |
+
+An earlier revision of this fragment said flatly that "`configDir`
+(`.config/github-copilot/`) belongs to NEITHER by discovery … the CLI does not
+look there." That is correct about the devenv default and **false about the HM
+one**, where `configDir` is precisely where the CLI looks. The devenv default is
+gitignored, so the server-side reviewer cannot see it even in principle, and it
+exists solely as a target for CLI wrapper flags.
+
+Read a `configDir` cite with the backend attached, or the two collapse into a
+statement that is wrong half the time.
+
+### Home Manager named instructions and rules were written to a dead path
+
+`mkCopilot.nix` hardcoded `.github/instructions/<name>.instructions.md` on BOTH
+backends. On devenv that is right — it is the committed reviewer surface. On
+Home Manager the same literal resolves to `$HOME/.github/instructions/`, which
+is not a Copilot surface at all: `.github` is a repository convention, and there
+is no user-global reading of it. So every named `ai.instructions` entry and
+every `ai.rules` entry emitted a file under HM and nothing ever loaded it.
+
+Fixed by prefixing `cfg.configDir`, which is what every other HM artifact this
+module writes already did (`agents/`, `skills/`, `lsp-config.json`,
+`mcp-config.json`, `settings.json`). The devenv arm was already correct and is
+unchanged.
+
+**The destination is live — measured, not assumed** (2026-08-14, 1.0.80). This
+is the one thing worth checking before trusting the fix, since the defect being
+fixed was precisely a write to a path nobody reads. Two independent lines of
+evidence, both with passing positive controls:
+
+- **End-to-end**: with `COPILOT_OFFLINE=true` and `COPILOT_PROVIDER_BASE_URL`
+  pointed at a local capture server, a marker placed in
+  `$HOME/.copilot/instructions/probe.instructions.md` appears verbatim in the
+  outgoing system prompt. `strace` shows the matching `openat(O_DIRECTORY)` +
+  `getdents64` + read. Negative control: `--no-custom-instructions` zeroes every
+  marker while the request is still captured.
+- **Static**: the binary's own enumeration lists
+  `$HOME/.copilot/instructions/**/*.instructions.md`.
+
+Two properties the emission depends on, both measured: the walk is **recursive**
+(`**` is real), and it is **suffix-gated** — a `plain.md` dropped in that
+directory is ignored, so the `<name>.instructions.md` filename this module emits
+is load-bearing rather than cosmetic.
+
+The full 1.0.80 list, from the binary's own `/help` text and consistent with
+what was measured:
+
+```
+CLAUDE.md                                    (git root & cwd)
+GEMINI.md                                    (git root & cwd)
+AGENTS.md                                    (git root & cwd)
+.github/instructions/**/*.instructions.md    (git root & cwd)
+.github/copilot-instructions.md              (git root & cwd)
+$HOME/.copilot/copilot-instructions.md
+$HOME/.copilot/instructions/**/*.instructions.md
+COPILOT_CUSTOM_INSTRUCTIONS_DIRS             (extra dirs, comma-separated)
+```
+
+One detail that matters if anyone ever tunes the transformer, and it is worth
+stating with its measurement status attached because an earlier draft of this
+paragraph got it backwards:
+
+- **`applyTo:` IS consumed as routing metadata — MEASURED.** The Rust core
+  (`runtime.node`) parses it as a glob and carries the diagnostic
+  `(ignoring malformed applyTo glob pattern`. An earlier revision of this
+  fragment claimed the header was passed to the model as inert text; that half
+  is refuted. Note the trap that produced it: grepping the JS bundle for
+  `applyTo` returns only `applyToken` / `applyToolDeferralPlan` substring hits,
+  so a careless positive control "passes" while proving nothing about the key.
+  Match it as a word.
+- **Frontmatter ALSO reaches the prompt for unscoped files** — measured at
+  1.0.79 and recorded in `docs/plans/ai-normalized-interface-rework.md` §A3b,
+  NOT re-measured at 1.0.80 here. Every universal-`applyTo` file is concatenated
+  into one run with no delimiter between files and with its raw YAML inlined as
+  prose, while a SCOPED file keeps per-file identity through a
+  `| Pattern | File Path | Description |` index row.
+
+The two are consistent — routing is parsed, and the unscoped bucket is inlined
+anyway — but do not restate either half without the other, and do not restate
+the second as though this fragment measured it.
+
+**Why this matters for the named-only migration, and what it does NOT license.**
+`docs/plans/ai-normalized-interface-rework.md` §A3 settles the direction:
+`instructions` is DELETED, not aliased, and for Claude and Copilot "one composed
+always-loaded file becomes N always-on rule files". So after that migration
+every always-on rule is a named file carrying a universal `applyTo` — the
+inlined bucket described above. That cost is known and already accepted in §A3b,
+on the measured ground that Copilot's PROJECT tier behaves identically today, so
+the migration does not make anything lossy that was not already.
+
+Do not read the frontmatter-inlining as an argument for keeping always-on
+content in the context file instead. `ai.context` is a single global baseline,
+not a pool, and routing rule content there to dodge frontmatter would
+reintroduce exactly the composed-single-file shape §A3 is retiring. The
+convention is named files; the transformer already emits `applyTo: "**"` for
+`paths == null` (`lib/ai/transformers/copilot.nix`), which is what puts them in
+the injected tier at all.
+
+**What this PR contributes to that migration is the destination being live.**
+Those N named files land under `<configDir>/instructions/` on Home Manager —
+which was the dead `$HOME/.github/` directory until this change. That is the
+concrete mechanism behind the plan's "5 must follow 2" ordering constraint:
+retiring `instructions` first would have moved Claude and Copilot always-on
+content out of a working composed file and into a directory nothing reads.
+
+**The fix comes with a gated assertion, and the gate is the interesting part.**
+`mcp-config.json` survives a moved `configDir` because the wrapper hands Copilot
+that exact path via `--additional-mcp-config`. There is no instructions
+equivalent of that flag, and this module deliberately does not set
+`COPILOT_HOME` (see below — that would fork auth and session state). So a
+non-default `configDir` puts instructions and rules somewhere nothing reads,
+reintroducing the same defect through a different door. The module therefore
+requires `configDir == ".copilot"` **only when there is a named instruction or a
+rule to lose**, and names the specific files in the message. A consumer using
+`configDir` purely as a wrapper-aimed MCP root is unaffected.
+
+Known cost, accepted deliberately, and it is a REAL false positive rather than a
+theoretical one: `COPILOT_HOME` was measured to relocate the instruction walk
+wholesale — with it set, `$HOME/.copilot/*` stops being read at all and
+`$COPILOT_HOME/instructions/**` is read instead. So a consumer who exports it
+themselves has a correct reason to move `configDir` to match, and the assertion
+blocks them. Nix cannot see that variable. The alternative — wiring
+`COPILOT_CUSTOM_INSTRUCTIONS_DIRS`, which was also measured working — expands
+the option surface for what is a bug fix. If that consumer appears, the escape
+is to widen the assertion, not to un-gate it.
+
+Two other HM artifact classes (`agents/`, `skills/`) go undeliverable on a moved
+`configDir` in exactly the same way and carry no assertion. That inconsistency
+is pre-existing and out of scope here; it is recorded so the next reader does
+not mistake the gap for a decision.
 
 ### Measured discovery (copilot-cli 1.0.78)
 

@@ -156,9 +156,12 @@ lib.ai.app.mkAiApp {
       hasContext = effectiveContext != null && effectiveContext != "";
       # Unnamed always-on instructions compose into the single native context
       # file below (the generic aggregate render was retired). Named entries
-      # emit their own `.github/instructions/<name>.instructions.md`.
+      # emit their own `<configDir>/instructions/<name>.instructions.md`.
       unnamedInstructions = builtins.filter (i: !(i ? name)) mergedInstructions;
       hasUnnamed = unnamedInstructions != [];
+      # Complement of `unnamedInstructions`, hoisted so the `configDir`
+      # assertion and the emission block below read the same set.
+      namedInstructions = builtins.filter (i: i ? name) mergedInstructions;
       resolveRuleText = rule:
         if builtins.isPath rule.text
         then builtins.readFile rule.text
@@ -216,6 +219,49 @@ lib.ai.app.mkAiApp {
                 through Home Manager. Configure it through the devenv module.
               '';
             }
+            # Named instructions and rules are the only artifacts here that
+            # Copilot discovers by walking its own home rather than by being
+            # handed a path. `mcp-config.json` survives a moved `configDir`
+            # because the wrapper points `--additional-mcp-config` straight at
+            # it; there is no instructions equivalent of that flag, and this
+            # module deliberately does not set `COPILOT_HOME` (that would fork
+            # auth and session state — see copilot-config-delivery.md). So a
+            # non-default `configDir` writes these files somewhere nothing
+            # reads, which is the exact defect this path was just fixed for.
+            #
+            # Gated on there being content to lose: a consumer using
+            # `configDir` purely as the wrapper-aimed MCP root is unaffected,
+            # and the failure arrives at the moment the first instruction or
+            # rule would go dead rather than at an unrelated config change.
+            #
+            # This whole block rides `mkIf cfg.enable` (mkBackendTransform.nix
+            # wraps `customConfig`), unlike the shared-pool collision
+            # assertions, which sit outside it so bad SHARED data cannot hide
+            # behind a disabled CLI. That is the right split: nothing is
+            # emitted here while Copilot is off, so there is nothing to lose.
+            {
+              assertion =
+                (namedInstructions == [] && mergedRules == {})
+                || cfg.configDir == ".copilot";
+              message = ''
+                ai.copilot.configDir is "${cfg.configDir}", but Copilot CLI
+                discovers named instructions and rules only under its own home
+                (`~/.copilot/instructions/`). Home Manager cannot relocate that
+                home, so these files would be written and never read:
+
+                ${lib.concatMapStringsSep "\n" (n: "  - ${n}.instructions.md") (
+                  lib.sort (a: b: a < b) (
+                    map (i: i.name) namedInstructions ++ lib.attrNames mergedRules
+                  )
+                )}
+
+                Either leave ai.copilot.configDir at its ".copilot" default, or
+                drop the named ai.instructions / ai.rules entries above from
+                this Home Manager configuration. Project-scope instructions go
+                through the devenv module, which writes them under
+                ai.copilot.projectDir instead.
+              '';
+            }
           ];
         }
         # L2b → L3: expand `ai.copilot.agentsDir` into
@@ -267,31 +313,41 @@ lib.ai.app.mkAiApp {
           };
         })
         # Per-instruction files — write
-        # `.github/instructions/<name>.instructions.md` for each
+        # `<configDir>/instructions/<name>.instructions.md` for each
         # instruction entry that carries a `name` field. The copilot
         # transformer emits `applyTo:` YAML frontmatter per scope.
         # Nameless entries are composed into the native context file
         # (`<configDir>/<contextFilename>`) below.
+        #
+        # This path used to be a hardcoded `.github/instructions/`, which
+        # under Home Manager resolves to `$HOME/.github/instructions/` —
+        # a directory copilot-cli never reads, so every named instruction
+        # and every rule was written and then ignored. `.github` is the
+        # PROJECT root that github.com's Copilot code review consumes; it
+        # has no user-global meaning. See the devenv branch below, which
+        # correctly prefixes `projectDir`, and
+        # dev/fragments/ai-clis/copilot-config-delivery.md for the two
+        # disjoint consumers this repo keeps confusing.
         (let
           fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
           inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
-          named = builtins.filter (i: i ? name) mergedInstructions;
         in {
           home.file = lib.listToAttrs (map (instr: {
-              name = ".github/instructions/${instr.name}.instructions.md";
+              name = "${cfg.configDir}/instructions/${instr.name}.instructions.md";
               value.text = fragmentsLib.mkRenderer copilotTransformer {} instr;
             })
-            named);
+            namedInstructions);
         })
         # Attrs-shape ai.rules / ai.copilot.rules → instruction files.
-        # Each entry becomes .github/instructions/<name>.instructions.md
-        # with copilotTransformer's applyTo: frontmatter.
+        # Each entry becomes
+        # `<configDir>/instructions/<name>.instructions.md` with
+        # copilotTransformer's applyTo: frontmatter.
         (let
           fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
           inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
         in {
           home.file = lib.mapAttrs' (name: rule:
-            lib.nameValuePair ".github/instructions/${name}.instructions.md" {
+            lib.nameValuePair "${cfg.configDir}/instructions/${name}.instructions.md" {
               text = fragmentsLib.mkRenderer copilotTransformer {} (rule
                 // {
                   text = resolveRuleText rule;
