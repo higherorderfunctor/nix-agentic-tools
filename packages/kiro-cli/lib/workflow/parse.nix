@@ -8,9 +8,19 @@
 #      recipes inlined in the engine bundle, which are the highest-fidelity
 #      conformance corpus available. The engine shape-parses them at module
 #      init but does not run its structural analyzer until launch.
-#   2. `parse` then `render` must round-trip. That property is what proves the
-#      authored/wire divergence is a faithful re-encoding rather than a
-#      lossy one, and it is tested rather than asserted.
+#   2. `parse` then `render` must round-trip SEMANTICALLY. That property is
+#      what proves the authored/wire divergence is a faithful re-encoding
+#      rather than a lossy one, and it is tested rather than asserted.
+#
+#      The qualifier is load-bearing, not hedging. `parseFileCheck` drops
+#      empty `jsonPath` segments, which makes `parse` deliberately
+#      NON-INJECTIVE: `state..done` and `.done` come back as `state.done` and
+#      `done`, so `render (parse wire) == wire` is false for any wire path
+#      carrying a redundant dot. The engine filters identically in
+#      `walkJsonPath` (`split(".").filter(s => s.length > 0)`), so the
+#      normalized path addresses the very same property and only the spelling
+#      is lost. Pinned by the check
+#      `kiro-workflow-parse-normalizes-jsonpath-empty-segments`.
 #
 # This is a TOTAL function on well-formed input and throws loudly otherwise.
 # It deliberately does NOT validate — feed the result through
@@ -63,6 +73,12 @@
     inherit (fc) path value;
     # The wire form is a '.'-separated property walk; the authored form is the
     # segment list that makes the JSONPath spelling unrepresentable.
+    #
+    # The filter is what makes this function non-injective — see the round-trip
+    # note in the file header. An empty segment is a redundant dot the engine
+    # itself discards, so dropping it on import is the normalization, not a
+    # loss; an ALL-empty path collapses to `[]`, which `jsonPathType` then
+    # refuses (a listed stricter-than-engine rule).
     jsonPath = lib.filter (segment: segment != "") (splitString "." fc.jsonPath);
   };
 

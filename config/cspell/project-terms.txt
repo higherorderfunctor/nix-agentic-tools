@@ -170,6 +170,7 @@ idempotently
 idents
 indexedlog
 inferera
+injective
 inlines
 inspectable
 ints
