@@ -339,6 +339,19 @@ describe("analyze: whole-tree rules", () => {
     ).toContain("E-NODE-DUPLICATE-ID");
   });
 
+  test("duplicate diagnostics follow second-occurrence order", () => {
+    const messages = diagnosticsOf(
+      withSteps([step("a"), step("b"), step("b"), step("a")]),
+    )
+      .filter((diagnostic) => diagnostic.code === "E-NODE-DUPLICATE-ID")
+      .map((diagnostic) => diagnostic.message);
+
+    expect(messages).toEqual([
+      "duplicate node id 'b'; ids must be unique across the WHOLE tree, not just among siblings",
+      "duplicate node id 'a'; ids must be unique across the WHOLE tree, not just among siblings",
+    ]);
+  });
+
   test("duplicate ids use last-wins lineage and any-occurrence producer status", () => {
     const producerFirst = withSteps([
       step("dup"),

@@ -66,6 +66,20 @@ type _FindsDuplicate = Assert<
     : false
 >;
 
+/** Matches the engine: the first second occurrence is the first diagnostic. */
+type _DuplicateOrderUsesSecondOccurrence = Assert<
+  DuplicateId<
+    [
+      { type: "step"; id: "a" },
+      { type: "step"; id: "b" },
+      { type: "step"; id: "b" },
+      { type: "step"; id: "a" },
+    ]
+  > extends "b"
+    ? true
+    : false
+>;
+
 type _NoDuplicate = Assert<
   [
     DuplicateId<[{ type: "step"; id: "a" }, { type: "step"; id: "b" }]>,
