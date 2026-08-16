@@ -159,11 +159,11 @@ out-of-tree DB, or `--stealth`. The disable surface:
   `--stealth` = all three plus `no-git-ops: true`. `[upstream]`
 - `bd onboard` **prints** the agent-instructions snippet instead of writing it,
   which is what makes declarative placement possible. `[upstream]`
-- `bd setup` at the pinned **v1.2.2** stable line includes a Kiro target. The
-  earlier v1.1.2 stable release had no Kiro target; by v1.2.1 the target list
-  was much longer (cursor, claude, copilot, gemini, aider, factory, codex, mux,
-  opencode, junie, kiro, windsurf, cody, kilocode). Version-scope any claim
-  about setup targets. `[upstream]`
+- `bd setup` at the pinned **v1.2.2** stable line has no Kiro target. The v1.2.1
+  prerelease briefly included Kiro, but v1.2.2 is a recovery release based on
+  the tested 1.1 line and omits that 1.2.x-only recipe. The exact packaged
+  binary's `bd setup --list` output is the contract; version-scope any claim
+  about setup targets. `[measured package @1.2.2]`
 - Git hooks, when wanted at all, are thin shims calling `bd hooks run <name>`; a
   declarative hook manager can invoke that directly and skip bd's installer.
   `[upstream]`
