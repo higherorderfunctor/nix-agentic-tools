@@ -92,7 +92,7 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
 put Dolt on `PATH`. This repository extends that same `wrapProgram` invocation
 with `BD_DISABLE_METRICS=1`, `BD_DISABLE_EVENT_FLUSH=1`, and
 `DOLT_DISABLE_EVENT_FLUSH=1`; it does not wrap the result again. The install
-check rejects a missing or second hidden wrapper, runs `bd version` and
+check rejects a missing or second hidden wrapper, runs `bd --version` and
 `bd metrics` under `env -i`, and exercises the Dolt command surface.
 `[measured package @1.2.2]`
 

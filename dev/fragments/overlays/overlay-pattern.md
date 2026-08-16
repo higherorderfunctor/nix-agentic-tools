@@ -6,67 +6,68 @@
 > byte-identical and `useFhsSandbox = false` is an explicit module-level
 > selection of `passthru.unwrapped`). Prior: 2026-08-15 (commit pending — adds
 > Beads as the eighth Go package and as a stable-release, sidecar-pinned thin
-> override in the `devTools` group). Prior: 2026-08-16 (commit pending — nixpkgs
-> 9ddfd8a consolidated Kiro's three per-command FHS environments into one shared
-> environment behind thin command wrappers. Re-pointing the unwrapped base and
-> recomposing through upstream's `.override` remains the correct seam and
-> inherited the topology change without implementation edits). Prior: 2026-08-10
-> (commit pending — adds the third override-seam failure mode, measured on
-> `kiro-cli`: the attribute you are overriding stops being a derivation at all.
-> nixpkgs f13ff45a split it into `kiro-cli-unwrapped` plus a `symlinkJoin` of
-> `buildFHSEnv` sandboxes, and `overrideAttrs` on that join silently dropped our
-> `src`, `version` AND `postFixup` while the build stayed green. Unlike the
-> `extendMkDerivation` cases below, NO seam on the public attribute can fix it —
-> the base has to be re-pointed at the derivation that still owns a `src`. Also
-> retires this section's claim that a thin `overrideAttrs` picks upstream
-> changes up "automatically"). Prior: 2026-08-05 (commit pending — the Go
-> toolchain floor is now DERIVED from the pinned source's go.mod rather than
-> hand-written, is carried by ALL SEVEN Go packages rather than two, and is
-> reached through the new `vu.mkGoBuilder`; adds `checks/go-floor-drift.nix` as
-> the loud half and records that the toolchain is a BUILDER argument only
-> `.override` can reach. Measured: `gh` had ALREADY silently required Go >=
-> 1.26.5, so it was the next package to break after `glab`). Prior: 2026-08-03
-> (commit pending — records the property used to associate versioned derivations
-> with a flake-input update owner or a reasoned local-source exemption). Prior:
-> 2026-08-03 (commit pending — makes `pkgs.ai` the single binary-package
-> namespace, retains `generic` as a temporary nested bucket, and moves the two
-> forge CLIs into `ai.devTools`). Prior: 2026-08-03 (commit pending — makes
-> overlay-owned local implementation sources a boundary invariant and relocates
-> the auto-memory helper and distiller sources accordingly). Prior: 2026-08-02
-> (commit pending — adds Semble's direct external-flake derivation pattern and
-> identity-preserving MCP role). Prior: 2026-08-01 (commit pending — records
-> that `glab`'s `extraExtract` also regenerates its `passthru.extracted`
-> sidecar, via the new shared `vu.mkExtractRegen`, and that glab is the one
-> extracted package where the fixer-then-extract ORDER is forced. It had NO
-> regeneration at all until now, which nothing caught until its first version
-> bump reddened `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28
-> — the commit adding THAT line lands `glab`: the first Go package whose SRC
-> hash also lives in the sidecar (`vu.mkGoSrcVendorFix`), the first
-> GitLab-hosted version check (`vu.glLatestVersionCmd`), and the collapse of the
-> three sidecar hash fixers onto one `vu.mkHashFix` body driven by
-> `hashFixTargets`. It also corrects the thin-override list, which now has to
-> distinguish the SIDECAR contract (where a hash comes from) from the OVERRIDE
-> SEAM (`.override` vs `overrideAttrs`) — `glab` shares bruno's former but not
-> its latter. Prior: 2026-07-27 retired the "bruno is the ONLY worked example"
-> claim (`overlays/git-tools/git-absorb.nix` is a second one and PREDATES it),
-> replaces the heuristic with the INPUT-vs-OUTPUT rule read out of the pinned
-> nixpkgs' `lib.extendMkDerivation`, and corrects "the failure is SILENT …
-> shape-independent" — silent for `buildNpmPackage`, LOUD for
-> `buildRustPackage`. Prior: 2026-07-25 wired `passthru.fixVendorHash` /
-> `passthru.fixNpmDepsHash` to a real caller (`fix_sidecar_hashes`) for the
-> first time and corrected the `overlays/lib.nix` comment that claimed a re-run
-> which did not exist; see the Go-vendorHash section below. Before that: two
-> changes, both wanted. `bc23e34b` (LANDED) records that the CI warm step now
-> forces `drvPath` and therefore DOES cover sidecar-versioned packages; the
-> commit adding this line (pending) adds the sidecar-vs-inline decision rule and
-> the `.override`-vs-`overrideAttrs` rule for `lib.extendMkDerivation` builders.
-> Both sit on top of the Go sidecar-`vendorHash` mechanism, the
-> derived-Go-toolchain seam, and the platform-gated-attribute rule, on top of
-> the multi-major-attribute shape, the namespaced-only rule and the
-> store-path-parity expectation for thin nixpkgs overrides. If you add, remove
-> or rename an overlay namespace, move a package between namespaces, or change
-> how a `generic` package relates to its nixpkgs original, and this section
-> isn't updated in the same commit, stop and fix it.
+> override in the `devTools` group). Prior: 2026-08-16 (commit pending —
+> documents Beads' distinct builder override plus anchored wrapper-extension
+> seam). Prior: 2026-08-16 (commit pending — nixpkgs 9ddfd8a consolidated Kiro's
+> three per-command FHS environments into one shared environment behind thin
+> command wrappers. Re-pointing the unwrapped base and recomposing through
+> upstream's `.override` remains the correct seam and inherited the topology
+> change without implementation edits). Prior: 2026-08-10 (commit pending — adds
+> the third override-seam failure mode, measured on `kiro-cli`: the attribute
+> you are overriding stops being a derivation at all. nixpkgs f13ff45a split it
+> into `kiro-cli-unwrapped` plus a `symlinkJoin` of `buildFHSEnv` sandboxes, and
+> `overrideAttrs` on that join silently dropped our `src`, `version` AND
+> `postFixup` while the build stayed green. Unlike the `extendMkDerivation`
+> cases below, NO seam on the public attribute can fix it — the base has to be
+> re-pointed at the derivation that still owns a `src`. Also retires this
+> section's claim that a thin `overrideAttrs` picks upstream changes up
+> "automatically"). Prior: 2026-08-05 (commit pending — the Go toolchain floor
+> is now DERIVED from the pinned source's go.mod rather than hand-written, is
+> carried by ALL SEVEN Go packages rather than two, and is reached through the
+> new `vu.mkGoBuilder`; adds `checks/go-floor-drift.nix` as the loud half and
+> records that the toolchain is a BUILDER argument only `.override` can reach.
+> Measured: `gh` had ALREADY silently required Go >= 1.26.5, so it was the next
+> package to break after `glab`). Prior: 2026-08-03 (commit pending — records
+> the property used to associate versioned derivations with a flake-input update
+> owner or a reasoned local-source exemption). Prior: 2026-08-03 (commit pending
+> — makes `pkgs.ai` the single binary-package namespace, retains `generic` as a
+> temporary nested bucket, and moves the two forge CLIs into `ai.devTools`).
+> Prior: 2026-08-03 (commit pending — makes overlay-owned local implementation
+> sources a boundary invariant and relocates the auto-memory helper and
+> distiller sources accordingly). Prior: 2026-08-02 (commit pending — adds
+> Semble's direct external-flake derivation pattern and identity-preserving MCP
+> role). Prior: 2026-08-01 (commit pending — records that `glab`'s
+> `extraExtract` also regenerates its `passthru.extracted` sidecar, via the new
+> shared `vu.mkExtractRegen`, and that glab is the one extracted package where
+> the fixer-then-extract ORDER is forced. It had NO regeneration at all until
+> now, which nothing caught until its first version bump reddened
+> `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28 — the commit
+> adding THAT line lands `glab`: the first Go package whose SRC hash also lives
+> in the sidecar (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
+> (`vu.glLatestVersionCmd`), and the collapse of the three sidecar hash fixers
+> onto one `vu.mkHashFix` body driven by `hashFixTargets`. It also corrects the
+> thin-override list, which now has to distinguish the SIDECAR contract (where a
+> hash comes from) from the OVERRIDE SEAM (`.override` vs `overrideAttrs`) —
+> `glab` shares bruno's former but not its latter. Prior: 2026-07-27 retired the
+> "bruno is the ONLY worked example" claim (`overlays/git-tools/git-absorb.nix`
+> is a second one and PREDATES it), replaces the heuristic with the
+> INPUT-vs-OUTPUT rule read out of the pinned nixpkgs' `lib.extendMkDerivation`,
+> and corrects "the failure is SILENT … shape-independent" — silent for
+> `buildNpmPackage`, LOUD for `buildRustPackage`. Prior: 2026-07-25 wired
+> `passthru.fixVendorHash` / `passthru.fixNpmDepsHash` to a real caller
+> (`fix_sidecar_hashes`) for the first time and corrected the `overlays/lib.nix`
+> comment that claimed a re-run which did not exist; see the Go-vendorHash
+> section below. Before that: two changes, both wanted. `bc23e34b` (LANDED)
+> records that the CI warm step now forces `drvPath` and therefore DOES cover
+> sidecar-versioned packages; the commit adding this line (pending) adds the
+> sidecar-vs-inline decision rule and the `.override`-vs-`overrideAttrs` rule
+> for `lib.extendMkDerivation` builders. Both sit on top of the Go
+> sidecar-`vendorHash` mechanism, the derived-Go-toolchain seam, and the
+> platform-gated-attribute rule, on top of the multi-major-attribute shape, the
+> namespaced-only rule and the store-path-parity expectation for thin nixpkgs
+> overrides. If you add, remove or rename an overlay namespace, move a package
+> between namespaces, or change how a `generic` package relates to its nixpkgs
+> original, and this section isn't updated in the same commit, stop and fix it.
 
 `overlays/default.nix` aggregates every binary package under the single
 `pkgs.ai` namespace. Flat AI CLIs live directly below it; supporting categories

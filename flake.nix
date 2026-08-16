@@ -138,8 +138,8 @@
     # per-package update config (config/update-matrix.nix was dissolved into
     # this). Explicit 3-module import list (the barrel walker is deferred Track
     # B): lib/update.nix declares the option, config/update-targets.nix carries
-    # the 20 non-effect-mcp rows, and the co-located effect-mcp.update.nix
-    # contributes the last one. Consumed by config/generate-update-ninja.nix
+    # the non-effect-mcp rows, and the co-located effect-mcp.update.nix
+    # contributes its row. Consumed by config/generate-update-ninja.nix
     # (the ninja DAG) and update-pkg.sh (via
     # `nix eval --raw .#updateTargets.<name>.file`), and asserted
     # byte-identical to resolve_overlay_file by checks.update-targets-parity.

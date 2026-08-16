@@ -1,10 +1,10 @@
 # Beads: overlay package and `ai.*` option surface
 
-> **Status: DESIGN** — phase 1 of 3 (this document set). Created 2026-08-14;
-> updated 2026-08-16 after the normalized program factory landed in #1024.
-> Companion references, synthesized from prior research sessions and re-verified
-> where marked: `docs/beads/bd-reference.md` (the tool),
-> `docs/beads/dolt-git-remotes.md` (sync/remote mechanics),
+> **Status: IN PROGRESS** — phase 2 is implemented and held in #1011; phase 3
+> remains gated. Created 2026-08-14; updated 2026-08-16 after the normalized
+> program factory landed in #1024. Companion references, synthesized from prior
+> research sessions and re-verified where marked: `docs/beads/bd-reference.md`
+> (the tool), `docs/beads/dolt-git-remotes.md` (sync/remote mechanics),
 > `docs/beads/ecosystem.md` (integrations and prior art). Facts in this plan
 > that duplicate a companion are deliberate summaries — the companion is
 > authoritative; update both in the same commit.
@@ -15,13 +15,14 @@ Adopt beads (`bd`, the Dolt-backed graph issue tracker for coding agents) as a
 first-class citizen of this repo:
 
 1. **Overlay package** — `pkgs.ai.devTools.beads` on the standard update
-   pipeline (phase 2, unblocked).
-2. **Option surface** — HM + devenv modules with config parity, wiring bd's
-   integration surfaces through the `ai.*` factory to the supported runtimes
-   with opinionated defaults (phase 3, gated).
+   pipeline (phase 2, implemented and held in #1011).
+2. **Option surface** — a future `ai.programs.beads` convenience tree with
+   HM/devenv parity for normalized declarations, plus a devenv-only operational
+   lifecycle for server, initialization, credentials, and publication (phase 3,
+   gated).
 3. **Git-ref-backed sync** — support a Dolt remote riding an ordinary git remote
-   (`refs/dolt/data`) with an explicit checkpoint/push workflow, usable from a
-   home-manager-only machine (phase 3, partially gated).
+   (`refs/dolt/data`) through the devenv operational lifecycle, with an explicit
+   checkpoint/push workflow (phase 3, partially gated).
 
 **Out of scope here:** the protocol design of any specific consumer (for
 example, using bd as the task store behind a particular planning workflow —
@@ -37,8 +38,9 @@ there is a first-party Claude plugin. **All of that is disabled here.** A tool
 self-configuring the environment is the anti-pattern this repo exists to
 eliminate: beads is consumed as a pure data engine, and every integration
 surface it would self-install (binary, MCP server, context snippet, skill,
-session-start hooks, env, permissions) is declared through the `ai.*` HM/devenv
-factory instead. Concretely:
+session-start hooks, env, permissions) is declared through normalized `ai.*`
+surfaces where supported; the stateful lifecycle remains a devenv concern.
+Concretely:
 
 - Init only ever as `bd init --quiet --skip-agents --skip-hooks` (or
   `--stealth`), with `no-git-ops: true` — and the `no-git-ops` config is
@@ -47,28 +49,28 @@ factory instead. Concretely:
   with cwd = repo root, so the config must live where `bd` reads it _without_
   the env var (project-local `.beads/config.yaml` or the user-global config).
   Details in `docs/beads/bd-reference.md`.
-- Telemetry off is a hard requirement (`BD_DISABLE_METRICS=1`,
-  `BD_DISABLE_EVENT_FLUSH=1`).
+- Telemetry off is a hard requirement (`BD_DISABLE_EVENT_FLUSH=1`,
+  `BD_DISABLE_METRICS=1`, `DOLT_DISABLE_EVENT_FLUSH=1`).
 - Hooks and wrappers that cannot resolve their workspace must **emit a signal**,
   never silently no-op — an env-delivery failure must not present as "beads just
   never primes."
 
 ## Phases and gating
 
-| Phase | Deliverable                                        | Gated by                                                |
-| ----- | -------------------------------------------------- | ------------------------------------------------------- |
-| 1     | This document set                                  | —                                                       |
-| 2     | `overlays/dev-tools/beads.nix` + registrations     | OD-P1/OD-P2/OD-P4 veto window (defaults proposed below) |
-| 2b    | `overlays/mcp-servers/beads-mcp.nix`               | OD-P3 (timing); technically unblocked                   |
-| 3     | `packages/beads/` HM + devenv + lib option surface | OD-M1..M5, probes; namespace gate satisfied by #1024    |
-| 3b    | Git-ref Dolt remote options + checkpoint workflow  | OD-M4; encrypted variants additionally OD-D1            |
+| Phase | Deliverable                                                  | State / gate                                         |
+| ----- | ------------------------------------------------------------ | ---------------------------------------------------- |
+| 1     | This document set                                            | Complete                                             |
+| 2     | `overlays/dev-tools/beads.nix` + registrations               | Implemented and held in #1011                        |
+| 2b    | `overlays/mcp-servers/beads-mcp.nix`                         | OD-P3 (timing); technically unblocked                |
+| 3     | normalized convenience + devenv-only operational module      | OD-M1..M5, probes; namespace gate satisfied by #1024 |
+| 3b    | Git-ref Dolt remote options + qualified checkpoint/push flow | OD-M4; encrypted variants additionally OD-D1         |
 
 Phase 3's namespace question is settled: #1024 shipped `ai.programs.<pkg>` /
 `ai.<runtime>.programs.<pkg>` with generated per-leaf runtime overrides. Beads'
 options should land in that shape. The remaining phase-3 gates are the operator
 decisions and probes named above, not an interface migration.
 
-## Phase 2 — the overlay (unblocked)
+## Phase 2 — the overlay (implemented and held)
 
 Verified 2026-08-14: this repo's pinned nixpkgs already carries `beads` 1.0.3
 (`pkgs/by-name/be/beads/package.nix` — buildGoModule, ICU, MIT,
@@ -88,22 +90,22 @@ Verified 2026-08-14: this repo's pinned nixpkgs already carries `beads` 1.0.3
 - `overlays/dev-tools/beads-sources.json` — sidecar written by
   `vu.ghArchiveUpdateScript { repo = "gastownhall/beads"; sourcesFile = …; extraExtract = fixVendorHash + fixGoFloor; }`
   (hash fixer first). Release-tracking mode, which also solves the version-pick:
-  the sweep follows **stable releases** (v1.1.2 at the verify date) and never
-  the v1.2.x prereleases that `llm-agents.nix` currently pins. Bootstrap: the
-  overlay reads the sidecar at eval time with no fallback for `version`/`src`,
-  so commit a minimal seed sidecar first (placeholder hashes are fine —
-  `vendorHash` falls back through the fixer), run the update script once to
-  prefetch the real hashes and let `fixVendorHash`/`fixGoFloor` restore the
-  derived keys, then commit the regenerated file. Hashes come from tooling,
+  the sweep follows **stable releases** and currently pins v1.2.2. Bootstrap:
+  the overlay reads the sidecar at eval time with no fallback for
+  `version`/`src`, so commit a minimal seed sidecar first (placeholder hashes
+  are fine — `vendorHash` falls back through the fixer), run the update script
+  once to prefetch the real hashes and let `fixVendorHash`/`fixGoFloor` restore
+  the derived keys, then commit the regenerated file. Hashes come from tooling,
   never hand-pasted.
-- The dolt PATH wrap is **inherited from the nixpkgs recipe** — verify at the
-  pinned rev during implementation and do not add a second `wrapProgram`
-  (double-wrapping is the trap; check with
+- The Dolt PATH wrap is **inherited from the nixpkgs recipe** and is extended at
+  one anchored seam with `lib.replaceString`; evaluation fails if the upstream
+  `postInstall` shape moves. Do not add a second `wrapProgram` (double-wrapping
+  is the trap; check with
   `ls -a $(nix build .#beads --no-link --print-out-paths)/bin` for a single
-  `.bd-wrapped`). If OD-P2's telemetry bake is accepted, the mechanism is to
-  **replace `postInstall` wholesale** with one `wrapProgram` call carrying both
-  the dolt `--prefix PATH` and the `--set-default` flags — extending the
-  inherited wrap in place, never appending a second one.
+  `.bd-wrapped`). The extended invocation uses `--set` for
+  `BD_DISABLE_EVENT_FLUSH`, `BD_DISABLE_METRICS`, and
+  `DOLT_DISABLE_EVENT_FLUSH`, preserving the inherited Dolt PATH prefix and all
+  other upstream installation logic.
 - Registrations, all alphabetically placed within their files:
   `config/cache-hit-parity-targets.nix`
   (`consumerPath = ["ai" "devTools" "beads"]`), `config/update-targets.nix`
@@ -143,51 +145,54 @@ re-verified at the pinned version when the module wires the env block (PB12).
 
 ## Phase 3 — the option surface (gated)
 
-`packages/beads/` in the standard facet-barrel shape: `lib/` (manual wiring
-functions), `modules/homeManager/`, `modules/devenv/` — the config-parity rule
-applies (every surface expressible in all three methods or recorded as an
-explicit exclusion). Surface bindings, verified against the current tree
-2026-08-14 (line numbers will drift; re-verify at build time):
+The future convenience layer is `ai.programs.beads`, with generated runtime
+leaves and HM/devenv parity for its normalized declarations. Stateful operation
+belongs only in `packages/beads/modules/devenv/`: server lifecycle,
+initialization, credentials, mutation serialization, and publication are not an
+HM surface. The target bindings below follow the coordinated
+normalized-interface boundary; rows explicitly identify present gaps:
 
-| beads surface        | factory mechanism today                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `bd` on PATH         | raw `home.packages` — no `ai.*` option exists (known gap). devenv delivers **config only** where a machine-wide bd exists; a devenv-only consumer must source bd from this same pinned flake, never a second pin (see the one-flake invariant below)                                                                                                                                                                                                                                       |
-| beads-mcp            | `ai.mcpServers.beads` (`lib/ai/sharedOptions.nix:65`) with the server's own `env` block (`lib/ai/mcpServer/commonSchema.nix:169`); fans out to all runtimes including Codex                                                                                                                                                                                                                                                                                                                |
-| session-start prime  | portable `ai.hooks` (`lib/ai/sharedOptions.nix:221`, Claude+Codex) or `ai.claude.hooks.SessionStart` (`packages/claude-code/lib/mkClaude.nix:577`); Kiro via `ai.kiro.hooks` **UserPromptSubmit** (`packages/kiro-cli/lib/mkKiro.nix:1457`) — Kiro SessionStart cannot inject context; Copilot and Kimchi have no factory hook surface (explicit exclusions)                                                                                                                               |
-| timer-gate check     | same hook surfaces as prime (`bd gate check`)                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| onboard snippet      | `ai.rules` keyed entry (`lib/ai/sharedOptions.nix:92`); the former list-shaped `ai.instructions` surface is retired                                                                                                                                                                                                                                                                                                                                                                        |
-| skill                | `ai.skills` (`lib/ai/sharedOptions.nix:328`) contributed via `lib/ai/mkSkillPackageModule.nix`                                                                                                                                                                                                                                                                                                                                                                                             |
-| env / telemetry-off  | `ai.environmentVariables` (`lib/ai/sharedOptions.nix:254` — Codex, Copilot, Kimchi, Kiro) **plus** `ai.claude.nativeSettings.env` (Claude is excluded from the shared pool)                                                                                                                                                                                                                                                                                                                |
-| permissions          | `ai.claude.nativeSettings.permissions.allow = ["Bash(bd:*)"]` (freeform) + `ai.kiro.permissions` (typed, `packages/kiro-cli/lib/mkKiro.nix:1355`, HM-only); Codex, Copilot, and Kimchi have no factory permission surface today (explicit exclusions — revisit under the rework's per-pool gating)                                                                                                                                                                                         |
-| project config files | devenv `files.*` for `.beads/config.yaml` + `.beads/config.local.yaml`; HM `home.file`/`xdg` for `~/.config/bd/config.yaml`                                                                                                                                                                                                                                                                                                                                                                |
-| Dolt credentials     | 0600 INI at `~/.config/beads/credentials` from the repo's existing credential patterns (`lib/mcp.nix`); prefer the `BEADS_DOLT_PASSWORD` env path; never in the store. **Never put secrets in bd's database-level config** (`bd config set`) — DB config replicates verbatim to the remote on every `bd dolt push`                                                                                                                                                                         |
-| shared-server unit   | **no reusable surface** — `services.mcp-servers` is MCP-specific and HM-only; a Dolt `sql-server` needs its own HM systemd-user unit plus a devenv `processes` counterpart (asymmetric primitives; parity note required). Unit requirements: **loopback-only bind by default** (mirror `lib/ai/mcpServer/serviceSchema.nix`'s `127.0.0.1` posture), pin the server's auth defaults explicitly, and take `dolt` from the same pinned nixpkgs the wrap uses — one dolt provenance everywhere |
+| beads surface        | target factory mechanism                                                                                                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bd` on PATH         | ordinary HM/devenv package primitives outside the normalized program tree; every consumer uses this flake's `pkgs.ai.devTools.beads`, never a second pin                                     |
+| beads-mcp            | normalized MCP/settings pools, lowered by each runtime transformer to its supported native representation; unsupported runtimes are explicit exclusions                                      |
+| session-start prime  | normalized typed hooks, lowered by each runtime transformer; a missing native event is an explicit exclusion rather than a Beads-specific workaround                                         |
+| timer-gate check     | same normalized hook surface as prime (`bd gate check`)                                                                                                                                      |
+| onboard snippet      | normalized instructions pool                                                                                                                                                                 |
+| skill                | normalized skills pool                                                                                                                                                                       |
+| env / telemetry-off  | normalized settings/environment pools; fill normalization gaps instead of adding Beads-specific native settings                                                                              |
+| permissions          | normalized typed permissions pool with explicit per-runtime exclusions                                                                                                                       |
+| project config files | existing devenv file primitives; #983's future `ai.<runtime>.files` native escape hatch is not an MVP dependency                                                                             |
+| Dolt credentials     | devenv-managed runtime secret material, never the Nix store; prefer `BEADS_DOLT_PASSWORD`. Never put secrets in database-level config (`bd config set`), because it replicates to the remote |
+| shared-server unit   | devenv process lifecycle only. Bind loopback-only by default, pin auth explicitly, and take `dolt` from the same pinned nixpkgs as the wrapper — one Dolt provenance everywhere              |
 
 Cross-cutting invariants the modules must encode:
 
+- **Normalized boundary**: the future convenience layer is `ai.programs.beads`,
+  never `ai.beads`. It composes normalized hooks, skills, instructions,
+  MCP/settings, and typed pools; runtime transformers perform supported native
+  lowering. `nativeSettings` remains the native lowering and escape layer, not a
+  merged normalized/native attribute set. Prefer filling a normalization gap
+  over adding a Beads-specific native workaround.
 - **`BEADS_DIR` is a runtime value.** A clone-scoped path (derived from
-  `git rev-parse --git-common-dir`) cannot be baked at Nix eval, and HM-global
-  Claude settings are one file for all projects — a static global value would
-  force one DB across every repo. Resolution happens at invocation: wrapper,
-  devenv `enterShell`, or inside the hook script itself.
-- **Ownership split**: HM owns the user-global config
-  (`~/.config/bd/config.yaml`), the shared-server unit, credentials, and
-  machine-wide env; devenv owns project identity — prefix, `.beads/` local
-  config, and assertions (`bd where`, `bd config show`
-  intended-versus-effective). Team-shared `.beads/config.yaml` is touched by
-  neither when a repo manages it by hand.
+  `git rev-parse --git-common-dir`) cannot be baked at Nix eval. Resolution
+  happens in the devenv operational lifecycle or inside its generated commands.
+- **Operational ownership**: devenv owns server lifecycle, project identity,
+  prefix, local config, credentials, mutation serialization, publication, and
+  assertions (`bd where`, `bd config show` intended-versus-effective). HM/devenv
+  parity applies only to the future normalized `ai.programs.beads` convenience
+  declarations; it does not make the operational lifecycle an HM surface.
+  Team-shared `.beads/config.yaml` is untouched when a repository manages it by
+  hand.
 - **`prefix` is a required option with no default** in shared-server mode — two
   projects sharing a prefix share a DB, and the identity check fails closed but
   fails.
 - **One flake owns the bd version.** The version-skew guard (newer-binary
   refusal, migration ceremony) means per-project shells must never pin a second
-  `bd`; devenv modules deliver config, not binaries.
-- **HM-only consumers are first-class.** A machine managed only by home-manager
-  (no devenv in the consuming repo) must be able to express the full setup —
-  package, config, env, hooks, permissions, server unit, and remote/push
-  workflow — from HM options alone; devenv adds per-project identity and
-  assertions on top, and anything devenv-only beyond that is an explicit
-  exclusion with a recorded reason.
+  `bd`.
+- **No HM operational fallback.** A Home Manager consumer may use the future
+  normalized convenience declarations, but the shared server, initialization,
+  credentials, and checkpoint/push/recovery workflow require the devenv module.
 - **Until phase 3b lands a remote, every DB is a single local copy** of what the
   reference calls a design-doc corpus, and a true backup is only `bd backup` /
   `bd dolt push`. Adopting phase 3 early means accepting that window; the
@@ -251,13 +256,12 @@ ruling; owner **measure** = a probe or experiment settles it.
 - **OD-P1** (operator veto): overlay defaults as specified above — dev-tools
   group, thin nixpkgs override, stable-release tracking. Proceeds as designed
   absent an objection.
-- **OD-P2** (operator veto): bake telemetry-off into the overlay wrapper —
-  `--set-default BD_DISABLE_METRICS 1 --set-default BD_DISABLE_EVENT_FLUSH 1`
-  (makeWrapper takes VAR VALUE pairs, one pair per flag; compare `gh.nix`'s
-  `--set-default GH_TELEMETRY false`) — so the guarantee exists below the module
-  layer; delivered by replacing the inherited `postInstall` with one extended
-  `wrapProgram` call (see the phase 2 dolt-wrap bullet); module env still
-  declares it for the MCP/hook consumers. Default: yes.
+- **OD-P2 — implemented:** the overlay extends the inherited single wrapper at
+  an anchored `wrapProgram` token and uses `--set` for
+  `BD_DISABLE_EVENT_FLUSH=1`, `BD_DISABLE_METRICS=1`, and
+  `DOLT_DISABLE_EVENT_FLUSH=1`. Evaluation fails if the upstream seam moves; the
+  implementation preserves the rest of `postInstall` and never adds a second
+  wrapper.
 - **OD-P3** (operator): phase 2b timing — package beads-mcp alongside the
   overlay, or defer to phase 3 when its env block gets designed. Default:
   alongside (it is cheap and unblocks MCP experiments).
@@ -293,10 +297,9 @@ ruling; owner **measure** = a probe or experiment settles it.
   `bd vc commit`. Options: on issue-close, on session end (hook), gated on
   grooming operations, periodic. Blocks the server-mode option surface and phase
   3b's history claims. Input: PB8.
-- **OD-M5** (operator): host platform assumption for the server unit —
-  systemd-user only, or launchd parity too. Decides the HM unit form. Whatever
-  the platform, the unit binds loopback-only by default and pins auth (see the
-  shared-server row).
+- **OD-M5** (operator): host-platform scope for the devenv server process. The
+  process binds loopback-only by default and pins auth (see the shared-server
+  row); this decision does not create an HM lifecycle surface.
 - **OD-M6 — resolved by #1024:** the option namespace is `ai.programs.beads`,
   with generated per-runtime leaves under `ai.<runtime>.programs.beads`. Do not
   introduce a standalone `beads.*` namespace.
@@ -315,11 +318,10 @@ ruling; owner **measure** = a probe or experiment settles it.
 - **OD-D4** (measure): structure enforcement for formula-stamped subgraphs
   (beads _formulas_ stamp templated subgraphs of issues when "poured"; whether
   the stamped structure is re-validated afterwards is unverified). Input: PB6.
-- **OD-D5** (operator): Kiro integration depth. At the pinned stable v1.1.2,
-  `bd setup` has no kiro target; upstream added `bd setup kiro` by v1.2.1 — but
-  the pure-data-engine discipline hand-rolls Kiro wiring (steering + hooks)
-  regardless, by repo policy rather than for lack of an upstream target. Decide
-  how far past the MVP bar to go.
+- **OD-D5** (operator): Kiro integration depth. The pinned stable v1.2.2 exposes
+  upstream Kiro setup, but the pure-data-engine discipline still declares Kiro
+  wiring through normalized repository surfaces. Decide how far past the MVP bar
+  to go.
 - **OD-D6** (operator): teardown and data lifecycle. Disabling the modules
   leaves residue nothing currently cleans up: the shared-server data dir
   (`~/.beads/shared-server/`, every project's DB), project `.beads/` and
@@ -393,15 +395,16 @@ session against the phase 2 package. Feeds noted.
   `bd` (`.bd-wrapped` present, no double wrap — the OD-P2 bake extends the one
   wrap in place, so the count stays one); `bd --version` matches the sidecar. If
   OD-P2 landed, also assert the baked env: run the wrapped `bd` under `env -i`
-  and confirm both telemetry variables are set (the wrap-count check alone
-  cannot catch a mis-spelled `--set-default`).
+  and confirm all three telemetry/no-flush variables are set (the wrap-count
+  check alone cannot catch a misspelled `--set`).
 - `nix flake check` — structural gates (`update-targets-parity`,
   `cache-hit-parity`, `go-floor-drift` via `passthru.goFloor`) all discover the
   new package without manual test edits.
 - Update-pipeline dry run: the sweep's update script rewrites the sidecar and
   restores `vendorHash`/`goFloor` (a no-op run costs ~1s).
-- Module eval: HM and devenv module fixtures in `checks/module-eval.nix` once
-  phase 3 lands; parity per `checks/options-doc.nix`.
+- Module eval: HM and devenv fixtures for the future normalized convenience
+  tree, plus devenv-only lifecycle fixtures, once phase 3 lands; convenience
+  parity per `checks/options-doc.nix`.
 - Darwin builds are a CI observation (`build (aarch64-darwin)`), never a local
   claim.
 
