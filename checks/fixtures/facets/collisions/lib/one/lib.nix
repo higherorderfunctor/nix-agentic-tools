@@ -1,3 +1,3 @@
 {
-  shared.value = "one";
+  shared.__facetLeaf = "one";
 }

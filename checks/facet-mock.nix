@@ -3,11 +3,12 @@
   pkgs,
   self,
 }: let
-  inherit (lib) all attrNames concatMapStringsSep escapeShellArgs hasPrefix sort;
+  inherit (lib) all attrNames concatMap concatMapStringsSep escapeShellArgs filter hasPrefix sort;
   system = pkgs.stdenv.hostPlatform.system;
   fixtureRoot = ./fixtures/facets;
   compatibleRoot = fixtureRoot + "/compatible";
   collisionRoot = fixtureRoot + "/collisions";
+  enforceLocalChecks = import (fixtureRoot + "/root/enforce-local-checks.nix") {inherit lib;};
   registryModule = fixtureRoot + "/root/registry.nix";
   loader = import ../lib/facets.nix {inherit lib;};
 
@@ -19,11 +20,37 @@
     devenv = {devenvOnly = "devenv";};
     homeManager = {hmOnly = "home-manager";};
   };
-  world = loader.compose {
-    facetsDir = compatibleRoot;
-    inherit pkgs specialArgs system;
-    registryModules = [registryModule];
-  };
+  world = enforceLocalChecks (
+    loader.compose {
+      facetsDir = compatibleRoot;
+      inherit pkgs specialArgs system;
+      registryModules = [registryModule];
+    }
+  );
+
+  compatibleEntries = builtins.readDir compatibleRoot;
+  expectedOwnerNames = sort builtins.lessThan (filter (name: compatibleEntries.${name} == "directory") (attrNames compatibleEntries));
+  expectedContributionPaths = ownerName: let
+    ownerRoot = compatibleRoot + "/${ownerName}";
+    entries = builtins.readDir ownerRoot;
+    directNames = filter (name: builtins.elem name ["checks.nix" "lib.nix" "overlay.nix" "registry.nix"]) (attrNames entries);
+    nestedPaths = container:
+      if entries ? ${container}
+      then map (name: ownerRoot + "/${container}/${name}") (attrNames (builtins.readDir (ownerRoot + "/${container}")))
+      else [];
+  in
+    map (name: ownerRoot + "/${name}") directNames
+    ++ nestedPaths "modules"
+    ++ nestedPaths "packages";
+  actualContributionPaths = contributions:
+    concatMap (
+      name:
+        if name == "modules"
+        then builtins.attrValues contributions.${name}
+        else if name == "packages"
+        then contributions.${name}
+        else [contributions.${name}]
+    ) (attrNames contributions);
 
   rootPolicy = import (fixtureRoot + "/root/overlay-policy.nix");
   composedOverlay = lib.composeExtensions world.overlay rootPolicy;
@@ -34,11 +61,12 @@
   );
 
   ownerNames = map (owner: owner.name) world.owners;
-  localCheckValues = map (check: check.value) (builtins.attrValues world.localChecks);
   publicHomeManagerImports = self.homeManagerModules.default.imports or [];
   publicDevenvImports = self.devenvModules.nix-agentic-tools.imports or [];
   outsideFixture = module: !hasPrefix (toString fixtureRoot) (toString module);
   publicOverlayResult = self.overlays.default pkgs pkgs;
+  publicAiLib = self.lib.ai or {};
+  mockOverlayNames = filter (name: name != "seed") (attrNames overlayResult);
 
   assertions = {
     backend-isolation =
@@ -61,13 +89,17 @@
       && world.packages.alpha-app.decorated == "hello-from-bravo:alpha";
     deterministic-discovery =
       ownerNames
-      == sort builtins.lessThan ownerNames
-      && builtins.length ownerNames == 3;
+      == expectedOwnerNames
+      && all (
+        owner:
+          toString owner.path
+          == toString (compatibleRoot + "/${owner.name}")
+          && sort builtins.lessThan (map toString (actualContributionPaths owner.contributions))
+          == sort builtins.lessThan (map toString (expectedContributionPaths owner.name))
+      )
+      world.owners;
     facet-lib-composition = world.facetLib.bravo.greeting == "hello-from-bravo";
-    facet-local-checks =
-      builtins.length localCheckValues
-      == 5
-      && all (value: value == true) localCheckValues;
+    facet-local-checks = builtins.seq world.localChecks true;
     overlay-final-prev-and-root-policy =
       overlayResult.alpha-from-final
       == "alpha:alpha:bravo"
@@ -76,18 +108,16 @@
     public-output-invisibility =
       all (name: !(self.packages.${system} ? ${name})) (attrNames world.packages)
       && !(self.lib ? facets)
+      && !(publicAiLib ? facets)
       && !(self.overlays ? facet-mock)
-      && !(publicOverlayResult ? alpha-base)
-      && !(publicOverlayResult ? alpha-from-final)
-      && !(publicOverlayResult ? bravo-from-prev)
+      && all (name: !(publicOverlayResult ? ${name})) mockOverlayNames
       && !(self.homeManagerModules ? facet-mock)
       && !(self.devenvModules ? facet-mock)
       && all outsideFixture publicHomeManagerImports
       && all outsideFixture publicDevenvImports;
     registry-composition =
-      builtins.length (attrNames world.registry.facetMock.entries)
-      == 3
-      && world.registry.facetMock.entries.alpha.payload == "alpha"
+      world.registry.facetMock.entries.alpha.payload
+      == "alpha:common:module"
       && world.registry.facetMock.entries.bravo.payload == "bravo";
   };
   assertionsPass = all (value: value == true) (builtins.attrValues assertions);
@@ -107,31 +137,27 @@
         pkgs = import ${pkgs.path} {system = ${builtins.toJSON system};};
         lib = pkgs.lib;
         loader = import ${../lib/facets.nix} {inherit lib;};
-        world = loader.compose {
-          inherit facetsDir pkgs;
-          system = ${builtins.toJSON system};
-          registryModules = [${registryModule}];
-          specialArgs = {
-            common = {
-              fixtureToken = "common";
-              system = ${builtins.toJSON system};
+        enforceLocalChecks = import ${fixtureRoot + "/root/enforce-local-checks.nix"} {inherit lib;};
+        world = enforceLocalChecks (
+          loader.compose {
+            inherit facetsDir pkgs;
+            system = ${builtins.toJSON system};
+            registryModules = [${registryModule}];
+            specialArgs = {
+              common = {
+                fixtureToken = "common";
+                system = ${builtins.toJSON system};
+              };
+              devenv.devenvOnly = "devenv";
+              homeManager.hmOnly = "home-manager";
             };
-            devenv.devenvOnly = "devenv";
-            homeManager.hmOnly = "home-manager";
-          };
-        };
+          }
+        );
         overlayResult = lib.fix (final: world.overlay final {});
-        localChecksPass = lib.all (check: check.value == true) (builtins.attrValues world.localChecks);
       in
         ${
         if probe.force == "checks"
         then "builtins.deepSeq world.localChecks true"
-        else if probe.force == "false-check"
-        then ''
-          if localChecksPass
-          then true
-          else throw "facet local check failed: deliberate-false"
-        ''
         else if probe.force == "lib"
         then "builtins.deepSeq world.facetLib true"
         else if probe.force == "overlay"
@@ -173,14 +199,14 @@
 
   probes = [
     (collisionProbe "checks" "shared" {})
-    (collisionProbe "lib" "shared.value" {})
+    (collisionProbe "lib" "shared.__facetLeaf" {})
     (collisionProbe "overlay" "shared.value" {})
     (collisionProbe "packages" "shared" {})
     (collisionProbe "registry" "shared" {})
     {
       name = "false-check";
       facetsDir = collisionRoot + "/false-check";
-      force = "false-check";
+      force = "checks";
       expected = ["facet local check failed: deliberate-false"];
     }
     {

@@ -40,46 +40,61 @@
     claims;
 
   isMergeable = value: isAttrs value && !lib.isDerivation value;
-  isLeaf = node: node ? __facetLeaf;
+  emptyTree = {
+    children = {};
+    kind = "branch";
+  };
+  isLeaf = node: node.kind == "leaf";
+  isEmptyBranch = node: !isLeaf node && attrNames node.children == [];
 
   toClaimTree = claim: value:
     if isMergeable value
-    then mapAttrs (_: nested: toClaimTree claim nested) value
+    then {
+      children = mapAttrs (_: nested: toClaimTree claim nested) value;
+      kind = "branch";
+    }
     else {
-      __facetLeaf = true;
       inherit (claim) owner source;
       inherit value;
+      kind = "leaf";
     };
 
   firstLeaf = tree:
     if isLeaf tree
     then tree
-    else firstLeaf tree.${builtins.head (sortNames (attrNames tree))};
+    else firstLeaf tree.children.${builtins.head (sortNames (attrNames tree.children))};
 
   mergeTrees = registry: keyPath: left: right:
-    if isLeaf left || isLeaf right
+    if isEmptyBranch left
+    then right
+    else if isEmptyBranch right
+    then left
+    else if isLeaf left || isLeaf right
     then collision registry keyPath (firstLeaf left) (firstLeaf right)
     else let
-      names = sortNames (unique ((attrNames left) ++ (attrNames right)));
-    in
-      genAttrs names (
+      names = sortNames (unique ((attrNames left.children) ++ (attrNames right.children)));
+    in {
+      children = genAttrs names (
         name:
-          if left ? ${name} && right ? ${name}
-          then mergeTrees registry (keyPath ++ [name]) left.${name} right.${name}
-          else left.${name} or right.${name}
+          if left.children ? ${name} && right.children ? ${name}
+          then mergeTrees registry (keyPath ++ [name]) left.children.${name} right.children.${name}
+          else left.children.${name} or right.children.${name}
       );
+      kind = "branch";
+    };
 
   materializeTree = tree:
     if isLeaf tree
     then tree.value
-    else mapAttrs (_: materializeTree) tree;
+    else mapAttrs (_: materializeTree) tree.children;
 
   mergeContributions = registry: contributions:
     materializeTree (
       foldl' (
         tree: contribution:
           mergeTrees registry [] tree (toClaimTree contribution contribution.value)
-      ) {}
+      )
+      emptyTree
       contributions
     );
 
@@ -246,7 +261,7 @@ in {
             prev = state.prev // contribution;
           }
         ) {
-          tree = {};
+          tree = emptyTree;
           inherit prev;
         }
         overlayClaims;
@@ -261,11 +276,18 @@ in {
     ) (filter (owner: owner.registryPath != null) ownerData);
     registryContributionModules =
       map (
-        claim:
-          loadValue claim.source {
-            inherit lib;
-            inherit (claim) owner source;
-          }
+        claim: moduleArgs: let
+          imported = import claim.source;
+        in
+          if isFunction imported
+          then
+            imported (
+              moduleArgs
+              // {
+                inherit (claim) owner source;
+              }
+            )
+          else imported
       )
       registryClaims;
     registry =
