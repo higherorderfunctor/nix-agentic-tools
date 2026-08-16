@@ -7,59 +7,63 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-08-15 (commit pending — Semble's program-factory
-> relocation preserves one HM/devenv declaration and lowering path; identical
-> runtime package variants share one wrapper/cache while divergent variants use
-> a collision-free aggregate and isolated caches). Prior: 2026-08-15 (commit
-> pending — normalized guidance is now a typed context record plus keyed rules;
-> the list-shaped instructions option and shared instruction type are gone).
-> Prior: 2026-08-15 (commit pending — runtime-shaped config moved from
-> `ai.<runtime>.settings` to `nativeSettings`, the new closed `settings`
-> submodule is normalized across all runtimes, and Codex integration roots use a
-> hidden internal contribution channel). Prior: 2026-08-14 (commit pending —
-> Semble's shared module now lowers grammar and path mappings identically
-> through both facets, with one package-identity cache guard and cache-location
-> wrapper per backend; HM's XDG cache remains authoritative on Darwin too).
-> Prior: 2026-08-05 (commit pending — the Codex named-profile delivery-path
-> example is retained but `ai.codex.profiles` is now LOCKED OUT and fails
-> evaluation; the asymmetry it teaches is still correct, the option is not
-> usable). Prior: 2026-08-05 (commit pending — glab's Linux Home Manager facet
-> can queue one OS-keyring synchronization per activation through a
-> graphical-session path unit; the shared option is an explicit devenv
-> exclusion, and the ordinary wrapper stops exporting the synchronized token).
-> Prior: 2026-08-05 (commit pending — enabled glab facets contribute their
-> effective config directory to Codex's legacy workspace-write sandbox; this
-> follows backend defaults and explicit overrides without coupling the
-> standalone glab module to the AI module). Prior: 2026-08-05 (commit pending —
-> re-verifies these conventions while the managed MCP module's bridge-host
-> comment is generalized so adding Context7 to the bridge set cannot stale a
-> hardcoded server count). Prior: 2026-08-03 (commit pending — glab's shared
-> package default now follows its `pkgs.ai.devTools.glab` namespace in both HM
-> and devenv). Prior: 2026-08-02 (commit pending — Semble's shared activation
-> condition delegates its Codex cache grant to backend-native sinks; Home
-> Manager appends the user XDG cache path without enabling Codex or choosing its
-> sandbox mode). Prior: 2026-08-02 (commit pending — Semble adds one shared HM
-> and devenv option declaration plus shared runtime-fanout logic; only the
-> package installation sink differs). Prior: 2026-08-02 (commit pending — Codex
-> named profiles now use one typed declaration across HM and devenv while each
-> backend delivers the artifact at its native scope: HM links user files and
-> devenv materializes repo declarations into the user-only profile lookup
-> location with explicit ownership). Prior: 2026-08-02 (commit pending —
-> generated option references now enforce exact flattened `ai.*` name/type
-> parity across HM and devenv; backend-only behavior stays discoverable and
-> fails explicitly, as with Home Manager rejecting project-only
-> `ai.copilot.projectDir` overrides). Prior: 2026-08-02 (commit 589fa37c —
-> distinguishes ordinary JSON merge activation from Codex's leaf-owned TOML
-> reconciliation, whose manifest supplies removal semantics while preserving
-> native project-trust state). Prior: 2026-07-28 (commit pending — records the
-> ONE-SHARED-DECLARATION form of the config-parity rule, landed by
-> `packages/glab` and asserted by `module-glab-hm-devenv-option-parity`; prior
-> 2026-07-21 was the repo-wide activation reordering
-> `entryAfter ["writeBoundary"]` → `["linkGeneration"]`; earlier revisions added
-> the activation script `exit` warning + Nix path type strictness section). If
-> you touch any `modules/<subdir>/default.nix` file, add a new option, or change
-> an assertion/activation pattern and this fragment isn't updated in the same
-> commit, stop and fix it.
+> **Last verified:** 2026-08-16 (commit pending — stacked-workflows and
+> living-workflow now share `ai.programs.*` enable declarations across HM and
+> devenv through `mkSkillPackageModule`; stacked-workflows' machine-wide
+> `gitPreset` remains an explicitly HM-only top-level companion; runtime
+> submodule and enable-gate examples cover all five ecosystems). Prior:
+> 2026-08-15 (commit pending — Semble's program-factory relocation preserves one
+> HM/devenv declaration and lowering path; identical runtime package variants
+> share one wrapper/cache while divergent variants use a collision-free
+> aggregate and isolated caches). Prior: 2026-08-15 (commit pending — normalized
+> guidance is now a typed context record plus keyed rules; the list-shaped
+> instructions option and shared instruction type are gone). Prior: 2026-08-15
+> (commit pending — runtime-shaped config moved from `ai.<runtime>.settings` to
+> `nativeSettings`, the new closed `settings` submodule is normalized across all
+> runtimes, and Codex integration roots use a hidden internal contribution
+> channel). Prior: 2026-08-14 (commit pending — Semble's shared module now
+> lowers grammar and path mappings identically through both facets, with one
+> package-identity cache guard and cache-location wrapper per backend; HM's XDG
+> cache remains authoritative on Darwin too). Prior: 2026-08-05 (commit pending
+> — the Codex named-profile delivery-path example is retained but
+> `ai.codex.profiles` is now LOCKED OUT and fails evaluation; the asymmetry it
+> teaches is still correct, the option is not usable). Prior: 2026-08-05 (commit
+> pending — glab's Linux Home Manager facet can queue one OS-keyring
+> synchronization per activation through a graphical-session path unit; the
+> shared option is an explicit devenv exclusion, and the ordinary wrapper stops
+> exporting the synchronized token). Prior: 2026-08-05 (commit pending — enabled
+> glab facets contribute their effective config directory to Codex's legacy
+> workspace-write sandbox; this follows backend defaults and explicit overrides
+> without coupling the standalone glab module to the AI module). Prior:
+> 2026-08-05 (commit pending — re-verifies these conventions while the managed
+> MCP module's bridge-host comment is generalized so adding Context7 to the
+> bridge set cannot stale a hardcoded server count). Prior: 2026-08-03 (commit
+> pending — glab's shared package default now follows its
+> `pkgs.ai.devTools.glab` namespace in both HM and devenv). Prior: 2026-08-02
+> (commit pending — Semble's shared activation condition delegates its Codex
+> cache grant to backend-native sinks; Home Manager appends the user XDG cache
+> path without enabling Codex or choosing its sandbox mode). Prior: 2026-08-02
+> (commit pending — Semble adds one shared HM and devenv option declaration plus
+> shared runtime-fanout logic; only the package installation sink differs).
+> Prior: 2026-08-02 (commit pending — Codex named profiles now use one typed
+> declaration across HM and devenv while each backend delivers the artifact at
+> its native scope: HM links user files and devenv materializes repo
+> declarations into the user-only profile lookup location with explicit
+> ownership). Prior: 2026-08-02 (commit pending — generated option references
+> now enforce exact flattened `ai.*` name/type parity across HM and devenv;
+> backend-only behavior stays discoverable and fails explicitly, as with Home
+> Manager rejecting project-only `ai.copilot.projectDir` overrides). Prior:
+> 2026-08-02 (commit 589fa37c — distinguishes ordinary JSON merge activation
+> from Codex's leaf-owned TOML reconciliation, whose manifest supplies removal
+> semantics while preserving native project-trust state). Prior: 2026-07-28
+> (commit pending — records the ONE-SHARED-DECLARATION form of the config-parity
+> rule, landed by `packages/glab` and asserted by
+> `module-glab-hm-devenv-option-parity`; prior 2026-07-21 was the repo-wide
+> activation reordering `entryAfter ["writeBoundary"]` → `["linkGeneration"]`;
+> earlier revisions added the activation script `exit` warning + Nix path type
+> strictness section). If you touch any `modules/<subdir>/default.nix` file, add
+> a new option, or change an assertion/activation pattern and this fragment
+> isn't updated in the same commit, stop and fix it.
 
 These conventions are enforced by code review and the `checks/module-eval.nix`
 evaluation tests, not by the module system itself. Follow them when adding or
@@ -73,7 +77,7 @@ declare the real type: `types.submodule`, `types.nullOr`, `types.attrsOf`,
 `types.enum`, `types.attrTag`, `types.listOf`, etc.
 
 **Submodules as containers.** Per-ecosystem config lives in a submodule:
-`ai.claude`, `ai.copilot`, `ai.kiro` are each a
+`ai.claude`, `ai.codex`, `ai.copilot`, `ai.kimchi`, and `ai.kiro` are each a
 `types.submodule { options = { enable; package; ... }; }`. The submodule is the
 logical grouping — do not flatten per-ecosystem options into the top level.
 
@@ -97,10 +101,10 @@ consumers can override).
 
 ### Gating and mkIf patterns
 
-**Per-CLI enable is the SOLE gate.** Each `ai.{claude,copilot,kiro}.enable` is
-its own mkIf block. There is **no master `ai.enable`** — it was dropped in
-commit f2e911c after causing a silent no-op bug (see `ai-module-fanout` fragment
-for the full story).
+**Per-CLI enable is the SOLE gate.** Each
+`ai.{claude,codex,copilot,kimchi,kiro}.enable` is its own mkIf block. There is
+**no master `ai.enable`** — it was dropped in commit f2e911c after causing a
+silent no-op bug (see `ai-module-fanout` fragment for the full story).
 
 The `config` block shape:
 
@@ -108,12 +112,15 @@ The `config` block shape:
 config = mkMerge [
   { assertions = [...]; }                # Always evaluated
   (mkIf cfg.claude.enable  { ... })      # Each CLI independent
+  (mkIf cfg.codex.enable   { ... })
   (mkIf cfg.copilot.enable { ... })
+  (mkIf cfg.kimchi.enable  { ... })
   (mkIf cfg.kiro.enable    { ... })
 ];
 ```
 
-**Each per-CLI block also flips the corresponding `programs.<cli>.enable`:**
+**A per-CLI block flips the corresponding `programs.<cli>.enable` when an
+upstream module exists:**
 
 ```nix
 (mkIf cfg.claude.enable {
@@ -122,10 +129,11 @@ config = mkMerge [
 })
 ```
 
-`mkDefault` lets the consumer override with
-`programs.claude-code.enable = false` explicitly if they want to turn it off
-while keeping `ai.claude.enable = true` for other reasons. In practice they
-don't — it's an escape hatch.
+Codex and Kimchi have no upstream Home Manager modules, so their blocks install
+their selected packages directly. For upstream-backed runtimes, `mkDefault` lets
+the consumer override with `programs.claude-code.enable = false` explicitly if
+they want to turn it off while keeping `ai.claude.enable = true` for other
+reasons. In practice they don't — it's an escape hatch.
 
 **hasModule checks upstream availability**:
 
@@ -380,6 +388,21 @@ runtime selection therefore cannot drift between backends. Runtime selection
 contributes defaults to `ai.<runtime>.*` but deliberately does not set
 `ai.<runtime>.enable`; choosing an integration is not authority to enable the
 corresponding CLI.
+
+`lib/ai/mkSkillPackageModule` applies the same shared-declaration rule to
+stacked-workflows and living-workflow. Both facets expose
+`ai.programs.<name>.enable` and every registered per-runtime override from one
+enable-only program specification, then write the resolved package content into
+that backend evaluation's per-runtime pools. A runtime false therefore removes
+only that runtime's skill/rule contribution.
+
+`stacked-workflows.gitPreset` is the deliberate companion exception. It stays
+outside `ai.*` and exists only in Home Manager because it configures
+machine-wide `programs.git.settings`; putting it in the program specification
+would generate per-runtime Git-preset overrides that have no coherent lowering.
+The normalized program tree itself remains exactly parity-checked. Keep this
+boundary explicit in consumer docs rather than presenting the companion as a
+devenv option.
 
 Both sinks wrap every Semble entry point with its selected cache location. Home
 Manager deliberately fixes the user-global root at

@@ -526,8 +526,9 @@ and `1`.
 If `find … -xtype l` prints anything, a lab used a raw skill source directory.
 Those contain relative symlinks (`references/*.md -> ../../../references/*.md`)
 that home-manager copies verbatim. Fix the **lab definition** to use
-`stacked-workflows.enable = true` (the packaged, dereferenced path) rather than
-pointing `ai.skills.*` at a repo source dir. Do not work around it in the task.
+`ai.programs.stacked-workflows.enable = true` (the packaged, dereferenced path)
+rather than pointing `ai.skills.*` at a repo source dir. Do not work around it
+in the task.
 
 - [ ] **Step 6: Commit**
 

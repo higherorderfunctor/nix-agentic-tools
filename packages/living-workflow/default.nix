@@ -2,13 +2,13 @@
 #
 # The living-workflow skill is a Nix-GENERATED router: it bakes the XDG
 # state base (config.xdg.stateHome) into its SKILL.md at eval time, then
-# contributes itself to the cross-ecosystem `ai.skills` pool.
+# contributes itself to each resolved `ai.<runtime>.skills` pool.
 #
 # Install scope (design D1): the home-manager module is the PRIMARY path —
-# `living-workflow.enable = true` installs the skill USER-GLOBAL to
-# ~/.claude/skills/ and ~/.kiro/skills/. The devenv module is a
-# project-local PARITY mirror (the `ai.skills` pool is per-`evalModules`,
-# so HM and devenv are wired independently — config-parity rule).
+# `ai.programs.living-workflow.enable = true` installs the skill USER-GLOBAL in
+# each enabled runtime's native skill directory. The devenv module is a
+# project-local PARITY mirror (the runtime pools are per-`evalModules`, so HM and
+# devenv are wired independently — config-parity rule).
 #
 # No overlay / `-content` derivation: because the skill bakes a per-eval
 # value (config.xdg.stateHome), a static overlay-time derivation (built

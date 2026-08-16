@@ -130,9 +130,10 @@ Notes that bite:
   `.claude/skills/claude-code-home-manager/.mcp.json`.
 - **Copy with `cp -rL … && chmod -R u+w`.** `--no-preserve=mode` silently strips
   the exec bit off `.claude/hooks/*`.
-- **Use `stacked-workflows.enable = true`, never raw skill source dirs.** Raw
-  dirs contain relative symlinks (`references/*.md -> ../../../references/*.md`)
-  that HM copies verbatim, making `cp -rL` hard-fail.
+- **Use `ai.programs.stacked-workflows.enable = true`, never raw skill source
+  dirs.** Raw dirs contain relative symlinks
+  (`references/*.md -> ../../../references/*.md`) that HM copies verbatim,
+  making `cp -rL` hard-fail.
 - `ai.claude.package = null` is rejected (`types.package`). To drop the 1.3 GiB
   tail, use `programs.claude-code.package = lib.mkForce null`.
 

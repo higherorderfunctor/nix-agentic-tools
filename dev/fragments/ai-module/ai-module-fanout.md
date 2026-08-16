@@ -1,19 +1,24 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — the `ai.programs.*` factory
-> generates portable defaults and capability-gated runtime override trees from
-> one program specification; Semble is its first consumer and uses program-level
-> enable negation instead of runtime selectors; divergent runtime package
-> customizations use collision-free command aliases and isolated caches). Prior:
-> 2026-08-15 (commit pending — top-level proxied MCP declarations now own one
-> shared managed daemon and fan out only lowered client entries; runtime
-> declarations own directly, duplicate ownership keys fail explicitly, and
-> unused top-level owners are never materialized). Prior: 2026-08-15 (commit
-> pending — normalized keyed pools use atomic per-runtime replacement and null
-> tombstones, with same-scope package ownership checked from definition
-> provenance). Prior: 2026-08-15 (commit pending — context is a typed
-> `text`-XOR-`source` record that composes root-first with runtime context and
-> names its native artifact per runtime. Rules carry a normalized `matcher`;
+> **Last verified:** 2026-08-16 (commit pending — `mkSkillPackageModule` now
+> consumes the `ai.programs.*` factory, moving stacked-workflows and
+> living-workflow enablement into portable plus per-runtime B4 option trees
+> while preserving their per-runtime pool writes; runtime inventories now cover
+> all five registered ecosystems; stacked-workflows' machine-wide `gitPreset`
+> remains an HM-only top-level companion). Prior: 2026-08-15 (commit pending —
+> the `ai.programs.*` factory generates portable defaults and capability-gated
+> runtime override trees from one program specification; Semble is its first
+> consumer and uses program-level enable negation instead of runtime selectors;
+> divergent runtime package customizations use collision-free command aliases
+> and isolated caches). Prior: 2026-08-15 (commit pending — top-level proxied
+> MCP declarations now own one shared managed daemon and fan out only lowered
+> client entries; runtime declarations own directly, duplicate ownership keys
+> fail explicitly, and unused top-level owners are never materialized). Prior:
+> 2026-08-15 (commit pending — normalized keyed pools use atomic per-runtime
+> replacement and null tombstones, with same-scope package ownership checked
+> from definition provenance). Prior: 2026-08-15 (commit pending — context is a
+> typed `text`-XOR-`source` record that composes root-first with runtime context
+> and names its native artifact per runtime. Rules carry a normalized `matcher`;
 > Claude, Kiro, Copilot, and Codex lower it to native metadata or explicit
 > prose, and devenv AGENTS.md consumers share one keyed deduplicating writer;
 > the list-shaped `instructions` surface is retired rather than aliased). Prior:
@@ -170,13 +175,14 @@ sole gate for that ecosystem's fanout:
 | `ai.claude.enable = true`  | claude fanout block + `programs.claude-code.enable = mkDefault true`  |
 | `ai.codex.enable = true`   | Codex package + guidance, skills, settings, agents, hooks fanout      |
 | `ai.copilot.enable = true` | copilot fanout block + `programs.copilot-cli.enable = mkDefault true` |
+| `ai.kimchi.enable = true`  | Kimchi package + context, MCP, settings, skills, environment fanout   |
 | `ai.kiro.enable = true`    | kiro fanout block + `programs.kiro-cli.enable = mkDefault true`       |
 
 Where an upstream module exists, each per-CLI block implicitly flips its enable
-via `mkDefault`, so consumers don't have to set enable twice. Codex has no
-upstream module: its factory installs `ai.codex.package` directly in each
-backend. For CLIs that do have an upstream module, a consumer can still override
-the corresponding `programs.<cli>.enable` explicitly.
+via `mkDefault`, so consumers don't have to set enable twice. Codex and Kimchi
+have no upstream modules: their factories install the selected package directly
+in each backend. For CLIs that do have an upstream module, a consumer can still
+override the corresponding `programs.<cli>.enable` explicitly.
 
 ### Why there's no master switch
 
@@ -227,11 +233,12 @@ password dialog in an unattended harness session.
 
 The ai module fans out TWO kinds of configuration:
 
-**Per-CLI options** (live inside `ai.{claude,codex,copilot,kiro}.*`):
+**Per-CLI options** (live inside `ai.{claude,codex,copilot,kimchi,kiro}.*`):
 
 - `ai.claude.package` / `ai.codex.package` / `ai.copilot.package` /
-  `ai.kiro.package` — package override; Codex installs it directly while the
-  established runtimes route it through their native factory wiring.
+  `ai.kimchi.package` / `ai.kiro.package` — package override; Codex and Kimchi
+  install it directly while the other runtimes route it through their native
+  factory wiring.
 - `ai.kiro.extraPackages` — store-backed tools added to Kiro's runtime PATH in
   both backends. It is Kiro-specific because it closes the Linux `buildFHSEnv`
   visibility gap; it remains independent of `ai.shell`, which selects an
@@ -330,8 +337,8 @@ enabled ecosystem whose native model preserves the option's semantics):
   normalized default, and a native null excludes that runtime from emission.
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
-  and repository-local `.agents/skills` in devenv; Claude, Copilot, and Kiro use
-  their established native directories.
+  and repository-local `.agents/skills` in devenv; Claude, Copilot, Kimchi, and
+  Kiro use their established native directories.
 - `ai.agents` — either legacy Markdown/path entries for Claude and Copilot or a
   portable `{ description, instructions, tools?, codex? }` record. Semantic
   records render Claude/Copilot frontmatter plus body and Codex standalone TOML.
@@ -462,13 +469,13 @@ location.
 
 ### Documentation parity is capability parity
 
-Do not describe every top-level pool as mechanically reaching all four runtimes.
+Do not describe every top-level pool as mechanically reaching all five runtimes.
 The shared option descriptions and generated README capability matrix must name
-Codex either as a consumer or as an intentional exclusion. In particular, Codex
-has no native LSP registry; its `shell_environment_policy` filters child-command
-inheritance rather than setting the Codex process environment; legacy Markdown
-agents cannot become native Codex TOML; and only the Claude/Codex lifecycle
-intersection belongs in portable hooks.
+each registered runtime as a consumer or an intentional exclusion. In
+particular, Codex has no native LSP registry; its `shell_environment_policy`
+filters child-command inheritance rather than setting the Codex process
+environment; legacy Markdown agents cannot become native Codex TOML; and only
+the Claude/Codex lifecycle intersection belongs in portable hooks.
 
 `lib/options-doc.nix` evaluates both complete published module trees and
 produces their CommonMark/JSON references. The old mdbook/NuschtOS site is gone,
@@ -506,13 +513,14 @@ trees. A value set in the HM-imported copy of a module is visible only to HM's
 eval. Devenv's eval has a completely separate `config.ai.skills` (etc.) that
 doesn't see the HM contribution.
 
-**Consequence for "plain modules"** (not `mkAiApp` participants, like
-`packages/stacked-workflows/modules/`): when a plain module contributes to
-`ai.skills` / `ai.rules` / etc., the contribution MUST happen in the module's
-appropriate backend sibling. If the content is HM-scope (personal user config),
-put it in the HM module. If it's project-scope (devenv-only), put it in the
-devenv module. Contributing in one and expecting the other to pick it up will
-silently fail — the contribution just doesn't land in the other eval.
+**Consequence for package modules outside `mkAiApp`** (including the
+`mkSkillPackageModule` consumers): when a package contributes to `ai.skills` /
+`ai.rules` / etc., the contribution MUST happen in the module's appropriate
+backend sibling. If the content is HM-scope (personal user config), put it in
+the HM module. If it's project-scope (devenv-only), put it in the devenv module.
+Contributing in one and expecting the other to pick it up will silently fail —
+the contribution just doesn't land in the other eval. A program option tree can
+make enablement structural without changing that per-evaluation ownership.
 
 This is a different discipline from the AI CLI factories (`mkAiApp`), which have
 structural `hm = { config = …; }` / `devenv = { config = …; }` blocks that force
@@ -536,10 +544,13 @@ an inherited portable feature value. The program still must not set
 `ai.<runtime>.enable`, because package/CLI activation remains an explicit
 consumer choice.
 
-Semble is the first factory consumer. Its single spec supports Claude, Codex,
+Semble was the first factory consumer. Its single spec supports Claude, Codex,
 and Kiro, and generates its named MCP, agent, and `semble` rule defaults in both
-backend evaluations. The rule composes into Claude and Codex's single
-always-loaded files and lets Kiro's directory-native renderer write `semble.md`.
+backend evaluations. The skill-package factory now consumes the same primitive
+for stacked-workflows and living-workflow, with an enable-only program spec that
+supports every registered runtime. The rule composes into Claude and Codex's
+single always-loaded files and lets Kiro's directory-native renderer write
+`semble.md`.
 
 Semble also treats Codex's selected sandbox mode as an integration boundary. A
 selected Codex feature plus `sandbox_mode = "workspace-write"` appends that
@@ -587,6 +598,16 @@ consumers saw nothing while the HM contribution alone reached personal scope. It
 was first scoped to the devenv module (commit `940ec54c`); the current design
 re-adds the HM contribution as its own explicit, user-global emission, so both
 backends now contribute (each via `lib/ai/mkSkillPackageModule`).
+
+That helper now declares `ai.programs.stacked-workflows.enable` and
+`ai.programs.living-workflow.enable` through `lib.ai.program.mkProgram`. A root
+true enables every supported runtime whose pool exists in the current
+evaluation; `ai.<runtime>.programs.<name>.enable = false` retracts that
+runtime's package contribution without affecting siblings. The removed top-level
+package enable options have no aliases. `stacked-workflows.gitPreset` is
+deliberately not part of the program tree: it configures Home Manager's
+machine-wide `programs.git.settings`, has no runtime meaning, and remains an
+HM-only companion instead of creating misleading runtime overrides.
 
 **Both contributions land PER RUNTIME, not on the root pool** — since 2026-08-14
 the factory writes `ai.<runtime>.skills` and `ai.<runtime>.rules` for every

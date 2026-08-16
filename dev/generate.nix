@@ -380,14 +380,13 @@
       };
       copilot.enable = true;
       kiro.enable = true;
+      programs.stacked-workflows.enable = true;
       settings.reasoningEffort = "high";
     };
 
-    stacked-workflows = {
-      enable = true;
-      gitPreset = "full";
-      integrations.claude.enable = true;
-    };
+    # Home Manager-only companion; the program enable above is shared with
+    # devenv and supports per-runtime overrides.
+    stacked-workflows.gitPreset = "full";
 
     services.mcp-servers.servers.github-mcp = {
       enable = true;
@@ -573,9 +572,10 @@
     <!-- prettier-ignore -->
     | Feature | Without Nix | Home-Manager | DevEnv |
     |---------|-------------|--------------|--------|
-    | Stacked workflow skills | Copy skills/ | `stacked-workflows.enable` | `stacked-workflows.enable` |
+    | Living workflow skill | Copy skill/ | `ai.programs.living-workflow.enable` | `ai.programs.living-workflow.enable` |
+    | Stacked workflow skills | Copy skills/ | `ai.programs.stacked-workflows.enable` | `ai.programs.stacked-workflows.enable` |
     | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
-    | Unified MCP config | Manual native config | `ai.mcpServers.*` (all four CLIs) | `ai.mcpServers.*` (all four CLIs) |
+    | Unified MCP config | Manual native config | `ai.mcpServers.*` (all five CLIs) | `ai.mcpServers.*` (all five CLIs) |
     | Typed MCP settings | N/A | Shared schema + native extensions | Shared schema + native extensions |
     | MCP credentials | Manual env vars | `plain`, `file`, or `helper` | `plain`, `file`, or `helper` |
     | Semble search integrations | Manual install | `ai.programs.semble` (Claude + Codex + Kiro) | Same; project-native paths |
@@ -583,7 +583,7 @@
     | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
     | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
     | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths |
-    | Skills | Copy native directories | `ai.skills.*` (all four CLIs) | Same; project-native paths |
+    | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
     | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex) | Same |
     | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot) | Same; project-native paths |
     | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same |
@@ -598,8 +598,8 @@
     <summary><strong>Unified ai.* Module</strong></summary>
 
     Single source of truth for shared config across Claude, Codex, Copilot,
-    and Kiro. Only semantics a runtime can preserve fan out; the feature matrix
-    above names deliberate exclusions. Scalar defaults use `mkDefault`
+    Kimchi, and Kiro. Only semantics a runtime can preserve fan out; the feature
+    matrix above names deliberate exclusions. Scalar defaults use `mkDefault`
     priority, so per-CLI overrides always win.
 
     ```nix
@@ -607,6 +607,7 @@
       claude.enable = true;
       codex.enable = true;
       copilot.enable = true;
+      kimchi.enable = true;
       kiro.enable = true;
 
       skills.my-skill = ./skills/my-skill;
@@ -840,18 +841,31 @@
     </details>
 
     <details>
+    <summary><strong>Living Workflow</strong></summary>
+
+    ```nix
+    ai.programs.living-workflow.enable = true;
+
+    # Optional runtime override: null inherits, false disables one runtime.
+    ai.codex.programs.living-workflow.enable = false;
+    ```
+
+    Migrating from an older release: replace `living-workflow.enable` with
+    `ai.programs.living-workflow.enable`.
+
+    </details>
+
+    <details>
     <summary><strong>Stacked Workflows</strong></summary>
 
     ```nix
-    stacked-workflows = {
-      enable = true;
-      gitPreset = "full";     # or "minimal" or "none"
-      integrations = {
-        claude.enable = true;
-        copilot.enable = true;
-        kiro.enable = true;
-      };
-    };
+    ai.programs.stacked-workflows.enable = true;
+
+    # Home Manager-only companion; omit in devenv configurations.
+    stacked-workflows.gitPreset = "full"; # or "minimal" or "none"
+
+    # Optional runtime override: null inherits, false disables one runtime.
+    ai.codex.programs.stacked-workflows.enable = false;
     ```
 
     See the `stacked-workflows` package for git presets and skill

@@ -45,9 +45,15 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
     [`dev/fragments/ai-module/shell-option.md`](dev/fragments/ai-module/shell-option.md)
 
 - **`ai-skills`**
-  - Match: `lib/ai/hm-helpers.nix`, `packages/chatgpt-codex/modules/**`,
-    `packages/claude-code/modules/**`, `packages/copilot-cli/modules/**`,
-    `packages/kiro-cli/modules/**`
+  - Match: `lib/ai/hm-helpers.nix`, `lib/ai/mkSkillPackageModule.nix`,
+    `packages/chatgpt-codex/lib/mkCodex.nix`,
+    `packages/chatgpt-codex/modules/**`,
+    `packages/claude-code/lib/mkClaude.nix`, `packages/claude-code/modules/**`,
+    `packages/copilot-cli/lib/mkCopilot.nix`, `packages/copilot-cli/modules/**`,
+    `packages/kimchi/lib/mkKimchi.nix`, `packages/kimchi/modules/**`,
+    `packages/kiro-cli/lib/mkKiro.nix`, `packages/kiro-cli/modules/**`,
+    `packages/living-workflow/modules/**`,
+    `packages/stacked-workflows/modules/**`
   - Read:
     [`dev/fragments/ai-skills/skills-fanout-pattern.md`](dev/fragments/ai-skills/skills-fanout-pattern.md)
 
@@ -309,9 +315,9 @@ instructions/steering, MCP servers, LSP servers, settings, hooks, agents,
 environment variables, permissions.
 
 The `ai.*` module (both HM and devenv) provides a unified interface that fans
-out shared surfaces to enabled ecosystems (Claude, Codex, Copilot, Kiro) with
-ecosystem-specific translation. A surface without a lossless native mapping is
-an explicit exclusion, not a silent no-op.
+out shared surfaces to enabled ecosystems (Claude, Codex, Copilot, Kimchi, Kiro)
+with ecosystem-specific translation. A surface without a lossless native mapping
+is an explicit exclusion, not a silent no-op.
 
 <!-- Fragment: packages/coding-standards/fragments/tooling-preference.md -->
 

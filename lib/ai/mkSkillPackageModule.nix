@@ -1,10 +1,12 @@
 # Factory for a skill-packaging module.
 #
-# Declares `<name>.enable` and, when enabled, contributes skills (and optionally
-# a router rule) to the PER-RUNTIME `ai.<runtime>.*` pools of every
-# runtime present in the evaluation — never to the root `ai.*` pools. See
-# "Contributions land PER RUNTIME" below for why that distinction is load-
-# bearing rather than stylistic.
+# Uses `lib.ai.program.mkProgram` to declare
+# `ai.programs.<name>.enable` plus capability-gated
+# `ai.<runtime>.programs.<name>.enable` overrides. Each resolved runtime that is
+# enabled receives skills (and optionally a router rule) in its PER-RUNTIME
+# `ai.<runtime>.*` pools — never in the root `ai.*` pools. See "Contributions
+# land PER RUNTIME" below for why that distinction is load-bearing rather than
+# stylistic.
 #
 # Both backends of a skill package — the home-manager (user-global) module and
 # the devenv (project-local) module — share this exact shape. The `ai.*` pools
@@ -20,8 +22,11 @@
 #     options — stacked-workflows HM, which adds its `gitPreset` on top.
 #
 # spec:
-#   name              : option namespace; declares `<name>.enable` (string).
+#   name              : program key; declares `ai.programs.<name>.enable`
+#                       plus per-runtime overrides (string).
 #   enableDescription : mkEnableOption description (string).
+#   supportedRuntimes : runtime capability set. OPTIONAL; defaults to every
+#                       registered runtime.
 #   skills            : moduleArgs -> attrsOf (path | str). The skill dirs to
 #                       fan out. Values may be `./` path literals (static skill
 #                       trees) OR generated store-path strings (skills baked at
@@ -44,6 +49,10 @@
 #                       unconditional.
 #
 # ── Contributions land PER RUNTIME, never on the root pool ──
+#
+# `ai.programs.<name>.enable = true` enables every supported runtime by default.
+# `ai.<runtime>.programs.<name>.enable = false` disables only that runtime; a
+# null override inherits the portable value through B4 `resolveOverride`.
 #
 # Each skill value is wrapped in `lib.mkDefault`, so a consumer can override an
 # individual key at normal priority. Override skills through
@@ -74,8 +83,13 @@ spec: {
   pkgs,
   ...
 }: let
-  cfg = config.${spec.name};
   moduleArgs = {inherit config lib pkgs;};
+  programFactory = import ./program.nix {inherit lib;};
+  program = programFactory.mkProgram {
+    inherit (spec) name;
+    supportedRuntimes = spec.supportedRuntimes or (import ./runtimes.nix);
+    options.enable = lib.mkEnableOption spec.enableDescription;
+  };
 
   skillEntries = lib.mapAttrs (_: lib.mkDefault) (spec.skills moduleArgs);
   ruleEntries = lib.mapAttrs (_: lib.mkDefault) ((spec.rules or (_: {})) moduleArgs);
@@ -92,18 +106,22 @@ spec: {
   presentSkillRuntimes =
     lib.filter
     (runtime: lib.hasAttrByPath ["ai" runtime "skills"] options)
-    (import ./runtimes.nix);
+    program.supportedRuntimes;
   presentRuleRuntimes =
     lib.filter
     (runtime: lib.hasAttrByPath ["ai" runtime "rules"] options)
-    (import ./runtimes.nix);
+    program.supportedRuntimes;
 in {
-  options.${spec.name}.enable = lib.mkEnableOption spec.enableDescription;
+  imports = [program.module];
 
-  config = lib.mkIf cfg.enable {
-    ai = lib.mkMerge [
-      (lib.genAttrs presentSkillRuntimes (_runtime: {skills = skillEntries;}))
-      (lib.genAttrs presentRuleRuntimes (_runtime: {rules = ruleEntries;}))
-    ];
-  };
+  config.ai = lib.mkMerge [
+    (lib.genAttrs presentSkillRuntimes (runtime:
+      lib.mkIf (program.resolve config runtime).enable {
+        skills = skillEntries;
+      }))
+    (lib.genAttrs presentRuleRuntimes (runtime:
+      lib.mkIf (program.resolve config runtime).enable {
+        rules = ruleEntries;
+      }))
+  ];
 }

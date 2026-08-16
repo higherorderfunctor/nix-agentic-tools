@@ -1,17 +1,20 @@
 ## Stacked Workflows Development
 
-> **Last verified:** 2026-08-15 (commit pending — same-key root entries are now
-> portable defaults replaced by the package's per-runtime values; consumers may
-> override or null-suppress those `mkDefault` package entries). Prior:
-> 2026-08-15 (commit pending — the router is now the keyed
-> `stacked-workflows-router` rule, contributed at `mkDefault` so an ordinary
-> per-runtime consumer definition wins). Prior: 2026-08-14 (commit pending — the
-> contributions land on the PER-RUNTIME pools now, not the root ones, so the
-> consumer override key moved to `ai.<runtime>.skills.<name>` and a root write
-> is a collision rather than an override). Prior: 2026-08-02 (commit pending —
-> Codex now receives the shared stacked-workflow skills and routing instruction
-> through the same explicit HM and devenv pool contributions as the other
-> enabled AI CLIs).
+> **Last verified:** 2026-08-16 (commit pending — package enablement moved to
+> `ai.programs.stacked-workflows.enable` with per-runtime B4 overrides; skills
+> reach all five runtimes while the router reaches only runtimes with a rules
+> pool; `stacked-workflows.gitPreset` remains an HM-only top-level companion).
+> Prior: 2026-08-15 (commit pending — same-key root entries are now portable
+> defaults replaced by the package's per-runtime values; consumers may override
+> or null-suppress those `mkDefault` package entries). Prior: 2026-08-15 (commit
+> pending — the router is now the keyed `stacked-workflows-router` rule,
+> contributed at `mkDefault` so an ordinary per-runtime consumer definition
+> wins). Prior: 2026-08-14 (commit pending — the contributions land on the
+> PER-RUNTIME pools now, not the root ones, so the consumer override key moved
+> to `ai.<runtime>.skills.<name>` and a root write is a collision rather than an
+> override). Prior: 2026-08-02 (commit pending — Codex now receives the shared
+> stacked-workflow skills and routing instruction through the same explicit HM
+> and devenv pool contributions as the other enabled AI CLIs).
 
 ### Package Structure
 
@@ -37,26 +40,31 @@ content package with per-backend modules:
 Two preset levels are exported via `lib.gitConfig` (essential aliases) and
 `lib.gitConfigFull` (extended configuration). The HM module wires these into
 `programs.git.settings` via the `gitPreset` option (`"minimal"` / `"full"` /
-`"none"`).
+`"none"`). That option remains `stacked-workflows.gitPreset`, outside `ai.*`,
+because it is machine-wide Home Manager configuration with no runtime-specific
+or devenv lowering.
 
 ### Skills + Skill-Routing Rule
 
-`stacked-workflows.enable = true` fans the (unprefixed) `stack-*` skills and the
-`stacked-workflows-router` rule into the PER-RUNTIME `ai.<runtime>.skills` /
-`ai.<runtime>.rules` pools of every runtime present in the evaluation, so each
-enabled AI CLI installs them at its native path. Both backend modules delegate
-to the shared `lib/ai/mkSkillPackageModule` factory; those pools are
-per-`evalModules`, so the HM (user-global) and devenv (project-local)
-contributions are independent.
+`ai.programs.stacked-workflows.enable = true` fans the (unprefixed) `stack-*`
+skills into the PER-RUNTIME `ai.<runtime>.skills` pool of every supported
+runtime present in the evaluation. The `stacked-workflows-router` rule also fans
+into each runtime that exposes an `ai.<runtime>.rules` pool; Kimchi has no rules
+capability and receives only the skills. Each enabled AI CLI installs its
+contribution at its native path.
+`ai.<runtime>.programs.stacked-workflows.enable = false` disables that runtime's
+contribution only. Both backend modules delegate to the shared
+`lib/ai/mkSkillPackageModule` factory; those pools are per-`evalModules`, so the
+HM (user-global) and devenv (project-local) contributions are independent.
 
 It writes the per-runtime pools rather than root `ai.skills` because a root pool
 belongs to consumers as a portable default surface — the provenance guard in
 `checks/module-eval.nix` enforces that. **The practical consequence for a
 consumer: override or suppress a package skill at `ai.<runtime>.skills.<name>`
-and the router at `ai.<runtime>.rules.stacked-workflows-router`.** Package
-values use `mkDefault`, so an explicit value or null wins at that runtime scope.
-A same-key root entry is replaced by the package's per-runtime value rather than
-colliding.
+and, on rule-capable runtimes, the router at
+`ai.<runtime>.rules.stacked-workflows-router`.** Package values use `mkDefault`,
+so an explicit value or null wins at that runtime scope. A same-key root entry
+is replaced by the package's per-runtime value rather than colliding.
 
 ### Building and Testing
 

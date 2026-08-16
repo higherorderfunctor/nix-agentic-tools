@@ -14,6 +14,6 @@ instructions/steering, MCP servers, LSP servers, settings, hooks, agents,
 environment variables, permissions.
 
 The `ai.*` module (both HM and devenv) provides a unified interface that fans
-out shared surfaces to enabled ecosystems (Claude, Codex, Copilot, Kiro) with
-ecosystem-specific translation. A surface without a lossless native mapping is
-an explicit exclusion, not a silent no-op.
+out shared surfaces to enabled ecosystems (Claude, Codex, Copilot, Kimchi, Kiro)
+with ecosystem-specific translation. A surface without a lossless native mapping
+is an explicit exclusion, not a silent no-op.

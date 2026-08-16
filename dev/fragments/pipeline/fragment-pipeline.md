@@ -1,6 +1,9 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-08-15 (commit pending — Semble's co-located
+> **Last verified:** 2026-08-16 (commit pending — generated README guidance now
+> uses `ai.programs.stacked-workflows.enable`, documents B4 runtime negation,
+> and keeps the HM-only `stacked-workflows.gitPreset` companion visibly
+> separate). Prior: 2026-08-15 (commit pending — Semble's co-located
 > architecture document is now a registered package-sourced category scoped to
 > `packages/semble/**`). Prior: 2026-08-15 (commit pending — the `mcp-secrets`
 > category now follows managed-proxy ownership through its shared option
