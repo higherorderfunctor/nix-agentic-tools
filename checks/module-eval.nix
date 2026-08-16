@@ -6787,10 +6787,6 @@ in {
       .packages)
     .success);
 
-  # devenv parity: v3 = true must wrap on devenv too, so `devenv shell` launches
-  # the v3 engine like HM does (was HM-only before the shared wrapper). devenv
-  # exports env natively, so the wrapper carries flags only — but the symlinkJoin
-  # ("kiro-cli-wrapped") still fires on v3/tui alone.
   # The unlock must FORK the derivation — if the drvPath were unchanged, the
   # patch step silently did nothing and the consumer would get stock kiro while
   # believing workflows were on. Comparing drvPaths is the only assertion that
@@ -6930,6 +6926,201 @@ in {
         (ev.config.assertions or []);
     in
       asserts != [] && (builtins.head asserts).assertion == true
+  );
+
+  # The FHS compatibility wrapper remains the default. Opting out selects the
+  # overlay's pinned payload rather than a second independently packaged Kiro.
+  module-kiro-hm-fhs-opt-out-selects-unwrapped = mkTest "kiro-hm-fhs-opt-out-selects-unwrapped" (
+    let
+      result = evalHm {
+        ai.gitSshConfigWorkaround = false;
+        ai.kiro = {
+          enable = true;
+          useFhsSandbox = false;
+        };
+      };
+      packages = result.config.home.packages or [];
+    in
+      builtins.length packages
+      == 1
+      && (builtins.head packages).drvPath == pkgs.ai.kiro-cli.unwrapped.drvPath
+  );
+
+  # Devenv shares the same option and package-selection seam.
+  module-kiro-devenv-fhs-opt-out-selects-unwrapped = mkTest "kiro-devenv-fhs-opt-out-selects-unwrapped" (
+    let
+      result = evalDevenv {
+        ai.gitSshConfigWorkaround = false;
+        ai.kiro = {
+          enable = true;
+          useFhsSandbox = false;
+        };
+      };
+      packages = result.config.packages or [];
+    in
+      builtins.length packages
+      == 1
+      && (builtins.head packages).drvPath == pkgs.ai.kiro-cli.unwrapped.drvPath
+  );
+
+  # When another option still requires a wrapper, the opt-out must change the
+  # wrapper's exec target rather than merely changing the empty-wrapper case.
+  # Devenv's default Git SSH export supplies that production-shaped wrapper.
+  module-kiro-devenv-fhs-opt-out-wrapper-targets-unwrapped = let
+    result = evalDevenv {
+      ai.kiro = {
+        enable = true;
+        useFhsSandbox = false;
+      };
+    };
+  in
+    mkWrapperGrepTest {
+      name = "kiro-devenv-fhs-opt-out-wrapper-targets-unwrapped";
+      package = builtins.head result.config.packages;
+      bin = "kiro-cli";
+      needles = ["${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli"];
+      absentNeedles = ["${pkgs.ai.kiro-cli}/bin/kiro-cli"];
+    };
+
+  # #956's exact backend: with no unrelated wrapper reason, trustedMcpTools
+  # must fork the FHS payload itself. The former outer symlinkJoin had no
+  # `fhsenv` passthru and was unreachable during launcher dispatch.
+  module-kiro-devenv-trusted-tools-fork-fhs-payload = mkTest "kiro-devenv-trusted-tools-fork-fhs-payload" (
+    let
+      result = evalDevenv {
+        ai.gitSshConfigWorkaround = false;
+        ai.kiro = {
+          enable = true;
+          trustedMcpTools = ["fs_read"];
+        };
+      };
+      packages = result.config.packages or [];
+      configured = builtins.head packages;
+    in
+      builtins.length packages
+      == 1
+      && configured ? fhsenv
+      && configured.fhsenv.drvPath != pkgs.ai.kiro-cli.fhsenv.drvPath
+      && (configured.name or "") != "kiro-cli-wrapped"
+  );
+
+  # A custom package without a supported unwrapped route must fail by the
+  # named assertion instead of silently leaving the FHS wrapper enabled.
+  module-kiro-fhs-opt-out-rejects-package-without-unwrapped = mkTest "kiro-fhs-opt-out-rejects-package-without-unwrapped" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          package = pkgs.hello;
+          useFhsSandbox = false;
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "passthru.unwrapped" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == false
+  );
+
+  # Positive control: the overlay package exposes the route and satisfies the
+  # same assertion when the opt-out is selected.
+  module-kiro-fhs-opt-out-accepts-overlay-package = mkTest "kiro-fhs-opt-out-accepts-overlay-package" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          useFhsSandbox = false;
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "passthru.unwrapped" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == true
+  );
+
+  # The supported pre-split topology is already unwrapped. Its explicit false
+  # marker makes opt-out a valid no-op instead of confusing the public
+  # `unwrapped` route with evidence that an FHS composition seam is missing.
+  module-kiro-fhs-opt-out-accepts-pre-split-contract = mkTest "kiro-fhs-opt-out-accepts-pre-split-contract" (
+    let
+      preSplitPackage = pkgs.hello.overrideAttrs (attrs: {
+        passthru =
+          (attrs.passthru or {})
+          // {
+            kiroFhsSandbox = false;
+            unwrapped = pkgs.hello;
+          };
+      });
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          package = preSplitPackage;
+          useFhsSandbox = false;
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "passthru.unwrapped" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == true
+  );
+
+  # A detectable custom FHS package without the payload-composition seam would
+  # recreate #956. Reject it rather than silently leaving trust injection in an
+  # outer wrapper that launcher dispatch cannot reach.
+  module-kiro-trust-rejects-fhs-package-without-payload-seam = mkTest "kiro-trust-rejects-fhs-package-without-payload-seam" (
+    if !pkgs.stdenv.hostPlatform.isLinux
+    then true
+    else let
+      customFhsPackage = pkgs.hello.overrideAttrs (attrs: {
+        passthru = (attrs.passthru or {}) // {unwrapped = pkgs.hello;};
+      });
+      ev = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          package = customFhsPackage;
+          trustedMcpTools = ["fs_read"];
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "passthru.withFhsPayload" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == false
+  );
+
+  # Assertions inspect the resolved rollout variant, not merely cfg.package.
+  # A custom factory that drops the FHS passthru contract must fail by name
+  # before wrapping can silently retain the sandbox or lose trust injection.
+  module-kiro-trust-rejects-rollout-variant-without-payload-seam = mkTest "kiro-trust-rejects-rollout-variant-without-payload-seam" (
+    if !pkgs.stdenv.hostPlatform.isLinux
+    then true
+    else let
+      customFhsPackage = pkgs.hello.overrideAttrs (attrs: {
+        passthru =
+          (attrs.passthru or {})
+          // {
+            kiroFhsSandbox = true;
+            unwrapped = pkgs.hello;
+            withFhsPayload = _: pkgs.hello;
+            withRolloutFeatures = _: pkgs.hello;
+          };
+      });
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          package = customFhsPackage;
+          trustedMcpTools = ["fs_read"];
+          unlockedRolloutFeatures = ["workflows"];
+          v3 = true;
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "passthru.withFhsPayload" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == false
   );
 
   # `unlockedRolloutFeatures` without `v3` is INERT, and silently so — the
@@ -7242,9 +7433,13 @@ in {
       hooks ? workflow-reminder && hooks.workflow-reminder.action.type == "agent"
   );
 
+  # Devenv parity: v3 must wrap here too. Disable the Git SSH default so v3 is
+  # the sole wrapper reason; otherwise this passes vacuously on the environment
+  # export even if the flag wiring disappears.
   module-kiro-devenv-v3-wraps-package = mkTest "kiro-devenv-v3-wraps-package" (
     let
       result = evalDevenv {
+        ai.gitSshConfigWorkaround = false;
         ai.kiro = {
           enable = true;
           v3 = true;

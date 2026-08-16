@@ -6,6 +6,15 @@
 {pkgs, ...}: let
   isLinux = pkgs.stdenv.hostPlatform.isLinux;
   kiroPackage = pkgs.ai.kiro-cli;
+  wrapKiroPackage = import ../packages/kiro-cli/lib/wrapPackage.nix {
+    inherit (pkgs) lib;
+    inherit pkgs;
+  };
+  trustedKiroPackage = wrapKiroPackage {
+    package = kiroPackage;
+    trustedMcpTools = ["fs_read"];
+    v3 = false;
+  };
 in
   pkgs.runCommandLocal "kiro-fhs-contract-check" {} ''
     ${
@@ -129,6 +138,30 @@ in
           'export PATH="/run/wrappers/bin:/usr/bin:/usr/sbin:$PATH"' \
           "$nat_profile" \
           || nat_fail "FHS profile no longer preserves inherited PATH as its tail"
+
+        # Production-shaped trust injection: the upstream root shadows an
+        # outer kiro-cli-chat wrapper, so the configured wrapper must be part
+        # of the FHS payload itself. Follow both the consolidated shared
+        # launcher and the older per-command launcher to the synthesized root,
+        # then inspect the command path dispatch actually selects.
+        nat_trusted_entrypoint="$(${pkgs.coreutils}/bin/readlink -f ${trustedKiroPackage}/bin/kiro-cli-chat)"
+        nat_trusted_entrypoint_root="''${nat_trusted_entrypoint%/bin/kiro-cli-chat}"
+        nat_trusted_shared_launcher="$nat_trusted_entrypoint_root/libexec/kiro-cli/kiro-cli-wrapper"
+        if [ -e "$nat_trusted_shared_launcher" ]; then
+          nat_trusted_launcher="$(${pkgs.coreutils}/bin/readlink -f "$nat_trusted_shared_launcher")"
+        else
+          nat_trusted_launcher="$nat_trusted_entrypoint"
+        fi
+        nat_trusted_rootfs="$(${pkgs.gnused}/bin/sed -n \
+          's#^for i in \(/nix/store/[^ ]*-fhsenv-rootfs\)/\*; do$#\1#p' \
+          "$nat_trusted_launcher")"
+        [ -d "$nat_trusted_rootfs" ] \
+          || nat_fail "could not locate the configured FHS root; trustedMcpTools composition is unverified"
+        nat_trusted_chat="$(${pkgs.coreutils}/bin/readlink -f "$nat_trusted_rootfs/usr/bin/kiro-cli-chat")"
+        [ -f "$nat_trusted_chat" ] \
+          || nat_fail "configured FHS root no longer supplies kiro-cli-chat"
+        ${pkgs.gnugrep}/bin/grep -qF -- '--trust-tools=fs_read' "$nat_trusted_chat" \
+          || nat_fail "trustedMcpTools wrapper is not inside the FHS command path"
       ''
       else ''
         # Darwin has no upstream buildFHSEnv layer, so there is no FHS contract

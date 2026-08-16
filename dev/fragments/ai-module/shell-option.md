@@ -1,7 +1,11 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-08-15 (commit pending — the new program factory
-> applies null-as-inherit recursively across capability-gated
+> **Last verified:** 2026-08-16 (commit pending — resolves #877's Kiro default
+> question: the FHS root containing bash but hiding a host zsh does not justify
+> a runtime-specific implicit shell. `ai.shell` remains null; consumers may set
+> a store-backed package explicitly or choose Kiro's FHS opt-out independently).
+> Prior: 2026-08-15 (commit pending — the new program factory applies
+> null-as-inherit recursively across capability-gated
 > `ai.<runtime>.programs.<pkg>` option trees). Prior: 2026-08-15 (commit pending
 > — distinguishes scalar null-as-inherit from keyed-pool null tombstones and
 > removes the retired collision-assertion rationale for internal process
@@ -98,6 +102,20 @@ sibling shell-specific capability flag.
 
 Four runtimes were asked for; five go through `mkAiApp`. Kimchi is easy to miss
 because the issue that requested this never mentioned it.
+
+### Kiro's FHS root does not change the shell default
+
+The Linux FHS root supplies bash but no zsh. A host-only `SHELL=/usr/bin/zsh` is
+therefore absent inside it, and Kiro falls back to `/bin/sh` when no usable
+store-backed shell is configured. That makes an explicit package-typed
+`ai.shell` valuable; it does not justify a hidden Kiro-specific default.
+
+The standing decision is to keep `ai.shell = null`: null means the module does
+not choose a shell, consistently across runtimes. Consumers who want a stable
+shell can set `ai.shell = pkgs.bashInteractive` (or a Kiro-specific override),
+and consumers willing to give up the extracted-`bun` compatibility wrapper can
+set `ai.kiro.useFhsSandbox = false`. Shell selection and namespace selection are
+independent choices; neither silently implies the other.
 
 ### NEVER write the shell environment
 
