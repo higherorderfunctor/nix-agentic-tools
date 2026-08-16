@@ -380,14 +380,13 @@
       };
       copilot.enable = true;
       kiro.enable = true;
+      programs.stacked-workflows.enable = true;
       settings.reasoningEffort = "high";
     };
 
-    stacked-workflows = {
-      enable = true;
-      gitPreset = "full";
-      integrations.claude.enable = true;
-    };
+    # Home Manager-only companion; the program enable above is shared with
+    # devenv and supports per-runtime overrides.
+    stacked-workflows.gitPreset = "full";
 
     services.mcp-servers.servers.github-mcp = {
       enable = true;
@@ -573,7 +572,7 @@
     <!-- prettier-ignore -->
     | Feature | Without Nix | Home-Manager | DevEnv |
     |---------|-------------|--------------|--------|
-    | Stacked workflow skills | Copy skills/ | `stacked-workflows.enable` | `stacked-workflows.enable` |
+    | Stacked workflow skills | Copy skills/ | `ai.programs.stacked-workflows.enable` | `ai.programs.stacked-workflows.enable` |
     | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
     | Unified MCP config | Manual native config | `ai.mcpServers.*` (all four CLIs) | `ai.mcpServers.*` (all four CLIs) |
     | Typed MCP settings | N/A | Shared schema + native extensions | Shared schema + native extensions |
@@ -843,15 +842,13 @@
     <summary><strong>Stacked Workflows</strong></summary>
 
     ```nix
-    stacked-workflows = {
-      enable = true;
-      gitPreset = "full";     # or "minimal" or "none"
-      integrations = {
-        claude.enable = true;
-        copilot.enable = true;
-        kiro.enable = true;
-      };
-    };
+    ai.programs.stacked-workflows.enable = true;
+
+    # Home Manager-only companion; omit in devenv configurations.
+    stacked-workflows.gitPreset = "full"; # or "minimal" or "none"
+
+    # Optional runtime override: null inherits, false disables one runtime.
+    ai.codex.programs.stacked-workflows.enable = false;
     ```
 
     See the `stacked-workflows` package for git presets and skill

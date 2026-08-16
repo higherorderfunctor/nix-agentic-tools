@@ -5,10 +5,10 @@
 # contributes itself to the cross-ecosystem `ai.skills` pool.
 #
 # Install scope (design D1): the home-manager module is the PRIMARY path —
-# `living-workflow.enable = true` installs the skill USER-GLOBAL to
-# ~/.claude/skills/ and ~/.kiro/skills/. The devenv module is a
-# project-local PARITY mirror (the `ai.skills` pool is per-`evalModules`,
-# so HM and devenv are wired independently — config-parity rule).
+# `ai.programs.living-workflow.enable = true` installs the skill USER-GLOBAL in
+# each enabled runtime's native skill directory. The devenv module is a
+# project-local PARITY mirror (the `ai.skills` pool is per-`evalModules`, so HM
+# and devenv are wired independently — config-parity rule).
 #
 # No overlay / `-content` derivation: because the skill bakes a per-eval
 # value (config.xdg.stateHome), a static overlay-time derivation (built

@@ -6,7 +6,8 @@
 #   programs.git.settings = inputs.stacked-workflow-skills.lib.gitConfigFull;
 #
 # Or via the home-manager module (applies mkDefault to each leaf):
-#   stacked-workflows = { enable = true; gitPreset = "full"; };
+#   ai.programs.stacked-workflows.enable = true;
+#   stacked-workflows.gitPreset = "full";
 #
 # See packages/stacked-workflows/references/recommended-config.md for explanations of each setting.
 let

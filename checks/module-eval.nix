@@ -562,8 +562,10 @@
   # means the reported violation LIST can be incomplete when two definitions of
   # one option disagree on priority.
   #
-  # `lib.ai.program` now makes both program levels structural. This broader
-  # guard remains for non-program package contributors until the row 8 moves.
+  # `lib.ai.program` now makes both program levels structural, including both
+  # skill packages after row 8. This broader guard remains because a program's
+  # implementation callback can still write the wrong pool level, and because
+  # non-program package contributors remain valid.
   rootPoolSrcRoot = toString ./..;
 
   runtimePoolProbeConfig = {
@@ -573,9 +575,11 @@
   rootPoolProbeConfig =
     runtimePoolProbeConfig
     // {
-      ai.programs.semble.enable = true;
-      living-workflow.enable = true;
-      stacked-workflows.enable = true;
+      ai.programs = {
+        living-workflow.enable = true;
+        semble.enable = true;
+        stacked-workflows.enable = true;
+      };
     };
 
   # Definition provenance is post-priority filtering. The all-active probe is
@@ -587,8 +591,8 @@
   packagePoolProbeConfigs = [
     runtimePoolProbeConfig
     (runtimePoolProbeConfig // {ai.programs.semble.enable = true;})
-    (runtimePoolProbeConfig // {living-workflow.enable = true;})
-    (runtimePoolProbeConfig // {stacked-workflows.enable = true;})
+    (runtimePoolProbeConfig // {ai.programs.living-workflow.enable = true;})
+    (runtimePoolProbeConfig // {ai.programs.stacked-workflows.enable = true;})
     rootPoolProbeConfig
   ];
 
@@ -1135,7 +1139,7 @@ in {
             rules = _: {probe-rule.text = "Probe guidance.";};
             skills = _: {probe-skill = ./fixtures;};
           })
-          {probe-package.enable = true;}
+          {ai.programs.probe-package.enable = true;}
         ];
       };
     in
@@ -8410,12 +8414,43 @@ in {
   # user-global; the devenv module mirrors them project-local. References are
   # bundled as REAL files inside each skill dir (deref'd at build).
 
-  # Default disabled — stacked-workflows.enable defaults to false.
+  # Default disabled — the portable program enable defaults to false.
   module-sws-default-disabled = mkTest "sws-default-disabled" (
     let
       result = evalHm {};
     in
-      !(result.config.stacked-workflows.enable or true)
+      !result.config.ai.programs.stacked-workflows.enable
+      && !(result.options.stacked-workflows ? enable)
+  );
+
+  # Both skill packages consume the generic program factory. One shared
+  # declaration therefore produces identical HM/devenv root and runtime
+  # option trees, and the package capability set covers every registered
+  # runtime. `gitPreset` deliberately stays out of this tree as an HM-only
+  # top-level companion because it configures machine-wide Git, not a runtime.
+  module-skill-packages-program-option-parity = mkTest "skill-packages-program-option-parity" (
+    let
+      optionShape = evaluated: path:
+        lib.mapAttrs (_: option: option.type.description)
+        (lib.filterAttrs
+          (name: _: name != "_module")
+          ((lib.getAttrFromPath path evaluated.options).type.getSubOptions []));
+      hm = evalHm {};
+      devenv = evalDevenv {};
+      programParity = package:
+        optionShape hm ["ai" "programs" package]
+        == {enable = "boolean";}
+        && optionShape hm ["ai" "programs" package]
+        == optionShape devenv ["ai" "programs" package]
+        && lib.all
+        (runtime:
+          optionShape hm ["ai" runtime "programs" package]
+          == optionShape devenv ["ai" runtime "programs" package])
+        harnessNames;
+    in
+      lib.all programParity ["living-workflow" "stacked-workflows"]
+      && hm.options.stacked-workflows ? gitPreset
+      && !(devenv.options ? stacked-workflows)
   );
 
   # ── Where these contributions land ────────────────────────────────────
@@ -8433,7 +8468,7 @@ in {
   # skills, and the root pool gets none of them.
   module-sws-devenv-enable-sets-ai-skills = mkTest "sws-devenv-enable-sets-ai-skills" (
     let
-      result = evalDevenv {stacked-workflows.enable = true;};
+      result = evalDevenv {ai.programs.stacked-workflows.enable = true;};
       expected = ["stack-fix" "stack-plan" "stack-split" "stack-submit" "stack-summary" "stack-test"];
       runtimeHasAll = runtime:
         lib.all (skill: result.config.ai.${runtime}.skills ? ${skill}) expected;
@@ -8446,7 +8481,7 @@ in {
   # not in the root pool.
   module-sws-devenv-enable-sets-ai-rules = mkTest "sws-devenv-enable-sets-ai-rules" (
     let
-      result = evalDevenv {stacked-workflows.enable = true;};
+      result = evalDevenv {ai.programs.stacked-workflows.enable = true;};
       ruleRuntimes = builtins.filter (runtime: result.options.ai.${runtime} ? rules) harnessNames;
       runtimeHasOne = runtime: result.config.ai.${runtime}.rules ? stacked-workflows-router;
     in
@@ -8459,7 +8494,7 @@ in {
   # This is the scope-revert (previously the HM module was git-config only).
   module-sws-hm-enable-sets-ai-skills = mkTest "sws-hm-enable-sets-ai-skills" (
     let
-      result = evalHm {stacked-workflows.enable = true;};
+      result = evalHm {ai.programs.stacked-workflows.enable = true;};
       expected = ["stack-fix" "stack-plan" "stack-split" "stack-submit" "stack-summary" "stack-test"];
       runtimeHasAll = runtime:
         lib.all (skill: result.config.ai.${runtime}.skills ? ${skill}) expected;
@@ -8472,7 +8507,7 @@ in {
   # supporting runtime's pool.
   module-sws-hm-enable-sets-ai-rules = mkTest "sws-hm-enable-sets-ai-rules" (
     let
-      result = evalHm {stacked-workflows.enable = true;};
+      result = evalHm {ai.programs.stacked-workflows.enable = true;};
       ruleRuntimes = builtins.filter (runtime: result.options.ai.${runtime} ? rules) harnessNames;
       runtimeHasOne = runtime: result.config.ai.${runtime}.rules ? stacked-workflows-router;
     in
@@ -8485,7 +8520,7 @@ in {
   module-sws-consumer-rule-override-wins = mkTest "sws-consumer-rule-override-wins" (
     let
       result = evalHm {
-        stacked-workflows.enable = true;
+        ai.programs.stacked-workflows.enable = true;
         ai.claude.rules.stacked-workflows-router.text = "Consumer router.";
       };
     in
@@ -8494,14 +8529,28 @@ in {
       && result.config.ai.codex.rules.stacked-workflows-router.text != "Consumer router."
   );
 
+  # B4 program negation controls the package's actual per-runtime pool writes.
+  # Disabling Codex removes both its skills and router while sibling runtimes
+  # continue inheriting the portable enable.
+  module-sws-runtime-program-negation = mkTest "sws-runtime-program-negation" (
+    let
+      result = evalHm {
+        ai.programs.stacked-workflows.enable = true;
+        ai.codex.programs.stacked-workflows.enable = false;
+      };
+    in
+      result.config.ai.claude.skills ? stack-fix
+      && result.config.ai.claude.rules ? stacked-workflows-router
+      && !(result.config.ai.codex.skills ? stack-fix)
+      && !(result.config.ai.codex.rules ? stacked-workflows-router)
+  );
+
   # Git config applies when preset is "minimal".
   module-sws-git-config-minimal = mkTest "sws-git-config-minimal" (
     let
       result = evalHm {
-        stacked-workflows = {
-          enable = true;
-          gitPreset = "minimal";
-        };
+        ai.programs.stacked-workflows.enable = true;
+        stacked-workflows.gitPreset = "minimal";
       };
       gitSettings = result.config.programs.git.settings;
     in
@@ -8514,10 +8563,8 @@ in {
   module-sws-git-config-full = mkTest "sws-git-config-full" (
     let
       result = evalHm {
-        stacked-workflows = {
-          enable = true;
-          gitPreset = "full";
-        };
+        ai.programs.stacked-workflows.enable = true;
+        stacked-workflows.gitPreset = "full";
       };
       gitSettings = result.config.programs.git.settings;
     in
@@ -8532,10 +8579,8 @@ in {
   module-sws-git-config-none = mkTest "sws-git-config-none" (
     let
       result = evalHm {
-        stacked-workflows = {
-          enable = true;
-          gitPreset = "none";
-        };
+        ai.programs.stacked-workflows.enable = true;
+        stacked-workflows.gitPreset = "none";
       };
       gitSettings = result.config.programs.git.settings;
     in
@@ -8548,7 +8593,7 @@ in {
   # resolve to real, present files.
   module-sws-skill-references-resolve = mkTest "sws-skill-references-resolve" (
     let
-      result = evalDevenv {stacked-workflows.enable = true;};
+      result = evalDevenv {ai.programs.stacked-workflows.enable = true;};
       skillPath = result.config.ai.claude.skills.stack-fix;
     in
       builtins.pathExists "${skillPath}/SKILL.md"
@@ -8565,12 +8610,13 @@ in {
   # every consumer (upstream claude mkSkillEntry, our mkSkillEntries, the devenv
   # walker) materializes as a recursive DIRECTORY.
 
-  # Default: living-workflow.enable defaults to false.
+  # Default: the portable living-workflow program enable defaults to false.
   module-living-workflow-default-disabled = mkTest "living-workflow-default-disabled" (
     let
       result = evalHm {};
     in
-      !(result.config.living-workflow.enable or true)
+      !result.config.ai.programs.living-workflow.enable
+      && !(result.options ? living-workflow)
   );
 
   # HM (primary): enable -> ai.<runtime>.skills.living-workflow -> upstream
@@ -8581,7 +8627,7 @@ in {
     let
       result = evalHm {
         ai.claude.enable = true;
-        living-workflow.enable = true;
+        ai.programs.living-workflow.enable = true;
       };
     in
       result.config.programs.claude-code.skills ? living-workflow
@@ -8596,7 +8642,7 @@ in {
     let
       result = evalHm {
         ai.kiro.enable = true;
-        living-workflow.enable = true;
+        ai.programs.living-workflow.enable = true;
       };
       files = result.config.home.file;
     in
@@ -8609,10 +8655,22 @@ in {
   # the root pool alone.
   module-living-workflow-devenv-enable-sets-skill = mkTest "living-workflow-devenv-enable-sets-skill" (
     let
-      result = evalDevenv {living-workflow.enable = true;};
+      result = evalDevenv {ai.programs.living-workflow.enable = true;};
     in
       lib.all (runtime: result.config.ai.${runtime}.skills ? living-workflow) harnessNames
       && !(result.config.ai.skills ? living-workflow)
+  );
+
+  # A non-null runtime enable wins over the false portable default. Only that
+  # runtime receives the package contribution; siblings keep inheriting false.
+  module-living-workflow-runtime-program-enable = mkTest "living-workflow-runtime-program-enable" (
+    let
+      result = evalDevenv {ai.claude.programs.living-workflow.enable = true;};
+    in
+      result.config.ai.claude.skills ? living-workflow
+      && lib.all
+      (runtime: !(result.config.ai.${runtime}.skills ? living-workflow))
+      (builtins.filter (runtime: runtime != "claude") harnessNames)
   );
 
   # Disabled -> absent: with living-workflow off, no living-workflow skill is

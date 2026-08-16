@@ -7,10 +7,15 @@ applyTo: "checks/module-eval.nix,lib/ai/agent.nix,lib/ai/ai-common.nix,lib/ai/ap
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — the `ai.programs.*` factory
-> generates portable defaults and capability-gated runtime override trees from
-> one program specification; Semble is its first consumer and uses program-level
-> enable negation instead of runtime selectors; divergent runtime package
+> **Last verified:** 2026-08-16 (commit pending — `mkSkillPackageModule` now
+> consumes the `ai.programs.*` factory, moving stacked-workflows and
+> living-workflow enablement into portable plus per-runtime B4 option trees
+> while preserving their per-runtime pool writes; stacked-workflows'
+> machine-wide `gitPreset` remains an HM-only top-level companion). Prior:
+> 2026-08-15 (commit pending — the `ai.programs.*` factory generates portable
+> defaults and capability-gated runtime override trees from one program
+> specification; Semble is its first consumer and uses program-level enable
+> negation instead of runtime selectors; divergent runtime package
 > customizations use collision-free command aliases and isolated caches). Prior:
 > 2026-08-15 (commit pending — top-level proxied MCP declarations now own one
 > shared managed daemon and fan out only lowered client entries; runtime
@@ -513,13 +518,14 @@ trees. A value set in the HM-imported copy of a module is visible only to HM's
 eval. Devenv's eval has a completely separate `config.ai.skills` (etc.) that
 doesn't see the HM contribution.
 
-**Consequence for "plain modules"** (not `mkAiApp` participants, like
-`packages/stacked-workflows/modules/`): when a plain module contributes to
-`ai.skills` / `ai.rules` / etc., the contribution MUST happen in the module's
-appropriate backend sibling. If the content is HM-scope (personal user config),
-put it in the HM module. If it's project-scope (devenv-only), put it in the
-devenv module. Contributing in one and expecting the other to pick it up will
-silently fail — the contribution just doesn't land in the other eval.
+**Consequence for package modules outside `mkAiApp`** (including the
+`mkSkillPackageModule` consumers): when a package contributes to `ai.skills` /
+`ai.rules` / etc., the contribution MUST happen in the module's appropriate
+backend sibling. If the content is HM-scope (personal user config), put it in
+the HM module. If it's project-scope (devenv-only), put it in the devenv module.
+Contributing in one and expecting the other to pick it up will silently fail —
+the contribution just doesn't land in the other eval. A program option tree can
+make enablement structural without changing that per-evaluation ownership.
 
 This is a different discipline from the AI CLI factories (`mkAiApp`), which have
 structural `hm = { config = …; }` / `devenv = { config = …; }` blocks that force
@@ -543,10 +549,13 @@ an inherited portable feature value. The program still must not set
 `ai.<runtime>.enable`, because package/CLI activation remains an explicit
 consumer choice.
 
-Semble is the first factory consumer. Its single spec supports Claude, Codex,
+Semble was the first factory consumer. Its single spec supports Claude, Codex,
 and Kiro, and generates its named MCP, agent, and `semble` rule defaults in both
-backend evaluations. The rule composes into Claude and Codex's single
-always-loaded files and lets Kiro's directory-native renderer write `semble.md`.
+backend evaluations. The skill-package factory now consumes the same primitive
+for stacked-workflows and living-workflow, with an enable-only program spec that
+supports every registered runtime. The rule composes into Claude and Codex's
+single always-loaded files and lets Kiro's directory-native renderer write
+`semble.md`.
 
 Semble also treats Codex's selected sandbox mode as an integration boundary. A
 selected Codex feature plus `sandbox_mode = "workspace-write"` appends that
@@ -594,6 +603,16 @@ consumers saw nothing while the HM contribution alone reached personal scope. It
 was first scoped to the devenv module (commit `940ec54c`); the current design
 re-adds the HM contribution as its own explicit, user-global emission, so both
 backends now contribute (each via `lib/ai/mkSkillPackageModule`).
+
+That helper now declares `ai.programs.stacked-workflows.enable` and
+`ai.programs.living-workflow.enable` through `lib.ai.program.mkProgram`. A root
+true enables every supported runtime whose pool exists in the current
+evaluation; `ai.<runtime>.programs.<name>.enable = false` retracts that
+runtime's package contribution without affecting siblings. The removed top-level
+package enable options have no aliases. `stacked-workflows.gitPreset` is
+deliberately not part of the program tree: it configures Home Manager's
+machine-wide `programs.git.settings`, has no runtime meaning, and remains an
+HM-only companion instead of creating misleading runtime overrides.
 
 **Both contributions land PER RUNTIME, not on the root pool** — since 2026-08-14
 the factory writes `ai.<runtime>.skills` and `ai.<runtime>.rules` for every

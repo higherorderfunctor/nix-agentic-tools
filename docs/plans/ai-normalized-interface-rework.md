@@ -1,20 +1,25 @@
 # `ai.*` normalized-interface rework, then semble #858 on top
 
-> **Last verified:** 2026-08-15 (commit pending — PR 7 ships the `ai.programs.*`
-> factory and relocates Semble with B4 runtime overrides, program-level runtime
-> negation, and the current scalar MCP content contract). Prior: 2026-08-15
-> (commit pending — PR 6 adds the approved managed-proxy ownership contract to
-> B1a: one used top-level owner, direct runtime owners, explicit duplicate-key
-> failure, and no unused top-level materialization). Prior: 2026-08-15 (commit
-> pending — PR 6 ships all six keyed-pool null tombstones, atomic per-runtime
-> replacement, and definition-provenance checks for package collisions at root
-> and runtime scope; B1/B8/B9/B10 now record the shipped contract). Prior:
-> 2026-08-15 (commit pending — PR 5 retires the list-shaped instructions
-> surface, types context as text-XOR-source with root-first composition, and
-> gives keyed rules a normalized matcher; B5a/B6a and the removed B10 blocker
-> record those decisions). Prior: 2026-08-15 (commit pending — PR 3 now follows
-> the later execution brief: `supportedPools` generalizes the record capability
-> gate, Kimchi's dead rules options are removed, and boundary B0 records the
+> **Last verified:** 2026-08-16 (commit pending — PR 8 moves stacked-workflows
+> and living-workflow enablement onto the `ai.programs.*` factory with B4
+> runtime negation and no old aliases; the HM-only machine-wide
+> `stacked-workflows.gitPreset` remains a top-level companion rather than
+> acquiring meaningless runtime overrides). Prior: 2026-08-15 (commit pending —
+> PR 7 ships the `ai.programs.*` factory and relocates Semble with B4 runtime
+> overrides, program-level runtime negation, and the current scalar MCP content
+> contract). Prior: 2026-08-15 (commit pending — PR 6 adds the approved
+> managed-proxy ownership contract to B1a: one used top-level owner, direct
+> runtime owners, explicit duplicate-key failure, and no unused top-level
+> materialization). Prior: 2026-08-15 (commit pending — PR 6 ships all six
+> keyed-pool null tombstones, atomic per-runtime replacement, and
+> definition-provenance checks for package collisions at root and runtime scope;
+> B1/B8/B9/B10 now record the shipped contract). Prior: 2026-08-15 (commit
+> pending — PR 5 retires the list-shaped instructions surface, types context as
+> text-XOR-source with root-first composition, and gives keyed rules a
+> normalized matcher; B5a/B6a and the removed B10 blocker record those
+> decisions). Prior: 2026-08-15 (commit pending — PR 3 now follows the later
+> execution brief: `supportedPools` generalizes the record capability gate,
+> Kimchi's dead rules options are removed, and boundary B0 records the
 > unsupported-root degradation contract). Prior: 2026-08-14 against `main` at
 > `0fe1f1fd`, by two verification passes (twelve agents, then seven) over the
 > preceding design session's working notes. Every `file:line` below was re-read;
@@ -70,7 +75,7 @@ defer the namespace move", written before that sign-off.
 | 6   | **SHIPPED:** pool negation `attrsOf (nullOr …)` + net-new package-vs-package check                                                                                                                      | 5        |
 | 7a  | Delete semble `runtimes` (self-contained)                                                                                                                                                               | —        |
 | 7b  | `ai.programs.*` factory + semble relocation — ATOMIC with the parity-test rewrite and the `expectedCodexRoots` fixture                                                                                  | 1, 3, 7a |
-| 8   | Namespace move: `stacked-workflows` / `living-workflow` + its `gitPreset` parity fix                                                                                                                    | 7b       |
+| 8   | `ai.programs.*` move for stacked-workflows / living-workflow; keep machine-wide `stacked-workflows.gitPreset` as an explicit HM-only companion                                                          | 7b       |
 | 9   | semble #858 re-implementation                                                                                                                                                                           | 7b, 8    |
 
 Hard constraints behind the shape:
@@ -315,46 +320,23 @@ Runtime provenance guards leak — an inline module reports `<unknown-file>`,
 indistinguishable from a consumer's inline config — so prefer a factory that
 generates both levels from one spec and makes the fanout structural.
 
-**Scope hazard — sized 2026-08-14.** `lib/ai/mkSkillPackageModule.nix:56-57`
-writes root `ai.skills` and `ai.instructions`, which A1 bans. Those two lines
-are the **only** root-pool assignments anywhere in `packages/` or `lib/`.
+**Row 8 resolution — 2026-08-16.** PR 1 already moved the package writes to
+capability-present per-runtime skills/rules pools and replaced the proposed scan
+with the broader provenance guard. Row 8 now makes the remaining enablement
+structural: `lib/ai/mkSkillPackageModule.nix` consumes
+`lib.ai.program.mkProgram`, declaring `ai.programs.<pkg>.enable` plus all
+registered runtime override leaves from one specification. Runtime false now
+removes the actual package skill/rule contribution; the removed top-level enable
+paths have no compatibility aliases.
 
-The hazard is real but far smaller than the earlier wording implied, and it is
-**separable** from the namespace move it was attached to:
-
-- The per-runtime equivalents (`ai.<runtime>.skills`,
-  `ai.<runtime>.instructions`) **already exist for all five runtimes with
-  byte-identical types**, so fixing the writes declares no new options.
-- **The old cross-level collision was temporary and is now retired.** Once the
-  package writes `ai.<runtime>.skills`, its value replaces a consumer's same-key
-  root portable default. Because package entries use `mkDefault`, a consumer can
-  override or null-suppress the per-runtime key. Two packages claiming that same
-  per-runtime key fail the provenance guard instead.
-- It also **flips always-loaded instruction ORDER**
-  (`lib/ai/app/mkBackendTransform.nix:241` concatenates root-first), and a
-  per-runtime write requires that runtime's module to be PRESENT in the eval —
-  `devenv.nix:224-238` imports four of five. Gate on
-  `lib.hasAttrByPath ["ai" name "skills"] options` (the shape
-  `lib/ai/sharedOptions.nix:21` already uses) and add `options` to
-  `mkSkillPackageModule`'s formals.
-- **A1's proposed backstop check would never catch it.** That check is scoped to
-  `packages/*/modules/**`, and the one violation in the tree lives in `lib/ai/`.
-  Widen the scope or the check is theatre.
-- **The namespace move cannot be a pure rename.** `checks/options-doc.nix` diffs
-  every option starting with `ai.` for exact HM/devenv name and type parity, so
-  `stacked-workflows.gitPreset` — HM-only today — fails that check the moment it
-  moves under `ai.programs.*`. Its emission into `programs.git.settings` would
-  also turn A0's "one real drift" into two.
-- **Does leaving the writes as-is actually hurt?** Only once per-runtime
-  negation ships: with `ai.<runtime>.programs.<pkg>` declared per B4, a root
-  write means the negation evaluates clean and does nothing, silently. And
-  stacked-workflows' `ai.instructions` stays unretractable per runtime even
-  after B10, because B10 needs a key and that pool is a list until A3 lands.
-
-Note also that this document never actually decided the move — it appeared on
-one line, inside this hazard note, ending unresolved. **Recommendation for the
-operator (not a decision): fold in the 2-line pool fix, defer the namespace
-move.**
+`gitPreset` takes the explicit companion option from #982's resolution set. It
+remains `stacked-workflows.gitPreset`, outside `ai.*` and Home Manager-only,
+because it writes machine-wide `programs.git.settings` and has neither a
+runtime-specific meaning nor a devenv lowering. Moving it into the program spec
+would mechanically generate five runtime overrides whose precedence could not
+map coherently to one Git configuration. Keeping it separate preserves exact
+HM/devenv parity for the normalized `ai.programs.stacked-workflows` tree without
+inventing a parity-check exclusion or a silently ignored devenv option.
 
 ### A1a. The runtime registry exists three times — unify, do not invent
 

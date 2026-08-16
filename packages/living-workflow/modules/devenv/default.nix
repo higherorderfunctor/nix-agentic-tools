@@ -1,13 +1,14 @@
 # Living-workflow devenv module — project-local PARITY mirror.
 #
 # Delegates to the shared skill-packaging factory (lib/ai/mkSkillPackageModule):
-# `living-workflow.enable = true` re-contributes the same living-workflow skill
-# at project-local (devenv) scope for consumers who want it per repo
-# (config-parity rule). It lands on the PER-RUNTIME `ai.<runtime>.skills` pools
-# rather than the root one. The package entry is a whole-entry default, so a
-# consumer can replace it or suppress it with null in any runtime. Those pools
-# are per-`evalModules`, so the HM module's contribution is invisible to devenv
-# and vice-versa; each backend imports its own factory instance.
+# `ai.programs.living-workflow.enable = true` re-contributes the same
+# living-workflow skill at project-local (devenv) scope for consumers who want
+# it per repo (config-parity rule). It lands on the PER-RUNTIME
+# `ai.<runtime>.skills` pools rather than the root one. The package entry is a
+# whole-entry default, so a consumer can replace it or suppress it with null in
+# any runtime. Those pools are per-`evalModules`, so the HM module's
+# contribution is invisible to devenv and vice-versa; each backend imports its
+# own factory instance.
 #
 # State-base source: devenv eval has NO `config.xdg.stateHome` (that is a
 # home-manager option). HM is the path that bakes the Nix-resolved absolute base

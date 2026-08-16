@@ -1,8 +1,9 @@
 # Stacked-workflows home-manager module — user-global install.
 #
 # The skills + skill-routing fanout is delegated to the shared skill-packaging
-# factory (lib/ai/mkSkillPackageModule), imported below: `stacked-workflows.enable
-# = true` fans the unprefixed stack-* skills and the skill-routing rule
+# factory (lib/ai/mkSkillPackageModule), imported below:
+# `ai.programs.stacked-workflows.enable = true` fans the unprefixed stack-*
+# skills and the skill-routing rule
 # into the PER-RUNTIME `ai.<runtime>.{skills,rules}` pools of every
 # runtime present in the evaluation, so each enabled ecosystem installs them
 # user-global (~/.claude/skills, ~/.kiro/skills, ~/.claude/CLAUDE.md,
@@ -11,10 +12,14 @@
 # factory's header. Those pools are per-`evalModules`, so this HM-scope
 # contribution is independent of the devenv module's.
 #
-# On TOP of the factory, this module adds the HM-only `gitPreset` option (the
-# git-config presets have no devenv analogue). Skill sources are the deref'd,
-# self-contained skill dirs from `pkgs.stacked-workflows-content.passthru.skills`
-# (real reference files bundled inside each, so they resolve in every scope).
+# On TOP of the factory, this module keeps the HM-only
+# `stacked-workflows.gitPreset` companion option outside `ai.*`: Git presets
+# configure the machine-wide Home Manager `programs.git.settings` surface and
+# have no runtime-specific or devenv analogue. Keeping that boundary explicit
+# avoids generating meaningless `ai.<runtime>.programs.stacked-workflows`
+# `gitPreset` overrides. Skill sources are the deref'd, self-contained skill
+# dirs from `pkgs.stacked-workflows-content.passthru.skills` (real reference
+# files bundled inside each, so they resolve in every scope).
 #
 # Picked up by `collectFacet ["modules" "homeManager"]` in flake.nix.
 {
@@ -22,7 +27,8 @@
   lib,
   ...
 }: let
-  cfg = config.stacked-workflows;
+  cfg = config.ai.programs.stacked-workflows;
+  gitPreset = config.stacked-workflows.gitPreset;
 
   # Apply mkDefault to every leaf value in a nested attrset so users can
   # override individual keys at normal priority.
@@ -74,7 +80,7 @@ in {
       assertions = [
         {
           assertion =
-            !(cfg.gitPreset
+            !(gitPreset
               != "none"
               && (lib.attrByPath ["pull" "ff"] null
                 config.programs.git.settings)
@@ -93,8 +99,8 @@ in {
     }
 
     # ── Git configuration ──────────────────────────────────────────────
-    (lib.mkIf (cfg.gitPreset != "none") {
-      programs.git.settings = mkDefaultRecursive gitSettings.${cfg.gitPreset};
+    (lib.mkIf (gitPreset != "none") {
+      programs.git.settings = mkDefaultRecursive gitSettings.${gitPreset};
     })
   ]);
 }

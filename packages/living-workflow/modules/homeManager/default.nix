@@ -1,13 +1,12 @@
 # Living-workflow home-manager module — the PRIMARY install path.
 #
 # Delegates to the shared skill-packaging factory (lib/ai/mkSkillPackageModule):
-# `living-workflow.enable = true` installs the living-workflow skill USER-GLOBAL
-# to ~/.claude/skills/ and ~/.kiro/skills/ via the PER-RUNTIME
-# `ai.<runtime>.skills` pools (each enabled ecosystem fans it out) — NOT the
-# consumer-owned root `ai.skills` pool, which would fan the package out beyond
-# its runtime ownership. Those pools are per-`evalModules`, so this HM
-# contribution is independent of the devenv module's project-local parity
-# mirror.
+# `ai.programs.living-workflow.enable = true` installs the living-workflow
+# skill USER-GLOBAL to each enabled runtime's native skills directory via the
+# PER-RUNTIME `ai.<runtime>.skills` pools — NOT the consumer-owned root
+# `ai.skills` pool, which would fan the package out beyond its runtime
+# ownership. Those pools are per-`evalModules`, so this HM contribution is
+# independent of the devenv module's project-local parity mirror.
 #
 # The skill is Nix-GENERATED: `lib/mkSkill.nix` bakes the XDG state base
 # (`config.xdg.stateHome`) into SKILL.md's @XDG_STATE_BASE@ token and returns the
@@ -21,7 +20,7 @@
 # Picked up by `collectFacet ["modules" "homeManager"]` in flake.nix.
 import ../../../../lib/ai/mkSkillPackageModule.nix {
   name = "living-workflow";
-  enableDescription = "the living-workflow skill (user-global: ~/.claude/skills/ + ~/.kiro/skills/)";
+  enableDescription = "the living-workflow skill in each enabled runtime's user-global skills directory";
   skills = {
     config,
     pkgs,

@@ -1,12 +1,15 @@
 ## ai.skills Fanout Delegation Pattern
 
-> **Last verified:** 2026-08-01 (commit pending — Codex joins skills fanout at
-> the native user-global and repository-local `.agents/skills` locations).
-> Prior: 2026-04-08 (commit 97ac174 — refactor(devenv): ai.skills branches
-> delegate through ecosystem options). If you touch any of the four CLI skills
-> fanouts, `lib/ai/hm-helpers.nix:mkSkillEntries`, or upstream
-> `programs.<cli>.skills` references, and this fragment isn't updated in the
-> same commit, stop and fix it.
+> **Last verified:** 2026-08-16 (commit pending — stacked-workflows and
+> living-workflow now use `ai.programs.<name>.enable` plus nullable per-runtime
+> B4 overrides to gate their existing per-runtime skill contributions). Prior:
+> 2026-08-01 (commit pending — Codex joins skills fanout at the native
+> user-global and repository-local `.agents/skills` locations). Prior:
+> 2026-04-08 (commit 97ac174 — refactor(devenv): ai.skills branches delegate
+> through ecosystem options). If you touch any of the four CLI skills fanouts,
+> `lib/ai/hm-helpers.nix:mkSkillEntries`, or upstream `programs.<cli>.skills`
+> references, and this fragment isn't updated in the same commit, stop and fix
+> it.
 
 When an ecosystem has a `programs.<cli>.skills` option, `ai.skills` fanout MUST
 delegate through it. Codex has no upstream Home Manager module, so its factory
@@ -80,6 +83,20 @@ devenv emits project-root `.agents/skills`; neither destination is derived from
 factory without a native recursive option uses `mkDevenvSkillEntries`, which
 enumerates each leaf at evaluation time and preserves nested relative paths.
 Codex calls it with `.agents`, producing project-root `.agents/skills` entries.
+
+### Skill-package program gating
+
+`lib/ai/mkSkillPackageModule.nix` uses `lib.ai.program.mkProgram` for package
+enablement. Its portable option is `ai.programs.<name>.enable`; generated
+`ai.<runtime>.programs.<name>.enable` leaves use B4 null-as-inherit semantics. A
+resolved false runtime receives no package skills or router rule, while siblings
+continue to inherit the portable value.
+
+This controls whether the package writes its existing
+`ai.<runtime>.{skills,rules}` entries; it does not move those entries to the
+root pools. Both the stacked-workflows and living-workflow HM/devenv facets
+import their own helper instance because the two backend evaluations do not
+share pool values.
 
 ### Related
 
