@@ -55,6 +55,25 @@ in
       done < <(find "$hooks" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | sort)
     }
 
+    assert_bare_cache() {
+      local cache forbidden_a="$2" forbidden_b="$3" label="$4" state="$1"
+      find "$state" -type d -path '*/git-remote-cache/*/repo.git' \
+        | sort > "$state-caches.actual"
+      expect_eq "$label cache count" "1" "$(wc -l < "$state-caches.actual")"
+      cache="$(cat "$state-caches.actual")"
+      case "$cache" in
+      "$forbidden_a" | "$forbidden_a"/* | "$forbidden_b" | "$forbidden_b"/*)
+        fail "$label cache aliases a source or remote work area"
+        ;;
+      esac
+      expect_eq \
+        "$label cache is bare" \
+        "true" \
+        "$(git --git-dir="$cache" rev-parse --is-bare-repository)"
+      git --git-dir="$cache" fsck --connectivity-only > /dev/null \
+        || fail "$label cache is not a usable Git repository"
+    }
+
     run_bd() {
       local root="$1" cwd="$2" state="$3"
       shift 3
@@ -196,6 +215,14 @@ in
     source_after="$(git -C "$source_init/repo" rev-parse HEAD)"
     [ "$source_before" != "$source_after" ] \
       || fail "skip flags unexpectedly stopped bd init from committing"
+    expect_eq \
+      "ordinary init creates one commit" \
+      "1" \
+      "$(git -C "$source_init/repo" rev-list --count "$source_before..$source_after")"
+    expect_eq \
+      "ordinary init commit parent" \
+      "$source_before" \
+      "$(git -C "$source_init/repo" rev-parse "$source_after^")"
     expect_eq \
       "ordinary init commit subject" \
       "bd init: initialize beads issue tracking" \
@@ -448,15 +475,28 @@ in
       create "equal URL seed" --silent > /dev/null
     run_bd "$remote" "$remote/source" "$remote/equal-url-state" dolt push \
       > "$remote/equal-url-push.out"
-    find "$remote/equal-url-state" -type d -path '*/git-remote-cache/*/repo.git' -print -quit \
-      | grep -q . || fail "equal URL did not create a dedicated local bare cache"
+    assert_bare_cache \
+      "$remote/equal-url-state" \
+      "$remote/source" \
+      "$remote/source.git" \
+      "equal URL"
     expect_eq \
       "equal URL publication leaves source main unchanged" \
       "$source_remote_main" \
       "$(git -C "$remote/source.git" rev-parse refs/heads/main)"
 
-    # The Git remote adapter refuses a completely unborn remote. Seed an ordinary
-    # branch first; Dolt publication remains isolated on refs/dolt/data.
+    # The Git remote adapter refuses a completely unborn remote loudly and does
+    # not leave a partial Dolt ref. Seed an ordinary branch only after that proof.
+    make_state "$remote/unborn-state"
+    if run_bd "$remote" "$remote/source" "$remote/unborn-state" "''${init_args[@]}" \
+      --remote "file://$remote/ledger.git" > "$remote/unborn-init.out" 2>&1; then
+      fail "init from an unborn Git remote unexpectedly succeeded"
+    fi
+    grep -Fq "git remote has no branches" "$remote/unborn-init.out" \
+      || fail "unborn Git remote failure shape changed"
+    if git -C "$remote/ledger.git" rev-parse --verify refs/dolt/data > /dev/null 2>&1; then
+      fail "failed unborn push left refs/dolt/data"
+    fi
     git -C "$remote/source" push -q "file://$remote/ledger.git" main:main
     make_state "$remote/state-a"
     run_bd "$remote" "$remote/source" "$remote/state-a" "''${init_args[@]}" \
@@ -484,8 +524,11 @@ in
       || fail "explicit push did not create refs/dolt/data"
     git -C "$remote/ledger.git" rev-parse --verify refs/heads/__dolt_remote_info__ > /dev/null \
       || fail "explicit push did not create the Dolt remote metadata ref"
-    find "$remote/state-a" -type d -path '*/git-remote-cache/*/repo.git' -print -quit \
-      | grep -q . || fail "Dolt did not create a dedicated local bare cache"
+    assert_bare_cache \
+      "$remote/state-a" \
+      "$remote/source" \
+      "$remote/ledger.git" \
+      "declared ledger"
 
     published="$(git -C "$remote/ledger.git" rev-parse refs/dolt/data)"
     local_id="$(run_bd "$remote" "$remote/source" "$remote/state-a" \
@@ -588,24 +631,29 @@ in
       "777" \
       "$(stat -c %a "$telemetry/control-home/.dolt/config_global.json")"
 
-    mkdir -p "$telemetry/contained-root" "$telemetry/contained-repo"
-    chmod 700 "$telemetry/contained-root"
-    env -i HOME="$telemetry/control-home" DOLT_ROOT_PATH="$telemetry/contained-root" \
+    mkdir -p \
+      "$telemetry/contained-home" \
+      "$telemetry/contained-root" \
+      "$telemetry/contained-repo"
+    chmod 700 "$telemetry/contained-home" "$telemetry/contained-root"
+    env -i HOME="$telemetry/contained-home" DOLT_ROOT_PATH="$telemetry/contained-root" \
       DOLT_DISABLE_EVENT_FLUSH=1 PATH="$PATH" \
       ${dolt}/bin/dolt config --global --add metrics.disabled true
-    env -i HOME="$telemetry/control-home" DOLT_ROOT_PATH="$telemetry/contained-root" \
+    env -i HOME="$telemetry/contained-home" DOLT_ROOT_PATH="$telemetry/contained-root" \
       DOLT_DISABLE_EVENT_FLUSH=1 PATH="$PATH" \
       ${dolt}/bin/dolt config --global --add user.email probe@example.invalid
-    env -i HOME="$telemetry/control-home" DOLT_ROOT_PATH="$telemetry/contained-root" \
+    env -i HOME="$telemetry/contained-home" DOLT_ROOT_PATH="$telemetry/contained-root" \
       DOLT_DISABLE_EVENT_FLUSH=1 PATH="$PATH" \
       ${dolt}/bin/dolt config --global --add user.name Probe
     (
       cd "$telemetry/contained-repo"
-      env -i HOME="$telemetry/control-home" DOLT_ROOT_PATH="$telemetry/contained-root" \
+      env -i HOME="$telemetry/contained-home" DOLT_ROOT_PATH="$telemetry/contained-root" \
         DOLT_DISABLE_EVENT_FLUSH=1 PATH="$PATH" ${dolt}/bin/dolt init
-      env -i HOME="$telemetry/control-home" DOLT_ROOT_PATH="$telemetry/contained-root" \
+      env -i HOME="$telemetry/contained-home" DOLT_ROOT_PATH="$telemetry/contained-root" \
         DOLT_DISABLE_EVENT_FLUSH=1 PATH="$PATH" ${dolt}/bin/dolt status > /dev/null
     )
+    [ -z "$(find "$telemetry/contained-home" -mindepth 1 -print -quit)" ] \
+      || fail "DOLT_ROOT_PATH leaked Dolt state into HOME"
     [ -f "$telemetry/contained-root/.dolt/config_global.json" ] \
       || fail "DOLT_ROOT_PATH did not contain global config"
     expect_eq \
@@ -616,23 +664,46 @@ in
       "Dolt preserves its broad inner config mode" \
       "777" \
       "$(stat -c %a "$telemetry/contained-root/.dolt/config_global.json")"
+    expect_eq \
+      "contained metrics disable value" \
+      "true" \
+      "$(env -i HOME="$telemetry/contained-home" \
+        DOLT_ROOT_PATH="$telemetry/contained-root" PATH="$PATH" \
+        ${dolt}/bin/dolt config --global --get metrics.disabled)"
+    cat > "$telemetry/contained-events.expected" <<'EVENTS'
+    d 755 .dolt
+    d 755 .dolt/eventsData
+    f 777 .dolt/config_global.json
+    f 777 .dolt/eventsData/dolt.lock
+    EVENTS
+    find "$telemetry/contained-root" -mindepth 1 \
+      -printf '%y %m %P\n' | sort > "$telemetry/contained-events.actual"
+    diff -u "$telemetry/contained-events.expected" "$telemetry/contained-events.actual" \
+      || fail "contained Dolt telemetry residue changed"
     # cspell:disable-next-line
     if find "$telemetry/contained-root/.dolt/eventsData" -name '*.devts' -print -quit \
       | grep -q .; then
       fail "metrics.disabled=true still created Dolt event payloads"
     fi
 
-    # The available older client rejects a freshly initialized 1.2.2 database
-    # because newer table fields are unknown. The reverse direction opens and
-    # remains writable, while migration inspection only reports a version-label
-    # mismatch; this release pair does not exercise a destructive migration.
-    if run_old_bd "$contained" "$contained/cwd" "$contained/state" list --json \
-      > "$contained/old-client.out" 2>&1; then
+    # The available older client rejects a dedicated freshly initialized 1.2.2
+    # database before any issue write.
+    fresh_new="$probe/fresh-new"
+    make_home "$fresh_new"
+    make_state "$fresh_new/state"
+    mkdir -p "$fresh_new/cwd"
+    run_bd "$fresh_new" "$fresh_new/cwd" "$fresh_new/state" "''${init_args[@]}" \
+      > "$fresh_new/init.out" 2>&1
+    if run_old_bd "$fresh_new" "$fresh_new/cwd" "$fresh_new/state" list --json \
+      > "$fresh_new/old-client.out" 2>&1; then
       fail "bd 1.0.3 unexpectedly opened a fresh 1.2.2 database"
     fi
-    grep -Fq "table has unknown fields" "$contained/old-client.out" \
+    grep -Fq "table has unknown fields" "$fresh_new/old-client.out" \
       || fail "older-client refusal shape changed"
 
+    # The reverse direction opens and remains writable, while migration
+    # inspection only reports a version-label mismatch; this release pair does
+    # not exercise a destructive migration.
     upgrade="$probe/upgrade"
     make_home "$upgrade"
     make_state "$upgrade/state"
@@ -653,6 +724,10 @@ in
       > "$upgrade/inspect.out" 2>&1
     grep -Fq "schema version mismatch (current: 1.0.3, expected: 1.2.2)" \
       "$upgrade/inspect.out" || fail "upgrade inspection mismatch warning changed"
+    run_bd "$upgrade" "$upgrade/cwd" "$upgrade/state" migrate schema --json \
+      > "$upgrade/schema.out" 2>&1
+    grep -Fq "Schema already at v53" "$upgrade/schema.out" \
+      || fail "explicit schema migration result changed"
 
     touch "$out"
   ''

@@ -104,13 +104,15 @@ underneath it.
   force-push) was **rejected** because it could not land writes atomically under
   concurrency.
 
-The packaged behavior matches this architecture. `bd init --remote <URL>`
-persists the exact URL in `sync.remote`; `bd dolt remote list --json` exposes a
-`git+`-normalized transport URL. The local workspace contains a separate bare
-cache below `embeddeddolt/<database>/.dolt/git-remote-cache/`, including when
-the source and ledger URLs are equal. The cache is materialized by the first
-sync operation, not necessarily by init alone. The source working tree and its
-ordinary branches are untouched. `[measured @Beads 1.2.2 / Dolt 2.2.3]`
+The packaged embedded behavior matches this architecture.
+`bd init --remote <URL>` persists the exact URL in `sync.remote`;
+`bd dolt remote list --json` exposes a `git+`-normalized transport URL. The
+local workspace contains a separate bare cache below
+`embeddeddolt/<database>/.dolt/git-remote-cache/`, including when the source and
+ledger URLs are equal. The cache is materialized by the first sync operation,
+not necessarily by init alone. The contract asserts exactly one usable bare
+cache, distinct from both source and remote work areas. The source working tree
+and its ordinary branches are untouched. `[measured @Beads 1.2.2 / Dolt 2.2.3]`
 
 One upstream behavior must be actively rejected: if `--remote` is omitted from a
 source checkout with `origin`, bd inherits that source URL as its Dolt remote.
@@ -191,24 +193,26 @@ was a 57,317-byte `.darc` blob, so no chunk boundary was approached. This is a
 fixture-scale contract, not hosting-capacity evidence.
 `[measured @Beads 1.2.2 / Dolt 2.2.3]`
 
-## Qualified MVP ledger lifecycle
+## Qualified ledger primitives
 
-The supported lifecycle is explicit and contains no publication daemon:
+The embedded contract isolates the upstream primitives without a publication
+process:
 
 1. Create a dedicated local state directory and pre-seed its contained config.
 2. From a neutral non-Git cwd, run module-owned `bd init` with the exact ledger
    URL and non-interactive/skip flags documented in `bd-reference.md`.
 3. Assert exact `bd where`, `sync.remote`, and `bd dolt remote list` values.
-4. Publish only with explicit `bd dolt push`; consume only with explicit
-   `bd dolt pull`. Runtime automation, if any, belongs to #993.
+4. Exercise publication and consumption with explicit commands so no background
+   behavior can satisfy the assertions.
 
-A completely unborn bare Git remote is rejected loudly: GitBlobstore requires an
-ordinary branch/commit before the first Dolt publication. Once seeded, the first
-explicit push creates `refs/dolt/data` plus `refs/heads/__dolt_remote_info__`;
-normal source refs remain unchanged. Local writes do not move the remote ref. An
-independent bootstrap performed after a local-only write still saw exactly the
-published row and could not resolve the unpublished issue ID, excluding a
-delayed publisher rather than relying on an immediate ref snapshot alone.
+A completely unborn bare Git remote is rejected loudly during
+`bd init --remote`, before publication, with `git remote has no branches` and no
+`refs/dolt/data`. Once seeded, the first explicit push creates `refs/dolt/data`
+plus `refs/heads/__dolt_remote_info__`; normal source refs remain unchanged.
+Local writes do not move the remote ref. An independently contained init
+performed after a local-only write still saw exactly the published row and could
+not resolve the unpublished issue ID, excluding a delayed publisher rather than
+relying on an immediate ref snapshot alone.
 `[measured @Beads 1.2.2 / Dolt 2.2.3]`
 
 A second independently initialized state directory bootstraps from that ref and
@@ -220,6 +224,51 @@ asserts that both remain reachable in A's final `dolt_log`; row count alone is
 not treated as history evidence. This establishes loud stale-writer failure and
 explicit recovery; it does not authorize conflict-resolution strategies that
 discard either side. `[measured @Beads 1.2.2 / Dolt 2.2.3]`
+
+### Qualified external-server composition
+
+The intended day-one topology is an external loopback Dolt server, a literal
+module-owned `.beads` directory, and a declared ledger URL. Initialization from
+a neutral non-Git cwd preserves that URL, verifies the complete remote set, and
+leaves source Git state untouched. Eight source-checkout writers plus eight
+linked-worktree writers persist through the shared server. Initialization and
+writes do not publish while `dolt.auto-push=false`, `BD_DOLT_AUTO_PUSH=false`,
+`export.auto=false`, `export.git-add=false`, `no-git-ops=true`, and Beads hooks
+remain disabled. `[measured server probe @Beads 1.2.2 / Dolt 2.2.3]`
+
+Pinned Dolt 2.2.3 has one deterministic process-state defect in the initial
+publication window. Initialization against a Git remote with an ordinary seed
+branch but no `refs/dolt/data` attempts `DOLT_CLONE`; the clone registers a
+process-global Git-remote chunk-store entry, then fails because the remote has
+no Dolt data. Clone cleanup deletes the database directory and its cache repo
+without evicting that entry. The same server's first `CALL DOLT_PUSH` reuses the
+stale entry and fails with `fatal: not a git repository` while leaving the
+ledger unchanged. This is Dolt cache invalidation, not a Beads routing defect;
+external-server Beads correctly selects SQL because it cannot see a CLI database
+directory. The file-and-line diagnosis and hermetic reproduction are retained in
+issue #1025.
+
+The settled module pusher is also the measured recovery. It derives the database
+name from `.beads/metadata.json`, acquires the repository singleton lock, and
+runs raw `dolt push --set-upstream origin main` from the server data directory.
+That fresh Dolt process recreates exactly one usable bare cache, publishes
+`refs/dolt/data`, and heals the still-running server: the next `bd dolt push`
+succeeds without a restart. No version override, Dolt patch, cache-path glue, or
+manual operator/agent push is required. A future upstream fix changes the
+discrimination result, not the module-pusher ownership decision.
+`[measured server probe @Beads 1.2.2 / Dolt 2.2.3]`
+
+Publication is module-explicit: the pusher performs a start-up drain and the
+configured interval loop, with a per-repository enable toggle and singleton
+guard. Beads-side auto-push and export stay inert, so agents and operators never
+publish imperatively. Pull remains `bd dolt pull`: in the measured same-row
+conflict, it failed loudly and restored the clean pre-pull working set, whereas
+raw `dolt pull` left an unresolved table conflict. Fresh recovery remains
+`bd bootstrap`; activation invokes it only when the configured database is
+absent and otherwise verifies existing state, because rerunning bootstrap with
+`sync.remote` set is anti-idempotent. Runtime process wiring belongs to #993;
+these are the qualified boundaries consumed by #992 and #993.
+`[measured session @Beads 1.2.2 / Dolt 2.2.3; measured server probe for publication and bootstrap]`
 
 ## Encrypted-remote options
 

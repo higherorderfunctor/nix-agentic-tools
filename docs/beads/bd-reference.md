@@ -75,9 +75,11 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
   `#cgo pkg-config:` line), `doCheck = false`, and a dolt PATH wrap. It also
   ships `beads-rust` (an unrelated single-maintainer Rust reimplementation) and
   `beads-viewer`. `[upstream]`
-- **dolt**: a separate binary, required for the server modes;
-  `bd dolt push/pull` shells out to it. nixpkgs carries it (2.2.4 at this repo's
-  2026-08 pin; Apache-2.0). Dolt's `metrics.disabled` default is false.
+- **dolt**: a separate binary, required for the server modes.
+  `bd dolt push/pull` may use the CLI or Dolt SQL procedures; an external server
+  whose data directory is not visible to Beads uses `CALL DOLT_PUSH` /
+  `CALL DOLT_PULL`. nixpkgs carries Dolt 2.2.4 at this repo's 2026-08 pin
+  (Apache-2.0). Dolt's `metrics.disabled` default is false.
   `DOLT_DISABLE_EVENT_FLUSH=1` prevents queued events from being sent but still
   permits local event files; complete collection disablement is the stateful
   user-global `metrics.disabled = true` setting. The repository's `bd` wrapper
@@ -86,10 +88,12 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
   file, confirming that the wrapper control prevents network flushing but is not
   the collection kill switch. `DOLT_ROOT_PATH=<contained-root>` relocates both
   `.dolt/config_global.json` and `.dolt/eventsData`; setting
-  `metrics.disabled=true` there before init leaves only the event lock and no
-  `.devts` payload. Dolt creates some global-state paths mode 0777, so the
-  module must create and enforce the outer directory's restrictive mode rather
-  than inheriting Dolt's defaults. `[measured contract @1.2.2/2.2.3]`
+  `metrics.disabled=true` there before init leaves exactly the contained global
+  config, events directory, and event lock, with no `.devts` payload; a distinct
+  clean `HOME` remains empty and the effective global value reads back as
+  `true`. Dolt creates some inner global-state paths mode 0777, so the module
+  must create and enforce the outer directory's restrictive mode rather than
+  inheriting Dolt's defaults. `[measured contract @1.2.2/2.2.3]`
 - **Compilation**: `bd` is plain Go. The nixpkgs and llm-agents derivations
   build with cgo/ICU (verified at the date above); the upstream flake's own
   derivation was earlier recorded as a pure-Go build (`gms_pure_go` tag, no cgo)
@@ -151,6 +155,17 @@ contained fixture, `no-git-ops` reports `config.yaml` provenance and embedded
 `[measured contract @1.2.2/2.2.3]` The YAML config is a working-tree file and is
 **not** included in `bd export`; posture config must be re-applied after any
 rebuild from JSONL `[measured @1.1.0]`.
+
+**Native bootstrap is the recovery primitive, not the general activation
+primitive.** Fresh `bd bootstrap` restores the published rows and exact Dolt
+history through an external server when `BEADS_DIR` is a literal `.beads`
+directory, `sync.remote` is declared, and the target database is absent. With
+`sync.remote` still set, a second invocation selects clone again and fails
+because the database exists. Activation must therefore bootstrap only an absent
+database and verify an existing one without rerunning bootstrap. `bd vc log` is
+not a validation command in 1.2.2: it prints help and exits zero because no
+`log` subcommand exists. Verify restored history with read-only `dolt log` from
+the resolved database directory. `[measured server probe @1.2.2/2.2.3]`
 
 **Secrets.** Dolt-server credentials live in an INI file at
 `~/.config/beads/credentials` (directory `beads`, **not** `bd`), sections keyed
@@ -227,11 +242,19 @@ Storage layout under a project-local workspace: `.beads/config.yaml` (track),
   multi-writer mode. `[measured contract @1.2.2/2.2.3]`
 - **Server**: an external `dolt sql-server`; default port 3307. An explicit
   `bd init --server --external --server-host <loopback> --server-port <port> --database <name>`
-  works with an out-of-tree workspace. `bd dolt show --json` is the usable
-  readiness check (`connection_ok: true` plus exact host, port, and database).
-  `bd dolt status` reports `running: false` and `bd dolt stop` refuses because
-  bd does not own the external process. The devenv process supervisor must own
-  start, logs, restart, and backoff. `[measured server probe @1.2.2/2.2.3]`
+  works with an out-of-tree workspace. Before mutation, the durable probe
+  authenticates a read-only query with the private secret from that server's
+  `sql-server.info`; an open port and live PID alone do not prove endpoint
+  ownership. `bd dolt show --json` then reports `connection_ok: true` plus the
+  exact host, port, and database. `bd dolt status` reports `running: false` and
+  `bd dolt stop` refuses because bd does not own the external process.
+  `[measured server probe @1.2.2/2.2.3]`
+- **Native server lifecycle**: `bd init --server` without `--external`
+  auto-starts a background server and writes project-local lock, log, PID, and
+  port files. `bd dolt status/start/stop` observe and control that process. A
+  forced crash is reported as stopped and is not restarted automatically;
+  explicit `bd dolt start` recovers it. The pinned native lifecycle therefore
+  supplies no restart/backoff policy. `[measured server probe @1.2.2/2.2.3]`
 - **Shared-server**: one Dolt server at `~/.beads/shared-server/`, default port
   **3308** (3307 is reserved for the plain server, 3306 for real MySQL), with a
   per-project database selected by **prefix**. Enable via
@@ -296,8 +319,9 @@ behavior. `[measured server probe @1.2.2/2.2.3]`
 **Process residue**: embedded commands left no resident `bd` or Dolt process in
 the measured session. External-server mode leaves only the supervisor-owned
 `dolt sql-server`; bd's status/stop commands do not adopt it, and the durable
-probe's cleanup trap terminates it. No write performed an automatic
-`bd dolt push`.
+probe's bounded cleanup trap terminates it. Native-server mode leaves the
+documented project-local process files and one bd-owned server until explicit
+stop. No write performed an automatic `bd dolt push`.
 `[measured session @1.2.2/2.2.3; measured server probe @1.2.2/2.2.3; measured contract @1.2.2/2.2.3 for publication]`
 
 ## Workspace resolution and isolation
