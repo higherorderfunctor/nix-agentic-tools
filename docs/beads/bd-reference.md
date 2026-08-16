@@ -176,15 +176,16 @@ does not stop the `beads.role` mutation when cwd is a Git checkout.
 `[measured contract @1.2.2/2.2.3]`
 
 The ordinary skip-flags fixture's complete top-level residue is `.beads/` with
-`.gitignore`, `.local_version`, `README.md`, `config.yaml`,
-`interactions.jsonl`, and `metadata.json`, plus root `.gitignore`. Its init
-commit tracks all except `.local_version`; its exact subject is
-`bd init: initialize beads issue tracking`. The only local Git-config delta is
-`beads.role=maintainer`, and the pre-existing hook set is unchanged. Standalone
-`--stealth` creates the same Beads top-level files, keeps the worktree clean and
-HEAD fixed, leaves hooks/AGENTS.md absent, adds only `beads.role`, writes
-exactly `no-git-ops: true`, and appends the six exclude entries asserted by the
-contract check. `[measured contract @1.2.2/2.2.3]`
+the `embeddeddolt/` directory and `.gitignore`, `.local_version`, `README.md`,
+`config.yaml`, `interactions.jsonl`, and `metadata.json`, plus root
+`.gitignore`. Its init commit tracks all except `.local_version`; its exact
+subject is `bd init: initialize beads issue tracking`. The only local Git-config
+delta is `beads.role=maintainer`, and the pre-existing hook set is unchanged.
+Standalone `--stealth` creates the same Beads top-level files, keeps the
+worktree clean and HEAD fixed, leaves hooks/AGENTS.md absent, adds only
+`beads.role`, writes exactly `no-git-ops: true`, and makes the Beads-labeled
+stealth block the only `.git/info/exclude` change.
+`[measured contract @1.2.2/2.2.3]`
 
 The minimal contained initialization is module-owned: run from a neutral,
 non-Git cwd with an explicit out-of-tree `BEADS_DIR`; create its mode-0700
@@ -286,7 +287,7 @@ exclusive without an independently proven compare-and-publish protocol.
 with connection refused. `BEADS_DOLT_SERVER_PORT` overrides the stale file and
 restores the connection. The process environment and `bd dolt show --json` must
 therefore be authoritative. Killing the server makes writes fail loudly; the
-server log contains the connection/query failure context. A no-auto-commit row
+client output contains the connection failure context. A no-auto-commit row
 survived a kill and restart in the disposable probe, but the minimum supported
 recovery remains backup/remote-ref based rather than relying on that working-set
 behavior. `[measured server probe @1.2.2/2.2.3]`

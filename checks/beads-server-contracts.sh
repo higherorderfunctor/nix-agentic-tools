@@ -12,6 +12,7 @@ dolt_bin="$2"
 probe_root="$(mktemp -d "${TMPDIR:-/tmp}/beads-server-contracts.XXXXXXXX")"
 server_pid=""
 server_port=""
+writer_processes=()
 
 fail() {
   printf 'beads-server-contracts: %s\n' "$1" >&2
@@ -21,12 +22,30 @@ fail() {
 stop_server() {
   if [[ -n $server_pid ]] && kill -0 "$server_pid" 2>/dev/null; then
     kill "$server_pid" 2>/dev/null || :
+    for _ in $(seq 1 100); do
+      if ! kill -0 "$server_pid" 2>/dev/null; then
+        break
+      fi
+      sleep 0.05
+    done
+    if kill -0 "$server_pid" 2>/dev/null; then
+      kill -KILL "$server_pid" 2>/dev/null || :
+    fi
     wait "$server_pid" 2>/dev/null || :
   fi
   server_pid=""
 }
 
 cleanup() {
+  local writer_pid
+  for writer_pid in "${writer_processes[@]}"; do
+    if kill -0 "$writer_pid" 2>/dev/null; then
+      kill "$writer_pid" 2>/dev/null || :
+    fi
+  done
+  for writer_pid in "${writer_processes[@]}"; do
+    wait "$writer_pid" 2>/dev/null || :
+  done
   stop_server
   case "$probe_root" in
   "${TMPDIR:-/tmp}"/beads-server-contracts.*)
@@ -44,11 +63,15 @@ port_is_open() {
 }
 
 start_server() {
-  local candidate log_offset
+  local candidate info log_offset
   log_offset="$1"
+  info="$probe_root/dolt-data/.dolt/sql-server.info"
   for candidate in $(seq "$((43000 + ($$ % 1000) + log_offset))" 44999); do
     if port_is_open "$candidate"; then
       continue
+    fi
+    if [[ -e $info ]]; then
+      rm -f -- "$info"
     fi
     server_port="$candidate"
     (
@@ -65,7 +88,10 @@ start_server() {
     ) >"$probe_root/server-$server_port.log" 2>&1 &
     server_pid="$!"
     for _ in $(seq 1 200); do
-      if port_is_open "$server_port"; then
+      if kill -0 "$server_pid" 2>/dev/null &&
+        [[ -f $info ]] &&
+        [[ $(<"$info") == "$server_pid:$server_port:"* ]] &&
+        port_is_open "$server_port"; then
         return
       fi
       if ! kill -0 "$server_pid" 2>/dev/null; then
@@ -119,6 +145,7 @@ password = fixture-file-password
 EOF
 
 start_server 0
+database_name="contract_$$_$(date +%s%N)"
 sed -i "s/:PORT]/:$server_port]/" "$probe_root/home/.config/beads/credentials"
 sed -i 's/password = fixture-file-password/password =/' \
   "$probe_root/home/.config/beads/credentials"
@@ -126,7 +153,7 @@ sed -i 's/password = fixture-file-password/password =/' \
 (
   cd "$probe_root/cwd"
   run_bd init \
-    --database external \
+    --database "$database_name" \
     --external \
     --init-if-missing \
     --non-interactive \
@@ -140,8 +167,9 @@ sed -i 's/password = fixture-file-password/password =/' \
 
 show="$(run_bd dolt show --json)"
 jq -e \
+  --arg database "$database_name" \
   --argjson port "$server_port" \
-  '.connection_ok == true and .database == "external" and
+  '.connection_ok == true and .database == $database and
     .host == "127.0.0.1" and .port == $port' \
   <<<"$show" >/dev/null || fail "external server readiness shape changed"
 run_bd list --json >/dev/null 2>"$probe_root/broad-credentials.out"
@@ -183,11 +211,16 @@ for writer in $(seq 1 8); do
   writer_processes+=("$!")
   writer_labels+=("linked-$writer")
 done
+writer_failed=0
 for index in "${!writer_processes[@]}"; do
   if ! wait "${writer_processes[$index]}"; then
-    fail "server writer ${writer_labels[$index]} failed"
+    printf 'beads-server-contracts: server writer %s failed\n' \
+      "${writer_labels[$index]}" >&2
+    writer_failed=1
   fi
 done
+writer_processes=()
+((writer_failed == 0)) || fail "one or more server writers failed"
 elapsed_ms="$((($(date +%s%N) - started_ns) / 1000000))"
 issue_count="$(run_bd list --json | jq length)"
 [[ $issue_count == 16 ]] || fail "server writers persisted $issue_count/16 rows"
@@ -198,6 +231,12 @@ old_port="$server_port"
 kill -KILL "$server_pid"
 wait "$server_pid" 2>/dev/null || :
 server_pid=""
+if run_bd create "offline write must fail" --silent \
+  >"$probe_root/offline-write.out" 2>&1; then
+  fail "write without a server unexpectedly succeeded"
+fi
+grep -Eq 'connection refused|connect:' "$probe_root/offline-write.out" ||
+  fail "offline write did not fail loudly"
 start_server 1000
 if run_bd_without_port list --json >"$probe_root/stale-port.out" 2>&1; then
   fail "stale recorded server port unexpectedly connected"
@@ -216,4 +255,7 @@ printf 'writers=16\n'
 printf 'elapsed_ms=%s\n' "$elapsed_ms"
 printf 'nothing_to_commit_warnings=%s\n' "$warning_count"
 printf 'external_status=%s\n' "$(jq -c . <<<"$status")"
-printf 'stale_port_failure=%s\n' "$(tail -n 1 "$probe_root/stale-port.out")"
+printf 'offline_write_failure=%s\n' \
+  "$(grep -Em1 'connection refused|connect:' "$probe_root/offline-write.out")"
+printf 'stale_port_failure=%s\n' \
+  "$(grep -Em1 'connection refused|connect:' "$probe_root/stale-port.out")"

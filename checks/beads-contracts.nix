@@ -201,23 +201,39 @@ in
     git -C "$source_init/repo" ls-tree -r --name-only HEAD > "$source_init/tracked.actual"
     diff -u "$source_init/tracked.expected" "$source_init/tracked.actual" \
       || fail "ordinary init tracked residue changed"
+    # cspell:ignore embeddeddolt
     cat > "$source_init/state-files.expected" <<'FILES'
-    .gitignore
-    .local_version
-    README.md
-    config.yaml
-    interactions.jsonl
-    metadata.json
+    d embeddeddolt
+    f .gitignore
+    f .local_version
+    f README.md
+    f config.yaml
+    f interactions.jsonl
+    f metadata.json
     FILES
-    find "$source_init/repo/.beads" -maxdepth 1 -type f -printf '%f\n' \
+    find "$source_init/repo/.beads" -mindepth 1 -maxdepth 1 -printf '%y %f\n' \
       | sort > "$source_init/state-files.actual"
     diff -u "$source_init/state-files.expected" "$source_init/state-files.actual" \
       || fail "ordinary init state residue changed"
-    git -C "$source_init/repo" config --local --list | sort > "$source_init/config.after"
+    cat > "$source_init/root.expected" <<'FILES'
+    d .beads
+    d .git
+    f .gitignore
+    FILES
+    find "$source_init/repo" -mindepth 1 -maxdepth 1 -printf '%y %f\n' \
+      | sort > "$source_init/root.actual"
+    diff -u "$source_init/root.expected" "$source_init/root.actual" \
+      || fail "ordinary init root residue changed"
     expect_eq \
-      "ordinary init local Git config delta" \
-      "beads.role=maintainer" \
-      "$(comm -13 "$source_init/config.before" "$source_init/config.after")"
+      "ordinary init leaves a clean worktree" \
+      "" \
+      "$(git -C "$source_init/repo" status --short --untracked-files=all)"
+    git -C "$source_init/repo" config --local --list | sort > "$source_init/config.after"
+    cp "$source_init/config.before" "$source_init/config.expected"
+    printf 'beads.role=maintainer\n' >> "$source_init/config.expected"
+    sort -o "$source_init/config.expected" "$source_init/config.expected"
+    diff -u "$source_init/config.expected" "$source_init/config.after" \
+      || fail "ordinary init local Git config changed unexpectedly"
     find "$source_init/repo/.git/hooks" -maxdepth 1 -type f -printf '%f\n' \
       | sort > "$source_init/hooks.after"
     cmp "$source_init/hooks.before" "$source_init/hooks.after" \
@@ -233,6 +249,7 @@ in
     git -C "$stealth/repo" config user.name Probe
     git -C "$stealth/repo" commit -q --allow-empty -m seed
     git -C "$stealth/repo" config --local --list | sort > "$stealth/config.before"
+    cp "$stealth/repo/.git/info/exclude" "$stealth/exclude.before"
     find "$stealth/repo/.git/hooks" -maxdepth 1 -type f -printf '%f\n' \
       | sort > "$stealth/hooks.before"
     stealth_before="$(git -C "$stealth/repo" rev-parse HEAD)"
@@ -248,30 +265,44 @@ in
     expect_eq "stealth leaves a clean worktree" "" "$(git -C "$stealth/repo" status --short)"
     expect_eq "stealth config" "no-git-ops: true" "$(cat "$stealth/repo/.beads/config.yaml")"
     git -C "$stealth/repo" config --local --list | sort > "$stealth/config.after"
-    expect_eq \
-      "stealth local Git config delta" \
-      "beads.role=maintainer" \
-      "$(comm -13 "$stealth/config.before" "$stealth/config.after")"
+    cp "$stealth/config.before" "$stealth/config.expected"
+    printf 'beads.role=maintainer\n' >> "$stealth/config.expected"
+    sort -o "$stealth/config.expected" "$stealth/config.expected"
+    diff -u "$stealth/config.expected" "$stealth/config.after" \
+      || fail "stealth local Git config changed unexpectedly"
     find "$stealth/repo/.git/hooks" -maxdepth 1 -type f -printf '%f\n' \
       | sort > "$stealth/hooks.after"
     cmp "$stealth/hooks.before" "$stealth/hooks.after" \
       || fail "stealth changed Git hooks"
     [ ! -e "$stealth/repo/AGENTS.md" ] || fail "stealth wrote AGENTS.md"
-    find "$stealth/repo/.beads" -maxdepth 1 -type f -printf '%f\n' \
+    find "$stealth/repo/.beads" -mindepth 1 -maxdepth 1 -printf '%y %f\n' \
       | sort > "$stealth/state-files.actual"
     diff -u "$source_init/state-files.expected" "$stealth/state-files.actual" \
       || fail "stealth state residue changed"
+    cat > "$stealth/root.expected" <<'FILES'
+    d .beads
+    d .git
+    FILES
+    find "$stealth/repo" -mindepth 1 -maxdepth 1 -printf '%y %f\n' \
+      | sort > "$stealth/root.actual"
+    diff -u "$stealth/root.expected" "$stealth/root.actual" \
+      || fail "stealth root residue changed"
     # cspell:ignore proxieddb
-    for excluded in \
-      ".beads/" \
-      ".claude/settings.local.json" \
-      ".dolt/" \
-      "*.db" \
-      ".beads-credential-key" \
-      ".beads/proxieddb/"; do
-      grep -Fxq "$excluded" "$stealth/repo/.git/info/exclude" \
-        || fail "stealth exclude is missing $excluded"
-    done
+    cp "$stealth/exclude.before" "$stealth/exclude.expected"
+    cat >> "$stealth/exclude.expected" <<'EXCLUDES'
+
+    # Beads stealth mode (added by bd init --stealth)
+    .beads/
+    .claude/settings.local.json
+
+    # Beads: Dolt files kept local via .git/info/exclude (stealth / no-git-ops)
+    .dolt/
+    *.db
+    .beads-credential-key
+    .beads/proxieddb/
+    EXCLUDES
+    diff -u "$stealth/exclude.expected" "$stealth/repo/.git/info/exclude" \
+      || fail "stealth exclude mutation changed"
 
     # Unset discovery follows the common Git directory into linked worktrees.
     # A missing or empty BEADS_DIR does not fail closed: it is ignored and the
@@ -290,6 +321,11 @@ in
     fallback_where="$(run_bd "$source_init" "$source_init/repo" "$source_init/empty-state" \
       where --json | jq -r .path)"
     expect_eq "empty BEADS_DIR falls back" "$main_where" "$fallback_where"
+    fallback_where="$(run_bd "$source_init" "$source_init/repo" "$source_init/absent-state" \
+      where --json | jq -r .path)"
+    expect_eq "missing BEADS_DIR falls back" "$main_where" "$fallback_where"
+    [ ! -e "$source_init/absent-state" ] \
+      || fail "missing BEADS_DIR fallback materialized the absent path"
 
     # Independent writers launched from a checkout and its linked worktree can
     # share one external embedded workspace. The fallback is safe but slow;
