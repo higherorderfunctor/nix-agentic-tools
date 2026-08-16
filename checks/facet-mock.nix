@@ -35,13 +35,12 @@
     devenv = {devenvOnly = "devenv";};
     homeManager = {hmOnly = "home-manager";};
   };
-  world = enforceLocalChecks (
-    loader.compose {
-      facetsDir = compatibleRoot;
-      inherit pkgs specialArgs system;
-      registryModules = [registryModule];
-    }
-  );
+  coreWorld = loader.compose {
+    facetsDir = compatibleRoot;
+    inherit pkgs specialArgs system;
+    registryModules = [registryModule];
+  };
+  world = enforceLocalChecks coreWorld;
 
   compatibleEntries = builtins.readDir compatibleRoot;
   expectedOwnerNames = sort builtins.lessThan (filter (name: compatibleEntries.${name} == "directory") (attrNames compatibleEntries));
@@ -87,9 +86,15 @@
       in
         if builtins.pathExists source
         then let
-          checks = import source {
-            inherit lib pkgs system world;
-          };
+          imported = import source;
+          checks =
+            if builtins.isFunction imported
+            then
+              imported {
+                inherit lib pkgs system;
+                world = coreWorld;
+              }
+            else imported;
         in
           map (key: {
             inherit key owner source;
@@ -240,23 +245,24 @@
     scenario ? registry,
   }: let
     facetsDir = collisionRoot + "/${scenario}";
+    sourceFile =
+      if registry == "packages"
+      then "packages/shared.nix"
+      else "${registry}.nix";
   in {
     inherit facetsDir force name;
     expected = [
       "facet collision in ${registry} at '${key}'"
-      "one ("
-      "/one/${
-        if registry == "packages"
-        then "packages/shared.nix"
-        else "${registry}.nix"
-      })"
-      "two ("
-      "/two/${
-        if registry == "packages"
-        then "packages/shared.nix"
-        else "${registry}.nix"
-      })"
+      "owner-source:one:one/${sourceFile}"
+      "owner-source:two:two/${sourceFile}"
     ];
+  };
+
+  scannerProbe = scenario: expected: {
+    facetsDir = collisionRoot + "/${scenario}";
+    force = "owners";
+    name = scenario;
+    inherit expected;
   };
 
   probes = [
@@ -279,37 +285,64 @@
       force = "checks";
       expected = ["facet local check failed: deliberate-false"];
     }
-    {
-      name = "invalid-owner";
-      facetsDir = collisionRoot + "/invalid-owner";
-      force = "owners";
-      expected = [
-        "invalid owner 'Bad'"
-        "/Bad"
-        "allowed form: [a-z][a-z0-9-]*"
-      ];
-    }
-    {
-      name = "unknown-entry";
-      facetsDir = collisionRoot + "/unknown-entry";
-      force = "owners";
-      expected = [
-        "owner 'one'"
-        "/one/unexpected.nix"
-        "allowed forms:"
-      ];
-    }
-    {
-      name = "empty-owner";
-      facetsDir = collisionRoot + "/empty-owner";
-      force = "owners";
-      expected = [
-        "owner 'one'"
-        "/one"
-        "empty or documentation-only"
-        "allowed forms require at least one facet contribution"
-      ];
-    }
+    (scannerProbe "invalid-owner" [
+      "invalid owner 'Bad'"
+      "/Bad"
+      "allowed form: [a-z][a-z0-9-]*"
+    ])
+    (scannerProbe "unknown-entry" [
+      "owner 'one'"
+      "/one/unexpected.nix"
+      "allowed forms:"
+    ])
+    (scannerProbe "empty-owner" [
+      "owner 'one'"
+      "/one"
+      "empty or documentation-only"
+      "allowed forms require at least one facet contribution"
+    ])
+    (scannerProbe "root-non-directory" [
+      "facets directory"
+      "root-non-directory/one"
+      "contains non-directory owner entry"
+      "allowed forms: immediate owner directories"
+    ])
+    (scannerProbe "packages-non-directory" [
+      "owner 'one'"
+      "/one/packages"
+      "non-directory contribution container"
+      "allowed forms require directories"
+    ])
+    (scannerProbe "modules-non-directory" [
+      "owner 'one'"
+      "/one/modules"
+      "non-directory contribution container"
+      "allowed forms require directories"
+    ])
+    (scannerProbe "package-invalid-entry" [
+      "owner 'one'"
+      "/one/packages/Bad.txt"
+      "invalid package entry"
+      "allowed forms: regular <export>.nix files with lowercase kebab-case names"
+    ])
+    (scannerProbe "package-non-regular" [
+      "owner 'one'"
+      "/one/packages/shared.nix"
+      "invalid package entry"
+      "allowed forms: regular <export>.nix files with lowercase kebab-case names"
+    ])
+    (scannerProbe "module-unknown" [
+      "owner 'one'"
+      "/one/modules/other.nix"
+      "unknown module"
+      "allowed forms: devenv.nix, homeManager.nix"
+    ])
+    (scannerProbe "module-non-regular" [
+      "owner 'one'"
+      "/one/modules/devenv.nix"
+      "non-regular module"
+      "allowed forms require regular Nix files"
+    ])
   ];
 
   probeCommands =
@@ -345,6 +378,15 @@
 
         local expected
         for expected in "$@"; do
+          case "$expected" in
+            owner-source:*)
+              local pair="''${expected#owner-source:}"
+              local pair_owner="''${pair%%:*}"
+              local pair_path="''${pair#*:}"
+              expected="$pair_owner ($facets_dir/$pair_path)"
+              ;;
+            *) ;;
+          esac
           if ! ${pkgs.gnugrep}/bin/grep -F -- "$expected" "$name.stderr" >/dev/null; then
             echo "facet mock negative probe missed diagnostic '$expected': $name" >&2
             ${pkgs.coreutils}/bin/cat "$name.stderr" >&2
