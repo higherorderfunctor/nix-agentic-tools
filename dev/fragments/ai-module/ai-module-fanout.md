@@ -4,13 +4,16 @@
 > program-inherited MCP integration from explicit CLI-rule and named-agent
 > opt-ins; MCP agents use a committed tool-specific prompt, and only Kiro may
 > retain an agent-scoped server while suppressing root exposure). Prior:
-> 2026-08-16 (commit pending — `mkSkillPackageModule` now consumes the
-> `ai.programs.*` factory, moving stacked-workflows and living-workflow
-> enablement into portable plus per-runtime B4 option trees while preserving
-> their per-runtime pool writes; runtime inventories now cover all five
-> registered ecosystems; stacked-workflows' machine-wide `gitPreset` remains an
-> HM-only top-level companion). Prior: 2026-08-15 (commit pending — the
-> `ai.programs.*` factory generates portable defaults and capability-gated
+> 2026-08-16 (commit pending — Kiro's shared factory now exposes a default-on
+> `useFhsSandbox` package-selection option in both backends, and places
+> `trustedMcpTools` on the inner FHS payload so devenv launcher dispatch cannot
+> bypass it). Prior: 2026-08-16 (commit pending — `mkSkillPackageModule` now
+> consumes the `ai.programs.*` factory, moving stacked-workflows and
+> living-workflow enablement into portable plus per-runtime B4 option trees
+> while preserving their per-runtime pool writes; runtime inventories now cover
+> all five registered ecosystems; stacked-workflows' machine-wide `gitPreset`
+> remains an HM-only top-level companion). Prior: 2026-08-15 (commit pending —
+> the `ai.programs.*` factory generates portable defaults and capability-gated
 > runtime override trees from one program specification; Semble is its first
 > consumer and uses program-level enable negation instead of runtime selectors;
 > divergent runtime package customizations use collision-free command aliases
@@ -247,6 +250,10 @@ The ai module fans out TWO kinds of configuration:
   both backends. It is Kiro-specific because it closes the Linux `buildFHSEnv`
   visibility gap; it remains independent of `ai.shell`, which selects an
   executable rather than supplying commands.
+- `ai.kiro.useFhsSandbox` — defaults true and keeps nixpkgs' Linux compatibility
+  wrapper. False selects the configured package's pinned `passthru.unwrapped`
+  payload in both backends; packages without that route fail a named assertion.
+  This is runtime-specific package selection, not a normalized sandbox pool.
 - `ai.codex.nativeSettings` — typed stable keys plus a TOML-compatible native
   freeform tail. Home Manager reconciles exact declared leaves into a writable
   `${configDir}/config.toml`; devenv writes a statically Nix-owned

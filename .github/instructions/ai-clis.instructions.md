@@ -289,9 +289,9 @@ Packages live under `pkgs.ai.*` and are flattened to top-level flake outputs
 
 ### Build Patterns
 
-**overrideAttrs binary** (kiro-cli): overrides the existing nixpkgs derivation
-to pin the version and `src` from a per-platform `sources.json`, inheriting
-upstream install/wrapper logic.
+**overrideAttrs binary** (kiro-cli): overrides nixpkgs' `kiro-cli-unwrapped`
+derivation to pin the version and `src` from a per-platform `sources.json`, then
+re-composes the public package through upstream's wrapper.
 
 **Standalone binary** (chatgpt-codex, copilot-cli, kimchi): there is no nixpkgs
 base to inherit, so these are fresh `stdenv.mkDerivation`s over a per-platform
@@ -467,7 +467,11 @@ of three environments, now one shared environment); the public derivation has no
 `fixupPhase`, so the pin AND the `postFixup` both evaporated while the build
 stayed green. `overlays/kiro-cli.nix` therefore feature-detects
 `ourPkgs ? kiro-cli-unwrapped`, overrides the unwrapped derivation, and hands
-the result back to upstream's wrapper via `.override`.
+the result back to upstream's wrapper via `.override`. Its public passthru also
+exposes `withFhsPayload` so module configuration that must be visible inside the
+FHS root can use that same upstream expression; `useFhsSandbox = false` selects
+the pinned `unwrapped` payload explicitly instead of changing the public
+package's default meaning.
 
 Read the "When the attribute stops being the derivation" section of the
 overlay-pattern fragment before adding another `overrideAttrs` package — it

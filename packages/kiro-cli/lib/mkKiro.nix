@@ -534,6 +534,16 @@
         message = "ai.kiro: cannot set both `agents` and `agentsDir` — choose one.";
       }
       {
+        assertion = cfg.useFhsSandbox || cfg.package ? unwrapped;
+        message = ''
+          ai.kiro: `useFhsSandbox = false` needs a `package` exposing
+          `passthru.unwrapped`, which `pkgs.ai.kiro-cli` from this flake's
+          overlay provides. The configured package has no unwrapped payload to
+          select. Either keep the FHS sandbox or use an overlay-provided
+          kiro-cli package.
+        '';
+      }
+      {
         assertion = !((cfg.hooks != {} || cfg.hooksJson != {}) && cfg.hooksDir != null);
         message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
       }
@@ -1287,6 +1297,19 @@ in
           prefix remains first.
         '';
       };
+      useFhsSandbox = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Whether to use nixpkgs' Linux FHS compatibility wrapper. The default
+          keeps upstream's runtime support for the generic-glibc `bun` that
+          Kiro extracts dynamically. Set this to false to launch this flake's
+          pinned unwrapped package directly, restoring ordinary host namespace
+          visibility at the cost of that compatibility guarantee. This has no
+          practical effect on Darwin, where nixpkgs already ships the unwrapped
+          package.
+        '';
+      };
       # V3 next-gen agent — appends `--v3` to the top-level `kiro-cli`
       # launcher. The granular `--agent-engine`/`--mode` flags live ONLY on the
       # `chat` subcommand and are rejected by the launcher, so the launcher's
@@ -1519,7 +1542,7 @@ in
         # ride along with the --v3/--trust-tools flag injections. Shared
         # wrapper helper (also used by the devenv backend).
         kiroPackage = wrapKiroPackage {
-          inherit (cfg) extraPackages v3 trustedMcpTools;
+          inherit (cfg) extraPackages trustedMcpTools useFhsSandbox v3;
           package = resolvePackage cfg;
           environmentVariables = kiroEnvironment {inherit moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell;};
           inherit (kiroSecrets) secretEnv;
@@ -1754,7 +1777,7 @@ in
             {
               packages = [
                 (wrapKiroPackage {
-                  inherit (cfg) extraPackages v3 trustedMcpTools;
+                  inherit (cfg) extraPackages trustedMcpTools useFhsSandbox v3;
                   package = resolvePackage cfg;
                   # Baked into the launcher, NOT devenv's `env` attrset. This
                   # module does not write the project shell's environment —

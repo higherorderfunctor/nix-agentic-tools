@@ -12,6 +12,13 @@
 # tools to either the inherited PATH or an explicit `environmentVariables.PATH`
 # without capturing the evaluator's PATH or replacing the caller's environment.
 #
+# On post-split Linux, chat-only argv injection is the one wrapper concern that
+# cannot remain outside: the FHS root's /usr/bin shadows the outer chat command.
+# When the overlay exposes `withFhsPayload`, this helper wraps the unwrapped chat
+# payload first and asks nixpkgs to rebuild its own FHS package around it. Every
+# other export stays outer and inherited. `useFhsSandbox = false` instead selects
+# the same pinned `passthru.unwrapped` payload directly.
+#
 # ── The argv contract ──────────────────────────────────────────────────────
 # `--v3` is a LAUNCHER-GLOBAL option, so it is injected BEFORE any subcommand.
 # Appending it instead is what made `kiro-cli acp` die with "error: unexpected
@@ -65,8 +72,11 @@
   # bare launch (`kiro-cli --agent acp` is a bare launch, not the `acp`
   # subcommand). `--v3` is injected unconditionally and needs no such gate.
   chatValueFlags = ["--resume-id"];
-in
-  {
+
+  # Build one ordinary wrapper layer around the package passed here. The
+  # public function below decides whether that layer belongs outside the
+  # upstream FHS package or on its unwrapped payload.
+  wrapDirect = {
     package,
     v3,
     trustedMcpTools,
@@ -289,4 +299,53 @@ in
             }} "$out/bin/kiro-cli-chat"
           ''}
         '';
-      }
+      };
+in
+  {
+    package,
+    v3,
+    trustedMcpTools,
+    environmentVariables ? {},
+    extraPackages ? [],
+    secretEnv ? {},
+    identityMaterializer ? null,
+    useFhsSandbox ? true,
+  }: let
+    # The upstream Linux FHS root supplies its own /usr/bin/kiro-cli-chat ahead
+    # of the inherited PATH. An outer chat wrapper is therefore unreachable
+    # when the launcher dispatches. Re-compose the upstream package around a
+    # chat-only wrapped payload so --trust-tools lives at the command path the
+    # FHS launcher actually selects. Other exports remain outside: they are
+    # inherited across bubblewrap and retain their established precedence.
+    placeTrustInsideFhs =
+      useFhsSandbox
+      && pkgs.stdenv.hostPlatform.isLinux
+      && trustedMcpTools != []
+      && package ? unwrapped
+      && package ? withFhsPayload;
+    innerTrustPackage =
+      (wrapDirect {
+        package = package.unwrapped;
+        v3 = false;
+        inherit trustedMcpTools;
+      }).overrideAttrs (_: {
+        # nixpkgs' FHS expression inherits these from its payload. Ordinary
+        # outer wrappers do not need them, so surface them only on this inner
+        # package and leave every existing wrapper derivation unchanged.
+        inherit (package.unwrapped) meta version;
+      });
+    selectedPackage =
+      if !useFhsSandbox
+      then package.unwrapped or package
+      else if placeTrustInsideFhs
+      then package.withFhsPayload innerTrustPackage
+      else package;
+  in
+    wrapDirect {
+      package = selectedPackage;
+      inherit environmentVariables extraPackages identityMaterializer secretEnv v3;
+      trustedMcpTools =
+        if placeTrustInsideFhs
+        then []
+        else trustedMcpTools;
+    }

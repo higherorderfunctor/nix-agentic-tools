@@ -7,48 +7,51 @@ applyTo: "overlays/*.nix,overlays/**/*.nix"
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-16 (commit pending — nixpkgs 9ddfd8a consolidated
-> Kiro's three FHS derivations into one shared environment. The overlay still
-> recomposes exclusively through `ourPkgs`, so the topology change preserves the
-> same consumer/standalone cache identity contract). Prior: 2026-08-10 (commit
-> pending — `overlays/kiro-cli.nix` is no longer a plain `overrideAttrs`, so the
-> "pure binary-fetch" example below is re-pointed. nixpkgs f13ff45a split the
-> package, and the overlay now overrides `kiro-cli-unwrapped` and re-composes
-> upstream's wrapper with `.override`. Parity is UNAFFECTED and the reason is
-> worth stating: both sides of the parity check import `inputs.nixpkgs`, so the
-> `ourPkgs ? kiro-cli-unwrapped` feature-detection resolves the same way on both
-> and cannot itself drift — see the overlay-pattern fragment for the seam).
-> Prior: 2026-08-05 (commit pending — records that a consumer's
-> `inputs.nixpkgs.follows` defeats `ourPkgs` BY CONSTRUCTION, since it rewrites
-> the input rather than the overlay argument, and that its cost is not merely
-> the documented cache miss: measured on a real consumer, a followed April 2026
-> nixpkgs FAILED the `glab` build outright on the Go floor. Do not "fix"
-> `ourPkgs` for this — `checks/cache-hit-parity.nix` already asserts the drift).
-> Prior: 2026-08-03 (commit pending — annotates Semble's unchanged upstream
-> derivation and git-branchless's passthru with their flake-input update owners
-> without moving either derivation). Prior: 2026-08-03 (commit pending — patches
-> Oxlint's `@napi-rs/cli` dependency in its pnpm-fetched source rather than
-> admitting Darwin's `/bin/ps` into the sandbox; both fetch and build use pnpm
-> 11 from pinned `ourPkgs`, matching upstream's major). Prior: 2026-08-03
-> (commit pending — nests every binary-package group under `pkgs.ai`, moves `gh`
-> and `glab` into `ai.devTools`, and updates the consumer-path registry without
-> changing any derivation). Prior: 2026-08-03 (commit pending — relocates the
-> two repo-local auto-memory source trees beside their overlay derivations
-> without changing package inputs or cache-hit semantics). Prior: 2026-08-03
-> (commit pending — adds a positive control that substitutes the overlay's own
-> `inputs.nixpkgs` the way a consumer's `follows` directive does, proving that
-> unsupported configuration drifts from the cache-published `fblog` path).
-> Prior: 2026-08-02 (commit pending — adds the pinned external Semble exception:
-> direct upstream selection preserves Numtide's derivation, while a plain meta
-> overlay exposes the MCP role without forking the build). Prior: 2026-07-25
-> (commit pending — the worked example moved off `git-branchless`, which had not
-> carried this shape for a long time, onto `git-absorb`, which does; also
-> corrects the new-package signature, the namespacing in the manual verification
-> snippet, and the pure-binary-fetch package list). If you touch any
-> `overlays/<name>.nix` overlay file or the overlay composition machinery and
-> this fragment isn't updated in the same commit, stop and fix it. Regressions
-> are gated by the `checks.cache-hit-parity` flake check (see "Verification"
-> below).
+> **Last verified:** 2026-08-16 (commit pending — adding Kiro's `withFhsPayload`
+> passthru and FHS opt-out leaves the default derivation byte-identical; only
+> configurations requesting an inner chat wrapper or the explicit unwrapped
+> selection fork from it). Prior: 2026-08-16 (commit pending — nixpkgs 9ddfd8a
+> consolidated Kiro's three FHS derivations into one shared environment. The
+> overlay still recomposes exclusively through `ourPkgs`, so the topology change
+> preserves the same consumer/standalone cache identity contract). Prior:
+> 2026-08-10 (commit pending — `overlays/kiro-cli.nix` is no longer a plain
+> `overrideAttrs`, so the "pure binary-fetch" example below is re-pointed.
+> nixpkgs f13ff45a split the package, and the overlay now overrides
+> `kiro-cli-unwrapped` and re-composes upstream's wrapper with `.override`.
+> Parity is UNAFFECTED and the reason is worth stating: both sides of the parity
+> check import `inputs.nixpkgs`, so the `ourPkgs ? kiro-cli-unwrapped`
+> feature-detection resolves the same way on both and cannot itself drift — see
+> the overlay-pattern fragment for the seam). Prior: 2026-08-05 (commit pending
+> — records that a consumer's `inputs.nixpkgs.follows` defeats `ourPkgs` BY
+> CONSTRUCTION, since it rewrites the input rather than the overlay argument,
+> and that its cost is not merely the documented cache miss: measured on a real
+> consumer, a followed April 2026 nixpkgs FAILED the `glab` build outright on
+> the Go floor. Do not "fix" `ourPkgs` for this — `checks/cache-hit-parity.nix`
+> already asserts the drift). Prior: 2026-08-03 (commit pending — annotates
+> Semble's unchanged upstream derivation and git-branchless's passthru with
+> their flake-input update owners without moving either derivation). Prior:
+> 2026-08-03 (commit pending — patches Oxlint's `@napi-rs/cli` dependency in its
+> pnpm-fetched source rather than admitting Darwin's `/bin/ps` into the sandbox;
+> both fetch and build use pnpm 11 from pinned `ourPkgs`, matching upstream's
+> major). Prior: 2026-08-03 (commit pending — nests every binary-package group
+> under `pkgs.ai`, moves `gh` and `glab` into `ai.devTools`, and updates the
+> consumer-path registry without changing any derivation). Prior: 2026-08-03
+> (commit pending — relocates the two repo-local auto-memory source trees beside
+> their overlay derivations without changing package inputs or cache-hit
+> semantics). Prior: 2026-08-03 (commit pending — adds a positive control that
+> substitutes the overlay's own `inputs.nixpkgs` the way a consumer's `follows`
+> directive does, proving that unsupported configuration drifts from the
+> cache-published `fblog` path). Prior: 2026-08-02 (commit pending — adds the
+> pinned external Semble exception: direct upstream selection preserves
+> Numtide's derivation, while a plain meta overlay exposes the MCP role without
+> forking the build). Prior: 2026-07-25 (commit pending — the worked example
+> moved off `git-branchless`, which had not carried this shape for a long time,
+> onto `git-absorb`, which does; also corrects the new-package signature, the
+> namespacing in the manual verification snippet, and the pure-binary-fetch
+> package list). If you touch any `overlays/<name>.nix` overlay file or the
+> overlay composition machinery and this fragment isn't updated in the same
+> commit, stop and fix it. Regressions are gated by the
+> `checks.cache-hit-parity` flake check (see "Verification" below).
 
 ### The rule
 
@@ -352,7 +355,11 @@ always take the same branch. A detection keyed on `final`/`prev` would not have
 that property — it would resolve against the consumer's pin and could take
 different branches on the two sides, which is drift by construction. Keep
 feature-detection on `ourPkgs`. The package remains covered by
-`checks.cache-hit-parity`.
+`checks.cache-hit-parity`. The `withFhsPayload` function is passthru only and
+therefore does not move the default derivation; calling it deliberately creates
+a configuration-specific FHS derivation. Selecting `passthru.unwrapped` through
+`useFhsSandbox = false` reuses the already pinned payload rather than building a
+second copy.
 
 **Standalone variant.** When upstream's attrs become incompatible with the
 artifact we want to ship (different `sourceRoot`, `installPhase`, `buildInputs`,
@@ -373,39 +380,44 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-16 (commit pending — nixpkgs 9ddfd8a consolidated
-> Kiro's three per-command FHS environments into one shared environment behind
-> thin command wrappers. Re-pointing the unwrapped base and recomposing through
-> upstream's `.override` remains the correct seam and inherited the topology
-> change without implementation edits). Prior: 2026-08-10 (commit pending — adds
-> the third override-seam failure mode, measured on `kiro-cli`: the attribute
-> you are overriding stops being a derivation at all. nixpkgs f13ff45a split it
-> into `kiro-cli-unwrapped` plus a `symlinkJoin` of `buildFHSEnv` sandboxes, and
-> `overrideAttrs` on that join silently dropped our `src`, `version` AND
-> `postFixup` while the build stayed green. Unlike the `extendMkDerivation`
-> cases below, NO seam on the public attribute can fix it — the base has to be
-> re-pointed at the derivation that still owns a `src`. Also retires this
-> section's claim that a thin `overrideAttrs` picks upstream changes up
-> "automatically"). Prior: 2026-08-05 (commit pending — the Go toolchain floor
-> is now DERIVED from the pinned source's go.mod rather than hand-written, is
-> carried by ALL SEVEN Go packages rather than two, and is reached through the
-> new `vu.mkGoBuilder`; adds `checks/go-floor-drift.nix` as the loud half and
-> records that the toolchain is a BUILDER argument only `.override` can reach.
-> Measured: `gh` had ALREADY silently required Go >= 1.26.5, so it was the next
-> package to break after `glab`). Prior: 2026-08-03 (commit pending — records
-> the property used to associate versioned derivations with a flake-input update
-> owner or a reasoned local-source exemption). Prior: 2026-08-03 (commit pending
-> — makes `pkgs.ai` the single binary-package namespace, retains `generic` as a
-> temporary nested bucket, and moves the two forge CLIs into `ai.devTools`).
-> Prior: 2026-08-03 (commit pending — makes overlay-owned local implementation
-> sources a boundary invariant and relocates the auto-memory helper and
-> distiller sources accordingly). Prior: 2026-08-02 (commit pending — adds
-> Semble's direct external-flake derivation pattern and identity-preserving MCP
-> role). Prior: 2026-08-01 (commit pending — records that `glab`'s
-> `extraExtract` also regenerates its `passthru.extracted` sidecar, via the new
-> shared `vu.mkExtractRegen`, and that glab is the one extracted package where
-> the fixer-then-extract ORDER is forced. It had NO regeneration at all until
-> now, which nothing caught until its first version bump reddened
+> **Last verified:** 2026-08-16 (commit pending — Kiro's recomposition seam now
+> also exposes `withFhsPayload`: configured chat-only wrappers can enter the
+> upstream FHS root without reimplementing it, while the public default stays
+> byte-identical and `useFhsSandbox = false` is an explicit module-level
+> selection of `passthru.unwrapped`). Prior: 2026-08-16 (commit pending —
+> nixpkgs 9ddfd8a consolidated Kiro's three per-command FHS environments into
+> one shared environment behind thin command wrappers. Re-pointing the unwrapped
+> base and recomposing through upstream's `.override` remains the correct seam
+> and inherited the topology change without implementation edits). Prior:
+> 2026-08-10 (commit pending — adds the third override-seam failure mode,
+> measured on `kiro-cli`: the attribute you are overriding stops being a
+> derivation at all. nixpkgs f13ff45a split it into `kiro-cli-unwrapped` plus a
+> `symlinkJoin` of `buildFHSEnv` sandboxes, and `overrideAttrs` on that join
+> silently dropped our `src`, `version` AND `postFixup` while the build stayed
+> green. Unlike the `extendMkDerivation` cases below, NO seam on the public
+> attribute can fix it — the base has to be re-pointed at the derivation that
+> still owns a `src`. Also retires this section's claim that a thin
+> `overrideAttrs` picks upstream changes up "automatically"). Prior: 2026-08-05
+> (commit pending — the Go toolchain floor is now DERIVED from the pinned
+> source's go.mod rather than hand-written, is carried by ALL SEVEN Go packages
+> rather than two, and is reached through the new `vu.mkGoBuilder`; adds
+> `checks/go-floor-drift.nix` as the loud half and records that the toolchain is
+> a BUILDER argument only `.override` can reach. Measured: `gh` had ALREADY
+> silently required Go >= 1.26.5, so it was the next package to break after
+> `glab`). Prior: 2026-08-03 (commit pending — records the property used to
+> associate versioned derivations with a flake-input update owner or a reasoned
+> local-source exemption). Prior: 2026-08-03 (commit pending — makes `pkgs.ai`
+> the single binary-package namespace, retains `generic` as a temporary nested
+> bucket, and moves the two forge CLIs into `ai.devTools`). Prior: 2026-08-03
+> (commit pending — makes overlay-owned local implementation sources a boundary
+> invariant and relocates the auto-memory helper and distiller sources
+> accordingly). Prior: 2026-08-02 (commit pending — adds Semble's direct
+> external-flake derivation pattern and identity-preserving MCP role). Prior:
+> 2026-08-01 (commit pending — records that `glab`'s `extraExtract` also
+> regenerates its `passthru.extracted` sidecar, via the new shared
+> `vu.mkExtractRegen`, and that glab is the one extracted package where the
+> fixer-then-extract ORDER is forced. It had NO regeneration at all until now,
+> which nothing caught until its first version bump reddened
 > `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28 — the commit
 > adding THAT line lands `glab`: the first Go package whose SRC hash also lives
 > in the sidecar (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
@@ -659,8 +671,17 @@ hasUnwrapped = ourPkgs ? kiro-cli-unwrapped;
 basePackage =
   if hasUnwrapped then ourPkgs.kiro-cli-unwrapped else ourPkgs.kiro-cli;
 # … pinned = basePackage.overrideAttrs (…) …
-# then hand it back to upstream's wrapper, preserving the FHS sandbox:
-ourPkgs.kiro-cli.override {kiro-cli-unwrapped = pinned;}
+# then hand it back to upstream's wrapper, preserving the FHS sandbox and the
+# route in both directions (metadata/name handling omitted here):
+rewrap = payload:
+  (ourPkgs.kiro-cli.override {kiro-cli-unwrapped = payload;}).overrideAttrs
+  (attrs: {
+    passthru = (attrs.passthru or {}) // pinned.passthru // {
+      unwrapped = pinned;
+      withFhsPayload = rewrap;
+    };
+  });
+in rewrap pinned
 ```
 
 Three properties of that shape are deliberate:
@@ -673,11 +694,15 @@ Three properties of that shape are deliberate:
   unwrapped derivation directly. Silently opting out of an upstream RUNTIME fix
   while still publishing the attribute under its normal name is the invisible
   divergence this fragment family exists to prevent — and re-wrapping means
-  whatever upstream adds to that wrapper next comes along for free.
+  whatever upstream adds to that wrapper next comes along for free. A named
+  consumer option may deliberately select `passthru.unwrapped`, but the public
+  package must not change meaning implicitly.
 - **Merge `passthru` onto the wrapper, do not replace it.** `passthru` is not a
   derivation input, so re-attaching ours moves neither `drvPath` nor `outPath`,
   and the wrapper's `unwrapped` key is the only supported route from the public
-  attribute back to the real binaries.
+  attribute back to the real binaries. `withFhsPayload` is the corresponding
+  route forward: it places a configured payload inside upstream's wrapper while
+  retaining the pinned package's metadata and passthru contract.
 
 **How to detect this class before it costs a release.** A silent-drop split
 produces no error anywhere; the only tell is that the package's own facts stop

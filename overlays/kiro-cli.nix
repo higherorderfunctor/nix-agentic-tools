@@ -68,10 +68,10 @@
   #
   # So: override the derivation that HAS a `src`, then hand the result back to
   # upstream's wrapper via `.override`. Every upstream packaging decision is
-  # preserved (the FHS sandbox included) and ours are restored on top. Adopting
-  # the wrapper is deliberate — silently opting out of an upstream RUNTIME fix
-  # while still calling the attribute `kiro-cli` is the kind of invisible
-  # divergence this repo's overlay fragments exist to prevent.
+  # preserved (the FHS sandbox included) and ours are restored on top. The
+  # PUBLIC package keeps that upstream-compatible default. Module consumers may
+  # explicitly select `passthru.unwrapped` with `useFhsSandbox = false`; that
+  # named tradeoff is different from silently changing what `kiro-cli` means.
   #
   # Feature-detected on the ATTRIBUTE, never gated on a nixpkgs version, so one
   # expression is correct on both sides of the split and the branch retires
@@ -82,7 +82,7 @@
     then ourPkgs.kiro-cli-unwrapped
     else ourPkgs.kiro-cli;
 
-  mkKiroCli = rawFeatures: let
+  mkKiroCliWithPayload = rawFeatures: fhsPayload: let
     rolloutFeatures = canonFeatures rawFeatures;
 
     # Name infix that makes a PATCHED build self-identifying. Both variants
@@ -212,6 +212,14 @@
             # then. If this is ever exposed somewhere that does NOT go through the
             # guarded attribute, re-wrap it.
             withRolloutFeatures = mkKiroCli;
+
+            # Re-compose the public Linux FHS package around a configured
+            # payload without reimplementing nixpkgs' buildFHSEnv expression.
+            # The module uses this to place the chat-only trust wrapper INSIDE
+            # the synthesized root, where launcher dispatch can actually reach
+            # it. Like withRolloutFeatures, the result is unguarded but can only
+            # be reached through the guarded public package.
+            withFhsPayload = mkKiroCliWithPayload rawFeatures;
           };
       }
       # `optionalAttrs`, NOT an `optionalString` inside an always-present attr.
@@ -244,14 +252,21 @@
     then
       # Re-wrap through upstream's own expression rather than reimplementing it,
       # so the FHS sandbox (and whatever upstream adds to that wrapper next)
-      # comes along for free.
+      # comes along for free. `fhsPayload` is normally null, which preserves the
+      # byte-identical pinned default. The module supplies a wrapped payload only
+      # when chat-only configuration must live inside the synthesized root.
       #
       # `passthru` is NOT a derivation input, so re-attaching ours to the join
       # moves neither `drvPath` nor `outPath`. Merge on top of upstream's rather
       # than replacing it: the join carries `unwrapped` and `tests`, and
       # dropping `unwrapped` would take away the only supported route from the
       # public attribute back to the real binaries.
-      (ourPkgs.kiro-cli.override {kiro-cli-unwrapped = pinned;}).overrideAttrs
+      (ourPkgs.kiro-cli.override {
+        kiro-cli-unwrapped =
+          if fhsPayload == null
+          then pinned
+          else fhsPayload;
+      }).overrideAttrs
       (joinAttrs:
         {
           # `unwrapped` is re-asserted rather than merely inherited because
@@ -312,5 +327,7 @@
     # there is nothing to re-wrap and this is byte-identical to what shipped
     # before the split was accounted for.
     else pinned;
+
+  mkKiroCli = rawFeatures: mkKiroCliWithPayload rawFeatures null;
 in
   mkKiroCli []
