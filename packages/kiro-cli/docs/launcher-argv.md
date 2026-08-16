@@ -1,22 +1,26 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-08-15 (commit pending — Kiro-specific environment
-> variables may now null-suppress same-key root defaults before wrapper
-> construction; this does not change argv ordering). Prior: 2026-08-14 (commit
-> pending — the launcher now prepends `ai.kiro.extraPackages` to PATH in both
-> wrapper entry points while preserving the ambient or explicitly configured
-> base; this changes environment only, never argv. Also corrects the older
-> pre-split claim that current Linux launcher dispatch traverses the outer chat
-> wrapper). Prior: 2026-08-11 (commit pending — the sandbox's effect on PATH
-> resolution is no longer unverified, so the prior entry's "treat it as
-> unverified there" is retired: PATH is **preserved** inside, and a decoy still
-> resolves provided it sits outside a shadowed directory and can load its
-> libraries. The bind rule, the shadowed set, the silent-substitution hazard and
-> the loader trap are their own concern and now live in
-> [`fhs-sandbox.md`](fhs-sandbox.md); this document stays about argv). Prior:
-> 2026-08-10 (commit pending — records that on a post-split nixpkgs (f13ff45a
-> and later) Linux gains a THIRD layer below the two wrappers here:
-> `pkgs.ai.kiro-cli` is a `symlinkJoin` of `buildFHSEnv` sandboxes and
+> **Last verified:** 2026-08-16 (commit pending — nixpkgs 9ddfd8a replaced the
+> three per-command FHS environments with one shared environment behind thin
+> command wrappers. The extra layer changes structural traversal but not this
+> repo's argv or environment contract; launcher-mediated sessions still skip the
+> outer configured chat wrapper inside the synthesized root). Prior: 2026-08-15
+> (commit pending — Kiro-specific environment variables may now null-suppress
+> same-key root defaults before wrapper construction; this does not change argv
+> ordering). Prior: 2026-08-14 (commit pending — the launcher now prepends
+> `ai.kiro.extraPackages` to PATH in both wrapper entry points while preserving
+> the ambient or explicitly configured base; this changes environment only,
+> never argv. Also corrects the older pre-split claim that current Linux
+> launcher dispatch traverses the outer chat wrapper). Prior: 2026-08-11 (commit
+> pending — the sandbox's effect on PATH resolution is no longer unverified, so
+> the prior entry's "treat it as unverified there" is retired: PATH is
+> **preserved** inside, and a decoy still resolves provided it sits outside a
+> shadowed directory and can load its libraries. The bind rule, the shadowed
+> set, the silent-substitution hazard and the loader trap are their own concern
+> and now live in [`fhs-sandbox.md`](fhs-sandbox.md); this document stays about
+> argv). Prior: 2026-08-10 (commit pending — records that on a post-split
+> nixpkgs (f13ff45a and later) Linux gains a THIRD layer below the two wrappers
+> here: `pkgs.ai.kiro-cli` is a `symlinkJoin` of `buildFHSEnv` sandboxes and
 > `$out/bin/*` are bubblewrap launchers, not our wrapProgram shims. The argv
 > contract itself is unchanged — flags still pass through — but the Linux
 > PATH-resolution measurement below was taken on the pre-split layout and has
@@ -221,20 +225,23 @@ root. See [`fhs-sandbox.md`](fhs-sandbox.md) for why that distinction matters.
 
 ## POST-SPLIT LINUX DOES NOT COMPOSE THE OUTER WRAPPERS
 
-> **Linux gained a third layer on post-split nixpkgs.** Since f13ff45a,
-> `pkgs.ai.kiro-cli` is a `symlinkJoin` over per-command `buildFHSEnv`
-> sandboxes, so `$out/bin/kiro-cli` is a bubblewrap launcher that execs the real
-> binary inside an FHS root — our wrapProgram shims now live one level down, on
-> `passthru.unwrapped`. Flags and environment still pass straight through, so
-> the argv contract in this document holds. PATH is **preserved** inside, but
-> `/etc/profile` prepends `/run/wrappers/bin:/usr/bin:/usr/sbin`. Because the
-> FHS root's `/usr/bin` already contains `kiro-cli-chat`, launcher dispatch
-> selects that raw command before the inherited profile PATH can reach this
-> repo's outer chat wrapper. A decoy under `$HOME` is visible but cannot
-> displace that same-named FHS command; one in `/usr/local/bin` is absent
-> entirely. See [`fhs-sandbox.md`](fhs-sandbox.md) for the bind rule, shadowed
-> set, and loader trap. Darwin is unaffected — upstream returns the unwrapped
-> derivation and builds no FHS layer.
+> **Linux gained an FHS layer on post-split nixpkgs.** Since f13ff45a, the
+> public package wraps `kiro-cli-unwrapped` in `buildFHSEnv`. nixpkgs 9ddfd8a
+> later consolidated the original three per-command environments into one shared
+> environment: `$out/bin/*` are thin wrappers selecting a command,
+> `$out/libexec/kiro-cli/kiro-cli-wrapper` enters bubblewrap, and `/init`
+> delegates through a three-line dispatcher before the selected command runs in
+> the FHS root. Our wrapProgram shims live on `passthru.unwrapped`. Flags and
+> environment pass through every layer, so the contract in this document holds.
+> PATH is **preserved** inside, but `/etc/profile` prepends
+> `/run/wrappers/bin:/usr/bin:/usr/sbin`. Because the FHS root's `/usr/bin`
+> already contains `kiro-cli-chat`, launcher dispatch selects that command
+> before the inherited profile PATH can reach this repo's outer configured chat
+> wrapper. A decoy under `$HOME` is visible but cannot displace that same-named
+> FHS command; one in `/usr/local/bin` is absent entirely. See
+> [`fhs-sandbox.md`](fhs-sandbox.md) for the bind rule, shadowed set, and loader
+> trap. Darwin is unaffected — upstream returns the unwrapped derivation and
+> builds no FHS layer.
 
 **The pre-split launcher resolved `kiro-cli-chat` through PATH.** Dropping the
 wrapped bin directory made it fail rather than fall back, and a leading decoy
@@ -287,8 +294,10 @@ launcher wrapper:
 ```
 kiro-cli acp
   -> launcher wrapper  prepends --v3
-  -> FHS /init          prepends the synthesized command directories
-  -> launcher           finds raw /usr/bin/kiro-cli-chat first
+  -> command wrapper   selects kiro-cli on the shared FHS launcher
+  -> FHS /init         prepends the synthesized command directories
+  -> dispatcher        execs the selected command
+  -> launcher          finds the package's /usr/bin/kiro-cli-chat first
 ```
 
 The outer chat wrapper still applies to a direct `kiro-cli-chat` entry. Its
@@ -553,9 +562,9 @@ parse rejection from an accepted flag.
 ## Tests
 
 - `checks/kiro-fhs-contract.nix` — structurally inspects the realized upstream
-  Linux launcher, init, and profile. It pins the `/nix` bind and inherited PATH
-  bridge that `extraPackages` depends on without claiming to execute bubblewrap
-  inside the Nix build sandbox.
+  Linux command wrappers, shared launcher, init, dispatcher, and profile. It
+  pins the `/nix` bind and inherited PATH bridge that `extraPackages` depends on
+  without claiming to execute bubblewrap inside the Nix build sandbox.
 - `checks/kiro-wrapper-argv.nix` — the real wrapper against a stub package that
   prints its argv. Covers which SIDE of the subcommand each flag lands on, the
   absence of `--tui`, the value-flag skip, `--`, idempotence, and the env/PATH

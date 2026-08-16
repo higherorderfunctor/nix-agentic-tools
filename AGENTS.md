@@ -100,8 +100,9 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
     [`packages/kiro-cli/docs/kiro-auto-memory.md`](packages/kiro-cli/docs/kiro-auto-memory.md)
 
 - **`kiro-wrapper`**
-  - Match: `checks/kiro-wrapper-argv.nix`, `lib/idempotentFlags.nix`,
-    `overlays/kiro-cli.nix`, `packages/kiro-cli/lib/**`
+  - Match: `checks/kiro-fhs-contract.nix`, `checks/kiro-wrapper-argv.nix`,
+    `lib/idempotentFlags.nix`, `overlays/kiro-cli.nix`,
+    `packages/kiro-cli/lib/**`
   - Read:
     [`packages/kiro-cli/docs/fhs-sandbox.md`](packages/kiro-cli/docs/fhs-sandbox.md),
     [`packages/kiro-cli/docs/launcher-argv.md`](packages/kiro-cli/docs/launcher-argv.md)

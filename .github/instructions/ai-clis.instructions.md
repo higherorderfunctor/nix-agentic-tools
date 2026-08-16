@@ -393,12 +393,13 @@ Supporting properties:
   untouched. Darwin needs the rename re-applied in the OUTER `overrideAttrs`,
   because upstream's `kiro-cli-unwrapped.overrideAttrs {pname = "kiro-cli";}`
   clobbers it otherwise.
-- **The rename cannot reach the linux FHS intermediates.** Upstream hardcodes
-  `pname = executableName` per `buildFHSEnv` and `name = "kiro-cli-${version}"`
-  for the join, consulting `kiro-cli-unwrapped.pname` nowhere, so `-bwrap` /
-  `-fhsenv-rootfs` are identical strings for both variants. They carry no
-  proprietary bytes and are inert without the unwrapped path — but it is why the
-  filter is blunt rather than surgical.
+- **The rename cannot reach the linux FHS intermediates.** Upstream originally
+  hardcoded one `pname = executableName` per environment and now hardcodes
+  `pname = "kiro-cli"` for the consolidated environment. Neither form consults
+  `kiro-cli-unwrapped.pname`, so `-bwrap` / `-fhsenv-rootfs` are identical
+  strings for both variants. They carry no proprietary bytes and are inert
+  without the unwrapped path — but it is why the filter is blunt rather than
+  surgical.
 
 Both knobs are configuration, so the `kiro-patched` job's "Assert the patched
 output is not published" step asserts the OUTCOME: it fails if any kiro path
@@ -410,12 +411,12 @@ Getting that step right took three wrong versions, and each failure mode is
 worth keeping because none is specific to Kiro:
 
 - **Assert only on the patched-UNIQUE paths.** Walking the whole patched closure
-  reports six false leaks. The `-init` scripts and `-fhsenv-profile` trees do
-  not depend on the binary's CONTENT, so they are byte-identical across both
-  variants, share a store path, and are published legitimately with the
-  unpatched package. Subtract the unpatched closure first. A patched-specific
-  path cannot appear in the base derivation tree, so the subtraction cannot
-  over-exclude.
+  now reports three false leaks (six before the FHS consolidation). The shared
+  dispatcher, `-init` script, and `-fhsenv-profile` tree do not depend on the
+  binary's CONTENT, so they are byte-identical across both variants, share a
+  store path, and are published legitimately with the unpatched package.
+  Subtract the unpatched closure first. A patched-specific path cannot appear in
+  the base derivation tree, so the subtraction cannot over-exclude.
 - **`nix derivation show`'s `.outputs[].path` changes shape by nix version** —
   `/nix/store/xxx-name` on 2.34.4, bare `xxx-name` on 2.35.1. A full-path
   comparison matched NOTHING on the runner while passing locally. Compare
@@ -460,10 +461,11 @@ picked up on nixpkgs bumps.
 **But only while `pkgs.<name>` remains the derivation carrying `src`.** This
 pattern degrades to a SILENT no-op — not an error — the moment upstream
 restructures the attribute out from under it. nixpkgs f13ff45a split `kiro-cli`
-into `kiro-cli-unwrapped` plus a `symlinkJoin` of `buildFHSEnv` sandboxes; the
-join has no `src` and no `version`, and a `buildCommand` derivation never
-reaches `fixupPhase`, so the pin AND the `postFixup` both evaporated while the
-build stayed green. `overlays/kiro-cli.nix` therefore feature-detects
+into `kiro-cli-unwrapped` plus a public FHS wrapper (initially a `symlinkJoin`
+of three environments, now one shared environment); the public derivation has no
+`src`, and its `buildCommand` never reaches the unwrapped package's
+`fixupPhase`, so the pin AND the `postFixup` both evaporated while the build
+stayed green. `overlays/kiro-cli.nix` therefore feature-detects
 `ourPkgs ? kiro-cli-unwrapped`, overrides the unwrapped derivation, and hands
 the result back to upstream's wrapper via `.override`.
 

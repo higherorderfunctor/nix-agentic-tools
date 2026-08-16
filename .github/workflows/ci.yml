@@ -470,14 +470,15 @@ jobs:
           fi
 
           # Assert only on paths UNIQUE to the patched closure. Some FHS
-          # scaffolding — the `-init` scripts and `-fhsenv-profile` trees — does
-          # not depend on the binary's CONTENT, so it is byte-identical for both
-          # variants and shares one store path, which the build job publishes
-          # legitimately as part of the unpatched package. Walking the whole
-          # closure therefore reported six such paths as leaks on linux (darwin
-          # has no FHS layer, so it passed and hid the bug). Those carry no
-          # patched bytes; flagging them would train the reader to ignore this
-          # step, which is worse than not having it.
+          # scaffolding — the shared command dispatcher, `-init` script and
+          # `-fhsenv-profile` tree — does not depend on the binary's CONTENT, so
+          # it is byte-identical for both variants and shares one store path,
+          # which the build job publishes legitimately as part of the unpatched
+          # package. Walking the whole closure therefore reports three such
+          # paths as leaks on linux (six before nixpkgs consolidated the three
+          # FHS environments; darwin has no FHS layer, so it passed and hid the
+          # bug). Those carry no patched bytes; flagging them would train the
+          # reader to ignore this step, which is worse than not having it.
           #
           # `nix derivation show -r` is eval-only — it reads each derivation's
           # DECLARED output paths without building or substituting the 621 MiB
@@ -534,7 +535,7 @@ jobs:
             # exits on the first match, `printf` is then still writing, takes
             # SIGPIPE (141), and `pipefail` reports 141 for the pipeline — so a
             # SUCCESSFUL match reads as FALSE, every shared path falls through
-            # to being asserted, and the step reports six leaks that are not
+            # to being asserted, and the step reports three leaks that are not
             # leaks.
             #
             # It is SIZE-DEPENDENT, which is what makes it easy to "fix" and
