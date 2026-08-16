@@ -186,6 +186,10 @@
         type = lib.types.listOf lib.types.package;
         default = [];
       };
+      processes = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
       enterShell = lib.mkOption {
         type = lib.types.lines;
         default = "";
@@ -278,6 +282,7 @@
         // extraSpecialArgs;
       modules = [
         ./../lib/ai/sharedOptions.nix
+        ./../packages/beads/modules/devenv
         ./../packages/chatgpt-codex/modules/devenv
         ./../packages/claude-code/modules/devenv
         ./../packages/copilot-cli/modules/devenv
@@ -11392,4 +11397,51 @@ in {
       && mkPre pgSettings "stdio" == []
       && mkPre {} "http" == []
     );
+
+  module-beads-credential-url-rejected = mkTest "beads-credential-url-rejected" (
+    let
+      ev = evalDevenv {
+        services.beads = {
+          enable = true;
+          issuePrefix = "fixture";
+          ledgerUrl = "https://embedded-token@example.invalid/ledger.git";
+        };
+      };
+      beadsAssertions = lib.filter (assertion: lib.hasPrefix "services.beads" assertion.message) ev.config.assertions;
+    in
+      lib.any (assertion: !assertion.assertion) beadsAssertions
+  );
+
+  module-beads-default-disabled = mkTest "beads-default-disabled" (
+    let
+      ev = evalDevenv {};
+    in
+      !ev.config.services.beads.enable
+      && ev.config.packages == []
+      && ev.config.processes == {}
+      && !(ev.config.tasks ? "beads:prepare")
+  );
+
+  module-beads-devenv-wiring = mkTest "beads-devenv-wiring" (
+    let
+      ev = evalDevenv {
+        services.beads = {
+          enable = true;
+          issuePrefix = "fixture";
+          ledgerUrl = "file:///tmp/beads-ledger.git";
+        };
+      };
+      assertionsPass = lib.all (assertion: assertion.assertion) (
+        lib.filter (assertion: lib.hasPrefix "services.beads" assertion.message) ev.config.assertions
+      );
+    in
+      assertionsPass
+      && builtins.length ev.config.packages == 1
+      && builtins.attrNames ev.config.processes == ["beads-publisher" "beads-server"]
+      && builtins.attrNames ev.config.tasks
+      == ["beads:bootstrap" "beads:checkpoint" "beads:diagnostics" "beads:prepare" "beads:status"]
+      && ev.config.tasks."beads:prepare".before == ["devenv:enterShell"]
+      && lib.hasInfix " publisher" ev.config.processes.beads-publisher.exec
+      && lib.hasInfix " server" ev.config.processes.beads-server.exec
+  );
 }

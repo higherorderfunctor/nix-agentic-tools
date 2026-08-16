@@ -1,0 +1,70 @@
+# Beads devenv lifecycle
+
+> **Last verified:** 2026-08-16 (commit pending — initial `services.beads`
+> lifecycle implementation for #992).
+
+`services.beads` is intentionally devenv-only. It owns repository-local
+operational state and does not create an `ai.programs.beads` distribution tree;
+agent-runtime delivery remains #993. The repository itself does not enable the
+module. #994 owns the first real-ledger exercise.
+
+## Ownership boundary
+
+The declared Git ledger URL is embedded unmodified in the generated lifecycle
+launcher and must not contain credentials. Runtime Git and SSH credential
+discovery remains user-owned. Every other writable artifact lives below a
+mode-0700 directory derived at runtime from the shared Git common-directory path
+and `XDG_STATE_HOME`. Source and linked worktrees therefore select one state
+root, one external Dolt data directory, one contained `DOLT_ROOT_PATH`, and one
+repository lock. No state path, credential value, or generated credentials file
+is copied into the Nix store or source checkout.
+
+`beads:prepare` runs before shell entry. It creates and verifies only contained
+runtime configuration, including `metrics.disabled=true` in the contained Dolt
+root. It never initializes a database and never publishes. First database
+initialization is performed by the module's bootstrap entry, normally when the
+publisher process starts after the Dolt process. It runs pinned `bd init` from a
+neutral non-Git directory only when `refs/dolt/data` is absent, or pinned
+`bd bootstrap` only when the local database is absent and the ref exists. An
+existing database is verified in place; it is never bootstrapped again.
+
+## Serialized checkpoint protocol
+
+The installed `bd` is a guard around the pinned package, not the unwrapped
+binary. Ordinary CLI calls acquire the repository lock, verify clean valid
+incoming state, run against the exact external-server workspace with automatic
+publication disabled, always cross the `bd dolt commit` commit-if-needed
+barrier, and validate the clean checkpoint before unlocking. The validation
+requires the exact workspace, exact complete remote set, exact server
+host/port/database, a clean Dolt working set, zero constraint violations, zero
+direct event or dependency orphans, and unchanged source Git state.
+
+Lifecycle, recovery, configuration, raw SQL, and publication subcommands are
+rejected by the installed guard. Module entry points are the only supported
+route for initialization and publication. This is not a security sandbox—a user
+can deliberately locate the unwrapped store path—but it removes accidental
+bypass from the project shell.
+
+## Publication and failure policy
+
+The `beads-publisher` process waits for the shared daemon, invokes idempotent
+module bootstrap, performs an immediate startup drain, and retries at the
+declared bounded interval. Its one-shot primitive acquires the same repository
+lock and runs the paired raw Dolt binary from the metadata-validated database
+directory:
+
+```text
+dolt push --set-upstream origin main
+```
+
+The lifecycle durably records both the last observed `refs/dolt/data` object ID
+and the corresponding local Dolt HEAD. It refuses a changed remote ref, dirty or
+invalid local state, a changed remote configuration, or an unexpected server. It
+never pulls, merges, rebases, repairs, resolves conflicts, or force-pushes.
+There is no automatic recovery path: an invariant failure stops the guarded
+client or publisher for operator diagnosis.
+
+The public entry points are `beads-bootstrap`, `beads-checkpoint`,
+`beads-status`, `beads-diagnostics`, and the one-shot `beads-publish`. The
+devenv process entries are `beads-server` and `beads-publisher`; the matching
+tasks use the `beads:*` namespace.

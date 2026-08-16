@@ -289,9 +289,14 @@ an existing database is verified in place rather than bootstrapped again. After
 a verified restore, the probe proves a new write, a forward no-force republish
 under the same lock, and a third exact cold restore. It never repairs an invalid
 head. Pull, merge, rebase, conflict resolution, and force-push are deliberately
-unqualified and forbidden. Runtime implementation belongs to #992 and process
-wiring to #993; neither may weaken this #991 boundary.
-`[measured recovery probe @Beads 1.2.2 / Dolt 2.2.3; implementation review]`
+unqualified and forbidden. `services.beads` implements this boundary with one
+shared state root for linked worktrees, a guarded installed `bd`, external
+daemon and publisher process entries, durable expected-remote and published-HEAD
+checkpoints, and activation that only prepares contained state. The isolated
+lifecycle fixture exercises module-owned init/re-entry, startup drain, equal and
+different source-origin topology, dirty refusal, and divergence refusal. #993
+may add agent-runtime wiring but may not weaken this boundary.
+`[measured recovery probe @Beads 1.2.2 / Dolt 2.2.3; measured lifecycle check @Beads 1.2.2 / Dolt 2.2.4]`
 
 ## Encrypted-remote options
 

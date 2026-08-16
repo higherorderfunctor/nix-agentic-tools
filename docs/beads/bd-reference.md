@@ -19,12 +19,14 @@
 > probe run outside the Nix build sandbox.
 > `[measured recovery probe @1.2.2/2.2.4]` — asserted by
 > `checks/beads-recovery-contracts.sh`, the repeated serialized
-> write/publish/cold-restore probe. `[measured session @1.2.2/2.2.3]` — retained
-> in #991's timestamped investigation record, but not asserted by either durable
-> probe. `[measured Dolt @2.2.3]` — observed by running the pinned Dolt binary
-> under a clean temporary home. `[upstream]` — read from upstream docs or source
-> at the date above. `[unverified]` — carried from research that never executed
-> the binary; quarantine until probed. Claims can go stale in either direction;
+> write/publish/cold-restore probe. `[measured lifecycle check @1.2.2/2.2.4]` —
+> asserted by the isolated `beads-lifecycle` flake check against the generated
+> devenv lifecycle. `[measured session @1.2.2/2.2.3]` — retained in #991's
+> timestamped investigation record, but not asserted by either durable probe.
+> `[measured Dolt @2.2.3]` — observed by running the pinned Dolt binary under a
+> clean temporary home. `[upstream]` — read from upstream docs or source at the
+> date above. `[unverified]` — carried from research that never executed the
+> binary; quarantine until probed. Claims can go stale in either direction;
 > re-verify against the pinned version before building on a load-bearing one.
 > Claim-local durable-probe tags naming 2.2.3 preserve the first measurement;
 > the current contract, server, and recovery probes requalified those surfaces
@@ -118,6 +120,36 @@ with `BD_DISABLE_METRICS=1`, `BD_DISABLE_EVENT_FLUSH=1`, and
 check rejects a missing or second hidden wrapper, runs `bd --version` and
 `bd metrics` under `env -i`, and exercises the Dolt command surface.
 `[measured package @1.2.2]`
+
+## Devenv lifecycle module
+
+The opt-in `services.beads` module is the supported repository lifecycle. It
+requires `issuePrefix` and the exact credential-free `ledgerUrl`, installs the
+pinned CLI behind a serialized guard, and launches the paired pinned Dolt from
+the Beads package's `passthru.dolt`. It is devenv-only: there is no
+`ai.programs.beads` tree and no Home Manager operational surface. This
+repository deliberately leaves it disabled; #994 owns the first real-ledger
+exercise after #993 supplies agent-runtime wiring.
+
+`devenv up` starts one shared external Dolt daemon and the sole publisher. The
+publisher waits for the daemon, performs module-owned initialization or exact
+existing-state verification, drains once at startup, then publishes on the
+bounded interval. Shell activation runs only `beads:prepare`, which creates and
+verifies contained runtime configuration and never publishes. Operators and
+agents do not run `bd init`; `beads-bootstrap` and the `beads:bootstrap` task
+are the explicit module-owned entry points.
+
+The installed `bd` acquires the repository-wide lock even for reads, rejects
+unqualified lifecycle/configuration/recovery commands, verifies clean valid
+incoming state, executes the pinned client with auto-commit batching, crosses
+the commit-if-needed barrier, and verifies the committed checkpoint before
+unlocking. `beads-checkpoint`, `beads-status`, and `beads-diagnostics` expose
+the corresponding validation and observation paths. Runtime state is selected
+from the shared Git common directory below `XDG_STATE_HOME`, so linked worktrees
+share one ledger without writing into either checkout. The isolated fixture
+covers equal and different source/ledger URLs, linked-worktree writes, safe
+re-entry, startup publication, remote divergence, dirty refusal, and unchanged
+source/global configuration. `[measured lifecycle check @1.2.2/2.2.4]`
 
 **Unattended bump risk.** The update target proves that a new stable release
 builds and preserves the package contract, but it does not open or migrate an
