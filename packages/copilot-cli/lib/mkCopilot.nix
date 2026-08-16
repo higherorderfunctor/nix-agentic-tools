@@ -54,7 +54,8 @@ lib.ai.app.mkAiApp {
     Set exactly one of `text` or `source`; `filename` controls the artifact name.
   '';
   rulesDescription = ''
-    Copilot-specific rules merged with top-level `ai.rules`; collisions fail.
+    Copilot-specific rules replace top-level `ai.rules` entries at the same
+    key; null suppresses an inherited rule.
     Devenv writes them beneath `ai.copilot.projectDir` for github.com's reviewer;
     Home Manager declares the same option for schema parity but treats it as a
     no-op.
@@ -110,36 +111,35 @@ lib.ai.app.mkAiApp {
     # expansion deferred until the cross-ecosystem `ai.lspServers`
     # surface lands; per-app options are fine for now.
     lspServers = lib.mkOption {
-      type = lib.types.attrsOf (import ../../../lib/ai/ai-common.nix {inherit lib;}).lspServerModule;
+      type = lib.types.attrsOf (lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).lspServerModule);
       default = {};
-      description = "Typed LSP server definitions; translated via `mkCopilotLspConfig` into lsp-config.json on emission (adds fileExtensions mapping).";
+      description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkCopilotLspConfig` into lsp-config.json on emission (adds fileExtensions mapping).";
     };
     # Baked into the symlinkJoin wrapper on BOTH backends. devenv used to
     # populate its native `env` attrset instead, which exported them into the
     # project shell rather than into Copilot. `attrsOf str` — matching the
     # legacy surface exactly.
     environmentVariables = lib.mkOption {
-      type = lib.types.attrsOf lib.types.str;
+      type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
       default = {};
-      description = "Environment variables baked into the copilot launcher wrapper. Scoped to the Copilot process and the commands it spawns; never exported into the project shell.";
+      description = "Environment variables baked into the copilot launcher wrapper. Scoped to the Copilot process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
     };
     # Inline agent markdown content. Written under
     # `<configDir>/agents/<name>.md` in HM and
-    # `<projectDir>/agents/<name>.agent.md` in devenv. Merged with
-    # top-level `ai.agents`; collisions fail. Can also be populated
+    # `<projectDir>/agents/<name>.agent.md` in devenv. Per-runtime entries
+    # replace or suppress top-level `ai.agents`. Can also be populated
     # from a directory via `agentsDir` below (same L2b→L3 pattern as
     # `rulesDir` / `skillsDir`).
     agents = lib.mkOption {
-      type = lib.types.attrsOf lib.ai.agent.agentType;
+      type = lib.types.attrsOf (lib.types.nullOr lib.ai.agent.agentType);
       default = {};
-      description = "Agent Markdown or portable semantic records (HM: <configDir>/agents/<name>.md; devenv: <projectDir>/agents/<name>.agent.md).";
+      description = "Agent Markdown or portable semantic records (HM: <configDir>/agents/<name>.md; devenv: <projectDir>/agents/<name>.agent.md). Null suppresses a root entry at the same key.";
     };
     # Directory of `.md` agent files. Each file becomes one entry
     # in `ai.copilot.agents`, keyed by basename minus `.md`. Parity
     # with `rulesDir` / `skillsDir`: expansion runs through the
-    # shared collision-as-failure check, and the on-disk emission
-    # dir is NOT taken over wholesale (other derivations may still
-    # contribute files alongside).
+    # shared replacement semantics, and the on-disk emission dir is NOT taken
+    # over wholesale (other derivations may still contribute files alongside).
     agentsDir = lib.mkOption {
       type = lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).dirOptionType;
       default = null;
@@ -225,8 +225,8 @@ lib.ai.app.mkAiApp {
           ];
         }
         # L2b → L3: expand `ai.copilot.agentsDir` into
-        # `ai.copilot.agents`. mkDefault priority; collisions with
-        # `ai.agents` go through the shared collision check.
+        # `ai.copilot.agents`. mkDefault lets an explicit per-runtime value
+        # win; the resulting entry replaces a same-key root agent.
         (lib.mkIf (cfg.agentsDir != null) {
           ai.copilot.agents = lib.mapAttrs (_: lib.mkDefault) (
             dirHelpers.agentsFromDir cfg.agentsDir

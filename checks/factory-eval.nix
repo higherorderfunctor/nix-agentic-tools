@@ -11,6 +11,7 @@
   ...
 }: let
   ai = import ../lib/ai {inherit lib;};
+  aiCommon = import ../lib/ai/ai-common.nix {inherit lib;};
 
   # Stub HM option types so mkAiApp's baseline home.file render
   # (introduced when the render pipeline was wired) can write to
@@ -51,6 +52,99 @@
       }
     '';
 
+  # Exercise each mkBackendTransform call site through two real factory
+  # records. Runtime A suppresses one inherited key and replaces another;
+  # runtime B is the positive control that keeps both root entries. The
+  # callback is a synthetic emitter only so the exact post-merge pool remains
+  # observable without coupling this factory suite to one product's file
+  # format.
+  poolMergeContract = {
+    poolName,
+    rootValue,
+    runtimeValue,
+    checkRoot,
+    checkRuntime,
+  }: let
+    mergedArgByPool = {
+      agents = "mergedAgents";
+      environmentVariables = "mergedEnvironmentVariables";
+      lspServers = "mergedLspServers";
+      mcpServers = "mergedServers";
+      rules = "mergedRules";
+      skills = "mergedSkills";
+    };
+    mergedArg = mergedArgByPool.${poolName};
+    customPoolOptions = {
+      agents = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.nullOr ai.agent.agentType);
+        default = {};
+      };
+      environmentVariables = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
+        default = {};
+      };
+      lspServers = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
+        default = {};
+      };
+    };
+    runtimeA = "pool-a-${poolName}";
+    runtimeB = "pool-b-${poolName}";
+    mkRecord = name:
+      ai.app.mkAiApp {
+        inherit name;
+        supportedPools = [poolName];
+        transformers.markdown = ai.transformers.claude;
+        defaults.package = pkgs.hello;
+        options =
+          {
+            _observedPool = lib.mkOption {
+              type = lib.types.attrsOf lib.types.anything;
+              default = {};
+              internal = true;
+            };
+          }
+          // lib.optionalAttrs (builtins.hasAttr poolName customPoolOptions) {
+            ${poolName} = customPoolOptions.${poolName};
+          };
+        hm.config = args: {
+          ai.${name}._observedPool = args.${mergedArg};
+        };
+      };
+    evaluated = lib.evalModules {
+      modules = [
+        ai.sharedOptions
+        hmStubs
+        (ai.app.hmTransform (mkRecord runtimeA))
+        (ai.app.hmTransform (mkRecord runtimeB))
+        {
+          config.ai = {
+            ${poolName} = {
+              inherited = rootValue;
+              removed = rootValue;
+              replaced = rootValue;
+            };
+            ${runtimeA} = {
+              enable = true;
+              ${poolName} = {
+                removed = null;
+                replaced = runtimeValue;
+              };
+            };
+            ${runtimeB}.enable = true;
+          };
+        }
+      ];
+    };
+    observedA = evaluated.config.ai.${runtimeA}._observedPool;
+    observedB = evaluated.config.ai.${runtimeB}._observedPool;
+  in
+    !(observedA ? removed)
+    && checkRoot observedA.inherited
+    && checkRuntime observedA.replaced
+    && checkRoot observedB.removed
+    && checkRoot observedB.replaced;
+
   mkServiceServerDef = httpMode: meta: {
     meta =
       {
@@ -88,6 +182,78 @@
       ];
     };
 in {
+  # ── Normalized keyed-pool replacement and negation ──────────────
+  factory-pool-agents-negation = mkTest "pool-agents-negation" (poolMergeContract {
+    poolName = "agents";
+    rootValue = {
+      description = "root";
+      instructions = "root";
+      tools = ["Read"];
+    };
+    runtimeValue = {
+      description = "runtime";
+      instructions = "runtime";
+    };
+    checkRoot = value:
+      value.description == "root" && value.tools == ["Read"];
+    checkRuntime = value:
+      value.description == "runtime" && value.tools == null;
+  });
+  factory-pool-environmentVariables-negation = mkTest "pool-environmentVariables-negation" (poolMergeContract {
+    poolName = "environmentVariables";
+    rootValue = "root";
+    runtimeValue = "runtime";
+    checkRoot = value: value == "root";
+    checkRuntime = value: value == "runtime";
+  });
+  factory-pool-lspServers-negation = mkTest "pool-lspServers-negation" (poolMergeContract {
+    poolName = "lspServers";
+    rootValue = {
+      command = "root-lsp";
+      args = ["--root-only"];
+    };
+    runtimeValue.command = "runtime-lsp";
+    checkRoot = value:
+      value.command == "root-lsp" && value.args == ["--root-only"];
+    checkRuntime = value:
+      value.command == "runtime-lsp" && value.args == ["--stdio"];
+  });
+  factory-pool-mcpServers-negation = mkTest "pool-mcpServers-negation" (poolMergeContract {
+    poolName = "mcpServers";
+    rootValue = {
+      type = "stdio";
+      command = "root-mcp";
+      args = ["--root-only"];
+    };
+    runtimeValue = {
+      type = "stdio";
+      command = "runtime-mcp";
+    };
+    checkRoot = value:
+      value.command == "root-mcp" && value.args == ["--root-only"];
+    checkRuntime = value:
+      value.command == "runtime-mcp" && value.args == [];
+  });
+  factory-pool-rules-negation = mkTest "pool-rules-negation" (poolMergeContract {
+    poolName = "rules";
+    rootValue = {
+      text = "root";
+      matcher = ["**/*.root"];
+    };
+    runtimeValue.text = "runtime";
+    checkRoot = value:
+      value.text == "root" && value.matcher == ["**/*.root"];
+    checkRuntime = value:
+      value.text == "runtime" && value.matcher == null;
+  });
+  factory-pool-skills-negation = mkTest "pool-skills-negation" (poolMergeContract {
+    poolName = "skills";
+    rootValue = ./fixtures/claude-agents;
+    runtimeValue = ./fixtures/kiro-steering;
+    checkRoot = value: value == ./fixtures/claude-agents;
+    checkRuntime = value: value == ./fixtures/kiro-steering;
+  });
+
   # ── Transformer shape tests ─────────────────────────────────────
   factory-transformer-claude-empty = mkTest "transformer-claude-empty" (
     ai.transformers.claude.render {text = "";} == ""

@@ -1,25 +1,27 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — context is a typed
-> `text`-XOR-`source` record that composes root-first with runtime context and
-> names its native artifact per runtime. Rules carry a normalized `matcher`;
-> Claude, Kiro, Copilot, and Codex lower it to native metadata or explicit
-> prose, and devenv AGENTS.md consumers share one keyed deduplicating writer;
-> the list-shaped `instructions` surface is retired rather than aliased). Prior:
-> 2026-08-15 (commit pending — every normalized pool crosses into a runtime only
-> when its app record lists it in `supportedPools`; all five runtimes now list
-> the closed normalized `settings` submodule, runtime-native passthrough moved
-> to `nativeSettings`, per-runtime fields resolve against the root
-> independently, and Codex integration roots travel through a hidden internal
-> channel before native TOML emission). Prior: 2026-08-14 (commit pending —
-> Copilot's `ai.instructions` / `ai.rules` destination is per-BACKEND and this
-> entry named only one of them. Home Manager wrote a hardcoded
-> `.github/instructions/`, which resolves to `$HOME/.github/instructions/` — a
-> directory copilot-cli never reads — so every named instruction and every rule
-> was emitted and then ignored. It now routes through `ai.copilot.configDir`,
-> matching every other HM artifact this module writes. See
-> `copilot-config-delivery.md` for why the two backends address genuinely
-> different consumers). Prior: 2026-08-14 (commit pending — adds the
+> **Last verified:** 2026-08-15 (commit pending — normalized keyed pools use
+> atomic per-runtime replacement and null tombstones, with same-scope package
+> ownership checked from definition provenance). Prior: 2026-08-15 (commit
+> pending — context is a typed `text`-XOR-`source` record that composes
+> root-first with runtime context and names its native artifact per runtime.
+> Rules carry a normalized `matcher`; Claude, Kiro, Copilot, and Codex lower it
+> to native metadata or explicit prose, and devenv AGENTS.md consumers share one
+> keyed deduplicating writer; the list-shaped `instructions` surface is retired
+> rather than aliased). Prior: 2026-08-15 (commit pending — every normalized
+> pool crosses into a runtime only when its app record lists it in
+> `supportedPools`; all five runtimes now list the closed normalized `settings`
+> submodule, runtime-native passthrough moved to `nativeSettings`, per-runtime
+> fields resolve against the root independently, and Codex integration roots
+> travel through a hidden internal channel before native TOML emission). Prior:
+> 2026-08-14 (commit pending — Copilot's `ai.instructions` / `ai.rules`
+> destination is per-BACKEND and this entry named only one of them. Home Manager
+> wrote a hardcoded `.github/instructions/`, which resolves to
+> `$HOME/.github/instructions/` — a directory copilot-cli never reads — so every
+> named instruction and every rule was emitted and then ignored. It now routes
+> through `ai.copilot.configDir`, matching every other HM artifact this module
+> writes. See `copilot-config-delivery.md` for why the two backends address
+> genuinely different consumers). Prior: 2026-08-14 (commit pending — adds the
 > Kiro-specific `extraPackages` runtime PATH prefix, shared by both backends
 > through the existing launcher wrapper and deliberately not promoted to
 > `ai.shell` or a cross-runtime pool). Prior: 2026-08-05 (commit pending —
@@ -392,14 +394,15 @@ enabled ecosystem whose native model preserves the option's semantics):
   `fork`/`exec`, so a harness's children still see it. See `shell-option.md` §
   NEVER write the shell environment.
 
-Cross-ecosystem scalar defaults and per-entry fanouts use `mkDefault` so per-CLI
-overrides take precedence. Collection pools use their documented collision or
-concatenation semantics instead.
+Cross-ecosystem scalar defaults and package-generated per-entry fanouts use
+`mkDefault` so explicit values at the same scope take precedence. Keyed pools
+then apply per-runtime replacement/null negation across scopes; context and
+hooks retain their documented composition semantics.
 
 ### Per-pool capability gate
 
 Every app record carries one `supportedPools` list. The shared transformer uses
-it for the per-runtime option schema, collision merge, callback fanout, and
+it for the per-runtime option schema, keyed-pool merge, callback fanout, and
 shell resolution. A per-runtime pool write that the runtime cannot consume is
 therefore an unknown-option error. A ROOT pool value stays portable and degrades
 to the neutral value for an incapable runtime.
@@ -413,9 +416,10 @@ masquerade as correct exclusion.
 
 ### Assertion semantics
 
-Fanout assertions live outside per-runtime enable gates so invalid shared data
-cannot hide behind a disabled CLI. This includes collision checks and the
-portable hook-event vocabulary check. Runtime-specific materialization
+Fanout validation assertions live outside per-runtime enable gates so invalid
+shared data cannot hide behind a disabled CLI. This includes the portable
+hook-event vocabulary check. Package pool ownership is a separate provenance
+check over both backend module trees. Runtime-specific materialization
 assertions remain inside the enabled runtime's factory—for example, Codex's
 semantic-agent requirement and its `hooks.json` versus inline-hook ownership
 check.
@@ -554,17 +558,17 @@ backends now contribute (each via `lib/ai/mkSkillPackageModule`).
 **Both contributions land PER RUNTIME, not on the root pool** — since 2026-08-14
 the factory writes `ai.<runtime>.skills` and `ai.<runtime>.rules` for every
 runtime whose module is present in the evaluation, filtered by
-`lib.hasAttrByPath ["ai" name "skills"] options`. Root `ai.skills` is ADDITIVE
-and cannot be retracted per runtime, so a root write would make a consumer's
-future per-runtime negation evaluate cleanly and silently do nothing. The
-provenance guard in `checks/module-eval.nix` enforces this: it reads each root
-option's `definitionsWithLocations` and fails when a definition came from a file
-inside this flake. The one exemption is `sharedOptions.nix` itself, which
-declares those options and so has nowhere else to expand its L1→L2 Dir reshape
-to.
+`lib.hasAttrByPath ["ai" name "skills"] options`. Root `ai.skills` belongs to
+the consumer as a portable default surface. Per-runtime null can now retract an
+inherited key, but packages still do not write root values that fan out beyond
+their runtime ownership. The `rootPoolViolations` provenance guard in
+`checks/module-eval.nix` enforces this by reading each root option's
+`definitionsWithLocations`. The declaring module is exempt, which lets
+`sharedOptions.nix` perform its root L1→L2 Dir reshape.
 
 Two consequences to know before changing it. Consumer override keys are
 `ai.<runtime>.skills.<name>` and `ai.<runtime>.rules.<name>`; package entries
-use `mkDefault`, so an ordinary per-runtime consumer definition wins. A root
-entry with the same key is instead a hard cross-level collision because
-`intersectAttrs` is priority-blind (see `collision-semantics.md`).
+use `mkDefault`, so an ordinary per-runtime consumer definition or null wins. A
+same-key root entry remains a portable default and is atomically replaced by the
+package's per-runtime value. Two packages claiming that per-runtime key fail the
+package-provenance guard (see `collision-semantics.md`).

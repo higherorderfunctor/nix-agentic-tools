@@ -66,8 +66,8 @@ _: {
         # fragments loaded is how the rule gets "simplified" back out.
         "checks/module-eval.nix"
         "lib/ai/agent.nix"
-        # Home of both merge helpers these fragments describe
-        # (mergeWithCollisionCheck, resolveOverride) — previously
+        # Home of both merge helpers these fragments describe (`mergePool`,
+        # `resolveOverride`) — previously
         # unscoped, so editing them loaded no guidance.
         "lib/ai/ai-common.nix"
         "lib/ai/app/**"

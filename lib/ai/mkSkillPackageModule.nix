@@ -48,21 +48,15 @@
 # Each skill value is wrapped in `lib.mkDefault`, so a consumer can override an
 # individual key at normal priority. Override skills through
 # `ai.<runtime>.skills.<name>` and router rules through
-# `ai.<runtime>.rules.<name>` — NOT the corresponding root key, which is a hard
-# evaluation error rather than an override. That is worth stating plainly
-# because the failure is counter-intuitive: `mergeWithCollisionCheck`
-# (lib/ai/ai-common.nix) decides collisions with `builtins.intersectAttrs`,
-# which sees KEY PRESENCE and knows nothing about priorities. A consumer's
-# root `mkForce` therefore does not outrank this module's `mkDefault`; it
-# collides with it, and the assertion fires outside every `mkIf`, so it fires
-# even for runtimes that are merely imported.
+# `ai.<runtime>.rules.<name>`. A same-key root consumer entry is a portable
+# default: this module's per-runtime value replaces it after ordinary module
+# priority has selected the value at each level. Consumers can also set the
+# per-runtime key to null to suppress the root value.
 #
 # Writing the ROOT pool is what this module used to do, and it is banned by
-# the provenance guard in `checks/module-eval.nix`. The reason is not
-# tidiness: root pools are
-# ADDITIVE and cannot be retracted per runtime, so once per-runtime negation
-# exists, a root contribution makes a consumer's negation evaluate perfectly
-# cleanly and silently fail to negate anything.
+# the provenance guard in `checks/module-eval.nix`. Root pools belong to
+# consumers as portable defaults; a package write there would fan out beyond
+# the package's runtime ownership and force consumers to retract it themselves.
 #
 # ── Two consequences of the move, both deliberate ──
 #

@@ -397,34 +397,34 @@ in
         '';
       };
       ultracodeOnLaunch = lib.mkEnableOption ''
-        starting every Claude session in ultracode (xhigh effort plus
-        standing dynamic-workflow orchestration).
+          starting every Claude session in ultracode (xhigh effort plus
+          standing dynamic-workflow orchestration).
 
-        Session-setup convenience, NOT the per-turn "ultracode" keyword
-        (that is `settings.workflowKeywordTriggerEnabled`, orthogonal).
-        When true, writes `settings.ultracode = true` (⚠ see caveat) and
-        `settings.enableWorkflows = true` via mkDefault, so an explicit
-        `ai.claude.nativeSettings.*` still wins. Does NOT set effortLevel —
-        ultracode implies xhigh unconditionally.
+          Session-setup convenience, NOT the per-turn "ultracode" keyword
+          (that is `settings.workflowKeywordTriggerEnabled`, orthogonal).
+          When true, writes `settings.ultracode = true` (⚠ see caveat) and
+          `settings.enableWorkflows = true` via mkDefault, so an explicit
+          `ai.claude.nativeSettings.*` still wins. Does NOT set effortLevel —
+          ultracode implies xhigh unconditionally.
 
-        ⚠ CAVEAT: the `ultracode` settings key is UNDOCUMENTED and
-        officially session-only. Anthropic's docs describe ultracode as
-        lasting only for the current session; only `disableWorkflows`
-        appears in the official settings reference. Persisting
-        `ultracode = true` relies on internal behavior (the binary reads it
-        from any settings.json source) that works today (verified on
-        claude-code 2.1.202) but carries no compatibility promise — a future
-        release could stop honoring it without it counting as a breaking
-        change. The claude-code overlay's extraExtract guard asserts the key
-        still parses on each bump so a silent drop fails the update pipeline
+          ⚠ CAVEAT: the `ultracode` settings key is UNDOCUMENTED and
+          officially session-only. Anthropic's docs describe ultracode as
+          lasting only for the current session; only `disableWorkflows`
+          appears in the official settings reference. Persisting
+          `ultracode = true` relies on internal behavior (the binary reads it
+          from any settings.json source) that works today (verified on
+          claude-code 2.1.202) but carries no compatibility promise — a future
+          release could stop honoring it without it counting as a breaking
+          change. The claude-code overlay's extraExtract guard asserts the key
+          still parses on each bump so a silent drop fails the update pipeline
         loudly'';
       lspServers = lib.mkOption {
-        type = lib.types.attrsOf (import ../../../lib/ai/ai-common.nix {inherit lib;}).lspServerModule;
+        type = lib.types.attrsOf (lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).lspServerModule);
         default = {};
         description = ''
-          Typed Claude-specific LSP server declarations. Merged with
-          top-level `ai.lspServers`; per-CLI wins on name conflict.
-          Translated via `mkClaudeLspConfig` to
+          Typed Claude-specific LSP server declarations. Entries replace
+          top-level `ai.lspServers` at the same key; null suppresses an
+          inherited server. Translated via `mkClaudeLspConfig` to
           `programs.claude-code.lspServers`, which upstream writes into
           `~/.claude/settings.json`. Extensions list becomes
           `extensionToLanguage` mapping. Upstream devenv `claude.code`
@@ -463,11 +463,12 @@ in
         '';
       };
       agents = lib.mkOption {
-        type = lib.types.attrsOf agent.agentType;
+        type = lib.types.attrsOf (lib.types.nullOr agent.agentType);
         default = {};
         description = ''
-          Claude-specific agent Markdown or portable semantic records (merged
-          with top-level `ai.agents`; collisions fail). Routed to
+          Claude-specific agent Markdown or portable semantic records. Entries
+          replace top-level `ai.agents` at the same key; null suppresses an
+          inherited agent. Routed to
           `programs.claude-code.agents`; upstream writes them under
           `~/.claude/agents/<name>.md`. HM only — upstream devenv
           `claude.code` has no agents surface.
@@ -754,9 +755,8 @@ in
           (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
           # L2b → L3: expand `ai.claude.agentsDir` into per-CLI
           # `ai.claude.agents`. mkDefault lets explicit
-          # `ai.claude.agents.<name>` entries win within this layer;
-          # collisions with `ai.agents.<name>` still go through the
-          # shared collision check in the transform.
+          # `ai.claude.agents.<name>` entries win within this layer; the
+          # resulting per-runtime entry replaces a same-key root agent.
           (lib.mkIf (cfg.agentsDir != null) {
             ai.claude.agents = lib.mapAttrs (_: lib.mkDefault) (
               dirHelpers.agentsFromDir cfg.agentsDir

@@ -4,9 +4,10 @@
 # `living-workflow.enable = true` installs the living-workflow skill USER-GLOBAL
 # to ~/.claude/skills/ and ~/.kiro/skills/ via the PER-RUNTIME
 # `ai.<runtime>.skills` pools (each enabled ecosystem fans it out) — NOT the
-# root `ai.skills` pool, which is additive and cannot be retracted per runtime.
-# Those pools are per-`evalModules`, so this HM contribution is independent of
-# the devenv module's project-local parity mirror.
+# consumer-owned root `ai.skills` pool, which would fan the package out beyond
+# its runtime ownership. Those pools are per-`evalModules`, so this HM
+# contribution is independent of the devenv module's project-local parity
+# mirror.
 #
 # The skill is Nix-GENERATED: `lib/mkSkill.nix` bakes the XDG state base
 # (`config.xdg.stateHome`) into SKILL.md's @XDG_STATE_BASE@ token and returns the

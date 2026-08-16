@@ -56,35 +56,18 @@
   cfg = config.ai.${appRecord.name};
   supportedPools = appRecord.supportedPools or [];
   supportsPool = poolName: builtins.elem poolName supportedPools;
-  # Collision-as-failure merges — shared ai.<pool> vs ai.<cli>.<pool>.
-  # See lib/ai/ai-common.nix:mergeWithCollisionCheck. Assertions are
-  # emitted through config.assertions below.
-  mergeCheck = poolName: topPool: cliPool:
-    aiCommon.mergeWithCollisionCheck {
-      inherit poolName topPool cliPool;
-      cliName = appRecord.name;
-    };
-  emptyMerge = {
-    assertions = [];
-    merged = {};
-  };
+  # Per-runtime entries replace root entries atomically. Null is a tombstone
+  # filtered after precedence, so it suppresses a root entry at the same key.
   mergePool = poolName: topPool: cliPool:
     if supportsPool poolName
-    then mergeCheck poolName topPool cliPool
-    else emptyMerge;
-  agentsMerge = mergePool "agents" config.ai.agents (cfg.agents or {});
-  envMerge = mergePool "environmentVariables" config.ai.environmentVariables (cfg.environmentVariables or {});
-  lspMerge = mergePool "lspServers" config.ai.lspServers (cfg.lspServers or {});
-  rulesMerge = mergePool "rules" config.ai.rules cfg.rules;
-  serversMerge = mergePool "mcpServers" config.ai.mcpServers cfg.mcpServers;
-  skillsMerge = mergePool "skills" config.ai.skills cfg.skills;
-  collisionAssertions =
-    serversMerge.assertions
-    ++ skillsMerge.assertions
-    ++ rulesMerge.assertions
-    ++ lspMerge.assertions
-    ++ envMerge.assertions
-    ++ agentsMerge.assertions;
+    then aiCommon.mergePool {inherit topPool cliPool;}
+    else {};
+  mergedAgents = mergePool "agents" config.ai.agents (cfg.agents or {});
+  mergedEnvironmentVariables = mergePool "environmentVariables" config.ai.environmentVariables (cfg.environmentVariables or {});
+  mergedLspServers = mergePool "lspServers" config.ai.lspServers (cfg.lspServers or {});
+  mergedRules = mergePool "rules" config.ai.rules cfg.rules;
+  rawMergedServers = mergePool "mcpServers" config.ai.mcpServers cfg.mcpServers;
+  mergedSkills = mergePool "skills" config.ai.skills cfg.skills;
   # ── Local credential-injecting proxy split ──────────────────────
   # A server with `proxy.enable` has its url + headers moved into a
   # systemd user daemon (lib/ai/mcpProxy.nix) and is handed to every
@@ -93,7 +76,6 @@
   # included — ever sees the secret for a proxied server, and the
   # rendered entry passes `renderServer`'s non-Kiro credential guards
   # because there is no credential left in it.
-  rawMergedServers = serversMerge.merged;
   proxiedServers = mcpProxy.proxiedServers rawMergedServers;
   mergedServers =
     rawMergedServers
@@ -210,7 +192,7 @@
   proxiedServers;
 
   # One capability source per app record. A normalized pool is declared,
-  # collision-checked and fanned out only when the runtime consumes it.
+  # merged and fanned out only when the runtime consumes it.
   # Unsupported per-runtime writes therefore get an "option does not exist"
   # eval error, while unsupported root fanout deliberately degrades to the
   # pool's neutral value.
@@ -219,8 +201,8 @@
   # same category as `backend` above: it forces neither `config` nor
   # the factory's `pkgs`, so it cannot reintroduce the `_module.args`
   # recursion documented against `proxyIsSupported` below.
-  # Override-wins, NOT collision-as-failure — see the contrast note on
-  # `resolveOverride` in lib/ai/ai-common.nix. Left null when the app
+  # Null inherits for this scalar; keyed-pool nulls are tombstones instead.
+  # Left null when the app
   # opts out, so a callback that ignores it cannot accidentally emit a
   # root-level shell the runtime never reads.
   resolvedShell =
@@ -248,8 +230,8 @@
 
   # Module-contributed process env, delivered on the internal channel rather
   # than through `ai.<cli>.environmentVariables` — see the note on
-  # `_sandboxSafeSshCommand` in sharedOptions.nix for why injecting into a
-  # collision-checked pool cannot work.
+  # `_sandboxSafeSshCommand` in sharedOptions.nix for why internal contributions
+  # do not belong in the consumer-facing override pool.
   #
   # Callers merge this UNDER `mergedEnvironmentVariables`, so an explicit
   # consumer entry for the same key wins. That ordering is the contract; do
@@ -259,11 +241,6 @@
     GIT_SSH_COMMAND = sandboxSshCommand;
   };
 
-  mergedSkills = skillsMerge.merged;
-  mergedRules = rulesMerge.merged;
-  mergedLspServers = lspMerge.merged;
-  mergedEnvironmentVariables = envMerge.merged;
-  mergedAgents = agentsMerge.merged;
   mergedContext =
     if supportsPool "context"
     then aiCommon.composeContent [config.ai.context cfg.context]
@@ -314,11 +291,11 @@ in {
     }
     // lib.optionalAttrs (supportsPool "mcpServers") {
       mcpServers = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.submoduleWith {
+        type = lib.types.attrsOf (lib.types.nullOr (lib.types.submoduleWith {
           modules = [(import ../mcpServer/commonSchema.nix)];
-        });
+        }));
         default = {};
-        description = "${appRecord.name}-specific MCP servers (merged with top-level ai.mcpServers; collisions fail).";
+        description = "${appRecord.name}-specific MCP servers. Entries replace top-level ai.mcpServers at the same key; null suppresses an inherited server.";
       };
     }
     // lib.optionalAttrs (supportsPool "settings") {
@@ -351,10 +328,10 @@ in {
     }
     // lib.optionalAttrs (supportsPool "rules") {
       rules = lib.mkOption {
-        type = lib.types.attrsOf (appRecord.ruleModule or aiCommon.ruleModule);
+        type = lib.types.attrsOf (lib.types.nullOr (appRecord.ruleModule or aiCommon.ruleModule));
         default = {};
         apply = aiCommon.validateRules;
-        description = appRecord.rulesDescription or "${appRecord.name}-specific rules (merged with top-level ai.rules; collisions fail).";
+        description = appRecord.rulesDescription or "${appRecord.name}-specific rules. Entries replace top-level ai.rules at the same key; null suppresses an inherited rule.";
       };
       rulesDir = lib.mkOption {
         type = lib.types.nullOr aiCommon.dirOptionType;
@@ -364,17 +341,17 @@ in {
           file becomes one entry in `ai.${appRecord.name}.rules` keyed by
           the basename minus `.md`. Accepts a path literal or
           `{ path, filter? }` (filter: name → bool, default keeps `.md`).
-          Runs through the same collision-as-failure merge with
-          `ai.rules` as explicit per-CLI entries; other derivations may
-          still contribute to the same on-disk rules dir.
+          Entries use the same per-runtime replacement semantics as explicit
+          values; other derivations may still contribute to the same on-disk
+          rules directory.
         '';
       };
     }
     // lib.optionalAttrs (supportsPool "skills") {
       skills = lib.mkOption {
-        type = lib.types.attrsOf lib.types.path;
+        type = lib.types.attrsOf (lib.types.nullOr lib.types.path);
         default = {};
-        description = "${appRecord.name}-specific skills (merged with top-level ai.skills; collisions fail).";
+        description = "${appRecord.name}-specific skills. Entries replace top-level ai.skills at the same key; null suppresses an inherited skill.";
       };
       skillsDir = lib.mkOption {
         type = lib.types.nullOr aiCommon.dirOptionType;
@@ -404,10 +381,7 @@ in {
 
   config = lib.mkMerge [
     {_module.args.aiTransformers = appRecord.transformers;}
-    # Collision-as-failure: always evaluate (no mkIf cfg.enable
-    # guard) so misconfigurations surface even when the feature
-    # is toggled off.
-    {assertions = collisionAssertions ++ proxyAssertions;}
+    {assertions = proxyAssertions;}
     # The proxy daemon is emitted OUTSIDE `mkIf cfg.enable`, unlike the
     # on-disk config. A client entry pointing at a dead loopback port is
     # a confusing failure, so the daemon's lifetime follows the SERVER
@@ -435,10 +409,9 @@ in {
       systemd.user.services = proxyUnits;
     })
     # L2b → L3 fanout for per-CLI Dir options. Expansion happens
-    # unconditionally (no mkIf cfg.enable) so the collision check
-    # still has visibility even when the CLI is disabled — the
-    # actual on-disk emission is still gated by `cfg.enable` inside
-    # the per-CLI factory's customConfig.
+    # unconditionally (no mkIf cfg.enable) so the normalized option value is
+    # complete even when the CLI is disabled. Actual on-disk emission remains
+    # gated by `cfg.enable` inside the per-CLI factory's customConfig.
     (lib.optionalAttrs (supportsPool "rules") (lib.mkIf (cfg.rulesDir != null) {
       ai.${appRecord.name}.rules = lib.mapAttrs (_: lib.mkDefault) (
         dirHelpers.rulesFromDir cfg.rulesDir

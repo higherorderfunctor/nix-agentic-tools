@@ -7,26 +7,28 @@ applyTo: "checks/module-eval.nix,lib/ai/agent.nix,lib/ai/ai-common.nix,lib/ai/ap
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — context is a typed
-> `text`-XOR-`source` record that composes root-first with runtime context and
-> names its native artifact per runtime. Rules carry a normalized `matcher`;
-> Claude, Kiro, Copilot, and Codex lower it to native metadata or explicit
-> prose, and devenv AGENTS.md consumers share one keyed deduplicating writer;
-> the list-shaped `instructions` surface is retired rather than aliased). Prior:
-> 2026-08-15 (commit pending — every normalized pool crosses into a runtime only
-> when its app record lists it in `supportedPools`; all five runtimes now list
-> the closed normalized `settings` submodule, runtime-native passthrough moved
-> to `nativeSettings`, per-runtime fields resolve against the root
-> independently, and Codex integration roots travel through a hidden internal
-> channel before native TOML emission). Prior: 2026-08-14 (commit pending —
-> Copilot's `ai.instructions` / `ai.rules` destination is per-BACKEND and this
-> entry named only one of them. Home Manager wrote a hardcoded
-> `.github/instructions/`, which resolves to `$HOME/.github/instructions/` — a
-> directory copilot-cli never reads — so every named instruction and every rule
-> was emitted and then ignored. It now routes through `ai.copilot.configDir`,
-> matching every other HM artifact this module writes. See
-> `copilot-config-delivery.md` for why the two backends address genuinely
-> different consumers). Prior: 2026-08-14 (commit pending — adds the
+> **Last verified:** 2026-08-15 (commit pending — normalized keyed pools use
+> atomic per-runtime replacement and null tombstones, with same-scope package
+> ownership checked from definition provenance). Prior: 2026-08-15 (commit
+> pending — context is a typed `text`-XOR-`source` record that composes
+> root-first with runtime context and names its native artifact per runtime.
+> Rules carry a normalized `matcher`; Claude, Kiro, Copilot, and Codex lower it
+> to native metadata or explicit prose, and devenv AGENTS.md consumers share one
+> keyed deduplicating writer; the list-shaped `instructions` surface is retired
+> rather than aliased). Prior: 2026-08-15 (commit pending — every normalized
+> pool crosses into a runtime only when its app record lists it in
+> `supportedPools`; all five runtimes now list the closed normalized `settings`
+> submodule, runtime-native passthrough moved to `nativeSettings`, per-runtime
+> fields resolve against the root independently, and Codex integration roots
+> travel through a hidden internal channel before native TOML emission). Prior:
+> 2026-08-14 (commit pending — Copilot's `ai.instructions` / `ai.rules`
+> destination is per-BACKEND and this entry named only one of them. Home Manager
+> wrote a hardcoded `.github/instructions/`, which resolves to
+> `$HOME/.github/instructions/` — a directory copilot-cli never reads — so every
+> named instruction and every rule was emitted and then ignored. It now routes
+> through `ai.copilot.configDir`, matching every other HM artifact this module
+> writes. See `copilot-config-delivery.md` for why the two backends address
+> genuinely different consumers). Prior: 2026-08-14 (commit pending — adds the
 > Kiro-specific `extraPackages` runtime PATH prefix, shared by both backends
 > through the existing launcher wrapper and deliberately not promoted to
 > `ai.shell` or a cross-runtime pool). Prior: 2026-08-05 (commit pending —
@@ -399,14 +401,15 @@ enabled ecosystem whose native model preserves the option's semantics):
   `fork`/`exec`, so a harness's children still see it. See `shell-option.md` §
   NEVER write the shell environment.
 
-Cross-ecosystem scalar defaults and per-entry fanouts use `mkDefault` so per-CLI
-overrides take precedence. Collection pools use their documented collision or
-concatenation semantics instead.
+Cross-ecosystem scalar defaults and package-generated per-entry fanouts use
+`mkDefault` so explicit values at the same scope take precedence. Keyed pools
+then apply per-runtime replacement/null negation across scopes; context and
+hooks retain their documented composition semantics.
 
 ### Per-pool capability gate
 
 Every app record carries one `supportedPools` list. The shared transformer uses
-it for the per-runtime option schema, collision merge, callback fanout, and
+it for the per-runtime option schema, keyed-pool merge, callback fanout, and
 shell resolution. A per-runtime pool write that the runtime cannot consume is
 therefore an unknown-option error. A ROOT pool value stays portable and degrades
 to the neutral value for an incapable runtime.
@@ -420,9 +423,10 @@ masquerade as correct exclusion.
 
 ### Assertion semantics
 
-Fanout assertions live outside per-runtime enable gates so invalid shared data
-cannot hide behind a disabled CLI. This includes collision checks and the
-portable hook-event vocabulary check. Runtime-specific materialization
+Fanout validation assertions live outside per-runtime enable gates so invalid
+shared data cannot hide behind a disabled CLI. This includes the portable
+hook-event vocabulary check. Package pool ownership is a separate provenance
+check over both backend module trees. Runtime-specific materialization
 assertions remain inside the enabled runtime's factory—for example, Codex's
 semantic-agent requirement and its `hooks.json` versus inline-hook ownership
 check.
@@ -561,215 +565,186 @@ backends now contribute (each via `lib/ai/mkSkillPackageModule`).
 **Both contributions land PER RUNTIME, not on the root pool** — since 2026-08-14
 the factory writes `ai.<runtime>.skills` and `ai.<runtime>.rules` for every
 runtime whose module is present in the evaluation, filtered by
-`lib.hasAttrByPath ["ai" name "skills"] options`. Root `ai.skills` is ADDITIVE
-and cannot be retracted per runtime, so a root write would make a consumer's
-future per-runtime negation evaluate cleanly and silently do nothing. The
-provenance guard in `checks/module-eval.nix` enforces this: it reads each root
-option's `definitionsWithLocations` and fails when a definition came from a file
-inside this flake. The one exemption is `sharedOptions.nix` itself, which
-declares those options and so has nowhere else to expand its L1→L2 Dir reshape
-to.
+`lib.hasAttrByPath ["ai" name "skills"] options`. Root `ai.skills` belongs to
+the consumer as a portable default surface. Per-runtime null can now retract an
+inherited key, but packages still do not write root values that fan out beyond
+their runtime ownership. The `rootPoolViolations` provenance guard in
+`checks/module-eval.nix` enforces this by reading each root option's
+`definitionsWithLocations`. The declaring module is exempt, which lets
+`sharedOptions.nix` perform its root L1→L2 Dir reshape.
 
 Two consequences to know before changing it. Consumer override keys are
 `ai.<runtime>.skills.<name>` and `ai.<runtime>.rules.<name>`; package entries
-use `mkDefault`, so an ordinary per-runtime consumer definition wins. A root
-entry with the same key is instead a hard cross-level collision because
-`intersectAttrs` is priority-blind (see `collision-semantics.md`).
+use `mkDefault`, so an ordinary per-runtime consumer definition or null wins. A
+same-key root entry remains a portable default and is atomically replaced by the
+package's per-runtime value. Two packages claiming that per-runtime key fail the
+package-provenance guard (see `collision-semantics.md`).
 
 <!-- Fragment: dev/fragments/ai-module/collision-semantics.md -->
 
-## ai.\* Collision Semantics
+## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — the list-shaped instructions
-> exception is gone; package guidance is keyed rules and follows the ordinary
-> collision/default rules). Prior: 2026-08-15 (commit pending — `ai.context` is
-> now an explicit content-composition exception: root content precedes runtime
-> content in one artifact, while keyed rules still collide across levels. The
-> shared repository AGENTS.md writer separately deduplicates identical same-key
-> runtime views and rejects divergent ones). Prior: 2026-08-15 (commit pending —
-> collision checks follow each app record's `supportedPools`, while normalized
-> `ai.settings` is a scalar-field exception: each nullable field resolves
-> independently, with a non-null per-runtime value overriding the root and null
-> inheriting it). Prior: 2026-08-14 (commit pending — records where a MODULE may
-> contribute, now that `lib/ai/mkSkillPackageModule.nix` writes the per-CLI
-> pools. That looks like the exact shape `shell-option.md` bans, and the
-> discriminator — always-on default versus opt-in behind an explicit enable — is
-> written down in the new section below because the ban's reasoning does not
-> carry across it. Also records the provenance guard, which makes the root-write
-> prohibition structural rather than reviewed-for). Prior: 2026-08-10 (commit
-> pending — TWO corrections. The call site was never `hmTransform.nix` +
-> `devenvTransform.nix`; both are 16-line re-exports of
-> `mkBackendTransform.nix`, which is where the merge AND the per-CLI baseline
-> option surface actually live, so step 2 of the checklist pointed at files that
-> declare nothing. And `ai.shell` now exists as a deliberate scalar EXCEPTION
-> resolving override-wins rather than collision-as-failure — recorded here so it
-> is not "fixed" into the covered pools table). Prior: 2026-08-04 (commit
-> pending — kiro's `agents` is still the CLI-specific-shape exemplar, but it is
-> a typed record now rather than raw JSON). Prior: 2026-08-01 (commit pending —
-> distinguishes portable hooks, whose per-event matcher-group lists
-> intentionally append, from key-identity pools). Prior: 2026-04-21 (commit
-> pending — refactor of ai-factory-collision plan §3.2). If you add a new shared
-> pool to `ai.*` or change how pools are merged across the L2↔L3 boundary and
-> this fragment isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-15 (commit pending — all six normalized keyed pools
+> now support per-runtime replacement and null tombstones; the former
+> root↔runtime collision assertion is deleted, and definition provenance now
+> rejects two packages claiming one key at the same root or runtime scope,
+> including claims hidden by whole-option priority in a combined evaluation).
+> Prior: 2026-08-15 (commit pending — the list-shaped instructions exception
+> retired in favor of keyed rules). If you add a normalized pool or change its
+> cross-level merge, null behavior, or package ownership rule and this fragment
+> is not updated in the same commit, stop and fix it.
 
-### Rule
+### Keyed-pool rule
 
-Duplicate keys across any shared `ai.*` pool are a **failure condition**, not a
-silent override. The factory used to merge the top-level pool with the per-CLI
-pool via `config.ai.<pool> // cfg.<pool>`, letting a later per-CLI contribution
-silently overwrite a same-name top-level entry. User directive: "mixing and
-collision should be a failure. we don't merge over keys."
+The six normalized keyed pools are:
 
-This rule applies only where a runtime supports the pool. Unsupported
-per-runtime options are absent, and root fanout to that runtime degrades before
-any merge or collision check.
+- `agents`
+- `environmentVariables`
+- `lspServers`
+- `mcpServers`
+- `rules`
+- `skills`
 
-### Where a MODULE in this repo may contribute
+Every root and per-runtime declaration uses `attrsOf (nullOr <valueType>)`. For
+a capable runtime, composition is:
 
-Consumers write whichever level they like. This repo's own modules may not: they
-write `ai.<cli>.<pool>` and **never** the root `ai.<pool>`, enforced by the
-provenance guard in `checks/module-eval.nix` (`rootPoolViolations`), which reads
-each root option's `definitionsWithLocations` and fails when a definition came
-from a file inside this flake. A consumer's inline config reports
-`<unknown-file>` and is therefore always allowed — the root level is theirs.
+```nix
+lib.filterAttrs (_: value: value != null) (rootPool // runtimePool)
+```
 
-The reason is not symmetry. Root pools are ADDITIVE and cannot be retracted per
-runtime, so once per-runtime negation exists a root contribution makes a
-consumer's negation evaluate perfectly cleanly and silently fail to negate
-anything. No error, no warning, and no visible difference except the feature
-they turned off still being on.
+This ordering is load-bearing:
 
-**This is in tension with `shell-option.md`'s "a module must NEVER contribute
-into `ai.<cli>.environmentVariables`", and the tension is real rather than a
-contradiction.** Both statements are about the same mechanism: `intersectAttrs`
-compares KEY PRESENCE and cannot see `mkDefault`, so a module contribution to a
-per-CLI pool turns a consumer's same-key root entry into a hard eval failure
-rather than yielding to it. The discriminator is **who pays**:
+1. root entries are portable defaults;
+2. a same-key runtime entry replaces the root entry **wholesale**;
+3. a same-key runtime null is a tombstone that suppresses the inherited entry;
+4. null is filtered only after precedence, so it cannot disappear before doing
+   that work.
 
-| module contribution                                         | reaches                  | a consumer's same-key root write                                            |
-| ----------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------- |
-| always-on default (`gitSshConfigWorkaround`)                | every consumer, unasked  | explodes on config nobody opted into — BANNED                               |
-| opt-in behind an explicit `enable` (`mkSkillPackageModule`) | only consumers who asked | explodes on config that consumer chose — ACCEPTED, documented at the option |
+Entries are atomic across levels. Records are never recursively merged. A second
+runtime with no same-key entry continues to inherit the root value; keep that
+positive control beside every per-pool negation test.
 
-An always-on default that collides is a trap: the consumer never asked for the
-contribution and the error names a pool they never wrote. An opt-in package's
-contribution is something the consumer switched on deliberately, so trading the
-root override for a per-runtime one (`ai.<runtime>.skills.<name>`) is a
-documented interface, not an ambush. `lib/ai/mkSkillPackageModule.nix` states
-that override key in its header; if you move a module's writes per-CLI, state it
-in yours too.
+The old `mergeWithCollisionCheck` helper and its root↔runtime assertions were a
+veto layered over data that already used the correct `root // runtime`
+precedence. They are intentionally gone. A root and runtime same-key pair is no
+longer a collision.
 
-### Covered pools
+Unsupported per-runtime options remain absent. Root fanout to an unsupported
+runtime degrades to `{}` before merging, based on the app record's
+`supportedPools` list.
 
-Applies to every attrset-shaped shared pool in `ai.*`:
+### Package ownership rule
 
-- `ai.rules` / `ai.<cli>.rules`
-- `ai.skills` / `ai.<cli>.skills`
-- `ai.mcpServers` / `ai.<cli>.mcpServers`
-- `ai.lspServers` / `ai.<cli>.lspServers`
-- `ai.environmentVariables` / `ai.<cli>.environmentVariables`
-- `ai.agents` / `ai.<cli>.agents`
+Two repo packages may not claim the same key in the same pool and scope. This is
+checked independently at root and at every per-runtime scope, so these are
+different ownership slots:
 
-`ai.context` is single-valued per level but composes across levels: root content
-is concatenated first, followed by runtime content. This preserves both halves
-rather than applying pool-entry replacement or collision semantics.
+```text
+ai.skills.example
+ai.claude.skills.example
+```
 
-`ai.shell` and the fields in normalized `ai.settings` are deliberate SCALAR
-exceptions and resolve the other way — per-runtime silently overrides the root,
-via `resolveOverride` rather than `mergeWithCollisionCheck`. Resolution happens
-per field, so one runtime may override `reasoningEffort` without replacing any
-future normalized sibling. A pool key names an independent entry, so overriding
-one loses data; a nullable scalar has nothing to lose, and making the pair
-collide would leave no way to express "this default, except here". See
-`shell-option.md` for the same precedence rule, and do not "fix" either surface
-into the table above.
+`checks/module-eval.nix` reads each option's `definitionsWithLocations`, keeps
+repo-origin definitions, groups files under `packages/<name>/` as one package
+owner, and reports keys with more than one owner. Consumer inline config is
+`<unknown-file>` and is not treated as a package claim. Because
+`definitionsWithLocations` is exposed after whole-option priority filtering, the
+production guard aggregates the all-active evaluation with isolated evaluations
+for every pool-contributing integration. A package claim hidden by another
+package's `mkForce` in the combined tree therefore remains visible in its
+isolated probe. Keep that activation inventory aligned when a package starts
+writing a normalized pool.
 
-`ai.hooks` is the deliberate attrset exception: event keys identify additive
-lifecycle streams, not replaceable entries. For a shared and runtime-specific
-definition of the same event, matcher-group lists concatenate in shared-first
-order. The top-level event vocabulary is restricted to the portable Claude/Codex
-intersection; runtime-only events stay under `ai.<cli>.hooks`.
+Both production backend trees have clean checks. Fixtures prove every pool fails
+at root and runtime scope, priority-shadowed claims still fail, two files under
+one package remain one owner, root and runtime scopes remain independent, and
+two different keys pass.
+
+This provenance check is separate from runtime replacement. It catches two
+packages competing within one scope; it does not mistake a root default and a
+runtime replacement for two owners.
+
+### Where repo modules contribute
+
+Repo modules write `ai.<runtime>.<pool>`, never the root `ai.<pool>`. The root
+level belongs to consumers as the portable default surface. A separate
+`rootPoolViolations` provenance guard enforces that boundary. Per-runtime null
+now lets a consumer undo an inherited root entry, but consumers should not have
+to retract package wiring that silently fanned out beyond the package's runtime
+ownership.
+
+Package-generated entries normally use a whole-entry `mkDefault`, so an explicit
+consumer value or null at that same per-runtime key wins through ordinary
+module-system priority before root/runtime composition happens. Do not put
+recursive defaults only on fields below a `nullOr` entry boundary: Nix must
+choose the null or record branch before those leaf priorities can arbitrate, and
+reports the option as both null and non-null instead of honoring the tombstone.
+
+Always-on process defaults such as the sandbox-safe SSH command still use the
+internal callback channel instead of writing a hidden normalized-pool
+definition. That keeps module plumbing out of the consumer-owned override pool
+and out of the package provenance guard.
+
+### Non-pool composition exceptions
+
+- `ai.context` is one content record per level. Root and runtime content
+  concatenate root-first into one runtime-named artifact.
+- `ai.hooks` is an event map whose matcher-group lists append shared-first.
+  Event keys identify additive lifecycle streams, not replaceable pool items.
+- `ai.shell` and normalized `ai.settings` fields are nullable scalars.
+  `resolveOverride` interprets runtime null as **inherit**, not delete; a
+  non-null runtime scalar wins.
+
+Do not generalize keyed-pool tombstones to these surfaces without redesigning
+and testing their distinct composition contracts.
 
 ### Implementation
 
-`lib.ai.mergeWithCollisionCheck` in `lib/ai/ai-common.nix`. The call site is
-`lib/ai/app/mkBackendTransform.nix` — **not** `hmTransform.nix` /
-`devenvTransform.nix`, which this fragment claimed until 2026-08-10. Those two
-are 16-line files that each `import ./mkBackendTransform.nix` with a differing
-`backend` key and declare nothing themselves, so the merge (and the per-CLI
-baseline option surface, below) is written once and shared:
+`lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
+filter. `lib/ai/app/mkBackendTransform.nix` calls it once for every supported
+pool and hands only the filtered `merged*` values to package callbacks. MCP
+proxy transformation runs after this merge, so a server replaced with `null`
+never reaches proxy validation or emission.
 
-```nix
-mergeCheck = poolName: topPool: cliPool:
-  aiCommon.mergeWithCollisionCheck {
-    inherit poolName topPool cliPool;
-    cliName = appRecord.name;
-  };
+`hmTransform.nix` and `devenvTransform.nix` are thin backend selectors; do not
+duplicate pool logic into them.
 
-rulesMerge = mergePool "rules" config.ai.rules cfg.rules;
-# ...
-collisionAssertions = rulesMerge.assertions ++ ... ;
-```
+### Adding a normalized pool
 
-The helper returns `{ merged, assertions }`. The merged shape matches the old
-`//` behavior (per-CLI wins) so downstream code keeps resolving until the module
-system checks assertions. Assertions aggregate into `config.assertions`
-**outside any mkIf guard**, so misconfigurations surface even when the CLI is
-toggled off.
-
-### Error message
-
-```
-<pool> '<key>' declared in both ai.<pool> and ai.<cli>.<pool> —
-collisions across shared ai.* pools are errors. Rename one or
-delete the duplicate.
-```
-
-### Adding a new shared pool
-
-1. Declare `ai.<pool>` in `lib/ai/sharedOptions.nix` (attrset shape).
-2. Declare `ai.<cli>.<pool>` in the mkAiApp baseline
-   (`lib/ai/app/mkBackendTransform.nix`, in the `options.ai.${appRecord.name}`
-   attrset, gated by `supportsPool`) OR in the per-CLI factory (for CLI-specific
-   shape, like kiro's `agents`, whose typed record models Kiro's own v3 agent
-   schema rather than the portable one).
-3. Add the pool to `supportedPools` for each app record that consumes it.
-4. Add `<pool>Merge = mergePool "<pool>" config.ai.<pool> cfg.<pool>;` to the
-   transform.
-5. Append `<pool>Merge.assertions` to `collisionAssertions`.
-6. Set `merged<Pool> = <pool>Merge.merged;`.
-7. Add collision and supported/unsupported option tests in
-   `checks/module-eval.nix`.
-
-### Pitfall
-
-**Do NOT merge with `//` anywhere in the factory.** That was the old shape — it
-silently overrode. If you see a new `//` on a pool merge during code review,
-route it through the helper instead. The existing tests cover the collision path
-per pool, but a brand-new pool added without the helper will evade detection
-until someone happens to configure a collision.
+1. Declare root and per-runtime values as `attrsOf (nullOr <valueType>)`.
+2. Add the capability to each consuming app record's `supportedPools`.
+3. Route root and runtime values through `mergePool` before any translation or
+   emission.
+4. Add the pool to `normalizedPoolNames` in `checks/module-eval.nix` so package
+   ownership is checked at root and every runtime scope.
+5. Test null-drop with a second-runtime inheritance control, wholesale same-key
+   replacement, package collision diagnostics via `lib.hasInfix`, and a
+   different-key package control.
 
 ### Debugging
 
-If a collision assertion fires and the user disagrees, inspect which side of the
-merge owns the offending key:
+For a missing emitted entry, inspect both levels before the callback:
 
 ```bash
-nix eval --impure --expr 'builtins.attrNames \
-  (builtins.fromJSON (builtins.readFile ./result/etc/<pool>.json))'
+nix eval .#homeConfigurations.<host>.config.ai.<pool>
+nix eval .#homeConfigurations.<host>.config.ai.<runtime>.<pool>
 ```
 
-Or look at `config.ai.<pool>` / `config.ai.<cli>.<pool>` via
-`nix eval .#homeConfigurations.<host>.config.ai.<pool>`.
+A runtime null at the key is an intentional deletion. For a package collision,
+the check diagnostic names the exact option path and all contributing module
+files; move one contribution to a distinct key or establish a single package
+owner rather than changing root/runtime precedence.
 
 <!-- Fragment: dev/fragments/ai-module/dir-helpers.md -->
 
 ## ai.\* Dir Helpers
 
-> **Last verified:** 2026-04-21 (commit pending — refactor of
-> ai-factory-collision plan §4 / commits 4–7). If you add a new `*FromDir`
-> helper or change the polymorphic input shape or the filter signature and this
-> fragment isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-15 (commit pending — directory-generated
+> per-runtime entries now replace or null-suppress same-key root entries under
+> the normalized keyed-pool contract). Prior: 2026-04-21 (commit pending —
+> refactor of ai-factory-collision plan §4 / commits 4–7). If you add a new
+> `*FromDir` helper or change the polymorphic input shape or the filter
+> signature and this fragment isn't updated in the same commit, stop and fix it.
 
 ### The helpers
 
@@ -827,9 +802,10 @@ ai.kiro.rulesDir = {
 };
 ```
 
-Mix Dir-based and explicit entries freely — they merge through `mkDefault`
-(explicit entries win within the same layer; collisions between L2 and L3 fire
-the shared assertion per the collision-semantics fragment).
+Mix Dir-based and explicit entries freely. They merge through `mkDefault`, so
+explicit entries win within the same layer. A resulting per-runtime entry then
+replaces a same-key root entry wholesale; an explicit per-runtime null
+suppresses the inherited root entry.
 
 ### Why pure-eval only
 
@@ -862,21 +838,23 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-08-15 (commit pending — typed context is the
-> composition exception: root and runtime content concatenate root-first into
-> one runtime-named artifact. Keyed rules retain collision semantics and lower
-> their normalized matcher at L4; repository-local AGENTS.md consumers share a
-> keyed, byte-deduplicating writer). Prior: 2026-08-15 (commit pending — L2 root
-> pools now cross into L3 only for runtimes whose app record lists that pool in
-> `supportedPools`; unsupported root fanout degrades and the L2b/L3 options are
-> absent. The closed normalized `settings` schema is deliberately listed by all
-> five runtimes even when a particular field lowers only for a subset). Prior:
-> 2026-08-01 (commit pending — records the portable hooks exception: per-event
-> matcher-group lists append instead of key-colliding, and agents may carry a
-> typed semantic record). Prior: 2026-04-21 (commit pending — refactor of
-> ai-factory-collision plan §4). If you add a new Dir option or change how
-> per-file Dir expansion fans through the layers, update this fragment in the
-> same commit.
+> **Last verified:** 2026-08-15 (commit pending — L2↔L3 keyed pools now use
+> atomic per-runtime replacement with null tombstones, while package ownership
+> collisions are checked by definition provenance within each scope). Prior:
+> 2026-08-15 (commit pending — typed context is the composition exception: root
+> and runtime content concatenate root-first into one runtime-named artifact.
+> Keyed rules retain collision semantics and lower their normalized matcher at
+> L4; repository-local AGENTS.md consumers share a keyed, byte-deduplicating
+> writer). Prior: 2026-08-15 (commit pending — L2 root pools now cross into L3
+> only for runtimes whose app record lists that pool in `supportedPools`;
+> unsupported root fanout degrades and the L2b/L3 options are absent. The closed
+> normalized `settings` schema is deliberately listed by all five runtimes even
+> when a particular field lowers only for a subset). Prior: 2026-08-01 (commit
+> pending — records the portable hooks exception: per-event matcher-group lists
+> append instead of key-colliding, and agents may carry a typed semantic
+> record). Prior: 2026-04-21 (commit pending — refactor of ai-factory-collision
+> plan §4). If you add a new Dir option or change how per-file Dir expansion
+> fans through the layers, update this fragment in the same commit.
 
 ### Canonical 4-layer shape
 
@@ -889,7 +867,7 @@ path types".
                              ▼  fanout via lib.ai.<X>FromDir
 ┌────────────────────────────────────────────────────────────┐
 │ L2: Top-level singles                                      │
-│   ai.<X> = attrsOf <itemModule>                            │
+│   ai.<X> = attrsOf (nullOr <itemModule>)                   │
 │   - cross-ecosystem pool                                   │
 └────────────────────────────────────────────────────────────┘
                              │
@@ -902,10 +880,10 @@ path types".
                              ▼  fanout via lib.ai.<X>FromDir
 ┌────────────────────────────────────────────────────────────┐
 │ L3: Per-CLI singles                                        │
-│   ai.<cli>.<X> = attrsOf <itemModule>                      │
+│   ai.<cli>.<X> = attrsOf (nullOr <itemModule>)             │
 │   - exists only when the app record supports pool X        │
-│   - merged with L2 via mergeWithCollisionCheck             │
-│   - collision-as-failure at the L2↔L3 boundary             │
+│   - same-key value atomically replaces L2                  │
+│   - same-key null suppresses the inherited L2 entry        │
 └────────────────────────────────────────────────────────────┘
                              │
                              ▼  translation + emission
@@ -921,11 +899,14 @@ path types".
 
 - **Emission logic lives ONLY at L4.** L1/L2/L2b are pure fanout — they never
   touch `home.file.*` or `files.*`.
-- **Collision-as-failure at every supported layer boundary.** The
-  mergeWithCollisionCheck helper fires on each supported L2↔L3 boundary inside
-  the CLI's transform. Unsupported root fanout degrades before this boundary and
-  has no L3 option. L1→L2 and L2b→L3 use `mkDefault` so explicit entries within
-  the same layer still win (that's a fanout, not a cross-layer collision).
+- **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
+  entries replace same-key root entries wholesale; null suppresses an inherited
+  entry after the shallow merge. Unsupported root fanout degrades before this
+  boundary and has no L3 option. L1→L2 and L2b→L3 use `mkDefault` so explicit
+  entries within the same layer still win before cross-level composition.
+- **One package owner per key and scope.** Definition-provenance checks reject
+  two packages claiming one root key or one per-runtime key. A root key and its
+  runtime replacement are different scopes and do not collide.
 - **List-valued lifecycle hooks append.** `ai.hooks.<Event>` matcher groups run
   before `ai.<cli>.hooks.<Event>` groups. This is intentional composition, not
   an attrset-entry collision; only the exact portable Claude/Codex event
@@ -959,7 +940,8 @@ path types".
   `lib/ai/app/{hmTransform,devenvTransform}.nix`
 - L2b options (CLI-specific, like Claude's `agentsDir` or `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
-- L2↔L3 collision check → transform (`collisionAssertions`)
+- L2↔L3 replacement/null filtering → transform (`aiCommon.mergePool`)
+- per-scope package ownership guard → `checks/module-eval.nix`
 - L4 emission → `packages/<pkg>/lib/mk<Cli>.nix`
 
 ### Adding a new concern X
@@ -972,9 +954,9 @@ path types".
    The uniform normalized `settings` schema is the explicit exception: every
    runtime declares it, while each field's native lowering may be narrower.
 4. Add L4 emission in each supporting per-CLI factory's customConfig.
-5. Wire the L2↔L3 merge through mergeWithCollisionCheck in both transforms, or
-   document and test the concern's intentional composition rule (hooks append
-   per-event lists).
+5. Wire L2↔L3 through `mergePool`, add the pool to the package-provenance guard,
+   or document and test the concern's intentional non-pool composition rule
+   (hooks append per-event lists).
 6. (Optional) Add L1 option `ai.<X>Dir` + L1→L2 expansion.
 7. (Optional) Add per-CLI L2b option `ai.<cli>.<X>Dir` + L2b→L3 expansion.
 8. Add tests in `checks/module-eval.nix` for every new surface and at least one
@@ -1002,21 +984,23 @@ touch L1/L2b; emission stays stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-08-15 (commit pending — package guidance now uses
-> keyed per-runtime rules; the pool census no longer includes the retired
-> instructions list). Prior: 2026-08-15 (commit pending — `supportedPools` now
-> gates all normalized pool declarations and fanout, while the new normalized
-> `settings` surface is deliberately present on every runtime and resolves
-> nullable fields per runtime through the same override rule as `ai.shell`).
-> Prior: 2026-08-14 (commit pending — the escape hatch at the end of the Copilot
-> section was half-wrong: at 1.0.80 the plain `@github/copilot` npm tarball is a
-> 24K loader shim, not readable JS. The readable app code is in the per-platform
-> dep — and, better, the SEA self-extracts a byte-identical copy on first run,
-> so no download is needed at all. The Copilot `ai.shell` gap itself is
-> UNCHANGED and still open). Prior: 2026-08-10 (commit pending — first landing
-> of `ai.shell`. If you add another nullable-scalar `ai.*` option, change which
-> runtimes consume this one, or touch `resolveOverride`, update this fragment in
-> the same commit.)
+> **Last verified:** 2026-08-15 (commit pending — distinguishes scalar
+> null-as-inherit from keyed-pool null tombstones and removes the retired
+> collision-assertion rationale for internal process defaults). Prior:
+> 2026-08-15 (commit pending — package guidance now uses keyed per-runtime
+> rules; the pool census no longer includes the retired instructions list).
+> Prior: 2026-08-15 (commit pending — `supportedPools` now gates all normalized
+> pool declarations and fanout, while the new normalized `settings` surface is
+> deliberately present on every runtime and resolves nullable fields per runtime
+> through the same override rule as `ai.shell`). Prior: 2026-08-14 (commit
+> pending — the escape hatch at the end of the Copilot section was half-wrong:
+> at 1.0.80 the plain `@github/copilot` npm tarball is a 24K loader shim, not
+> readable JS. The readable app code is in the per-platform dep — and, better,
+> the SEA self-extracts a byte-identical copy on first run, so no download is
+> needed at all. The Copilot `ai.shell` gap itself is UNCHANGED and still open).
+> Prior: 2026-08-10 (commit pending — first landing of `ai.shell`. If you add
+> another nullable-scalar `ai.*` option, change which runtimes consume this one,
+> or touch `resolveOverride`, update this fragment in the same commit.)
 
 ### One record is the capability source
 
@@ -1025,7 +1009,7 @@ Every `mkAiApp` record declares the normalized pools its runtime exposes in
 places:
 
 - only supported per-runtime pool options are declared;
-- only supported pools participate in shared/per-runtime collision checks;
+- only supported pools participate in shared/per-runtime merging;
 - only supported root pools reach the backend callback; and
 - `shell` resolution runs only when `shell` is in the list.
 
@@ -1047,21 +1031,18 @@ all five runtimes list it so the same closed schema is available at every
 runtime scope, even when a particular field currently has a lossless native
 lowering only for a subset such as Claude and Codex.
 
-### `ai.shell` is deliberately NOT collision-as-failure
+### `ai.shell` deliberately uses null-as-inherit
 
-Every attrset-shaped `ai.*` pool treats a shared/per-CLI duplicate key as an
-error — see `collision-semantics.md`. `ai.shell` and each normalized
-`ai.settings` field are the exceptions, and the exception is structural rather
-than a preference: a pool key names an independent entry, so silently overriding
-one loses data. A nullable scalar has nothing to lose. `ai.claude.shell` is not
-a second entry competing with `ai.shell`; it is the same knob at a narrower
-scope, and making the pair collide would leave no way to express "this default,
-except here" — the entire point of the option.
+Every keyed normalized pool uses per-runtime replacement, with null meaning
+delete the inherited entry. `ai.shell` and each normalized `ai.settings` field
+are structurally different: they are scalar defaults, so null means inherit.
+`ai.claude.shell` is not an independently named entry competing with `ai.shell`;
+it is the same knob at a narrower scope.
 
 Resolution lives in `lib/ai/ai-common.nix:resolveOverride` (non-null per-CLI
 wins, `null` inherits the root, `null` at both levels means "not configured").
-Do not inline the `if` at call sites; the contrast with the merge helper beside
-it is the thing worth keeping easy to grep for.
+Do not inline the `if` at call sites; the contrast with keyed-pool tombstones is
+the thing worth keeping easy to grep for.
 
 Normalized settings use that helper per field. For example,
 `ai.claude.settings.reasoningEffort = "low"` overrides a root
@@ -1175,29 +1156,14 @@ three runtimes demonstrably do not perform.
   depending on which runtime the consumer named. Guarded by
   `module-ai-shell-explicit-env-beats-typed-{codex,kiro}`; change them together
   or not at all.
-- **An ALWAYS-ON module default must never contribute into
-  `ai.<cli>.environmentVariables`.** That pool is collision-checked against
-  `ai.environmentVariables` by `builtins.intersectAttrs` — KEY PRESENCE, with no
-  awareness of `mkDefault`. So a module default there does not "yield" to a
-  consumer's entry for the same key, it turns that config into a hard eval
-  failure naming a pool the consumer never wrote, and it fires even for
-  merely-imported harnesses because `collisionAssertions` sits outside
-  `mkIf cfg.enable`. Both `ai.shell` and `gitSshConfigWorkaround` shipped this
-  bug for one commit. Module contributions ride `ai._sandboxSafeSshCommand` /
-  the `resolvedShell` callback argument and are merged at the wrapper call site
-  instead.
-
-  **Read the "always-on" qualifier — it was added 2026-08-14 and it is
-  load-bearing.** The rule used to read "a module must NEVER contribute into
-  `ai.<cli>.environmentVariables`", and generalizing that wording to every
-  collision-checked pool would now be wrong: `lib/ai/mkSkillPackageModule.nix`
-  deliberately writes `ai.<runtime>.skills` and `ai.<runtime>.rules`, because
-  writing the ROOT pool instead is what the provenance guard in
-  `checks/module-eval.nix` bans. What makes that safe and this unsafe is not the
-  pool, it is whether the consumer asked: `gitSshConfigWorkaround` reaches every
-  consumer unasked, while a skill package contributes only after an explicit
-  `<name>.enable = true`. See `collision-semantics.md` §"Where a MODULE in this
-  repo may contribute" for the full discriminator.
+- **Always-on process defaults do not write hidden normalized-pool entries.**
+  `ai.<cli>.environmentVariables` is the consumer's replacement/negation
+  surface, and definition provenance treats package claims there as owned API.
+  Internal defaults such as the sandbox-safe SSH command therefore ride
+  `ai._sandboxSafeSshCommand` / the `resolvedShell` callback argument and merge
+  under consumer values at the wrapper call site. Opt-in packages may publish
+  documented per-runtime pool entries; two packages still cannot own the same
+  key and scope. See `collision-semantics.md`.
 
 - **`shell_environment_policy` is not the Codex knob.** It filters what SPAWNED
   commands inherit; writing the shell there configures the children, not Codex.

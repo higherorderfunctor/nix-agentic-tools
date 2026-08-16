@@ -50,8 +50,6 @@
     cfg.mcp
     cfg.subagent
   ];
-  mkDefaultRecursive = lib.mapAttrsRecursive (_path: lib.mkDefault);
-
   cacheDir = cacheLocation {inherit config lib;};
   customizePackage = import ../lib/withGrammars.nix {inherit lib pkgs;};
   customizedPackage =
@@ -140,13 +138,15 @@
         ai.${runtime}.rules.semble = lib.mkDefault records.rule;
       })
       (lib.mkIf (selected runtime cfg.mcp) {
-        ai.${runtime}.mcpServers.semble = mkDefaultRecursive mcpEntry;
+        ai.${runtime}.mcpServers.semble = lib.mkDefault mcpEntry;
       })
       (lib.mkIf (selected runtime cfg.subagent) {
-        # Both records are now typed attrsets (Kiro's shape differs from the
-        # portable semantic one, but neither is pre-rendered), so the same
-        # per-leaf mkDefault applies to each.
-        ai.${runtime}.agents.semble-search = mkDefaultRecursive (
+        # Both records are typed attrsets (Kiro's shape differs from the
+        # portable semantic one, but neither is pre-rendered). Default the
+        # whole entry so a consumer can replace it atomically. Claude/Codex
+        # agents are normalized nullable entries and also accept null
+        # tombstones; Kiro's runtime-native agent pool is replace-only.
+        ai.${runtime}.agents.semble-search = lib.mkDefault (
           if runtime == "kiro"
           then records.kiroAgent
           else records.semanticAgent

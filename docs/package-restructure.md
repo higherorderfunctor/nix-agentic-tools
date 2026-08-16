@@ -5,6 +5,10 @@
 > started** on the real tree (Track A/B — see §12). This document replaces the
 > 8-document restructure cluster, now archived under `docs/archive/`.
 >
+> **Last verified:** 2026-08-15 (commit pending — §3.5 and every action item
+> derived from it now record the shipped shared backend transformer and the
+> normalized keyed-pool replacement/negation contract).
+>
 > **Written:** 2026-07-23; consolidated + reconciled to the locked design
 > 2026-07-24. Supersedes every source listed below.
 >
@@ -199,14 +203,16 @@ naturally subsumed by the slice move; 5 are independent.** Site #14
 (`*-sources.json` sidecars) is explicitly **not** a smell — it is the _good_
 pattern and the reference for what a Pattern-C fix should look like.
 
-### 3.5 Transform duplication
+### 3.5 Transform duplication — resolved
 
-`lib/ai/app/hmTransform.nix` and `devenvTransform.nix` are **~135 near-identical
-lines each** — the same six `mergeWithCollisionCheck` calls, the same baseline
-`ai.<name>.{enable,package,mcpServers,instructions,rules,rulesDir,skills,skillsDir}`
-option block, the same L2b→L3 Dir expansion, duplicated verbatim. This is a
-direct violation of the repo's own CLAUDE.md DRY rule and is _independent_ of
-the slice move — it can be fixed any time.
+`lib/ai/app/hmTransform.nix` and `devenvTransform.nix` are now thin backend
+selectors over `mkBackendTransform.nix`; the baseline option tree, directory
+expansion, and normalized-pool composition have one implementation. The six
+keyed pools use the shared `mergePool` primitive: runtime entries replace root
+entries atomically and a runtime `null` suppresses the inherited key. The old
+`mergeWithCollisionCheck` veto is retired. Preserve this centralization when a
+pool or backend grows; the duplication diagnosed by the original plan is no
+longer outstanding work.
 
 ---
 
@@ -601,8 +607,8 @@ Prerequisites 1–3 are **satisfied** (reaudit X8); `migrate-to-trunk-based` is
 4. **Forks 1–3 decided** (§8) — the fixture exists to settle them. **✓ met — d4
    (2026-07-24): no-barrel / defer-coarse-slices / `readDir`.**
 
-Independent of all the above and safe to do any time: **de-duplicate
-`hmTransform`/`devenvTransform`** (§3.5).
+Independent item now complete: ~~de-duplicate `hmTransform`/`devenvTransform`~~
+**✓ done** (§3.5).
 
 ### 9.1 Stay-green discipline
 
@@ -909,7 +915,7 @@ code reads the merged set.
 - Collapse the ~6-place package list toward one source of truth
 - Fix **#1** (active bug, wrong-file greps landing in main) and **#12** (silent
   failure — wrong version persists with no error)
-- De-duplicate `hmTransform`/`devenvTransform` (~135 lines, §3.5)
+- ~~De-duplicate `hmTransform`/`devenvTransform` (~135 lines, §3.5)~~ **✓ done**
 
 **Why this is the good half:**
 
@@ -982,7 +988,7 @@ unit) intact.
 > 2 below is therefore the two [OVL] split-prep refactors plus the 14-overlay
 > absorption, not a dissolution into package dirs.
 
-1. **Track A** (registries + the two live bugs + transform de-dup)
+1. **Track A** (registries + the two live bugs; transform de-dup is **✓ done**)
 2. **Overlay split-prep (D-1)** — the two [OVL] refactors (TOP-9 relocates the 2
    cross-boundary build sources _into_ `overlays/`; TOP-10 exposes
    `*-extracted.json` via `passthru.extracted`), then absorb nixos-config's 14
@@ -1007,7 +1013,7 @@ state as of 2026-07-23; re-verify before acting — several are moving.)_
 | **`converge-agentic-foundations` P3** (paused)               | Typed-surface work edits `lib/ai/`, `mkClaude.nix`, `mkKiro.nix`, `hooksJson` retirement — **the same files** Track B moves. Track A's `config.update.targets` option lives in a **new `lib/update.nix`** (RESOLVED d4 — deliberately _not_ `lib/ai/sharedOptions.nix`), so that seam no longer overlaps converge P3's typed-surface files. **Also:** the D-1 overlay split-prep's TOP-10 (`passthru.extracted` re-plumb — an _active_ phase, not deferred) edits `mkClaude.nix:186` (`effortLevels` enum) and `mkKiro.nix:75` (`hookTriggers` enum) — the same typed-surface files — landing **before** converge P3 resumes, so P3 rebases over the re-plumbed enum sources, not only over Track B's deferred file-moves | Option placement **resolved (d4): `lib/update.nix`**, which removes the option-placement conflict; the `mkClaude`/`mkKiro` overlap remains — now from **both** Track B's deferred moves _and_ TOP-10's active enum re-plumb, so converge P3 must rebase over the re-plumbed `effortLevels`/`hookTriggers` sources |
 | **Update pipeline v4 + transitive-hash gap (#144)**          | Track A's centrepiece **is** dissolving `update-matrix.nix` and changing `update-pkg.sh`. #144 (refresh only touches the named hash) is adjacent surgery on the same script                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Coordinate — do not run both independently                                                                                                                                                                                                                                                                        |
 | **Fragment pipeline** (`dev/generate.nix`)                   | Track A dissolves `packagePaths`, which lives in `dev/generate.nix` — owned by the fragment pipeline, not this plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | **RESOLVED (2026-07-24)** — dissolved under `converge-repo-foundations` together with `devFragmentNames` into `config.fragments.categories`                                                                                                                                                                       |
-| **`hmTransform`/`devenvTransform` de-dup**                   | Touches `lib/ai/app/`, which typed-surface work also touches                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Cheap and independent — but sequence against typed-surface                                                                                                                                                                                                                                                        |
+| **`hmTransform`/`devenvTransform` de-dup** (**done**)        | The thin selectors now share `mkBackendTransform.nix`; later typed-surface work must preserve that single implementation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | **Resolved** — rebase later typed-surface changes over the shared transformer                                                                                                                                                                                                                                     |
 | **Repo defects (`mkClaude.nix:659`)**                        | `mkClaude.nix` is the ~800-line reference file; defect fixes there conflict with moving it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Fix defects first; they're smaller                                                                                                                                                                                                                                                                                |
 
 ### Questions the convergence session must answer
@@ -1085,9 +1091,8 @@ true.
 
 ## 15. If you only do three things
 
-1. **De-duplicate `hmTransform`/`devenvTransform`.** ~135 duplicated lines,
-   violates the repo's own DRY rule, **completely independent** of every fork,
-   workstream, and blocker in this document. Free money, today.
+1. ~~**De-duplicate `hmTransform`/`devenvTransform`.**~~ **✓ done.** Keep pool
+   composition in `mkBackendTransform.nix`; do not recreate backend copies.
 2. **Run the `effect-mcp` pre-pilot (§9.2), then dissolve `update-matrix.nix`.**
    This is Track A's beachhead, proves the merge-up namespace on one package
    with a fallback, and needs **no** fork decided.

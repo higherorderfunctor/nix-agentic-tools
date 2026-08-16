@@ -491,11 +491,12 @@
   # DECLARES it. Every other module here writes `ai.<runtime>.<option>`; the
   # root level belongs to consumers.
   #
-  # Root options are ADDITIVE and cannot be retracted per runtime. Once
-  # per-runtime negation ships, a contribution this repo made at the root level
-  # makes a consumer's negation evaluate perfectly cleanly and do nothing — no
-  # error, no warning, and no visible difference except the feature they turned
-  # off still being on. That silence is why this is enforced, not reviewed for.
+  # Root options belong to consumers as portable defaults. A package-level
+  # contribution there silently fans out to every capable runtime, including
+  # runtimes the package does not own. Consumers can now retract an individual
+  # key per runtime, but they should not have to undo package wiring that landed
+  # at the wrong scope. That is why this remains enforced rather than reviewed
+  # for.
   #
   # ── Why PROVENANCE and not a source scan ──
   #
@@ -546,7 +547,8 @@
   # guard would evaluate a tree in which the ENTIRE fanout body contributes
   # nothing — the largest and likeliest home for a root write, invisible. The
   # runtimes come from the shared registry so a sixth is covered the day it
-  # lands; the skill packages are named because they gate on their own flags.
+  # lands; pool-contributing integrations are named because they gate on their
+  # own flags.
   #
   # Verified by mutation, not by reading: a root write gated on
   # `config.ai.claude.enable` is reported with these enables and vanishes
@@ -565,11 +567,31 @@
   # that lands, a root write can no longer be expressed and this can go.
   rootPoolSrcRoot = toString ./..;
 
-  rootPoolProbeConfig = {
+  runtimePoolProbeConfig = {
     ai = lib.genAttrs harnessNames (_: {enable = true;});
-    living-workflow.enable = true;
-    stacked-workflows.enable = true;
   };
+
+  rootPoolProbeConfig =
+    runtimePoolProbeConfig
+    // {
+      semble.enable = true;
+      living-workflow.enable = true;
+      stacked-workflows.enable = true;
+    };
+
+  # Definition provenance is post-priority filtering. The all-active probe is
+  # still useful, but a whole-option mkForce from one package could otherwise
+  # erase another package's lower-priority claim before the guard sees it.
+  # Evaluate each pool-contributing integration in isolation as well, then
+  # aggregate claims across the evaluations. Keep this inventory aligned with
+  # every first-party integration that writes a normalized pool.
+  packagePoolProbeConfigs = [
+    runtimePoolProbeConfig
+    (runtimePoolProbeConfig // {semble.enable = true;})
+    (runtimePoolProbeConfig // {living-workflow.enable = true;})
+    (runtimePoolProbeConfig // {stacked-workflows.enable = true;})
+    rootPoolProbeConfig
+  ];
 
   rootPoolViolations = evaluated: let
     isOurs = file: lib.hasPrefix rootPoolSrcRoot (toString file);
@@ -607,10 +629,112 @@
 
         ${builtins.concatStringsSep "\n  " violations}
 
-      Root options are ADDITIVE and cannot be retracted per runtime, so this
-      makes a consumer's per-runtime negation evaluate clean and silently do
-      nothing. Write ai.<runtime>.<option> instead, gated on
+      Root options are consumer-owned portable defaults. A package write here
+      fans out beyond the package's runtime ownership. Write
+      ai.<runtime>.<option> instead, gated on
       `lib.hasAttrByPath ["ai" name "<option>"] options`.
+    '';
+
+  # ── Package-vs-package keyed-pool collision guard ───────────────
+  # Root and per-runtime scopes are independent: a root entry and a same-key
+  # per-runtime entry are the intended replacement boundary. Within either
+  # scope, however, two repo packages claiming one key is ambiguous ownership
+  # and must fail. Definition provenance distinguishes those package claims
+  # from consumer inline config (`<unknown-file>`), while grouping paths under
+  # packages/<name>/ prevents two modules of one package from masquerading as
+  # two package owners.
+  normalizedPoolNames = [
+    "agents"
+    "environmentVariables"
+    "lspServers"
+    "mcpServers"
+    "rules"
+    "skills"
+  ];
+
+  packageOwnerOf = file: let
+    path = toString file;
+    relative = lib.removePrefix "${rootPoolSrcRoot}/" path;
+    parts = lib.splitString "/" relative;
+  in
+    if builtins.length parts >= 2 && builtins.head parts == "packages"
+    then builtins.elemAt parts 1
+    # Test fixtures live outside packages/; treating each fixture file as an
+    # owner keeps the positive control sensitive without inventing fake
+    # production packages.
+    else path;
+
+  packagePoolClaims = evaluated: let
+    isOurs = file: lib.hasPrefix rootPoolSrcRoot (toString file);
+    scopes =
+      [
+        {
+          label = "ai";
+          path = ["ai"];
+        }
+      ]
+      ++ map (runtime: {
+        label = "ai.${runtime}";
+        path = ["ai" runtime];
+      })
+      harnessNames;
+    claimsFor = scope: pool: let
+      optionPath = scope.path ++ [pool];
+      opt = lib.attrByPath optionPath null evaluated.options;
+      declaredIn = map toString (opt.declarations or []);
+      isPackageDefinition = definition:
+        isOurs definition.file
+        && !(lib.elem (toString definition.file) declaredIn)
+        && builtins.isAttrs definition.value;
+      definitions =
+        if opt == null || !(lib.isOption opt)
+        then []
+        else lib.filter isPackageDefinition (opt.definitionsWithLocations or []);
+      claims = lib.concatMap (definition:
+        map (key: {
+          file = toString definition.file;
+          inherit key;
+          owner = packageOwnerOf definition.file;
+          id = "${scope.label}.${pool}.${key}";
+        }) (builtins.attrNames definition.value))
+      definitions;
+    in
+      claims;
+  in
+    lib.concatMap (scope:
+      lib.concatMap (pool: claimsFor scope pool) normalizedPoolNames)
+    scopes;
+
+  packagePoolCollisions = evaluatedOrList: let
+    evaluations =
+      if builtins.isList evaluatedOrList
+      then evaluatedOrList
+      else [evaluatedOrList];
+    claims = lib.concatMap packagePoolClaims evaluations;
+    ids = lib.unique (map (claim: claim.id) claims);
+    collisionFor = id: let
+      keyClaims = lib.filter (claim: claim.id == id) claims;
+      owners = lib.unique (map (claim: claim.owner) keyClaims);
+      files = lib.unique (map (claim: claim.file) keyClaims);
+    in
+      lib.optional (builtins.length owners > 1)
+      "${id} <- ${lib.concatStringsSep ", " files}";
+  in
+    lib.concatMap collisionFor ids;
+
+  packagePoolsClean = backend: evaluatedOrList: let
+    collisions = packagePoolCollisions evaluatedOrList;
+  in
+    collisions
+    == []
+    || throw ''
+      Normalized ai.* pool keys claimed by multiple packages (${backend}):
+
+        ${builtins.concatStringsSep "\n  " collisions}
+
+      Each key has one package owner within a root or per-runtime pool. Root
+      and per-runtime scopes remain independent so runtime replacement and
+      null negation can operate normally.
     '';
 in {
   # ── Kiro launcher wrapper: flag injection ────────────────────────
@@ -785,7 +909,157 @@ in {
     rootPoolClean "devenv" (evalDevenv rootPoolProbeConfig)
   );
 
-  # POSITIVE CONTROL. The two guards above pass by finding NOTHING, so a guard
+  # Package ownership is checked independently per scope. These production
+  # evaluations cover every imported package module in both backends. The
+  # isolated activation probes preserve claims that another package could hide
+  # with whole-option priority before definitionsWithLocations is exposed.
+  module-ai-no-package-pool-collisions-hm = mkTest "ai-no-package-pool-collisions-hm" (
+    packagePoolsClean "home-manager" (map evalHm packagePoolProbeConfigs)
+  );
+
+  module-ai-no-package-pool-collisions-devenv = mkTest "ai-no-package-pool-collisions-devenv" (
+    packagePoolsClean "devenv" (map evalDevenv packagePoolProbeConfigs)
+  );
+
+  # Positive control for every normalized pool at BOTH root and per-runtime
+  # scope. The fixture values intentionally use `anything`: this test targets
+  # provenance and ownership, not the six independently covered value schemas.
+  module-ai-package-pool-collision-guard-fires = mkTest "ai-package-pool-collision-guard-fires" (
+    let
+      poolOptions = lib.genAttrs normalizedPoolNames (_:
+        lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+        });
+      probe = lib.evalModules {
+        specialArgs = {inherit lib;};
+        modules = [
+          {options.ai = poolOptions // {claude = poolOptions;};}
+          ./fixtures/pool-package-a.nix
+          ./fixtures/pool-package-b.nix
+        ];
+      };
+      collisions = packagePoolCollisions probe;
+      namesEveryCollision = pool:
+        builtins.any (lib.hasInfix "ai.${pool}.shared") collisions
+        && builtins.any (lib.hasInfix "ai.claude.${pool}.shared") collisions;
+      threw = !(builtins.tryEval (packagePoolsClean "probe" probe)).success;
+    in
+      builtins.length collisions
+      == 12
+      && builtins.all namesEveryCollision normalizedPoolNames
+      && threw
+  );
+
+  # Passing control: two package modules may contribute different keys at the
+  # same root and per-runtime scopes.
+  module-ai-package-pool-distinct-keys-pass = mkTest "ai-package-pool-distinct-keys-pass" (
+    let
+      poolOptions = lib.genAttrs normalizedPoolNames (_:
+        lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+        });
+      probe = lib.evalModules {
+        specialArgs = {inherit lib;};
+        modules = [
+          {options.ai = poolOptions // {claude = poolOptions;};}
+          ./fixtures/pool-package-a.nix
+          ./fixtures/pool-package-distinct.nix
+        ];
+      };
+    in
+      packagePoolCollisions probe == [] && packagePoolsClean "probe" probe
+  );
+
+  # Whole-option priorities are filtered before definitionsWithLocations is
+  # exposed. The combined evaluation therefore hides package A, while the
+  # isolated claim evaluations retain both owners and must still collide.
+  module-ai-package-pool-priority-shadow-still-fails = mkTest "ai-package-pool-priority-shadow-still-fails" (
+    let
+      optionModule.options.ai.skills = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
+      packageA = {
+        _file = "${rootPoolSrcRoot}/packages/pool-a/default.nix";
+        config.ai.skills = lib.mkDefault {shared = "package-a";};
+      };
+      packageB = {
+        _file = "${rootPoolSrcRoot}/packages/pool-b/default.nix";
+        config.ai.skills.shared = "package-b";
+      };
+      mkProbe = modules:
+        lib.evalModules {modules = [optionModule] ++ modules;};
+      combined = mkProbe [packageA packageB];
+      isolated = [
+        (mkProbe [packageA])
+        (mkProbe [packageB])
+      ];
+      collisions = packagePoolCollisions isolated;
+    in
+      packagePoolCollisions combined
+      == []
+      && builtins.length collisions == 1
+      && lib.hasInfix "ai.skills.shared" (builtins.head collisions)
+      && !(builtins.tryEval (packagePoolsClean "priority probe" isolated)).success
+  );
+
+  # Two files inside one package are one owner, even when the aggregate claim
+  # probe observes them in separate evaluations.
+  module-ai-package-pool-same-package-files-pass = mkTest "ai-package-pool-same-package-files-pass" (
+    let
+      optionModule.options.ai.skills = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
+      mkProbe = file:
+        lib.evalModules {
+          modules = [
+            optionModule
+            {
+              _file = file;
+              config.ai.skills.shared = "same-package";
+            }
+          ];
+        };
+      probes = [
+        (mkProbe "${rootPoolSrcRoot}/packages/pool-owner/a.nix")
+        (mkProbe "${rootPoolSrcRoot}/packages/pool-owner/b.nix")
+      ];
+    in
+      packagePoolCollisions probes == [] && packagePoolsClean "same-package probe" probes
+  );
+
+  # The same key at root and runtime scope is replacement, not a package
+  # collision, even when different package owners contribute the two entries.
+  module-ai-package-pool-root-runtime-independent = mkTest "ai-package-pool-root-runtime-independent" (
+    let
+      poolOption = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
+      optionModule.options.ai = {
+        skills = poolOption;
+        claude.skills = poolOption;
+      };
+      mkProbe = module:
+        lib.evalModules {modules = [optionModule module];};
+      probes = [
+        (mkProbe {
+          _file = "${rootPoolSrcRoot}/packages/pool-root/default.nix";
+          config.ai.skills.shared = "root";
+        })
+        (mkProbe {
+          _file = "${rootPoolSrcRoot}/packages/pool-runtime/default.nix";
+          config.ai.claude.skills.shared = "runtime";
+        })
+      ];
+    in
+      packagePoolCollisions probes == [] && packagePoolsClean "scope probe" probes
+  );
+
+  # POSITIVE CONTROL. The two root guards pass by finding NOTHING, so a guard
   # that detected nothing at all would look identical to a clean tree. This
   # evaluates a fixture that really does write a root pool and requires the
   # guard to name it — and it goes through `rootPoolClean`, not just
@@ -875,10 +1149,9 @@ in {
       # devenv has no `programs.git`, so the workaround travels the INTERNAL
       # channel (`ai._sandboxSafeSshCommand`) and each factory merges it into
       # its launcher wrapper. It is deliberately neither a project-shell write
-      # (which reached the developer's own git) nor a contribution into
-      # `ai.<cli>.environmentVariables` (which is collision-checked, so a
-      # module default there turns a consumer's own entry for the same key
-      # into a hard eval error). Claude has no wrapper and uses settings.env.
+      # (which reached the developer's own git) nor a hidden contribution into
+      # the consumer-facing `ai.<cli>.environmentVariables` pool. Claude has no
+      # wrapper and uses settings.env.
       devenvChannel = name: let
         cfg = (evalDevenv (lib.setAttrByPath ["ai" name "enable"] true)).config;
       in
@@ -1040,7 +1313,7 @@ in {
       && devenv.config.files ? ".agents/skills/skill-b/SKILL.md"
   );
 
-  module-codex-skill-collision-fails = mkTest "codex-skill-collision-fails" (
+  module-codex-skill-runtime-replaces-root = mkTest "codex-skill-runtime-replaces-root" (
     let
       evaluated = evalHm {
         ai = {
@@ -1052,7 +1325,8 @@ in {
         };
       };
     in
-      builtins.any (assertion: !assertion.assertion && lib.hasInfix "skills 'duplicate'" assertion.message) evaluated.config.assertions
+      evaluated.config.home.file.".agents/skills/duplicate".source
+      == ./fixtures/claude-skills/skill-b
   );
 
   module-codex-empty-settings-emits-no-toml = mkTest "codex-empty-settings-emits-no-toml" (
@@ -2196,26 +2470,27 @@ in {
       touch "$out"
     '';
 
-  module-codex-agent-collision-fails = mkTest "codex-agent-collision-fails" (
+  module-codex-agent-runtime-replaces-root = mkTest "codex-agent-runtime-replaces-root" (
     let
-      semantic = {
-        description = "Review.";
-        instructions = "Review carefully.";
-      };
       result = evalHm {
         ai = {
-          agents.reviewer = semantic;
+          agents.reviewer = {
+            description = "Root review.";
+            instructions = "Use root instructions.";
+          };
           codex = {
             enable = true;
-            agents.reviewer = semantic;
+            agents.reviewer = {
+              description = "Codex review.";
+              instructions = "Use Codex instructions.";
+            };
           };
         };
       };
+      source = result.config.home.file.".codex/agents/reviewer.toml".source;
     in
-      builtins.any (assertion:
-        !assertion.assertion
-        && lib.hasInfix "agents 'reviewer' declared in both" assertion.message)
-      result.config.assertions
+      lib.hasInfix ''description = "Codex review."'' (builtins.readFile source)
+      && !(lib.hasInfix "Root review." (builtins.readFile source))
   );
 
   module-codex-legacy-markdown-agent-fails-loudly = mkTest "codex-legacy-markdown-agent-fails-loudly" (
@@ -2658,7 +2933,7 @@ in {
       && !(empty.config.files ? "AGENTS.md")
   );
 
-  module-codex-rule-collision-fails = mkTest "codex-rule-collision-fails" (
+  module-codex-rule-runtime-replaces-root = mkTest "codex-rule-runtime-replaces-root" (
     let
       evaluated = evalHm {
         ai = {
@@ -2670,7 +2945,8 @@ in {
         };
       };
     in
-      builtins.any (assertion: !assertion.assertion && lib.hasInfix "rules 'duplicate'" assertion.message) evaluated.config.assertions
+      lib.hasInfix "Codex" evaluated.config.home.file.".codex/AGENTS.md".text
+      && !(lib.hasInfix "Shared" evaluated.config.home.file.".codex/AGENTS.md".text)
   );
 
   # ── Semble convenience integration ───────────────────────────────
@@ -3206,7 +3482,7 @@ in {
       failed missingLanguage && failed duplicateLanguage
   );
 
-  module-semble-mcp-content-and-default-refinement = mkTest "semble-mcp-content-and-default-refinement" (
+  module-semble-mcp-content-and-atomic-replacement = mkTest "semble-mcp-content-and-atomic-replacement" (
     let
       code = (evalHm {semble.mcp.enable = true;}).config.ai.claude.mcpServers.semble;
       docs =
@@ -3218,9 +3494,13 @@ in {
             };
           };
         }).config.ai.claude.mcpServers.semble;
-      refined =
+      replaced =
         (evalHm {
-          ai.codex.mcpServers.semble.args = ["--log-level" "debug"];
+          ai.codex.mcpServers.semble = {
+            type = "stdio";
+            command = "custom-semble";
+            args = ["--log-level" "debug"];
+          };
           semble = {
             enable = true;
             runtimes = ["codex"];
@@ -3231,8 +3511,8 @@ in {
       == []
       && lib.hasSuffix "/bin/semble-mcp" code.command
       && docs.args == ["--content" "docs"]
-      && refined.args == ["--log-level" "debug"]
-      && lib.hasSuffix "/bin/semble-mcp" refined.command
+      && replaced.args == ["--log-level" "debug"]
+      && replaced.command == "custom-semble"
   );
 
   module-semble-package-override-and-named-kiro-rule = mkTest "semble-package-override-and-named-kiro-rule" (
@@ -7896,9 +8176,8 @@ in {
   # The skill packages write the PER-RUNTIME pools (`ai.<runtime>.skills`,
   # `ai.<runtime>.rules`), never the root ones. The tests below assert
   # both halves of that, and the second half is the one worth having: a root
-  # pool is ADDITIVE and cannot be retracted per runtime, so a regression that
-  # moved these writes back to the root would still deliver every skill to
-  # every runtime and pass a presence-only test.
+  # package write would silently fan out beyond package runtime ownership, so a
+  # regression could still deliver every skill and pass a presence-only test.
   #
   # They iterate `harnessNames` (the shared registry) rather than sampling one
   # runtime, so a sixth runtime is covered the day it is added.
@@ -8461,8 +8740,9 @@ in {
       && !(result.config.home.file ? ".github/instructions/security.instructions.md")
   );
 
-  # Root and per-runtime rule entries are keyed pools; duplicate keys conflict.
-  module-kiro-hm-rule-collision-fails = mkTest "kiro-hm-rule-collision-fails" (
+  # Root and per-runtime rule entries are keyed pools; the runtime entry
+  # atomically replaces a same-key root default.
+  module-kiro-hm-rule-runtime-replaces-root = mkTest "kiro-hm-rule-runtime-replaces-root" (
     let
       result = evalHm {
         ai.kiro = {
@@ -8471,9 +8751,10 @@ in {
         };
         ai.rules.same-name.text = "Top-level loses.";
       };
-      failures = builtins.filter (assertion: !assertion.assertion) result.config.assertions;
+      rendered = result.config.ai.kiro.steeringFiles."same-name.md".text;
     in
-      builtins.any (assertion: lib.hasInfix "rules 'same-name'" assertion.message) failures
+      lib.hasInfix "Per-CLI wins." rendered
+      && !(lib.hasInfix "Top-level loses." rendered)
   );
 
   # Rules with null paths → unconditional (no frontmatter scoping).
@@ -9336,167 +9617,97 @@ in {
       f != null && (f.text or null) == "#!/usr/bin/env bash\nexit 0\n"
   );
 
-  # ── Collision-as-failure ──────────────────────────────────────
-  # Shared ai.<pool> merging with ai.<cli>.<pool> emits NixOS
-  # assertions on duplicate keys. See lib/ai/ai-common.nix
-  # mergeWithCollisionCheck. Applies retroactively to: rules,
-  # skills, mcpServers, lspServers, environmentVariables, agents.
-  #
-  # The assertion always fires (no mkIf cfg.enable gate) so a
-  # mis-configured ai.* surface surfaces even when the feature is
-  # toggled off.
-
-  # Rules: top-level ai.rules.foo vs per-CLI ai.claude.rules.foo.
-  module-claude-rules-collision = mkTest "claude-rules-collision" (
+  # ── Normalized keyed-pool null types ────────────────────────────
+  # The merge contract itself is covered once per pool in factory-eval.nix.
+  # This full-tree check pins the other half: every root declaration and every
+  # supported per-runtime declaration accepts the same null tombstone.
+  module-ai-pool-null-types-hm-devenv = mkTest "ai-pool-null-types-hm-devenv" (
     let
-      result = evalHm {
-        ai.rules.foo.text = "top";
-        ai.claude = {
-          enable = true;
-          rules.foo.text = "cli";
+      config.ai = {
+        agents.removed = null;
+        environmentVariables.removed = null;
+        lspServers.removed = null;
+        mcpServers.removed = null;
+        rules.removed = null;
+        skills.removed = null;
+
+        claude = {
+          agents.removed = null;
+          lspServers.removed = null;
+          mcpServers.removed = null;
+          rules.removed = null;
+          skills.removed = null;
+        };
+        codex = {
+          agents.removed = null;
+          environmentVariables.removed = null;
+          mcpServers.removed = null;
+          rules.removed = null;
+          skills.removed = null;
+        };
+        copilot = {
+          agents.removed = null;
+          environmentVariables.removed = null;
+          lspServers.removed = null;
+          mcpServers.removed = null;
+          rules.removed = null;
+          skills.removed = null;
+        };
+        kimchi.environmentVariables.removed = null;
+        kiro = {
+          environmentVariables.removed = null;
+          lspServers.removed = null;
+          mcpServers.removed = null;
+          rules.removed = null;
+          skills.removed = null;
         };
       };
+      keepsNulls = evaluated:
+        evaluated.config.ai.agents.removed
+        == null
+        && evaluated.config.ai.claude.lspServers.removed == null
+        && evaluated.config.ai.codex.environmentVariables.removed == null
+        && evaluated.config.ai.copilot.mcpServers.removed == null
+        && evaluated.config.ai.kimchi.environmentVariables.removed == null
+        && evaluated.config.ai.kiro.skills.removed == null;
     in
-      lib.any
-      (a: lib.hasInfix "rules 'foo' declared in both" a.message && !a.assertion)
-      result.config.assertions
+      keepsNulls (evalHm config) && keepsNulls (evalDevenv config)
   );
 
-  # Rules: collision fires even when the CLI is disabled.
-  module-claude-rules-collision-without-enable = mkTest "claude-rules-collision-without-enable" (
+  # Semble contributes package defaults to real nullable pool entries. Those
+  # defaults must live at the entry boundary: per-leaf defaults make nullOr
+  # attempt to merge the null and submodule branches before precedence can
+  # choose, producing "defined both null and not null" instead of a tombstone.
+  module-semble-generated-pool-entries-accept-null = mkTest "semble-generated-pool-entries-accept-null" (
     let
-      result = evalHm {
-        ai.rules.foo.text = "top";
-        ai.claude.rules.foo.text = "cli";
-      };
-    in
-      lib.any
-      (a: lib.hasInfix "rules 'foo' declared in both" a.message && !a.assertion)
-      result.config.assertions
-  );
-
-  # Skills.
-  module-kiro-skills-collision = mkTest "kiro-skills-collision" (
-    let
-      result = evalHm {
-        ai.skills.my-skill = ./../packages/stacked-workflows/skills/stack-fix;
-        ai.kiro = {
-          enable = true;
-          skills.my-skill = ./../packages/stacked-workflows/skills/stack-fix;
-        };
-      };
-    in
-      lib.any
-      (a: lib.hasInfix "skills 'my-skill' declared in both" a.message && !a.assertion)
-      result.config.assertions
-  );
-
-  # MCP servers.
-  module-copilot-mcpservers-collision = mkTest "copilot-mcpservers-collision" (
-    let
-      result = evalHm {
-        ai.mcpServers.my-server = {
-          type = "stdio";
-          package = pkgs.hello;
-          command = "hello";
-        };
-        ai.copilot = {
-          enable = true;
-          mcpServers.my-server = {
-            type = "stdio";
-            package = pkgs.hello;
-            command = "hello";
+      config = {
+        semble.enable = true;
+        ai = {
+          claude = {
+            enable = true;
+            agents.semble-search = null;
+            mcpServers.semble = null;
+          };
+          codex = {
+            enable = true;
+            agents.semble-search = null;
+            mcpServers.semble = null;
+          };
+          kiro = {
+            enable = true;
+            mcpServers.semble = null;
           };
         };
       };
+      suppressed = evaluated:
+        evaluated.config.ai.claude.agents.semble-search
+        == null
+        && evaluated.config.ai.claude.mcpServers.semble == null
+        && evaluated.config.ai.codex.agents.semble-search == null
+        && evaluated.config.ai.codex.mcpServers.semble == null
+        && evaluated.config.ai.kiro.mcpServers.semble == null;
     in
-      lib.any
-      (a: lib.hasInfix "mcpServers 'my-server' declared in both" a.message && !a.assertion)
-      result.config.assertions
-  );
-
-  # LSP servers.
-  module-claude-lspservers-collision = mkTest "claude-lspservers-collision" (
-    let
-      result = evalHm {
-        ai.lspServers.nixd = {
-          command = "nixd";
-        };
-        ai.claude = {
-          enable = true;
-          lspServers.nixd = {
-            command = "nixd";
-          };
-        };
-      };
-    in
-      lib.any
-      (a: lib.hasInfix "lspServers 'nixd' declared in both" a.message && !a.assertion)
-      result.config.assertions
-  );
-
-  # Environment variables.
-  module-copilot-envvar-collision = mkTest "copilot-envvar-collision" (
-    let
-      result = evalHm {
-        ai.environmentVariables.FOO = "top";
-        ai.copilot = {
-          enable = true;
-          environmentVariables.FOO = "cli";
-        };
-      };
-    in
-      lib.any
-      (a: lib.hasInfix "environmentVariables 'FOO' declared in both" a.message && !a.assertion)
-      result.config.assertions
-  );
-
-  # Agents.
-  module-claude-agents-collision = mkTest "claude-agents-collision" (
-    let
-      result = evalHm {
-        ai.agents.helper = "Top-level agent";
-        ai.claude = {
-          enable = true;
-          agents.helper = "Claude-only agent";
-        };
-      };
-    in
-      lib.any
-      (a: lib.hasInfix "agents 'helper' declared in both" a.message && !a.assertion)
-      result.config.assertions
-  );
-
-  # Devenv collision surfaces through the same helper.
-  module-claude-devenv-rules-collision = mkTest "claude-devenv-rules-collision" (
-    let
-      result = evalDevenv {
-        ai.rules.foo.text = "top";
-        ai.claude = {
-          enable = true;
-          rules.foo.text = "cli";
-        };
-      };
-    in
-      lib.any
-      (a: lib.hasInfix "rules 'foo' declared in both" a.message && !a.assertion)
-      result.config.assertions
-  );
-
-  # Distinct keys do NOT trigger an assertion.
-  module-claude-rules-no-collision = mkTest "claude-rules-no-collision" (
-    let
-      result = evalHm {
-        ai.rules.from-top.text = "top";
-        ai.claude = {
-          enable = true;
-          rules.from-cli.text = "cli";
-        };
-      };
-    in
-      !(lib.any
-        (a: !a.assertion && lib.hasInfix "declared in both" a.message)
-        result.config.assertions)
+      suppressed (evalHm config) && suppressed (evalDevenv config)
   );
 
   # ── ai.*.rulesDir Dir helper ──────────────────────────────────
@@ -9570,9 +9781,8 @@ in {
       result.config.ai.kiro.steeringFiles ? "alpha.md"
   );
 
-  # Collision between Dir-generated and explicit single (same key)
-  # fires the shared collision assertion.
-  module-kiro-rulesdir-collides-with-explicit-single = mkTest "kiro-rulesdir-collides-with-explicit-single" (
+  # A per-runtime directory-generated entry replaces the same-key root entry.
+  module-kiro-rulesdir-entry-replaces-root-single = mkTest "kiro-rulesdir-entry-replaces-root-single" (
     let
       result = evalHm {
         ai.rules.alpha.text = "explicit top-level";
@@ -9582,9 +9792,8 @@ in {
         };
       };
     in
-      lib.any
-      (a: lib.hasInfix "rules 'alpha' declared in both" a.message && !a.assertion)
-      result.config.assertions
+      lib.hasInfix "Alpha steering body." result.config.ai.kiro.steeringFiles."alpha.md".text
+      && !(lib.hasInfix "explicit top-level" result.config.ai.kiro.steeringFiles."alpha.md".text)
   );
 
   # Devenv-side unscoped directory rules join the shared AGENTS.md.
@@ -9655,9 +9864,9 @@ in {
 
   # ── ai.shell — root default with per-runtime override ───────────
   #
-  # The FIRST `ai.*` surface whose shared/per-runtime pair resolves by
-  # override rather than by collision-as-failure, so the precedence
-  # cases below are the contract, not incidental coverage. Three
+  # This scalar uses null-as-inherit, unlike keyed pools where null is a
+  # tombstone. The precedence cases below are the contract, not incidental
+  # coverage. Three
   # runtimes consume it through three different mechanisms; two are
   # excluded outright. See dev/fragments/ai-module/shell-option.md.
 
@@ -9966,20 +10175,19 @@ in {
       !probe.success
   );
 
-  # Collision between Dir-generated and explicit single.
-  module-claude-skillsdir-collides-with-explicit-single = mkTest "claude-skillsdir-collides-with-explicit-single" (
+  # A per-runtime directory-generated entry replaces the same-key root entry.
+  module-claude-skillsdir-entry-replaces-root-single = mkTest "claude-skillsdir-entry-replaces-root-single" (
     let
       result = evalHm {
-        ai.skills.skill-a = ./fixtures/claude-skills/skill-a;
+        ai.skills.skill-a = ./fixtures/claude-skills/skill-b;
         ai.claude = {
           enable = true;
           skillsDir = ./fixtures/claude-skills;
         };
       };
+      upstream = result.config.programs.claude-code.skills or {};
     in
-      lib.any
-      (a: lib.hasInfix "skills 'skill-a' declared in both" a.message && !a.assertion)
-      result.config.assertions
+      upstream.skill-a == ./fixtures/claude-skills/skill-a
   );
 
   # ── ai.*.agentsDir Dir helper ──────────────────────────────
@@ -10038,8 +10246,8 @@ in {
       upstream ? agent-one && upstream ? agent-two
   );
 
-  # Collision between Dir-generated and explicit top-level single.
-  module-claude-agentsdir-collides-with-explicit-single = mkTest "claude-agentsdir-collides-with-explicit-single" (
+  # A per-runtime directory-generated entry replaces the same-key root entry.
+  module-claude-agentsdir-entry-replaces-root-single = mkTest "claude-agentsdir-entry-replaces-root-single" (
     let
       result = evalHm {
         ai.agents.agent-one = "Explicit top-level agent";
@@ -10048,10 +10256,9 @@ in {
           agentsDir = ./fixtures/claude-agents;
         };
       };
+      upstream = result.config.programs.claude-code.agents or {};
     in
-      lib.any
-      (a: lib.hasInfix "agents 'agent-one' declared in both" a.message && !a.assertion)
-      result.config.assertions
+      upstream.agent-one == ./fixtures/claude-agents/agent-one.md
   );
 
   # Copilot parity (HM side).

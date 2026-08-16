@@ -187,9 +187,9 @@ in
       };
 
       environmentVariables = lib.mkOption {
-        type = lib.types.attrsOf lib.types.str;
+        type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
         default = {};
-        description = "Environment variables exported when launching kimchi.";
+        description = "Environment variables exported when launching kimchi. Null suppresses a root entry at the same key.";
       };
 
       # Cast AI key — a runtime credential (file | helper), exported as

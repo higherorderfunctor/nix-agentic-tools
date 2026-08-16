@@ -1,19 +1,22 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-08-14 (commit pending — the launcher now prepends
-> `ai.kiro.extraPackages` to PATH in both wrapper entry points while preserving
-> the ambient or explicitly configured base; this changes environment only,
-> never argv. Also corrects the older pre-split claim that current Linux
-> launcher dispatch traverses the outer chat wrapper). Prior: 2026-08-11 (commit
-> pending — the sandbox's effect on PATH resolution is no longer unverified, so
-> the prior entry's "treat it as unverified there" is retired: PATH is
-> **preserved** inside, and a decoy still resolves provided it sits outside a
-> shadowed directory and can load its libraries. The bind rule, the shadowed
-> set, the silent-substitution hazard and the loader trap are their own concern
-> and now live in [`fhs-sandbox.md`](fhs-sandbox.md); this document stays about
-> argv). Prior: 2026-08-10 (commit pending — records that on a post-split
-> nixpkgs (f13ff45a and later) Linux gains a THIRD layer below the two wrappers
-> here: `pkgs.ai.kiro-cli` is a `symlinkJoin` of `buildFHSEnv` sandboxes and
+> **Last verified:** 2026-08-15 (commit pending — Kiro-specific environment
+> variables may now null-suppress same-key root defaults before wrapper
+> construction; this does not change argv ordering). Prior: 2026-08-14 (commit
+> pending — the launcher now prepends `ai.kiro.extraPackages` to PATH in both
+> wrapper entry points while preserving the ambient or explicitly configured
+> base; this changes environment only, never argv. Also corrects the older
+> pre-split claim that current Linux launcher dispatch traverses the outer chat
+> wrapper). Prior: 2026-08-11 (commit pending — the sandbox's effect on PATH
+> resolution is no longer unverified, so the prior entry's "treat it as
+> unverified there" is retired: PATH is **preserved** inside, and a decoy still
+> resolves provided it sits outside a shadowed directory and can load its
+> libraries. The bind rule, the shadowed set, the silent-substitution hazard and
+> the loader trap are their own concern and now live in
+> [`fhs-sandbox.md`](fhs-sandbox.md); this document stays about argv). Prior:
+> 2026-08-10 (commit pending — records that on a post-split nixpkgs (f13ff45a
+> and later) Linux gains a THIRD layer below the two wrappers here:
+> `pkgs.ai.kiro-cli` is a `symlinkJoin` of `buildFHSEnv` sandboxes and
 > `$out/bin/*` are bubblewrap launchers, not our wrapProgram shims. The argv
 > contract itself is unchanged — flags still pass through — but the Linux
 > PATH-resolution measurement below was taken on the pre-split layout and has
@@ -197,7 +200,9 @@ launcher and direct chat wrappers. Their store-backed `bin` directories are
 prepended after ordinary and secret environment exports, so an explicit
 `ai.kiro.environmentVariables.PATH` becomes the base and the requested packages
 are first at that wrapper boundary. With no explicit PATH, the caller's
-inherited value remains after the prefix.
+inherited value remains after the prefix. Setting the Kiro-specific PATH entry
+to null suppresses a root `ai.environmentVariables.PATH`, restoring the ambient
+base before `extraPackages` is prepended.
 
 That is not final override precedence on Linux. The upstream FHS `/init` then
 sources `/etc/profile`, which puts `/run/wrappers/bin:/usr/bin:/usr/sbin` ahead

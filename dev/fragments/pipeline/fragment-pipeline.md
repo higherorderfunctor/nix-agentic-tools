@@ -1,10 +1,12 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-08-15 (commit pending — generated README guidance now
-> uses typed context and keyed rules, including Semble's single exported `rule`
-> helper; retired instruction helpers no longer appear). Prior: 2026-08-15
-> (commit pending — generated README guidance now distinguishes the closed
-> normalized `ai.<runtime>.settings` surface from runtime-shaped
+> **Last verified:** 2026-08-15 (commit pending — the ai-module routing comment
+> now names `mergePool` after the retired collision helper; category scopes and
+> sources are unchanged). Prior: 2026-08-15 (commit pending — generated README
+> guidance now uses typed context and keyed rules, including Semble's single
+> exported `rule` helper; retired instruction helpers no longer appear). Prior:
+> 2026-08-15 (commit pending — generated README guidance now distinguishes the
+> closed normalized `ai.<runtime>.settings` surface from runtime-shaped
 > `nativeSettings`, including Codex security and Claude environment examples).
 > Prior: 2026-08-05 (commit pending — adds the `mcp-services` category so the
 > managed-service bind-address contract follows its schema, server metadata,

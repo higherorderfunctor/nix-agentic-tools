@@ -105,7 +105,7 @@ in {
   validateOptionalContent = validateContent false;
   validateRules = rules:
     lib.mapAttrs (name: rule:
-      if ruleIsValid rule
+      if rule == null || ruleIsValid rule
       then rule
       else
         throw
@@ -416,15 +416,7 @@ in {
   });
 
   # ── Scalar override resolution ──────────────────────────────────
-  # DELIBERATELY the opposite of `mergeWithCollisionCheck` below.
-  #
-  # Every attrset-shaped `ai.*` pool treats a shared/per-CLI duplicate
-  # as a FAILURE, because each key names an independent entry and a
-  # silent override loses one of them. A nullable SCALAR has no such
-  # identity to lose: `ai.<cli>.shell` is not a second entry competing
-  # with `ai.shell`, it is the same knob at a narrower scope. Making
-  # that pair collide would leave no way to express "this default,
-  # except here" — which is the entire point of the option.
+  # DELIBERATELY different from keyed-pool merging below.
   #
   # So: a non-null per-CLI value wins, `null` inherits the root, and
   # `null` at both levels means "not configured" rather than "empty".
@@ -438,56 +430,14 @@ in {
     then cliValue
     else topValue;
 
-  # ── Collision-as-failure pool merge ─────────────────────────────
-  # Merge two attrset pools and surface duplicate keys as NixOS
-  # module assertions. The shared `ai.*` pools (rules, skills,
-  # context, mcpServers, lspServers, environmentVariables, agents)
-  # fan out to every enabled CLI, and each CLI may also contribute
-  # per-CLI entries via `ai.<cli>.<pool>`. Silent `//` merges at
-  # that boundary let a later contributor override an earlier one
-  # without a signal; the user directive is "collisions are
-  # failure, we don't merge over keys".
-  #
-  # Inputs:
-  #   poolName : human-readable label for the pool, used in the
-  #              assertion message (e.g. "rule", "skill",
-  #              "MCP server", "LSP server", "agent",
-  #              "environment variable").
-  #   cliName  : CLI identifier for error context (e.g. "claude").
-  #              Use `null` for boundaries that aren't per-CLI.
-  #   topPool  : attrset of entries contributed at top level
-  #              (`ai.<pool>`).
-  #   cliPool  : attrset of entries contributed per-CLI
-  #              (`ai.<cli>.<pool>`).
-  #
-  # Output: an attrset with
-  #   - `merged`     : the combined pool (safe to read even when
-  #                    collisions exist — per-CLI values win, same
-  #                    as the legacy `//` shape, so downstream
-  #                    references still resolve until `assertions`
-  #                    fire and abort eval).
-  #   - `assertions` : a list of NixOS assertion attrs naming each
-  #                    duplicate key and the two contributing pools.
-  mergeWithCollisionCheck = {
-    poolName,
-    cliName ? null,
+  # ── Keyed-pool override and negation ────────────────────────────
+  # Per-runtime entries shallowly replace root entries at the same key.
+  # A per-runtime null is a tombstone: filter it only after precedence is
+  # resolved so it can suppress the inherited root entry. Values remain
+  # atomic; records are never recursively merged across levels.
+  mergePool = {
     topPool,
     cliPool,
-  }: let
-    duplicates = lib.attrNames (builtins.intersectAttrs topPool cliPool);
-    scope =
-      if cliName == null
-      then "ai.${poolName}"
-      else "ai.${cliName}.${poolName}";
-    mkAssertion = key: {
-      assertion = false;
-      message =
-        "${poolName} '${key}' declared in both ai.${poolName} and "
-        + "${scope} — collisions across shared ai.* pools are errors. "
-        + "Rename one or delete the duplicate.";
-    };
-  in {
-    merged = topPool // cliPool;
-    assertions = map mkAssertion duplicates;
-  };
+  }:
+    lib.filterAttrs (_name: value: value != null) (topPool // cliPool);
 }

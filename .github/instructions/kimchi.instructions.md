@@ -7,13 +7,15 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-08-15 (commit pending — Kimchi's typed context now
-> composes root-first with runtime context into the existing
-> `harness/AGENTS.md`; the retired instructions pool is no longer part of the
-> capability census, and rules continue to degrade because Kimchi has no rules
-> pool). Prior: 2026-08-15 (commit pending — records Kimchi's normalized pool
-> capability census and deliberate absence of rules; native JSON passthrough
-> moved to `ai.kimchi.nativeSettings`, while the uniform closed
+> **Last verified:** 2026-08-15 (commit pending — Kimchi's normalized
+> environment-variable pool now accepts null tombstones, so a runtime entry can
+> suppress a same-key portable root default). Prior: 2026-08-15 (commit pending
+> — Kimchi's typed context now composes root-first with runtime context into the
+> existing `harness/AGENTS.md`; the retired instructions pool is no longer part
+> of the capability census, and rules continue to degrade because Kimchi has no
+> rules pool). Prior: 2026-08-15 (commit pending — records Kimchi's normalized
+> pool capability census and deliberate absence of rules; native JSON
+> passthrough moved to `ai.kimchi.nativeSettings`, while the uniform closed
 > `ai.kimchi.settings` surface does not change the two-file native lifecycle).
 > Prior: 2026-06-23 (commit pending). If you touch
 > `packages/kimchi/lib/mkKimchi.nix`, `packages/kimchi/modules/**`, or the
@@ -58,6 +60,11 @@ portable agents, LSP, portable hooks, or shell-selection landing key. Those
 per-runtime normalized options are absent; root values for them remain valid and
 silently degrade for Kimchi. `settings` is the uniform closed normalized
 namespace; its current field has no Kimchi-native lowering.
+
+The three keyed pools Kimchi consumes (`environmentVariables`, `mcpServers`, and
+`skills`) follow the shared atomic replacement rule. A Kimchi-specific same-key
+value replaces the root entry wholesale; null suppresses it before Kimchi's
+wrapper or file emitters run.
 
 In particular, `ai.kimchi.rules` and `ai.kimchi.rulesDir` do not exist. Do not
 restore them in anticipation of future rules support: Kimchi's rules support is

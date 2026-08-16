@@ -827,9 +827,9 @@ in
       # surface for its process environment; `shell_environment_policy`
       # filters what SPAWNED commands inherit, which is a different thing.
       environmentVariables = lib.mkOption {
-        type = lib.types.attrsOf lib.types.str;
+        type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
         default = {};
-        description = "Environment variables baked into the codex launcher wrapper. Scoped to the Codex process and the commands it spawns; never exported into the project shell.";
+        description = "Environment variables baked into the codex launcher wrapper. Scoped to the Codex process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
       };
       configDir = lib.mkOption {
         type = lib.types.addCheck lib.types.str (value:
@@ -844,14 +844,15 @@ in
         '';
       };
       agents = lib.mkOption {
-        type = lib.types.attrsOf codexAgentType;
+        type = lib.types.attrsOf (lib.types.nullOr codexAgentType);
         default = {};
         description = ''
-          Codex-specific semantic agents merged with portable `ai.agents`;
-          collisions fail. Each record becomes one standalone TOML layer under
-          the active config directory's `agents/` child. Put normal Codex
-          config keys such as model, model_reasoning_effort, sandbox_mode,
-          mcp_servers, and skills.config under the record's `codex` extension.
+          Codex-specific semantic agents replace portable `ai.agents` entries
+          at the same key; null suppresses an inherited agent. Each record
+          becomes one standalone TOML layer under the active config directory's
+          `agents/` child. Put normal Codex config keys such as model,
+          model_reasoning_effort, sandbox_mode, mcp_servers, and skills.config
+          under the record's `codex` extension.
         '';
       };
       execpolicyRules = lib.mkOption {
