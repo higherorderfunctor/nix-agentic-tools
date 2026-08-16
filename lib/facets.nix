@@ -3,6 +3,7 @@
   inherit
     (lib)
     attrByPath
+    attrValues
     concatMap
     concatStringsSep
     elem
@@ -13,7 +14,6 @@
     isDerivation
     listToAttrs
     makeScope
-    mapAttrs
     nameValuePair
     optional
     sort
@@ -34,16 +34,64 @@
         ${right.owner} (${toString right.source})
     '';
 
+  pathIsPrefix = prefix: path:
+    if prefix == []
+    then true
+    else if path == [] || builtins.head prefix != builtins.head path
+    then false
+    else pathIsPrefix (builtins.tail prefix) (builtins.tail path);
+
   mergeExclusiveClaims = registry: claims:
     foldl' (
       merged: claim: let
-        id = concatStringsSep "." claim.keyPath;
+        id = builtins.toJSON claim.keyPath;
+        conflicts = filter (
+          existing:
+            pathIsPrefix existing.keyPath claim.keyPath
+            || pathIsPrefix claim.keyPath existing.keyPath
+        ) (attrValues merged);
       in
-        if merged ? ${id}
-        then collision registry claim.keyPath merged.${id} claim
+        if conflicts != []
+        then collision registry claim.keyPath (builtins.head conflicts) claim
         else merged // {${id} = claim;}
     ) {}
     claims;
+
+  ordinaryAttrs = value: isAttrs value && !isDerivation value;
+
+  pathsUnder = prefix: value:
+    if ordinaryAttrs value
+    then let
+      names = attrNames value;
+    in
+      if names == []
+      then [prefix]
+      else concatMap (name: pathsUnder (prefix ++ [name]) value.${name}) names
+    else [prefix];
+
+  valuesEqual = left: right: let
+    compared = builtins.tryEval (left == right);
+  in
+    compared.success && compared.value;
+
+  changedLeafPaths = prefix: beforePresent: before: after:
+    if beforePresent && ordinaryAttrs before && ordinaryAttrs after
+    then
+      concatMap (
+        name:
+          if after ? ${name}
+          then changedLeafPaths (prefix ++ [name]) (before ? ${name}) before.${name} after.${name}
+          else pathsUnder (prefix ++ [name]) before.${name}
+      ) (unique (attrNames before ++ attrNames after))
+    else if beforePresent && valuesEqual before after
+    then []
+    else pathsUnder prefix after;
+
+  overlayChanges = prev: contribution:
+    concatMap (
+      name:
+        changedLeafPaths [name] (prev ? ${name}) prev.${name} contribution.${name}
+    ) (attrNames contribution);
 
   contributionFor = owner: name: source: {
     inherit (owner) name;
@@ -317,6 +365,18 @@ in rec {
             (ensure (isAttrs value && value ? claims && value ? overlay) "owner '${claim.owner}' overlay at '${toString claim.source}' must return { claims, overlay }")
             (ensure (isAttrs value && value ? claims && builtins.isList value.claims) "owner '${claim.owner}' overlay claims at '${toString claim.source}' must be a list of exclusive leaf paths")
             (ensure (isAttrs value && value ? overlay && isFunction value.overlay) "owner '${claim.owner}' overlay at '${toString claim.source}' must provide an overlay function")
+            (ensure (
+              isAttrs value
+              && value ? claims
+              && builtins.isList value.claims
+              && builtins.all (
+                keyPath:
+                  builtins.isList keyPath
+                  && keyPath != []
+                  && builtins.all (component: builtins.isString component && component != "") keyPath
+              )
+              value.claims
+            ) "owner '${claim.owner}' overlay claims at '${toString claim.source}' must contain non-empty lists of non-empty strings")
           ];
         in
           deepSeq claimValidations {
@@ -335,10 +395,31 @@ in rec {
       )
       loaded;
     exclusive = mergeExclusiveClaims "overlay" ownershipClaims;
+    checkedOverlays =
+      map (
+        item: final: prev: let
+          contribution = item.value.overlay final prev;
+          changedPaths =
+            if isAttrs contribution
+            then overlayChanges prev contribution
+            else [];
+          declaredIds = map builtins.toJSON item.value.claims;
+          changedIds = map builtins.toJSON changedPaths;
+          undeclared = filter (path: !elem (builtins.toJSON path) declaredIds) changedPaths;
+          unwritten = filter (path: !elem (builtins.toJSON path) changedIds) item.value.claims;
+          validations = [
+            (ensure (isAttrs contribution) "owner '${item.claim.owner}' overlay at '${toString item.claim.source}' must return an attribute set")
+            (ensure (undeclared == []) "owner '${item.claim.owner}' overlay at '${toString item.claim.source}' writes undeclared leaf '${concatStringsSep "." (builtins.head undeclared)}'")
+            (ensure (unwritten == []) "owner '${item.claim.owner}' overlay at '${toString item.claim.source}' claims unwritten leaf '${concatStringsSep "." (builtins.head unwritten)}'")
+          ];
+        in
+          deepSeq validations contribution
+      )
+      loaded;
   in
     deepSeq exclusive {
       inherit ownershipClaims;
-      overlay = lib.composeManyExtensions (map (item: item.value.overlay) loaded);
+      overlay = lib.composeManyExtensions checkedOverlays;
     };
 
   realizeRegistry = {
@@ -409,11 +490,13 @@ in rec {
     validations = [
       (ensure (nonDerivations == []) "owner '${(builtins.head nonDerivations).owner}' check '${builtins.head (builtins.head nonDerivations).keyPath}' at '${toString (builtins.head nonDerivations).source}' returned a non-derivation")
     ];
+    checksByName = listToAttrs (map (
+        claim:
+          nameValuePair (builtins.head claim.keyPath) {
+            inherit (claim) owner source value;
+          }
+      )
+      checkClaims);
   in
-    deepSeq [(attrNames exclusive) validations] (
-      mapAttrs (_: claim: {
-        inherit (claim) owner source value;
-      })
-      exclusive
-    );
+    deepSeq [(attrNames exclusive) validations] checksByName;
 }

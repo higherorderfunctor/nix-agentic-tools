@@ -1,5 +1,7 @@
 {
+  devenvConfig,
   devenvModules,
+  homeManagerConfig,
   homeManagerModules,
   index,
   inputs,
@@ -20,6 +22,18 @@ in {
   assert registry.facetMock.entries.git-revise.payload == inputs.fixture.sentinel;
   assert builtins.elem owner.contributions.modules.homeManager.source homeManagerModules;
   assert builtins.elem owner.contributions.modules.devenv.source devenvModules;
+  assert homeManagerConfig.facetMock.shared
+  == {
+    backend = "home-manager";
+    enabled = true;
+    label = "git-revise";
+  };
+  assert devenvConfig.facetMock.shared
+  == {
+    backend = "devenv";
+    enabled = true;
+    label = "git-revise";
+  };
   assert builtins.elem "owner-default" metadataKinds;
   assert builtins.elem "documentation" metadataKinds;
   assert builtins.elem "docs" metadataKinds;

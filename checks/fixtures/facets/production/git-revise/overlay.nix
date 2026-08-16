@@ -1,5 +1,8 @@
 {packages, ...}: {
-  claims = [["ai" "gitTools" "git-revise"]];
+  claims = [
+    ["ai" "gitReviseObserved"]
+    ["ai" "gitTools" "git-revise"]
+  ];
   overlay = _final: prev: {
     ai =
       prev.ai
