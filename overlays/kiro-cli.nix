@@ -282,7 +282,16 @@
           passthru =
             (joinAttrs.passthru or {})
             // pinned.passthru
-            // {unwrapped = pinned;};
+            // {
+              # Module validation uses this explicit marker to distinguish an
+              # actual FHS wrapper from darwin and pre-split packages that are
+              # already direct payloads. A custom package that exposes
+              # `unwrapped` without the marker is treated conservatively as an
+              # FHS wrapper and must also expose `withFhsPayload` before
+              # chat-only configuration is accepted.
+              kiroFhsSandbox = ourPkgs.stdenv.hostPlatform.isLinux;
+              unwrapped = pinned;
+            };
         }
         # `version` is REQUIRED where it is absent, not decoration:
         # `ensureUnfreeCheck` in overlays/default.nix rebuilds every unfree
@@ -324,9 +333,19 @@
           else {name = "kiro-cli-${rolloutSuffix}-${sources.version}";}
         ))
     # Pre-split nixpkgs: `kiro-cli` IS the derivation carrying the binaries, so
-    # there is nothing to re-wrap and this is byte-identical to what shipped
-    # before the split was accounted for.
-    else pinned;
+    # there is nothing to re-wrap. Attach the same public package-selection
+    # contract without changing the derivation input: opt-out is a no-op here,
+    # and the explicit false marker prevents validation from mistaking the
+    # direct payload for an FHS wrapper merely because it exposes `unwrapped`.
+    else
+      pinned.overrideAttrs (attrs: {
+        passthru =
+          (attrs.passthru or {})
+          // {
+            kiroFhsSandbox = false;
+            unwrapped = pinned;
+          };
+      });
 
   mkKiroCli = rawFeatures: mkKiroCliWithPayload rawFeatures null;
 in

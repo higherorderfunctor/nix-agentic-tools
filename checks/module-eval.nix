@@ -7039,6 +7039,90 @@ in {
       asserts != [] && (builtins.head asserts).assertion == true
   );
 
+  # The supported pre-split topology is already unwrapped. Its explicit false
+  # marker makes opt-out a valid no-op instead of confusing the public
+  # `unwrapped` route with evidence that an FHS composition seam is missing.
+  module-kiro-fhs-opt-out-accepts-pre-split-contract = mkTest "kiro-fhs-opt-out-accepts-pre-split-contract" (
+    let
+      preSplitPackage = pkgs.hello.overrideAttrs (attrs: {
+        passthru =
+          (attrs.passthru or {})
+          // {
+            kiroFhsSandbox = false;
+            unwrapped = pkgs.hello;
+          };
+      });
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          package = preSplitPackage;
+          useFhsSandbox = false;
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "passthru.unwrapped" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == true
+  );
+
+  # A detectable custom FHS package without the payload-composition seam would
+  # recreate #956. Reject it rather than silently leaving trust injection in an
+  # outer wrapper that launcher dispatch cannot reach.
+  module-kiro-trust-rejects-fhs-package-without-payload-seam = mkTest "kiro-trust-rejects-fhs-package-without-payload-seam" (
+    if !pkgs.stdenv.hostPlatform.isLinux
+    then true
+    else let
+      customFhsPackage = pkgs.hello.overrideAttrs (attrs: {
+        passthru = (attrs.passthru or {}) // {unwrapped = pkgs.hello;};
+      });
+      ev = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          package = customFhsPackage;
+          trustedMcpTools = ["fs_read"];
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "passthru.withFhsPayload" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == false
+  );
+
+  # Assertions inspect the resolved rollout variant, not merely cfg.package.
+  # A custom factory that drops the FHS passthru contract must fail by name
+  # before wrapping can silently retain the sandbox or lose trust injection.
+  module-kiro-trust-rejects-rollout-variant-without-payload-seam = mkTest "kiro-trust-rejects-rollout-variant-without-payload-seam" (
+    if !pkgs.stdenv.hostPlatform.isLinux
+    then true
+    else let
+      customFhsPackage = pkgs.hello.overrideAttrs (attrs: {
+        passthru =
+          (attrs.passthru or {})
+          // {
+            kiroFhsSandbox = true;
+            unwrapped = pkgs.hello;
+            withFhsPayload = _: pkgs.hello;
+            withRolloutFeatures = _: pkgs.hello;
+          };
+      });
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          package = customFhsPackage;
+          trustedMcpTools = ["fs_read"];
+          unlockedRolloutFeatures = ["workflows"];
+          v3 = true;
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "passthru.withFhsPayload" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == false
+  );
+
   # `unlockedRolloutFeatures` without `v3` is INERT, and silently so — the
   # binary really is patched, the option really is set, and the feature never
   # appears. The assertion is all that stands between a consumer and a

@@ -155,10 +155,19 @@ That removes bubblewrap from Kiro's launch chain and restores the host's normal
 namespace and PATH resolution. It does not select a separately packaged binary:
 rollout patches, version pinning, TERM defaults, environment variables, secrets,
 identity materialization, and argv injection still use the same overlay payload
-and wrapper helpers. A custom `ai.kiro.package` must expose
-`passthru.unwrapped`; otherwise evaluation fails with a named assertion instead
-of silently retaining the sandbox. Direct package consumers can make the same
-choice with `pkgs.ai.kiro-cli.unwrapped`.
+and wrapper helpers. A custom `ai.kiro.package` must expose `passthru.unwrapped`
+on every rollout-resolved variant; otherwise evaluation fails with a named
+assertion instead of silently retaining the sandbox. Direct package consumers
+can make the same choice with `pkgs.ai.kiro-cli.unwrapped`. The overlay exposes
+that route even on pre-split nixpkgs, where it selects the already-direct
+package and is therefore a no-op.
+
+With the sandbox enabled, a custom FHS package used with `trustedMcpTools` must
+also expose `passthru.withFhsPayload`. Without it the FHS command shadows the
+outer chat wrapper and silently drops the grant, so the module rejects that
+detectable package shape. A package that is already direct can state that
+explicitly with `passthru.kiroFhsSandbox = false`; the overlay does so for
+darwin and pre-split nixpkgs.
 
 The cost is real. nixpkgs added the FHS environment because Kiro dynamically
 extracts a generic-glibc `bun`; without the compatibility root, that path may
@@ -587,7 +596,10 @@ shadowed chat-specific injection is what limits the behavioral change.
 `ai.kiro.useFhsSandbox = false` skips this package-composition layer entirely
 and applies the ordinary wrappers to `passthru.unwrapped`. That is an explicit
 compatibility tradeoff, not the default; see [`fhs-sandbox.md`](fhs-sandbox.md)
-for the extracted-`bun` risk.
+for the extracted-`bun` risk. Module assertions inspect the rollout-resolved
+package and reject a custom FHS package that advertises an unwrapped payload but
+cannot recompose it, because accepting that shape would recreate the same
+unreachable outer trust wrapper.
 
 **What the launcher forwarded in the pre-split measurement**, captured with a
 `kiro-cli-chat` decoy first on PATH. The wrapper test continues to pin these

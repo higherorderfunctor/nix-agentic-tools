@@ -201,9 +201,11 @@ stayed green. `overlays/kiro-cli.nix` therefore feature-detects
 `ourPkgs ? kiro-cli-unwrapped`, overrides the unwrapped derivation, and hands
 the result back to upstream's wrapper via `.override`. Its public passthru also
 exposes `withFhsPayload` so module configuration that must be visible inside the
-FHS root can use that same upstream expression; `useFhsSandbox = false` selects
-the pinned `unwrapped` payload explicitly instead of changing the public
-package's default meaning.
+FHS root can use that same upstream expression. The public package-selection
+contract is topology-stable: `unwrapped` always names the direct payload, and
+`kiroFhsSandbox` says whether selecting it actually removes an FHS layer
+(`false` on darwin and pre-split nixpkgs). `useFhsSandbox = false` selects that
+payload explicitly instead of changing the public package's default meaning.
 
 Read the "When the attribute stops being the derivation" section of the
 overlay-pattern fragment before adding another `overrideAttrs` package — it

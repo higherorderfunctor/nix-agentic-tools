@@ -323,7 +323,10 @@ shadowed chat-specific injection is what limits the behavioral change.
 `ai.kiro.useFhsSandbox = false` skips this package-composition layer entirely
 and applies the ordinary wrappers to `passthru.unwrapped`. That is an explicit
 compatibility tradeoff, not the default; see [`fhs-sandbox.md`](fhs-sandbox.md)
-for the extracted-`bun` risk.
+for the extracted-`bun` risk. Module assertions inspect the rollout-resolved
+package and reject a custom FHS package that advertises an unwrapped payload but
+cannot recompose it, because accepting that shape would recreate the same
+unreachable outer trust wrapper.
 
 **What the launcher forwarded in the pre-split measurement**, captured with a
 `kiro-cli-chat` decoy first on PATH. The wrapper test continues to pin these

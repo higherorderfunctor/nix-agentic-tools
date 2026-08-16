@@ -527,20 +527,49 @@
   # Shared assertion set for both backends: mutually exclusive
   # inline/dir pairs, hook-name charset, and the steering-entry
   # shape/name guards (exactly-one-of text/source; copy-mode names).
-  mkAssertions = cfg:
+  mkAssertions = cfg: let
+    # Assertion evaluation must not call a missing custom-package rollout
+    # function before the dedicated assertion below can report that shape.
+    resolvedPackage =
+      if cfg.unlockedRolloutFeatures != [] && !(cfg.package ? withRolloutFeatures)
+      then cfg.package
+      else resolvePackage cfg;
+    packageNeedsFhsPayload = package:
+      package.kiroFhsSandbox or (package ? unwrapped || package ? withFhsPayload);
+    needsFhsPayloadComposition =
+      cfg.useFhsSandbox
+      && pkgs.stdenv.hostPlatform.isLinux
+      && cfg.trustedMcpTools != []
+      && (packageNeedsFhsPayload cfg.package || packageNeedsFhsPayload resolvedPackage);
+  in
     [
       {
         assertion = !(cfg.agents != {} && cfg.agentsDir != null);
         message = "ai.kiro: cannot set both `agents` and `agentsDir` — choose one.";
       }
       {
-        assertion = cfg.useFhsSandbox || cfg.package ? unwrapped;
+        assertion = cfg.useFhsSandbox || resolvedPackage ? unwrapped;
         message = ''
-          ai.kiro: `useFhsSandbox = false` needs a `package` exposing
-          `passthru.unwrapped`, which `pkgs.ai.kiro-cli` from this flake's
-          overlay provides. The configured package has no unwrapped payload to
-          select. Either keep the FHS sandbox or use an overlay-provided
-          kiro-cli package.
+          ai.kiro: `useFhsSandbox = false` needs the resolved `package` to
+          expose `passthru.unwrapped`, which `pkgs.ai.kiro-cli` and its rollout
+          variants from this flake's overlay provide. The resolved package has
+          no unwrapped payload to select. Either keep the FHS sandbox or use an
+          overlay-provided kiro-cli package whose rollout variants preserve
+          that passthru.
+        '';
+      }
+      {
+        assertion =
+          !needsFhsPayloadComposition
+          || (resolvedPackage ? unwrapped && resolvedPackage ? withFhsPayload);
+        message = ''
+          ai.kiro: `trustedMcpTools` with the Linux FHS sandbox needs the
+          resolved `package` to expose both `passthru.unwrapped` and
+          `passthru.withFhsPayload`. Without that composition seam the FHS
+          launcher's `/usr/bin/kiro-cli-chat` shadows the outer trust wrapper,
+          so the grant would be silently lost. Use `pkgs.ai.kiro-cli` from this
+          flake's overlay, preserve both passthru attributes in custom rollout
+          variants, or set `useFhsSandbox = false`.
         '';
       }
       {

@@ -252,8 +252,16 @@ The ai module fans out TWO kinds of configuration:
   executable rather than supplying commands.
 - `ai.kiro.useFhsSandbox` — defaults true and keeps nixpkgs' Linux compatibility
   wrapper. False selects the configured package's pinned `passthru.unwrapped`
-  payload in both backends; packages without that route fail a named assertion.
-  This is runtime-specific package selection, not a normalized sandbox pool.
+  payload in both backends; validation inspects the rollout-resolved package, so
+  custom factories must preserve that route. Packages without it fail a named
+  assertion. This is runtime-specific package selection, not a normalized
+  sandbox pool.
+- A custom Linux FHS package used with `trustedMcpTools` must expose both
+  `passthru.unwrapped` and `passthru.withFhsPayload`. Otherwise the synthesized
+  `/usr/bin/kiro-cli-chat` can shadow the outer trust wrapper, so the module
+  rejects the configuration instead of silently losing the grant. Direct payload
+  packages may declare `passthru.kiroFhsSandbox = false`; the overlay does this
+  for darwin and pre-split nixpkgs.
 - `ai.codex.nativeSettings` — typed stable keys plus a TOML-compatible native
   freeform tail. Home Manager reconciles exact declared leaves into a writable
   `${configDir}/config.toml`; devenv writes a statically Nix-owned

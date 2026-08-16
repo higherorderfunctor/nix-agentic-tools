@@ -352,7 +352,9 @@ feature-detection on `ourPkgs`. The package remains covered by
 therefore does not move the default derivation; calling it deliberately creates
 a configuration-specific FHS derivation. Selecting `passthru.unwrapped` through
 `useFhsSandbox = false` reuses the already pinned payload rather than building a
-second copy.
+second copy. The topology marker `passthru.kiroFhsSandbox` is metadata-only too:
+attaching it to the current wrapper and pre-split payload does not enter either
+derivation's inputs.
 
 **Standalone variant.** When upstream's attrs become incompatible with the
 artifact we want to ship (different `sourceRoot`, `installPhase`, `buildInputs`,

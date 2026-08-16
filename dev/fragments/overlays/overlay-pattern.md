@@ -297,6 +297,7 @@ rewrap = payload:
   (ourPkgs.kiro-cli.override {kiro-cli-unwrapped = payload;}).overrideAttrs
   (attrs: {
     passthru = (attrs.passthru or {}) // pinned.passthru // {
+      kiroFhsSandbox = ourPkgs.stdenv.hostPlatform.isLinux;
       unwrapped = pinned;
       withFhsPayload = rewrap;
     };
@@ -323,6 +324,9 @@ Three properties of that shape are deliberate:
   attribute back to the real binaries. `withFhsPayload` is the corresponding
   route forward: it places a configured payload inside upstream's wrapper while
   retaining the pinned package's metadata and passthru contract.
+  `kiroFhsSandbox` disambiguates that contract on darwin and pre-split nixpkgs,
+  where the public package is already direct and `unwrapped` is a valid no-op
+  selection rather than evidence of an FHS layer.
 
 **How to detect this class before it costs a release.** A silent-drop split
 produces no error anywhere; the only tell is that the package's own facts stop
