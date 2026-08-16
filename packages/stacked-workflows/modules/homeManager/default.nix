@@ -7,9 +7,9 @@
 # runtime present in the evaluation, so each enabled ecosystem installs them
 # user-global (~/.claude/skills, ~/.kiro/skills, ~/.claude/CLAUDE.md,
 # ~/.kiro/steering/, ...). NOT the root `ai.skills` pool — a root write is
-# additive and cannot be retracted per runtime; see the factory's header. Those
-# pools are per-`evalModules`, so this HM-scope contribution is independent of
-# the devenv module's.
+# consumer-owned and would fan out beyond package runtime ownership; see the
+# factory's header. Those pools are per-`evalModules`, so this HM-scope
+# contribution is independent of the devenv module's.
 #
 # On TOP of the factory, this module adds the HM-only `gitPreset` option (the
 # git-config presets have no devenv analogue). Skill sources are the deref'd,

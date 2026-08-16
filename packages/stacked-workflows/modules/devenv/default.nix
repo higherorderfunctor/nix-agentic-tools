@@ -4,9 +4,9 @@
 # `stacked-workflows.enable = true` fans the unprefixed stack-* skills and the
 # skill-routing rule into the PER-RUNTIME
 # `ai.<runtime>.{skills,rules}` pools at project-local (devenv) scope —
-# NOT the root pools, which are additive and cannot be retracted per runtime.
-# Those pools are per-`evalModules`, so this contribution is independent of the
-# HM module's.
+# NOT the consumer-owned root pools, which would fan the package out beyond its
+# runtime ownership. Those pools are per-`evalModules`, so this contribution is
+# independent of the HM module's.
 #
 # Skills come from `pkgs.stacked-workflows-content.passthru.skills` — the
 # deref'd, self-contained skill dirs (real reference files bundled inside each,

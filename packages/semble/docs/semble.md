@@ -1,5 +1,10 @@
 # Semble integrations
 
+> **Last verified:** 2026-08-15 (commit pending — Semble now defaults each
+> generated normalized-pool entry at its nullable boundary, so consumers can
+> replace the entry atomically or suppress it with an ordinary `null`; Kiro's
+> runtime-native subagent remains replace-only).
+
 Semble provides local semantic and lexical code search through a CLI and an MCP
 server. This repository re-exports Numtide's pinned derivation unchanged and
 adds matching Home Manager and devenv convenience modules for Claude, Codex, and
@@ -96,11 +101,14 @@ Shebang-based inference is deliberately out of scope. Extensionless scripts must
 be listed through `pathMappings`; the integration does not read file contents to
 guess their language.
 
-Any active integration installs `semble.package`. Named MCP, subagent, and rule
-entries use `mkDefault`, so consumers can refine their generated values. Claude
-and Codex compose the guidance into their single always-loaded `CLAUDE.md` and
-`AGENTS.md` files. Kiro receives the same named rule and writes it to
-`.kiro/steering/semble.md`.
+Any active integration installs `semble.package`. Named MCP and rule entries,
+plus Claude and Codex normalized subagents, use a whole-entry `mkDefault`, so an
+ordinary consumer value replaces the generated record atomically and `null`
+suppresses it for that runtime. Kiro's runtime-native subagent is not a
+normalized nullable pool: consumers can replace the generated entry atomically,
+but cannot suppress it with `null`. Claude and Codex compose the guidance into
+their single always-loaded `CLAUDE.md` and `AGENTS.md` files. Kiro receives the
+same named rule and writes it to `.kiro/steering/semble.md`.
 
 Home Manager fixes the global cache at `${config.xdg.cacheHome}/semble`, even on
 Darwin where Semble's platform default would otherwise be `~/Library/Caches`.

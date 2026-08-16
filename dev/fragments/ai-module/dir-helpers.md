@@ -1,9 +1,11 @@
 ## ai.\* Dir Helpers
 
-> **Last verified:** 2026-04-21 (commit pending — refactor of
-> ai-factory-collision plan §4 / commits 4–7). If you add a new `*FromDir`
-> helper or change the polymorphic input shape or the filter signature and this
-> fragment isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-15 (commit pending — directory-generated
+> per-runtime entries now replace or null-suppress same-key root entries under
+> the normalized keyed-pool contract). Prior: 2026-04-21 (commit pending —
+> refactor of ai-factory-collision plan §4 / commits 4–7). If you add a new
+> `*FromDir` helper or change the polymorphic input shape or the filter
+> signature and this fragment isn't updated in the same commit, stop and fix it.
 
 ### The helpers
 
@@ -61,9 +63,10 @@ ai.kiro.rulesDir = {
 };
 ```
 
-Mix Dir-based and explicit entries freely — they merge through `mkDefault`
-(explicit entries win within the same layer; collisions between L2 and L3 fire
-the shared assertion per the collision-semantics fragment).
+Mix Dir-based and explicit entries freely. They merge through `mkDefault`, so
+explicit entries win within the same layer. A resulting per-runtime entry then
+replaces a same-key root entry wholesale; an explicit per-runtime null
+suppresses the inherited root entry.
 
 ### Why pure-eval only
 

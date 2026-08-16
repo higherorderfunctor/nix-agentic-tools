@@ -1,20 +1,25 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-08-15 (commit pending — typed context is the
-> composition exception: root and runtime content concatenate root-first into
-> one runtime-named artifact. Keyed rules retain collision semantics and lower
-> their normalized matcher at L4; repository-local AGENTS.md consumers share a
-> keyed, byte-deduplicating writer). Prior: 2026-08-15 (commit pending — L2 root
-> pools now cross into L3 only for runtimes whose app record lists that pool in
-> `supportedPools`; unsupported root fanout degrades and the L2b/L3 options are
-> absent. The closed normalized `settings` schema is deliberately listed by all
-> five runtimes even when a particular field lowers only for a subset). Prior:
-> 2026-08-01 (commit pending — records the portable hooks exception: per-event
-> matcher-group lists append instead of key-colliding, and agents may carry a
-> typed semantic record). Prior: 2026-04-21 (commit pending — refactor of
-> ai-factory-collision plan §4). If you add a new Dir option or change how
-> per-file Dir expansion fans through the layers, update this fragment in the
-> same commit.
+> **Last verified:** 2026-08-15 (commit pending — records the managed-proxy
+> sidecar exception: MCP client values still traverse L2↔L3 normally, while
+> explicit declaration ownership centrally emits unique active systemd units).
+> Prior: 2026-08-15 (commit pending — L2↔L3 keyed pools now use atomic
+> per-runtime replacement with null tombstones, while package ownership
+> collisions are checked by definition provenance within each scope). Prior:
+> 2026-08-15 (commit pending — typed context is the composition exception: root
+> and runtime content concatenate root-first into one runtime-named artifact.
+> Keyed rules retain collision semantics and lower their normalized matcher at
+> L4; repository-local AGENTS.md consumers share a keyed, byte-deduplicating
+> writer). Prior: 2026-08-15 (commit pending — L2 root pools now cross into L3
+> only for runtimes whose app record lists that pool in `supportedPools`;
+> unsupported root fanout degrades and the L2b/L3 options are absent. The closed
+> normalized `settings` schema is deliberately listed by all five runtimes even
+> when a particular field lowers only for a subset). Prior: 2026-08-01 (commit
+> pending — records the portable hooks exception: per-event matcher-group lists
+> append instead of key-colliding, and agents may carry a typed semantic
+> record). Prior: 2026-04-21 (commit pending — refactor of ai-factory-collision
+> plan §4). If you add a new Dir option or change how per-file Dir expansion
+> fans through the layers, update this fragment in the same commit.
 
 ### Canonical 4-layer shape
 
@@ -27,7 +32,7 @@
                              ▼  fanout via lib.ai.<X>FromDir
 ┌────────────────────────────────────────────────────────────┐
 │ L2: Top-level singles                                      │
-│   ai.<X> = attrsOf <itemModule>                            │
+│   ai.<X> = attrsOf (nullOr <itemModule>)                   │
 │   - cross-ecosystem pool                                   │
 └────────────────────────────────────────────────────────────┘
                              │
@@ -40,10 +45,10 @@
                              ▼  fanout via lib.ai.<X>FromDir
 ┌────────────────────────────────────────────────────────────┐
 │ L3: Per-CLI singles                                        │
-│   ai.<cli>.<X> = attrsOf <itemModule>                      │
+│   ai.<cli>.<X> = attrsOf (nullOr <itemModule>)             │
 │   - exists only when the app record supports pool X        │
-│   - merged with L2 via mergeWithCollisionCheck             │
-│   - collision-as-failure at the L2↔L3 boundary             │
+│   - same-key value atomically replaces L2                  │
+│   - same-key null suppresses the inherited L2 entry        │
 └────────────────────────────────────────────────────────────┘
                              │
                              ▼  translation + emission
@@ -57,13 +62,19 @@
 
 ### Rules
 
-- **Emission logic lives ONLY at L4.** L1/L2/L2b are pure fanout — they never
-  touch `home.file.*` or `files.*`.
-- **Collision-as-failure at every supported layer boundary.** The
-  mergeWithCollisionCheck helper fires on each supported L2↔L3 boundary inside
-  the CLI's transform. Unsupported root fanout degrades before this boundary and
-  has no L3 option. L1→L2 and L2b→L3 use `mkDefault` so explicit entries within
-  the same layer still win (that's a fanout, not a cross-layer collision).
+- **Artifact emission logic lives ONLY at L4.** L1/L2/L2b are pure fanout — they
+  never touch `home.file.*` or `files.*`. The one sidecar exception is managed
+  MCP proxy ownership: `sharedOptions.nix` aggregates proxy declaration scopes
+  and emits unique active systemd units, while only lowered client entries
+  traverse this four-layer pipeline.
+- **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
+  entries replace same-key root entries wholesale; null suppresses an inherited
+  entry after the shallow merge. Unsupported root fanout degrades before this
+  boundary and has no L3 option. L1→L2 and L2b→L3 use `mkDefault` so explicit
+  entries within the same layer still win before cross-level composition.
+- **One package owner per key and scope.** Definition-provenance checks reject
+  two packages claiming one root key or one per-runtime key. A root key and its
+  runtime replacement are different scopes and do not collide.
 - **List-valued lifecycle hooks append.** `ai.hooks.<Event>` matcher groups run
   before `ai.<cli>.hooks.<Event>` groups. This is intentional composition, not
   an attrset-entry collision; only the exact portable Claude/Codex event
@@ -97,7 +108,10 @@
   `lib/ai/app/{hmTransform,devenvTransform}.nix`
 - L2b options (CLI-specific, like Claude's `agentsDir` or `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
-- L2↔L3 collision check → transform (`collisionAssertions`)
+- L2↔L3 replacement/null filtering → transform (`aiCommon.mergePool`)
+- managed MCP proxy ownership, validation, and systemd unit aggregation →
+  `lib/ai/sharedOptions.nix` + `lib/ai/mcpProxy.nix`
+- per-scope package ownership guard → `checks/module-eval.nix`
 - L4 emission → `packages/<pkg>/lib/mk<Cli>.nix`
 
 ### Adding a new concern X
@@ -110,9 +124,9 @@
    The uniform normalized `settings` schema is the explicit exception: every
    runtime declares it, while each field's native lowering may be narrower.
 4. Add L4 emission in each supporting per-CLI factory's customConfig.
-5. Wire the L2↔L3 merge through mergeWithCollisionCheck in both transforms, or
-   document and test the concern's intentional composition rule (hooks append
-   per-event lists).
+5. Wire L2↔L3 through `mergePool`, add the pool to the package-provenance guard,
+   or document and test the concern's intentional non-pool composition rule
+   (hooks append per-event lists).
 6. (Optional) Add L1 option `ai.<X>Dir` + L1→L2 expansion.
 7. (Optional) Add per-CLI L2b option `ai.<cli>.<X>Dir` + L2b→L3 expansion.
 8. Add tests in `checks/module-eval.nix` for every new surface and at least one
@@ -120,11 +134,14 @@
 
 ### Pitfall
 
-**Never emit from L1/L2/L2b.** Those layers exist solely to reshape data; they
-read nothing from `config.home.file.*` / `config.files.*` and write nothing
-there either. If you find yourself reaching for `home.file.*` in
+**Never emit runtime artifacts from L1/L2/L2b.** Those layers exist solely to
+reshape data; they read nothing from `config.home.file.*` / `config.files.*` and
+write nothing there either. If you find yourself reaching for `home.file.*` in
 `sharedOptions.nix` or in a transform's `config` block, something is off — drop
-the contribution into the per-CLI factory's L4 emission.
+the contribution into the per-CLI factory's L4 emission. Managed MCP proxy units
+are the explicit sidecar exception because their lifetime and ownership cannot
+belong to any one runtime view; do not generalize it to emitted client
+configuration.
 
 ### Why 4 layers instead of inline
 

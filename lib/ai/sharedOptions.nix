@@ -4,7 +4,7 @@
 # Imported by every mkAiApp module so per-app layers
 # (ai.<name>.mcpServers, etc.) compose with these top-level pools. Scalar
 # defaults allow per-app overrides, lists concatenate, and named attrset pools
-# reject shared/per-app duplicate keys through mergeWithCollisionCheck.
+# use shallow per-runtime replacement with null tombstones.
 {
   config,
   lib,
@@ -17,8 +17,94 @@
   dirHelpers = import ./dir-helpers.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
   harnessNames = import ./runtimes.nix;
+  mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
+  hasAssertions = options ? assertions;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
+  hasHomeManagerSystemd = lib.hasAttrByPath ["systemd" "user" "services"] options;
+
+  # ── Managed MCP proxy ownership ─────────────────────────────────────
+  # A top-level proxied declaration is one shared owner, not one owner per
+  # runtime view. It materializes only when at least one enabled capable
+  # runtime inherits it. Runtime-scoped declarations own their units directly;
+  # their lifetime follows the declaration, matching the pre-existing contract.
+  # Discover MCP-capable runtimes from the evaluated OPTION tree rather than
+  # the first-party registry. mkAiApp is public, and every transformed record
+  # declares an internal per-runtime capability marker with its normalized MCP
+  # option. The marker distinguishes that pool from an independent same-named
+  # native option and avoids introducing a package-written root option.
+  mcpRuntimeNames =
+    builtins.filter
+    (name: lib.hasAttrByPath ["ai" name "_normalizedPools" "mcpServers"] options)
+    (builtins.attrNames options.ai);
+  runtimeMcpServers = name: lib.attrByPath ["ai" name "mcpServers"] {} config;
+  topLevelProxiedServers = mcpProxy.proxiedServers config.ai.mcpServers;
+  topLevelProxyIsUsed = key:
+    lib.any
+    (name:
+      lib.attrByPath ["ai" name "enable"] false config
+      && !(builtins.hasAttr key (runtimeMcpServers name)))
+    mcpRuntimeNames;
+  usedTopLevelProxiedServers = lib.filterAttrs (key: _: topLevelProxyIsUsed key) topLevelProxiedServers;
+
+  mkProxyDeclaration = optionPath: key: server: {
+    inherit key optionPath server;
+    scope = "${optionPath}.${key}";
+  };
+  topLevelProxyDeclarations =
+    lib.mapAttrsToList (mkProxyDeclaration "ai.mcpServers") topLevelProxiedServers;
+  usedTopLevelProxyDeclarations =
+    lib.mapAttrsToList (mkProxyDeclaration "ai.mcpServers") usedTopLevelProxiedServers;
+  runtimeProxyDeclarations =
+    lib.concatMap
+    (name:
+      lib.mapAttrsToList
+      (mkProxyDeclaration "ai.${name}.mcpServers")
+      (mcpProxy.proxiedServers (runtimeMcpServers name)))
+    mcpRuntimeNames;
+
+  # The server key is the managed-unit identity. Refuse every reused key up
+  # front, including byte-identical definitions, and omit conflicted units so
+  # the module system cannot preempt this actionable assertion with a generic
+  # duplicate-definition error.
+  proxyDeclarationsByKey = lib.groupBy (declaration: declaration.key) (
+    topLevelProxyDeclarations ++ runtimeProxyDeclarations
+  );
+  duplicateProxyDeclarations = lib.filterAttrs (_: declarations: builtins.length declarations > 1) proxyDeclarationsByKey;
+  duplicateProxyKeys = builtins.attrNames duplicateProxyDeclarations;
+  activeProxyDeclarations = usedTopLevelProxyDeclarations ++ runtimeProxyDeclarations;
+  uniqueActiveProxyDeclarations =
+    builtins.filter
+    (declaration: !(builtins.elem declaration.key duplicateProxyKeys))
+    activeProxyDeclarations;
+  managedProxyServers = builtins.listToAttrs (map
+    (declaration: lib.nameValuePair declaration.key declaration.server)
+    uniqueActiveProxyDeclarations);
+
+  duplicateProxyDescription = key: declarations: "'${key}' (${lib.concatStringsSep ", " (map (declaration: declaration.scope) declarations)})";
+  proxyOwnershipAssertions = [
+    {
+      assertion = duplicateProxyKeys == [];
+      message = ''
+        MCP proxy ownership keys are reused: ${lib.concatStringsSep "; " (lib.mapAttrsToList duplicateProxyDescription duplicateProxyDeclarations)}.
+        A managed proxy key names one systemd user service. A top-level
+        `ai.mcpServers.<key>` declaration is its single shared owner; each
+        runtime-scoped `ai.<runtime>.mcpServers.<key>` declaration is a direct
+        owner. Reusing a key across owners is ambiguous even when definitions
+        are identical. Give every direct owner a different MCP server key.
+      '';
+    }
+  ];
+  proxyValidationAssertions =
+    lib.concatMap
+    (declaration:
+      mcpProxy.assertionsFor {
+        inherit (declaration) optionPath;
+        backendSupported = hasHomeManagerSystemd;
+        servers = {${declaration.key} = declaration.server;};
+      })
+    activeProxyDeclarations;
+  proxyAssertions = proxyOwnershipAssertions ++ proxyValidationAssertions;
 
   # OpenSSH rejects Home Manager's otherwise-safe ~/.ssh/config symlink inside
   # Linux user-namespace sandboxes: the root-owned Nix-store target is exposed
@@ -67,20 +153,23 @@ in {
     };
 
     mcpServers = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.submoduleWith {
+      type = lib.types.attrsOf (lib.types.nullOr (lib.types.submoduleWith {
         modules = [(import ./mcpServer/commonSchema.nix)];
-      });
+      }));
       default = {};
       description = ''
         MCP servers fanned out to every enabled AI app: Claude, Codex,
-        Copilot, and Kiro. Per-app entries (ai.<name>.mcpServers) add
-        runtime-specific servers; duplicate names across the shared and
-        per-app pools fail the factory's collision check.
+        Copilot, and Kiro. Per-app entries replace root entries at the same
+        key; null suppresses an inherited server for that runtime. A used
+        top-level proxied server owns one shared managed proxy and fans out only
+        its credential-free client entry. Runtime-scoped proxied servers own
+        their managed proxies directly. Because the server key is also the
+        managed-proxy identity, proxy owners must use distinct keys.
       '';
     };
 
     rules = lib.mkOption {
-      type = lib.types.attrsOf aiCommon.ruleModule;
+      type = lib.types.attrsOf (lib.types.nullOr aiCommon.ruleModule);
       default = {};
       apply = aiCommon.validateRules;
       description = ''
@@ -94,10 +183,10 @@ in {
         instead appends rules in key order
         to its single AGENTS.md, translating `matcher` to a prose scope note.
         Kimchi has no rules pool, so root rules silently degrade for it.
-        Per-app entries merge with the root pool; duplicate keys across those
-        levels are a failure. Set exactly one of `text` or `source` for each
-        rule. Kiro's native `inclusion` override exists only on
-        `ai.kiro.rules`.
+        Per-app entries replace root entries at the same key; null suppresses
+        an inherited rule for that runtime. Set exactly one of `text` or
+        `source` for each non-null rule. Kiro's native `inclusion` override
+        exists only on `ai.kiro.rules`.
       '';
       example = lib.literalExpression ''
         {
@@ -117,9 +206,10 @@ in {
       description = ''
         Directory of `.md` rule files fanned out to Claude, Codex, Copilot,
         and Kiro. Each file becomes one entry in `ai.rules` keyed by the
-        basename minus `.md`. Collisions with explicit `ai.rules.<name>`
-        entries (or with `ai.<cli>.rules`) fail via the shared collision check.
-        Accepts either a Nix path literal or `{ path, filter? }` where
+        basename minus `.md`. Explicit `ai.rules.<name>` values arbitrate with
+        these generated defaults; per-runtime entries then replace or suppress
+        the resulting root entry. Accepts either a Nix path literal or `{ path,
+        filter? }` where
         `filter : name → bool` (default: keep `.md` files). The source
         directory is NOT taken over wholesale — other derivations can
         still contribute to the same ecosystem rules dir via
@@ -152,7 +242,7 @@ in {
     };
 
     lspServers = lib.mkOption {
-      type = lib.types.attrsOf aiCommon.lspServerModule;
+      type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
       default = {};
       description = ''
         Typed LSP server declarations fanned out to enabled Claude, Copilot,
@@ -160,13 +250,13 @@ in {
         on emission (Kiro: command/args; Copilot: + fileExtensions; Claude: +
         extensionToLanguage). Codex is intentionally excluded because its
         public configuration has no native LSP-server surface. Per-app entries
-        (ai.<name>.lspServers) add runtime-specific servers; duplicate names
-        across the shared and per-app pools fail the collision check.
+        replace root entries at the same key; null suppresses an inherited
+        server for that runtime.
       '';
     };
 
     agents = lib.mkOption {
-      type = lib.types.attrsOf agent.agentType;
+      type = lib.types.attrsOf (lib.types.nullOr agent.agentType);
       default = {};
       description = ''
         Agent definitions fanned out to Claude and Copilot. Portable semantic
@@ -186,8 +276,8 @@ in {
         NAMES (`Bash`, `Read`), while Kiro takes capability TAGS (`shell`,
         `read`, `@mcp`), so lowering one to the other needs a translation
         table rather than a pass-through. Use `ai.kiro.agents` directly for
-        that ecosystem. Per-app overrides (ai.<cli>.agents) merge on top;
-        collisions fail.
+        that ecosystem. Per-app entries replace root entries at the same key;
+        null suppresses an inherited agent for that runtime.
       '';
     };
 
@@ -241,14 +331,13 @@ in {
     };
 
     environmentVariables = lib.mkOption {
-      type = lib.types.attrsOf lib.types.str;
+      type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
       default = {};
       description = ''
         Environment variables fanned out to every enabled AI app with a
         launcher wrapper: Codex, Copilot, Kimchi and Kiro. Per-app entries
-        (ai.<name>.environmentVariables) add runtime-specific variables;
-        duplicate names across the shared and per-app pools fail the collision
-        check.
+        replace root entries at the same key; null suppresses an inherited
+        variable for that runtime.
 
         Delivered by baking them into each app's wrapper, so they scope to
         that process and the commands it spawns. They are NOT written into
@@ -267,9 +356,9 @@ in {
 
     # Internal module-to-module channel. NOT a consumer surface: it exists so
     # `gitSshConfigWorkaround` can reach each harness's launcher wrapper
-    # without writing into `ai.<cli>.environmentVariables`, which is
-    # collision-checked and would reject the consumer's own entry for the same
-    # key. Read by the per-package factories; `internal` keeps it out of the
+    # without writing into the consumer-facing
+    # `ai.<cli>.environmentVariables` override pool. Read by the per-package
+    # factories; `internal` keeps it out of the
     # generated options documentation.
     _sandboxSafeSshCommand = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
@@ -315,9 +404,9 @@ in {
     };
 
     skills = lib.mkOption {
-      type = lib.types.attrsOf lib.types.path;
+      type = lib.types.attrsOf (lib.types.nullOr lib.types.path);
       default = {};
-      description = "Cross-app skills fanned out to every enabled AI app: Claude, Codex, Copilot, and Kiro.";
+      description = "Cross-app skills fanned out to every enabled AI app: Claude, Codex, Copilot, and Kiro. Per-app entries replace root entries at the same key; null suppresses an inherited skill for that runtime.";
     };
 
     skillsDir = lib.mkOption {
@@ -326,10 +415,10 @@ in {
       description = ''
         Directory-of-directories fanned out to Claude, Codex, Copilot, and
         Kiro; each immediate subdirectory becomes one entry in `ai.skills`
-        keyed by the subdir name. Collisions with explicit
-        `ai.skills.<name>` entries (or with `ai.<cli>.skills`) fail via the
-        shared collision check. The default filter accepts every subdirectory;
-        supply a
+        keyed by the subdir name. Explicit `ai.skills.<name>` values arbitrate
+        with these generated defaults; per-runtime entries then replace or
+        suppress the resulting root entry. The default filter accepts every
+        subdirectory; supply a
         `{ path, filter? }` submodule with `filter : name → bool` to
         exclude specific subdirs.
       '';
@@ -343,14 +432,20 @@ in {
 
   # L1 → L2 fanout: expand Dir options into per-file entries on
   # the matching L2 pools. mkDefault priority lets explicit
-  # `ai.<pool>.<name>` contributions override (this is the L1→L2
-  # fanout specifically, not a collision; collisions are handled
-  # at the L2↔L3 boundary by the factory's mergeWithCollisionCheck
-  # helper).
+  # `ai.<pool>.<name>` contributions override. Per-runtime L3 entries then
+  # replace or suppress the resulting root value.
   #
   # Emission logic lives at L4 inside each per-CLI factory. This
   # layer only reshapes the L1 Dir option into L2 per-file entries.
   config = lib.mkMerge [
+    (lib.optionalAttrs hasAssertions {assertions = proxyAssertions;})
+    # Drop the systemd path entirely in devenv. `mkIf false` would still define
+    # an unknown option there; the option-tree probe is a build-time condition
+    # and does not force config. Unsupported active declarations fail through
+    # proxyValidationAssertions instead of disappearing silently.
+    (lib.optionalAttrs hasHomeManagerSystemd {
+      systemd.user.services = mcpProxy.systemdUnitsFor managedProxyServers;
+    })
     {
       # THE one sanctioned root-pool write in this repo. Every other module
       # writes `ai.<runtime>.<pool>`, enforced by the provenance guard in
@@ -393,18 +488,10 @@ in {
         # Published on the INTERNAL channel, never into
         # `ai.<cli>.environmentVariables`.
         #
-        # Writing a module default into that pool looks equivalent and is not:
-        # `mergeWithCollisionCheck` decides collisions with
-        # `builtins.intersectAttrs`, which sees KEY PRESENCE and knows nothing
-        # about `mkDefault`. So a module contribution there turns any consumer
-        # who also sets `ai.environmentVariables.GIT_SSH_COMMAND` into a hard
-        # eval failure — naming a per-CLI pool they never wrote, and firing
-        # even for harnesses that are merely imported, since
-        # `collisionAssertions` is emitted outside `mkIf cfg.enable`.
-        #
         # The pool belongs to the consumer. Module contributions ride this
         # channel and are merged UNDER the pool at each wrapper call site, so
-        # an explicit entry simply wins.
+        # an explicit entry simply wins without a hidden module definition
+        # participating in the normalized pool's provenance guard.
         ai._sandboxSafeSshCommand = sandboxSafeSshCommand;
       }
     ))

@@ -110,7 +110,9 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
     [`dev/fragments/markdown-formatting/markdown-formatting.md`](dev/fragments/markdown-formatting/markdown-formatting.md)
 
 - **`mcp-secrets`**
-  - Match: `lib/ai/mcpServer/**`, `lib/mcp.nix`,
+  - Match: `checks/factory-eval.nix`, `checks/module-eval.nix`,
+    `lib/ai/app/mkBackendTransform.nix`, `lib/ai/mcpProxy.nix`,
+    `lib/ai/mcpServer/**`, `lib/ai/sharedOptions.nix`, `lib/mcp.nix`,
     `packages/kiro-cli/lib/mcpSecrets.nix`, `packages/kiro-cli/lib/mkKiro.nix`,
     `packages/kiro-cli/lib/wrapPackage.nix`
   - Read:

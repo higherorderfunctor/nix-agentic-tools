@@ -962,11 +962,10 @@
   # call site in ONE place so both backends agree.
   #
   # It is deliberately NOT contributed as an `ai.kiro.environmentVariables`
-  # definition, which is what it was until the collision semantics were
-  # re-read: that pool is collision-checked against `ai.environmentVariables`
-  # by KEY PRESENCE, so a module default for `SHELL` there turns a consumer's
-  # own `ai.environmentVariables.SHELL` into a hard eval error rather than an
-  # override. See `_sandboxSafeSshCommand` in lib/ai/sharedOptions.nix.
+  # definition. That normalized pool belongs to consumers; module-generated
+  # process defaults use the internal channel instead, keeping package
+  # provenance out of consumer override semantics. See `_sandboxSafeSshCommand`
+  # in lib/ai/sharedOptions.nix.
   #
   # Ordering is the contract: module defaults first, consumer pool last, so an
   # explicit entry wins. Codex and Claude resolve the same way.
@@ -1253,9 +1252,9 @@ in
       # Typed LSP server definitions for settings/lsp.json. Freeform
       # attrs-of-anything matching the legacy `attrsOf jsonFormat.type`.
       lspServers = lib.mkOption {
-        type = lib.types.attrsOf aiCommon.lspServerModule;
+        type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
         default = {};
-        description = "Typed LSP server definitions; translated via `mkLspConfig` into settings/lsp.json on emission.";
+        description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkLspConfig` into settings/lsp.json on emission.";
       };
       # Env vars exported when launching kiro. In HM they're baked into
       # Baked into the symlinkJoin launcher on BOTH backends. devenv used to
@@ -1263,9 +1262,9 @@ in
       # the project shell rather than into Kiro. `attrsOf str` — matching the
       # legacy surface.
       environmentVariables = lib.mkOption {
-        type = lib.types.attrsOf lib.types.str;
+        type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
         default = {};
-        description = "Environment variables baked into the kiro launcher wrapper. Scoped to the Kiro process and the commands it spawns; never exported into the project shell.";
+        description = "Environment variables baked into the kiro launcher wrapper. Scoped to the Kiro process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
       };
       extraPackages = lib.mkOption {
         type = lib.types.listOf lib.types.package;

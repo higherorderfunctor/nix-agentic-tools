@@ -12,7 +12,11 @@
 #
 # This moves the credential to a DAEMON instead. A systemd user service
 # runs Caddy, reads each secret from its file at START, and exposes an
-# UNAUTHENTICATED loopback endpoint. The client entry becomes a plain
+# UNAUTHENTICATED loopback endpoint. Proxy ownership is keyed by the MCP
+# server attribute name: a used top-level declaration owns one shared unit,
+# while a runtime-scoped declaration owns its unit directly. Reusing a key
+# across proxy declarations is rejected by sharedOptions.nix before any unit
+# is emitted. The client entry becomes a plain
 # `{ type = "http"; url = "http://127.0.0.1:<port>/"; }` carrying no
 # credential at all, so it is harness-agnostic: kiro, Claude Code,
 # Copilot, wrapped or not, it makes no difference.
@@ -83,7 +87,7 @@
   lib,
   pkgs,
 }: let
-  inherit (lib) concatStringsSep filterAttrs foldl' mapAttrs mapAttrsToList;
+  inherit (lib) concatStringsSep filterAttrs foldl' mapAttrs mapAttrs' mapAttrsToList;
 
   credentialsLib = import ../credentials.nix {inherit lib;};
 
@@ -158,10 +162,12 @@
 
   isCredential = v: builtins.isAttrs v && (v ? file || v ? helper);
 
-  isProxied = srv: let
-    p = srv.proxy or null;
-  in
-    p != null && (p.enable or false);
+  isProxied = srv:
+    builtins.isAttrs srv
+    && (let
+      p = srv.proxy or null;
+    in
+      p != null && (p.enable or false));
 
   proxiedServers = servers: filterAttrs (_: isProxied) servers;
 
@@ -191,6 +197,55 @@
     // lib.optionalAttrs ((srv.timeout or null) != null) {
       inherit (srv) timeout;
     };
+
+  # Lower proxy declarations at EACH ownership scope before root/runtime
+  # composition. A top-level proxy therefore fans out only this credential-free
+  # client record; its managed unit stays owned by the top-level declaration.
+  # Runtime-scoped proxies lower independently and own their units directly.
+  # Null tombstones must survive this pass so mergePool can apply them after
+  # precedence.
+  lowerClientEntries = servers:
+    mapAttrs
+    (name: srv:
+      if isProxied srv
+      then clientEntry name srv
+      else srv)
+    servers;
+
+  # Validation belongs to the declaration that owns the managed proxy, not to
+  # every runtime view that happens to inherit its lowered client entry.
+  assertionsFor = {
+    optionPath,
+    servers,
+    backendSupported,
+  }: let
+    proxied = proxiedServers servers;
+    withoutUrl =
+      builtins.attrNames
+      (filterAttrs (_: srv: (srv.url or null) == null) proxied);
+    withCredentialClientHeaders =
+      builtins.attrNames
+      (filterAttrs
+        (_: srv:
+          builtins.any
+          isCredential
+          (builtins.attrValues (srv.headers or {})))
+        proxied);
+    names = builtins.attrNames proxied;
+  in [
+    {
+      assertion = withoutUrl == [];
+      message = "${optionPath}: ${concatStringsSep ", " withoutUrl} set `proxy.enable` but no `url`. The proxy forwards to that url, so there is nothing to proxy to — set `url` (a plain string or a credential), or drop `proxy.enable`.";
+    }
+    {
+      assertion = withCredentialClientHeaders == [];
+      message = "${optionPath}: ${concatStringsSep ", " withCredentialClientHeaders} set `proxy.enable` and put a CREDENTIAL in the server's top-level `headers`. On a proxied server those are the CLIENT's headers and are written into its config, which would hand it the credential the proxy exists to withhold. Move them to `proxy.headers`, where the daemon injects them and no client ever sees the value. (Top-level `headers` used to be absorbed into the daemon automatically; that behavior was removed so the key means one thing.)";
+    }
+    {
+      assertion = backendSupported || proxied == {};
+      message = "${optionPath}: ${concatStringsSep ", " names} set `proxy.enable`, which this backend does not implement. Home Manager owns the current systemd user-service lifecycle; devenv lifecycle is tracked separately and is deliberately out of scope here. Declare these servers in Home Manager, or drop `proxy.enable` and accept client-side credentials.";
+    }
+  ];
 
   # ── One secretValue → { rendered; secrets; } ────────────────────────
   # A plain string is literal config. A credential becomes
@@ -420,14 +475,47 @@
         --config ${caddyfileFor spec} \
         --adapter caddyfile
     '';
+
+  # One managed unit for one explicit proxy owner. Ownership aggregation and
+  # duplicate-key diagnostics live in sharedOptions.nix, so callers pass only
+  # the unique declarations that are safe to materialize.
+  systemdUnitFor = name: srv: let
+    spec = specFor name srv;
+  in {
+    Unit = {
+      Description = "Credential-injecting MCP proxy for ${name}";
+      After = ["network.target"];
+    };
+    Service = {
+      ExecStart = "${startScriptFor spec}";
+      Restart = "on-failure";
+      RestartSec = 5;
+      # Per-server attribution in the journal. The proxy drops the whole
+      # request-header map, so the unit is the stable source of identity.
+      SyslogIdentifier = "mcp-proxy-${name}";
+      # Decrypted values live only in the daemon environment and memory.
+      # /proc/<pid>/environ is 0400; nothing secret enters world-readable argv.
+      PrivateTmp = true;
+    };
+    Install.WantedBy = ["default.target"];
+  };
+
+  systemdUnitsFor = servers:
+    mapAttrs'
+    (name: srv: lib.nameValuePair "mcp-proxy-${name}" (systemdUnitFor name srv))
+    servers;
 in {
   inherit
+    assertionsFor
     caddyfileFor
     clientEntry
     envVarFor
     isProxied
+    lowerClientEntries
     proxiedServers
     specFor
     startScriptFor
+    systemdUnitFor
+    systemdUnitsFor
     ;
 }

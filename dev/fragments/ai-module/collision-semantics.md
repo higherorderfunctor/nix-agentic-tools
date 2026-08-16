@@ -1,183 +1,182 @@
-## ai.\* Collision Semantics
+## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — the list-shaped instructions
-> exception is gone; package guidance is keyed rules and follows the ordinary
-> collision/default rules). Prior: 2026-08-15 (commit pending — `ai.context` is
-> now an explicit content-composition exception: root content precedes runtime
-> content in one artifact, while keyed rules still collide across levels. The
-> shared repository AGENTS.md writer separately deduplicates identical same-key
-> runtime views and rejects divergent ones). Prior: 2026-08-15 (commit pending —
-> collision checks follow each app record's `supportedPools`, while normalized
-> `ai.settings` is a scalar-field exception: each nullable field resolves
-> independently, with a non-null per-runtime value overriding the root and null
-> inheriting it). Prior: 2026-08-14 (commit pending — records where a MODULE may
-> contribute, now that `lib/ai/mkSkillPackageModule.nix` writes the per-CLI
-> pools. That looks like the exact shape `shell-option.md` bans, and the
-> discriminator — always-on default versus opt-in behind an explicit enable — is
-> written down in the new section below because the ban's reasoning does not
-> carry across it. Also records the provenance guard, which makes the root-write
-> prohibition structural rather than reviewed-for). Prior: 2026-08-10 (commit
-> pending — TWO corrections. The call site was never `hmTransform.nix` +
-> `devenvTransform.nix`; both are 16-line re-exports of
-> `mkBackendTransform.nix`, which is where the merge AND the per-CLI baseline
-> option surface actually live, so step 2 of the checklist pointed at files that
-> declare nothing. And `ai.shell` now exists as a deliberate scalar EXCEPTION
-> resolving override-wins rather than collision-as-failure — recorded here so it
-> is not "fixed" into the covered pools table). Prior: 2026-08-04 (commit
-> pending — kiro's `agents` is still the CLI-specific-shape exemplar, but it is
-> a typed record now rather than raw JSON). Prior: 2026-08-01 (commit pending —
-> distinguishes portable hooks, whose per-event matcher-group lists
-> intentionally append, from key-identity pools). Prior: 2026-04-21 (commit
-> pending — refactor of ai-factory-collision plan §3.2). If you add a new shared
-> pool to `ai.*` or change how pools are merged across the L2↔L3 boundary and
-> this fragment isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-15 (commit pending — proxied MCP declarations now
+> carry explicit managed-unit ownership: a used root declaration owns one shared
+> proxy, runtime declarations own directly, reused ownership keys fail, and
+> unused root proxies do not materialize). Prior: 2026-08-15 (commit pending —
+> all six normalized keyed pools now support per-runtime replacement and null
+> tombstones; the former root↔runtime collision assertion is deleted, and
+> definition provenance now rejects two packages claiming one key at the same
+> root or runtime scope, including claims hidden by whole-option priority in a
+> combined evaluation). Prior: 2026-08-15 (commit pending — the list-shaped
+> instructions exception retired in favor of keyed rules). If you add a
+> normalized pool or change its cross-level merge, null behavior, or package
+> ownership rule and this fragment is not updated in the same commit, stop and
+> fix it.
 
-### Rule
+### Keyed-pool rule
 
-Duplicate keys across any shared `ai.*` pool are a **failure condition**, not a
-silent override. The factory used to merge the top-level pool with the per-CLI
-pool via `config.ai.<pool> // cfg.<pool>`, letting a later per-CLI contribution
-silently overwrite a same-name top-level entry. User directive: "mixing and
-collision should be a failure. we don't merge over keys."
+The six normalized keyed pools are:
 
-This rule applies only where a runtime supports the pool. Unsupported
-per-runtime options are absent, and root fanout to that runtime degrades before
-any merge or collision check.
+- `agents`
+- `environmentVariables`
+- `lspServers`
+- `mcpServers`
+- `rules`
+- `skills`
 
-### Where a MODULE in this repo may contribute
+Every root and per-runtime declaration uses `attrsOf (nullOr <valueType>)`. For
+a capable runtime, composition is:
 
-Consumers write whichever level they like. This repo's own modules may not: they
-write `ai.<cli>.<pool>` and **never** the root `ai.<pool>`, enforced by the
-provenance guard in `checks/module-eval.nix` (`rootPoolViolations`), which reads
-each root option's `definitionsWithLocations` and fails when a definition came
-from a file inside this flake. A consumer's inline config reports
-`<unknown-file>` and is therefore always allowed — the root level is theirs.
+```nix
+lib.filterAttrs (_: value: value != null) (rootPool // runtimePool)
+```
 
-The reason is not symmetry. Root pools are ADDITIVE and cannot be retracted per
-runtime, so once per-runtime negation exists a root contribution makes a
-consumer's negation evaluate perfectly cleanly and silently fail to negate
-anything. No error, no warning, and no visible difference except the feature
-they turned off still being on.
+This ordering is load-bearing:
 
-**This is in tension with `shell-option.md`'s "a module must NEVER contribute
-into `ai.<cli>.environmentVariables`", and the tension is real rather than a
-contradiction.** Both statements are about the same mechanism: `intersectAttrs`
-compares KEY PRESENCE and cannot see `mkDefault`, so a module contribution to a
-per-CLI pool turns a consumer's same-key root entry into a hard eval failure
-rather than yielding to it. The discriminator is **who pays**:
+1. root entries are portable defaults;
+2. a same-key runtime entry replaces the root entry **wholesale**;
+3. a same-key runtime null is a tombstone that suppresses the inherited entry;
+4. null is filtered only after precedence, so it cannot disappear before doing
+   that work.
 
-| module contribution                                         | reaches                  | a consumer's same-key root write                                            |
-| ----------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------- |
-| always-on default (`gitSshConfigWorkaround`)                | every consumer, unasked  | explodes on config nobody opted into — BANNED                               |
-| opt-in behind an explicit `enable` (`mkSkillPackageModule`) | only consumers who asked | explodes on config that consumer chose — ACCEPTED, documented at the option |
+Entries are atomic across levels. Records are never recursively merged. A second
+runtime with no same-key entry continues to inherit the root value; keep that
+positive control beside every per-pool negation test.
 
-An always-on default that collides is a trap: the consumer never asked for the
-contribution and the error names a pool they never wrote. An opt-in package's
-contribution is something the consumer switched on deliberately, so trading the
-root override for a per-runtime one (`ai.<runtime>.skills.<name>`) is a
-documented interface, not an ambush. `lib/ai/mkSkillPackageModule.nix` states
-that override key in its header; if you move a module's writes per-CLI, state it
-in yours too.
+The old `mergeWithCollisionCheck` helper and its root↔runtime assertions were a
+veto layered over data that already used the correct `root // runtime`
+precedence. They are intentionally gone. A root and runtime same-key pair is no
+longer a collision.
 
-### Covered pools
+Unsupported per-runtime options remain absent. Root fanout to an unsupported
+runtime degrades to `{}` before merging, based on the app record's
+`supportedPools` list.
 
-Applies to every attrset-shaped shared pool in `ai.*`:
+### Managed-proxy ownership exception
 
-- `ai.rules` / `ai.<cli>.rules`
-- `ai.skills` / `ai.<cli>.skills`
-- `ai.mcpServers` / `ai.<cli>.mcpServers`
-- `ai.lspServers` / `ai.<cli>.lspServers`
-- `ai.environmentVariables` / `ai.<cli>.environmentVariables`
-- `ai.agents` / `ai.<cli>.agents`
+An MCP pool entry with `proxy.enable` has a managed systemd unit in addition to
+its client value. The pool value still follows ordinary atomic replacement and
+null negation, but the unit needs one unambiguous owner:
 
-`ai.context` is single-valued per level but composes across levels: root content
-is concatenated first, followed by runtime content. This preserves both halves
-rather than applying pool-entry replacement or collision semantics.
+- a used top-level proxy declaration owns one shared unit and fans out only its
+  lowered credential-free client entry;
+- a runtime-scoped proxy declaration owns its unit directly; and
+- the MCP server key is also the unit ownership key, so two proxy declarations
+  may not reuse it across scopes. Use different keys even when the declarations
+  are byte-identical.
 
-`ai.shell` and the fields in normalized `ai.settings` are deliberate SCALAR
-exceptions and resolve the other way — per-runtime silently overrides the root,
-via `resolveOverride` rather than `mergeWithCollisionCheck`. Resolution happens
-per field, so one runtime may override `reasoningEffort` without replacing any
-future normalized sibling. A pool key names an independent entry, so overriding
-one loses data; a nullable scalar has nothing to lose, and making the pair
-collide would leave no way to express "this default, except here". See
-`shell-option.md` for the same precedence rule, and do not "fix" either surface
-into the table above.
+This is not a return of the retired root↔runtime pool collision assertion. A
+top-level proxied entry may still be replaced by an ordinary non-proxied runtime
+entry or suppressed by null. The failure applies only when two declarations both
+claim the same managed-proxy identity. A top-level owner inherited by no enabled
+capable runtime is not materialized. The shared owner aggregator dynamically
+discovers every runtime option subtree carrying the internal normalized-MCP
+capability marker. Do not infer capability from the `mcpServers` name alone: the
+generic public `mkAiApp` factory permits an unrelated same-named native option
+when the normalized pool is unsupported.
 
-`ai.hooks` is the deliberate attrset exception: event keys identify additive
-lifecycle streams, not replaceable entries. For a shared and runtime-specific
-definition of the same event, matcher-group lists concatenate in shared-first
-order. The top-level event vocabulary is restricted to the portable Claude/Codex
-intersection; runtime-only events stay under `ai.<cli>.hooks`.
+### Package ownership rule
+
+Two repo packages may not claim the same key in the same pool and scope. This is
+checked independently at root and at every per-runtime scope, so these are
+different ownership slots:
+
+```text
+ai.skills.example
+ai.claude.skills.example
+```
+
+`checks/module-eval.nix` reads each option's `definitionsWithLocations`, keeps
+repo-origin definitions, groups files under `packages/<name>/` as one package
+owner, and reports keys with more than one owner. Consumer inline config is
+`<unknown-file>` and is not treated as a package claim. Because
+`definitionsWithLocations` is exposed after whole-option priority filtering, the
+production guard aggregates the all-active evaluation with isolated evaluations
+for every pool-contributing integration. A package claim hidden by another
+package's `mkForce` in the combined tree therefore remains visible in its
+isolated probe. Keep that activation inventory aligned when a package starts
+writing a normalized pool.
+
+Both production backend trees have clean checks. Fixtures prove every pool fails
+at root and runtime scope, priority-shadowed claims still fail, two files under
+one package remain one owner, root and runtime scopes remain independent, and
+two different keys pass.
+
+This provenance check is separate from runtime replacement. It catches two
+packages competing within one scope; it does not mistake a root default and a
+runtime replacement for two owners.
+
+### Where repo modules contribute
+
+Repo modules write `ai.<runtime>.<pool>`, never the root `ai.<pool>`. The root
+level belongs to consumers as the portable default surface. A separate
+`rootPoolViolations` provenance guard enforces that boundary. Per-runtime null
+now lets a consumer undo an inherited root entry, but consumers should not have
+to retract package wiring that silently fanned out beyond the package's runtime
+ownership.
+
+Package-generated entries normally use a whole-entry `mkDefault`, so an explicit
+consumer value or null at that same per-runtime key wins through ordinary
+module-system priority before root/runtime composition happens. Do not put
+recursive defaults only on fields below a `nullOr` entry boundary: Nix must
+choose the null or record branch before those leaf priorities can arbitrate, and
+reports the option as both null and non-null instead of honoring the tombstone.
+
+Always-on process defaults such as the sandbox-safe SSH command still use the
+internal callback channel instead of writing a hidden normalized-pool
+definition. That keeps module plumbing out of the consumer-owned override pool
+and out of the package provenance guard.
+
+### Non-pool composition exceptions
+
+- `ai.context` is one content record per level. Root and runtime content
+  concatenate root-first into one runtime-named artifact.
+- `ai.hooks` is an event map whose matcher-group lists append shared-first.
+  Event keys identify additive lifecycle streams, not replaceable pool items.
+- `ai.shell` and normalized `ai.settings` fields are nullable scalars.
+  `resolveOverride` interprets runtime null as **inherit**, not delete; a
+  non-null runtime scalar wins.
+
+Do not generalize keyed-pool tombstones to these surfaces without redesigning
+and testing their distinct composition contracts.
 
 ### Implementation
 
-`lib.ai.mergeWithCollisionCheck` in `lib/ai/ai-common.nix`. The call site is
-`lib/ai/app/mkBackendTransform.nix` — **not** `hmTransform.nix` /
-`devenvTransform.nix`, which this fragment claimed until 2026-08-10. Those two
-are 16-line files that each `import ./mkBackendTransform.nix` with a differing
-`backend` key and declare nothing themselves, so the merge (and the per-CLI
-baseline option surface, below) is written once and shared:
+`lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
+filter. `lib/ai/app/mkBackendTransform.nix` calls it once for every supported
+pool and hands only the filtered `merged*` values to package callbacks. For MCP,
+`lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy declarations at each
+scope while preserving null tombstones; only those client views cross the
+root/runtime merge. `lib/ai/sharedOptions.nix` separately aggregates explicit
+proxy owners, rejects reused keys before the module system can collide, and
+emits only unique active units.
 
-```nix
-mergeCheck = poolName: topPool: cliPool:
-  aiCommon.mergeWithCollisionCheck {
-    inherit poolName topPool cliPool;
-    cliName = appRecord.name;
-  };
+`hmTransform.nix` and `devenvTransform.nix` are thin backend selectors; do not
+duplicate pool logic into them.
 
-rulesMerge = mergePool "rules" config.ai.rules cfg.rules;
-# ...
-collisionAssertions = rulesMerge.assertions ++ ... ;
-```
+### Adding a normalized pool
 
-The helper returns `{ merged, assertions }`. The merged shape matches the old
-`//` behavior (per-CLI wins) so downstream code keeps resolving until the module
-system checks assertions. Assertions aggregate into `config.assertions`
-**outside any mkIf guard**, so misconfigurations surface even when the CLI is
-toggled off.
-
-### Error message
-
-```
-<pool> '<key>' declared in both ai.<pool> and ai.<cli>.<pool> —
-collisions across shared ai.* pools are errors. Rename one or
-delete the duplicate.
-```
-
-### Adding a new shared pool
-
-1. Declare `ai.<pool>` in `lib/ai/sharedOptions.nix` (attrset shape).
-2. Declare `ai.<cli>.<pool>` in the mkAiApp baseline
-   (`lib/ai/app/mkBackendTransform.nix`, in the `options.ai.${appRecord.name}`
-   attrset, gated by `supportsPool`) OR in the per-CLI factory (for CLI-specific
-   shape, like kiro's `agents`, whose typed record models Kiro's own v3 agent
-   schema rather than the portable one).
-3. Add the pool to `supportedPools` for each app record that consumes it.
-4. Add `<pool>Merge = mergePool "<pool>" config.ai.<pool> cfg.<pool>;` to the
-   transform.
-5. Append `<pool>Merge.assertions` to `collisionAssertions`.
-6. Set `merged<Pool> = <pool>Merge.merged;`.
-7. Add collision and supported/unsupported option tests in
-   `checks/module-eval.nix`.
-
-### Pitfall
-
-**Do NOT merge with `//` anywhere in the factory.** That was the old shape — it
-silently overrode. If you see a new `//` on a pool merge during code review,
-route it through the helper instead. The existing tests cover the collision path
-per pool, but a brand-new pool added without the helper will evade detection
-until someone happens to configure a collision.
+1. Declare root and per-runtime values as `attrsOf (nullOr <valueType>)`.
+2. Add the capability to each consuming app record's `supportedPools`.
+3. Route root and runtime values through `mergePool` before any translation or
+   emission.
+4. Add the pool to `normalizedPoolNames` in `checks/module-eval.nix` so package
+   ownership is checked at root and every runtime scope.
+5. Test null-drop with a second-runtime inheritance control, wholesale same-key
+   replacement, package collision diagnostics via `lib.hasInfix`, and a
+   different-key package control.
 
 ### Debugging
 
-If a collision assertion fires and the user disagrees, inspect which side of the
-merge owns the offending key:
+For a missing emitted entry, inspect both levels before the callback:
 
 ```bash
-nix eval --impure --expr 'builtins.attrNames \
-  (builtins.fromJSON (builtins.readFile ./result/etc/<pool>.json))'
+nix eval .#homeConfigurations.<host>.config.ai.<pool>
+nix eval .#homeConfigurations.<host>.config.ai.<runtime>.<pool>
 ```
 
-Or look at `config.ai.<pool>` / `config.ai.<cli>.<pool>` via
-`nix eval .#homeConfigurations.<host>.config.ai.<pool>`.
+A runtime null at the key is an intentional deletion. For a package collision,
+the check diagnostic names the exact option path and all contributing module
+files; move one contribution to a distinct key or establish a single package
+owner rather than changing root/runtime precedence.

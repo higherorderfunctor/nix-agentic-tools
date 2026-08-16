@@ -56,171 +56,38 @@
   cfg = config.ai.${appRecord.name};
   supportedPools = appRecord.supportedPools or [];
   supportsPool = poolName: builtins.elem poolName supportedPools;
-  # Collision-as-failure merges — shared ai.<pool> vs ai.<cli>.<pool>.
-  # See lib/ai/ai-common.nix:mergeWithCollisionCheck. Assertions are
-  # emitted through config.assertions below.
-  mergeCheck = poolName: topPool: cliPool:
-    aiCommon.mergeWithCollisionCheck {
-      inherit poolName topPool cliPool;
-      cliName = appRecord.name;
-    };
-  emptyMerge = {
-    assertions = [];
-    merged = {};
-  };
+  # Per-runtime entries replace root entries atomically. Null is a tombstone
+  # filtered after precedence, so it suppresses a root entry at the same key.
   mergePool = poolName: topPool: cliPool:
     if supportsPool poolName
-    then mergeCheck poolName topPool cliPool
-    else emptyMerge;
-  agentsMerge = mergePool "agents" config.ai.agents (cfg.agents or {});
-  envMerge = mergePool "environmentVariables" config.ai.environmentVariables (cfg.environmentVariables or {});
-  lspMerge = mergePool "lspServers" config.ai.lspServers (cfg.lspServers or {});
-  rulesMerge = mergePool "rules" config.ai.rules cfg.rules;
-  serversMerge = mergePool "mcpServers" config.ai.mcpServers cfg.mcpServers;
-  skillsMerge = mergePool "skills" config.ai.skills cfg.skills;
-  collisionAssertions =
-    serversMerge.assertions
-    ++ skillsMerge.assertions
-    ++ rulesMerge.assertions
-    ++ lspMerge.assertions
-    ++ envMerge.assertions
-    ++ agentsMerge.assertions;
-  # ── Local credential-injecting proxy split ──────────────────────
-  # A server with `proxy.enable` has its url + headers moved into a
-  # systemd user daemon (lib/ai/mcpProxy.nix) and is handed to every
-  # ecosystem as a credential-free loopback entry. This runs BEFORE the
-  # per-app callback, so no factory — Kiro's credential preprocessor
-  # included — ever sees the secret for a proxied server, and the
-  # rendered entry passes `renderServer`'s non-Kiro credential guards
-  # because there is no credential left in it.
-  rawMergedServers = serversMerge.merged;
-  proxiedServers = mcpProxy.proxiedServers rawMergedServers;
-  mergedServers =
-    rawMergedServers
-    // lib.mapAttrs mcpProxy.clientEntry proxiedServers;
-
-  # SCOPE — Home Manager only, and in practice Linux only because the
-  # daemon is a systemd user service. Neither devenv nor Darwin is a
-  # WONTFIX; see the `proxy` option in mcpServer/commonSchema.nix.
-  #
-  # Gated on `backend` ALONE, deliberately. `backend` is a build-time
-  # parameter, so testing it forces nothing. Adding
-  # `pkgs.stdenv.hostPlatform.isLinux` here would force the `pkgs` module
-  # argument while the `config` attrset is being CONSTRUCTED, and `pkgs`
-  # resolves through `_module.args`, which requires `config` — an
-  # infinite recursion that surfaces far away, as
-  # "while evaluating the option `_module.freeformType'" in a factory
-  # that uses `pkgs.formats.json` for a freeform type. Every other `pkgs`
-  # use below sits inside an attribute VALUE and stays lazy.
-  #
-  # The Darwin gate is therefore documentation plus the devenv assertion,
-  # not a platform conditional. home-manager's own systemd.user options
-  # are already inert off Linux.
-  # `backend` ONLY. Testing `appRecord.pkgs != null` here looks harmless
-  # and is not: `appRecord.pkgs` is the factory's `pkgs` argument, so
-  # forcing it inside the `optionalAttrs` CONDITION forces that argument
-  # while `config` is being constructed. Under a harness that does not
-  # externally provide `pkgs` (checks/options-doc.nix), it resolves
-  # through `_module.args`, which requires `config` — the same infinite
-  # recursion, reached by a different route.
-  #
-  # A null `pkgs` is caught by the lazy assertion below instead, and
-  # `proxyUnits` is `{}` when nothing is proxied, so nothing forces it.
-  proxyIsSupported = backend == "hm";
-
-  # A proxied server with no `url` has nothing to forward to. The start
-  # script would export no url variable, then dereference it under
-  # `set -u` and die at SERVICE START with a bare unbound-variable error
-  # naming a generated variable — far from the option that is actually
-  # wrong. Reject it at eval, where the message can name the server.
-  proxiedWithoutUrl =
-    builtins.attrNames
-    (lib.filterAttrs (_: srv: (srv.url or null) == null) proxiedServers);
-
-  # A proxied server's TOP-LEVEL `headers` are the CLIENT's, and the
-  # client entry is an unauthenticated loopback url — so a credential
-  # there would be written into the client's config, which is the exact
-  # thing the proxy exists to prevent. Injected credentials belong in
-  # `proxy.headers`.
-  #
-  # This is also the migration message. Before 2026-08-13 top-level
-  # credential headers were ABSORBED into the daemon when `proxy.enable`
-  # was set; anything written against that shape must move. Failing loudly
-  # is deliberate — silently absorbing them is what made one key mean two
-  # things, and silently passing them through would leak.
-  proxiedWithCredentialHeaders =
-    builtins.attrNames
-    (lib.filterAttrs
-      (_: srv:
-        builtins.any
-        (v: builtins.isAttrs v && (v ? file || v ? helper))
-        (builtins.attrValues (srv.headers or {})))
-      proxiedServers);
-
-  proxyAssertions = [
-    {
-      assertion = proxiedWithoutUrl == [];
-      message = "ai.${appRecord.name}.mcpServers: ${lib.concatStringsSep ", " proxiedWithoutUrl} set `proxy.enable` but no `url`. The proxy forwards to that url, so there is nothing to proxy to — set `url` (a plain string or a credential), or drop `proxy.enable`.";
-    }
-    {
-      assertion = proxiedWithCredentialHeaders == [];
-      message = "ai.${appRecord.name}.mcpServers: ${lib.concatStringsSep ", " proxiedWithCredentialHeaders} set `proxy.enable` and put a CREDENTIAL in the server's top-level `headers`. On a proxied server those are the CLIENT's headers and are written into its config, which would hand it the credential the proxy exists to withhold. Move them to `proxy.headers`, where the daemon injects them and no client ever sees the value. (Top-level `headers` used to be absorbed into the daemon automatically; that behavior was removed so the key means one thing.)";
-    }
-    {
-      assertion = appRecord.pkgs != null || proxiedServers == {};
-      message = "ai.${appRecord.name}.mcpServers: ${lib.concatStringsSep ", " (builtins.attrNames proxiedServers)} set `proxy.enable`, but the ${appRecord.name} app record carries no `pkgs`, so the proxy daemon cannot be built. Pass `inherit pkgs;` to `mkAiApp` in that factory.";
-    }
-    {
-      assertion = backend != "devenv" || proxiedServers == {};
-      message = "ai.${appRecord.name}.mcpServers: ${lib.concatStringsSep ", " (builtins.attrNames proxiedServers)} set `proxy.enable`, which the devenv backend does not implement. The proxy is a systemd user service and devenv has no equivalent wired yet — deliberately out of scope, NOT a decision against it. Declare these servers in Home Manager, or drop `proxy.enable` and accept client-side credentials.";
-    }
-  ];
-
-  # One unit per proxied server, keyed by SERVER name rather than by app,
-  # so a server shared across two enabled ecosystems yields one daemon.
-  # Two apps seeing the same top-level server produce byte-identical
-  # definitions, which the module system merges; they differ only if the
-  # server itself differs, and that is a real conflict worth failing on.
-  proxyUnits = lib.mapAttrs' (name: srv: let
-    spec = mcpProxy.specFor name srv;
-  in
-    lib.nameValuePair "mcp-proxy-${name}" {
-      Unit = {
-        Description = "Credential-injecting MCP proxy for ${name}";
-        After = ["network.target"];
-      };
-      Service = {
-        ExecStart = "${mcpProxy.startScriptFor spec}";
-        Restart = "on-failure";
-        RestartSec = 5;
-        # Per-server attribution in the journal. Without this the visible
-        # identifier is the ExecStart store basename — the server name
-        # behind a 32-char hash that CHANGES ON EVERY REBUILD. That is
-        # load-bearing rather than cosmetic: the logs carry no request
-        # headers at all (see mcpProxy.nix), so the unit is the only thing
-        # that says which proxy a line came from.
-        SyslogIdentifier = "mcp-proxy-${name}";
-        # The decrypted values live only here and in the process's own
-        # memory: /proc/<pid>/environ is 0400, while /proc/<pid>/cmdline
-        # is world-readable — which is why nothing is passed as argv.
-        PrivateTmp = true;
-      };
-      Install.WantedBy = ["default.target"];
-    })
-  proxiedServers;
+    then aiCommon.mergePool {inherit topPool cliPool;}
+    else {};
+  mergedAgents = mergePool "agents" config.ai.agents (cfg.agents or {});
+  mergedEnvironmentVariables = mergePool "environmentVariables" config.ai.environmentVariables (cfg.environmentVariables or {});
+  mergedLspServers = mergePool "lspServers" config.ai.lspServers (cfg.lspServers or {});
+  mergedRules = mergePool "rules" config.ai.rules cfg.rules;
+  # Proxy ownership is resolved at the declaration scope BEFORE fanout.
+  # Top-level declarations contribute only their lowered credential-free
+  # client entries here; sharedOptions.nix emits their one managed unit.
+  # Runtime declarations lower independently and own their managed units
+  # directly. Null tombstones survive lowering and are filtered by mergePool.
+  topServers = mcpProxy.lowerClientEntries config.ai.mcpServers;
+  runtimeServers = mcpProxy.lowerClientEntries cfg.mcpServers;
+  mergedServers = mergePool "mcpServers" topServers runtimeServers;
+  mergedSkills = mergePool "skills" config.ai.skills cfg.skills;
 
   # One capability source per app record. A normalized pool is declared,
-  # collision-checked and fanned out only when the runtime consumes it.
+  # merged and fanned out only when the runtime consumes it.
   # Unsupported per-runtime writes therefore get an "option does not exist"
   # eval error, while unsupported root fanout deliberately degrades to the
   # pool's neutral value.
   #
   # Reading it off the RECORD keeps it a build-time parameter, in the
   # same category as `backend` above: it forces neither `config` nor
-  # the factory's `pkgs`, so it cannot reintroduce the `_module.args`
-  # recursion documented against `proxyIsSupported` below.
-  # Override-wins, NOT collision-as-failure — see the contrast note on
-  # `resolveOverride` in lib/ai/ai-common.nix. Left null when the app
+  # the factory's `pkgs`, so it cannot introduce an `_module.args`
+  # recursion while this module constructs `config`.
+  # Null inherits for this scalar; keyed-pool nulls are tombstones instead.
+  # Left null when the app
   # opts out, so a callback that ignores it cannot accidentally emit a
   # root-level shell the runtime never reads.
   resolvedShell =
@@ -248,8 +115,8 @@
 
   # Module-contributed process env, delivered on the internal channel rather
   # than through `ai.<cli>.environmentVariables` — see the note on
-  # `_sandboxSafeSshCommand` in sharedOptions.nix for why injecting into a
-  # collision-checked pool cannot work.
+  # `_sandboxSafeSshCommand` in sharedOptions.nix for why internal contributions
+  # do not belong in the consumer-facing override pool.
   #
   # Callers merge this UNDER `mergedEnvironmentVariables`, so an explicit
   # consumer entry for the same key wins. That ordering is the contract; do
@@ -259,11 +126,6 @@
     GIT_SSH_COMMAND = sandboxSshCommand;
   };
 
-  mergedSkills = skillsMerge.merged;
-  mergedRules = rulesMerge.merged;
-  mergedLspServers = lspMerge.merged;
-  mergedEnvironmentVariables = envMerge.merged;
-  mergedAgents = agentsMerge.merged;
   mergedContext =
     if supportsPool "context"
     then aiCommon.composeContent [config.ai.context cfg.context]
@@ -313,12 +175,20 @@ in {
       };
     }
     // lib.optionalAttrs (supportsPool "mcpServers") {
+      _normalizedPools.mcpServers = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        readOnly = true;
+        internal = true;
+        visible = false;
+        description = "Internal normalized MCP-pool capability marker used by shared proxy ownership.";
+      };
       mcpServers = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.submoduleWith {
+        type = lib.types.attrsOf (lib.types.nullOr (lib.types.submoduleWith {
           modules = [(import ../mcpServer/commonSchema.nix)];
-        });
+        }));
         default = {};
-        description = "${appRecord.name}-specific MCP servers (merged with top-level ai.mcpServers; collisions fail).";
+        description = "${appRecord.name}-specific MCP servers. Entries replace top-level ai.mcpServers at the same key; null suppresses an inherited server.";
       };
     }
     // lib.optionalAttrs (supportsPool "settings") {
@@ -351,10 +221,10 @@ in {
     }
     // lib.optionalAttrs (supportsPool "rules") {
       rules = lib.mkOption {
-        type = lib.types.attrsOf (appRecord.ruleModule or aiCommon.ruleModule);
+        type = lib.types.attrsOf (lib.types.nullOr (appRecord.ruleModule or aiCommon.ruleModule));
         default = {};
         apply = aiCommon.validateRules;
-        description = appRecord.rulesDescription or "${appRecord.name}-specific rules (merged with top-level ai.rules; collisions fail).";
+        description = appRecord.rulesDescription or "${appRecord.name}-specific rules. Entries replace top-level ai.rules at the same key; null suppresses an inherited rule.";
       };
       rulesDir = lib.mkOption {
         type = lib.types.nullOr aiCommon.dirOptionType;
@@ -364,17 +234,17 @@ in {
           file becomes one entry in `ai.${appRecord.name}.rules` keyed by
           the basename minus `.md`. Accepts a path literal or
           `{ path, filter? }` (filter: name → bool, default keeps `.md`).
-          Runs through the same collision-as-failure merge with
-          `ai.rules` as explicit per-CLI entries; other derivations may
-          still contribute to the same on-disk rules dir.
+          Entries use the same per-runtime replacement semantics as explicit
+          values; other derivations may still contribute to the same on-disk
+          rules directory.
         '';
       };
     }
     // lib.optionalAttrs (supportsPool "skills") {
       skills = lib.mkOption {
-        type = lib.types.attrsOf lib.types.path;
+        type = lib.types.attrsOf (lib.types.nullOr lib.types.path);
         default = {};
-        description = "${appRecord.name}-specific skills (merged with top-level ai.skills; collisions fail).";
+        description = "${appRecord.name}-specific skills. Entries replace top-level ai.skills at the same key; null suppresses an inherited skill.";
       };
       skillsDir = lib.mkOption {
         type = lib.types.nullOr aiCommon.dirOptionType;
@@ -404,41 +274,10 @@ in {
 
   config = lib.mkMerge [
     {_module.args.aiTransformers = appRecord.transformers;}
-    # Collision-as-failure: always evaluate (no mkIf cfg.enable
-    # guard) so misconfigurations surface even when the feature
-    # is toggled off.
-    {assertions = collisionAssertions ++ proxyAssertions;}
-    # The proxy daemon is emitted OUTSIDE `mkIf cfg.enable`, unlike the
-    # on-disk config. A client entry pointing at a dead loopback port is
-    # a confusing failure, so the daemon's lifetime follows the SERVER
-    # declaration rather than any one ecosystem being turned on.
-    #
-    # `optionalAttrs`, NOT `lib.mkIf`. This body is shared with the devenv
-    # backend, which has no `systemd` option at all, and `mkIf false` still
-    # places the attribute path in the definition tree — the module system
-    # then rejects it with "The option `systemd' does not exist" even though
-    # the condition is false. Only dropping the key outright works, and it
-    # is safe because `backend` is a build-time parameter, not config.
-    #
-    # The condition must be answerable WITHOUT touching `config` or the
-    # factory's `pkgs`. Both were tried and both are infinite recursions:
-    # `appRecord.pkgs != null` forces a module argument that resolves
-    # through `_module.args`, and `proxiedServers != {}` forces
-    # `config.ai.mcpServers` while `config` is being constructed. `backend`
-    # is a build-time parameter and forces nothing.
-    #
-    # Consequence: for the HM backend this key is ALWAYS defined, as `{}`
-    # when nothing is proxied. Any harness evaluating this transform must
-    # therefore declare a `systemd.user.services` option — `hmStubs` in
-    # checks/factory-eval.nix and checks/module-eval.nix do.
-    (lib.optionalAttrs proxyIsSupported {
-      systemd.user.services = proxyUnits;
-    })
     # L2b → L3 fanout for per-CLI Dir options. Expansion happens
-    # unconditionally (no mkIf cfg.enable) so the collision check
-    # still has visibility even when the CLI is disabled — the
-    # actual on-disk emission is still gated by `cfg.enable` inside
-    # the per-CLI factory's customConfig.
+    # unconditionally (no mkIf cfg.enable) so the normalized option value is
+    # complete even when the CLI is disabled. Actual on-disk emission remains
+    # gated by `cfg.enable` inside the per-CLI factory's customConfig.
     (lib.optionalAttrs (supportsPool "rules") (lib.mkIf (cfg.rulesDir != null) {
       ai.${appRecord.name}.rules = lib.mapAttrs (_: lib.mkDefault) (
         dirHelpers.rulesFromDir cfg.rulesDir

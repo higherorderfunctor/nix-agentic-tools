@@ -11,6 +11,7 @@
   ...
 }: let
   ai = import ../lib/ai {inherit lib;};
+  aiCommon = import ../lib/ai/ai-common.nix {inherit lib;};
 
   # Stub HM option types so mkAiApp's baseline home.file render
   # (introduced when the render pipeline was wired) can write to
@@ -18,9 +19,9 @@
   # hmStubs pattern in checks/module-eval.nix.
   hmStubs = {
     options = {
-      # The HM transform always defines this for the hm backend (it is
-      # `{}` when no server sets `proxy.enable`), because the condition
-      # cannot read `config` without recursing. See mkBackendTransform.
+      # sharedOptions detects this option path to select the Home Manager
+      # managed-proxy lifecycle. The real module supplies it; the factory
+      # harness declares the same boundary without importing Home Manager.
       systemd.user.services = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
@@ -42,6 +43,47 @@
     };
   };
 
+  devenvStubs = {
+    options = {
+      assertions = lib.mkOption {
+        type = lib.types.listOf lib.types.anything;
+        default = [];
+      };
+      files = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
+    };
+  };
+
+  factoryProxyServer = port: {
+    type = "http";
+    url = "https://upstream.example.test/mcp";
+    proxy = {
+      enable = true;
+      inherit port;
+    };
+  };
+
+  mkProxyTestRecord = name:
+    ai.app.mkAiApp {
+      inherit name pkgs;
+      supportedPools = ["mcpServers"];
+      transformers.markdown = ai.transformers.claude;
+      defaults.package = pkgs.hello;
+      options._observedServers = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+        internal = true;
+      };
+      hm.config = {mergedServers, ...}: {
+        ai.${name}._observedServers = mergedServers;
+      };
+      devenv.config = {mergedServers, ...}: {
+        ai.${name}._observedServers = mergedServers;
+      };
+    };
+
   mkTest = name: assertion:
     pkgs.runCommand "factory-test-${name}" {} ''
       ${
@@ -50,6 +92,99 @@
         else throw "FAIL: ${name}"
       }
     '';
+
+  # Exercise each mkBackendTransform call site through two real factory
+  # records. Runtime A suppresses one inherited key and replaces another;
+  # runtime B is the positive control that keeps both root entries. The
+  # callback is a synthetic emitter only so the exact post-merge pool remains
+  # observable without coupling this factory suite to one product's file
+  # format.
+  poolMergeContract = {
+    poolName,
+    rootValue,
+    runtimeValue,
+    checkRoot,
+    checkRuntime,
+  }: let
+    mergedArgByPool = {
+      agents = "mergedAgents";
+      environmentVariables = "mergedEnvironmentVariables";
+      lspServers = "mergedLspServers";
+      mcpServers = "mergedServers";
+      rules = "mergedRules";
+      skills = "mergedSkills";
+    };
+    mergedArg = mergedArgByPool.${poolName};
+    customPoolOptions = {
+      agents = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.nullOr ai.agent.agentType);
+        default = {};
+      };
+      environmentVariables = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
+        default = {};
+      };
+      lspServers = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
+        default = {};
+      };
+    };
+    runtimeA = "pool-a-${poolName}";
+    runtimeB = "pool-b-${poolName}";
+    mkRecord = name:
+      ai.app.mkAiApp {
+        inherit name;
+        supportedPools = [poolName];
+        transformers.markdown = ai.transformers.claude;
+        defaults.package = pkgs.hello;
+        options =
+          {
+            _observedPool = lib.mkOption {
+              type = lib.types.attrsOf lib.types.anything;
+              default = {};
+              internal = true;
+            };
+          }
+          // lib.optionalAttrs (builtins.hasAttr poolName customPoolOptions) {
+            ${poolName} = customPoolOptions.${poolName};
+          };
+        hm.config = args: {
+          ai.${name}._observedPool = args.${mergedArg};
+        };
+      };
+    evaluated = lib.evalModules {
+      modules = [
+        ai.sharedOptions
+        hmStubs
+        (ai.app.hmTransform (mkRecord runtimeA))
+        (ai.app.hmTransform (mkRecord runtimeB))
+        {
+          config.ai = {
+            ${poolName} = {
+              inherited = rootValue;
+              removed = rootValue;
+              replaced = rootValue;
+            };
+            ${runtimeA} = {
+              enable = true;
+              ${poolName} = {
+                removed = null;
+                replaced = runtimeValue;
+              };
+            };
+            ${runtimeB}.enable = true;
+          };
+        }
+      ];
+    };
+    observedA = evaluated.config.ai.${runtimeA}._observedPool;
+    observedB = evaluated.config.ai.${runtimeB}._observedPool;
+  in
+    !(observedA ? removed)
+    && checkRoot observedA.inherited
+    && checkRuntime observedA.replaced
+    && checkRoot observedB.removed
+    && checkRoot observedB.replaced;
 
   mkServiceServerDef = httpMode: meta: {
     meta =
@@ -88,6 +223,78 @@
       ];
     };
 in {
+  # ── Normalized keyed-pool replacement and negation ──────────────
+  factory-pool-agents-negation = mkTest "pool-agents-negation" (poolMergeContract {
+    poolName = "agents";
+    rootValue = {
+      description = "root";
+      instructions = "root";
+      tools = ["Read"];
+    };
+    runtimeValue = {
+      description = "runtime";
+      instructions = "runtime";
+    };
+    checkRoot = value:
+      value.description == "root" && value.tools == ["Read"];
+    checkRuntime = value:
+      value.description == "runtime" && value.tools == null;
+  });
+  factory-pool-environmentVariables-negation = mkTest "pool-environmentVariables-negation" (poolMergeContract {
+    poolName = "environmentVariables";
+    rootValue = "root";
+    runtimeValue = "runtime";
+    checkRoot = value: value == "root";
+    checkRuntime = value: value == "runtime";
+  });
+  factory-pool-lspServers-negation = mkTest "pool-lspServers-negation" (poolMergeContract {
+    poolName = "lspServers";
+    rootValue = {
+      command = "root-lsp";
+      args = ["--root-only"];
+    };
+    runtimeValue.command = "runtime-lsp";
+    checkRoot = value:
+      value.command == "root-lsp" && value.args == ["--root-only"];
+    checkRuntime = value:
+      value.command == "runtime-lsp" && value.args == ["--stdio"];
+  });
+  factory-pool-mcpServers-negation = mkTest "pool-mcpServers-negation" (poolMergeContract {
+    poolName = "mcpServers";
+    rootValue = {
+      type = "stdio";
+      command = "root-mcp";
+      args = ["--root-only"];
+    };
+    runtimeValue = {
+      type = "stdio";
+      command = "runtime-mcp";
+    };
+    checkRoot = value:
+      value.command == "root-mcp" && value.args == ["--root-only"];
+    checkRuntime = value:
+      value.command == "runtime-mcp" && value.args == [];
+  });
+  factory-pool-rules-negation = mkTest "pool-rules-negation" (poolMergeContract {
+    poolName = "rules";
+    rootValue = {
+      text = "root";
+      matcher = ["**/*.root"];
+    };
+    runtimeValue.text = "runtime";
+    checkRoot = value:
+      value.text == "root" && value.matcher == ["**/*.root"];
+    checkRuntime = value:
+      value.text == "runtime" && value.matcher == null;
+  });
+  factory-pool-skills-negation = mkTest "pool-skills-negation" (poolMergeContract {
+    poolName = "skills";
+    rootValue = ./fixtures/claude-agents;
+    runtimeValue = ./fixtures/kiro-steering;
+    checkRoot = value: value == ./fixtures/claude-agents;
+    checkRuntime = value: value == ./fixtures/kiro-steering;
+  });
+
   # ── Transformer shape tests ─────────────────────────────────────
   factory-transformer-claude-empty = mkTest "transformer-claude-empty" (
     ai.transformers.claude.render {text = "";} == ""
@@ -599,6 +806,145 @@ in {
       evaluated.config.ai.testapp._mergedServerCount == 2
   );
 
+  # Public mkAiApp records participate in centralized proxy ownership without
+  # appearing in the repo's first-party runtime registry. A used inherited
+  # owner must therefore materialize once and lower for the custom client.
+  factory-mkAiApp-custom-runtime-uses-shared-proxy-owner = mkTest "mkAiApp-custom-runtime-uses-shared-proxy-owner" (
+    let
+      record = mkProxyTestRecord "testapp";
+      evaluated = lib.evalModules {
+        specialArgs = {inherit pkgs;};
+        modules = [
+          ai.sharedOptions
+          hmStubs
+          (ai.app.hmTransform record)
+          {
+            config.ai = {
+              mcpServers.shared = factoryProxyServer 9509;
+              testapp.enable = true;
+            };
+          }
+        ];
+      };
+    in
+      evaluated.config.systemd.user.services ? mcp-proxy-shared
+      && evaluated.config.ai.testapp._observedServers.shared.url == "http://127.0.0.1:9509/"
+  );
+
+  # A custom runtime-scoped declaration is a direct owner, exactly like a
+  # first-party record, rather than merely a lowered dead-loopback client.
+  factory-mkAiApp-custom-runtime-emits-direct-proxy-owner = mkTest "mkAiApp-custom-runtime-emits-direct-proxy-owner" (
+    let
+      record = mkProxyTestRecord "testapp";
+      evaluated = lib.evalModules {
+        specialArgs = {inherit pkgs;};
+        modules = [
+          ai.sharedOptions
+          hmStubs
+          (ai.app.hmTransform record)
+          {
+            config.ai.testapp = {
+              enable = true;
+              mcpServers.direct = factoryProxyServer 9510;
+            };
+          }
+        ];
+      };
+    in
+      evaluated.config.systemd.user.services ? mcp-proxy-direct
+      && evaluated.config.ai.testapp._observedServers.direct.url == "http://127.0.0.1:9510/"
+  );
+
+  # Dynamic registration also closes the security boundary across arbitrary
+  # records: two direct owners cannot silently route through one daemon.
+  factory-mkAiApp-custom-runtime-proxy-key-reuse-fails = mkTest "mkAiApp-custom-runtime-proxy-key-reuse-fails" (
+    let
+      evaluated = lib.evalModules {
+        specialArgs = {inherit pkgs;};
+        modules = [
+          ai.sharedOptions
+          hmStubs
+          (ai.app.hmTransform (mkProxyTestRecord "first"))
+          (ai.app.hmTransform (mkProxyTestRecord "second"))
+          {
+            config.ai = {
+              first.mcpServers.shared = factoryProxyServer 9511;
+              second.mcpServers.shared = factoryProxyServer 9512;
+            };
+          }
+        ];
+      };
+      failed = builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions;
+    in
+      !(evaluated.config.systemd.user.services ? mcp-proxy-shared)
+      && builtins.any
+      (assertion:
+        lib.hasInfix "ai.first.mcpServers.shared" assertion.message
+        && lib.hasInfix "ai.second.mcpServers.shared" assertion.message)
+      failed
+  );
+
+  # Custom devenv runtimes fail closed at the same explicit lifecycle boundary
+  # as first-party ones; a lowered client entry cannot silently survive alone.
+  factory-mkAiApp-custom-runtime-devenv-proxy-rejected = mkTest "mkAiApp-custom-runtime-devenv-proxy-rejected" (
+    let
+      record = mkProxyTestRecord "testapp";
+      evaluated = lib.evalModules {
+        specialArgs = {inherit pkgs;};
+        modules = [
+          ai.sharedOptions
+          devenvStubs
+          (ai.app.devenvTransform record)
+          {
+            config.ai.testapp = {
+              enable = true;
+              mcpServers.direct = factoryProxyServer 9513;
+            };
+          }
+        ];
+      };
+      failed = builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions;
+    in
+      builtins.any
+      (assertion:
+        lib.hasInfix "ai.testapp.mcpServers" assertion.message
+        && lib.hasInfix "devenv lifecycle is tracked separately" assertion.message)
+      failed
+  );
+
+  # Same-named native options are independent when a normalized pool is not in
+  # supportedPools. Proxy discovery keys on the internal capability marker, not
+  # the public option name, so an arbitrary native shape remains untouched.
+  factory-mkAiApp-unsupported-native-mcp-option-not-registered = mkTest "mkAiApp-unsupported-native-mcp-option-not-registered" (
+    let
+      record = ai.app.mkAiApp {
+        inherit pkgs;
+        name = "testapp";
+        supportedPools = [];
+        transformers.markdown = ai.transformers.claude;
+        defaults.package = pkgs.hello;
+        options.mcpServers = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+        };
+      };
+      evaluated = lib.evalModules {
+        specialArgs = {inherit pkgs;};
+        modules = [
+          ai.sharedOptions
+          hmStubs
+          (ai.app.hmTransform record)
+          {config.ai.testapp.mcpServers = ["native-only"];}
+        ];
+      };
+      proxyServices = lib.filterAttrs (name: _: lib.hasPrefix "mcp-proxy-" name) evaluated.config.systemd.user.services;
+    in
+      evaluated.config.ai.testapp.mcpServers
+      == ["native-only"]
+      && proxyServices == {}
+      && builtins.all (assertion: assertion.assertion) evaluated.config.assertions
+  );
+
   factory-hmTransform-applies-to-record = mkTest "hmTransform-applies-to-record" (
     let
       record = ai.app.mkAiApp {
@@ -635,19 +981,6 @@ in {
         };
       };
       module = ai.app.devenvTransform record;
-      # devenv stub: `files` option instead of `home.file`
-      devenvStubs = {
-        options = {
-          assertions = lib.mkOption {
-            type = lib.types.listOf lib.types.anything;
-            default = [];
-          };
-          files = lib.mkOption {
-            type = lib.types.attrsOf lib.types.anything;
-            default = {};
-          };
-        };
-      };
       evaluated = lib.evalModules {
         modules = [
           ai.sharedOptions

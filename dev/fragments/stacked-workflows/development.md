@@ -1,6 +1,9 @@
 ## Stacked Workflows Development
 
-> **Last verified:** 2026-08-15 (commit pending — the router is now the keyed
+> **Last verified:** 2026-08-15 (commit pending — same-key root entries are now
+> portable defaults replaced by the package's per-runtime values; consumers may
+> override or null-suppress those `mkDefault` package entries). Prior:
+> 2026-08-15 (commit pending — the router is now the keyed
 > `stacked-workflows-router` rule, contributed at `mkDefault` so an ordinary
 > per-runtime consumer definition wins). Prior: 2026-08-14 (commit pending — the
 > contributions land on the PER-RUNTIME pools now, not the root ones, so the
@@ -47,12 +50,13 @@ per-`evalModules`, so the HM (user-global) and devenv (project-local)
 contributions are independent.
 
 It writes the per-runtime pools rather than root `ai.skills` because a root pool
-is additive and cannot be retracted per runtime — the provenance guard in
+belongs to consumers as a portable default surface — the provenance guard in
 `checks/module-eval.nix` enforces that. **The practical consequence for a
-consumer: override a skill at `ai.<runtime>.skills.<name>` or the router at
-`ai.<runtime>.rules.stacked-workflows-router`, not through the root pools.** A
-same-key root entry is a hard cross-level collision because the merge compares
-key presence and cannot see `mkDefault`.
+consumer: override or suppress a package skill at `ai.<runtime>.skills.<name>`
+and the router at `ai.<runtime>.rules.stacked-workflows-router`.** Package
+values use `mkDefault`, so an explicit value or null wins at that runtime scope.
+A same-key root entry is replaced by the package's per-runtime value rather than
+colliding.
 
 ### Building and Testing
 

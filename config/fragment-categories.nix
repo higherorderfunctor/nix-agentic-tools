@@ -66,8 +66,8 @@ _: {
         # fragments loaded is how the rule gets "simplified" back out.
         "checks/module-eval.nix"
         "lib/ai/agent.nix"
-        # Home of both merge helpers these fragments describe
-        # (mergeWithCollisionCheck, resolveOverride) — previously
+        # Home of both merge helpers these fragments describe (`mergePool`,
+        # `resolveOverride`) — previously
         # unscoped, so editing them loaded no guidance.
         "lib/ai/ai-common.nix"
         "lib/ai/app/**"
@@ -277,12 +277,18 @@ _: {
       sources = ["markdown-formatting"];
     };
     # mcp-secrets: SOPS/agenix-injectable http MCP headers + url, the Kiro
-    # `${env:VAR}` / activation-envsubst delivery, and `mcpWriteMode`. Scoped to
-    # the schema, the shared renderer, the Kiro secret preprocessor, and the
+    # `${env:VAR}` / activation-envsubst delivery, `mcpWriteMode`, and managed
+    # proxy ownership/lowering. Scoped to the ownership and transform paths,
+    # schema, shared renderer, proxy checks, Kiro secret preprocessor, and the
     # launcher wrapper that exports the decrypted values at runtime.
     mcp-secrets = {
       scopes = [
+        "checks/factory-eval.nix"
+        "checks/module-eval.nix"
+        "lib/ai/app/mkBackendTransform.nix"
+        "lib/ai/mcpProxy.nix"
         "lib/ai/mcpServer/**"
+        "lib/ai/sharedOptions.nix"
         "lib/mcp.nix"
         "packages/kiro-cli/lib/mcpSecrets.nix"
         "packages/kiro-cli/lib/mkKiro.nix"

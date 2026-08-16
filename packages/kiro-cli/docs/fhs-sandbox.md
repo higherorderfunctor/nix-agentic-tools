@@ -1,16 +1,18 @@
 # The nixpkgs FHS sandbox: what kiro can and cannot see
 
-> **Last verified:** 2026-08-14 (commit pending — adds the consumer-facing
-> `ai.kiro.extraPackages` path for making store-backed tools visible without
-> rebuilding the FHS root, records its wrapper/PATH precedence, and clarifies
-> that the FHS copy of `kiro-cli-chat` shadows the outer chat wrapper during
-> launcher dispatch. Adds a structural CI guard for the upstream `/nix`, init,
-> and inherited-PATH contracts). Prior: 2026-08-11 (commit pending — first
-> revision, measured against the 2.16.2 `fhsenv-rootfs` derivation by reading
-> the generated bwrap script and probing from inside the sandbox. Supersedes the
-> "has NOT been measured" caveat in [`launcher-argv.md`](launcher-argv.md)). If
-> you bump kiro-cli or touch `overlays/kiro-cli.nix`, re-measure rather than
-> assuming.
+> **Last verified:** 2026-08-15 (commit pending — clarifies that a null
+> Kiro-specific PATH tombstone suppresses the normalized root PATH before the
+> `extraPackages` prefix is built). Prior: 2026-08-14 (commit pending — adds the
+> consumer-facing `ai.kiro.extraPackages` path for making store-backed tools
+> visible without rebuilding the FHS root, records its wrapper/PATH precedence,
+> and clarifies that the FHS copy of `kiro-cli-chat` shadows the outer chat
+> wrapper during launcher dispatch. Adds a structural CI guard for the upstream
+> `/nix`, init, and inherited-PATH contracts). Prior: 2026-08-11 (commit pending
+> — first revision, measured against the 2.16.2 `fhsenv-rootfs` derivation by
+> reading the generated bwrap script and probing from inside the sandbox.
+> Supersedes the "has NOT been measured" caveat in
+> [`launcher-argv.md`](launcher-argv.md)). If you bump kiro-cli or touch
+> `overlays/kiro-cli.nix`, re-measure rather than assuming.
 
 **This is not Kiro's sandbox.** It is an upstream nixpkgs wrapper: since the
 package split, `pkgs.ai.kiro-cli` on Linux is a `symlinkJoin` of per-command
@@ -103,6 +105,8 @@ preserves the caller's PATH. If `ai.kiro.environmentVariables.PATH` is set, that
 explicit value becomes the preserved base instead. The wrapper references each
 package, so its store path is rooted; bubblewrap preserves the resulting PATH
 and bind-mounts `/nix`, so the tools remain executable inside the FHS root.
+Setting that Kiro-specific PATH entry to null suppresses a root
+`ai.environmentVariables.PATH`; the ambient PATH becomes the preserved base.
 
 This supplies commands missing from the synthesized root; it is not an override
 mechanism for commands already there. After the outer launcher runs, the FHS
