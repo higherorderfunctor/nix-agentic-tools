@@ -49,8 +49,11 @@ Concretely:
   with cwd = repo root, so the config must live where `bd` reads it _without_
   the env var (project-local `.beads/config.yaml` or the user-global config).
   Details in `docs/beads/bd-reference.md`.
-- Telemetry off is a hard requirement (`BD_DISABLE_EVENT_FLUSH=1`,
-  `BD_DISABLE_METRICS=1`, `DOLT_DISABLE_EVENT_FLUSH=1`).
+- Telemetry off is a hard requirement. `BD_DISABLE_EVENT_FLUSH=1` and
+  `BD_DISABLE_METRICS=1` disable Beads' flush and metrics paths;
+  `DOLT_DISABLE_EVENT_FLUSH=1` disables Dolt's network flush, while the stateful
+  devenv lifecycle owns and asserts Dolt's global `metrics.disabled=true`
+  setting to stop local event collection.
 - Hooks and wrappers that cannot resolve their workspace must **emit a signal**,
   never silently no-op — an env-delivery failure must not present as "beads just
   never primes."
@@ -155,13 +158,13 @@ normalized-interface boundary; rows explicitly identify present gaps:
 | beads surface        | target factory mechanism                                                                                                                                                                     |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `bd` on PATH         | ordinary HM/devenv package primitives outside the normalized program tree; every consumer uses this flake's `pkgs.ai.devTools.beads`, never a second pin                                     |
-| beads-mcp            | normalized MCP/settings pools, lowered by each runtime transformer to its supported native representation; unsupported runtimes are explicit exclusions                                      |
+| beads-mcp            | normalized `mcpServers` pool, including its typed server settings; runtime transformers lower that record for supported runtimes and exclude unsupported ones                                |
 | session-start prime  | normalized typed hooks, lowered by each runtime transformer; a missing native event is an explicit exclusion rather than a Beads-specific workaround                                         |
 | timer-gate check     | same normalized hook surface as prime (`bd gate check`)                                                                                                                                      |
-| onboard snippet      | normalized instructions pool                                                                                                                                                                 |
-| skill                | normalized skills pool                                                                                                                                                                       |
-| env / telemetry-off  | normalized settings/environment pools; fill normalization gaps instead of adding Beads-specific native settings                                                                              |
-| permissions          | normalized typed permissions pool with explicit per-runtime exclusions                                                                                                                       |
+| onboard snippet      | normalized `rules` or always-on `context`, selected by intended placement                                                                                                                    |
+| skill                | normalized `skills` pool                                                                                                                                                                     |
+| env / telemetry-off  | normalized `environmentVariables` only for runtimes that support it; dynamic `BEADS_DIR` stays in devenv commands, wrappers, and MCP env                                                     |
+| permissions          | supported runtime-native permission surfaces, typed where available, with explicit exclusions; there is no shared normalized permissions pool                                                |
 | project config files | existing devenv file primitives; #983's future `ai.<runtime>.files` native escape hatch is not an MVP dependency                                                                             |
 | Dolt credentials     | devenv-managed runtime secret material, never the Nix store; prefer `BEADS_DOLT_PASSWORD`. Never put secrets in database-level config (`bd config set`), because it replicates to the remote |
 | shared-server unit   | devenv process lifecycle only. Bind loopback-only by default, pin auth explicitly, and take `dolt` from the same pinned nixpkgs as the wrapper — one Dolt provenance everywhere              |
@@ -169,11 +172,14 @@ normalized-interface boundary; rows explicitly identify present gaps:
 Cross-cutting invariants the modules must encode:
 
 - **Normalized boundary**: the future convenience layer is `ai.programs.beads`,
-  never `ai.beads`. It composes normalized hooks, skills, instructions,
-  MCP/settings, and typed pools; runtime transformers perform supported native
-  lowering. `nativeSettings` remains the native lowering and escape layer, not a
-  merged normalized/native attribute set. Prefer filling a normalization gap
-  over adding a Beads-specific native workaround.
+  never `ai.beads`. `mkProgram` declares and resolves the portable program root
+  and runtime option tree; Beads modules use that resolved state to contribute
+  to the normalized hooks, skills, rules/context, MCP, settings, and other typed
+  pools each runtime supports. Runtime transformers perform supported native
+  lowering. `nativeSettings` is the runtime-shaped passthrough and arbitration
+  target for supported lowering, not a normalized pool or a merged
+  normalized/native attribute set. Prefer filling a normalization gap over
+  adding a Beads-specific native workaround.
 - **`BEADS_DIR` is a runtime value.** A clone-scoped path (derived from
   `git rev-parse --git-common-dir`) cannot be baked at Nix eval. Resolution
   happens in the devenv operational lifecycle or inside its generated commands.
@@ -318,10 +324,9 @@ ruling; owner **measure** = a probe or experiment settles it.
 - **OD-D4** (measure): structure enforcement for formula-stamped subgraphs
   (beads _formulas_ stamp templated subgraphs of issues when "poured"; whether
   the stamped structure is re-validated afterwards is unverified). Input: PB6.
-- **OD-D5** (operator): Kiro integration depth. The pinned stable v1.2.2 exposes
-  upstream Kiro setup, but the pure-data-engine discipline still declares Kiro
-  wiring through normalized repository surfaces. Decide how far past the MVP bar
-  to go.
+- **OD-D5** (operator): Kiro integration depth. The pinned stable v1.2.2 does
+  not expose a Kiro setup recipe, so any Kiro integration must be declared
+  through normalized repository surfaces. Decide how far past the MVP bar to go.
 - **OD-D6** (operator): teardown and data lifecycle. Disabling the modules
   leaves residue nothing currently cleans up: the shared-server data dir
   (`~/.beads/shared-server/`, every project's DB), project `.beads/` and
@@ -342,21 +347,22 @@ session against the phase 2 package. Feeds noted.
   rule in `docs/beads/bd-reference.md`.
 - **PB2** — shared-server duplicate-prefix connect: confirm documented refusal,
   capture the error shape. → OD-M3, module assertion text.
-- **PB3** — `bd where` from a linked git worktree with `BEADS_DIR` unset:
-  correct main-repo workspace reported? → devenv assertion viability.
-- **PB4** — `bd config show --json`: provenance field shape stable and
-  parseable? → the intended-versus-effective assertion task.
+- **PB3 — complete:** the durable contract confirms `bd where` from a linked
+  worktree with `BEADS_DIR` unset resolves the shared main-repository workspace.
+- **PB4 — complete:** the durable contract records parseable
+  `bd config show --json` provenance for intended-versus-effective assertions.
 - **PB5** — custom issue types: `bd create -t <custom>` accepted? (Premise is
   carried, unverified research: a reported 2026-03 defect had `bd types` listing
   and `bd update` accepting a type that `bd create` rejected — see the
   reference's carried-unverified list.) → taxonomy expressibility.
 - **PB6** — formula enforcement: pour a formula, create a bare violating child
   under the stamped epic — accepted? → OD-D4.
-- **PB7** — daemon existence: observe processes around bd invocations;
-  `BD_NO_DAEMON` semantics; any background writer? → OD-M3 (second-writer risk).
-- **PB8** — server-mode auto-commit empirics: confirm off-by-default, resolve
-  the flag-vs-config default discrepancy, characterize `bd vc commit`
-  granularity and Dolt history shape after mixed writes. → OD-M3, OD-M4.
+- **PB7 — partial:** process observation found no automatic recovery supervisor;
+  `BD_NO_DAEMON` semantics and any residual background-writer path remain to be
+  qualified. → OD-M3 (second-writer risk).
+- **PB8 — complete/superseded by #991:** server-mode store mutations can create
+  Dolt commits independently of the CLI auto-commit flag; #991 qualifies the
+  resulting serialized commit-if-needed and history boundary. → OD-M3, OD-M4.
 - **PB9** — emBEADings `neighbors` quality spot-check once a real backlog is
   seeded (≥30 issues): does the static model catch known paraphrase pairs? →
   OD-D3.
@@ -369,8 +375,8 @@ session against the phase 2 package. Feeds noted.
   `git config beads.role`; timer-gate batch semantics; Dolt session-branches as
   an isolation mechanism; the FULLTEXT ID-tokenization hazard. →
   `docs/beads/bd-reference.md` unverified tags.
-- **PB11** — version-skew guard: does an older bd actually refuse a newer-schema
-  DB, and with what error? → the one-flake-owns-the-version rule.
+- **PB11 — complete:** packaged bd 1.0.3 refuses a 1.2.2-schema database; the
+  durable contract records the failure. → the one-flake-owns-the-version rule.
 - **PB12** — beads-mcp env surface at the pinned version: confirm which of
   `BEADS_DIR`/`BEADS_DB`/`BEADS_WORKING_DIR` the server reads and their
   precedence, and the bd-version-skew tolerance of a non-lockstep pairing. →
@@ -379,11 +385,10 @@ session against the phase 2 package. Feeds noted.
   any downgrade path exists, and whether `bd export --all` → fresh init →
   `bd import` recovers across a schema-version boundary. → OD-P4, the
   one-way-door risk.
-- **PB14** — dolt hygiene: does the pinned `dolt` emit metrics/events by default
-  and what disables them (dolt historically ships DoltHub usage metrics with its
-  own off switch); and bd's tolerance for dolt version skew (wrap vs server unit
-  must share one provenance either way). → OD-P2's guarantee actually holding,
-  the shared-server unit design.
+- **PB14 — partial:** Beads event/metrics controls, Dolt no-flush behavior, and
+  the stateful `metrics.disabled=true` requirement are settled; bd/Dolt version
+  skew remains unqualified. The wrapper and server unit must share one Dolt
+  provenance either way. → the shared-server unit design.
 - **Remote experiments** — the CAS/encryption experiments in
   `docs/beads/dolt-git-remotes.md` (the cheap URL-passthrough check first — it
   is a prerequisite of the gcrypt race — then the race, then the rest). → phase
@@ -395,8 +400,8 @@ session against the phase 2 package. Feeds noted.
   `bd` (`.bd-wrapped` present, no double wrap — the OD-P2 bake extends the one
   wrap in place, so the count stays one); `bd --version` matches the sidecar. If
   OD-P2 landed, also assert the baked env: run the wrapped `bd` under `env -i`
-  and confirm all three telemetry/no-flush variables are set (the wrap-count
-  check alone cannot catch a misspelled `--set`).
+  and confirm both Beads telemetry controls plus the Dolt no-flush variable are
+  set (the wrap-count check alone cannot catch a misspelled `--set`).
 - `nix flake check` — structural gates (`update-targets-parity`,
   `cache-hit-parity`, `go-floor-drift` via `passthru.goFloor`) all discover the
   new package without manual test edits.

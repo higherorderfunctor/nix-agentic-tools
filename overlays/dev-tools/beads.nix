@@ -66,7 +66,11 @@ in
         then "${lib.removeSuffix ")$" flag}|TestInstallHooksBeads_WorktreeAccess)$"
         else flag;
     in
-      if builtins.length inherited == 1 && lib.hasPrefix "-skip=^(" (builtins.head inherited)
+      if
+        builtins.length inherited
+        == 1
+        && lib.hasPrefix "-skip=^(" (builtins.head inherited)
+        && lib.hasSuffix ")$" (builtins.head inherited)
       then map extendSkip inherited
       else throw "beads: nixpkgs checkFlags no longer has the expected single anchored skip regex";
 
