@@ -152,11 +152,20 @@ run_bd() {
 
 with_repository_lock() {
   local lock_fd rc=0
-  exec {lock_fd}>"$repository_lock"
-  flock "$lock_fd"
+  if ! exec {lock_fd}>"$repository_lock"; then
+    fail "could not open the repository lock"
+  fi
+  if ! flock "$lock_fd"; then
+    exec {lock_fd}>&- || :
+    fail "could not acquire the repository lock"
+  fi
   "$@" || rc="$?"
-  flock -u "$lock_fd"
-  exec {lock_fd}>&-
+  if ! flock -u "$lock_fd"; then
+    fail "could not release the repository lock"
+  fi
+  if ! exec {lock_fd}>&-; then
+    fail "could not close the repository lock"
+  fi
   return "$rc"
 }
 
@@ -280,7 +289,7 @@ bd_version="$(
 )"
 dolt_version="$(run_dolt_in "$probe_root/dolt-data" version | head -n 1)"
 [[ $bd_version == "bd version 1.2.2 (dev)" ]] || fail "unexpected bd: $bd_version"
-[[ $dolt_version == "dolt version 2.2.3" ]] || fail "unexpected Dolt: $dolt_version"
+[[ $dolt_version == "dolt version 2.2.4" ]] || fail "unexpected Dolt: $dolt_version"
 
 git -C "$probe_root/ledger.git" init -q --bare
 if git ls-remote --exit-code --heads "file://$probe_root/ledger.git" \
@@ -392,15 +401,24 @@ metadata_database="$(jq -er '.dolt_database | select(type == "string" and length
   "$probe_root/module-root/.beads/metadata.json")"
 [[ $metadata_database == "$database_name" ]] ||
   fail "metadata database does not match the initialized database"
-exec {pusher_lock_fd}>"$repository_lock"
-flock "$pusher_lock_fd"
+if ! exec {pusher_lock_fd}>"$repository_lock"; then
+  fail "could not open the raw-pusher repository lock"
+fi
+if ! flock "$pusher_lock_fd"; then
+  exec {pusher_lock_fd}>&- || :
+  fail "could not acquire the raw-pusher repository lock"
+fi
 if flock -n "$repository_lock" true; then
   fail "competing pusher acquired the repository singleton lock"
 fi
 run_dolt_in "$probe_root/dolt-data/$metadata_database" \
   push --set-upstream origin main >"$probe_root/raw-push.out" 2>&1
-flock -u "$pusher_lock_fd"
-exec {pusher_lock_fd}>&-
+if ! flock -u "$pusher_lock_fd"; then
+  fail "could not release the raw-pusher repository lock"
+fi
+if ! exec {pusher_lock_fd}>&-; then
+  fail "could not close the raw-pusher repository lock"
+fi
 flock -n "$repository_lock" true || fail "pusher lock remained held after release"
 
 mapfile -t cache_repositories < <(

@@ -39,6 +39,28 @@ fail() {
   exit 1
 }
 
+acquire_repository_lock() {
+  local target="$1" acquired_fd
+  if ! exec {acquired_fd}>"$repository_lock"; then
+    fail "could not open the repository lock"
+  fi
+  if ! flock "$acquired_fd"; then
+    exec {acquired_fd}>&- || :
+    fail "could not acquire the repository lock"
+  fi
+  printf -v "$target" '%s' "$acquired_fd"
+}
+
+release_repository_lock() {
+  local acquired_fd="$1"
+  if ! flock -u "$acquired_fd"; then
+    fail "could not release the repository lock"
+  fi
+  if ! exec {acquired_fd}>&-; then
+    fail "could not close the repository lock"
+  fi
+}
+
 port_is_open() {
   (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
 }
@@ -277,8 +299,18 @@ status_count() {
 }
 
 remote_ref() {
-  git -C "$ledger_path" rev-parse --verify refs/dolt/data 2>/dev/null ||
+  local exists_rc
+  if git -C "$ledger_path" show-ref --exists refs/dolt/data 2>/dev/null; then
+    git -C "$ledger_path" show-ref --verify --hash refs/dolt/data
+    return
+  else
+    exists_rc="$?"
+  fi
+  if ((exists_rc == 2)); then
     printf '%s\n' absent
+    return
+  fi
+  return "$exists_rc"
 }
 
 assert_source_git_unchanged() {
@@ -350,38 +382,33 @@ commit_activation_config() {
 locked_init() {
   local label="$1" lock_fd
   shift
-  exec {lock_fd}>"$repository_lock"
-  flock "$lock_fd"
+  acquire_repository_lock lock_fd
   if ! run_bd "$@" >"$scenario_root/$label.out" 2>&1; then
     sed 's/^/init: /' "$scenario_root/$label.out" >&2
     fail "$label failed"
   fi
   commit_activation_config "$label"
   assert_clean_valid "$label"
-  flock -u "$lock_fd"
-  exec {lock_fd}>&-
+  release_repository_lock "$lock_fd"
 }
 
 locked_bootstrap() {
   local label="$1" lock_fd
+  acquire_repository_lock lock_fd
   [[ ! -e $active_data/$active_database ]] ||
     fail "$label did not start from an absent database"
-  exec {lock_fd}>"$repository_lock"
-  flock "$lock_fd"
   if ! run_bd bootstrap --non-interactive --json >"$scenario_root/$label.out" 2>&1; then
     sed 's/^/bootstrap: /' "$scenario_root/$label.out" >&2
     fail "$label failed"
   fi
   assert_clean_valid "$label"
-  flock -u "$lock_fd"
-  exec {lock_fd}>&-
+  release_repository_lock "$lock_fd"
 }
 
 locked_mutation() {
   local label="$1" cwd="$2" actor="$3" before_head after_head lock_fd output
   shift 3
-  exec {lock_fd}>"$repository_lock"
-  flock "$lock_fd"
+  acquire_repository_lock lock_fd
   assert_clean_valid "$label incoming state"
   before_head="$(head_hash)"
   if ! output="$(run_bd_as "$cwd" "$actor" "$@" \
@@ -393,14 +420,13 @@ locked_mutation() {
   if ! run_bd_as "$active_cwd" "$actor" dolt commit -m "contract: $label" \
     >"$scenario_root/$label-commit.out" 2>&1; then
     sed 's/^/commit: /' "$scenario_root/$label-commit.out" >&2
-    fail "$label checkpoint failed"
+    fail "$label commit-if-needed normalization failed"
   fi
   commit_activation_config "$label"
   after_head="$(head_hash)"
   [[ $after_head != "$before_head" ]] || fail "$label did not advance Dolt history"
   assert_clean_valid "$label"
-  flock -u "$lock_fd"
-  exec {lock_fd}>&-
+  release_repository_lock "$lock_fd"
   printf '%s\n' "$output"
 }
 
@@ -411,14 +437,12 @@ dirty_preflight_control() {
   run_dolt_in "$active_data/$active_database" log --oneline \
     >"$scenario_root/dirty-preflight-history.before"
 
-  exec {lock_fd}>"$repository_lock"
-  flock "$lock_fd"
+  acquire_repository_lock lock_fd
   run_dolt_in "$active_data/$active_database" sql -r json \
     -q "UPDATE issues SET notes = 'controlled dirty-state residue' WHERE id = '$issue_id';" \
     >"$scenario_root/dirty-preflight-residue.out"
   [[ $(status_count) != 0 ]] || fail "dirty preflight control did not create residue"
-  flock -u "$lock_fd"
-  exec {lock_fd}>&-
+  release_repository_lock "$lock_fd"
 
   if (
     trap - EXIT
@@ -448,7 +472,9 @@ pusher_preflight() {
   [[ $(constraint_count) == 0 ]] || return 1
   [[ $(event_orphan_count) == 0 ]] || return 1
   [[ $(dependency_orphan_count) == 0 ]] || return 1
-  actual_remote="$(remote_ref)"
+  if ! actual_remote="$(remote_ref)"; then
+    return 1
+  fi
   [[ $actual_remote == "$expected_remote" ]] || return 1
   expected_url="git+file://$ledger_path"
   run_bd dolt remote list --json |
@@ -459,22 +485,26 @@ pusher_preflight() {
 }
 
 publish_locked() {
-  local expected_remote="$1" label="$2" lock_fd published_remote
-  exec {lock_fd}>"$repository_lock"
-  flock "$lock_fd"
+  local expected_remote="$1" label="$2" lock_fd published_remote push_rc=0
+  acquire_repository_lock lock_fd
   if ! pusher_preflight "$expected_remote"; then
-    flock -u "$lock_fd"
-    exec {lock_fd}>&-
+    release_repository_lock "$lock_fd"
     return 1
   fi
   run_dolt_in "$active_data/$active_database" push --set-upstream origin main \
-    >"$scenario_root/$label.out" 2>&1
-  published_remote="$(remote_ref)"
+    >"$scenario_root/$label.out" 2>&1 || push_rc="$?"
+  if ((push_rc != 0)); then
+    release_repository_lock "$lock_fd"
+    return "$push_rc"
+  fi
+  if ! published_remote="$(remote_ref)"; then
+    release_repository_lock "$lock_fd"
+    return 1
+  fi
   [[ $published_remote != absent ]] || fail "$label did not create the remote ledger ref"
   [[ $published_remote != "$expected_remote" ]] || fail "$label did not advance the remote ref"
   assert_clean_valid "$label"
-  flock -u "$lock_fd"
-  exec {lock_fd}>&-
+  release_repository_lock "$lock_fd"
   printf '%s\n' "$published_remote"
 }
 
@@ -539,13 +569,11 @@ run_scenario() {
   linked_expected_head="$(git -C "$scenario_root/linked" rev-parse HEAD)"
   source_expected_config="$scenario_root/source-config.expected"
   git -C "$scenario_root/source" config --local --list | sort >"$source_expected_config"
-  exec {lock_fd}>"$repository_lock"
-  flock "$lock_fd"
+  acquire_repository_lock lock_fd
   if flock -n "$repository_lock" true; then
     fail "a competing client acquired the repository lock"
   fi
-  flock -u "$lock_fd"
-  exec {lock_fd}>&-
+  release_repository_lock "$lock_fd"
   flock -n "$repository_lock" true || fail "the repository lock remained held"
 
   activate_phase primary "$((scenario_index * 3))" true
@@ -702,7 +730,7 @@ dolt_version="$(
     timeout --kill-after=5 --signal=TERM 120 "$dolt_bin" version | sed -n '1p'
 )"
 [[ $bd_version == "bd version 1.2.2 (dev)" ]] || fail "unexpected bd: $bd_version"
-[[ $dolt_version == "dolt version 2.2.3" ]] || fail "unexpected Dolt: $dolt_version"
+[[ $dolt_version == "dolt version 2.2.4" ]] || fail "unexpected Dolt: $dolt_version"
 
 printf 'bd=%s\n' "$bd_version"
 printf 'dolt=%s\n' "$dolt_version"

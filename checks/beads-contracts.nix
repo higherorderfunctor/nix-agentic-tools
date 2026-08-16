@@ -121,7 +121,7 @@ in
     expect_eq "packaged bd version" "bd version 1.2.2 (dev)" "$(${qualifiedBeads}/bin/bd --version)"
     expect_eq \
       "packaged Dolt version" \
-      "dolt version 2.2.3" \
+      "dolt version 2.2.4" \
       "$(HOME="$probe/version-home" ${dolt}/bin/dolt version | head -n 1)"
     expect_eq "comparison bd version" "bd version 1.0.3 (dev)" "$(${beads}/bin/bd --version)"
 
