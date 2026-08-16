@@ -911,28 +911,30 @@ aggregate but skips its dependency leaves.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-08-03 (commit pending — adds reverse package-to-target
-> completeness coverage using derivation, source, update-script, flake-input,
-> package-exemption, and registry-exemption properties). Prior: 2026-08-03
-> (commit pending — limits package DAG edges to initialization plus explicit
-> target-specific constraints and removes base-checkout finalizers that could
-> not observe isolated update branches). Prior: 2026-08-03 (commit pending —
-> repairs the always-uploaded hidden update-report artifact and makes its
-> absence fail loudly). Prior: 2026-08-03 (commit pending — records the fifth
-> required `devenv-test` context in the update workflow's auto-merge contract).
-> Prior: 2026-08-03 (commit pending — moves the `gh` and `glab` update targets
-> with their overlay files from `generic/` to `dev-tools/`). Prior: 2026-08-02
-> (commit pending — the `llm-agents` input update regenerates Semble's
-> upstream-template snapshot through its separate extraction derivation, while
-> human-reviewed content hashes intentionally remain manual and make CI stop on
-> unreviewed drift). Prior: 2026-07-27 (commit pending — re-points the
-> reference-submodule-shape pointer from the gitignored
-> `private/slice-fixture/lib/concerns.nix` at the tracked in-tree registries
-> `lib/fragments-registry.nix` and `lib/checks.nix`; also deletes the hardcoded
-> "29 packages — 16 main-tracking + 13 binary" target count, which had gone
-> stale, in favour of a derivation command; prior 2026-07-24, dissolves
-> `config/update-matrix.nix` into `config.update.targets`, now the single source
-> of truth). If you touch `dev/scripts/update-*.sh`,
+> **Last verified:** 2026-08-15 (commit pending — registers the sidecar-owned
+> stable Beads release as a binary update target without introducing a second
+> source tracker). Prior: 2026-08-03 (commit pending — adds reverse
+> package-to-target completeness coverage using derivation, source,
+> update-script, flake-input, package-exemption, and registry-exemption
+> properties). Prior: 2026-08-03 (commit pending — limits package DAG edges to
+> initialization plus explicit target-specific constraints and removes
+> base-checkout finalizers that could not observe isolated update branches).
+> Prior: 2026-08-03 (commit pending — repairs the always-uploaded hidden
+> update-report artifact and makes its absence fail loudly). Prior: 2026-08-03
+> (commit pending — records the fifth required `devenv-test` context in the
+> update workflow's auto-merge contract). Prior: 2026-08-03 (commit pending —
+> moves the `gh` and `glab` update targets with their overlay files from
+> `generic/` to `dev-tools/`). Prior: 2026-08-02 (commit pending — the
+> `llm-agents` input update regenerates Semble's upstream-template snapshot
+> through its separate extraction derivation, while human-reviewed content
+> hashes intentionally remain manual and make CI stop on unreviewed drift).
+> Prior: 2026-07-27 (commit pending — re-points the reference-submodule-shape
+> pointer from the gitignored `private/slice-fixture/lib/concerns.nix` at the
+> tracked in-tree registries `lib/fragments-registry.nix` and `lib/checks.nix`;
+> also deletes the hardcoded "29 packages — 16 main-tracking + 13 binary" target
+> count, which had gone stale, in favour of a derivation command; prior
+> 2026-07-24, dissolves `config/update-matrix.nix` into `config.update.targets`,
+> now the single source of truth). If you touch `dev/scripts/update-*.sh`,
 > `dev/scripts/resolve-overlay-file.sh`, `config/generate-update-ninja.nix`,
 > `config/update-targets.nix`, `lib/update.nix`, any
 > `overlays/**/<pkg>.update.nix`, or `.github/workflows/update.yml` and this

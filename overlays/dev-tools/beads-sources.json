@@ -1,0 +1,9 @@
+{
+  "version": "1.2.2",
+  "src": {
+    "url": "https://github.com/gastownhall/beads/archive/v1.2.2.tar.gz",
+    "hash": "sha256-HSZ1z4WaHQDPomW6nNs8iUnld36BuHnOVaODD5mxY00="
+  },
+  "vendorHash": "sha256-WWEwGpCwMPD7jaz02zN745RQQqYTQttehbcT3J9hayM=",
+  "goFloor": "1.26.2"
+}

@@ -132,12 +132,13 @@ _: {
     # off npm's `latest-<N>` dist-tag). Same --use-update-script contract
     # either way — the script owns its sidecar.
     #
-    # gh / gluetun / oh-my-posh / otel-tui are on the same ghArchiveUpdateScript
-    # contract but carry a SECOND hash: `vendorHash`, which a Go package cannot
-    # derive from a lockfile the way importCargoLock derives one from
-    # Cargo.lock. mkUpdateScript rebuilds the sidecar from scratch on every
-    # write, so each of them threads `extraExtract = "${fixVendorHash}"` to put
-    # the vendor hash back immediately afterwards. Nothing extra is needed here.
+    # beads / gh / gluetun / oh-my-posh / otel-tui are on the same
+    # ghArchiveUpdateScript contract but carry a SECOND hash: `vendorHash`,
+    # which a Go package cannot derive from a lockfile the way importCargoLock
+    # derives one from Cargo.lock. mkUpdateScript rebuilds the sidecar from
+    # scratch on every write, so each of them threads
+    # `extraExtract = "${fixVendorHash}"` to put the vendor hash back immediately
+    # afterwards. Nothing extra is needed here.
     #
     # bruno and glab are the same --use-update-script contract with a THIRD
     # variation: their src hash cannot come from a prefetch at all, because
@@ -153,6 +154,7 @@ _: {
     # `vu.glLatestVersionCmd` instead. That is entirely inside the
     # updateScript and invisible to this registry.
     arkenfox = {flags = ["--use-update-script" "--override-filename" "overlays/generic/arkenfox.nix"];};
+    beads = {flags = ["--use-update-script" "--override-filename" "overlays/dev-tools/beads.nix"];};
     bruno = {flags = ["--use-update-script" "--override-filename" "overlays/generic/bruno.nix"];};
     btop = {flags = ["--use-update-script" "--override-filename" "overlays/generic/btop.nix"];};
     bun = {flags = ["--use-update-script" "--override-filename" "overlays/generic/bun.nix"];};

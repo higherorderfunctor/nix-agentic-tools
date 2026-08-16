@@ -251,6 +251,9 @@
   };
   # ── Dev tools ──────────────────────────────────────────────────────
   devToolDrvs = {
+    beads = import ./dev-tools/beads.nix {
+      inherit inputs final;
+    };
     gh = import ./dev-tools/gh.nix {
       inherit inputs final;
     };
