@@ -17,8 +17,11 @@ zero-registration extension: only its own files name it, while discovery still
 composes its library value, local check, and registry entry.
 
 The `collisions/` scenarios isolate package, library, overlay, local-check, and
-registry collisions so one early failure cannot mask another. The root check
-also drives invalid-owner, unknown-entry, empty-owner, symlink, and false-local-
-check cases through a standalone evaluator and checks their diagnostics. These
-are fixture facts, not public API promises: the loader remains import-only and
-the repository root retains aggregation, policy, and cross-facet assertions.
+registry collisions so one early failure cannot mask another. Library probes
+also cover an explicit empty namespace colliding with a scalar in both owner
+orders, while the compatible fixture proves that an empty namespace can be
+extended by another owner. The root check also drives invalid-owner, unknown-
+entry, empty-owner, symlink, and false-local-check cases through a standalone
+evaluator and checks their diagnostics. These are fixture facts, not public API
+promises: the loader remains import-only and the repository root retains
+aggregation, policy, and cross-facet assertions.

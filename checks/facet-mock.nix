@@ -3,7 +3,22 @@
   pkgs,
   self,
 }: let
-  inherit (lib) all attrNames concatMap concatMapStringsSep escapeShellArgs filter hasPrefix sort;
+  inherit
+    (lib)
+    all
+    attrNames
+    concatMap
+    concatMapStringsSep
+    escapeShellArgs
+    filter
+    genAttrs
+    hasPrefix
+    listToAttrs
+    mapAttrs
+    nameValuePair
+    optionalAttrs
+    sort
+    ;
   system = pkgs.stdenv.hostPlatform.system;
   fixtureRoot = ./fixtures/facets;
   compatibleRoot = fixtureRoot + "/compatible";
@@ -30,27 +45,72 @@
 
   compatibleEntries = builtins.readDir compatibleRoot;
   expectedOwnerNames = sort builtins.lessThan (filter (name: compatibleEntries.${name} == "directory") (attrNames compatibleEntries));
-  expectedContributionPaths = ownerName: let
+  expectedContributions = ownerName: let
     ownerRoot = compatibleRoot + "/${ownerName}";
     entries = builtins.readDir ownerRoot;
-    directNames = filter (name: builtins.elem name ["checks.nix" "lib.nix" "overlay.nix" "registry.nix"]) (attrNames entries);
-    nestedPaths = container:
-      if entries ? ${container}
-      then map (name: ownerRoot + "/${container}/${name}") (attrNames (builtins.readDir (ownerRoot + "/${container}")))
+    present = name: entries ? ${name};
+    modulesPath = ownerRoot + "/modules";
+    packagesPath = ownerRoot + "/packages";
+    moduleNames =
+      if present "modules"
+      then attrNames (builtins.readDir modulesPath)
+      else [];
+    packageNames =
+      if present "packages"
+      then attrNames (builtins.readDir packagesPath)
       else [];
   in
-    map (name: ownerRoot + "/${name}") directNames
-    ++ nestedPaths "modules"
-    ++ nestedPaths "packages";
-  actualContributionPaths = contributions:
-    concatMap (
-      name:
+    optionalAttrs (present "checks.nix") {checks = toString (ownerRoot + "/checks.nix");}
+    // optionalAttrs (present "lib.nix") {lib = toString (ownerRoot + "/lib.nix");}
+    // optionalAttrs (moduleNames != []) {
+      modules = genAttrs moduleNames (name: toString (modulesPath + "/${name}"));
+    }
+    // optionalAttrs (present "overlay.nix") {overlay = toString (ownerRoot + "/overlay.nix");}
+    // optionalAttrs (packageNames != []) {
+      packages = map (name: toString (packagesPath + "/${name}")) packageNames;
+    }
+    // optionalAttrs (present "registry.nix") {registry = toString (ownerRoot + "/registry.nix");};
+  normalizeContributions = contributions:
+    mapAttrs (
+      name: value:
         if name == "modules"
-        then builtins.attrValues contributions.${name}
+        then mapAttrs (_: toString) value
         else if name == "packages"
-        then contributions.${name}
-        else [contributions.${name}]
-    ) (attrNames contributions);
+        then map toString value
+        else toString value
+    )
+    contributions;
+  expectedLocalCheckClaims =
+    concatMap (
+      owner: let
+        source = compatibleRoot + "/${owner}/checks.nix";
+      in
+        if builtins.pathExists source
+        then let
+          checks = import source {
+            inherit lib pkgs system world;
+          };
+        in
+          map (key: {
+            inherit key owner source;
+          }) (attrNames checks)
+        else []
+    )
+    expectedOwnerNames;
+  expectedLocalCheckProvenance = listToAttrs (map (
+      claim:
+        nameValuePair claim.key {
+          inherit (claim) owner;
+          source = toString claim.source;
+        }
+    )
+    expectedLocalCheckClaims);
+  actualLocalCheckProvenance =
+    mapAttrs (_: check: {
+      inherit (check) owner;
+      source = toString check.source;
+    })
+    world.localChecks;
 
   rootPolicy = import (fixtureRoot + "/root/overlay-policy.nix");
   composedOverlay = lib.composeExtensions world.overlay rootPolicy;
@@ -94,12 +154,14 @@
         owner:
           toString owner.path
           == toString (compatibleRoot + "/${owner.name}")
-          && sort builtins.lessThan (map toString (actualContributionPaths owner.contributions))
-          == sort builtins.lessThan (map toString (expectedContributionPaths owner.name))
+          && normalizeContributions owner.contributions
+          == expectedContributions owner.name
       )
       world.owners;
     facet-lib-composition = world.facetLib.bravo.greeting == "hello-from-bravo";
-    facet-local-checks = builtins.seq world.localChecks true;
+    facet-local-checks =
+      actualLocalCheckProvenance
+      == expectedLocalCheckProvenance;
     overlay-final-prev-and-root-policy =
       overlayResult.alpha-from-final
       == "alpha:alpha:bravo"
@@ -174,12 +236,12 @@
 
   collisionProbe = registry: key: {
     force ? registry,
+    name ? registry,
     scenario ? registry,
   }: let
     facetsDir = collisionRoot + "/${scenario}";
   in {
-    inherit facetsDir force;
-    name = registry;
+    inherit facetsDir force name;
     expected = [
       "facet collision in ${registry} at '${key}'"
       "one ("
@@ -200,6 +262,14 @@
   probes = [
     (collisionProbe "checks" "shared" {})
     (collisionProbe "lib" "shared.__facetLeaf" {})
+    (collisionProbe "lib" "shared" {
+      name = "lib-empty-branch-first";
+      scenario = "lib-empty-branch-first";
+    })
+    (collisionProbe "lib" "shared" {
+      name = "lib-empty-leaf-first";
+      scenario = "lib-empty-leaf-first";
+    })
     (collisionProbe "overlay" "shared.value" {})
     (collisionProbe "packages" "shared" {})
     (collisionProbe "registry" "shared" {})

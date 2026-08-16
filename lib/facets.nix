@@ -42,14 +42,15 @@
   isMergeable = value: isAttrs value && !lib.isDerivation value;
   emptyTree = {
     children = {};
-    kind = "branch";
+    kind = "root";
   };
   isLeaf = node: node.kind == "leaf";
-  isEmptyBranch = node: !isLeaf node && attrNames node.children == [];
+  isRoot = node: node.kind == "root";
 
   toClaimTree = claim: value:
     if isMergeable value
     then {
+      inherit (claim) owner source;
       children = mapAttrs (_: nested: toClaimTree claim nested) value;
       kind = "branch";
     }
@@ -59,21 +60,17 @@
       kind = "leaf";
     };
 
-  firstLeaf = tree:
-    if isLeaf tree
-    then tree
-    else firstLeaf tree.children.${builtins.head (sortNames (attrNames tree.children))};
-
   mergeTrees = registry: keyPath: left: right:
-    if isEmptyBranch left
+    if isRoot left
     then right
-    else if isEmptyBranch right
+    else if isRoot right
     then left
     else if isLeaf left || isLeaf right
-    then collision registry keyPath (firstLeaf left) (firstLeaf right)
+    then collision registry keyPath left right
     else let
       names = sortNames (unique ((attrNames left.children) ++ (attrNames right.children)));
     in {
+      inherit (left) owner source;
       children = genAttrs names (
         name:
           if left.children ? ${name} && right.children ? ${name}
