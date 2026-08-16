@@ -287,6 +287,7 @@ instruction building.
 <!-- prettier-ignore -->
 | Feature | Without Nix | Home-Manager | DevEnv |
 |---------|-------------|--------------|--------|
+| Living workflow skill | Copy skill/ | `ai.programs.living-workflow.enable` | `ai.programs.living-workflow.enable` |
 | Stacked workflow skills | Copy skills/ | `ai.programs.stacked-workflows.enable` | `ai.programs.stacked-workflows.enable` |
 | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
 | Unified MCP config | Manual native config | `ai.mcpServers.*` (all five CLIs) | `ai.mcpServers.*` (all five CLIs) |
@@ -548,6 +549,21 @@ services.mcp-servers.servers = {
   context7-mcp.enable = true;
 };
 ```
+
+</details>
+
+<details>
+<summary><strong>Living Workflow</strong></summary>
+
+```nix
+ai.programs.living-workflow.enable = true;
+
+# Optional runtime override: null inherits, false disables one runtime.
+ai.codex.programs.living-workflow.enable = false;
+```
+
+Migrating from an older release: replace `living-workflow.enable` with
+`ai.programs.living-workflow.enable`.
 
 </details>
 

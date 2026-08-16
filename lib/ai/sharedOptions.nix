@@ -158,12 +158,12 @@ in {
       }));
       default = {};
       description = ''
-        MCP servers fanned out to every enabled AI app: Claude, Codex,
-        Copilot, and Kiro. Per-app entries replace root entries at the same
-        key; null suppresses an inherited server for that runtime. A used
-        top-level proxied server owns one shared managed proxy and fans out only
-        its credential-free client entry. Runtime-scoped proxied servers own
-        their managed proxies directly. Because the server key is also the
+        MCP servers fanned out to every enabled AI app: Claude, Codex, Copilot,
+        Kimchi, and Kiro. Per-app entries replace root entries at the same key;
+        null suppresses an inherited server for that runtime. A used top-level
+        proxied server owns one shared managed proxy and fans out only its
+        credential-free client entry. Runtime-scoped proxied servers own their
+        managed proxies directly. Because the server key is also the
         managed-proxy identity, proxy owners must use distinct keys.
       '';
     };

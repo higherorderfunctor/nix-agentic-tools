@@ -3,7 +3,8 @@
 > **Last verified:** 2026-08-16 (commit pending — stacked-workflows and
 > living-workflow now share `ai.programs.*` enable declarations across HM and
 > devenv through `mkSkillPackageModule`; stacked-workflows' machine-wide
-> `gitPreset` remains an explicitly HM-only top-level companion). Prior:
+> `gitPreset` remains an explicitly HM-only top-level companion; runtime
+> submodule and enable-gate examples cover all five ecosystems). Prior:
 > 2026-08-15 (commit pending — Semble's program-factory relocation preserves one
 > HM/devenv declaration and lowering path; identical runtime package variants
 > share one wrapper/cache while divergent variants use a collision-free
@@ -69,7 +70,7 @@ declare the real type: `types.submodule`, `types.nullOr`, `types.attrsOf`,
 `types.enum`, `types.attrTag`, `types.listOf`, etc.
 
 **Submodules as containers.** Per-ecosystem config lives in a submodule:
-`ai.claude`, `ai.copilot`, `ai.kiro` are each a
+`ai.claude`, `ai.codex`, `ai.copilot`, `ai.kimchi`, and `ai.kiro` are each a
 `types.submodule { options = { enable; package; ... }; }`. The submodule is the
 logical grouping — do not flatten per-ecosystem options into the top level.
 
@@ -93,10 +94,10 @@ consumers can override).
 
 ### Gating and mkIf patterns
 
-**Per-CLI enable is the SOLE gate.** Each `ai.{claude,copilot,kiro}.enable` is
-its own mkIf block. There is **no master `ai.enable`** — it was dropped in
-commit f2e911c after causing a silent no-op bug (see `ai-module-fanout` fragment
-for the full story).
+**Per-CLI enable is the SOLE gate.** Each
+`ai.{claude,codex,copilot,kimchi,kiro}.enable` is its own mkIf block. There is
+**no master `ai.enable`** — it was dropped in commit f2e911c after causing a
+silent no-op bug (see `ai-module-fanout` fragment for the full story).
 
 The `config` block shape:
 
@@ -104,12 +105,15 @@ The `config` block shape:
 config = mkMerge [
   { assertions = [...]; }                # Always evaluated
   (mkIf cfg.claude.enable  { ... })      # Each CLI independent
+  (mkIf cfg.codex.enable   { ... })
   (mkIf cfg.copilot.enable { ... })
+  (mkIf cfg.kimchi.enable  { ... })
   (mkIf cfg.kiro.enable    { ... })
 ];
 ```
 
-**Each per-CLI block also flips the corresponding `programs.<cli>.enable`:**
+**A per-CLI block flips the corresponding `programs.<cli>.enable` when an
+upstream module exists:**
 
 ```nix
 (mkIf cfg.claude.enable {
@@ -118,10 +122,11 @@ config = mkMerge [
 })
 ```
 
-`mkDefault` lets the consumer override with
-`programs.claude-code.enable = false` explicitly if they want to turn it off
-while keeping `ai.claude.enable = true` for other reasons. In practice they
-don't — it's an escape hatch.
+Codex and Kimchi have no upstream Home Manager modules, so their blocks install
+their selected packages directly. For upstream-backed runtimes, `mkDefault` lets
+the consumer override with `programs.claude-code.enable = false` explicitly if
+they want to turn it off while keeping `ai.claude.enable = true` for other
+reasons. In practice they don't — it's an escape hatch.
 
 **hasModule checks upstream availability**:
 

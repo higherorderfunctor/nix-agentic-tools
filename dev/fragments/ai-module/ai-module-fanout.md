@@ -3,10 +3,10 @@
 > **Last verified:** 2026-08-16 (commit pending — `mkSkillPackageModule` now
 > consumes the `ai.programs.*` factory, moving stacked-workflows and
 > living-workflow enablement into portable plus per-runtime B4 option trees
-> while preserving their per-runtime pool writes; the skills inventory now
-> includes Kimchi; stacked-workflows' machine-wide `gitPreset` remains an
-> HM-only top-level companion). Prior: 2026-08-15 (commit pending — the
-> `ai.programs.*` factory generates portable defaults and capability-gated
+> while preserving their per-runtime pool writes; runtime inventories now cover
+> all five registered ecosystems; stacked-workflows' machine-wide `gitPreset`
+> remains an HM-only top-level companion). Prior: 2026-08-15 (commit pending —
+> the `ai.programs.*` factory generates portable defaults and capability-gated
 > runtime override trees from one program specification; Semble is its first
 > consumer and uses program-level enable negation instead of runtime selectors;
 > divergent runtime package customizations use collision-free command aliases
@@ -175,13 +175,14 @@ sole gate for that ecosystem's fanout:
 | `ai.claude.enable = true`  | claude fanout block + `programs.claude-code.enable = mkDefault true`  |
 | `ai.codex.enable = true`   | Codex package + guidance, skills, settings, agents, hooks fanout      |
 | `ai.copilot.enable = true` | copilot fanout block + `programs.copilot-cli.enable = mkDefault true` |
+| `ai.kimchi.enable = true`  | Kimchi package + context, MCP, settings, skills, environment fanout   |
 | `ai.kiro.enable = true`    | kiro fanout block + `programs.kiro-cli.enable = mkDefault true`       |
 
 Where an upstream module exists, each per-CLI block implicitly flips its enable
-via `mkDefault`, so consumers don't have to set enable twice. Codex has no
-upstream module: its factory installs `ai.codex.package` directly in each
-backend. For CLIs that do have an upstream module, a consumer can still override
-the corresponding `programs.<cli>.enable` explicitly.
+via `mkDefault`, so consumers don't have to set enable twice. Codex and Kimchi
+have no upstream modules: their factories install the selected package directly
+in each backend. For CLIs that do have an upstream module, a consumer can still
+override the corresponding `programs.<cli>.enable` explicitly.
 
 ### Why there's no master switch
 
@@ -232,11 +233,12 @@ password dialog in an unattended harness session.
 
 The ai module fans out TWO kinds of configuration:
 
-**Per-CLI options** (live inside `ai.{claude,codex,copilot,kiro}.*`):
+**Per-CLI options** (live inside `ai.{claude,codex,copilot,kimchi,kiro}.*`):
 
 - `ai.claude.package` / `ai.codex.package` / `ai.copilot.package` /
-  `ai.kiro.package` — package override; Codex installs it directly while the
-  established runtimes route it through their native factory wiring.
+  `ai.kimchi.package` / `ai.kiro.package` — package override; Codex and Kimchi
+  install it directly while the other runtimes route it through their native
+  factory wiring.
 - `ai.kiro.extraPackages` — store-backed tools added to Kiro's runtime PATH in
   both backends. It is Kiro-specific because it closes the Linux `buildFHSEnv`
   visibility gap; it remains independent of `ai.shell`, which selects an
@@ -467,13 +469,13 @@ location.
 
 ### Documentation parity is capability parity
 
-Do not describe every top-level pool as mechanically reaching all four runtimes.
+Do not describe every top-level pool as mechanically reaching all five runtimes.
 The shared option descriptions and generated README capability matrix must name
-Codex either as a consumer or as an intentional exclusion. In particular, Codex
-has no native LSP registry; its `shell_environment_policy` filters child-command
-inheritance rather than setting the Codex process environment; legacy Markdown
-agents cannot become native Codex TOML; and only the Claude/Codex lifecycle
-intersection belongs in portable hooks.
+each registered runtime as a consumer or an intentional exclusion. In
+particular, Codex has no native LSP registry; its `shell_environment_policy`
+filters child-command inheritance rather than setting the Codex process
+environment; legacy Markdown agents cannot become native Codex TOML; and only
+the Claude/Codex lifecycle intersection belongs in portable hooks.
 
 `lib/options-doc.nix` evaluates both complete published module trees and
 produces their CommonMark/JSON references. The old mdbook/NuschtOS site is gone,
