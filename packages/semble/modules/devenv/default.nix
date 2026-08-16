@@ -14,6 +14,6 @@ import ../common.nix {
       ${lib.getExe cacheGuard}
     '';
   };
-  installPackage = package: {packages = [package];};
+  installPackages = packages: {inherit packages;};
   relocatesCache = true;
 }

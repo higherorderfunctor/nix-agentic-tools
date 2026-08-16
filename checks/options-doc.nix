@@ -45,6 +45,7 @@
       "ai.codex.nativeSettings"
       "ai.codex.package"
       "ai.codex.profiles"
+      "ai.codex.programs"
       "ai.codex.projectDocMaxBytes"
       "ai.codex.rules"
       "ai.codex.rulesDir"
@@ -120,9 +121,9 @@ in {
     ' "${hmJson}" | "$sort" -u > actual-codex-option-roots
     "$diff" -u "${expectedCodexRoots}" actual-codex-option-roots
 
-    # Semantic-agent `.instructions` fields and the separate
-    # `semble.instructions` feature remain valid. Only the normalized root and
-    # per-runtime guidance surface was retired.
+    # Semantic-agent `.instructions` fields and Semble's nested program feature
+    # remain valid. Only the normalized root and per-runtime guidance surface
+    # was retired.
     ${lib.concatMapStringsSep "\n" (name: ''
         ! "$jq" --exit-status --arg name "${name}" 'has($name)' "${hmJson}" >/dev/null
         ! "$jq" --exit-status --arg name "${name}" 'has($name)' "${devenvJson}" >/dev/null

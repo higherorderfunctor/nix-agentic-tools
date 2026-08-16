@@ -15,6 +15,6 @@ import ../common.nix {
       )
     '';
   };
-  installPackage = package: {home.packages = [package];};
+  installPackages = packages: {home.packages = packages;};
   relocatesCache = true;
 }

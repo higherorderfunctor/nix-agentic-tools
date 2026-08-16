@@ -7,12 +7,14 @@ applyTo: "flake.nix,devenv.nix"
 
 ## Binary Cache Maintenance
 
-> **Last verified:** 2026-08-14 (commit pending — the "CI package-build runners
-> only" rule below was being HONOURED IN FORM AND BROKEN IN FACT. The numtide
-> substituter sat on ci.yml's installer step, and cachix-action runs after it
-> and exports NIX_USER_CONF_FILES pointing at a conf that ASSIGNS `substituters`
-> rather than extending it, so `extra_nix_config` was discarded before anything
-> built. Measured on run 31865858320:
+> **Last verified:** 2026-08-15 (commit pending — the interactive closure gate
+> moved unchanged from `semble.enable` to the capability-gated
+> `ai.codex.programs.semble.enable` path). Prior: 2026-08-14 (commit pending —
+> the "CI package-build runners only" rule below was being HONOURED IN FORM AND
+> BROKEN IN FACT. The numtide substituter sat on ci.yml's installer step, and
+> cachix-action runs after it and exports NIX_USER_CONF_FILES pointing at a conf
+> that ASSIGNS `substituters` rather than extending it, so `extra_nix_config`
+> was discarded before anything built. Measured on run 31865858320:
 > `substituters = https://cache.nixos.org https://nix-agentic-tools.cachix.org`
 > on BOTH legs, no numtide key in trusted-public-keys, and `cache.numtide.com`
 > nowhere in `nix config show`. Semble was therefore never substituted from
@@ -65,6 +67,7 @@ Cachix job, parses real AWK and jq samples, and exercises mapped-file discovery
 and language selection. This proves customization without publishing a
 grammar-set-specific Semble derivation.
 
-This is separate from `devenv test` closure policy. `semble.enable = !isCI`
-keeps the interactive package out of that cold runtime-test shell; it does not
-remove or weaken the flake check above.
+This is separate from `devenv test` closure policy.
+`ai.codex.programs.semble.enable = !isCI` keeps the interactive package out of
+that cold runtime-test shell; it does not remove or weaken the flake check
+above.

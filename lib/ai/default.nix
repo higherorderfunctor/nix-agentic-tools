@@ -12,6 +12,7 @@ in {
   materialize = import ./materialize.nix {inherit lib;};
   mcpServer = import ./mcpServer {inherit lib;};
   mcpServers = import ./mcpServers {inherit lib;};
+  program = import ./program.nix {inherit lib;};
   # Module function — imported unevaluated so consumers can pass it directly
   # to `lib.evalModules { modules = [ lib.ai.sharedOptions ... ]; }`.
   sharedOptions = import ./sharedOptions.nix;

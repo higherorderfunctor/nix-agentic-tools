@@ -1,17 +1,19 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-08-15 (commit pending — the `mcp-secrets` category now
-> follows managed-proxy ownership through its shared option aggregator,
-> declaration-scope lowering transform, proxy helper, and module/factory
-> behavioral checks). Prior: 2026-08-15 (commit pending — the ai-module routing
-> comment now names `mergePool` after the retired collision helper; category
-> scopes and sources are unchanged). Prior: 2026-08-15 (commit pending —
-> generated README guidance now uses typed context and keyed rules, including
-> Semble's single exported `rule` helper; retired instruction helpers no longer
-> appear). Prior: 2026-08-15 (commit pending — generated README guidance now
-> distinguishes the closed normalized `ai.<runtime>.settings` surface from
-> runtime-shaped `nativeSettings`, including Codex security and Claude
-> environment examples). Prior: 2026-08-05 (commit pending — adds the
+> **Last verified:** 2026-08-15 (commit pending — Semble's co-located
+> architecture document is now a registered package-sourced category scoped to
+> `packages/semble/**`). Prior: 2026-08-15 (commit pending — the `mcp-secrets`
+> category now follows managed-proxy ownership through its shared option
+> aggregator, declaration-scope lowering transform, proxy helper, and
+> module/factory behavioral checks). Prior: 2026-08-15 (commit pending — the
+> ai-module routing comment now names `mergePool` after the retired collision
+> helper; category scopes and sources are unchanged). Prior: 2026-08-15 (commit
+> pending — generated README guidance now uses typed context and keyed rules,
+> including Semble's single exported `rule` helper; retired instruction helpers
+> no longer appear). Prior: 2026-08-15 (commit pending — generated README
+> guidance now distinguishes the closed normalized `ai.<runtime>.settings`
+> surface from runtime-shaped `nativeSettings`, including Codex security and
+> Claude environment examples). Prior: 2026-08-05 (commit pending — adds the
 > `mcp-services` category so the managed-service bind-address contract follows
 > its schema, server metadata, Home Manager implementation, and behavioral
 > checks). Prior: 2026-08-03 (commit pending — generated README guidance now

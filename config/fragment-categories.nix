@@ -77,6 +77,9 @@ _: {
         # so it is exactly where collision-semantics' "where a MODULE may
         # contribute" rule has to be read before editing. Previously unscoped.
         "lib/ai/mkSkillPackageModule.nix"
+        # Portable program option-tree factory. Like `mkAiApp`, it declares
+        # capability-gated runtime paths and resolves root/runtime values.
+        "lib/ai/program.nix"
         # The runtime registry that file and sharedOptions.nix share.
         "lib/ai/runtimes.nix"
         "lib/ai/sharedOptions.nix"
@@ -396,6 +399,18 @@ _: {
         "fragment-pipeline"
         "generation-architecture"
         "update-pipeline"
+      ];
+    };
+    # semble: program-factory integration, customization, cache ownership, and
+    # the shared HM/devenv backend contract.
+    semble = {
+      scopes = ["packages/semble/**"];
+      sources = [
+        {
+          location = "package";
+          name = "semble";
+          dir = "semble";
+        }
       ];
     };
     stacked-workflows = {

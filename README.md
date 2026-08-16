@@ -293,7 +293,7 @@ instruction building.
 | Unified MCP config | Manual native config | `ai.mcpServers.*` (all four CLIs) | `ai.mcpServers.*` (all four CLIs) |
 | Typed MCP settings | N/A | Shared schema + native extensions | Shared schema + native extensions |
 | MCP credentials | Manual env vars | `plain`, `file`, or `helper` | `plain`, `file`, or `helper` |
-| Semble search integrations | Manual install | `semble.*` (Claude + Codex + Kiro) | Same; project-native paths |
+| Semble search integrations | Manual install | `ai.programs.semble` (Claude + Codex + Kiro) | Same; project-native paths |
 | Git tool packages | Install manually | Overlay + `nix build` | Overlay + `nix build` |
 | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
 | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
@@ -379,27 +379,30 @@ guidance, and `semble-search` subagent, then separately enable whichever
 runtimes should consume them:
 
 ```nix
-semble.enable = true;
+ai.programs.semble.enable = true;
 
 ai.claude.enable = true;
 ai.codex.enable = true;
 ai.kiro.enable = true;
 ```
 
-Each feature and runtime set can be selected independently. Nullable feature
-values inherit the umbrella setting:
+Portable defaults live at `ai.programs.semble`. Each supported runtime has the
+same nullable option tree under `ai.<runtime>.programs.semble`: null inherits
+the root value and a non-null value wins. Program-level enable overrides replace
+runtime lists:
 
 ```nix
-semble = {
-  enable = true;
-  runtimes = ["claude" "codex"];
-
-  mcp = {
-    content = "all";
-    runtimes = ["claude" "kiro"];
+ai = {
+  programs.semble = {
+    enable = true;
+    instructions.enable = false;
+    mcp.content = "all";
+    subagent.enable = false;
   };
-  instructions.enable = false;
-  subagent.runtimes = ["codex"];
+
+  claude.programs.semble.enable = false;
+  codex.programs.semble.subagent.enable = true;
+  kiro.programs.semble.mcp.enable = false;
 };
 ```
 
@@ -407,7 +410,7 @@ Claude and Codex compose the guidance into their single always-loaded
 `CLAUDE.md` and `AGENTS.md` files. Kiro writes its named instruction to
 `.kiro/steering/semble.md`.
 
-Home Manager leaves the cache at Semble's own XDG default. A devenv integration
+Home Manager fixes the cache at its owned XDG location. A devenv integration
 relocates it to a project-local state directory and tells Semble where by baking
 `SEMBLE_CACHE_LOCATION` into the launcher wrapper — never into the project
 shell's environment. The relocation is unconditional on devenv; only the Codex
@@ -436,8 +439,8 @@ ai.kiro = {
 };
 ```
 
-Copilot is intentionally outside `semble.*`; configure it directly through
-`ai.copilot.*` with the same exported helpers when desired.
+Semble does not declare `ai.copilot.programs.semble`; configure Copilot directly
+through `ai.copilot.*` with the same exported helpers when desired.
 
 </details>
 
