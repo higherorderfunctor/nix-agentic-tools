@@ -1,0 +1,1 @@
+# Non-regular platform metadata

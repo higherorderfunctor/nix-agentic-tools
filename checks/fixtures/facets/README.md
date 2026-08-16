@@ -1,29 +1,31 @@
-# Tracked facet composition mock
+# Tracked production-boundary facet mock
 
-This fixture exercises the internal production-candidate loader without
-publishing any mock package, overlay, or module. The shortest useful read is:
+This fixture keeps discovery separate from registry realization and publishes no
+mock package, overlay, module, or library. The shortest useful read is:
 
-1. [`lib/facets.nix`](../../../lib/facets.nix) for deterministic discovery and
-   native composition;
-2. [`compatible/alpha/`](compatible/alpha/) for one asymmetric owner; and
-3. [`checks/facet-mock.nix`](../../facet-mock.nix) for root policy and
-   cross-facet assertions.
+1. [`lib/facets.nix`](../../../lib/facets.nix) for the system-independent index
+   and registry-specific realizers;
+2. [`production/git-revise/`](production/git-revise/) for a vertically owned,
+   production-shaped package boundary; and
+3. [`checks/facet-mock.nix`](../../facet-mock.nix) for generic orchestration and
+   cross-owner assertions.
 
-`compatible/` contains owners with deliberately different contribution sets.
-Alpha owns a package, overlay, Home Manager module, local checks, and a registry
-entry. Bravo owns a package, library contribution, overlay, devenv module, local
-checks, and a registry entry. The remaining owners are zero-registration
-extensions: only their own files name them, while discovery still composes a
-library/registry extension and both function and plain-attrset local-check
-forms.
+`production/` is add-only by owner. The git-revise owner contains an owner
+`default.nix`, package recipe, overlay, directory-shaped Home Manager and devenv
+modules, derivation-valued checks, a declarative registry contribution,
+documentation, fragments, and Nix/JSON sidecars. Discovery records contribution
+and metadata provenance without importing the metadata-only files. The fixture
+consumer evaluates raw module paths with the native module system.
 
-The `collisions/` scenarios isolate package, library, overlay, local-check, and
-registry collisions so one early failure cannot mask another. Library probes
-also cover an explicit empty namespace colliding with a scalar in both owner
-orders, while the compatible fixture proves that an empty namespace can be
-extended by another owner. The root check also drives invalid-owner,
-unknown-entry, empty-owner, symlink, and false-local-check cases through a
-standalone evaluator and checks their diagnostics. Isolated scanner probes also
-cover invalid root entries, contribution containers, packages, and modules.
-These are fixture facts, not public API promises: the loader remains import-only
-and the repository root retains aggregation, policy, and cross-facet assertions.
+Packages use `makeScope`, `callPackage`, and `packagesFromDirectoryRecursive`;
+overlays use lexical `composeManyExtensions`; declarative values use
+`evalModules` with explicit types. The only custom merge is exclusive-owner
+validation before those native mechanisms run. The mixed-priority negative is
+the project constraint that requires it: native module priority filtering would
+otherwise hide an ordinary claim when another owner uses `mkForce`.
+
+`negative/` isolates package and overlay leaf collisions, equal- and
+mixed-priority registry ownership, reserved scope names, and non-derivation
+local checks. Every failure includes the claimed key and owner/source
+provenance. These are fixture facts, not a public API; the implementation
+remains internal and import-only.

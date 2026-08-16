@@ -1,3 +1,0 @@
-{
-  deliberate-false = false;
-}

@@ -2,7 +2,8 @@
   inherit (builtins) attrNames deepSeq isAttrs isFunction length pathExists readDir;
   inherit
     (lib)
-    all
+    attrByPath
+    attrValues
     concatMap
     concatStringsSep
     elem
@@ -10,330 +11,518 @@
     foldl'
     genAttrs
     hasSuffix
-    mapAttrs
-    optionalAttrs
-    removeSuffix
+    isDerivation
+    listToAttrs
+    makeScope
+    nameValuePair
+    optional
+    sort
     unique
     ;
 
-  sortNames = builtins.sort builtins.lessThan;
+  sortNames = sort builtins.lessThan;
   validName = name: builtins.match "[a-z][a-z0-9-]*" name != null;
   ensure = condition: message:
     if condition
     then true
-    else throw "facet discovery error: ${message}";
+    else throw "facet error: ${message}";
 
   collision = registry: keyPath: left: right:
     throw ''
-      facet collision in ${registry} at '${concatStringsSep "." keyPath}':
+      facet ownership collision in ${registry} at '${concatStringsSep "." keyPath}':
         ${left.owner} (${toString left.source})
         ${right.owner} (${toString right.source})
     '';
 
-  mergeFlatClaims = registry: claims:
+  pathIsPrefix = prefix: path:
+    if prefix == []
+    then true
+    else if path == [] || builtins.head prefix != builtins.head path
+    then false
+    else pathIsPrefix (builtins.tail prefix) (builtins.tail path);
+
+  mergeExclusiveClaims = registry: claims:
     foldl' (
-      merged: claim:
-        if merged ? ${claim.key}
-        then collision registry [claim.key] merged.${claim.key} claim
-        else merged // {${claim.key} = claim;}
+      merged: claim: let
+        id = builtins.toJSON claim.keyPath;
+        conflicts = filter (
+          existing:
+            pathIsPrefix existing.keyPath claim.keyPath
+            || pathIsPrefix claim.keyPath existing.keyPath
+        ) (attrValues merged);
+      in
+        if conflicts != []
+        then collision registry claim.keyPath (builtins.head conflicts) claim
+        else merged // {${id} = claim;}
     ) {}
     claims;
 
-  isMergeable = value: isAttrs value && !lib.isDerivation value;
-  emptyTree = {
-    children = {};
-    kind = "root";
-  };
-  isLeaf = node: node.kind == "leaf";
-  isRoot = node: node.kind == "root";
+  ordinaryAttrs = value: isAttrs value && !isDerivation value;
 
-  toClaimTree = claim: value:
-    if isMergeable value
-    then {
-      inherit (claim) owner source;
-      children = mapAttrs (_: nested: toClaimTree claim nested) value;
-      kind = "branch";
-    }
-    else {
-      inherit (claim) owner source;
-      inherit value;
-      kind = "leaf";
-    };
+  pathsUnder = prefix: value:
+    if ordinaryAttrs value
+    then let
+      names = attrNames value;
+    in
+      if names == []
+      then [prefix]
+      else concatMap (name: pathsUnder (prefix ++ [name]) value.${name}) names
+    else [prefix];
 
-  mergeTrees = registry: keyPath: left: right:
-    if isRoot left
-    then right
-    else if isRoot right
-    then left
-    else if isLeaf left || isLeaf right
-    then collision registry keyPath left right
-    else let
-      names = sortNames (unique ((attrNames left.children) ++ (attrNames right.children)));
-    in {
-      inherit (left) owner source;
-      children = genAttrs names (
-        name:
-          if left.children ? ${name} && right.children ? ${name}
-          then mergeTrees registry (keyPath ++ [name]) left.children.${name} right.children.${name}
-          else left.children.${name} or right.children.${name}
-      );
-      kind = "branch";
-    };
-
-  materializeTree = tree:
-    if isLeaf tree
-    then tree.value
-    else mapAttrs (_: materializeTree) tree.children;
-
-  mergeContributions = registry: contributions:
-    materializeTree (
-      foldl' (
-        tree: contribution:
-          mergeTrees registry [] tree (toClaimTree contribution contribution.value)
-      )
-      emptyTree
-      contributions
-    );
-
-  loadValue = path: args: let
-    imported = import path;
+  valuesEqual = left: right: let
+    compared = builtins.tryEval (left == right);
   in
-    if isFunction imported
-    then imported args
-    else imported;
-in {
-  compose = {
-    facetsDir,
-    pkgs,
-    registryModules ? [],
-    specialArgs ? {
-      common = {};
-      devenv = {};
-      homeManager = {};
-    },
-    system,
-  }: let
-    rootEntries = readDir facetsDir;
+    compared.success && compared.value;
+
+  changedLeafPaths = prefix: beforePresent: before: after:
+    if beforePresent && ordinaryAttrs before && ordinaryAttrs after
+    then
+      concatMap (
+        name:
+          if after ? ${name}
+          then changedLeafPaths (prefix ++ [name]) (before ? ${name}) before.${name} after.${name}
+          else pathsUnder (prefix ++ [name]) before.${name}
+      ) (unique (attrNames before ++ attrNames after))
+    else if beforePresent && valuesEqual before after
+    then []
+    else pathsUnder prefix after;
+
+  overlayChanges = prev: contribution:
+    concatMap (
+      name:
+        changedLeafPaths [name] (prev ? ${name}) prev.${name} contribution.${name}
+    ) (attrNames contribution);
+
+  contributionFor = owner: name: source: {
+    inherit (owner) name;
+    owner = owner.name;
+    inherit source;
+  };
+
+  contributionsFor = index: registry:
+    concatMap (
+      owner: let
+        contribution = owner.contributions.${registry};
+      in
+        if builtins.isList contribution
+        then contribution
+        else optional (contribution != null) contribution
+    )
+    index.owners;
+
+  callOwnerModule = claim: args: let
+    imported = import claim.source;
+    module =
+      if isFunction imported
+      then
+        imported (
+          args
+          // {
+            facetOwner = claim.owner;
+            facetSource = claim.source;
+          }
+        )
+      else imported;
+  in
+    module // {_file = toString claim.source;};
+in rec {
+  index = {facetsDir}: let
+    rootEntries =
+      if pathExists facetsDir
+      then readDir facetsDir
+      else {};
     ownerNames = sortNames (attrNames rootEntries);
-    allowedTopLevel = [
-      "README.md"
+    contributionEntryNames = [
       "checks.nix"
-      "docs"
-      "lib.nix"
       "modules"
       "overlay.nix"
       "packages"
       "registry.nix"
-      "src"
     ];
 
     scanOwner = name: let
       root = facetsDir + "/${name}";
       entries = readDir root;
       entryNames = sortNames (attrNames entries);
-      unknownEntries = filter (entry: !elem entry allowedTopLevel) entryNames;
+      owner = {inherit name root;};
       pathFor = entry: root + "/${entry}";
       present = entry: entries ? ${entry};
+
       regularContribution = entry:
         if present entry
-        then pathFor entry
+        then contributionFor owner entry (pathFor entry)
         else null;
 
       packagesPath = pathFor "packages";
       packageEntries =
-        if present "packages"
+        if present "packages" && entries.packages == "directory"
         then readDir packagesPath
         else {};
-      packageFileNames = sortNames (attrNames packageEntries);
+      packageNames = sortNames (attrNames packageEntries);
       packageClaims =
         map (
-          fileName: {
-            key = removeSuffix ".nix" fileName;
+          packageName: let
+            directory = packagesPath + "/${packageName}";
+            packageFiles =
+              if packageEntries.${packageName} == "directory"
+              then readDir directory
+              else {};
+            source = directory + "/package.nix";
+            platformsSource = directory + "/platforms.nix";
+          in {
+            inherit directory packageName source;
+            keyPath = [packageName];
             owner = name;
-            source = packagesPath + "/${fileName}";
+            platforms =
+              if packageFiles ? "platforms.nix"
+              then platformsSource
+              else null;
+            validations = [
+              (ensure (validName packageName) "owner '${name}' has invalid package name '${packageName}' at '${toString directory}'; expected lowercase kebab-case")
+              (ensure (packageEntries.${packageName} == "directory") "owner '${name}' package '${packageName}' at '${toString directory}' must be a directory")
+              (ensure (packageFiles ? "package.nix" && packageFiles."package.nix" == "regular") "owner '${name}' package '${packageName}' is missing regular recipe '${toString source}'")
+              (ensure (!(packageFiles ? "platforms.nix") || packageFiles."platforms.nix" == "regular") "owner '${name}' package '${packageName}' has non-regular platform metadata '${toString platformsSource}'")
+            ];
           }
         )
-        packageFileNames;
+        packageNames;
 
       modulesPath = pathFor "modules";
       moduleEntries =
-        if present "modules"
+        if present "modules" && entries.modules == "directory"
         then readDir modulesPath
         else {};
       moduleNames = sortNames (attrNames moduleEntries);
-      unknownModules = filter (moduleName: !elem moduleName ["devenv.nix" "homeManager.nix"]) moduleNames;
-      invalidRegularEntries = filter (entry: entries.${entry} != "regular") (filter (entry: elem entry ["README.md" "checks.nix" "lib.nix" "overlay.nix" "registry.nix"]) entryNames);
-      invalidContainerEntries = filter (entry: entries.${entry} != "directory") (filter (entry: elem entry ["docs" "modules" "packages" "src"]) entryNames);
-      invalidPackageEntries = filter (fileName: packageEntries.${fileName} != "regular" || !hasSuffix ".nix" fileName || !validName (removeSuffix ".nix" fileName)) packageFileNames;
-      invalidModuleEntries = filter (moduleName: moduleEntries.${moduleName} != "regular") moduleNames;
+      unknownModules = filter (moduleName: !elem moduleName ["devenv" "homeManager"]) moduleNames;
+      invalidModules = filter (
+        moduleName: let
+          modulePath = modulesPath + "/${moduleName}";
+          moduleFiles =
+            if moduleEntries.${moduleName} == "directory"
+            then readDir modulePath
+            else {};
+        in
+          moduleEntries.${moduleName}
+          != "directory"
+          || !(moduleFiles ? "default.nix")
+          || moduleFiles."default.nix" != "regular"
+      ) (filter (moduleName: elem moduleName ["devenv" "homeManager"]) moduleNames);
+      moduleContributions = genAttrs (filter (moduleName: elem moduleName ["devenv" "homeManager"]) moduleNames) (
+        moduleName: contributionFor owner moduleName (modulesPath + "/${moduleName}")
+      );
 
-      fileContributions = filter (value: value != null) [
-        (regularContribution "checks.nix")
-        (regularContribution "lib.nix")
-        (regularContribution "overlay.nix")
-        (regularContribution "registry.nix")
-      ];
-      contributionCount = length packageClaims + length moduleNames + length fileContributions;
+      invalidContributionFiles = filter (
+        entry: entries.${entry} != "regular"
+      ) (filter (entry: elem entry ["checks.nix" "overlay.nix" "registry.nix"]) entryNames);
+      invalidContributionDirectories = filter (
+        entry: entries.${entry} != "directory"
+      ) (filter (entry: elem entry ["modules" "packages"]) entryNames);
 
-      validations = [
-        (ensure (unknownEntries == []) "owner '${name}' at '${toString root}' has unknown entry '${toString (pathFor (builtins.head unknownEntries))}'; allowed forms: ${concatStringsSep ", " allowedTopLevel}")
-        (ensure (invalidRegularEntries == []) "owner '${name}' at '${toString root}' has non-regular contribution '${toString (pathFor (builtins.head invalidRegularEntries))}'; allowed forms require regular Nix/README files")
-        (ensure (invalidContainerEntries == []) "owner '${name}' at '${toString root}' has non-directory contribution container '${toString (pathFor (builtins.head invalidContainerEntries))}'; allowed forms require directories")
-        (ensure (invalidPackageEntries == []) "owner '${name}' has invalid package entry '${toString (packagesPath + "/${builtins.head invalidPackageEntries}")}'; allowed forms: regular <export>.nix files with lowercase kebab-case names")
-        (ensure (unknownModules == []) "owner '${name}' has unknown module '${toString (modulesPath + "/${builtins.head unknownModules}")}'; allowed forms: devenv.nix, homeManager.nix")
-        (ensure (invalidModuleEntries == []) "owner '${name}' has non-regular module '${toString (modulesPath + "/${builtins.head invalidModuleEntries}")}'; allowed forms require regular Nix files")
-        (ensure (contributionCount > 0) "owner '${name}' at '${toString root}' is empty or documentation-only; allowed forms require at least one facet contribution")
-      ];
+      metadataEntries = filter (entry: !elem entry contributionEntryNames) entryNames;
+      classifyMetadata = entry: let
+        type = entries.${entry};
+        kind =
+          if type == "directory"
+          then
+            if elem entry ["docs" "fragments" "src"]
+            then entry
+            else "directory-sidecar"
+          else if type != "regular"
+          then "unsupported"
+          else if entry == "default.nix"
+          then "owner-default"
+          else if entry == "README.md" || hasSuffix ".md" entry
+          then "documentation"
+          else if hasSuffix ".nix" entry
+          then "nix-sidecar"
+          else if hasSuffix ".json" entry || hasSuffix ".lock" entry || hasSuffix ".toml" entry || hasSuffix ".yaml" entry || hasSuffix ".yml" entry
+          then "data-sidecar"
+          else "unsupported";
+      in {
+        inherit kind;
+        source = pathFor entry;
+      };
+      metadata = map classifyMetadata metadataEntries;
+      unsupportedMetadata = filter (entry: entry.kind == "unsupported") metadata;
 
-      modulePaths = genAttrs moduleNames (moduleName: modulesPath + "/${moduleName}");
-      contributions =
-        optionalAttrs (present "checks.nix") {checks = pathFor "checks.nix";}
-        // optionalAttrs (present "lib.nix") {lib = pathFor "lib.nix";}
-        // optionalAttrs (moduleNames != []) {modules = modulePaths;}
-        // optionalAttrs (present "overlay.nix") {overlay = pathFor "overlay.nix";}
-        // optionalAttrs (packageClaims != []) {packages = map (claim: claim.source) packageClaims;}
-        // optionalAttrs (present "registry.nix") {registry = pathFor "registry.nix";};
+      contributions = {
+        checks = regularContribution "checks.nix";
+        modules = moduleContributions;
+        overlay = regularContribution "overlay.nix";
+        packages =
+          map (
+            claim:
+              builtins.removeAttrs claim ["packageName" "validations"]
+          )
+          packageClaims;
+        registry = regularContribution "registry.nix";
+      };
+      contributionCount =
+        length contributions.packages
+        + length (attrNames contributions.modules)
+        + length (filter (value: value != null) [contributions.checks contributions.overlay contributions.registry]);
+      validations =
+        [
+          (ensure (invalidContributionFiles == []) "owner '${name}' has non-regular contribution '${toString (pathFor (builtins.head invalidContributionFiles))}'")
+          (ensure (invalidContributionDirectories == []) "owner '${name}' has non-directory contribution container '${toString (pathFor (builtins.head invalidContributionDirectories))}'")
+          (ensure (unknownModules == []) "owner '${name}' has unknown module entry '${toString (modulesPath + "/${builtins.head unknownModules}")}'; expected directory-shaped devenv or homeManager modules")
+          (ensure (invalidModules == []) "owner '${name}' module '${toString (modulesPath + "/${builtins.head invalidModules}")}' must be a directory with regular default.nix")
+          (ensure (unsupportedMetadata == []) "owner '${name}' has unclassified metadata '${toString (builtins.head unsupportedMetadata).source}'")
+          (ensure (contributionCount > 0) "owner '${name}' at '${toString root}' is metadata-only; at least one exported contribution is required")
+        ]
+        ++ concatMap (claim: claim.validations) packageClaims;
     in
       deepSeq validations {
-        inherit contributions modulePaths name packageClaims root;
-        checksPath = regularContribution "checks.nix";
-        libPath = regularContribution "lib.nix";
-        overlayPath = regularContribution "overlay.nix";
-        registryPath = regularContribution "registry.nix";
+        inherit contributions metadata name;
+        path = root;
       };
 
+    invalidRootEntries = filter (name: rootEntries.${name} != "directory") ownerNames;
+    invalidOwnerNames = filter (name: !validName name) ownerNames;
     rootValidations = [
       (ensure (pathExists facetsDir) "facets directory '${toString facetsDir}' does not exist")
-      (ensure (all (name: rootEntries.${name} == "directory") ownerNames) "facets directory '${toString facetsDir}' contains non-directory owner entry '${toString (facetsDir + "/${builtins.head (filter (name: rootEntries.${name} != "directory") ownerNames)}")}'; allowed forms: immediate owner directories")
-      (ensure (all validName ownerNames) "invalid owner '${toString (builtins.head (filter (name: !validName name) ownerNames))}' at '${toString (facetsDir + "/${builtins.head (filter (name: !validName name) ownerNames)}")}'; allowed form: [a-z][a-z0-9-]*")
+      (ensure (invalidRootEntries == []) "facets directory '${toString facetsDir}' contains non-directory owner '${toString (facetsDir + "/${builtins.head invalidRootEntries}")}'")
+      (ensure (invalidOwnerNames == []) "invalid owner '${builtins.head invalidOwnerNames}' at '${toString (facetsDir + "/${builtins.head invalidOwnerNames}")}'; expected lowercase kebab-case")
     ];
-    ownerData = deepSeq rootValidations (map scanOwner ownerNames);
-
-    owners =
-      map (owner: {
-        inherit (owner) contributions name;
-        path = owner.root;
-      })
-      ownerData;
-
-    libContributions = map (
-      owner: {
-        inherit (owner) name;
-        owner = owner.name;
-        source = owner.libPath;
-        value = loadValue owner.libPath {inherit lib pkgs system;};
-      }
-    ) (filter (owner: owner.libPath != null) ownerData);
-    facetLib = mergeContributions "lib" libContributions;
-
-    packageClaims = concatMap (owner: owner.packageClaims) ownerData;
-    packageClaimsByName = mergeFlatClaims "packages" packageClaims;
-    packageNames = sortNames (attrNames packageClaimsByName);
-    packageScope = lib.makeScope pkgs.newScope (
-      scope:
-        {
-          inherit facetLib pkgs system;
-        }
-        // genAttrs packageNames (
-          packageName: scope.callPackage packageClaimsByName.${packageName}.source {}
-        )
-    );
-    packages = genAttrs packageNames (packageName: packageScope.${packageName});
-
-    overlayClaims = map (
-      owner: {
-        owner = owner.name;
-        source = owner.overlayPath;
-        value = import owner.overlayPath;
-      }
-    ) (filter (owner: owner.overlayPath != null) ownerData);
-    overlay = final: prev: let
-      state =
-        foldl' (
-          state: claim: let
-            contribution = claim.value final state.prev;
-            tree = mergeTrees "overlay" [] state.tree (toClaimTree claim contribution);
-          in {
-            inherit tree;
-            prev = state.prev // contribution;
-          }
-        ) {
-          tree = emptyTree;
-          inherit prev;
-        }
-        overlayClaims;
-    in
-      materializeTree state.tree;
-
-    registryClaims = map (
-      owner: {
-        owner = owner.name;
-        source = owner.registryPath;
-      }
-    ) (filter (owner: owner.registryPath != null) ownerData);
-    registryContributionModules =
-      map (
-        claim: moduleArgs: let
-          imported = import claim.source;
-        in
-          if isFunction imported
-          then
-            imported (
-              moduleArgs
-              // {
-                inherit (claim) owner source;
-              }
-            )
-          else imported
-      )
-      registryClaims;
-    registry =
-      (lib.evalModules {
-        modules = registryModules ++ registryContributionModules;
-        specialArgs = specialArgs.common;
-      })
-      .config;
-
-    modulePathsFor = backend:
-      map (owner: owner.modulePaths.${backend}) (filter (owner: owner.modulePaths ? ${backend}) ownerData);
-    evalBackend = backend:
-      lib.evalModules {
-        modules = modulePathsFor "${backend}.nix";
-        specialArgs = specialArgs.common // specialArgs.${backend};
-      };
-    homeManager = evalBackend "homeManager";
-    devenv = evalBackend "devenv";
-
-    coreWorld = {
-      inherit devenv facetLib homeManager overlay owners packages registry;
+  in
+    deepSeq rootValidations {
+      inherit facetsDir;
+      owners = map scanOwner ownerNames;
     };
-    checkClaims =
-      concatMap (
-        owner:
-          if owner.checksPath == null
-          then []
-          else let
-            checks = loadValue owner.checksPath {
-              inherit lib pkgs system;
-              world = coreWorld;
-            };
-            checkNames = sortNames (attrNames checks);
-          in
-            deepSeq (ensure (isAttrs checks) "owner '${owner.name}' checks at '${toString owner.checksPath}' must return an attribute set") (map (
-                key: {
-                  inherit key;
-                  owner = owner.name;
-                  source = owner.checksPath;
-                  value = checks.${key};
+
+  moduleImports = {
+    backend,
+    index,
+  }:
+    map (
+      owner: owner.contributions.modules.${backend}.source
+    ) (filter (owner: owner.contributions.modules ? ${backend}) index.owners);
+
+  realizePackages = {
+    index,
+    inputs,
+    pkgs,
+    scopeArgs ? {},
+    system,
+  }: let
+    claims = contributionsFor index "packages";
+    injectedArgs =
+      scopeArgs
+      // {
+        inherit inputs pkgs system;
+      };
+    nativeScopeMembers = attrNames (makeScope pkgs.newScope (_: {}));
+    reservedNames = unique (nativeScopeMembers ++ attrNames injectedArgs);
+    reservedClaims = filter (claim: elem (builtins.head claim.keyPath) reservedNames) claims;
+    exclusive = mergeExclusiveClaims "packages" claims;
+    eligibleClaims =
+      filter (
+        claim:
+          claim.platforms
+          == null
+          || elem system (import claim.platforms)
+      )
+      claims;
+    scope = makeScope pkgs.newScope (
+      self:
+        injectedArgs
+        // listToAttrs (map (
+            claim:
+              nameValuePair (builtins.head claim.keyPath) (
+                lib.filesystem.packagesFromDirectoryRecursive {
+                  inherit (claim) directory;
+                  inherit (self) callPackage;
                 }
               )
-              checkNames)
+          )
+          eligibleClaims)
+    );
+    packageNames = map (claim: builtins.head claim.keyPath) eligibleClaims;
+    validations = [
+      (ensure (reservedClaims == []) "reserved package name '${builtins.head (builtins.head reservedClaims).keyPath}' from owner '${(builtins.head reservedClaims).owner}' at '${toString (builtins.head reservedClaims).source}' would overwrite a native or injected scope member")
+    ];
+  in
+    deepSeq [exclusive validations] {
+      inherit claims scope;
+      omitted = map (claim: builtins.head claim.keyPath) (filter (claim: !elem claim eligibleClaims) claims);
+      packages = genAttrs packageNames (name: scope.${name});
+    };
+
+  realizeOverlay = {
+    context,
+    index,
+  }: let
+    sourceClaims = contributionsFor index "overlay";
+    loaded =
+      map (
+        claim: let
+          factory = import claim.source;
+          value =
+            if isFunction factory
+            then factory context
+            else factory;
+          claimValidations = [
+            (ensure (isAttrs value && value ? claims && value ? overlay) "owner '${claim.owner}' overlay at '${toString claim.source}' must return { claims, overlay }")
+            (ensure (isAttrs value && value ? claims && builtins.isList value.claims) "owner '${claim.owner}' overlay claims at '${toString claim.source}' must be a list of exclusive leaf paths")
+            (ensure (isAttrs value && value ? overlay && isFunction value.overlay) "owner '${claim.owner}' overlay at '${toString claim.source}' must provide an overlay function")
+            (ensure (
+              isAttrs value
+              && value ? claims
+              && builtins.isList value.claims
+              && builtins.all (
+                keyPath:
+                  builtins.isList keyPath
+                  && keyPath != []
+                  && builtins.all (component: builtins.isString component && component != "") keyPath
+              )
+              value.claims
+            ) "owner '${claim.owner}' overlay claims at '${toString claim.source}' must contain non-empty lists of non-empty strings")
+          ];
+        in
+          deepSeq claimValidations {
+            inherit claim value;
+          }
       )
-      ownerData;
-    localChecks = mapAttrs (_: claim: {
-      inherit (claim) owner source value;
-    }) (mergeFlatClaims "checks" checkClaims);
-  in {
-    inherit devenv facetLib homeManager localChecks overlay owners packages registry;
-  };
+      sourceClaims;
+    ownershipClaims =
+      concatMap (
+        loadedClaim:
+          map (keyPath: {
+            inherit keyPath;
+            inherit (loadedClaim.claim) owner source;
+          })
+          loadedClaim.value.claims
+      )
+      loaded;
+    exclusive = mergeExclusiveClaims "overlay" ownershipClaims;
+    checkedOverlays =
+      map (
+        item: final: prev: let
+          contribution = item.value.overlay final prev;
+          changedPaths =
+            if isAttrs contribution
+            then overlayChanges prev contribution
+            else [];
+          declaredIds = map builtins.toJSON item.value.claims;
+          changedIds = map builtins.toJSON changedPaths;
+          undeclared = filter (path: !elem (builtins.toJSON path) declaredIds) changedPaths;
+          unwritten = filter (path: !elem (builtins.toJSON path) changedIds) item.value.claims;
+          validations = [
+            (ensure (isAttrs contribution) "owner '${item.claim.owner}' overlay at '${toString item.claim.source}' must return an attribute set")
+            (ensure (undeclared == []) "owner '${item.claim.owner}' overlay at '${toString item.claim.source}' writes undeclared leaf '${concatStringsSep "." (builtins.head undeclared)}'")
+            (ensure (unwritten == []) "owner '${item.claim.owner}' overlay at '${toString item.claim.source}' claims unwritten leaf '${concatStringsSep "." (builtins.head unwritten)}'")
+          ];
+        in
+          deepSeq validations contribution
+      )
+      loaded;
+  in
+    deepSeq exclusive {
+      inherit ownershipClaims;
+      overlay = lib.composeManyExtensions checkedOverlays;
+    };
+
+  realizeRegistry = {
+    claimPath,
+    index,
+    modules,
+    specialArgs ? {},
+  }: let
+    sourceClaims = contributionsFor index "registry";
+    ownerModules =
+      map (
+        claim: args: callOwnerModule claim args
+      )
+      sourceClaims;
+    evaluate = extraModules:
+      lib.evalModules {
+        inherit specialArgs;
+        modules = modules ++ extraModules;
+      };
+    definitionsFor = evaluated:
+      (attrByPath claimPath {} evaluated.options).definitionsWithLocations or [];
+    rootDefinitions = definitionsFor (evaluate []);
+    rootKeys = unique (concatMap (definition: attrNames definition.value) rootDefinitions);
+    rootOwnershipClaims =
+      map (
+        key: let
+          definition = builtins.head (filter (candidate: candidate.value ? ${key}) rootDefinitions);
+        in {
+          keyPath = claimPath ++ [key];
+          owner = "root policy";
+          source = definition.file;
+        }
+      )
+      rootKeys;
+    ownershipClaims =
+      concatMap (
+        claim: let
+          evaluated = evaluate [(args: callOwnerModule claim args)];
+          ownerDefinitions = filter (
+            definition:
+              !builtins.any (
+                rootDefinition:
+                  definition.file
+                  == rootDefinition.file
+                  && valuesEqual definition.value rootDefinition.value
+              )
+              rootDefinitions
+          ) (definitionsFor evaluated);
+          keys = unique (concatMap (definition: attrNames definition.value) ownerDefinitions);
+        in
+          map (key: {
+            keyPath = claimPath ++ [key];
+            inherit (claim) owner source;
+          })
+          keys
+      )
+      sourceClaims;
+    exclusive = mergeExclusiveClaims "registry" (rootOwnershipClaims ++ ownershipClaims);
+    evaluated = evaluate ownerModules;
+  in
+    deepSeq exclusive {
+      inherit (evaluated) config;
+      inherit evaluated ownershipClaims rootOwnershipClaims;
+    };
+
+  realizeChecks = {
+    context,
+    index,
+  }: let
+    sourceClaims = contributionsFor index "checks";
+    checkClaims =
+      concatMap (
+        claim: let
+          factory = import claim.source;
+          checks =
+            if isFunction factory
+            then factory context
+            else throw "facet error: owner '${claim.owner}' check at '${toString claim.source}' must be a context factory";
+          checkNames =
+            if isAttrs checks
+            then sortNames (attrNames checks)
+            else throw "facet error: owner '${claim.owner}' check factory at '${toString claim.source}' must return an attribute set";
+        in
+          map (name: {
+            keyPath = [name];
+            inherit (claim) owner source;
+            value = checks.${name};
+          })
+          checkNames
+      )
+      sourceClaims;
+    exclusive = mergeExclusiveClaims "checks" checkClaims;
+    nonDerivations = filter (claim: !isDerivation claim.value) checkClaims;
+    validations = [
+      (ensure (nonDerivations == []) "owner '${(builtins.head nonDerivations).owner}' check '${builtins.head (builtins.head nonDerivations).keyPath}' at '${toString (builtins.head nonDerivations).source}' returned a non-derivation")
+    ];
+    checksByName = listToAttrs (map (
+        claim:
+          nameValuePair (builtins.head claim.keyPath) {
+            inherit (claim) owner source value;
+          }
+      )
+      checkClaims);
+  in
+    deepSeq [(attrNames exclusive) validations] checksByName;
 }
