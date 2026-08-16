@@ -44,10 +44,12 @@
   canonFeatures = fs: ourPkgs.lib.sort (a: b: a < b) (ourPkgs.lib.unique fs);
 
   # nixpkgs SPLIT this package (f13ff45a, 2026-08): the real `mkDerivation`
-  # moved to `kiro-cli-unwrapped`, and `kiro-cli` became a `symlinkJoin` of
-  # per-command `buildFHSEnv` sandboxes around it — upstream's fix for the TUI
-  # extracting a generic-glibc `bun` at runtime, which an FHS root satisfies
-  # without patching the extracted asset.
+  # moved to `kiro-cli-unwrapped`, and `kiro-cli` became a public FHS wrapper
+  # around it — upstream's fix for the TUI extracting a generic-glibc `bun` at
+  # runtime, which an FHS root satisfies without patching the extracted asset.
+  # It began as a `symlinkJoin` of three per-command environments; 9ddfd8a
+  # consolidated them into one environment behind thin command wrappers. The
+  # source-owning seam remains `kiro-cli-unwrapped` in both topologies.
   #
   # `overrideAttrs` on that join is a SILENT no-op for everything this overlay
   # exists to do, which is why the base has to be re-pointed rather than the
@@ -228,11 +230,12 @@
         # This is the 621 MiB proprietary ELF — the derivation the rollout
         # patch actually rewrites, and the one whose leak prompted this. It
         # is also the ONLY layer the rename reaches on linux: upstream's
-        # wrapper hardcodes `pname = executableName` for each `buildFHSEnv`
-        # and `name = "kiro-cli-${version}"` for the join, consulting
-        # `kiro-cli-unwrapped.pname` nowhere. The `-bwrap` / `-fhsenv-rootfs`
-        # intermediates therefore keep stock names for both variants; they
-        # carry no proprietary bytes and are inert without this path.
+        # wrapper originally hardcoded `pname = executableName` per environment
+        # and now hardcodes `pname = "kiro-cli"` for the shared environment,
+        # consulting `kiro-cli-unwrapped.pname` nowhere. The `-bwrap` /
+        # `-fhsenv-rootfs` intermediates therefore keep stock names for both
+        # variants; they carry no proprietary bytes and are inert without this
+        # path.
         pname = "${attrs.pname or "kiro-cli-unwrapped"}-${rolloutSuffix}";
         postInstallCheck = (attrs.postInstallCheck or "") + vu.kiroRolloutVerify;
       });
@@ -277,9 +280,10 @@
         # override was one of the attrs the join silently ignored, but it still
         # landed on the attrset the guard reads.
         #
-        # CONDITIONAL on the attr being missing, because darwin's post-split
-        # `kiro-cli` already inherits `version` from `pinned`. Re-asserting it
-        # there is a no-op that trips nixpkgs' newer
+        # CONDITIONAL on the attr being missing. The original linux
+        # `symlinkJoin` omitted `version`; the consolidated FHS derivation and
+        # darwin's post-split `kiro-cli` both inherit it. Re-asserting it where
+        # present is a no-op that trips nixpkgs' newer
         # "overridden with `version` but not `src`" lint — twice per eval, on
         # the REQUIRED `build (aarch64-darwin, macos-latest)` leg, the moment
         # the nixpkgs bump lands.
@@ -292,10 +296,9 @@
         # `symlinkJoin {inherit (drv) name version;}`, so the guard wrapper
         # inherits this for free.
         #
-        # PLATFORM-BRANCHED because the two shapes are named by different
-        # keys, and setting the wrong one is a SILENT no-op rather than an
-        # error. On linux this is upstream's `symlinkJoin`, named by `name`
-        # (it has no `pname`). On darwin it is
+        # PLATFORM-BRANCHED because linux's public wrapper is renamed through
+        # `name` in both supported topologies (the original `symlinkJoin` and
+        # the current shared FHS derivation). On darwin it is
         # `kiro-cli-unwrapped.overrideAttrs {pname = "kiro-cli";}` — whose
         # hardcoded `pname` would otherwise CLOBBER the rename applied to
         # `pinned` above, leaving darwin's 1.22 GiB output indistinguishable.

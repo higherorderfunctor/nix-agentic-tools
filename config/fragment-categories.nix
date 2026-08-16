@@ -241,6 +241,7 @@ _: {
     # behavioral check, since all three have to move together.
     kiro-wrapper = {
       scopes = [
+        "checks/kiro-fhs-contract.nix"
         "checks/kiro-wrapper-argv.nix"
         "lib/idempotentFlags.nix"
         # The overlay's wrapProgram calls carry the darwin argv0

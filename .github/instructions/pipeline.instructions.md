@@ -619,7 +619,10 @@ The directory is gitignored.
 
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-08-16 (commit pending — Living Workflow now has a
+> **Last verified:** 2026-08-16 (commit pending — the `kiro-wrapper` category
+> now scopes `checks/kiro-fhs-contract.nix`, so an editor changing the upstream
+> sandbox tripwire receives the FHS and launcher architecture sources it
+> enforces). Prior: 2026-08-16 (commit pending — Living Workflow now has a
 > package-sourced routed architecture category, and the Stacked Workflows guide
 > moved from `dev/fragments/` to its package `docs/` directory; both resolve
 > through the existing location discriminator). Prior: 2026-08-16 (commit
