@@ -37,13 +37,26 @@ stop_server() {
 }
 
 cleanup() {
-  local writer_pid
+  local live writer_pid
   for writer_pid in "${writer_processes[@]}"; do
     if kill -0 "$writer_pid" 2>/dev/null; then
       kill "$writer_pid" 2>/dev/null || :
     fi
   done
+  for _ in $(seq 1 100); do
+    live=0
+    for writer_pid in "${writer_processes[@]}"; do
+      if kill -0 "$writer_pid" 2>/dev/null; then
+        live=1
+      fi
+    done
+    ((live == 0)) && break
+    sleep 0.05
+  done
   for writer_pid in "${writer_processes[@]}"; do
+    if kill -0 "$writer_pid" 2>/dev/null; then
+      kill -KILL "$writer_pid" 2>/dev/null || :
+    fi
     wait "$writer_pid" 2>/dev/null || :
   done
   stop_server
@@ -114,7 +127,7 @@ run_bd() {
     BEADS_DIR="$probe_root/state" \
     BEADS_DOLT_SERVER_PORT="$server_port" \
     PATH="$PATH" \
-    timeout --signal=TERM 120 "$bd_bin" "$@"
+    timeout --kill-after=5 --signal=TERM 120 "$bd_bin" "$@"
 }
 
 run_bd_without_port() {
@@ -125,7 +138,7 @@ run_bd_without_port() {
     XDG_DATA_HOME="$probe_root/home/.local/share" \
     BEADS_DIR="$probe_root/state" \
     PATH="$PATH" \
-    timeout --signal=TERM 120 "$bd_bin" "$@"
+    timeout --kill-after=5 --signal=TERM 120 "$bd_bin" "$@"
 }
 
 install -d -m 0700 \
@@ -231,18 +244,26 @@ old_port="$server_port"
 kill -KILL "$server_pid"
 wait "$server_pid" 2>/dev/null || :
 server_pid=""
+jq -e --argjson port "$old_port" '.dolt_server_port == $port' \
+  "$probe_root/state/metadata.json" >/dev/null ||
+  fail "metadata did not retain the initialized server port"
 if run_bd create "offline write must fail" --silent \
   >"$probe_root/offline-write.out" 2>&1; then
   fail "write without a server unexpectedly succeeded"
 fi
 grep -Eq 'connection refused|connect:' "$probe_root/offline-write.out" ||
   fail "offline write did not fail loudly"
+grep -Fq "127.0.0.1:$old_port" "$probe_root/offline-write.out" ||
+  fail "offline write did not name the recorded endpoint"
 start_server 1000
+[[ $server_port != "$old_port" ]] || fail "server restart reused the stale port"
 if run_bd_without_port list --json >"$probe_root/stale-port.out" 2>&1; then
   fail "stale recorded server port unexpectedly connected"
 fi
 grep -Eq 'connection refused|connect:' "$probe_root/stale-port.out" ||
   fail "stale server port did not fail loudly"
+grep -Fq "127.0.0.1:$old_port" "$probe_root/stale-port.out" ||
+  fail "stale server failure did not name the recorded endpoint"
 run_bd show "$crash_id" --json >/dev/null ||
   fail "uncommitted row did not survive server restart"
 run_bd dolt commit -m "post-restart checkpoint" >/dev/null

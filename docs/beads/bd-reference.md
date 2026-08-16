@@ -283,8 +283,9 @@ reconsider only writer serialization after those gaps close. The pusher remains
 exclusive without an independently proven compare-and-publish protocol.
 `[measured #991 transaction spike @1.2.2/2.2.3; upstream source @Beads 1.2.2]`
 
-**Split-brain**: a stale `.beads/dolt-server.port` is honored and fails loudly
-with connection refused. `BEADS_DOLT_SERVER_PORT` overrides the stale file and
+**Split-brain**: external init persists its selected port as `dolt_server_port`
+in `.beads/metadata.json`; a stale value is honored and fails loudly with
+connection refused. `BEADS_DOLT_SERVER_PORT` overrides the stale metadata and
 restores the connection. The process environment and `bd dolt show --json` must
 therefore be authoritative. Killing the server makes writes fail loudly; the
 client output contains the connection failure context. A no-auto-commit row

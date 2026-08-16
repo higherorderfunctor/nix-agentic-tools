@@ -45,6 +45,16 @@ in
       chmod 600 "$state/config.yaml"
     }
 
+    snapshot_hooks() {
+      local hook hooks="$1" output="$2"
+      find "$hooks" -mindepth 1 -maxdepth 1 \
+        -printf 'entry|%y|%m|%f|%l\n' | sort > "$output"
+      while IFS= read -r hook; do
+        printf 'sha256|%s|' "$hook" >> "$output"
+        sha256sum "$hooks/$hook" | cut -d' ' -f1 >> "$output"
+      done < <(find "$hooks" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | sort)
+    }
+
     run_bd() {
       local root="$1" cwd="$2" state="$3"
       shift 3
@@ -174,8 +184,8 @@ in
     git -C "$source_init/repo" config user.name Probe
     git -C "$source_init/repo" commit -q --allow-empty -m seed
     git -C "$source_init/repo" config --local --list | sort > "$source_init/config.before"
-    find "$source_init/repo/.git/hooks" -maxdepth 1 -type f -printf '%f\n' \
-      | sort > "$source_init/hooks.before"
+    cp "$source_init/repo/.git/info/exclude" "$source_init/exclude.before"
+    snapshot_hooks "$source_init/repo/.git/hooks" "$source_init/hooks.before"
     source_before="$(git -C "$source_init/repo" rev-parse HEAD)"
     (
       cd "$source_init/repo"
@@ -234,10 +244,11 @@ in
     sort -o "$source_init/config.expected" "$source_init/config.expected"
     diff -u "$source_init/config.expected" "$source_init/config.after" \
       || fail "ordinary init local Git config changed unexpectedly"
-    find "$source_init/repo/.git/hooks" -maxdepth 1 -type f -printf '%f\n' \
-      | sort > "$source_init/hooks.after"
+    snapshot_hooks "$source_init/repo/.git/hooks" "$source_init/hooks.after"
     cmp "$source_init/hooks.before" "$source_init/hooks.after" \
       || fail "--skip-hooks changed Git hooks"
+    cmp "$source_init/exclude.before" "$source_init/repo/.git/info/exclude" \
+      || fail "ordinary init changed info/exclude"
     [ ! -e "$source_init/repo/AGENTS.md" ] || fail "--skip-agents wrote AGENTS.md"
     [ ! -e "$source_init/repo/.git/hooks/pre-commit" ] || fail "--skip-hooks wrote pre-commit"
 
@@ -250,8 +261,7 @@ in
     git -C "$stealth/repo" commit -q --allow-empty -m seed
     git -C "$stealth/repo" config --local --list | sort > "$stealth/config.before"
     cp "$stealth/repo/.git/info/exclude" "$stealth/exclude.before"
-    find "$stealth/repo/.git/hooks" -maxdepth 1 -type f -printf '%f\n' \
-      | sort > "$stealth/hooks.before"
+    snapshot_hooks "$stealth/repo/.git/hooks" "$stealth/hooks.before"
     stealth_before="$(git -C "$stealth/repo" rev-parse HEAD)"
     (
       cd "$stealth/repo"
@@ -270,8 +280,7 @@ in
     sort -o "$stealth/config.expected" "$stealth/config.expected"
     diff -u "$stealth/config.expected" "$stealth/config.after" \
       || fail "stealth local Git config changed unexpectedly"
-    find "$stealth/repo/.git/hooks" -maxdepth 1 -type f -printf '%f\n' \
-      | sort > "$stealth/hooks.after"
+    snapshot_hooks "$stealth/repo/.git/hooks" "$stealth/hooks.after"
     cmp "$stealth/hooks.before" "$stealth/hooks.after" \
       || fail "stealth changed Git hooks"
     [ ! -e "$stealth/repo/AGENTS.md" ] || fail "stealth wrote AGENTS.md"
@@ -312,6 +321,7 @@ in
       cd "$source_init/repo"
       env -i HOME="$source_init/home" PATH="$PATH" ${qualifiedBeads}/bin/bd where --json | jq -r .path
     )"
+    expect_eq "source checkout discovery" "$source_init/repo/.beads" "$main_where"
     linked_where="$(
       cd "$source_init/linked"
       env -i HOME="$source_init/home" PATH="$PATH" ${qualifiedBeads}/bin/bd where --json | jq -r .path
