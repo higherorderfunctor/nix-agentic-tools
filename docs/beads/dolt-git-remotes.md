@@ -1,10 +1,12 @@
 # Dolt remotes, git-backed sync, and encrypted-remote options
 
-> **Last verified:** 2026-08-15 against packaged Beads 1.2.2 and Dolt 2.2.3,
+> **Last verified:** 2026-08-16 against packaged Beads 1.2.2 and Dolt 2.2.3,
 > plus the upstream sources listed at the end. The disposable black-box contract
-> is `checks/beads-contracts.nix`; #991 carries the timestamped investigation
-> record. Companions: `bd-reference.md` (the tool itself) and `ecosystem.md`
-> (integrations). Remote-provider and encryption qualification remains #997.
+> is `checks/beads-contracts.nix`; the lifecycle and recovery probes are
+> `checks/beads-server-contracts.sh` and `checks/beads-recovery-contracts.sh`.
+> #991 carries the timestamped investigation record. Companions:
+> `bd-reference.md` (the tool itself) and `ecosystem.md` (integrations).
+> Remote-provider and encryption qualification remains #997.
 
 ## Problem framing — threat model before tooling
 
@@ -215,26 +217,39 @@ not resolve the unpublished issue ID, excluding a delayed publisher rather than
 relying on an immediate ref snapshot alone.
 `[measured @Beads 1.2.2 / Dolt 2.2.3]`
 
-A second independently initialized state directory bootstraps from that ref and
-adopts the ledger identity. In the measured divergence sequence, clones A and B
-both wrote, A pushed, B's stale push failed nonzero with a `non-fast-forward`
-diagnostic and pull hint, then B pull/push and A pull preserved all rows and
-history. The contract records each divergent create's Dolt commit hash and
-asserts that both remain reachable in A's final `dolt_log`; row count alone is
-not treated as history evidence. This establishes loud stale-writer failure and
-explicit recovery; it does not authorize conflict-resolution strategies that
-discard either side. `[measured @Beads 1.2.2 / Dolt 2.2.3]`
+An earlier two-clone discrimination probe established that a stale push fails
+nonzero with a `non-fast-forward` diagnostic. Its pull/merge sequence is not the
+accepted module protocol: #991 fails closed on remote divergence and does not
+pull, merge, rebase, resolve ledger conflicts, or force-push. Replacement
+recovery starts from an absent isolated database and consumes one already
+validated published HEAD.
+`[measured @Beads 1.2.2 / Dolt 2.2.3; qualified by recovery probe @Beads 1.2.2 / Dolt 2.2.3]`
 
 ### Qualified external-server composition
 
 The intended day-one topology is an external loopback Dolt server, a literal
 module-owned `.beads` directory, and a declared ledger URL. Initialization from
 a neutral non-Git cwd preserves that URL, verifies the complete remote set, and
-leaves source Git state untouched. Eight source-checkout writers plus eight
-linked-worktree writers persist through the shared server. Initialization and
-writes do not publish while `dolt.auto-push=false`, `BD_DOLT_AUTO_PUSH=false`,
+leaves source Git state untouched. The currently qualified path uses one
+repository-wide lock for every complete application mutation and the pusher.
+Each mutation rejects dirty or invalid incoming state after acquiring the lock,
+then must leave a clean committed working set and pass explicit constraint and
+direct orphan checks before the lock is released. Initialization and writes do
+not publish while `dolt.auto-push=false`, `BD_DOLT_AUTO_PUSH=false`,
 `export.auto=false`, `export.git-add=false`, `no-git-ops=true`, and Beads hooks
-remain disabled. `[measured server probe @Beads 1.2.2 / Dolt 2.2.3]`
+remain disabled.
+`[measured server and recovery probes @Beads 1.2.2 / Dolt 2.2.3]`
+
+Pinned Beads has a connection-pinned `RunInTransaction` helper that carries one
+SQL session through the application transaction and `StageAndCommit`, but
+ordinary `DoltStore.CreateIssue` does not use it. The default create path
+commits its issue/event SQL transaction before `doltAddAndCommit` separately
+obtains a pooled connection. Concurrent default sessions can therefore disagree
+during the later Dolt staging/version-commit transition even though the issue
+and its created event were atomic within the earlier SQL transaction. The
+published recovery artifact is the Dolt HEAD, not another session's live working
+set.
+`[upstream source @Beads 1.2.2; measured recovery probe @Beads 1.2.2 / Dolt 2.2.3]`
 
 Pinned Dolt 2.2.3 has one deterministic process-state defect in the initial
 publication window. Initialization against a Git remote with an ordinary seed
@@ -248,27 +263,28 @@ external-server Beads correctly selects SQL because it cannot see a CLI database
 directory. The file-and-line diagnosis and hermetic reproduction are retained in
 issue #1025.
 
-The settled module pusher is also the measured recovery. It derives the database
-name from `.beads/metadata.json`, acquires the repository singleton lock, and
-runs raw `dolt push --set-upstream origin main` from the server data directory.
-That fresh Dolt process recreates exactly one usable bare cache, publishes
-`refs/dolt/data`, and heals the still-running server: the next `bd dolt push`
-succeeds without a restart. No version override, Dolt patch, cache-path glue, or
-manual operator/agent push is required. A future upstream fix changes the
-discrimination result, not the module-pusher ownership decision.
+The settled module pusher derives the database name from `.beads/metadata.json`,
+acquires the same repository lock used by mutations, requires a clean valid
+working set and the expected remote ref, and runs raw
+`dolt push --set-upstream origin main` from the server data directory without
+force. That fresh Dolt process recreates exactly one usable bare cache,
+publishes `refs/dolt/data`, and heals the still-running server: the next
+`bd dolt push` succeeds without a restart. No version override, Dolt patch,
+cache-path glue, or manual operator/agent push is required. A future upstream
+fix changes the discrimination result, not the module-pusher ownership decision.
 `[measured server probe @Beads 1.2.2 / Dolt 2.2.3]`
 
-Publication is module-explicit: the pusher performs a start-up drain and the
-configured interval loop, with a per-repository enable toggle and singleton
-guard. Beads-side auto-push and export stay inert, so agents and operators never
-publish imperatively. Pull remains `bd dolt pull`: in the measured same-row
-conflict, it failed loudly and restored the clean pre-pull working set, whereas
-raw `dolt pull` left an unresolved table conflict. Fresh recovery remains
-`bd bootstrap`; activation invokes it only when the configured database is
-absent and otherwise verifies existing state, because rerunning bootstrap with
-`sync.remote` set is anti-idempotent. Runtime process wiring belongs to #993;
-these are the qualified boundaries consumed by #992 and #993.
-`[measured session @Beads 1.2.2 / Dolt 2.2.3; measured server probe for publication and bootstrap]`
+Publication is module-explicit. Beads-side auto-push and export stay inert, so
+agents and operators never publish imperatively. Remote divergence, dirty state,
+constraint violations, or direct application orphans reject publication before
+the raw pusher runs. Recovery is a cold `bd bootstrap` into an absent isolated
+database followed by exact verification; an existing database is verified in
+place rather than bootstrapped again. After a verified restore, the probe proves
+a new write, a forward no-force republish under the same lock, and a third exact
+cold restore. It never repairs an invalid head. Pull, merge, rebase, conflict
+resolution, and force-push are deliberately unqualified and forbidden. Runtime
+implementation belongs to #992 and process wiring to #993; neither may weaken
+this #991 boundary. `[measured recovery probe @Beads 1.2.2 / Dolt 2.2.3]`
 
 ## Encrypted-remote options
 
@@ -372,6 +388,9 @@ These are deliberately excluded from the MVP and routed to #997:
 ## Sources
 
 - Beads: `github.com/gastownhall/beads`
+- Beads 1.2.2 transaction lifecycle: `internal/storage/dolt/transaction.go`,
+  `internal/storage/dolt/issues.go`, and `internal/storage/dolt/store.go`
+- Beads 1.2.2 server-mode auto-commit policy: `cmd/bd/dolt_autocommit.go`
 - Dolt git remotes deep-dive: DoltHub blog, 2026-02-19, "Supporting Git remotes
   as Dolt remotes"
 - Dolt remote types: `docs.dolthub.com/sql-reference/version-control/remotes`

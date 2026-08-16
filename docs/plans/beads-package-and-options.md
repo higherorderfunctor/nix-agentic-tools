@@ -207,15 +207,15 @@ Cross-cutting invariants the modules must encode:
 
 ### Phase 3b — git-ref-backed Dolt remote and checkpoint workflow
 
-`bd dolt push`/`pull` can target a Dolt remote riding an ordinary git remote on
-the custom ref `refs/dolt/data` — one remote and credential for code and
-work-state, invisible to normal git operations (mechanics and CAS guarantees:
-`docs/beads/dolt-git-remotes.md`). The option surface should declare, per DB:
-the remote URL, a **push/checkpoint policy** (manual only / on session end /
-coupled to the OD-M4 checkpoint cadence), and a **pull posture** — the
-divergent-history pull behavior is uncharacterized (see the companion's
-experiment list), so multi-machine designs must not assume pulls are
-conflict-free. Two facts shape the design:
+Beads can target a Dolt remote riding an ordinary git remote on the custom ref
+`refs/dolt/data` — one remote and credential for code and work-state, invisible
+to normal git operations (mechanics and CAS guarantees:
+`docs/beads/dolt-git-remotes.md`). The qualified option boundary declares the
+remote URL and enough policy for one module-owned raw-Dolt pusher to publish a
+clean validated HEAD under the same repository gate as mutations. Agents and
+operators do not publish imperatively. Remote divergence fails closed; the
+module never pulls, merges, rebases, resolves ledger conflicts, or force-pushes.
+Two facts shape the design:
 
 - Issue state on a git ref is **not** branch-visible — no issue diffs in code
   review, ever. The options must not pretend otherwise.

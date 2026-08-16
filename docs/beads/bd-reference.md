@@ -15,8 +15,10 @@
 > black-box `beads-contracts` flake check.
 > `[measured server probe @1.2.2/2.2.3]` — asserted by
 > `checks/beads-server-contracts.sh`, a dynamic-port disposable probe run
-> outside the Nix build sandbox. `[measured session @1.2.2/2.2.3]` — retained in
-> #991's timestamped investigation record, but not asserted by either durable
+> outside the Nix build sandbox. `[measured recovery probe @1.2.2/2.2.3]` —
+> asserted by `checks/beads-recovery-contracts.sh`, the repeated serialized
+> write/publish/cold-restore probe. `[measured session @1.2.2/2.2.3]` — retained
+> in #991's timestamped investigation record, but not asserted by either durable
 > probe. `[measured Dolt @2.2.3]` — observed by running the pinned Dolt binary
 > under a clean temporary home. `[upstream]` — read from upstream docs or source
 > at the date above. `[unverified]` — carried from research that never executed
@@ -31,9 +33,11 @@ work-queue primitives. MIT-licensed, no web UI by design. Storage is **Dolt** (a
 version-controlled SQL database with cell-level merge and native branching);
 beads migrated off JSONL/SQLite, so pre-migration writeups are stale on storage
 and sync. Issue IDs are hash-based (`bd-a1b2`) to avoid merge collisions across
-concurrent agents and branches. Sync is `bd dolt push` / `bd dolt pull` against
-a Dolt remote. Old closed issues can be compacted ("memory decay") via
-`bd admin compact --days N` plus Dolt garbage collection. `[upstream]`
+concurrent agents and branches. Upstream sync exposes `bd dolt push` and
+`bd dolt pull` against a Dolt remote; the qualified module protocol below uses
+only serialized no-force publication and cold replacement recovery. Old closed
+issues can be compacted ("memory decay") via `bd admin compact --days N` plus
+Dolt garbage collection. `[upstream]`
 
 There is **no pluggable storage backend** — beads embeds Dolt specifically; the
 MySQL dialect is an implementation detail that only surfaces through `bd sql`.
@@ -84,9 +88,9 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
   permits local event files; complete collection disablement is the stateful
   user-global `metrics.disabled = true` setting. The repository's `bd` wrapper
   sets the no-flush variable for every Dolt child process. A clean-home `init` +
-  `status` probe with `DOLT_DISABLE_EVENT_FLUSH=1` created one 147-byte event
-  file, confirming that the wrapper control prevents network flushing but is not
-  the collection kill switch. `DOLT_ROOT_PATH=<contained-root>` relocates both
+  `status` probe with `DOLT_DISABLE_EVENT_FLUSH=1` created local event payloads,
+  confirming that the wrapper control prevents network flushing but is not the
+  collection kill switch. `DOLT_ROOT_PATH=<contained-root>` relocates both
   `.dolt/config_global.json` and `.dolt/eventsData`; setting
   `metrics.disabled=true` there before init leaves exactly the contained global
   config, events directory, and event lock, with no `.devts` payload; a distinct
@@ -162,10 +166,14 @@ history through an external server when `BEADS_DIR` is a literal `.beads`
 directory, `sync.remote` is declared, and the target database is absent. With
 `sync.remote` still set, a second invocation selects clone again and fails
 because the database exists. Activation must therefore bootstrap only an absent
-database and verify an existing one without rerunning bootstrap. `bd vc log` is
-not a validation command in 1.2.2: it prints help and exits zero because no
-`log` subcommand exists. Verify restored history with read-only `dolt log` from
-the resolved database directory. `[measured server probe @1.2.2/2.2.3]`
+database and verify an existing one without rerunning bootstrap. Qualified
+recovery compares the restored HEAD, table set, issues, dependencies, events,
+actor attribution, and history exactly; requires clean state with zero direct
+orphans and constraint violations; then writes, republishes, and repeats the
+cold restore. `bd vc log` is not a validation command in 1.2.2: it prints help
+and exits zero because no `log` subcommand exists. Verify restored history with
+read-only `dolt log` from the resolved database directory.
+`[measured recovery probe @1.2.2/2.2.3]`
 
 **Secrets.** Dolt-server credentials live in an INI file at
 `~/.config/beads/credentials` (directory `beads`, **not** `bd`), sections keyed
@@ -311,10 +319,10 @@ in `.beads/metadata.json`; a stale value is honored and fails loudly with
 connection refused. `BEADS_DOLT_SERVER_PORT` overrides the stale metadata and
 restores the connection. The process environment and `bd dolt show --json` must
 therefore be authoritative. Killing the server makes writes fail loudly; the
-client output contains the connection failure context. A no-auto-commit row
+client output contains the connection failure context. A server-mode row
 survived a kill and restart in the disposable probe, but the minimum supported
-recovery remains backup/remote-ref based rather than relying on that working-set
-behavior. `[measured server probe @1.2.2/2.2.3]`
+recovery remains backup/remote-ref based rather than relying on process-local
+working-set behavior. `[measured server probe @1.2.2/2.2.3]`
 
 **Process residue**: embedded commands left no resident `bd` or Dolt process in
 the measured session. External-server mode leaves only the supervisor-owned
