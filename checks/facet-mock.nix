@@ -35,12 +35,13 @@
     devenv = {devenvOnly = "devenv";};
     homeManager = {hmOnly = "home-manager";};
   };
-  coreWorld = loader.compose {
+  composedWorld = loader.compose {
     facetsDir = compatibleRoot;
     inherit pkgs specialArgs system;
     registryModules = [registryModule];
   };
-  world = enforceLocalChecks coreWorld;
+  checkWorld = builtins.removeAttrs composedWorld ["localChecks"];
+  world = enforceLocalChecks composedWorld;
 
   compatibleEntries = builtins.readDir compatibleRoot;
   expectedOwnerNames = sort builtins.lessThan (filter (name: compatibleEntries.${name} == "directory") (attrNames compatibleEntries));
@@ -92,7 +93,7 @@
             then
               imported {
                 inherit lib pkgs system;
-                world = coreWorld;
+                world = checkWorld;
               }
             else imported;
         in
@@ -319,9 +320,15 @@
       "non-directory contribution container"
       "allowed forms require directories"
     ])
-    (scannerProbe "package-invalid-entry" [
+    (scannerProbe "package-invalid-suffix" [
       "owner 'one'"
-      "/one/packages/Bad.txt"
+      "/one/packages/bad"
+      "invalid package entry"
+      "allowed forms: regular <export>.nix files with lowercase kebab-case names"
+    ])
+    (scannerProbe "package-invalid-name" [
+      "owner 'one'"
+      "/one/packages/Bad.nix"
       "invalid package entry"
       "allowed forms: regular <export>.nix files with lowercase kebab-case names"
     ])
