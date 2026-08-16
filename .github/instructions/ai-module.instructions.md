@@ -7,13 +7,17 @@ applyTo: "checks/module-eval.nix,lib/ai/agent.nix,lib/ai/ai-common.nix,lib/ai/ap
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-16 (commit pending — `mkSkillPackageModule` now
-> consumes the `ai.programs.*` factory, moving stacked-workflows and
-> living-workflow enablement into portable plus per-runtime B4 option trees
-> while preserving their per-runtime pool writes; runtime inventories now cover
-> all five registered ecosystems; stacked-workflows' machine-wide `gitPreset`
-> remains an HM-only top-level companion). Prior: 2026-08-15 (commit pending —
-> the `ai.programs.*` factory generates portable defaults and capability-gated
+> **Last verified:** 2026-08-16 (commit pending — Semble distinguishes its
+> program-inherited MCP integration from explicit CLI-rule and named-agent
+> opt-ins; MCP agents use a committed tool-specific prompt, and only Kiro may
+> retain an agent-scoped server while suppressing root exposure). Prior:
+> 2026-08-16 (commit pending — `mkSkillPackageModule` now consumes the
+> `ai.programs.*` factory, moving stacked-workflows and living-workflow
+> enablement into portable plus per-runtime B4 option trees while preserving
+> their per-runtime pool writes; runtime inventories now cover all five
+> registered ecosystems; stacked-workflows' machine-wide `gitPreset` remains an
+> HM-only top-level companion). Prior: 2026-08-15 (commit pending — the
+> `ai.programs.*` factory generates portable defaults and capability-gated
 > runtime override trees from one program specification; Semble is its first
 > consumer and uses program-level enable negation instead of runtime selectors;
 > divergent runtime package customizations use collision-free command aliases
@@ -545,15 +549,20 @@ behavior.
 The program implementation consumes only resolved per-runtime records and may
 write `ai.<runtime>.<pool>` entries at `mkDefault` priority; it must never write
 the root pools. A runtime-specific program `enable = false` is the runtime-list
-replacement. For Semble feature selection, an explicit runtime feature value is
-more specific still; otherwise the runtime program value takes precedence over
-an inherited portable feature value. The program still must not set
+replacement. For Semble's inherited MCP feature, an explicit runtime feature
+value is more specific still; otherwise the runtime program value takes
+precedence over an inherited portable feature value. Semble's CLI rule and named
+agent are explicit portable opt-ins: a runtime program false retracts them, but
+a runtime program true does not activate them. The program still must not set
 `ai.<runtime>.enable`, because package/CLI activation remains an explicit
 consumer choice.
 
 Semble was the first factory consumer. Its single spec supports Claude, Codex,
 and Kiro, and generates its named MCP, agent, and `semble` rule defaults in both
-backend evaluations. The skill-package factory now consumes the same primitive
+backend evaluations. The MCP agent and CLI rule use separate committed prompts.
+Kiro alone can carry `mcpServers.semble` inside its named agent, so
+`mcp.rootExposure = false` is rejected for other runtimes and without a matching
+MCP-backed Kiro agent. The skill-package factory now consumes the same primitive
 for stacked-workflows and living-workflow, with an enable-only program spec that
 supports every registered runtime. The rule composes into Claude and Codex's
 single always-loaded files and lets Kiro's directory-native renderer write

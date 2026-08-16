@@ -20,17 +20,31 @@
 }: let
   programFactory = import ../../../lib/ai/program.nix {inherit lib;};
   program = programFactory.mkProgram (import ./options.nix {inherit lib pkgs;});
+  contentScope = import ../lib/contentScope.nix {inherit lib;};
   records = import ../lib/integrations.nix;
   runtimes = program.supportedRuntimes;
   cacheRoot = cacheLocation {inherit config lib;};
   customizePackage = import ../lib/withGrammars.nix {inherit lib pkgs;};
 
+  featurePaths = {
+    instructions = ["instructions" "cli"];
+    mcp = ["mcp"];
+    subagent = ["subagent"];
+  };
+  optInFeatures = ["instructions" "subagent"];
+
   featureEnabled = portable: override: featureName: let
-    portableFeature = portable.${featureName}.enable;
-    runtimeFeature = override.${featureName}.enable;
+    path = featurePaths.${featureName};
+    portableFeature = (lib.getAttrFromPath path portable).enable;
+    runtimeFeature = (lib.getAttrFromPath path override).enable;
   in
     if runtimeFeature != null
     then runtimeFeature
+    else if lib.elem featureName optInFeatures
+    then
+      if override.enable == false
+      then false
+      else portableFeature
     else if override.enable != null
     then override.enable
     else if portableFeature != null
@@ -192,10 +206,26 @@
   # keeps its index.
 
   mcpEntry = state: {
-    args = lib.optionals (state.cfg.mcp.content != "code") ["--content" state.cfg.mcp.content];
+    args = contentScope.toArgs state.cfg.mcp.content;
     command = "${statePackage state}/bin/semble-mcp";
     type = "stdio";
   };
+
+  agentRecord = state: let
+    interfaceRecords =
+      if state.cfg.subagent.interface == "mcp"
+      then records.mcp
+      else recordsFor state;
+    base =
+      if state.runtime == "kiro"
+      then interfaceRecords.kiroAgent
+      else interfaceRecords.semanticAgent;
+  in
+    base
+    // lib.optionalAttrs (state.runtime == "kiro" && state.cfg.subagent.interface == "mcp") {
+      includeMcpJson = false;
+      mcpServers.semble = mcpEntry state;
+    };
 
   runtimeConfig = runtime: let
     state = states.${runtime};
@@ -204,7 +234,7 @@
       (lib.mkIf (state.selected "instructions") {
         ai.${runtime}.rules.semble = lib.mkDefault (recordsFor state).rule;
       })
-      (lib.mkIf (state.selected "mcp") {
+      (lib.mkIf (state.selected "mcp" && state.cfg.mcp.rootExposure) {
         ai.${runtime}.mcpServers.semble = lib.mkDefault (mcpEntry state);
       })
       (lib.mkIf (state.selected "subagent") {
@@ -213,11 +243,7 @@
         # whole entry so a consumer can replace it atomically. Claude/Codex
         # agents are normalized nullable entries and also accept null
         # tombstones; Kiro's runtime-native agent pool is replace-only.
-        ai.${runtime}.agents.semble-search = lib.mkDefault (
-          if runtime == "kiro"
-          then (recordsFor state).kiroAgent
-          else (recordsFor state).semanticAgent
-        );
+        ai.${runtime}.agents.semble-search = lib.mkDefault (agentRecord state);
       })
     ];
 in {
@@ -226,8 +252,8 @@ in {
   config = lib.mkMerge (
     [
       {
-        assertions =
-          lib.concatMap (state: [
+        assertions = lib.concatMap (state:
+          [
             {
               assertion = state.packageCustomizable;
               message = "ai.${state.runtime}.programs.semble grammar or path customization requires package to expose overridePythonAttrs.";
@@ -248,8 +274,26 @@ in {
               assertion = state.pathMappingPatternsUnique;
               message = "ai.${state.runtime}.programs.semble.mcp.pathMappings patterns must be unique.";
             }
+          ]
+          ++ map (message: {
+            assertion = false;
+            inherit message;
+          }) (contentScope.errors state.cfg.mcp.content)
+          ++ lib.optional (state.selected "subagent" && state.cfg.subagent.interface == "mcp") {
+            assertion = state.selected "mcp";
+            message = "ai.${state.runtime}.programs.semble.subagent.interface = \"mcp\" requires the Semble MCP integration for the same runtime.";
+          }
+          ++ lib.optionals (state.selected "mcp" && !state.cfg.mcp.rootExposure) [
+            {
+              assertion = state.runtime == "kiro";
+              message = "ai.${state.runtime}.programs.semble.mcp.rootExposure = false is unsupported: only Kiro can attach a Semble MCP server to a named agent without exposing it to the root session.";
+            }
+            {
+              assertion = state.selected "subagent" && state.cfg.subagent.interface == "mcp";
+              message = "ai.${state.runtime}.programs.semble.mcp.rootExposure = false requires an enabled MCP-backed Semble subagent for the same runtime.";
+            }
           ])
-          stateList;
+        stateList;
       }
       (lib.mkIf integrationActive
         (lib.mkMerge [

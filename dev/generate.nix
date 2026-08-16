@@ -660,9 +660,10 @@
     <details>
     <summary><strong>Semble code search</strong></summary>
 
-    Semble never enables AI runtimes implicitly. Enable its MCP server, CLI
-    guidance, and `semble-search` subagent, then separately enable whichever
-    runtimes should consume them:
+    Semble never enables AI runtimes implicitly. The program switch enables its
+    package and MCP server; CLI guidance and the `semble-search` subagent are
+    independent opt-ins. Separately enable whichever runtimes should consume
+    the generated configuration:
 
     ```nix
     ai.programs.semble.enable = true;
@@ -681,9 +682,12 @@
     ai = {
       programs.semble = {
         enable = true;
-        instructions.enable = false;
-        mcp.content = "all";
-        subagent.enable = false;
+        instructions.cli.enable = true;
+        mcp.content = ["code" "docs"];
+        subagent = {
+          enable = true;
+          interface = "mcp";
+        };
       };
 
       claude.programs.semble.enable = false;
@@ -695,6 +699,11 @@
     Claude and Codex compose the guidance into their single always-loaded
     `CLAUDE.md` and `AGENTS.md` files. Kiro writes its named instruction to
     `.kiro/steering/semble.md`.
+
+    Set `mcp.rootExposure = false` only on Kiro, with an enabled MCP-backed
+    Semble subagent for that runtime. The server then remains in the agent file
+    while being omitted from the root MCP pool; unsupported runtimes fail
+    evaluation instead of silently exposing it.
 
     Home Manager fixes the cache at its owned XDG location. A devenv integration
     relocates it to a project-local state directory and tells Semble where by

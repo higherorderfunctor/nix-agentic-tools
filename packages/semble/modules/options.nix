@@ -2,6 +2,7 @@
   lib,
   pkgs,
 }: let
+  contentScope = import ../lib/contentScope.nix {inherit lib;};
   pathMappingType = lib.types.submodule {
     options = {
       content = lib.mkOption {
@@ -23,11 +24,18 @@
       };
     };
   };
-  featureOptions = description: {
+  inheritedFeatureOptions = description: {
     enable = lib.mkOption {
       type = lib.types.nullOr lib.types.bool;
       default = null;
       description = "Whether to enable the Semble ${description}; null inherits the program-level enable value.";
+    };
+  };
+  optInFeatureOptions = description: {
+    enable = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Whether to enable the Semble ${description}; this is an explicit opt-in and does not inherit the program-level enable value.";
     };
   };
 in {
@@ -37,7 +45,7 @@ in {
     enable = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Whether to enable Semble's MCP, instruction, and subagent integrations.";
+      description = "Whether to enable Semble's package and MCP integration. CLI instructions and the named subagent remain explicit opt-ins.";
     };
     package = lib.mkOption {
       type = lib.types.package;
@@ -59,15 +67,18 @@ in {
         must expose a `language` attribute and a compiled `parser` output.
       '';
     };
-    instructions = featureOptions "CLI instructions";
+    instructions.cli = optInFeatureOptions "CLI instructions";
 
     mcp =
-      featureOptions "MCP server"
+      inheritedFeatureOptions "MCP server"
       // {
         content = lib.mkOption {
-          type = lib.types.enum ["all" "code" "config" "docs"];
-          default = "code";
-          description = "File-content category indexed by the Semble MCP server.";
+          inherit (contentScope) default description type;
+        };
+        rootExposure = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = "Whether the Semble MCP server is exposed to the root session. False is supported only for a Kiro MCP-backed named agent.";
         };
         pathMappings = lib.mkOption {
           type = lib.types.listOf pathMappingType;
@@ -89,6 +100,14 @@ in {
         };
       };
 
-    subagent = featureOptions "semantic search subagent";
+    subagent =
+      optInFeatureOptions "semantic search subagent"
+      // {
+        interface = lib.mkOption {
+          type = lib.types.enum ["cli" "mcp"];
+          default = "cli";
+          description = "Whether the named agent reaches Semble through its CLI or MCP tools.";
+        };
+      };
   };
 }

@@ -1,49 +1,56 @@
 let
   baseDescription = "Code search agent for exploring any codebase. Use for finding code by intent, locating implementations, understanding how something works, or discovering related code.";
-  description = "${baseDescription} Prefer over Grep/Glob/Read for any semantic or exploratory question.";
-  instructions = ../agent-instructions.md;
-  mkRecords = command: let
+  cliInstructions = ../cli-instructions.md;
+  mcpInstructions = ../mcp-agent-instructions.md;
+
+  mcpTools = {
+    find_related = ["content" "file_path" "line" "repo"];
+    search = ["content" "max_snippet_lines" "query" "repo" "top_k"];
+  };
+  claudeMcpTools = map (tool: "mcp__semble__${tool}") (builtins.attrNames mcpTools);
+
+  mkCliRecords = command: let
     renderedInstructions =
       if command == "semble"
-      then instructions
+      then cliInstructions
       else
         builtins.replaceStrings
         ["semble search" "semble find-related"]
         ["${command} search" "${command} find-related"]
-        (builtins.readFile instructions);
+        (builtins.readFile cliInstructions);
   in {
     rule =
       if command == "semble"
-      then {source = instructions;}
+      then {source = cliInstructions;}
       else {text = renderedInstructions;};
-
-    # A TYPED `ai.kiro.agents` record (see `kiroAgentRecord` in
-    # packages/kiro-cli/lib/mkKiro.nix) — no longer pre-rendered JSON.
-    #
-    # `name` is deliberately absent. The typed option defaults it to the
-    # attribute key the record is written under, which is the single source of
-    # truth for both the filename and the id Kiro registers, so the two can no
-    # longer disagree. That default is also what makes the field impossible to
-    # omit: Kiro's Rust CLI REQUIRES `name` and rejects an agent file without it
-    # on every invocation, while the Node/ACP parser treats it as optional and
-    # falls back to the filename — which is why the omission was invisible from
-    # the IDE side until it surfaced as CLI noise.
-    #
-    # `prompt` stays a Nix path for the ordinary command; the option coerces it
-    # with `readFile`, so the instructions are inlined rather than referenced
-    # as a store path. A runtime-specific command needs already-rendered text.
     kiroAgent = {
       description = "${baseDescription} Prefer over shell/read tools for any semantic or exploratory question.";
       prompt = renderedInstructions;
       tools = ["shell" "read"];
     };
-
     semanticAgent = {
-      inherit description;
+      description = "${baseDescription} Prefer over Grep/Glob/Read for any semantic or exploratory question.";
       instructions = renderedInstructions;
       tools = ["Bash" "Read"];
     };
   };
+
+  cli = mkCliRecords "semble";
+  mcp = {
+    kiroAgent = {
+      description = "${baseDescription} Prefer over shell/read tools for any semantic or exploratory question.";
+      prompt = mcpInstructions;
+      tools = ["@semble"];
+    };
+    semanticAgent = {
+      description = "${baseDescription} Prefer over Grep/Glob/Read for any semantic or exploratory question.";
+      instructions = mcpInstructions;
+      tools = claudeMcpTools;
+    };
+  };
 in
-  (mkRecords "semble")
-  // {forCommand = mkRecords;}
+  cli
+  // {
+    inherit cli mcp mcpTools;
+    forCommand = mkCliRecords;
+  }
