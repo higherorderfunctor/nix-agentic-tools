@@ -1,6 +1,7 @@
 # Beads: overlay package and `ai.*` option surface
 
-> **Status: DESIGN** — phase 1 of 3 (this document set). Created 2026-08-14.
+> **Status: DESIGN** — phase 1 of 3 (this document set). Created 2026-08-14;
+> updated 2026-08-16 after the normalized program factory landed in #1024.
 > Companion references, synthesized from prior research sessions and re-verified
 > where marked: `docs/beads/bd-reference.md` (the tool),
 > `docs/beads/dolt-git-remotes.md` (sync/remote mechanics),
@@ -59,15 +60,13 @@ factory instead. Concretely:
 | 1     | This document set                                  | —                                                       |
 | 2     | `overlays/dev-tools/beads.nix` + registrations     | OD-P1/OD-P2/OD-P4 veto window (defaults proposed below) |
 | 2b    | `overlays/mcp-servers/beads-mcp.nix`               | OD-P3 (timing); technically unblocked                   |
-| 3     | `packages/beads/` HM + devenv + lib option surface | rework PR 7b (naming), OD-M1..M5, probes                |
+| 3     | `packages/beads/` HM + devenv + lib option surface | OD-M1..M5, probes; namespace gate satisfied by #1024    |
 | 3b    | Git-ref Dolt remote options + checkpoint workflow  | OD-M4; encrypted variants additionally OD-D1            |
 
-Phase 3's namespace question is deliberately deferred: the in-flight `ai.*`
-rework (`docs/plans/ai-normalized-interface-rework.md`, PR sequence signed off
-2026-08-14) introduces `ai.programs.<pkg>` / `ai.<runtime>.programs.<pkg>` in PR
-7b, and beads' options should land in that shape rather than invent a pre-rework
-namespace that PR 8 would then have to migrate. Surfaces can be _designed_ now
-(below); they get _named_ after 7b.
+Phase 3's namespace question is settled: #1024 shipped `ai.programs.<pkg>` /
+`ai.<runtime>.programs.<pkg>` with generated per-leaf runtime overrides. Beads'
+options should land in that shape. The remaining phase-3 gates are the operator
+decisions and probes named above, not an interface migration.
 
 ## Phase 2 — the overlay (unblocked)
 
@@ -298,10 +297,9 @@ ruling; owner **measure** = a probe or experiment settles it.
   systemd-user only, or launchd parity too. Decides the HM unit form. Whatever
   the platform, the unit binds loopback-only by default and pins auth (see the
   shared-server row).
-- **OD-M6** (operator, deferred until rework PR 7b lands — this is the table's
-  naming gate): option namespace — land as `ai.programs.beads` once PR 7b
-  exists; only if phase 3 must ship earlier does a standalone `beads.*`
-  namespace (with a planned migration) become a real question.
+- **OD-M6 — resolved by #1024:** the option namespace is `ai.programs.beads`,
+  with generated per-runtime leaves under `ai.<runtime>.programs.beads`. Do not
+  introduce a standalone `beads.*` namespace.
 
 ### Deferred (nothing before phase 3b depends on these; revisit when a consumer arrives)
 
@@ -412,5 +410,5 @@ session against the phase 2 package. Feeds noted.
 This plan and its three companions carry `Last verified` markers. Any change to
 the overlay, the module surface, or an upstream fact a companion records must
 update the affected document in the same commit — a stale companion is worse
-than none. When the rework's PR 7b lands, revisit OD-M6 and re-cite the option
-paths in the phase 3 table.
+than none. If the normalized program factory changes, update the resolved OD-M6
+paths and the phase 3 table in the same commit.

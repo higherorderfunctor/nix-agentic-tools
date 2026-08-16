@@ -1,20 +1,23 @@
 ## Stacked Workflows Development
 
-> **Last verified:** 2026-08-16 (commit pending — package enablement moved to
-> `ai.programs.stacked-workflows.enable` with per-runtime B4 overrides; skills
-> reach all five runtimes while the router reaches only runtimes with a rules
-> pool; `stacked-workflows.gitPreset` remains an HM-only top-level companion).
-> Prior: 2026-08-15 (commit pending — same-key root entries are now portable
-> defaults replaced by the package's per-runtime values; consumers may override
-> or null-suppress those `mkDefault` package entries). Prior: 2026-08-15 (commit
-> pending — the router is now the keyed `stacked-workflows-router` rule,
-> contributed at `mkDefault` so an ordinary per-runtime consumer definition
-> wins). Prior: 2026-08-14 (commit pending — the contributions land on the
-> PER-RUNTIME pools now, not the root ones, so the consumer override key moved
-> to `ai.<runtime>.skills.<name>` and a root write is a collision rather than an
-> override). Prior: 2026-08-02 (commit pending — Codex now receives the shared
-> stacked-workflow skills and routing instruction through the same explicit HM
-> and devenv pool contributions as the other enabled AI CLIs).
+> **Last verified:** 2026-08-16 (commit pending — the package-specific
+> architecture guide is now co-located under `packages/stacked-workflows/docs/`
+> and routed from there). Prior: 2026-08-16 (commit pending — package enablement
+> moved to `ai.programs.stacked-workflows.enable` with per-runtime B4 overrides;
+> skills reach all five runtimes while the router reaches only runtimes with a
+> rules pool; `stacked-workflows.gitPreset` remains an HM-only top-level
+> companion). Prior: 2026-08-15 (commit pending — same-key root entries are now
+> portable defaults replaced by the package's per-runtime values; consumers may
+> override or null-suppress those `mkDefault` package entries). Prior:
+> 2026-08-15 (commit pending — the router is now the keyed
+> `stacked-workflows-router` rule, contributed at `mkDefault` so an ordinary
+> per-runtime consumer definition wins). Prior: 2026-08-14 (commit pending — the
+> contributions land on the PER-RUNTIME pools now, not the root ones, so the
+> consumer override key moved to `ai.<runtime>.skills.<name>` and a root write
+> is a collision rather than an override). Prior: 2026-08-02 (commit pending —
+> Codex now receives the shared stacked-workflow skills and routing instruction
+> through the same explicit HM and devenv pool contributions as the other
+> enabled AI CLIs).
 
 ### Package Structure
 
@@ -32,7 +35,8 @@ content package with per-backend modules:
   (skills + skill-routing rule + git-config presets)
 - `packages/stacked-workflows/modules/devenv/` — project-local module (skills +
   skill-routing rule)
-- `dev/fragments/stacked-workflows/` — dev-only development guide
+- `packages/stacked-workflows/docs/development.md` — this package-owned
+  development guide
 - `packages/git-tools/` — overlay for git-absorb, git-branchless, git-revise
 
 ### Git Config Presets

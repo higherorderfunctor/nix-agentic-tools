@@ -1,20 +1,52 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — B4 now also governs every
-> generated `ai.programs.*` runtime-override leaf; null inherits and non-null
-> wins without acquiring keyed-pool tombstone semantics). Prior: 2026-08-15
-> (commit pending — proxied MCP declarations now carry explicit managed-unit
-> ownership: a used root declaration owns one shared proxy, runtime declarations
-> own directly, reused ownership keys fail, and unused root proxies do not
-> materialize). Prior: 2026-08-15 (commit pending — all six normalized keyed
-> pools now support per-runtime replacement and null tombstones; the former
-> root↔runtime collision assertion is deleted, and definition provenance now
-> rejects two packages claiming one key at the same root or runtime scope,
-> including claims hidden by whole-option priority in a combined evaluation).
-> Prior: 2026-08-15 (commit pending — the list-shaped instructions exception
-> retired in favor of keyed rules). If you add a normalized pool or change its
-> cross-level merge, null behavior, or package ownership rule and this fragment
-> is not updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-16 (commit pending — this fragment now owns the
+> complete root/runtime boundary matrix formerly kept in the retired normalized
+> interface plan, including capability degradation, translation, file-level
+> native arbitration, and the same-commit maintenance gate). Prior: 2026-08-15
+> (commit pending — B4 now also governs every generated `ai.programs.*`
+> runtime-override leaf; null inherits and non-null wins without acquiring
+> keyed-pool tombstone semantics). Prior: 2026-08-15 (commit pending — proxied
+> MCP declarations now carry explicit managed-unit ownership: a used root
+> declaration owns one shared proxy, runtime declarations own directly, reused
+> ownership keys fail, and unused root proxies do not materialize). Prior:
+> 2026-08-15 (commit pending — all six normalized keyed pools now support
+> per-runtime replacement and null tombstones; the former root↔runtime collision
+> assertion is deleted, and definition provenance now rejects two packages
+> claiming one key at the same root or runtime scope, including claims hidden by
+> whole-option priority in a combined evaluation). Prior: 2026-08-15 (commit
+> pending — the list-shaped instructions exception retired in favor of keyed
+> rules). If you add a normalized pool or change its cross-level merge, null
+> behavior, or package ownership rule and this fragment is not updated in the
+> same commit, stop and fix it.
+
+### Root/runtime boundary contract
+
+This matrix is the authoritative cross-runtime merge and fanout contract. Any
+change to one of these boundaries must update the corresponding row in the same
+commit.
+
+| ID  | Boundary                                          | Unit    | Behavior                                                                                                                |
+| --- | ------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------- |
+| B0  | root pool → runtime lacking that pool             | pool    | Degrade to the neutral value; the corresponding per-runtime option does not exist.                                      |
+| B1  | root pool ↔ runtime pool, same key                | entry   | The runtime entry replaces the root entry wholesale.                                                                    |
+| B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.     |
+| B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                          |
+| B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                          |
+| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                   |
+| B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                   |
+| B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                       |
+| B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                       |
+| B6a | normalized rule matcher → native scope            | field   | Null is always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex routing prose.   |
+| B7  | module-derived native value ↔ user-authored value | file    | Use no custom guard: the module renders at `mkDefault`, and standard Nix option merging arbitrates at file granularity. |
+| B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                          |
+| B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                  |
+| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops the entry after the shallow merge.                                                                 |
+
+B3 is why `//` is correct and `recursiveUpdate` is wrong. B7's unit is the
+complete rendered native file, not a key inside it. Keyed-pool tombstones apply
+only to B10; they do not change the nullable-scalar inheritance contract in B4
+or B5.
 
 ### Keyed-pool rule
 

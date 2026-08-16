@@ -7,19 +7,22 @@ applyTo: "checks/copilot-wrapper-argv.nix,overlays/chatgpt-codex.nix,overlays/cl
 
 ## Copilot config delivery — two consumers, one product name
 
-> **Last verified:** 2026-08-15 (commit pending — normalized context and rules
-> intentionally emit only on devenv's project-local `.github` surface. Their
-> Home Manager options remain for schema parity but are a documented no-op; the
-> retired instructions surface and its intermediate HM writer are gone). Prior:
-> 2026-08-14 (commit pending — `configDir` is TWO different things and the
-> sentence below that called it "neither" was only true of devenv's. Home
-> Manager defaults it to `.copilot`, which IS the CLI's home; devenv defaults it
-> to `.config/github-copilot`, which nothing reads. Named instructions and rules
-> moved onto the HM `configDir` after landing in `$HOME/.github/instructions/` —
-> a directory with no user-global meaning at all — and a gated assertion now
-> pins `configDir` when there is content that would go dead. Records the
-> measured instruction-discovery list for 1.0.80, and a MUCH cheaper way to read
-> this SEA's app code than the npm tarball: it self-extracts). Prior: 2026-08-05
+> **Last verified:** 2026-08-16 (commit pending — the unscoped-frontmatter
+> measurement is retained here as the durable source after retiring the
+> normalized-interface plan; no behavior was re-measured). Prior: 2026-08-15
+> (commit pending — normalized context and rules intentionally emit only on
+> devenv's project-local `.github` surface. Their Home Manager options remain
+> for schema parity but are a documented no-op; the retired instructions surface
+> and its intermediate HM writer are gone). Prior: 2026-08-14 (commit pending —
+> `configDir` is TWO different things and the sentence below that called it
+> "neither" was only true of devenv's. Home Manager defaults it to `.copilot`,
+> which IS the CLI's home; devenv defaults it to `.config/github-copilot`, which
+> nothing reads. Named instructions and rules moved onto the HM `configDir`
+> after landing in `$HOME/.github/instructions/` — a directory with no
+> user-global meaning at all — and a gated assertion now pins `configDir` when
+> there is content that would go dead. Records the measured
+> instruction-discovery list for 1.0.80, and a MUCH cheaper way to read this
+> SEA's app code than the npm tarball: it self-extracts). Prior: 2026-08-05
 > (commit pending — the wrapper both backends use now lives in ONE place,
 > `packages/copilot-cli/lib/wrapPackage.nix`, and is exercised behaviorally by
 > `checks/copilot-wrapper-argv.nix`. It had been inlined once per backend, and
@@ -140,11 +143,11 @@ paragraph got it backwards:
   so a careless positive control "passes" while proving nothing about the key.
   Match it as a word.
 - **Frontmatter ALSO reaches the prompt for unscoped files** — measured at
-  1.0.79 and recorded in `docs/plans/ai-normalized-interface-rework.md` §A3b,
-  NOT re-measured at 1.0.80 here. Every universal-`applyTo` file is concatenated
-  into one run with no delimiter between files and with its raw YAML inlined as
-  prose, while a SCOPED file keeps per-file identity through a
-  `| Pattern | File Path | Description |` index row.
+  1.0.79 during the normalized-rules redesign, and NOT re-measured at 1.0.80
+  here. Every universal-`applyTo` file is concatenated into one run with no
+  delimiter between files and with its raw YAML inlined as prose, while a SCOPED
+  file keeps per-file identity through a `| Pattern | File Path | Description |`
+  index row.
 
 The two are consistent — routing is parsed, and the unscoped bucket is inlined
 anyway — but do not restate either half without the other, and do not restate
