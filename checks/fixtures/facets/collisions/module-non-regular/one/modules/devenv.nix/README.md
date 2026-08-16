@@ -1,1 +1,0 @@
-# Non-regular module fixture

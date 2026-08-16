@@ -1,3 +1,0 @@
-{
-  plain-attrset-check = true;
-}

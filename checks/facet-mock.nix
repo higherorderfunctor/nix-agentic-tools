@@ -7,194 +7,180 @@
     (lib)
     all
     attrNames
-    concatMap
     concatMapStringsSep
     escapeShellArgs
     filter
-    genAttrs
     hasPrefix
-    listToAttrs
     mapAttrs
-    nameValuePair
-    optionalAttrs
     sort
     ;
+
   system = pkgs.stdenv.hostPlatform.system;
   fixtureRoot = ./fixtures/facets;
-  compatibleRoot = fixtureRoot + "/compatible";
-  collisionRoot = fixtureRoot + "/collisions";
-  enforceLocalChecks = import (fixtureRoot + "/root/enforce-local-checks.nix") {inherit lib;};
+  productionRoot = fixtureRoot + "/production";
+  negativeRoot = fixtureRoot + "/negative";
   registryModule = fixtureRoot + "/root/registry.nix";
   loader = import ../lib/facets.nix {inherit lib;};
+  inputs.fixture.sentinel = "facet-input-sentinel";
 
-  specialArgs = {
-    common = {
-      fixtureToken = "common";
-      inherit pkgs system;
+  facetIndex = loader.index {facetsDir = productionRoot;};
+  packageWorld = loader.realizePackages {
+    inherit inputs pkgs system;
+    index = facetIndex;
+  };
+  homeManagerModules = loader.moduleImports {
+    backend = "homeManager";
+    index = facetIndex;
+  };
+  devenvModules = loader.moduleImports {
+    backend = "devenv";
+    index = facetIndex;
+  };
+  homeManagerEvaluation = lib.evalModules {modules = homeManagerModules;};
+  devenvEvaluation = lib.evalModules {modules = devenvModules;};
+  registryWorld = loader.realizeRegistry {
+    claimPath = ["facetMock" "entries"];
+    index = facetIndex;
+    modules = [registryModule];
+    specialArgs = {inherit inputs;};
+  };
+  overlayWorld = loader.realizeOverlay {
+    context = {
+      inherit inputs;
+      inherit (packageWorld) packages;
     };
-    devenv = {devenvOnly = "devenv";};
-    homeManager = {hmOnly = "home-manager";};
+    index = facetIndex;
   };
-  composedWorld = loader.compose {
-    facetsDir = compatibleRoot;
-    inherit pkgs specialArgs system;
-    registryModules = [registryModule];
-  };
-  checkWorld = builtins.removeAttrs composedWorld ["localChecks"];
-  world = enforceLocalChecks composedWorld;
-
-  compatibleEntries = builtins.readDir compatibleRoot;
-  expectedOwnerNames = sort builtins.lessThan (filter (name: compatibleEntries.${name} == "directory") (attrNames compatibleEntries));
-  expectedContributions = ownerName: let
-    ownerRoot = compatibleRoot + "/${ownerName}";
-    entries = builtins.readDir ownerRoot;
-    present = name: entries ? ${name};
-    modulesPath = ownerRoot + "/modules";
-    packagesPath = ownerRoot + "/packages";
-    moduleNames =
-      if present "modules"
-      then attrNames (builtins.readDir modulesPath)
-      else [];
-    packageNames =
-      if present "packages"
-      then attrNames (builtins.readDir packagesPath)
-      else [];
-  in
-    optionalAttrs (present "checks.nix") {checks = toString (ownerRoot + "/checks.nix");}
-    // optionalAttrs (present "lib.nix") {lib = toString (ownerRoot + "/lib.nix");}
-    // optionalAttrs (moduleNames != []) {
-      modules = genAttrs moduleNames (name: toString (modulesPath + "/${name}"));
-    }
-    // optionalAttrs (present "overlay.nix") {overlay = toString (ownerRoot + "/overlay.nix");}
-    // optionalAttrs (packageNames != []) {
-      packages = map (name: toString (packagesPath + "/${name}")) packageNames;
-    }
-    // optionalAttrs (present "registry.nix") {registry = toString (ownerRoot + "/registry.nix");};
-  normalizeContributions = contributions:
-    mapAttrs (
-      name: value:
-        if name == "modules"
-        then mapAttrs (_: toString) value
-        else if name == "packages"
-        then map toString value
-        else toString value
-    )
-    contributions;
-  expectedLocalCheckClaims =
-    concatMap (
-      owner: let
-        source = compatibleRoot + "/${owner}/checks.nix";
-      in
-        if builtins.pathExists source
-        then let
-          imported = import source;
-          checks =
-            if builtins.isFunction imported
-            then
-              imported {
-                inherit lib pkgs system;
-                world = checkWorld;
-              }
-            else imported;
-        in
-          map (key: {
-            inherit key owner source;
-          }) (attrNames checks)
-        else []
-    )
-    expectedOwnerNames;
-  expectedLocalCheckProvenance = listToAttrs (map (
-      claim:
-        nameValuePair claim.key {
-          inherit (claim) owner;
-          source = toString claim.source;
-        }
-    )
-    expectedLocalCheckClaims);
-  actualLocalCheckProvenance =
-    mapAttrs (_: check: {
-      inherit (check) owner;
-      source = toString check.source;
-    })
-    world.localChecks;
-
-  rootPolicy = import (fixtureRoot + "/root/overlay-policy.nix");
-  composedOverlay = lib.composeExtensions world.overlay rootPolicy;
+  overlayBase.ai.seed = inputs.fixture.sentinel;
   overlayResult = lib.fix (
     final:
-      {seed = "base";}
-      // composedOverlay final {seed = "base";}
+      overlayBase
+      // overlayWorld.overlay final overlayBase
   );
 
-  ownerNames = map (owner: owner.name) world.owners;
+  localChecks = loader.realizeChecks {
+    context = {
+      inherit
+        devenvModules
+        facetIndex
+        homeManagerModules
+        inputs
+        lib
+        overlayResult
+        pkgs
+        self
+        system
+        ;
+      index = facetIndex;
+      inherit (packageWorld) packages;
+      registry = registryWorld.config;
+    };
+    index = facetIndex;
+  };
+  localCheckNames = attrNames localChecks;
+  localCheckValues = map (name: localChecks.${name}.value) localCheckNames;
+  localCheckBuildCommands =
+    concatMapStringsSep "\n" (
+      name: "test -e ${localChecks.${name}.value}/passed"
+    )
+    localCheckNames;
+
+  ownerNames = map (owner: owner.name) facetIndex.owners;
   publicHomeManagerImports = self.homeManagerModules.default.imports or [];
   publicDevenvImports = self.devenvModules.nix-agentic-tools.imports or [];
   outsideFixture = module: !hasPrefix (toString fixtureRoot) (toString module);
   publicOverlayResult = self.overlays.default pkgs pkgs;
   publicAiLib = self.lib.ai or {};
-  mockOverlayNames = filter (name: name != "seed") (attrNames overlayResult);
+  gitRevise = packageWorld.packages.git-revise;
 
+  registryClaimKeys = sort builtins.lessThan (
+    map (claim: builtins.elemAt claim.keyPath 2) registryWorld.ownershipClaims
+  );
   assertions = {
-    backend-isolation =
-      world.homeManager.config.facetMock.homeManager
-      == {
-        observed = "common:home-manager";
-        sawDevenvOnly = false;
-      }
-      && world.devenv.config.facetMock.devenv
-      == {
-        observed = "common:devenv";
-        sawHmOnly = false;
-      }
-      && !(world.homeManager.options.facetMock ? devenv)
-      && !(world.devenv.options.facetMock ? homeManager);
-    call-package-cross-facet =
-      lib.isDerivation world.packages.alpha-app
-      && lib.isDerivation world.packages.bravo-tool
-      && world.packages.alpha-app.bravoDrvPath == world.packages.bravo-tool.drvPath
-      && world.packages.alpha-app.decorated == "hello-from-bravo:alpha";
-    deterministic-discovery =
+    deterministic-index =
       ownerNames
-      == expectedOwnerNames
+      == sort builtins.lessThan ownerNames
       && all (
         owner:
           toString owner.path
-          == toString (compatibleRoot + "/${owner.name}")
-          && normalizeContributions owner.contributions
-          == expectedContributions owner.name
+          == toString (productionRoot + "/${owner.name}")
+          && all (
+            contribution:
+              contribution.owner
+              == owner.name
+              && hasPrefix (toString owner.path) (toString contribution.source)
+          ) (
+            owner.contributions.packages
+            ++ builtins.attrValues owner.contributions.modules
+            ++ filter (value: value != null) [
+              owner.contributions.checks
+              owner.contributions.overlay
+              owner.contributions.registry
+            ]
+          )
       )
-      world.owners;
-    facet-lib-composition = world.facetLib.bravo.greeting == "hello-from-bravo";
-    facet-local-checks =
-      actualLocalCheckProvenance
-      == expectedLocalCheckProvenance;
-    overlay-final-prev-and-root-policy =
-      overlayResult.alpha-from-final
-      == "alpha:alpha:bravo"
-      && overlayResult.bravo-from-prev == "alpha:bravo"
-      && overlayResult.facet-policy == "policy:alpha:alpha:bravo";
+      facetIndex.owners;
+    module-consumer-shape =
+      homeManagerEvaluation.config.facetMock.shared
+      == {
+        backend = "home-manager";
+        enabled = true;
+        label = "git-revise";
+      }
+      && devenvEvaluation.config.facetMock.shared
+      == {
+        backend = "devenv";
+        enabled = true;
+        label = "git-revise";
+      };
+    overlay-order-and-namespace =
+      overlayResult.ai.seed
+      == inputs.fixture.sentinel
+      && overlayResult.ai.alpha == "${inputs.fixture.sentinel}:alpha"
+      && overlayResult.ai.gitReviseObserved
+      == "${inputs.fixture.sentinel}:${inputs.fixture.sentinel}:alpha"
+      && overlayResult.ai.gitTools.git-revise.drvPath == gitRevise.drvPath;
+    package-identity-and-platform-omission =
+      packageWorld.scope.git-revise.drvPath
+      == gitRevise.drvPath
+      && overlayResult.ai.gitTools.git-revise.drvPath == gitRevise.drvPath
+      && (
+        if system == "aarch64-darwin"
+        then packageWorld.packages ? unsupported-control
+        else
+          !(packageWorld.packages ? unsupported-control)
+          && builtins.elem "unsupported-control" packageWorld.omitted
+      );
     public-output-invisibility =
-      all (name: !(self.packages.${system} ? ${name})) (attrNames world.packages)
+      all (
+        package:
+          !lib.isDerivation package
+          || package.drvPath != gitRevise.drvPath
+      ) (builtins.attrValues self.packages.${system})
       && !(self.lib ? facets)
       && !(publicAiLib ? facets)
       && !(self.overlays ? facet-mock)
-      && all (name: !(publicOverlayResult ? ${name})) mockOverlayNames
+      && publicOverlayResult.ai.gitTools.git-revise.drvPath != gitRevise.drvPath
       && !(self.homeManagerModules ? facet-mock)
       && !(self.devenvModules ? facet-mock)
       && all outsideFixture publicHomeManagerImports
       && all outsideFixture publicDevenvImports;
-    registry-composition =
-      world.registry.facetMock.entries.alpha.payload
-      == "alpha:common:module"
-      && world.registry.facetMock.entries.bravo.payload == "bravo";
+    registry-native-realization =
+      attrNames registryWorld.config.facetMock.entries
+      == registryClaimKeys
+      && registryWorld.config.facetMock.entries.alpha.payload == "alpha"
+      && registryWorld.config.facetMock.entries.git-revise.payload
+      == inputs.fixture.sentinel;
   };
   assertionsPass = all (value: value == true) (builtins.attrValues assertions);
 
   positiveCheck = assert assertionsPass;
     pkgs.runCommandLocal "facet-mock" {
-      nativeBuildInputs = [world.packages.alpha-app];
+      nativeBuildInputs = localCheckValues ++ [gitRevise];
+      passthru.localChecks = mapAttrs (_: claim: claim.value) localChecks;
     } ''
-      test -e ${world.packages.alpha-app}/marker
+      ${localCheckBuildCommands}
+      test "$(cat ${gitRevise}/marker)" = ${lib.escapeShellArg inputs.fixture.sentinel}
       mkdir -p "$out"
       touch "$out/passed"
     '';
@@ -205,163 +191,130 @@
         pkgs = import ${pkgs.path} {system = ${builtins.toJSON system};};
         lib = pkgs.lib;
         loader = import ${../lib/facets.nix} {inherit lib;};
-        enforceLocalChecks = import ${fixtureRoot + "/root/enforce-local-checks.nix"} {inherit lib;};
-        world = enforceLocalChecks (
-          loader.compose {
-            inherit facetsDir pkgs;
-            system = ${builtins.toJSON system};
-            registryModules = [${registryModule}];
-            specialArgs = {
-              common = {
-                fixtureToken = "common";
-                system = ${builtins.toJSON system};
-              };
-              devenv.devenvOnly = "devenv";
-              homeManager.hmOnly = "home-manager";
-            };
-          }
-        );
-        overlayResult = lib.fix (final: world.overlay final {});
+        index = loader.index {inherit facetsDir;};
+        inputs.fixture.sentinel = "facet-input-sentinel";
+        context = {
+          inherit inputs lib pkgs;
+          self = {};
+          system = ${builtins.toJSON system};
+        };
       in
         ${
         if probe.force == "checks"
-        then "builtins.deepSeq world.localChecks true"
-        else if probe.force == "lib"
-        then "builtins.deepSeq world.facetLib true"
+        then "builtins.deepSeq (loader.realizeChecks { inherit context index; }) true"
+        else if probe.force == "index"
+        then "builtins.deepSeq index true"
         else if probe.force == "overlay"
-        then "builtins.deepSeq overlayResult true"
-        else if probe.force == "owners"
-        then "builtins.deepSeq world.owners true"
+        then "builtins.deepSeq (loader.realizeOverlay { inherit context index; }) true"
         else if probe.force == "packages"
-        then "builtins.deepSeq world.packages true"
+        then ''
+          builtins.deepSeq (loader.realizePackages {
+            inherit index inputs pkgs;
+            system = ${builtins.toJSON system};
+          }) true
+        ''
         else if probe.force == "registry"
-        then "builtins.deepSeq world.registry.facetMock.entries true"
+        then ''
+          builtins.deepSeq (loader.realizeRegistry {
+            claimPath = ["facetMock" "entries"];
+            inherit index;
+            modules = [${registryModule}];
+          }) true
+        ''
         else throw "unknown facet mock probe force '${probe.force}'"
       }
     '';
 
-  collisionProbe = registry: key: {
-    force ? registry,
-    name ? registry,
-    scenario ? registry,
-  }: let
-    facetsDir = collisionRoot + "/${scenario}";
-    sourceFile =
-      if registry == "packages"
-      then "packages/shared.nix"
-      else "${registry}.nix";
-  in {
-    inherit facetsDir force name;
-    expected = [
-      "facet collision in ${registry} at '${key}'"
-      "owner-source:one:one/${sourceFile}"
-      "owner-source:two:two/${sourceFile}"
-    ];
+  probe = {
+    expected,
+    force,
+    name,
+    scenario ? name,
+  }: {
+    facetsDir = negativeRoot + "/${scenario}";
+    inherit expected force name;
   };
-
-  scannerProbe = scenario: expected: {
-    facetsDir = collisionRoot + "/${scenario}";
-    force = "owners";
-    name = scenario;
-    inherit expected;
-  };
-
   probes = [
-    (collisionProbe "checks" "shared" {})
-    (collisionProbe "lib" "shared.__facetLeaf" {})
-    (collisionProbe "lib" "shared" {
-      name = "lib-empty-branch-first";
-      scenario = "lib-empty-branch-first";
-    })
-    (collisionProbe "lib" "shared" {
-      name = "lib-empty-leaf-first";
-      scenario = "lib-empty-leaf-first";
-    })
-    (collisionProbe "overlay" "shared.value" {})
-    (collisionProbe "packages" "shared" {})
-    (collisionProbe "registry" "shared" {})
-    {
-      name = "false-check";
-      facetsDir = collisionRoot + "/false-check";
+    (probe {
+      name = "check-non-derivation";
       force = "checks";
-      expected = ["facet local check failed: deliberate-false"];
-    }
-    (scannerProbe "invalid-owner" [
-      "invalid owner 'Bad'"
-      "/Bad"
-      "allowed form: [a-z][a-z0-9-]*"
-    ])
-    (scannerProbe "unknown-entry" [
-      "owner 'one'"
-      "/one/unexpected.nix"
-      "allowed forms:"
-    ])
-    (scannerProbe "empty-owner" [
-      "owner 'one'"
-      "/one"
-      "empty or documentation-only"
-      "allowed forms require at least one facet contribution"
-    ])
-    (scannerProbe "root-non-directory" [
-      "facets directory"
-      "root-non-directory/one"
-      "contains non-directory owner entry"
-      "allowed forms: immediate owner directories"
-    ])
-    (scannerProbe "packages-non-directory" [
-      "owner 'one'"
-      "/one/packages"
-      "non-directory contribution container"
-      "allowed forms require directories"
-    ])
-    (scannerProbe "modules-non-directory" [
-      "owner 'one'"
-      "/one/modules"
-      "non-directory contribution container"
-      "allowed forms require directories"
-    ])
-    (scannerProbe "package-invalid-suffix" [
-      "owner 'one'"
-      "/one/packages/bad"
-      "invalid package entry"
-      "allowed forms: regular <export>.nix files with lowercase kebab-case names"
-    ])
-    (scannerProbe "package-invalid-name" [
-      "owner 'one'"
-      "/one/packages/Bad.nix"
-      "invalid package entry"
-      "allowed forms: regular <export>.nix files with lowercase kebab-case names"
-    ])
-    (scannerProbe "package-non-regular" [
-      "owner 'one'"
-      "/one/packages/shared.nix"
-      "invalid package entry"
-      "allowed forms: regular <export>.nix files with lowercase kebab-case names"
-    ])
-    (scannerProbe "module-unknown" [
-      "owner 'one'"
-      "/one/modules/other.nix"
-      "unknown module"
-      "allowed forms: devenv.nix, homeManager.nix"
-    ])
-    (scannerProbe "module-non-regular" [
-      "owner 'one'"
-      "/one/modules/devenv.nix"
-      "non-regular module"
-      "allowed forms require regular Nix files"
-    ])
+      expected = [
+        "owner 'one' check 'invalid'"
+        "/one/checks.nix"
+        "returned a non-derivation"
+      ];
+    })
+    (probe {
+      name = "overlay-collision";
+      force = "overlay";
+      expected = [
+        "facet ownership collision in overlay at 'ai.shared'"
+        "one ("
+        "/one/overlay.nix"
+        "two ("
+        "/two/overlay.nix"
+      ];
+    })
+    (probe {
+      name = "package-collision";
+      force = "packages";
+      expected = [
+        "facet ownership collision in packages at 'shared'"
+        "/one/packages/shared/package.nix"
+        "/two/packages/shared/package.nix"
+      ];
+    })
+    (probe {
+      name = "registry-equal";
+      force = "registry";
+      expected = [
+        "facet ownership collision in registry at 'facetMock.entries.shared'"
+        "/one/registry.nix"
+        "/two/registry.nix"
+      ];
+    })
+    (probe {
+      name = "registry-mixed";
+      force = "registry";
+      expected = [
+        "facet ownership collision in registry at 'facetMock.entries.shared'"
+        "/one/registry.nix"
+        "/two/registry.nix"
+      ];
+    })
+    (probe {
+      name = "reserved-packages";
+      force = "packages";
+      expected = [
+        "reserved package name 'packages'"
+        "owner 'one'"
+        "/one/packages/packages/package.nix"
+      ];
+    })
+    (probe {
+      name = "reserved-pkgs";
+      force = "packages";
+      expected = [
+        "reserved package name 'pkgs'"
+        "owner 'one'"
+        "/one/packages/pkgs/package.nix"
+      ];
+    })
+    (probe {
+      name = "reserved-system";
+      force = "packages";
+      expected = [
+        "reserved package name 'system'"
+        "owner 'one'"
+        "/one/packages/system/package.nix"
+      ];
+    })
   ];
-
   probeCommands =
     concatMapStringsSep "\n" (
-      probe: "run_probe ${escapeShellArgs ([probe.name (toString (mkProbeExpression probe)) "${probe.facetsDir}"] ++ probe.expected)}"
+      item: "run_probe ${escapeShellArgs ([item.name (toString (mkProbeExpression item)) "${item.facetsDir}"] ++ item.expected)}"
     )
     probes;
-  symlinkProbe = mkProbeExpression {
-    name = "symlink";
-    facetsDir = compatibleRoot;
-    force = "owners";
-  };
 
   negativeCheck =
     pkgs.runCommandLocal "facet-mock-negative" {
@@ -385,15 +338,6 @@
 
         local expected
         for expected in "$@"; do
-          case "$expected" in
-            owner-source:*)
-              local pair="''${expected#owner-source:}"
-              local pair_owner="''${pair%%:*}"
-              local pair_path="''${pair#*:}"
-              expected="$pair_owner ($facets_dir/$pair_path)"
-              ;;
-            *) ;;
-          esac
           if ! ${pkgs.gnugrep}/bin/grep -F -- "$expected" "$name.stderr" >/dev/null; then
             echo "facet mock negative probe missed diagnostic '$expected': $name" >&2
             ${pkgs.coreutils}/bin/cat "$name.stderr" >&2
@@ -403,18 +347,6 @@
       }
 
       ${probeCommands}
-
-      mkdir -p symlink-fixture/one
-      ln -s ${compatibleRoot}/bravo/lib.nix symlink-fixture/one/lib.nix
-      if ${pkgs.nix}/bin/nix-instantiate --eval --strict "${symlinkProbe}" \
-        --argstr facetsDir "$PWD/symlink-fixture" \
-        >symlink.stdout 2>symlink.stderr; then
-        echo "facet mock symlink probe unexpectedly succeeded" >&2
-        false
-      fi
-      ${pkgs.gnugrep}/bin/grep -F -- "owner 'one'" symlink.stderr >/dev/null
-      ${pkgs.gnugrep}/bin/grep -F -- "$PWD/symlink-fixture/one/lib.nix" symlink.stderr >/dev/null
-      ${pkgs.gnugrep}/bin/grep -F -- "allowed forms require regular Nix/README files" symlink.stderr >/dev/null
 
       mkdir -p "$out"
       touch "$out/passed"
