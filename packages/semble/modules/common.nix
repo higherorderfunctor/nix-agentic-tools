@@ -4,7 +4,7 @@
   # about it (see `relocatesCache`).
   cacheLocation,
   installCacheInvalidation,
-  installPackage,
+  installPackages,
   # True when `cacheLocation` is a relocation rather than semble's default.
   # Relocating means semble must be told, and the only honest place to put
   # that is the process that reads it. This module does not write the shell
@@ -18,44 +18,89 @@
   pkgs,
   ...
 }: let
-  cfg = config.semble;
-  grammarLanguages = map (grammar: grammar.language or "") cfg.grammars;
-  grammarLanguagesValid = lib.all (language: language != "") grammarLanguages;
-  grammarLanguagesUnique = lib.length (lib.unique grammarLanguages) == lib.length grammarLanguages;
-  mappingPatterns = lib.concatMap (mapping: mapping.patterns) cfg.pathMappings;
-  pathMappingsValid = lib.all (mapping: mapping.language != "" && mapping.patterns != [] && lib.all (pattern: pattern != "") mapping.patterns) cfg.pathMappings;
-  pathMappingPatternsUnique = lib.length (lib.unique mappingPatterns) == lib.length mappingPatterns;
-  packageCustomizable = (cfg.grammars == [] && cfg.pathMappings == []) || cfg.package ? overridePythonAttrs;
+  programFactory = import ../../../lib/ai/program.nix {inherit lib;};
+  program = programFactory.mkProgram (import ./options.nix {inherit lib pkgs;});
   records = import ../lib/integrations.nix;
-  runtimes = ["claude" "codex" "kiro"];
+  runtimes = program.supportedRuntimes;
+  cacheDir = cacheLocation {inherit config lib;};
+  customizePackage = import ../lib/withGrammars.nix {inherit lib pkgs;};
 
-  featureEnabled = feature:
+  featureEnabled = cfg: feature:
     if feature.enable != null
     then feature.enable
     else cfg.enable;
-  featureRuntimes = feature:
-    if feature.runtimes != null
-    then feature.runtimes
-    else cfg.runtimes;
-  selected = runtime: feature:
-    featureEnabled feature && lib.elem runtime (featureRuntimes feature);
-  featureActive = feature:
-    featureEnabled feature && featureRuntimes feature != [];
-  integrationActive =
-    featureActive cfg.instructions
-    || featureActive cfg.mcp
-    || featureActive cfg.subagent;
-  codexSelected = lib.any (feature: selected "codex" feature) [
-    cfg.instructions
-    cfg.mcp
-    cfg.subagent
+
+  mkState = runtime: let
+    cfg = program.resolve config runtime;
+    grammarLanguages = map (grammar: grammar.language or "") cfg.grammars;
+    mappingPatterns = lib.concatMap (mapping: mapping.patterns) cfg.mcp.pathMappings;
+    packageCustomizable = (cfg.grammars == [] && cfg.mcp.pathMappings == []) || cfg.package ? overridePythonAttrs;
+    grammarLanguagesValid = lib.all (language: language != "") grammarLanguages;
+    grammarLanguagesUnique = lib.length (lib.unique grammarLanguages) == lib.length grammarLanguages;
+    pathMappingsValid = lib.all (mapping: mapping.language != "" && mapping.patterns != [] && lib.all (pattern: pattern != "") mapping.patterns) cfg.mcp.pathMappings;
+    pathMappingPatternsUnique = lib.length (lib.unique mappingPatterns) == lib.length mappingPatterns;
+    customizationValid = packageCustomizable && grammarLanguagesValid && grammarLanguagesUnique && pathMappingsValid && pathMappingPatternsUnique;
+    customizedPackage =
+      if customizationValid
+      then customizePackage cfg.package cfg.grammars cfg.mcp.pathMappings
+      else cfg.package;
+    semblePackage =
+      if !relocatesCache
+      then customizedPackage
+      else
+        pkgs.symlinkJoin {
+          # Name the wrapper after its input so package overrides remain
+          # observable in module evaluation and generated store paths.
+          name = "${lib.getName customizedPackage}-wrapped";
+          paths = [customizedPackage];
+          nativeBuildInputs = [pkgs.makeWrapper];
+          passthru = customizedPackage.passthru or {};
+          postBuild = ''
+            for bin in "$out"/bin/*; do
+              wrapProgram "$bin" \
+                --set SEMBLE_CACHE_LOCATION ${lib.escapeShellArg cacheDir}
+            done
+          '';
+        };
+    selected = feature: featureEnabled cfg feature;
+  in {
+    inherit
+      cfg
+      customizedPackage
+      grammarLanguagesUnique
+      grammarLanguagesValid
+      packageCustomizable
+      pathMappingPatternsUnique
+      pathMappingsValid
+      runtime
+      selected
+      semblePackage
+      ;
+    integrationActive = lib.any selected [cfg.instructions cfg.mcp cfg.subagent];
+  };
+
+  states = lib.genAttrs runtimes mkState;
+  stateList = lib.attrValues states;
+  activeStates = builtins.filter (state: state.integrationActive) stateList;
+  integrationActive = activeStates != [];
+  codexSelected = lib.any states.codex.selected [
+    states.codex.cfg.instructions
+    states.codex.cfg.mcp
+    states.codex.cfg.subagent
   ];
-  cacheDir = cacheLocation {inherit config lib;};
-  customizePackage = import ../lib/withGrammars.nix {inherit lib pkgs;};
-  customizedPackage =
-    if packageCustomizable && grammarLanguagesValid && grammarLanguagesUnique && pathMappingsValid && pathMappingPatternsUnique
-    then customizePackage cfg.package cfg.grammars cfg.pathMappings
-    else cfg.package;
+  uniquePackages = packages:
+    lib.attrValues (builtins.listToAttrs (map (package: {
+        name = builtins.unsafeDiscardStringContext (toString package);
+        value = package;
+      })
+      packages));
+  activePackages = uniquePackages (map (state: state.semblePackage) activeStates);
+  activeCustomizedPackages = uniquePackages (map (state: state.customizedPackage) activeStates);
+  cacheGuardPackage =
+    if activeCustomizedPackages == []
+    then states.claude.customizedPackage
+    else builtins.head activeCustomizedPackages;
+  expectedPackages = lib.concatStringsSep ":" (map toString activeCustomizedPackages);
 
   cacheGuard = pkgs.writeShellApplication {
     name = "semble-cache-guard";
@@ -64,7 +109,7 @@
       shopt -s inherit_errexit 2>/dev/null || :
 
       cache_dir=${lib.escapeShellArg cacheDir}
-      expected=${lib.escapeShellArg "${customizedPackage}"}
+      expected=${lib.escapeShellArg expectedPackages}
       stamp="$cache_dir/.nix-package"
       previous=
 
@@ -76,7 +121,7 @@
       if [ "$previous" != "$expected" ]; then
         printf 'Semble package changed; clearing indexes in %s\n' "$cache_dir"
         SEMBLE_CACHE_LOCATION="$cache_dir" \
-          ${customizedPackage}/bin/semble clear index >/dev/null
+          ${cacheGuardPackage}/bin/semble clear index >/dev/null
 
         temporary="$(${pkgs.coreutils}/bin/mktemp "$cache_dir/.nix-package.XXXXXX")"
         trap '${pkgs.coreutils}/bin/rm -f "$temporary"' EXIT
@@ -102,45 +147,23 @@
   # That gate is real: it is about Codex's sandbox, not about where semble
   # keeps its index.
 
-  # Wrapped once, for every entry point, so `semble` and `semble-mcp` cannot
-  # disagree about where the cache lives — and so the MCP server needs no
-  # `env` block of its own, since its command already carries the setting.
-  semblePackage =
-    if !relocatesCache
-    then customizedPackage
-    else
-      pkgs.symlinkJoin {
-        # Named after what it wraps, so a `semble.package` override stays
-        # OBSERVABLE once the package is no longer installed bare. A fixed
-        # name would make the override untestable — the wrapped derivation
-        # would look identical whatever went into it.
-        name = "${lib.getName customizedPackage}-wrapped";
-        paths = [customizedPackage];
-        nativeBuildInputs = [pkgs.makeWrapper];
-        passthru = customizedPackage.passthru or {};
-        postBuild = ''
-          for bin in "$out"/bin/*; do
-            wrapProgram "$bin" \
-              --set SEMBLE_CACHE_LOCATION ${lib.escapeShellArg cacheDir}
-          done
-        '';
-      };
-
-  mcpEntry = {
-    args = lib.optionals (cfg.mcp.content != "code") ["--content" cfg.mcp.content];
-    command = "${semblePackage}/bin/semble-mcp";
+  mcpEntry = state: {
+    args = lib.optionals (state.cfg.mcp.content != "code") ["--content" state.cfg.mcp.content];
+    command = "${state.semblePackage}/bin/semble-mcp";
     type = "stdio";
   };
 
-  runtimeConfig = runtime:
+  runtimeConfig = runtime: let
+    state = states.${runtime};
+  in
     lib.mkMerge [
-      (lib.mkIf (selected runtime cfg.instructions) {
+      (lib.mkIf (state.selected state.cfg.instructions) {
         ai.${runtime}.rules.semble = lib.mkDefault records.rule;
       })
-      (lib.mkIf (selected runtime cfg.mcp) {
-        ai.${runtime}.mcpServers.semble = lib.mkDefault mcpEntry;
+      (lib.mkIf (state.selected state.cfg.mcp) {
+        ai.${runtime}.mcpServers.semble = lib.mkDefault (mcpEntry state);
       })
-      (lib.mkIf (selected runtime cfg.subagent) {
+      (lib.mkIf (state.selected state.cfg.subagent) {
         # Both records are typed attrsets (Kiro's shape differs from the
         # portable semantic one, but neither is pre-rendered). Default the
         # whole entry so a consumer can replace it atomically. Claude/Codex
@@ -154,37 +177,39 @@
       })
     ];
 in {
-  imports = [(import ./options.nix {inherit lib pkgs;})];
+  imports = [program.module];
 
   config = lib.mkMerge (
     [
       {
-        assertions = [
-          {
-            assertion = packageCustomizable;
-            message = "semble grammar or path customization requires semble.package to expose overridePythonAttrs.";
-          }
-          {
-            assertion = grammarLanguagesValid;
-            message = "semble.grammars packages must expose a non-empty language attribute.";
-          }
-          {
-            assertion = grammarLanguagesUnique;
-            message = "semble.grammars language names must be unique.";
-          }
-          {
-            assertion = pathMappingsValid;
-            message = "semble.pathMappings entries require a non-empty language and at least one non-empty pattern.";
-          }
-          {
-            assertion = pathMappingPatternsUnique;
-            message = "semble.pathMappings patterns must be unique.";
-          }
-        ];
+        assertions =
+          lib.concatMap (state: [
+            {
+              assertion = state.packageCustomizable;
+              message = "ai.${state.runtime}.programs.semble grammar or path customization requires package to expose overridePythonAttrs.";
+            }
+            {
+              assertion = state.grammarLanguagesValid;
+              message = "ai.${state.runtime}.programs.semble.grammars packages must expose a non-empty language attribute.";
+            }
+            {
+              assertion = state.grammarLanguagesUnique;
+              message = "ai.${state.runtime}.programs.semble.grammars language names must be unique.";
+            }
+            {
+              assertion = state.pathMappingsValid;
+              message = "ai.${state.runtime}.programs.semble.mcp.pathMappings entries require a non-empty language and at least one non-empty pattern.";
+            }
+            {
+              assertion = state.pathMappingPatternsUnique;
+              message = "ai.${state.runtime}.programs.semble.mcp.pathMappings patterns must be unique.";
+            }
+          ])
+          stateList;
       }
       (lib.mkIf integrationActive
         (lib.mkMerge [
-          (installPackage semblePackage)
+          (installPackages activePackages)
           (installCacheInvalidation {
             inherit cacheGuard lib;
           })

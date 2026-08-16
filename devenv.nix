@@ -304,6 +304,60 @@ in {
     claude.enable = true;
     codex = {
       enable = true;
+      # Semble stays outside the CI devenv-test closure but is pinned by this
+      # flake for every interactive shell. The extra parsers cover file types
+      # Semble recognizes but its upstream bundled grammar archive does not
+      # currently ship. Restrict the integration to Codex through the generated
+      # runtime program tree rather than a runtime selector.
+      programs.semble = {
+        enable = !isCI;
+        # Use this flake's pinned nixpkgs grammars directly; the Cachix nixpkgs
+        # follow already supplies their store paths. If a future grammar needs a
+        # custom derivation, also expose that grammar alone in flake packages so
+        # the authenticated package sweep publishes it. Do not expose the
+        # grammar-patched Semble derivation.
+        grammars = with pkgs.tree-sitter-grammars; [
+          tree-sitter-awk
+          tree-sitter-jq
+        ];
+        mcp.pathMappings = [
+          {
+            content = "code";
+            language = "bash";
+            patterns = [
+              ".envrc"
+              "checks/fixtures/claude-hooks/post-edit"
+              "checks/fixtures/claude-hooks/pre-edit"
+            ];
+          }
+          {
+            content = "config";
+            language = "gitignore";
+            patterns = [
+              ".gitignore"
+              ".sembleignore"
+              "docs/.gitignore"
+            ];
+          }
+          {
+            content = "config";
+            language = "json";
+            patterns = [
+              "devenv.lock"
+              "flake.lock"
+            ];
+          }
+          {
+            content = "docs";
+            language = "markdown";
+            patterns = ["*.md.fixture"];
+          }
+        ];
+        # AGENTS.md already carries the repository's Semble search workflow from
+        # the generated stacked-workflows fragment. Avoid asking devenv `files.*`
+        # to replace that tracked real file with the redundant module projection.
+        instructions.enable = false;
+      };
       # Native legacy sandbox model, matching every other repository the maintainer
       # runs. This replaced a named permission profile — see the lockout
       # comment in packages/chatgpt-codex/lib/mkCodex.nix for why the beta
@@ -414,60 +468,6 @@ in {
         index-repo-docs = traceSource.tracedPath ./dev/skills/index-repo-docs;
         repo-review = traceSource.tracedPath ./dev/skills/repo-review;
       };
-  };
-
-  # Semble stays outside the CI devenv-test closure but is pinned by this flake
-  # for every interactive shell. The extra parsers cover file types Semble
-  # recognizes but its upstream bundled grammar archive does not currently ship.
-  semble = {
-    enable = !isCI;
-    # Use this flake's pinned nixpkgs grammars directly; the Cachix nixpkgs
-    # follow already supplies their store paths. If a future grammar needs a
-    # custom derivation, also expose that grammar alone in flake packages so
-    # the authenticated package sweep publishes it. Do not expose the
-    # grammar-patched Semble derivation.
-    grammars = with pkgs.tree-sitter-grammars; [
-      tree-sitter-awk
-      tree-sitter-jq
-    ];
-    pathMappings = [
-      {
-        content = "code";
-        language = "bash";
-        patterns = [
-          ".envrc"
-          "checks/fixtures/claude-hooks/post-edit"
-          "checks/fixtures/claude-hooks/pre-edit"
-        ];
-      }
-      {
-        content = "config";
-        language = "gitignore";
-        patterns = [
-          ".gitignore"
-          ".sembleignore"
-          "docs/.gitignore"
-        ];
-      }
-      {
-        content = "config";
-        language = "json";
-        patterns = [
-          "devenv.lock"
-          "flake.lock"
-        ];
-      }
-      {
-        content = "docs";
-        language = "markdown";
-        patterns = ["*.md.fixture"];
-      }
-    ];
-    # AGENTS.md already carries the repository's Semble search workflow from
-    # the generated stacked-workflows fragment. Avoid asking devenv `files.*`
-    # to replace that tracked real file with the redundant module projection.
-    instructions.enable = false;
-    runtimes = ["codex"];
   };
 
   # ── treefmt ────────────────────────────────────────────────────────────

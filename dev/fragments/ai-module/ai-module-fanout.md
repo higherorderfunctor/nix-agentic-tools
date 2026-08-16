@@ -1,31 +1,34 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — top-level proxied MCP
-> declarations now own one shared managed daemon and fan out only lowered client
-> entries; runtime declarations own directly, duplicate ownership keys fail
-> explicitly, and unused top-level owners are never materialized). Prior:
-> 2026-08-15 (commit pending — normalized keyed pools use atomic per-runtime
-> replacement and null tombstones, with same-scope package ownership checked
-> from definition provenance). Prior: 2026-08-15 (commit pending — context is a
-> typed `text`-XOR-`source` record that composes root-first with runtime context
-> and names its native artifact per runtime. Rules carry a normalized `matcher`;
-> Claude, Kiro, Copilot, and Codex lower it to native metadata or explicit
-> prose, and devenv AGENTS.md consumers share one keyed deduplicating writer;
-> the list-shaped `instructions` surface is retired rather than aliased). Prior:
-> 2026-08-15 (commit pending — every normalized pool crosses into a runtime only
-> when its app record lists it in `supportedPools`; all five runtimes now list
-> the closed normalized `settings` submodule, runtime-native passthrough moved
-> to `nativeSettings`, per-runtime fields resolve against the root
-> independently, and Codex integration roots travel through a hidden internal
-> channel before native TOML emission). Prior: 2026-08-14 (commit pending —
-> Copilot's `ai.instructions` / `ai.rules` destination is per-BACKEND and this
-> entry named only one of them. Home Manager wrote a hardcoded
-> `.github/instructions/`, which resolves to `$HOME/.github/instructions/` — a
-> directory copilot-cli never reads — so every named instruction and every rule
-> was emitted and then ignored. It now routes through `ai.copilot.configDir`,
-> matching every other HM artifact this module writes. See
-> `copilot-config-delivery.md` for why the two backends address genuinely
-> different consumers). Prior: 2026-08-14 (commit pending — adds the
+> **Last verified:** 2026-08-15 (commit pending — the `ai.programs.*` factory
+> generates portable defaults and capability-gated runtime override trees from
+> one program specification; Semble is its first consumer and uses program-level
+> enable negation instead of runtime selectors). Prior: 2026-08-15 (commit
+> pending — top-level proxied MCP declarations now own one shared managed daemon
+> and fan out only lowered client entries; runtime declarations own directly,
+> duplicate ownership keys fail explicitly, and unused top-level owners are
+> never materialized). Prior: 2026-08-15 (commit pending — normalized keyed
+> pools use atomic per-runtime replacement and null tombstones, with same-scope
+> package ownership checked from definition provenance). Prior: 2026-08-15
+> (commit pending — context is a typed `text`-XOR-`source` record that composes
+> root-first with runtime context and names its native artifact per runtime.
+> Rules carry a normalized `matcher`; Claude, Kiro, Copilot, and Codex lower it
+> to native metadata or explicit prose, and devenv AGENTS.md consumers share one
+> keyed deduplicating writer; the list-shaped `instructions` surface is retired
+> rather than aliased). Prior: 2026-08-15 (commit pending — every normalized
+> pool crosses into a runtime only when its app record lists it in
+> `supportedPools`; all five runtimes now list the closed normalized `settings`
+> submodule, runtime-native passthrough moved to `nativeSettings`, per-runtime
+> fields resolve against the root independently, and Codex integration roots
+> travel through a hidden internal channel before native TOML emission). Prior:
+> 2026-08-14 (commit pending — Copilot's `ai.instructions` / `ai.rules`
+> destination is per-BACKEND and this entry named only one of them. Home Manager
+> wrote a hardcoded `.github/instructions/`, which resolves to
+> `$HOME/.github/instructions/` — a directory copilot-cli never reads — so every
+> named instruction and every rule was emitted and then ignored. It now routes
+> through `ai.copilot.configDir`, matching every other HM artifact this module
+> writes. See `copilot-config-delivery.md` for why the two backends address
+> genuinely different consumers). Prior: 2026-08-14 (commit pending — adds the
 > Kiro-specific `extraPackages` runtime PATH prefix, shared by both backends
 > through the existing launcher wrapper and deliberately not promoted to
 > `ai.shell` or a cross-runtime pool). Prior: 2026-08-05 (commit pending —
@@ -514,14 +517,24 @@ structural `hm = { config = …; }` / `devenv = { config = …; }` blocks that f
 per-backend separation by construction. Plain modules have no such guardrail —
 authors must decide scope consciously.
 
-Plain convenience modules may contribute directly to selected
-`ai.<runtime>.<pool>` entries at `mkDefault` priority. Semble uses this for its
-named MCP, agent, and `semble` rule defaults in both backend evaluations. The
-rule composes into Claude and Codex's single always-loaded files and lets Kiro's
-directory-native renderer write `semble.md`. Selecting a runtime configures that
-runtime's integration only; the convenience module must not set
-`ai.<runtime>.enable`, because package/CLI activation remains an explicit
-consumer choice.
+Portable program integrations use `lib.ai.program.mkProgram`. One specification
+declares the program name, its runtime capability set, and its nested option
+tree. The factory projects that into `ai.programs.<name>` plus only the listed
+`ai.<runtime>.programs.<name>` paths. Runtime leaves are nullable and resolve
+independently through `resolveOverride`: null inherits the portable value and a
+non-null value wins. This is the scalar B4 contract, not keyed-pool tombstone
+behavior.
+
+The program implementation consumes only resolved per-runtime records and may
+write `ai.<runtime>.<pool>` entries at `mkDefault` priority; it must never write
+the root pools. A runtime-specific program `enable = false` is the runtime-list
+replacement. The program still must not set `ai.<runtime>.enable`, because
+package/CLI activation remains an explicit consumer choice.
+
+Semble is the first factory consumer. Its single spec supports Claude, Codex,
+and Kiro, and generates its named MCP, agent, and `semble` rule defaults in both
+backend evaluations. The rule composes into Claude and Codex's single
+always-loaded files and lets Kiro's directory-native renderer write `semble.md`.
 
 Semble also treats Codex's selected sandbox mode as an integration boundary. A
 selected Codex feature plus `sandbox_mode = "workspace-write"` appends the

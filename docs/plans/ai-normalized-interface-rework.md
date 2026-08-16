@@ -303,7 +303,8 @@ A structural check is REQUIRED as a backstop, and **no such check exists today**
 > cosmetic.
 >
 > A1's own preferred answer — "prefer a factory that … makes the fanout
-> structural" — still stands, and PR 7b is what retires this guard for good.
+> structural" — now governs `ai.programs.*`. The broader guard remains until the
+> row 8 package moves are complete; that work is outside PR 7b.
 
 Runtime provenance guards leak — an inline module reports `<unknown-file>`,
 indistinguishable from a consumer's inline config — so prefer a factory that
@@ -541,7 +542,7 @@ stated reasoning · **H?** human-picked among options without a strong basis ·
 | B1a | proxied MCP declaration → managed unit              | owner   | **SHIPPED: one used top-level owner; runtime declarations own directly; reused owner keys fail; unused top-level owners emit nothing** | H    |
 | B2  | root pool ↔ per-runtime pool, DIFFERENT key         | entry   | additive, both exist                                                                                                                   | M    |
 | B3  | inside a pool entry (a server record's fields)      | field   | **never merges across levels — entries are atomic**                                                                                    | H    |
-| B4  | `ai.programs.<pkg>` ↔ `ai.<runtime>.programs.<pkg>` | option  | `resolveOverride` — null inherits, non-null wins                                                                                       | L    |
+| B4  | `ai.programs.<pkg>` ↔ `ai.<runtime>.programs.<pkg>` | option  | factory resolves every generated leaf with `resolveOverride` — null inherits, non-null wins                                            | L    |
 | B5  | `ai.settings` ↔ `ai.<runtime>.settings`             | field   | `resolveOverride` per field                                                                                                            | H    |
 | B5a | `ai.context` ↔ `ai.<runtime>.context`               | content | concatenate into one runtime artifact, root first; package defaults use `mkDefault`, and ordinary Nix merge handles field writers      | H    |
 | B6  | normalized → native                                 | —       | not a merge, a translation. Normalized never emits                                                                                     | L    |
@@ -1104,20 +1105,21 @@ files) so it cannot be lost: `contentScope.nix` (new, unit-verified),
 the `cli-instructions.md` rename, `mcp-agent-instructions.md`,
 `checks/semble-mcp-surface.py`, and the `checks/semble-templates.nix` gate swap.
 
-**Known trap for the tests — corrected and re-sized 2026-08-14.** The
-`checks/module-eval.nix:2655-2668` parity test does
-`lib.mapAttrs (_: o: o.type.description)` one level deep, and a nested option
-group has no `.type` and throws. Two corrections to the earlier wording:
+**Resolved by the relocation:** the Semble parity test now enters each generated
+program submodule with `getSubOptions` and recursively records the nested option
+shape. The old one-level `lib.mapAttrs (_: o: o.type.description)`
+implementation could not cross the new `ai.programs.semble.mcp` group because a
+nested option group has no `.type`. Two corrections to the earlier wording
+remain useful:
 
 - **The trap is LATENT, not live.** Every option group is flat at `c5475438`, so
   it fires only if the rework introduces nesting — which it will.
 - **"Aborting the whole checks attrset" is WRONG.** Attribute values are
   independently lazy; a sibling check still evaluates. Verified.
-- **`lib.isOption` recursion alone does NOT fix it.** There is no expected-value
-  fixture to restructure, but the hard-coded six-key enumeration at `:2658-2665`
-  still names the deleted option and still roots at `evaluated.options.semble`.
-  Recursion also stops at submodule boundaries, where the repo's own `:2717`
-  uses `getSubOptions` — follow that.
+- **`lib.isOption` recursion alone does NOT fix it.** The generated program is a
+  submodule option, so traversal must call its type's `getSubOptions` before
+  recursing. The old hard-coded key enumeration and `evaluated.options.semble`
+  root are both gone.
 
 Blast radius: 12 semble tests in one 371-line block; 6 touched by the `runtimes`
 deletion alone; 1 (`module-semble-runtime-selection`, `:2541-2571`) deleted
@@ -1159,13 +1161,10 @@ outputs.
   unrelated same-named native options.
 - `ai.kiro.steeringFiles` is a real per-runtime override surface but is
   `internal = true` and undocumented.
-- `semble.*` is in neither `hmPrefixes` nor `devenvPrefixes`
-  (`lib/options-doc.nix:260-268`, `:294-301`) — **confirmed verbatim**. But the
-  benefit of fixing it by relocation is overstated: nothing publishes those
-  renderings any more (`lib/options-doc.nix:7-9`), the only live consumer is
-  `checks/options-doc.nix`, and semble is the **only** uncovered root — adding
-  `"semble."` to both lists fixes the coverage without moving anything. Use
-  options-doc as a consequence of relocation, never as its justification.
+- ~~`semble.*` is in neither `hmPrefixes` nor `devenvPrefixes`~~ — **RESOLVED by
+  the `ai.programs.semble` relocation.** The generated options are now covered
+  by the existing `ai.` prefix. Options-doc remains a consequence of the
+  relocation, never its justification.
 - Relocating under `ai.*` **acquires a constraint**: it enrols semble in
   `checks/options-doc.nix`'s mandatory HM/devenv exact-parity gate (lines 80-98,
   four `startswith("ai.")` sites). Free today because both backends import one
@@ -1174,8 +1173,8 @@ outputs.
 - The options-doc prefix lists carry four dead entries (`programs.copilot-cli.`,
   `programs.kiro-cli.`, `copilot.`, `kiro.`) matching no declared option —
   evidence the allowlist drifts unchecked.
-- `packages/semble/docs/semble.md` is unregistered in
-  `config/fragment-categories.nix` and linked from nowhere.
+- ~~`packages/semble/docs/semble.md` is unregistered~~ — **RESOLVED.** It is a
+  package-sourced `semble` category scoped to `packages/semble/**`.
 - `semble.*.runtimes` was introduced in `80cc3f84` / PR #701 with no rationale
   recorded in commit, PR, review, issue or fragment.
 - The in-repo comment at `packages/gitlab-mcp/modules/mcp-server.nix:323` cites

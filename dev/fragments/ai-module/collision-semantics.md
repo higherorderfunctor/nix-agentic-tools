@@ -1,18 +1,20 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — proxied MCP declarations now
-> carry explicit managed-unit ownership: a used root declaration owns one shared
-> proxy, runtime declarations own directly, reused ownership keys fail, and
-> unused root proxies do not materialize). Prior: 2026-08-15 (commit pending —
-> all six normalized keyed pools now support per-runtime replacement and null
-> tombstones; the former root↔runtime collision assertion is deleted, and
-> definition provenance now rejects two packages claiming one key at the same
-> root or runtime scope, including claims hidden by whole-option priority in a
-> combined evaluation). Prior: 2026-08-15 (commit pending — the list-shaped
-> instructions exception retired in favor of keyed rules). If you add a
-> normalized pool or change its cross-level merge, null behavior, or package
-> ownership rule and this fragment is not updated in the same commit, stop and
-> fix it.
+> **Last verified:** 2026-08-15 (commit pending — B4 now also governs every
+> generated `ai.programs.*` runtime-override leaf; null inherits and non-null
+> wins without acquiring keyed-pool tombstone semantics). Prior: 2026-08-15
+> (commit pending — proxied MCP declarations now carry explicit managed-unit
+> ownership: a used root declaration owns one shared proxy, runtime declarations
+> own directly, reused ownership keys fail, and unused root proxies do not
+> materialize). Prior: 2026-08-15 (commit pending — all six normalized keyed
+> pools now support per-runtime replacement and null tombstones; the former
+> root↔runtime collision assertion is deleted, and definition provenance now
+> rejects two packages claiming one key at the same root or runtime scope,
+> including claims hidden by whole-option priority in a combined evaluation).
+> Prior: 2026-08-15 (commit pending — the list-shaped instructions exception
+> retired in favor of keyed rules). If you add a normalized pool or change its
+> cross-level merge, null behavior, or package ownership rule and this fragment
+> is not updated in the same commit, stop and fix it.
 
 ### Keyed-pool rule
 
@@ -134,9 +136,10 @@ and out of the package provenance guard.
   concatenate root-first into one runtime-named artifact.
 - `ai.hooks` is an event map whose matcher-group lists append shared-first.
   Event keys identify additive lifecycle streams, not replaceable pool items.
-- `ai.shell` and normalized `ai.settings` fields are nullable scalars.
-  `resolveOverride` interprets runtime null as **inherit**, not delete; a
-  non-null runtime scalar wins.
+- `ai.shell`, normalized `ai.settings` fields, and generated
+  `ai.<runtime>.programs.<pkg>` leaves are nullable scalars. `resolveOverride`
+  interprets runtime null as **inherit**, not delete; a non-null runtime scalar
+  wins.
 
 Do not generalize keyed-pool tombstones to these surfaces without redesigning
 and testing their distinct composition contracts.

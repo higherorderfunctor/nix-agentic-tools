@@ -562,9 +562,8 @@
   # means the reported violation LIST can be incomplete when two definitions of
   # one option disagree on priority.
   #
-  # This check is a stopgap. §A1's own preferred answer is a factory that
-  # generates both levels from one spec and makes the fanout structural; when
-  # that lands, a root write can no longer be expressed and this can go.
+  # `lib.ai.program` now makes both program levels structural. This broader
+  # guard remains for non-program package contributors until the row 8 moves.
   rootPoolSrcRoot = toString ./..;
 
   runtimePoolProbeConfig = {
@@ -574,7 +573,7 @@
   rootPoolProbeConfig =
     runtimePoolProbeConfig
     // {
-      semble.enable = true;
+      ai.programs.semble.enable = true;
       living-workflow.enable = true;
       stacked-workflows.enable = true;
     };
@@ -587,7 +586,7 @@
   # every first-party integration that writes a normalized pool.
   packagePoolProbeConfigs = [
     runtimePoolProbeConfig
-    (runtimePoolProbeConfig // {semble.enable = true;})
+    (runtimePoolProbeConfig // {ai.programs.semble.enable = true;})
     (runtimePoolProbeConfig // {living-workflow.enable = true;})
     (runtimePoolProbeConfig // {stacked-workflows.enable = true;})
     rootPoolProbeConfig
@@ -2955,8 +2954,8 @@ in {
       hm = evalHm {};
       devenv = evalDevenv {};
       clean = evaluated:
-        !evaluated.config.semble.enable
-        && evaluated.config.semble.mcp.enable == null
+        !evaluated.config.ai.programs.semble.enable
+        && evaluated.config.ai.programs.semble.mcp.enable == null
         && !(evaluated.config.ai.claude.mcpServers ? semble)
         && !(evaluated.config.ai.codex.agents ? semble-search)
         && !(evaluated.config.ai.kiro.agents ? semble-search);
@@ -2976,10 +2975,7 @@ in {
             sandbox_mode = "workspace-write";
             sandbox_workspace_write.writable_roots = ["/consumer-cache"];
           };
-        };
-        semble = {
-          enable = true;
-          runtimes = ["codex"];
+          programs.semble.enable = true;
         };
       };
       hasWrappedSemble = packages:
@@ -2995,18 +2991,12 @@ in {
       readOnly =
         (evalDevenv {
           ai.codex.nativeSettings.sandbox_mode = "read-only";
-          semble = {
-            enable = true;
-            runtimes = ["codex"];
-          };
+          ai.codex.programs.semble.enable = true;
         }).config;
       noCodex =
         (evalDevenv {
           ai.codex.nativeSettings.sandbox_mode = "workspace-write";
-          semble = {
-            enable = true;
-            runtimes = ["claude"];
-          };
+          ai.claude.programs.semble.enable = true;
         }).config;
       profileOnly =
         (evalDevenv {
@@ -3014,10 +3004,7 @@ in {
             default_permissions = "project-edit";
             permissions.project-edit.description = "Project edit profile.";
           };
-          semble = {
-            enable = true;
-            runtimes = ["codex"];
-          };
+          ai.codex.programs.semble.enable = true;
         }).config;
     in
       builtins.all
@@ -3048,10 +3035,7 @@ in {
     semblePackage =
       builtins.head
       (evalDevenv {
-        semble = {
-          enable = true;
-          runtimes = ["codex"];
-        };
+        ai.codex.programs.semble.enable = true;
       })
       .config
       .packages;
@@ -3075,7 +3059,7 @@ in {
 
   module-semble-umbrella-fanout = mkTest "semble-umbrella-fanout" (
     let
-      evaluated = evalHm {semble.enable = true;};
+      evaluated = evalHm {ai.programs.semble.enable = true;};
       cfg = evaluated.config;
       claudeRule = cfg.ai.claude.rules.semble;
       codexRule = cfg.ai.codex.rules.semble;
@@ -3123,7 +3107,7 @@ in {
     let
       cfg =
         (evalHm {
-          semble.enable = true;
+          ai.programs.semble.enable = true;
           ai.kiro.enable = true;
         }).config;
       emitted =
@@ -3139,10 +3123,10 @@ in {
 
   module-semble-feature-enable-overrides = mkTest "semble-feature-enable-overrides" (
     let
-      onlyMcp = (evalDevenv {semble.mcp.enable = true;}).config;
+      onlyMcp = (evalDevenv {ai.programs.semble.mcp.enable = true;}).config;
       noMcp =
         (evalDevenv {
-          semble = {
+          ai.programs.semble = {
             enable = true;
             mcp.enable = false;
           };
@@ -3158,31 +3142,40 @@ in {
       && noMcp.ai.claude.agents ? semble-search
   );
 
-  module-semble-runtime-selection = mkTest "semble-runtime-selection" (
+  module-semble-program-overrides = mkTest "semble-program-overrides" (
     let
       top =
         (evalHm {
-          semble = {
-            enable = true;
-            runtimes = ["codex"];
+          ai = {
+            programs.semble = {
+              enable = true;
+              mcp.content = "docs";
+            };
+            claude.programs.semble.enable = false;
+            kiro.programs.semble.enable = false;
           };
         }).config;
       perFeature =
         (evalDevenv {
-          semble = {
-            enable = true;
-            instructions.runtimes = ["claude"];
-            mcp.runtimes = ["kiro"];
-            subagent.runtimes = ["codex"];
+          ai = {
+            programs.semble.mcp.content = "docs";
+            claude.programs.semble.instructions.enable = true;
+            codex.programs.semble.subagent.enable = true;
+            kiro.programs.semble.mcp = {
+              content = "config";
+              enable = true;
+            };
           };
         }).config;
     in
       top.ai.codex.mcpServers ? semble
+      && top.ai.codex.mcpServers.semble.args == ["--content" "docs"]
       && top.ai.codex.agents ? semble-search
       && top.ai.codex.rules ? semble
       && !(top.ai.claude.mcpServers ? semble)
       && !(top.ai.kiro.agents ? semble-search)
       && perFeature.ai.kiro.mcpServers ? semble
+      && perFeature.ai.kiro.mcpServers.semble.args == ["--content" "config"]
       && !(perFeature.ai.claude.mcpServers ? semble)
       && perFeature.ai.claude.rules ? semble
       && perFeature.ai.codex.rules == {}
@@ -3193,20 +3186,19 @@ in {
   module-semble-extra-grammars-and-cache-hooks = mkTest "semble-extra-grammars-and-cache-hooks" (
     let
       grammarConfig = {
-        semble = {
+        ai.codex.programs.semble = {
           enable = true;
           grammars = with pkgs.tree-sitter-grammars; [
             tree-sitter-awk
             tree-sitter-jq
           ];
-          pathMappings = [
+          mcp.pathMappings = [
             {
               content = "config";
               language = "json";
               patterns = ["flake.lock"];
             }
           ];
-          runtimes = ["codex"];
         };
       };
       hm = (evalHm grammarConfig).config;
@@ -3215,7 +3207,7 @@ in {
     in
       hmPackage.sembleExtraGrammarLanguages
       == ["awk" "jq"]
-      && hmPackage.semblePathMappings == grammarConfig.semble.pathMappings
+      && hmPackage.semblePathMappings == grammarConfig.ai.codex.programs.semble.mcp.pathMappings
       && hmPackage.passthru.updateFlakeInput == "llm-agents"
       && hm.home.activation ? sembleCacheGuard
       && lib.hasInfix "semble-cache-guard" hm.home.activation.sembleCacheGuard.text
@@ -3227,9 +3219,9 @@ in {
     let
       empty =
         (evalDevenv {
-          semble = {
+          ai.programs.semble = {
             enable = true;
-            pathMappings = [
+            mcp.pathMappings = [
               {
                 content = "code";
                 language = "";
@@ -3240,9 +3232,9 @@ in {
         }).config;
       duplicate =
         (evalHm {
-          semble = {
+          ai.programs.semble = {
             enable = true;
-            pathMappings = [
+            mcp.pathMappings = [
               {
                 content = "code";
                 language = "bash";
@@ -3403,14 +3395,13 @@ in {
     package =
       builtins.head
       (evalHm {
-        semble = {
+        ai.codex.programs.semble = {
           enable = true;
           package = pkgs.writeShellScriptBin "semble" ''
             set -euETo pipefail
             shopt -s inherit_errexit 2>/dev/null || :
             exec true
           '';
-          runtimes = ["codex"];
         };
       }).config.home.packages;
   in
@@ -3439,10 +3430,9 @@ in {
     };
     activation =
       (evalHm {
-        semble = {
+        ai.codex.programs.semble = {
           enable = true;
           package = sembleStub;
-          runtimes = ["codex"];
         };
         xdg.cacheHome = cacheHome;
       }).config.home.activation.sembleCacheGuard.text;
@@ -3463,13 +3453,13 @@ in {
   module-semble-grammar-validation = mkTest "semble-grammar-validation" (
     let
       missingLanguage = evalHm {
-        semble = {
+        ai.programs.semble = {
           enable = true;
           grammars = [pkgs.hello];
         };
       };
       duplicateLanguage = evalDevenv {
-        semble = {
+        ai.programs.semble = {
           enable = true;
           grammars = with pkgs.tree-sitter-grammars; [
             tree-sitter-awk
@@ -3484,10 +3474,10 @@ in {
 
   module-semble-mcp-content-and-atomic-replacement = mkTest "semble-mcp-content-and-atomic-replacement" (
     let
-      code = (evalHm {semble.mcp.enable = true;}).config.ai.claude.mcpServers.semble;
+      code = (evalHm {ai.programs.semble.mcp.enable = true;}).config.ai.claude.mcpServers.semble;
       docs =
         (evalHm {
-          semble = {
+          ai.programs.semble = {
             mcp = {
               content = "docs";
               enable = true;
@@ -3501,10 +3491,7 @@ in {
             command = "custom-semble";
             args = ["--log-level" "debug"];
           };
-          semble = {
-            enable = true;
-            runtimes = ["codex"];
-          };
+          ai.codex.programs.semble.enable = true;
         }).config.ai.codex.mcpServers.semble;
     in
       code.args
@@ -3518,10 +3505,9 @@ in {
   module-semble-package-override-and-named-kiro-rule = mkTest "semble-package-override-and-named-kiro-rule" (
     let
       evaluated = evalDevenv {
-        semble = {
+        ai.kiro.programs.semble = {
           instructions.enable = true;
           package = pkgs.hello;
-          runtimes = ["kiro"];
         };
       };
       rule = evaluated.config.ai.kiro.rules.semble;
@@ -3543,10 +3529,7 @@ in {
     let
       evaluated = evalDevenv {
         ai.kiro.rules.semble.text = "Consumer rule.";
-        semble = {
-          instructions.enable = true;
-          runtimes = ["kiro"];
-        };
+        ai.kiro.programs.semble.instructions.enable = true;
       };
       rule = evaluated.config.ai.kiro.rules.semble;
     in
@@ -3563,7 +3546,7 @@ in {
           codex.enable = true;
           kiro.enable = true;
         };
-        semble.instructions.enable = true;
+        ai.programs.semble.instructions.enable = true;
       };
       hm = (evalHm nativeConfig).config;
       devenv = (evalDevenv nativeConfig).config;
@@ -3584,18 +3567,31 @@ in {
 
   module-semble-hm-devenv-option-parity = mkTest "semble-hm-devenv-option-parity" (
     let
-      optionType = option: option.type.description;
-      optionShape = evaluated: {
-        enable = optionType evaluated.options.semble.enable;
-        grammars = optionType evaluated.options.semble.grammars;
-        package = optionType evaluated.options.semble.package;
-        runtimes = optionType evaluated.options.semble.runtimes;
-        instructions = lib.mapAttrs (_: optionType) evaluated.options.semble.instructions;
-        mcp = lib.mapAttrs (_: optionType) evaluated.options.semble.mcp;
-        subagent = lib.mapAttrs (_: optionType) evaluated.options.semble.subagent;
-      };
+      optionShape = options:
+        lib.mapAttrs (_: option:
+          if lib.isOption option
+          then option.type.description
+          else optionShape option)
+        (lib.filterAttrs (name: _: name != "_module") options);
+      programShape = evaluated: path:
+        optionShape ((lib.getAttrFromPath path evaluated.options).type.getSubOptions []);
+      hm = evalHm {};
+      devenv = evalDevenv {};
     in
-      optionShape (evalHm {}) == optionShape (evalDevenv {})
+      programShape hm ["ai" "programs" "semble"]
+      == programShape devenv ["ai" "programs" "semble"]
+      && programShape hm ["ai" "codex" "programs" "semble"]
+      == programShape devenv ["ai" "codex" "programs" "semble"]
+      && builtins.attrNames (programShape hm ["ai" "programs" "semble"])
+      == ["enable" "grammars" "instructions" "mcp" "package" "subagent"]
+      && builtins.attrNames (programShape hm ["ai" "programs" "semble"]).mcp
+      == ["content" "enable" "pathMappings"]
+      && lib.all
+      (runtime: lib.hasAttrByPath ["ai" runtime "programs" "semble"] hm.options)
+      ["claude" "codex" "kiro"]
+      && lib.all
+      (runtime: !(lib.hasAttrByPath ["ai" runtime "programs" "semble"] hm.options))
+      ["copilot" "kimchi"]
   );
 
   module-semble-direct-helpers = mkTest "semble-direct-helpers" (
@@ -9878,8 +9874,8 @@ in {
   module-semble-generated-pool-entries-accept-null = mkTest "semble-generated-pool-entries-accept-null" (
     let
       config = {
-        semble.enable = true;
         ai = {
+          programs.semble.enable = true;
           claude = {
             enable = true;
             agents.semble-search = null;
