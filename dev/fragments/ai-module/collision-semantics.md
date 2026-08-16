@@ -1,14 +1,18 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — all six normalized keyed pools
-> now support per-runtime replacement and null tombstones; the former
-> root↔runtime collision assertion is deleted, and definition provenance now
-> rejects two packages claiming one key at the same root or runtime scope,
-> including claims hidden by whole-option priority in a combined evaluation).
-> Prior: 2026-08-15 (commit pending — the list-shaped instructions exception
-> retired in favor of keyed rules). If you add a normalized pool or change its
-> cross-level merge, null behavior, or package ownership rule and this fragment
-> is not updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-15 (commit pending — proxied MCP declarations now
+> carry explicit managed-unit ownership: a used root declaration owns one shared
+> proxy, runtime declarations own directly, reused ownership keys fail, and
+> unused root proxies do not materialize). Prior: 2026-08-15 (commit pending —
+> all six normalized keyed pools now support per-runtime replacement and null
+> tombstones; the former root↔runtime collision assertion is deleted, and
+> definition provenance now rejects two packages claiming one key at the same
+> root or runtime scope, including claims hidden by whole-option priority in a
+> combined evaluation). Prior: 2026-08-15 (commit pending — the list-shaped
+> instructions exception retired in favor of keyed rules). If you add a
+> normalized pool or change its cross-level merge, null behavior, or package
+> ownership rule and this fragment is not updated in the same commit, stop and
+> fix it.
 
 ### Keyed-pool rule
 
@@ -48,6 +52,29 @@ longer a collision.
 Unsupported per-runtime options remain absent. Root fanout to an unsupported
 runtime degrades to `{}` before merging, based on the app record's
 `supportedPools` list.
+
+### Managed-proxy ownership exception
+
+An MCP pool entry with `proxy.enable` has a managed systemd unit in addition to
+its client value. The pool value still follows ordinary atomic replacement and
+null negation, but the unit needs one unambiguous owner:
+
+- a used top-level proxy declaration owns one shared unit and fans out only its
+  lowered credential-free client entry;
+- a runtime-scoped proxy declaration owns its unit directly; and
+- the MCP server key is also the unit ownership key, so two proxy declarations
+  may not reuse it across scopes. Use different keys even when the declarations
+  are byte-identical.
+
+This is not a return of the retired root↔runtime pool collision assertion. A
+top-level proxied entry may still be replaced by an ordinary non-proxied runtime
+entry or suppressed by null. The failure applies only when two declarations both
+claim the same managed-proxy identity. A top-level owner inherited by no enabled
+capable runtime is not materialized. The shared owner aggregator dynamically
+discovers every runtime option subtree carrying the internal normalized-MCP
+capability marker. Do not infer capability from the `mcpServers` name alone: the
+generic public `mkAiApp` factory permits an unrelated same-named native option
+when the normalized pool is unsupported.
 
 ### Package ownership rule
 
@@ -118,9 +145,12 @@ and testing their distinct composition contracts.
 
 `lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
 filter. `lib/ai/app/mkBackendTransform.nix` calls it once for every supported
-pool and hands only the filtered `merged*` values to package callbacks. MCP
-proxy transformation runs after this merge, so a server replaced with `null`
-never reaches proxy validation or emission.
+pool and hands only the filtered `merged*` values to package callbacks. For MCP,
+`lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy declarations at each
+scope while preserving null tombstones; only those client views cross the
+root/runtime merge. `lib/ai/sharedOptions.nix` separately aggregates explicit
+proxy owners, rejects reused keys before the module system can collide, and
+emits only unique active units.
 
 `hmTransform.nix` and `devenvTransform.nix` are thin backend selectors; do not
 duplicate pool logic into them.

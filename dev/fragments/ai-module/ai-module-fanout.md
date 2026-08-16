@@ -1,27 +1,31 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — normalized keyed pools use
-> atomic per-runtime replacement and null tombstones, with same-scope package
-> ownership checked from definition provenance). Prior: 2026-08-15 (commit
-> pending — context is a typed `text`-XOR-`source` record that composes
-> root-first with runtime context and names its native artifact per runtime.
-> Rules carry a normalized `matcher`; Claude, Kiro, Copilot, and Codex lower it
-> to native metadata or explicit prose, and devenv AGENTS.md consumers share one
-> keyed deduplicating writer; the list-shaped `instructions` surface is retired
-> rather than aliased). Prior: 2026-08-15 (commit pending — every normalized
-> pool crosses into a runtime only when its app record lists it in
-> `supportedPools`; all five runtimes now list the closed normalized `settings`
-> submodule, runtime-native passthrough moved to `nativeSettings`, per-runtime
-> fields resolve against the root independently, and Codex integration roots
-> travel through a hidden internal channel before native TOML emission). Prior:
-> 2026-08-14 (commit pending — Copilot's `ai.instructions` / `ai.rules`
-> destination is per-BACKEND and this entry named only one of them. Home Manager
-> wrote a hardcoded `.github/instructions/`, which resolves to
-> `$HOME/.github/instructions/` — a directory copilot-cli never reads — so every
-> named instruction and every rule was emitted and then ignored. It now routes
-> through `ai.copilot.configDir`, matching every other HM artifact this module
-> writes. See `copilot-config-delivery.md` for why the two backends address
-> genuinely different consumers). Prior: 2026-08-14 (commit pending — adds the
+> **Last verified:** 2026-08-15 (commit pending — top-level proxied MCP
+> declarations now own one shared managed daemon and fan out only lowered client
+> entries; runtime declarations own directly, duplicate ownership keys fail
+> explicitly, and unused top-level owners are never materialized). Prior:
+> 2026-08-15 (commit pending — normalized keyed pools use atomic per-runtime
+> replacement and null tombstones, with same-scope package ownership checked
+> from definition provenance). Prior: 2026-08-15 (commit pending — context is a
+> typed `text`-XOR-`source` record that composes root-first with runtime context
+> and names its native artifact per runtime. Rules carry a normalized `matcher`;
+> Claude, Kiro, Copilot, and Codex lower it to native metadata or explicit
+> prose, and devenv AGENTS.md consumers share one keyed deduplicating writer;
+> the list-shaped `instructions` surface is retired rather than aliased). Prior:
+> 2026-08-15 (commit pending — every normalized pool crosses into a runtime only
+> when its app record lists it in `supportedPools`; all five runtimes now list
+> the closed normalized `settings` submodule, runtime-native passthrough moved
+> to `nativeSettings`, per-runtime fields resolve against the root
+> independently, and Codex integration roots travel through a hidden internal
+> channel before native TOML emission). Prior: 2026-08-14 (commit pending —
+> Copilot's `ai.instructions` / `ai.rules` destination is per-BACKEND and this
+> entry named only one of them. Home Manager wrote a hardcoded
+> `.github/instructions/`, which resolves to `$HOME/.github/instructions/` — a
+> directory copilot-cli never reads — so every named instruction and every rule
+> was emitted and then ignored. It now routes through `ai.copilot.configDir`,
+> matching every other HM artifact this module writes. See
+> `copilot-config-delivery.md` for why the two backends address genuinely
+> different consumers). Prior: 2026-08-14 (commit pending — adds the
 > Kiro-specific `extraPackages` runtime PATH prefix, shared by both backends
 > through the existing launcher wrapper and deliberately not promoted to
 > `ai.shell` or a cross-runtime pool). Prior: 2026-08-05 (commit pending —
@@ -373,7 +377,13 @@ enabled ecosystem whose native model preserves the option's semantics):
   `envHttpHeaders` and `bearerTokenEnvVar` name environment variables so secret
   values never enter generated TOML. Direct
   `ai.codex.nativeSettings.mcp_servers` cannot be combined with either typed
-  pool because their table ownership would be ambiguous.
+  pool because their table ownership would be ambiguous. Credential-injecting
+  `proxy.enable` entries lower at their declaration scope before pool merging: a
+  used top-level declaration owns one shared managed proxy and only its
+  credential-free client entry fans out; a runtime declaration owns its proxy
+  directly. The MCP server key is also the managed-unit identity, so reused
+  proxy-owner keys fail and direct owners must choose different keys. A
+  top-level proxy inherited by no enabled capable runtime creates no unit.
 - `ai.lspServers` — typed LSP definitions, translated to Claude, Copilot, and
   Kiro native config. Codex is deliberately excluded: its current public config
   reference and pinned CLI expose no LSP-server registration surface, so
@@ -419,10 +429,12 @@ masquerade as correct exclusion.
 Fanout validation assertions live outside per-runtime enable gates so invalid
 shared data cannot hide behind a disabled CLI. This includes the portable
 hook-event vocabulary check. Package pool ownership is a separate provenance
-check over both backend module trees. Runtime-specific materialization
-assertions remain inside the enabled runtime's factory—for example, Codex's
-semantic-agent requirement and its `hooks.json` versus inline-hook ownership
-check.
+check over both backend module trees. Managed MCP proxy ownership is another
+separate check: `sharedOptions.nix` aggregates declaration scopes, rejects
+reused unit keys, and validates only active owners. Runtime-specific
+materialization assertions remain inside the enabled runtime's factory—for
+example, Codex's semantic-agent requirement and its `hooks.json` versus
+inline-hook ownership check.
 
 ### Other boundaries
 

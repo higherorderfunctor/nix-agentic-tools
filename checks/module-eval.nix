@@ -5109,6 +5109,203 @@ in {
   # header prefix + `https://` url prefix compose. Content-level (the
   # shared render both backends feed into). See mcpSecrets.nix.
   # ── Local credential-injecting proxy (lib/ai/mcpProxy.nix) ─────────
+
+  # A top-level proxied declaration owns ONE shared daemon. The runtimes see
+  # only the credential-free client entry, so enabling a second consumer must
+  # neither duplicate the service nor expose the owner record.
+  module-mcp-proxy-top-level-owner-is-shared = mkTest "mcp-proxy-top-level-owner-is-shared" (
+    let
+      result = evalHm {
+        ai = {
+          claude.enable = true;
+          codex.enable = true;
+          mcpServers.shared = proxySampleServer;
+        };
+      };
+      services = lib.filterAttrs (name: _: lib.hasPrefix "mcp-proxy-" name) result.config.systemd.user.services;
+      claudeEntry = result.config.programs.claude-code.mcpServers.shared;
+      codexEntry = (hmCodexSettings result).mcp_servers.shared;
+      rendered = builtins.toJSON [claudeEntry codexEntry];
+    in
+      builtins.attrNames services
+      == ["mcp-proxy-shared"]
+      && claudeEntry.url == "http://127.0.0.1:9501/"
+      && codexEntry.url == "http://127.0.0.1:9501/"
+      && !(claudeEntry ? proxy)
+      && !(codexEntry ? proxy)
+      && !(lib.hasInfix "/run/secrets" rendered)
+      && !(lib.hasInfix "X-Service-Token" rendered)
+  );
+
+  # A top-level owner is lazy: if every enabled capable runtime replaces or
+  # tombstones the key, no client can reach it and no managed daemon exists.
+  module-mcp-proxy-unused-top-level-owner-is-not-materialized = mkTest "mcp-proxy-unused-top-level-owner-is-not-materialized" (
+    let
+      result = evalHm {
+        ai = {
+          claude = {
+            enable = true;
+            mcpServers.unused = null;
+          };
+          mcpServers.unused = proxySampleServer;
+        };
+      };
+    in
+      !(result.config.systemd.user.services ? mcp-proxy-unused)
+      && !(result.config.programs.claude-code.mcpServers ? unused)
+  );
+
+  # A runtime-scoped declaration owns its managed proxy directly and receives
+  # the matching lowered client entry. Its unit does not depend on a top-level
+  # declaration or on accidental cross-runtime module-definition deduplication.
+  module-mcp-proxy-runtime-owner-emits-directly = mkTest "mcp-proxy-runtime-owner-emits-directly" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          mcpServers.direct = proxySampleServer;
+        };
+      };
+      entry = result.config.programs.claude-code.mcpServers.direct;
+    in
+      result.config.systemd.user.services ? mcp-proxy-direct
+      && entry.url == "http://127.0.0.1:9501/"
+      && !(entry ? proxy)
+  );
+
+  # "Directly" means declaration lifetime, not enabled-client lifetime. This
+  # preserves the existing runtime-owner contract while moving ownership out
+  # of the per-runtime fanout transform.
+  module-mcp-proxy-disabled-runtime-owner-emits-directly = mkTest "mcp-proxy-disabled-runtime-owner-emits-directly" (
+    let
+      result = evalHm {
+        ai.claude.mcpServers.direct = proxySampleServer;
+      };
+    in
+      result.config.systemd.user.services ? mcp-proxy-direct
+      && !(result.config.programs.claude-code ? mcpServers)
+  );
+
+  # The MCP key is the managed-unit ownership key. Reusing it at two runtime
+  # scopes must produce the dedicated actionable assertion and must suppress
+  # the conflicted unit so a generic module merge error cannot hide it.
+  module-mcp-proxy-reused-owner-key-fails-explicitly = mkTest "mcp-proxy-reused-owner-key-fails-explicitly" (
+    let
+      result = evalHm {
+        ai = {
+          claude.mcpServers.shared = proxySampleServer;
+          kiro.mcpServers.shared = lib.recursiveUpdate proxySampleServer {
+            proxy.port = 9502;
+          };
+        };
+      };
+      failed = builtins.filter (assertion: !assertion.assertion) result.config.assertions;
+    in
+      !(result.config.systemd.user.services ? mcp-proxy-shared)
+      && builtins.any
+      (assertion:
+        lib.hasInfix "MCP proxy ownership keys are reused" assertion.message
+        && lib.hasInfix "ai.claude.mcpServers.shared" assertion.message
+        && lib.hasInfix "ai.kiro.mcpServers.shared" assertion.message
+        && lib.hasInfix "different MCP server key" assertion.message)
+      failed
+  );
+
+  # The ownership namespace spans declaration layers, not just sibling
+  # runtimes: a top-level owner and a runtime-direct owner cannot share a key.
+  module-mcp-proxy-root-runtime-reused-owner-key-fails-explicitly = mkTest "mcp-proxy-root-runtime-reused-owner-key-fails-explicitly" (
+    let
+      result = evalHm {
+        ai = {
+          mcpServers.shared = proxySampleServer;
+          claude.mcpServers.shared = lib.recursiveUpdate proxySampleServer {
+            proxy.port = 9502;
+          };
+        };
+      };
+      failed = builtins.filter (assertion: !assertion.assertion) result.config.assertions;
+    in
+      !(result.config.systemd.user.services ? mcp-proxy-shared)
+      && builtins.any
+      (assertion:
+        lib.hasInfix "MCP proxy ownership keys are reused" assertion.message
+        && lib.hasInfix "ai.mcpServers.shared" assertion.message
+        && lib.hasInfix "ai.claude.mcpServers.shared" assertion.message)
+      failed
+  );
+
+  # A runtime's ordinary same-key replacement remains normal pool precedence,
+  # not a proxy-ownership collision. Another runtime may still inherit the
+  # top-level owner, which is materialized once for that consumer.
+  module-mcp-proxy-non-proxy-runtime-replacement-preserves-shared-owner = mkTest "mcp-proxy-non-proxy-runtime-replacement-preserves-shared-owner" (
+    let
+      result = evalHm {
+        ai = {
+          claude = {
+            enable = true;
+            mcpServers.shared = {
+              type = "http";
+              url = "https://runtime.example.test/mcp";
+            };
+          };
+          codex.enable = true;
+          mcpServers.shared = proxySampleServer;
+        };
+      };
+      claudeEntry = result.config.programs.claude-code.mcpServers.shared;
+      codexEntry = (hmCodexSettings result).mcp_servers.shared;
+      failed = builtins.filter (assertion: !assertion.assertion) result.config.assertions;
+    in
+      result.config.systemd.user.services ? mcp-proxy-shared
+      && claudeEntry.url == "https://runtime.example.test/mcp"
+      && codexEntry.url == "http://127.0.0.1:9501/"
+      && builtins.all
+      (assertion: !(lib.hasInfix "MCP proxy ownership keys are reused" assertion.message))
+      failed
+  );
+
+  # Positive control for the ownership failure: two direct owners with distinct
+  # keys produce two units and no ownership assertion.
+  module-mcp-proxy-distinct-owner-keys-pass = mkTest "mcp-proxy-distinct-owner-keys-pass" (
+    let
+      result = evalHm {
+        ai = {
+          claude.mcpServers.alpha = proxySampleServer;
+          kiro.mcpServers.beta = lib.recursiveUpdate proxySampleServer {
+            proxy.port = 9502;
+          };
+        };
+      };
+      failed = builtins.filter (assertion: !assertion.assertion) result.config.assertions;
+    in
+      result.config.systemd.user.services ? mcp-proxy-alpha
+      && result.config.systemd.user.services ? mcp-proxy-beta
+      && builtins.all
+      (assertion: !(lib.hasInfix "MCP proxy ownership keys are reused" assertion.message))
+      failed
+  );
+
+  # Devenv lifecycle remains deliberately separate. A used top-level owner is
+  # lowered for the client model but still fails rather than silently omitting
+  # the managed process that would make its loopback URL live.
+  module-mcp-proxy-devenv-lifecycle-remains-rejected = mkTest "mcp-proxy-devenv-lifecycle-remains-rejected" (
+    let
+      result = evalDevenv {
+        ai = {
+          claude.enable = true;
+          mcpServers.shared = proxySampleServer;
+        };
+      };
+      failed = builtins.filter (assertion: !assertion.assertion) result.config.assertions;
+    in
+      builtins.any
+      (assertion:
+        lib.hasInfix "ai.mcpServers" assertion.message
+        && lib.hasInfix "backend does not implement" assertion.message
+        && lib.hasInfix "devenv lifecycle is tracked separately" assertion.message)
+      failed
+  );
+
   # The property under test is NEGATIVE and easy to regress silently: a
   # proxied server must hand the client NOTHING secret. Assert the
   # loopback url is there AND that no header, no secret path, and no

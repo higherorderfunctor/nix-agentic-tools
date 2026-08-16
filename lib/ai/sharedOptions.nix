@@ -17,8 +17,94 @@
   dirHelpers = import ./dir-helpers.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
   harnessNames = import ./runtimes.nix;
+  mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
+  hasAssertions = options ? assertions;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
+  hasHomeManagerSystemd = lib.hasAttrByPath ["systemd" "user" "services"] options;
+
+  # ── Managed MCP proxy ownership ─────────────────────────────────────
+  # A top-level proxied declaration is one shared owner, not one owner per
+  # runtime view. It materializes only when at least one enabled capable
+  # runtime inherits it. Runtime-scoped declarations own their units directly;
+  # their lifetime follows the declaration, matching the pre-existing contract.
+  # Discover MCP-capable runtimes from the evaluated OPTION tree rather than
+  # the first-party registry. mkAiApp is public, and every transformed record
+  # declares an internal per-runtime capability marker with its normalized MCP
+  # option. The marker distinguishes that pool from an independent same-named
+  # native option and avoids introducing a package-written root option.
+  mcpRuntimeNames =
+    builtins.filter
+    (name: lib.hasAttrByPath ["ai" name "_normalizedPools" "mcpServers"] options)
+    (builtins.attrNames options.ai);
+  runtimeMcpServers = name: lib.attrByPath ["ai" name "mcpServers"] {} config;
+  topLevelProxiedServers = mcpProxy.proxiedServers config.ai.mcpServers;
+  topLevelProxyIsUsed = key:
+    lib.any
+    (name:
+      lib.attrByPath ["ai" name "enable"] false config
+      && !(builtins.hasAttr key (runtimeMcpServers name)))
+    mcpRuntimeNames;
+  usedTopLevelProxiedServers = lib.filterAttrs (key: _: topLevelProxyIsUsed key) topLevelProxiedServers;
+
+  mkProxyDeclaration = optionPath: key: server: {
+    inherit key optionPath server;
+    scope = "${optionPath}.${key}";
+  };
+  topLevelProxyDeclarations =
+    lib.mapAttrsToList (mkProxyDeclaration "ai.mcpServers") topLevelProxiedServers;
+  usedTopLevelProxyDeclarations =
+    lib.mapAttrsToList (mkProxyDeclaration "ai.mcpServers") usedTopLevelProxiedServers;
+  runtimeProxyDeclarations =
+    lib.concatMap
+    (name:
+      lib.mapAttrsToList
+      (mkProxyDeclaration "ai.${name}.mcpServers")
+      (mcpProxy.proxiedServers (runtimeMcpServers name)))
+    mcpRuntimeNames;
+
+  # The server key is the managed-unit identity. Refuse every reused key up
+  # front, including byte-identical definitions, and omit conflicted units so
+  # the module system cannot preempt this actionable assertion with a generic
+  # duplicate-definition error.
+  proxyDeclarationsByKey = lib.groupBy (declaration: declaration.key) (
+    topLevelProxyDeclarations ++ runtimeProxyDeclarations
+  );
+  duplicateProxyDeclarations = lib.filterAttrs (_: declarations: builtins.length declarations > 1) proxyDeclarationsByKey;
+  duplicateProxyKeys = builtins.attrNames duplicateProxyDeclarations;
+  activeProxyDeclarations = usedTopLevelProxyDeclarations ++ runtimeProxyDeclarations;
+  uniqueActiveProxyDeclarations =
+    builtins.filter
+    (declaration: !(builtins.elem declaration.key duplicateProxyKeys))
+    activeProxyDeclarations;
+  managedProxyServers = builtins.listToAttrs (map
+    (declaration: lib.nameValuePair declaration.key declaration.server)
+    uniqueActiveProxyDeclarations);
+
+  duplicateProxyDescription = key: declarations: "'${key}' (${lib.concatStringsSep ", " (map (declaration: declaration.scope) declarations)})";
+  proxyOwnershipAssertions = [
+    {
+      assertion = duplicateProxyKeys == [];
+      message = ''
+        MCP proxy ownership keys are reused: ${lib.concatStringsSep "; " (lib.mapAttrsToList duplicateProxyDescription duplicateProxyDeclarations)}.
+        A managed proxy key names one systemd user service. A top-level
+        `ai.mcpServers.<key>` declaration is its single shared owner; each
+        runtime-scoped `ai.<runtime>.mcpServers.<key>` declaration is a direct
+        owner. Reusing a key across owners is ambiguous even when definitions
+        are identical. Give every direct owner a different MCP server key.
+      '';
+    }
+  ];
+  proxyValidationAssertions =
+    lib.concatMap
+    (declaration:
+      mcpProxy.assertionsFor {
+        inherit (declaration) optionPath;
+        backendSupported = hasHomeManagerSystemd;
+        servers = {${declaration.key} = declaration.server;};
+      })
+    activeProxyDeclarations;
+  proxyAssertions = proxyOwnershipAssertions ++ proxyValidationAssertions;
 
   # OpenSSH rejects Home Manager's otherwise-safe ~/.ssh/config symlink inside
   # Linux user-namespace sandboxes: the root-owned Nix-store target is exposed
@@ -74,7 +160,11 @@ in {
       description = ''
         MCP servers fanned out to every enabled AI app: Claude, Codex,
         Copilot, and Kiro. Per-app entries replace root entries at the same
-        key; null suppresses an inherited server for that runtime.
+        key; null suppresses an inherited server for that runtime. A used
+        top-level proxied server owns one shared managed proxy and fans out only
+        its credential-free client entry. Runtime-scoped proxied servers own
+        their managed proxies directly. Because the server key is also the
+        managed-proxy identity, proxy owners must use distinct keys.
       '';
     };
 
@@ -348,6 +438,14 @@ in {
   # Emission logic lives at L4 inside each per-CLI factory. This
   # layer only reshapes the L1 Dir option into L2 per-file entries.
   config = lib.mkMerge [
+    (lib.optionalAttrs hasAssertions {assertions = proxyAssertions;})
+    # Drop the systemd path entirely in devenv. `mkIf false` would still define
+    # an unknown option there; the option-tree probe is a build-time condition
+    # and does not force config. Unsupported active declarations fail through
+    # proxyValidationAssertions instead of disappearing silently.
+    (lib.optionalAttrs hasHomeManagerSystemd {
+      systemd.user.services = mcpProxy.systemdUnitsFor managedProxyServers;
+    })
     {
       # THE one sanctioned root-pool write in this repo. Every other module
       # writes `ai.<runtime>.<pool>`, enforced by the provenance guard in

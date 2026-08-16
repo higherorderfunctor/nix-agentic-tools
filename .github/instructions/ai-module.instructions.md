@@ -7,28 +7,32 @@ applyTo: "checks/module-eval.nix,lib/ai/agent.nix,lib/ai/ai-common.nix,lib/ai/ap
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — normalized keyed pools use
-> atomic per-runtime replacement and null tombstones, with same-scope package
-> ownership checked from definition provenance). Prior: 2026-08-15 (commit
-> pending — context is a typed `text`-XOR-`source` record that composes
-> root-first with runtime context and names its native artifact per runtime.
-> Rules carry a normalized `matcher`; Claude, Kiro, Copilot, and Codex lower it
-> to native metadata or explicit prose, and devenv AGENTS.md consumers share one
-> keyed deduplicating writer; the list-shaped `instructions` surface is retired
-> rather than aliased). Prior: 2026-08-15 (commit pending — every normalized
-> pool crosses into a runtime only when its app record lists it in
-> `supportedPools`; all five runtimes now list the closed normalized `settings`
-> submodule, runtime-native passthrough moved to `nativeSettings`, per-runtime
-> fields resolve against the root independently, and Codex integration roots
-> travel through a hidden internal channel before native TOML emission). Prior:
-> 2026-08-14 (commit pending — Copilot's `ai.instructions` / `ai.rules`
-> destination is per-BACKEND and this entry named only one of them. Home Manager
-> wrote a hardcoded `.github/instructions/`, which resolves to
-> `$HOME/.github/instructions/` — a directory copilot-cli never reads — so every
-> named instruction and every rule was emitted and then ignored. It now routes
-> through `ai.copilot.configDir`, matching every other HM artifact this module
-> writes. See `copilot-config-delivery.md` for why the two backends address
-> genuinely different consumers). Prior: 2026-08-14 (commit pending — adds the
+> **Last verified:** 2026-08-15 (commit pending — top-level proxied MCP
+> declarations now own one shared managed daemon and fan out only lowered client
+> entries; runtime declarations own directly, duplicate ownership keys fail
+> explicitly, and unused top-level owners are never materialized). Prior:
+> 2026-08-15 (commit pending — normalized keyed pools use atomic per-runtime
+> replacement and null tombstones, with same-scope package ownership checked
+> from definition provenance). Prior: 2026-08-15 (commit pending — context is a
+> typed `text`-XOR-`source` record that composes root-first with runtime context
+> and names its native artifact per runtime. Rules carry a normalized `matcher`;
+> Claude, Kiro, Copilot, and Codex lower it to native metadata or explicit
+> prose, and devenv AGENTS.md consumers share one keyed deduplicating writer;
+> the list-shaped `instructions` surface is retired rather than aliased). Prior:
+> 2026-08-15 (commit pending — every normalized pool crosses into a runtime only
+> when its app record lists it in `supportedPools`; all five runtimes now list
+> the closed normalized `settings` submodule, runtime-native passthrough moved
+> to `nativeSettings`, per-runtime fields resolve against the root
+> independently, and Codex integration roots travel through a hidden internal
+> channel before native TOML emission). Prior: 2026-08-14 (commit pending —
+> Copilot's `ai.instructions` / `ai.rules` destination is per-BACKEND and this
+> entry named only one of them. Home Manager wrote a hardcoded
+> `.github/instructions/`, which resolves to `$HOME/.github/instructions/` — a
+> directory copilot-cli never reads — so every named instruction and every rule
+> was emitted and then ignored. It now routes through `ai.copilot.configDir`,
+> matching every other HM artifact this module writes. See
+> `copilot-config-delivery.md` for why the two backends address genuinely
+> different consumers). Prior: 2026-08-14 (commit pending — adds the
 > Kiro-specific `extraPackages` runtime PATH prefix, shared by both backends
 > through the existing launcher wrapper and deliberately not promoted to
 > `ai.shell` or a cross-runtime pool). Prior: 2026-08-05 (commit pending —
@@ -380,7 +384,13 @@ enabled ecosystem whose native model preserves the option's semantics):
   `envHttpHeaders` and `bearerTokenEnvVar` name environment variables so secret
   values never enter generated TOML. Direct
   `ai.codex.nativeSettings.mcp_servers` cannot be combined with either typed
-  pool because their table ownership would be ambiguous.
+  pool because their table ownership would be ambiguous. Credential-injecting
+  `proxy.enable` entries lower at their declaration scope before pool merging: a
+  used top-level declaration owns one shared managed proxy and only its
+  credential-free client entry fans out; a runtime declaration owns its proxy
+  directly. The MCP server key is also the managed-unit identity, so reused
+  proxy-owner keys fail and direct owners must choose different keys. A
+  top-level proxy inherited by no enabled capable runtime creates no unit.
 - `ai.lspServers` — typed LSP definitions, translated to Claude, Copilot, and
   Kiro native config. Codex is deliberately excluded: its current public config
   reference and pinned CLI expose no LSP-server registration surface, so
@@ -426,10 +436,12 @@ masquerade as correct exclusion.
 Fanout validation assertions live outside per-runtime enable gates so invalid
 shared data cannot hide behind a disabled CLI. This includes the portable
 hook-event vocabulary check. Package pool ownership is a separate provenance
-check over both backend module trees. Runtime-specific materialization
-assertions remain inside the enabled runtime's factory—for example, Codex's
-semantic-agent requirement and its `hooks.json` versus inline-hook ownership
-check.
+check over both backend module trees. Managed MCP proxy ownership is another
+separate check: `sharedOptions.nix` aggregates declaration scopes, rejects
+reused unit keys, and validates only active owners. Runtime-specific
+materialization assertions remain inside the enabled runtime's factory—for
+example, Codex's semantic-agent requirement and its `hooks.json` versus
+inline-hook ownership check.
 
 ### Other boundaries
 
@@ -584,15 +596,19 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — all six normalized keyed pools
-> now support per-runtime replacement and null tombstones; the former
-> root↔runtime collision assertion is deleted, and definition provenance now
-> rejects two packages claiming one key at the same root or runtime scope,
-> including claims hidden by whole-option priority in a combined evaluation).
-> Prior: 2026-08-15 (commit pending — the list-shaped instructions exception
-> retired in favor of keyed rules). If you add a normalized pool or change its
-> cross-level merge, null behavior, or package ownership rule and this fragment
-> is not updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-15 (commit pending — proxied MCP declarations now
+> carry explicit managed-unit ownership: a used root declaration owns one shared
+> proxy, runtime declarations own directly, reused ownership keys fail, and
+> unused root proxies do not materialize). Prior: 2026-08-15 (commit pending —
+> all six normalized keyed pools now support per-runtime replacement and null
+> tombstones; the former root↔runtime collision assertion is deleted, and
+> definition provenance now rejects two packages claiming one key at the same
+> root or runtime scope, including claims hidden by whole-option priority in a
+> combined evaluation). Prior: 2026-08-15 (commit pending — the list-shaped
+> instructions exception retired in favor of keyed rules). If you add a
+> normalized pool or change its cross-level merge, null behavior, or package
+> ownership rule and this fragment is not updated in the same commit, stop and
+> fix it.
 
 ### Keyed-pool rule
 
@@ -632,6 +648,29 @@ longer a collision.
 Unsupported per-runtime options remain absent. Root fanout to an unsupported
 runtime degrades to `{}` before merging, based on the app record's
 `supportedPools` list.
+
+### Managed-proxy ownership exception
+
+An MCP pool entry with `proxy.enable` has a managed systemd unit in addition to
+its client value. The pool value still follows ordinary atomic replacement and
+null negation, but the unit needs one unambiguous owner:
+
+- a used top-level proxy declaration owns one shared unit and fans out only its
+  lowered credential-free client entry;
+- a runtime-scoped proxy declaration owns its unit directly; and
+- the MCP server key is also the unit ownership key, so two proxy declarations
+  may not reuse it across scopes. Use different keys even when the declarations
+  are byte-identical.
+
+This is not a return of the retired root↔runtime pool collision assertion. A
+top-level proxied entry may still be replaced by an ordinary non-proxied runtime
+entry or suppressed by null. The failure applies only when two declarations both
+claim the same managed-proxy identity. A top-level owner inherited by no enabled
+capable runtime is not materialized. The shared owner aggregator dynamically
+discovers every runtime option subtree carrying the internal normalized-MCP
+capability marker. Do not infer capability from the `mcpServers` name alone: the
+generic public `mkAiApp` factory permits an unrelated same-named native option
+when the normalized pool is unsupported.
 
 ### Package ownership rule
 
@@ -702,9 +741,12 @@ and testing their distinct composition contracts.
 
 `lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
 filter. `lib/ai/app/mkBackendTransform.nix` calls it once for every supported
-pool and hands only the filtered `merged*` values to package callbacks. MCP
-proxy transformation runs after this merge, so a server replaced with `null`
-never reaches proxy validation or emission.
+pool and hands only the filtered `merged*` values to package callbacks. For MCP,
+`lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy declarations at each
+scope while preserving null tombstones; only those client views cross the
+root/runtime merge. `lib/ai/sharedOptions.nix` separately aggregates explicit
+proxy owners, rejects reused keys before the module system can collide, and
+emits only unique active units.
 
 `hmTransform.nix` and `devenvTransform.nix` are thin backend selectors; do not
 duplicate pool logic into them.
@@ -838,8 +880,11 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-08-15 (commit pending — L2↔L3 keyed pools now use
-> atomic per-runtime replacement with null tombstones, while package ownership
+> **Last verified:** 2026-08-15 (commit pending — records the managed-proxy
+> sidecar exception: MCP client values still traverse L2↔L3 normally, while
+> explicit declaration ownership centrally emits unique active systemd units).
+> Prior: 2026-08-15 (commit pending — L2↔L3 keyed pools now use atomic
+> per-runtime replacement with null tombstones, while package ownership
 > collisions are checked by definition provenance within each scope). Prior:
 > 2026-08-15 (commit pending — typed context is the composition exception: root
 > and runtime content concatenate root-first into one runtime-named artifact.
@@ -897,8 +942,11 @@ path types".
 
 ### Rules
 
-- **Emission logic lives ONLY at L4.** L1/L2/L2b are pure fanout — they never
-  touch `home.file.*` or `files.*`.
+- **Artifact emission logic lives ONLY at L4.** L1/L2/L2b are pure fanout — they
+  never touch `home.file.*` or `files.*`. The one sidecar exception is managed
+  MCP proxy ownership: `sharedOptions.nix` aggregates proxy declaration scopes
+  and emits unique active systemd units, while only lowered client entries
+  traverse this four-layer pipeline.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
   entries replace same-key root entries wholesale; null suppresses an inherited
   entry after the shallow merge. Unsupported root fanout degrades before this
@@ -941,6 +989,8 @@ path types".
 - L2b options (CLI-specific, like Claude's `agentsDir` or `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/null filtering → transform (`aiCommon.mergePool`)
+- managed MCP proxy ownership, validation, and systemd unit aggregation →
+  `lib/ai/sharedOptions.nix` + `lib/ai/mcpProxy.nix`
 - per-scope package ownership guard → `checks/module-eval.nix`
 - L4 emission → `packages/<pkg>/lib/mk<Cli>.nix`
 
@@ -964,11 +1014,14 @@ path types".
 
 ### Pitfall
 
-**Never emit from L1/L2/L2b.** Those layers exist solely to reshape data; they
-read nothing from `config.home.file.*` / `config.files.*` and write nothing
-there either. If you find yourself reaching for `home.file.*` in
+**Never emit runtime artifacts from L1/L2/L2b.** Those layers exist solely to
+reshape data; they read nothing from `config.home.file.*` / `config.files.*` and
+write nothing there either. If you find yourself reaching for `home.file.*` in
 `sharedOptions.nix` or in a transform's `config` block, something is off — drop
-the contribution into the per-CLI factory's L4 emission.
+the contribution into the per-CLI factory's L4 emission. Managed MCP proxy units
+are the explicit sidecar exception because their lifetime and ownership cannot
+belong to any one runtime view; do not generalize it to emitted client
+configuration.
 
 ### Why 4 layers instead of inline
 

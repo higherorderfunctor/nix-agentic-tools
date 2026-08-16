@@ -1,7 +1,10 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-08-15 (commit pending — L2↔L3 keyed pools now use
-> atomic per-runtime replacement with null tombstones, while package ownership
+> **Last verified:** 2026-08-15 (commit pending — records the managed-proxy
+> sidecar exception: MCP client values still traverse L2↔L3 normally, while
+> explicit declaration ownership centrally emits unique active systemd units).
+> Prior: 2026-08-15 (commit pending — L2↔L3 keyed pools now use atomic
+> per-runtime replacement with null tombstones, while package ownership
 > collisions are checked by definition provenance within each scope). Prior:
 > 2026-08-15 (commit pending — typed context is the composition exception: root
 > and runtime content concatenate root-first into one runtime-named artifact.
@@ -59,8 +62,11 @@
 
 ### Rules
 
-- **Emission logic lives ONLY at L4.** L1/L2/L2b are pure fanout — they never
-  touch `home.file.*` or `files.*`.
+- **Artifact emission logic lives ONLY at L4.** L1/L2/L2b are pure fanout — they
+  never touch `home.file.*` or `files.*`. The one sidecar exception is managed
+  MCP proxy ownership: `sharedOptions.nix` aggregates proxy declaration scopes
+  and emits unique active systemd units, while only lowered client entries
+  traverse this four-layer pipeline.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
   entries replace same-key root entries wholesale; null suppresses an inherited
   entry after the shallow merge. Unsupported root fanout degrades before this
@@ -103,6 +109,8 @@
 - L2b options (CLI-specific, like Claude's `agentsDir` or `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/null filtering → transform (`aiCommon.mergePool`)
+- managed MCP proxy ownership, validation, and systemd unit aggregation →
+  `lib/ai/sharedOptions.nix` + `lib/ai/mcpProxy.nix`
 - per-scope package ownership guard → `checks/module-eval.nix`
 - L4 emission → `packages/<pkg>/lib/mk<Cli>.nix`
 
@@ -126,11 +134,14 @@
 
 ### Pitfall
 
-**Never emit from L1/L2/L2b.** Those layers exist solely to reshape data; they
-read nothing from `config.home.file.*` / `config.files.*` and write nothing
-there either. If you find yourself reaching for `home.file.*` in
+**Never emit runtime artifacts from L1/L2/L2b.** Those layers exist solely to
+reshape data; they read nothing from `config.home.file.*` / `config.files.*` and
+write nothing there either. If you find yourself reaching for `home.file.*` in
 `sharedOptions.nix` or in a transform's `config` block, something is off — drop
-the contribution into the per-CLI factory's L4 emission.
+the contribution into the per-CLI factory's L4 emission. Managed MCP proxy units
+are the explicit sidecar exception because their lifetime and ownership cannot
+belong to any one runtime view; do not generalize it to emitted client
+configuration.
 
 ### Why 4 layers instead of inline
 

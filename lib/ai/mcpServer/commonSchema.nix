@@ -232,13 +232,22 @@ in {
               credential-injecting reverse proxy instead of handing the
               credentials to the client.
 
-              `url` and every `headers.<name>` move into the proxy
-              daemon's ENVIRONMENT, read from their secret files when the
-              daemon starts. The client receives a credential-free
-              `http://<host>:<port>/` entry, so it no longer matters which
-              binary launches it — the per-binary scope mismatch that
-              affects `''${env:VAR}` header placeholders cannot apply,
-              because the client holds no credential to get wrong.
+              `url` and credential values under `proxy.headers` move into
+              the proxy daemon's ENVIRONMENT, read from their secret files
+              when the daemon starts. Top-level `headers` remain client
+              headers and must be credential-free. The client receives a
+              credential-free `http://<host>:<port>/` entry, so it no longer
+              matters which binary launches it — the per-binary scope
+              mismatch that affects `''${env:VAR}` header placeholders cannot
+              apply, because the client holds no credential to get wrong.
+
+              The MCP server attribute key is also the managed-proxy ownership
+              key. A used top-level declaration owns one shared proxy and fans
+              out only its lowered client entry. A runtime-scoped declaration
+              owns its proxy directly. Reusing a proxy key across declaration
+              scopes is an error; give direct owners different server keys.
+              A top-level proxy inherited by no enabled runtime is not
+              materialized.
 
               This also makes the server harness-agnostic. A credential
               header or url is Kiro-only (`renderServer` throws for other

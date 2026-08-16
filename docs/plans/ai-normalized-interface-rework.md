@@ -1,21 +1,25 @@
 # `ai.*` normalized-interface rework, then semble #858 on top
 
-> **Last verified:** 2026-08-15 (commit pending — PR 6 ships all six keyed-pool
-> null tombstones, atomic per-runtime replacement, and definition-provenance
-> checks for package collisions at root and runtime scope; B1/B8/B9/B10 now
-> record the shipped contract). Prior: 2026-08-15 (commit pending — PR 5 retires
-> the list-shaped instructions surface, types context as text-XOR-source with
-> root-first composition, and gives keyed rules a normalized matcher; B5a/B6a
-> and the removed B10 blocker record those decisions). Prior: 2026-08-15 (commit
-> pending — PR 3 now follows the later execution brief: `supportedPools`
-> generalizes the record capability gate, Kimchi's dead rules options are
-> removed, and boundary B0 records the unsupported-root degradation contract).
-> Prior: 2026-08-14 against `main` at `0fe1f1fd`, by two verification passes
-> (twelve agents, then seven) over the preceding design session's working notes.
-> Every `file:line` below was re-read; 65 of 67 resolve exactly and the two
-> imprecise ones are corrected in place. Main moved from `c5475438` during the
-> session, but the six intervening commits touch only lockfiles and two overlay
-> files, so no citation needed re-anchoring.
+> **Last verified:** 2026-08-15 (commit pending — PR 6 adds the approved
+> managed-proxy ownership contract to B1a: one used top-level owner, direct
+> runtime owners, explicit duplicate-key failure, and no unused top-level
+> materialization). Prior: 2026-08-15 (commit pending — PR 6 ships all six
+> keyed-pool null tombstones, atomic per-runtime replacement, and
+> definition-provenance checks for package collisions at root and runtime scope;
+> B1/B8/B9/B10 now record the shipped contract). Prior: 2026-08-15 (commit
+> pending — PR 5 retires the list-shaped instructions surface, types context as
+> text-XOR-source with root-first composition, and gives keyed rules a
+> normalized matcher; B5a/B6a and the removed B10 blocker record those
+> decisions). Prior: 2026-08-15 (commit pending — PR 3 now follows the later
+> execution brief: `supportedPools` generalizes the record capability gate,
+> Kimchi's dead rules options are removed, and boundary B0 records the
+> unsupported-root degradation contract). Prior: 2026-08-14 against `main` at
+> `0fe1f1fd`, by two verification passes (twelve agents, then seven) over the
+> preceding design session's working notes. Every `file:line` below was re-read;
+> 65 of 67 resolve exactly and the two imprecise ones are corrected in place.
+> Main moved from `c5475438` during the session, but the six intervening commits
+> touch only lockfiles and two overlay files, so no citation needed
+> re-anchoring.
 >
 > **Items previously marked DECIDED or RESOLVED that were refuted: seven.** Four
 > by the first pass (R1-R4) and three by the second (R5-R7). Do not re-derive
@@ -497,6 +501,14 @@ All six keyed pools now declare nullable elements at root and every supported
 per-runtime surface. Per-key deletion is therefore uniform rather than an
 emitter-specific escape hatch.
 
+Proxied MCP entries carry a managed-process side effect in addition to the pool
+value, so their ownership is explicit without changing B1's client-entry
+replacement. A used top-level proxied declaration owns one shared managed proxy
+and fans out only its lowered credential-free client entry. A runtime-scoped
+proxied declaration owns its proxy directly. The server key is also the managed
+unit key; reusing it for two proxy owners fails and requires different keys. A
+top-level proxy inherited by no enabled capable runtime is not materialized.
+
 Corroborating that the pool guard is by design: closed issue #864 says of the
 `ai.shell` work that "`shell` wants the opposite: per-runtime silently overrides
 root. So this is a new merge semantic for a nullable scalar, **not another row
@@ -522,22 +534,23 @@ Provenance: **M** measured from code or a probe · **H** human-decided with
 stated reasoning · **H?** human-picked among options without a strong basis ·
 **L** LLM-proposed, human-accepted without independent grading.
 
-| #   | Boundary                                            | Unit    | Behavior                                                                                                                          | Prov |
-| --- | --------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- | ---- |
-| B0  | root pool → runtime lacking that pool               | pool    | silently degrades to the neutral value; the corresponding per-runtime option does not exist                                       | H    |
-| B1  | root pool ↔ per-runtime pool, SAME key              | entry   | **SHIPPED: per-runtime replaces root wholesale; the former collision assertion is deleted**                                       | H    |
-| B2  | root pool ↔ per-runtime pool, DIFFERENT key         | entry   | additive, both exist                                                                                                              | M    |
-| B3  | inside a pool entry (a server record's fields)      | field   | **never merges across levels — entries are atomic**                                                                               | H    |
-| B4  | `ai.programs.<pkg>` ↔ `ai.<runtime>.programs.<pkg>` | option  | `resolveOverride` — null inherits, non-null wins                                                                                  | L    |
-| B5  | `ai.settings` ↔ `ai.<runtime>.settings`             | field   | `resolveOverride` per field                                                                                                       | H    |
-| B5a | `ai.context` ↔ `ai.<runtime>.context`               | content | concatenate into one runtime artifact, root first; package defaults use `mkDefault`, and ordinary Nix merge handles field writers | H    |
-| B6  | normalized → native                                 | —       | not a merge, a translation. Normalized never emits                                                                                | L    |
-| B6a | normalized rule `matcher` → native scope            | field   | null means always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex prose                   | H    |
-| B7  | ~~module-derived native keys ↔ user native~~        | ~~key~~ | **superseded by B7″ — do not implement**                                                                                          | H?   |
-| B7″ | module-derived native value ↔ user-authored value   | file    | **no custom guard. Module renders at `mkDefault`; standard Nix option merge arbitrates.** Unit is the FILE, not the key — see A5  | H    |
-| B8  | two packages → same ROOT key                        | key     | **SHIPPED: fail by definition provenance**                                                                                        | H?   |
-| B9  | two packages → same PER-RUNTIME key                 | key     | **SHIPPED: fail by definition provenance (same rule as B8)**                                                                      | L    |
-| B10 | negation                                            | entry   | **SHIPPED: `null` at the per-runtime level drops the entry after the shallow merge**                                              | H    |
+| #   | Boundary                                            | Unit    | Behavior                                                                                                                               | Prov |
+| --- | --------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| B0  | root pool → runtime lacking that pool               | pool    | silently degrades to the neutral value; the corresponding per-runtime option does not exist                                            | H    |
+| B1  | root pool ↔ per-runtime pool, SAME key              | entry   | **SHIPPED: per-runtime replaces root wholesale; the former collision assertion is deleted**                                            | H    |
+| B1a | proxied MCP declaration → managed unit              | owner   | **SHIPPED: one used top-level owner; runtime declarations own directly; reused owner keys fail; unused top-level owners emit nothing** | H    |
+| B2  | root pool ↔ per-runtime pool, DIFFERENT key         | entry   | additive, both exist                                                                                                                   | M    |
+| B3  | inside a pool entry (a server record's fields)      | field   | **never merges across levels — entries are atomic**                                                                                    | H    |
+| B4  | `ai.programs.<pkg>` ↔ `ai.<runtime>.programs.<pkg>` | option  | `resolveOverride` — null inherits, non-null wins                                                                                       | L    |
+| B5  | `ai.settings` ↔ `ai.<runtime>.settings`             | field   | `resolveOverride` per field                                                                                                            | H    |
+| B5a | `ai.context` ↔ `ai.<runtime>.context`               | content | concatenate into one runtime artifact, root first; package defaults use `mkDefault`, and ordinary Nix merge handles field writers      | H    |
+| B6  | normalized → native                                 | —       | not a merge, a translation. Normalized never emits                                                                                     | L    |
+| B6a | normalized rule `matcher` → native scope            | field   | null means always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex prose                        | H    |
+| B7  | ~~module-derived native keys ↔ user native~~        | ~~key~~ | **superseded by B7″ — do not implement**                                                                                               | H?   |
+| B7″ | module-derived native value ↔ user-authored value   | file    | **no custom guard. Module renders at `mkDefault`; standard Nix option merge arbitrates.** Unit is the FILE, not the key — see A5       | H    |
+| B8  | two packages → same ROOT key                        | key     | **SHIPPED: fail by definition provenance**                                                                                             | H?   |
+| B9  | two packages → same PER-RUNTIME key                 | key     | **SHIPPED: fail by definition provenance (same rule as B8)**                                                                           | L    |
+| B10 | negation                                            | entry   | **SHIPPED: `null` at the per-runtime level drops the entry after the shallow merge**                                                   | H    |
 
 B3 is why `//` is correct and `recursiveUpdate` is wrong: pool entries never
 field-merge across levels, so shallow replace is the intended semantic.
@@ -1137,9 +1150,13 @@ outputs.
   `lib/ai/dir-helpers.nix` — the file `dir-helpers.md` documents by name.
 - `services.mcp-servers` is root-scoped into a vacuum: `mcpConfig` is
   `internal = true` and nothing reads it.
-- The credential proxy daemon is emitted per evaluated app record
-  (`lib/ai/app/mkBackendTransform.nix:366`, outside `mkIf cfg.enable`),
-  surviving only because the five definitions are byte-identical.
+- ~~The credential proxy daemon is emitted per evaluated app record, surviving
+  only because the five definitions are byte-identical~~ — **RESOLVED
+  2026-08-15.** `sharedOptions.nix` now owns explicit declaration identity and
+  emits unique active units; it discovers every MCP-capable runtime from the
+  transform's internal normalized-pool marker so public/custom `mkAiApp` records
+  participate in shared-owner usage and reused-key diagnostics without confusing
+  unrelated same-named native options.
 - `ai.kiro.steeringFiles` is a real per-runtime override surface but is
   `internal = true` and undocumented.
 - `semble.*` is in neither `hmPrefixes` nor `devenvPrefixes`

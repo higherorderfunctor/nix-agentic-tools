@@ -619,31 +619,34 @@ The directory is gitignored.
 
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-08-15 (commit pending — the ai-module routing comment
-> now names `mergePool` after the retired collision helper; category scopes and
-> sources are unchanged). Prior: 2026-08-15 (commit pending — generated README
-> guidance now uses typed context and keyed rules, including Semble's single
-> exported `rule` helper; retired instruction helpers no longer appear). Prior:
-> 2026-08-15 (commit pending — generated README guidance now distinguishes the
-> closed normalized `ai.<runtime>.settings` surface from runtime-shaped
-> `nativeSettings`, including Codex security and Claude environment examples).
-> Prior: 2026-08-05 (commit pending — adds the `mcp-services` category so the
-> managed-service bind-address contract follows its schema, server metadata,
-> Home Manager implementation, and behavioral checks). Prior: 2026-08-03 (commit
-> pending — generated README guidance now describes the temporary
-> `pkgs.ai.generic` bucket and classifies `gh`/`glab` as dev tools). Prior:
-> 2026-08-03 (commit pending — the kiro auto-memory category now scopes its
-> moved implementation sources under `overlays/`, keeping the fragment routed to
-> both sides of that abstraction). Prior: 2026-08-03 (commit pending — the
-> generated README now keeps `nix-agentic-tools` on its own nixpkgs pin so
-> consumer store paths match the published binary cache). Prior: 2026-08-02
-> (commit pending — generated Semble guidance now exposes its runtime-specific
-> direct instruction records: unnamed for the Claude/Codex single-file composers
-> and named for Kiro's `semble.md` steering file). Prior: 2026-08-02 (commit
-> pending — the generated README now documents shared typed Codex profile
-> ownership and devenv's native user-layer materialization). Prior: 2026-08-02
-> (commit pending — Kiro's transformer now accepts an explicit typed
-> `always | auto | fileMatch | manual` inclusion mode while preserving the
+> **Last verified:** 2026-08-15 (commit pending — the `mcp-secrets` category now
+> follows managed-proxy ownership through its shared option aggregator,
+> declaration-scope lowering transform, proxy helper, and module/factory
+> behavioral checks). Prior: 2026-08-15 (commit pending — the ai-module routing
+> comment now names `mergePool` after the retired collision helper; category
+> scopes and sources are unchanged). Prior: 2026-08-15 (commit pending —
+> generated README guidance now uses typed context and keyed rules, including
+> Semble's single exported `rule` helper; retired instruction helpers no longer
+> appear). Prior: 2026-08-15 (commit pending — generated README guidance now
+> distinguishes the closed normalized `ai.<runtime>.settings` surface from
+> runtime-shaped `nativeSettings`, including Codex security and Claude
+> environment examples). Prior: 2026-08-05 (commit pending — adds the
+> `mcp-services` category so the managed-service bind-address contract follows
+> its schema, server metadata, Home Manager implementation, and behavioral
+> checks). Prior: 2026-08-03 (commit pending — generated README guidance now
+> describes the temporary `pkgs.ai.generic` bucket and classifies `gh`/`glab` as
+> dev tools). Prior: 2026-08-03 (commit pending — the kiro auto-memory category
+> now scopes its moved implementation sources under `overlays/`, keeping the
+> fragment routed to both sides of that abstraction). Prior: 2026-08-03 (commit
+> pending — the generated README now keeps `nix-agentic-tools` on its own
+> nixpkgs pin so consumer store paths match the published binary cache). Prior:
+> 2026-08-02 (commit pending — generated Semble guidance now exposes its
+> runtime-specific direct instruction records: unnamed for the Claude/Codex
+> single-file composers and named for Kiro's `semble.md` steering file). Prior:
+> 2026-08-02 (commit pending — the generated README now documents shared typed
+> Codex profile ownership and devenv's native user-layer materialization).
+> Prior: 2026-08-02 (commit pending — Kiro's transformer now accepts an explicit
+> typed `always | auto | fileMatch | manual` inclusion mode while preserving the
 > legacy paths-derived default, and the shared renderer resolves typed
 > path-valued instruction bodies before node normalization). Prior 2026-08-02:
 > AGENTS.md now derives a compact source-fragment routing index from the
