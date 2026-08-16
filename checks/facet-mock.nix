@@ -429,6 +429,17 @@
       ];
     })
     (probe {
+      name = "registry-root-conflict";
+      force = "registry";
+      expected = [
+        "facet ownership collision in registry at 'facetMock.entries.root-policy'"
+        "root policy (/nix/store/"
+        "-registry.nix)"
+        "one ("
+        "/one/registry.nix"
+      ];
+    })
+    (probe {
       name = "reserved-packages";
       force = "packages";
       expected = [

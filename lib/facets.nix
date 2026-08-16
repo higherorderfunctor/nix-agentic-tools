@@ -439,25 +439,50 @@ in rec {
         inherit specialArgs;
         modules = modules ++ extraModules;
       };
-    rootKeys = attrNames (attrByPath claimPath {} (evaluate []).config);
+    definitionsFor = evaluated:
+      (attrByPath claimPath {} evaluated.options).definitionsWithLocations or [];
+    rootDefinitions = definitionsFor (evaluate []);
+    rootKeys = unique (concatMap (definition: attrNames definition.value) rootDefinitions);
+    rootOwnershipClaims =
+      map (
+        key: let
+          definition = builtins.head (filter (candidate: candidate.value ? ${key}) rootDefinitions);
+        in {
+          keyPath = claimPath ++ [key];
+          owner = "root policy";
+          source = definition.file;
+        }
+      )
+      rootKeys;
     ownershipClaims =
       concatMap (
         claim: let
           evaluated = evaluate [(args: callOwnerModule claim args)];
-          values = attrByPath claimPath {} evaluated.config;
+          ownerDefinitions = filter (
+            definition:
+              !builtins.any (
+                rootDefinition:
+                  definition.file
+                  == rootDefinition.file
+                  && valuesEqual definition.value rootDefinition.value
+              )
+              rootDefinitions
+          ) (definitionsFor evaluated);
+          keys = unique (concatMap (definition: attrNames definition.value) ownerDefinitions);
         in
           map (key: {
             keyPath = claimPath ++ [key];
             inherit (claim) owner source;
-          }) (filter (key: !elem key rootKeys) (attrNames values))
+          })
+          keys
       )
       sourceClaims;
-    exclusive = mergeExclusiveClaims "registry" ownershipClaims;
+    exclusive = mergeExclusiveClaims "registry" (rootOwnershipClaims ++ ownershipClaims);
     evaluated = evaluate ownerModules;
   in
     deepSeq exclusive {
       inherit (evaluated) config;
-      inherit evaluated ownershipClaims;
+      inherit evaluated ownershipClaims rootOwnershipClaims;
     };
 
   realizeChecks = {
