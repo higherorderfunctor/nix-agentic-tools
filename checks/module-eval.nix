@@ -3710,10 +3710,12 @@ in {
       cp ${invalidFile} "$HOME/.kiro/agents/invalid-search.json"
 
       validate_status=0
-      # Drive the chat binary that implements `kiro-cli agent validate`
-      # directly. The outer launcher refuses every subcommand before dispatch
-      # in a credential-free Nix sandbox; validation itself requires no login.
-      ${pkgs.ai.kiro-cli}/bin/kiro-cli-chat agent validate \
+      # Drive the unwrapped chat binary that implements `kiro-cli agent
+      # validate` directly. The exported Linux package is a buildFHSEnv
+      # bubblewrap launcher, and nested user namespaces are not portable across
+      # Nix build sandboxes; validation itself needs neither the FHS root nor a
+      # login.
+      ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat agent validate \
         --path "$HOME/.kiro/agents/semble-search.json" \
         >"$TMPDIR/validate.stdout" 2>"$TMPDIR/validate.stderr" \
         || validate_status=$?
@@ -3727,7 +3729,7 @@ in {
       }
 
       invalid_status=0
-      ${pkgs.ai.kiro-cli}/bin/kiro-cli-chat agent validate \
+      ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat agent validate \
         --path "$HOME/.kiro/agents/invalid-search.json" \
         >"$TMPDIR/invalid.stdout" 2>"$TMPDIR/invalid.stderr" \
         || invalid_status=$?
@@ -3747,7 +3749,7 @@ in {
       # v2 ACP path. The driver sends only initialize and session/new, never a
       # model-bearing session/prompt request.
       python3 ${./semble-kiro-acp.py} \
-        ${pkgs.ai.kiro-cli}/bin/kiro-cli-chat \
+        ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat \
         semble-search \
         control-search \
         "$TMPDIR/workspace" \
