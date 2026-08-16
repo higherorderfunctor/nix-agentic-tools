@@ -10,4 +10,10 @@
     default = {};
     description = "Native module values contributed by tracked mock facets.";
   };
+
+  config.facetMock.entries.root-policy = {
+    owner = "root";
+    payload = "root-policy";
+    source = toString ./registry.nix;
+  };
 }

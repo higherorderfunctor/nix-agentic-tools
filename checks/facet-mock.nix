@@ -170,8 +170,9 @@
       && all outsideFixture publicHomeManagerImports
       && all outsideFixture publicDevenvImports;
     registry-native-realization =
-      attrNames registryWorld.config.facetMock.entries
-      == registryClaimKeys;
+      all (key: registryWorld.config.facetMock.entries ? ${key}) registryClaimKeys
+      && !(builtins.elem "root-policy" registryClaimKeys)
+      && registryWorld.config.facetMock.entries.root-policy.owner == "root";
   };
   assertionsPass = all (value: value == true) (builtins.attrValues assertions);
 

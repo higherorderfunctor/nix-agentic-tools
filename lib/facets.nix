@@ -439,6 +439,7 @@ in rec {
         inherit specialArgs;
         modules = modules ++ extraModules;
       };
+    rootKeys = attrNames (attrByPath claimPath {} (evaluate []).config);
     ownershipClaims =
       concatMap (
         claim: let
@@ -448,7 +449,7 @@ in rec {
           map (key: {
             keyPath = claimPath ++ [key];
             inherit (claim) owner source;
-          }) (attrNames values)
+          }) (filter (key: !elem key rootKeys) (attrNames values))
       )
       sourceClaims;
     exclusive = mergeExclusiveClaims "registry" ownershipClaims;
