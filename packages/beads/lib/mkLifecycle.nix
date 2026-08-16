@@ -1,5 +1,5 @@
 {
-  # cspell:ignore HASHOF netcat versioncheck
+  # cspell:ignore HASHOF versioncheck
   cfg,
   lib,
   pkgs,
@@ -184,8 +184,10 @@
                   )
                 }
 
-          server_ready() {
-            ${pkgs.netcat-openbsd}/bin/nc -z -w 1 127.0.0.1 "$server_port" >/dev/null 2>&1
+      server_ready() {
+        ${pkgs.coreutils}/bin/timeout 1 \
+          ${pkgs.bash}/bin/bash -c 'exec 3<>"/dev/tcp/$1/$2"' -- \
+          127.0.0.1 "$server_port" >/dev/null 2>&1
                 }
 
                 require_server() {
