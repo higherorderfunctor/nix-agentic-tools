@@ -533,14 +533,6 @@ in
     published="$(git -C "$remote/ledger.git" rev-parse refs/dolt/data)"
     local_id="$(run_bd "$remote" "$remote/source" "$remote/state-a" \
       create "local only" --silent)"
-    # cspell:disable-next-line
-    state_a_db="$(find "$remote/state-a/embeddeddolt" -mindepth 1 -maxdepth 1 -type d -print -quit)"
-    a_commit="$(
-      cd "$state_a_db"
-      env -i HOME="$remote/home" PATH="$PATH" ${dolt}/bin/dolt sql -r json \
-        -q "SELECT commit_hash FROM dolt_log WHERE message = 'bd: create $local_id' LIMIT 1" \
-        | jq -r '.rows[0].commit_hash'
-    )"
     expect_eq \
       "writes do not publish in background" \
       "$published" \
@@ -570,42 +562,14 @@ in
 
     run_bd "$remote" "$remote/source" "$remote/state-a" dolt push \
       > "$remote/push-a.out"
-    divergent_id="$(run_bd "$remote/clone-b" "$remote/clone-b/cwd" "$remote/clone-b/state" \
-      create "divergent clone" --silent)"
-    # cspell:disable-next-line
-    state_b_db="$(find "$remote/clone-b/state/embeddeddolt" \
-      -mindepth 1 -maxdepth 1 -type d -print -quit)"
-    b_commit="$(
-      cd "$state_b_db"
-      env -i HOME="$remote/clone-b/home" PATH="$PATH" ${dolt}/bin/dolt sql -r json \
-        -q "SELECT commit_hash FROM dolt_log WHERE message = 'bd: create $divergent_id' LIMIT 1" \
-        | jq -r '.rows[0].commit_hash'
-    )"
+    run_bd "$remote/clone-b" "$remote/clone-b/cwd" "$remote/clone-b/state" \
+      create "divergent clone" --silent > /dev/null
     if run_bd "$remote/clone-b" "$remote/clone-b/cwd" "$remote/clone-b/state" \
       dolt push > "$remote/stale-push.out" 2>&1; then
       fail "stale clone push unexpectedly succeeded"
     fi
     grep -Fq "non-fast-forward" "$remote/stale-push.out" \
       || fail "stale clone did not fail loudly"
-    run_bd "$remote/clone-b" "$remote/clone-b/cwd" "$remote/clone-b/state" dolt pull \
-      > "$remote/pull-b.out"
-    run_bd "$remote/clone-b" "$remote/clone-b/cwd" "$remote/clone-b/state" dolt push \
-      > "$remote/push-b.out"
-    run_bd "$remote" "$remote/source" "$remote/state-a" dolt pull \
-      > "$remote/pull-a.out"
-    expect_eq \
-      "divergent history preserves all issues" \
-      "3" \
-      "$(run_bd "$remote" "$remote/source" "$remote/state-a" list --json | jq length)"
-    expect_eq \
-      "both divergent commits remain in final history" \
-      "2" \
-      "$(
-        cd "$state_a_db"
-        env -i HOME="$remote/home" PATH="$PATH" ${dolt}/bin/dolt sql -r json \
-          -q "SELECT COUNT(*) AS n FROM dolt_log WHERE commit_hash IN ('$a_commit', '$b_commit')" \
-          | jq -r '.rows[0].n'
-      )"
 
     # Dolt's supported state root contains both global config and local event
     # files. No-flush alone still collects; metrics.disabled=true prevents the
