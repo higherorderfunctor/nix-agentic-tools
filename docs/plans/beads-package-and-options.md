@@ -75,12 +75,12 @@ decisions and probes named above, not an interface migration.
 
 ## Phase 2 — the overlay (implemented and held)
 
-Verified 2026-08-14: this repo's pinned nixpkgs already carries `beads` 1.0.3
+Verified 2026-08-16: this repo's pinned nixpkgs already carries `beads` 1.0.3
 (`pkgs/by-name/be/beads/package.nix` — buildGoModule, ICU, MIT,
 `mainProgram = "bd"`, and a `postInstall` wrapping `dolt` onto PATH) and `dolt`
-(2.2.3 at the 2026-08 pin, Apache-2.0). So the overlay is a **thin override of
-`ourPkgs.beads`** in the `gh` shape (`overlays/dev-tools/gh.nix` is the template
-— Go, sidecar, grouped subtree), not a fresh derivation:
+(2.2.4 at the current 2026-08 pin, Apache-2.0). So the overlay is a **thin
+override of `ourPkgs.beads`** in the `gh` shape (`overlays/dev-tools/gh.nix` is
+the template — Go, sidecar, grouped subtree), not a fresh derivation:
 
 - `overlays/dev-tools/beads.nix` — `{inputs, final, ...}`, `ourPkgs`
   instantiated from `inputs.nixpkgs` (cache-hit parity: all build inputs from
@@ -219,9 +219,11 @@ conflict-free. Two facts shape the design:
 
 - Issue state on a git ref is **not** branch-visible — no issue diffs in code
   review, ever. The options must not pretend otherwise.
-- In server mode, Dolt auto-commit is off and fine-grained history vanishes
-  without explicit `bd vc commit` checkpoints — so the checkpoint policy (OD-M4)
-  is a prerequisite for any "history-preserving sync" claim.
+- In server mode, the store owns the Dolt commit lifecycle even when the CLI
+  receives `--dolt-auto-commit off`; a follow-up commit may be commit-if-needed
+  normalization. Issue #991 owns qualification of the complete mutation,
+  publication, and recovery boundary, so this package plan makes no
+  history-preserving recovery claim.
 
 Encrypted remote variants (gcrypt, crypt-mounts, self-hosted) are researched in
 `docs/beads/dolt-git-remotes.md` but **deferred** behind the threat-model
@@ -298,11 +300,11 @@ ruling; owner **measure** = a probe or experiment settles it.
   (single-writer; disqualified the moment two worktree sessions write
   concurrently) vs shared-server (one user-level Dolt server, per-project
   prefix, needs the OD-M5 unit). Input: PB2, PB7, PB8.
-- **OD-M4** (operator + measure): checkpoint policy under server mode —
-  auto-commit is off there, so per-write history disappears without explicit
-  `bd vc commit`. Options: on issue-close, on session end (hook), gated on
-  grooming operations, periodic. Blocks the server-mode option surface and phase
-  3b's history claims. Input: PB8.
+- **OD-M4** (#991 owner + measure): server-mode mutation, publication, and
+  recovery policy. The store can commit independently of the CLI auto-commit
+  flag, and a following explicit commit may only normalize anything still dirty.
+  #991 must qualify the complete history-preserving boundary before phase 3b can
+  rely on it. Input: PB8.
 - **OD-M5** (operator): host-platform scope for the devenv server process. The
   process binds loopback-only by default and pins auth (see the shared-server
   row); this decision does not create an HM lifecycle surface.
@@ -360,9 +362,9 @@ session against the phase 2 package. Feeds noted.
 - **PB7 — partial:** process observation found no automatic recovery supervisor;
   `BD_NO_DAEMON` semantics and any residual background-writer path remain to be
   qualified. → OD-M3 (second-writer risk).
-- **PB8 — complete/superseded by #991:** server-mode store mutations can create
-  Dolt commits independently of the CLI auto-commit flag; #991 qualifies the
-  resulting serialized commit-if-needed and history boundary. → OD-M3, OD-M4.
+- **PB8 — source boundary established:** server-mode store mutations can create
+  Dolt commits independently of the CLI auto-commit flag. #991 owns recovery
+  qualification. → OD-M3, OD-M4.
 - **PB9** — emBEADings `neighbors` quality spot-check once a real backlog is
   seeded (≥30 issues): does the static model catch known paraphrase pairs? →
   OD-D3.

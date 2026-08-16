@@ -7,8 +7,9 @@ applyTo: "overlays/*.nix,overlays/**/*.nix"
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-16 (commit pending — adding Kiro's `withFhsPayload`
-> passthru and FHS opt-out leaves the default derivation byte-identical; only
+> **Last verified:** 2026-08-16 (commit pending — corrects the current Go-floor
+> count to eight after Beads joined the covered set; Kiro's `withFhsPayload`
+> passthru and FHS opt-out leave the default derivation byte-identical, and only
 > configurations requesting an inner chat wrapper or the explicit unwrapped
 > selection fork from it). Prior: 2026-08-15 (commit pending — adds the
 > stable-release Beads overlay under `pkgs.ai.devTools`, built from this
@@ -168,7 +169,7 @@ outright with `go.mod requires go >= 1.26.5 (running go 1.26.2)`. A package with
 no toolchain-floor seam inherits whatever `go` the followed nixpkgs ships, and
 `gh` was silently one bump behind the same fate.
 
-The Go floor seam (overlay-pattern fragment) now covers all seven Go packages,
+The Go floor seam (overlay-pattern fragment) now covers all eight Go packages,
 so that specific class is handled — a followed older nixpkgs gets a `go-bin`
 toolchain instead of a failure. It does NOT make `follows` supported: the
 consumer still gets zero cache hits, and the next toolchain-shaped dependency
@@ -385,9 +386,10 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-16 (commit pending — Kiro's recomposition seam now
-> also exposes `withFhsPayload`: configured chat-only wrappers can enter the
-> upstream FHS root without reimplementing it, while the public default stays
+> **Last verified:** 2026-08-16 (commit pending — corrects the current Go-floor
+> enumeration to include all eight packages; Kiro's recomposition seam also
+> exposes `withFhsPayload`, so configured chat-only wrappers can enter the
+> upstream FHS root without reimplementing it while the public default stays
 > byte-identical and `useFhsSandbox = false` is an explicit module-level
 > selection of `passthru.unwrapped`). Prior: 2026-08-15 (commit pending — adds
 > Beads as the eighth Go package and as a stable-release, sidecar-pinned thin
@@ -918,11 +920,11 @@ sorts `1.27rc1` ABOVE `1.27.0`. `checks/go-toolchain-floor.nix` exercises all
 three branches plus two positive controls, which is also what keeps the input
 from shipping dormant.
 
-**ALL SEVEN Go packages carry the seam**, not just the two that once needed it —
-`gh`, `glab`, `github-mcp`, `gluetun`, `mcp-language-server`, `oh-my-posh`,
-`otel-tui`. Scoping it to "whatever broke most recently" is how the same defect
-gets rediscovered per package: when `glab` broke, `gh` had ALREADY silently
-required Go >= 1.26.5 and would have been next.
+**ALL EIGHT Go packages carry the seam**, not just the two that once needed it —
+`beads`, `gh`, `glab`, `github-mcp`, `gluetun`, `mcp-language-server`,
+`oh-my-posh`, `otel-tui`. Scoping it to "whatever broke most recently" is how
+the same defect gets rediscovered per package: when `glab` broke, `gh` had
+ALREADY silently required Go >= 1.26.5 and would have been next.
 
 Reach it through **`vu.mkGoBuilder`**, which composes floor -> toolchain ->
 `buildGoModule.override` in one call. Do not re-expand that chain per package;

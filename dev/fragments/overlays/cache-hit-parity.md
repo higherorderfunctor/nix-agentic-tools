@@ -1,7 +1,8 @@
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-16 (commit pending — adding Kiro's `withFhsPayload`
-> passthru and FHS opt-out leaves the default derivation byte-identical; only
+> **Last verified:** 2026-08-16 (commit pending — corrects the current Go-floor
+> count to eight after Beads joined the covered set; Kiro's `withFhsPayload`
+> passthru and FHS opt-out leave the default derivation byte-identical, and only
 > configurations requesting an inner chat wrapper or the explicit unwrapped
 > selection fork from it). Prior: 2026-08-15 (commit pending — adds the
 > stable-release Beads overlay under `pkgs.ai.devTools`, built from this
@@ -161,7 +162,7 @@ outright with `go.mod requires go >= 1.26.5 (running go 1.26.2)`. A package with
 no toolchain-floor seam inherits whatever `go` the followed nixpkgs ships, and
 `gh` was silently one bump behind the same fate.
 
-The Go floor seam (overlay-pattern fragment) now covers all seven Go packages,
+The Go floor seam (overlay-pattern fragment) now covers all eight Go packages,
 so that specific class is handled — a followed older nixpkgs gets a `go-bin`
 toolchain instead of a failure. It does NOT make `follows` supported: the
 consumer still gets zero cache hits, and the next toolchain-shaped dependency

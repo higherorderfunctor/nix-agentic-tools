@@ -1,7 +1,7 @@
 # bd (beads) — tool reference
 
-> **Last verified:** 2026-08-15 against the repository package pin at stable
-> Beads v1.2.2, nixpkgs Beads 1.0.3 and Dolt 2.2.3, plus the upstream and
+> **Last verified:** 2026-08-16 against the repository package pin at stable
+> Beads v1.2.2, nixpkgs Beads 1.0.3 and Dolt 2.2.4, plus the upstream and
 > `numtide/llm-agents.nix` derivations. Companion documents:
 > `dolt-git-remotes.md` (remote/sync mechanics) and `ecosystem.md` (integrations
 > and prior art). GitHub issue
@@ -42,7 +42,7 @@ reasoning, not just task titles. Treat its confidentiality closer to a
 design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
 `[upstream]`
 
-## Versions and packaging state (2026-08-15)
+## Versions and packaging state (2026-08-16)
 
 - **Upstream**: latest stable release **v1.2.2** (2026-08-15). The immediately
   preceding **v1.2.1** release remains marked prerelease. `[upstream]`
@@ -71,7 +71,7 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
   ships `beads-rust` (an unrelated single-maintainer Rust reimplementation) and
   `beads-viewer`. `[upstream]`
 - **dolt**: a separate binary, required for the server modes;
-  `bd dolt push/pull` shells out to it. nixpkgs carries it (2.2.3 at this repo's
+  `bd dolt push/pull` shells out to it. nixpkgs carries it (2.2.4 at this repo's
   2026-08 pin; Apache-2.0). Dolt's `metrics.disabled` default is false.
   `DOLT_DISABLE_EVENT_FLUSH=1` prevents queued events from being sent but still
   permits local event files; complete collection disablement is the stateful
@@ -163,7 +163,7 @@ out-of-tree DB, or `--stealth`. The disable surface:
   prerelease briefly included Kiro, but v1.2.2 is a recovery release based on
   the tested 1.1 line and omits that 1.2.x-only recipe. The exact packaged
   binary's `bd setup --list` output is the contract; version-scope any claim
-  about setup targets. `[measured package @1.2.2]`
+  about setup targets. `[measured session @1.2.2/2.2.4]`
 - Git hooks, when wanted at all, are thin shims calling `bd hooks run <name>`; a
   declarative hook manager can invoke that directly and skip bd's installer.
   `[upstream]`
@@ -191,17 +191,13 @@ Storage layout under a project-local workspace: `.beads/config.yaml` (track),
   DB; an identity check **refuses the connection** (fails safe, but fails) — the
   exact error shape is `[unverified]`. `[upstream]`
 
-**The auto-commit flip is the load-bearing cost.** Upstream documents the config
-default as **on for embedded, off for server** (under concurrency, a Dolt commit
-per write produces `database is read only` errors). With auto-commit on, every
-mutation is an immediate, durable Dolt history commit `[measured @1.1.0]`; with
-it off, fine-grained history vanishes unless explicit `bd vc commit` checkpoints
-are issued, and a crash window opens between write and commit. Note an internal
-doc inconsistency: the CLI reference states the `--dolt-auto-commit` flag
-default as plain `off` and documents a third `batch` mode; which statement wins
-is `[unverified]`. Any "git-like history" requirement therefore hangs on an
-explicit **checkpoint policy** in server mode — that is an open decision in the
-plan, not a settled default.
+In SQL-server mode, `--dolt-auto-commit off` does not suppress the store's own
+Dolt commit. Ordinary mutations can commit independently of the CLI flag, so a
+following explicit commit may be commit-if-needed normalization rather than the
+operation that creates the checkpoint. Issue #991 owns qualification of the
+complete mutation, publication, and recovery boundary; the package contract
+alone makes no history-preserving recovery claim.
+`[upstream source @Beads 1.2.2]`
 
 **Split-brain**: a stale `.beads/dolt-server.port` file versus an env-pointed
 managed server yields two truths for one DB name; `bd doctor` warns but only

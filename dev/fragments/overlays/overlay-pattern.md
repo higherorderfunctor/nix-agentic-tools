@@ -1,8 +1,9 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-16 (commit pending — Kiro's recomposition seam now
-> also exposes `withFhsPayload`: configured chat-only wrappers can enter the
-> upstream FHS root without reimplementing it, while the public default stays
+> **Last verified:** 2026-08-16 (commit pending — corrects the current Go-floor
+> enumeration to include all eight packages; Kiro's recomposition seam also
+> exposes `withFhsPayload`, so configured chat-only wrappers can enter the
+> upstream FHS root without reimplementing it while the public default stays
 > byte-identical and `useFhsSandbox = false` is an explicit module-level
 > selection of `passthru.unwrapped`). Prior: 2026-08-15 (commit pending — adds
 > Beads as the eighth Go package and as a stable-release, sidecar-pinned thin
@@ -533,11 +534,11 @@ sorts `1.27rc1` ABOVE `1.27.0`. `checks/go-toolchain-floor.nix` exercises all
 three branches plus two positive controls, which is also what keeps the input
 from shipping dormant.
 
-**ALL SEVEN Go packages carry the seam**, not just the two that once needed it —
-`gh`, `glab`, `github-mcp`, `gluetun`, `mcp-language-server`, `oh-my-posh`,
-`otel-tui`. Scoping it to "whatever broke most recently" is how the same defect
-gets rediscovered per package: when `glab` broke, `gh` had ALREADY silently
-required Go >= 1.26.5 and would have been next.
+**ALL EIGHT Go packages carry the seam**, not just the two that once needed it —
+`beads`, `gh`, `glab`, `github-mcp`, `gluetun`, `mcp-language-server`,
+`oh-my-posh`, `otel-tui`. Scoping it to "whatever broke most recently" is how
+the same defect gets rediscovered per package: when `glab` broke, `gh` had
+ALREADY silently required Go >= 1.26.5 and would have been next.
 
 Reach it through **`vu.mkGoBuilder`**, which composes floor -> toolchain ->
 `buildGoModule.override` in one call. Do not re-expand that chain per package;
