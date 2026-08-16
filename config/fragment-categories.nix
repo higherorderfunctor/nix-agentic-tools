@@ -261,6 +261,19 @@ _: {
         }
       ];
     };
+    # living-workflow: generated-skill ownership, state-root substitution, and
+    # independent HM/devenv program fanout. The architecture is package-specific
+    # and therefore co-located with the package.
+    living-workflow = {
+      scopes = ["packages/living-workflow/**"];
+      sources = [
+        {
+          location = "package";
+          name = "living-workflow";
+          dir = "living-workflow";
+        }
+      ];
+    };
     # markdown-formatting: treefmt owns markdown wrapping, and the one
     # markdown defect here that NO check can catch (a line broken
     # mid-token). Scoped broadly to `**/*.md` on purpose — since the
@@ -424,7 +437,13 @@ _: {
     };
     stacked-workflows = {
       scopes = ["packages/stacked-workflows/**"];
-      sources = ["development"];
+      sources = [
+        {
+          location = "package";
+          name = "development";
+          dir = "stacked-workflows";
+        }
+      ];
     };
   };
 }

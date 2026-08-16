@@ -169,8 +169,10 @@ Because SWS feeds a **plain `./` path literal** (static skills) while LW feeds a
 
 ### Coupling points that go stale when SWS changes (update in the shared-helper follow-up)
 
-- `docs/plans/living-workflow-skill-packaging-design.md:61,66,81-84`
-- `docs/plans/living-workflow-skill-packaging-plan.md:11-12,60-69,276`
+- Historical Living Workflow design inputs (removed by #984):
+  `docs/plans/living-workflow-skill-packaging-design.md` and
+  `docs/plans/living-workflow-skill-packaging-plan.md`. Current architecture is
+  owned by `packages/living-workflow/docs/living-workflow.md`.
 - `packages/living-workflow/modules/homeManager/default.nix:7-12`
 - `checks/module-eval.nix` LW comment ("INVERTING the sws choice", "Mirror the
   sws pattern")

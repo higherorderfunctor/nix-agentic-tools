@@ -1,5 +1,9 @@
 # Living-workflow skill-packaging — grooming handoff
 
+> **Historical input (shipped 2026-07-18):** retained only as decision
+> archaeology. This is no longer active grooming input; current architecture is
+> owned by `packages/living-workflow/docs/living-workflow.md`.
+
 Grooming **input** for the backlog item
 `package-the-workflow-as-an-installable-skill`: operator decisions and open
 questions from a design discussion. This is **not** a living plan — no
