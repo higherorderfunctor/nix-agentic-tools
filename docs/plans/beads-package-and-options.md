@@ -220,10 +220,9 @@ conflict-free. Two facts shape the design:
 - Issue state on a git ref is **not** branch-visible — no issue diffs in code
   review, ever. The options must not pretend otherwise.
 - In server mode, the store owns the Dolt commit lifecycle even when the CLI
-  receives `--dolt-auto-commit off`; a follow-up commit may be commit-if-needed
-  normalization. Issue #991 owns qualification of the complete mutation,
-  publication, and recovery boundary, so this package plan makes no
-  history-preserving recovery claim.
+  receives `--dolt-auto-commit off`. The safety boundary is the qualified
+  mutation gate and its final clean/invariant checks; a follow-up commit is
+  commit-if-needed normalization rather than the source of safety.
 
 Encrypted remote variants (gcrypt, crypt-mounts, self-hosted) are researched in
 `docs/beads/dolt-git-remotes.md` but **deferred** behind the threat-model
@@ -300,11 +299,14 @@ ruling; owner **measure** = a probe or experiment settles it.
   (single-writer; disqualified the moment two worktree sessions write
   concurrently) vs shared-server (one user-level Dolt server, per-project
   prefix, needs the OD-M5 unit). Input: PB2, PB7, PB8.
-- **OD-M4** (#991 owner + measure): server-mode mutation, publication, and
-  recovery policy. The store can commit independently of the CLI auto-commit
-  flag, and a following explicit commit may only normalize anything still dirty.
-  #991 must qualify the complete history-preserving boundary before phase 3b can
-  rely on it. Input: PB8.
+- **OD-M4** (settled by #991): the currently qualified server-mode path
+  serializes every complete mutation and the raw pusher through one repository
+  lock. The server-mode store owns its commit lifecycle even when the CLI
+  receives `--dolt-auto-commit off`; an explicit follow-up commit is
+  commit-if-needed normalization. Reject dirty or invalid application state
+  before mutation, then validate it again before unlocking. Expected live
+  remote-ref agreement is a separate publication preflight. Input: PB8 and
+  #991's repeated cold-recovery gate.
 - **OD-M5** (operator): host-platform scope for the devenv server process. The
   process binds loopback-only by default and pins auth (see the shared-server
   row); this decision does not create an HM lifecycle surface.
@@ -362,9 +364,9 @@ session against the phase 2 package. Feeds noted.
 - **PB7 — partial:** process observation found no automatic recovery supervisor;
   `BD_NO_DAEMON` semantics and any residual background-writer path remain to be
   qualified. → OD-M3 (second-writer risk).
-- **PB8 — source boundary established:** server-mode store mutations can create
-  Dolt commits independently of the CLI auto-commit flag. #991 owns recovery
-  qualification. → OD-M3, OD-M4.
+- **PB8 — complete/superseded by #991:** server-mode store mutations can create
+  Dolt commits independently of the CLI auto-commit flag; #991 qualifies the
+  resulting serialized commit-if-needed and history boundary. → OD-M3, OD-M4.
 - **PB9** — emBEADings `neighbors` quality spot-check once a real backlog is
   seeded (≥30 issues): does the static model catch known paraphrase pairs? →
   OD-D3.

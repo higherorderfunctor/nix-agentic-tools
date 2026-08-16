@@ -11,12 +11,13 @@
 > **Provenance tags.** `[measured @1.1.0]` — observed by running the real `bd`
 > v1.1.0 binary during a hands-on evaluation (2026-07).
 > `[measured package @1.2.2]` — asserted by the Nix package's build or install
-> checks. `[measured Dolt @2.2.3]` — observed by running the pinned Dolt binary
-> under a clean temporary home. `[upstream]` — read from upstream docs or source
-> at the date above. `[unverified]` — carried from research that never executed
-> the binary; quarantine until probed (the plan's probe queue tracks the
-> load-bearing ones). Claims can go stale in either direction; re-verify against
-> the pinned version before building on a load-bearing one.
+> checks. `[measured contract @1.2.2/2.2.3]` — asserted by the disposable
+> black-box `beads-contracts` flake check. `[measured Dolt @2.2.3]` — observed
+> by running the pinned Dolt binary under a clean temporary home. `[upstream]` —
+> read from upstream docs or source at the date above. `[unverified]` — carried
+> from research that never executed the binary; quarantine until probed. Claims
+> can go stale in either direction; re-verify against the pinned version before
+> building on a load-bearing one.
 
 ## What beads is
 
@@ -79,7 +80,12 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
   sets the no-flush variable for every Dolt child process. A clean-home `init` +
   `status` probe with `DOLT_DISABLE_EVENT_FLUSH=1` created one 147-byte event
   file, confirming that the wrapper control prevents network flushing but is not
-  the collection kill switch. `[measured Dolt @2.2.3]`
+  the collection kill switch. `DOLT_ROOT_PATH=<contained-root>` relocates both
+  `.dolt/config_global.json` and `.dolt/eventsData`; setting
+  `metrics.disabled=true` there before init leaves only the event lock and no
+  `.devts` payload. Dolt creates some global-state paths mode 0777, so the
+  module must create and enforce the outer directory's restrictive mode rather
+  than inheriting Dolt's defaults. `[measured contract @1.2.2/2.2.3]`
 - **Compilation**: `bd` is plain Go. The nixpkgs and llm-agents derivations
   build with cgo/ICU (verified at the date above); the upstream flake's own
   derivation was earlier recorded as a pure-Go build (`gms_pure_go` tag, no cgo)
@@ -104,12 +110,15 @@ rolled back unattended. Issue
 [#995](https://github.com/higherorderfunctor/nix-agentic-tools/issues/995) owns
 that lifecycle hardening.
 
-**Version-skew ceremony.** `bd` refuses to open a DB created by a newer binary
-`[unverified]`. Crossing a schema migration on a remote-backed DB means exactly
-one designated clone runs `bd migrate` + `bd dolt push` while all others
-`bd bootstrap` `[upstream]`. Direct packaging implication: on any shared DB, a
-single pinned `bd` version must be authoritative machine-wide — one flake owns
-the binary; per-project shells pin config, never a second binary.
+**Version-skew boundary.** The packaged 1.0.3 client refuses a fresh 1.2.2 DB
+with `table has unknown fields`. The 1.2.2 client can open and write a 1.0.3 DB,
+after which 1.0.3 can still read it. `bd migrate --inspect --json` reports the
+version-label mismatch, while `bd migrate schema --json` reports schema v53
+already current; this version pair therefore does not exercise a destructive
+migration or post-migration bootstrap. Supporting one remains gated by #995.
+Until then, one pinned `bd` package is authoritative and rollback requires a
+pre-upgrade `bd backup` or recoverable remote ref plus the previous binary.
+`[measured contract @1.2.2/2.2.3]`
 
 ## Config surface
 
@@ -131,13 +140,13 @@ Two config systems with a hard split:
   construction — imperative post-init only. Do not build options for it.
   `[upstream]`
 
-`bd config show` prints each key's effective value **plus its source**, which
-makes an intended-versus-effective assertion task possible; the JSON shape's
-stability is `[unverified]`. `bd config get` reads individual keys —
-`dolt.auto-commit` and `no-git-ops` were exercised this way `[measured @1.1.0]`.
-The YAML config is a working-tree file and is **not** included in `bd export`;
-posture config must be re-applied after any rebuild from JSONL
-`[measured @1.1.0]`.
+`bd config show --json` returns an array of `{key, value, source}` records,
+which makes an intended-versus-effective assertion task possible. In the
+contained fixture, `no-git-ops` reports `config.yaml` provenance and embedded
+`dolt.auto-commit` resolves to `on`. `bd config get` reads individual keys.
+`[measured contract @1.2.2/2.2.3]` The YAML config is a working-tree file and is
+**not** included in `bd export`; posture config must be re-applied after any
+rebuild from JSONL `[measured @1.1.0]`.
 
 **Secrets.** Dolt-server credentials live in an INI file at
 `~/.config/beads/credentials` (directory `beads`, **not** `bd`), sections keyed
@@ -148,12 +157,27 @@ matching `api_key|secret|token|password` are **refused** on a git-tracked
 
 ## Init residue and the pure-data-engine posture
 
-`bd init` self-wires: it writes an AGENTS.md, installs git hooks, and writes
-`.beads/.gitignore`. It reportedly also runs `git init` + an initial commit +
-`git config beads.role` **even with `--skip-hooks`** `[unverified]` — carried
-from research whose measurement record cannot be vouched for, so probe it before
-relying on it; if true, suppressing it requires the `no-git-ops` config, an
-out-of-tree DB, or `--stealth`. The disable surface:
+`bd init` self-wires and is not safe to delegate to an operator or agent. In a
+source checkout,
+`--non-interactive --init-if-missing --skip-agents --skip-hooks` still creates
+Beads files, sets local `beads.role=maintainer`, and creates a Git commit.
+Adding `--stealth` leaves HEAD unchanged but still sets `beads.role`, writes
+`.git/info/exclude`, and replaces the Beads config with `no-git-ops: true`.
+Pre-seeding an external config with `no-git-ops: true` stops source commits but
+does not stop the `beads.role` mutation when cwd is a Git checkout.
+`[measured contract @1.2.2/2.2.3]`
+
+The minimal contained initialization is module-owned: run from a neutral,
+non-Git cwd with an explicit out-of-tree `BEADS_DIR`; create its mode-0700
+parent and mode-0600 `config.yaml` containing `no-git-ops: true` first; then run
+`bd init --non-interactive --init-if-missing --skip-agents --skip-hooks --prefix <prefix>`
+and, for a remote-backed ledger, always add `--remote <exact URL>`. The neutral
+cwd remains empty. A repeat exits zero with
+`Skipping init: workspace already initialized.` The module must chmod the
+pre-created config: `bd init` tightens generated metadata but preserves an
+overly broad existing config mode. `[measured contract @1.2.2/2.2.3]`
+
+The remaining disable surface is:
 
 - `--quiet --skip-agents --skip-hooks` — suppress the individual writes;
   `--stealth` = all three plus `no-git-ops: true`. `[upstream]`
@@ -177,63 +201,98 @@ Storage layout under a project-local workspace: `.beads/config.yaml` (track),
 
 ## Storage modes
 
-- **Embedded** (default): single-writer, file-lock enforced; the violation
-  symptom is `database is locked` and the documented fix is server mode.
-  Worktrees **share one `.beads` workspace by design**, so two agent sessions in
-  two worktrees are two writers on one lock — multi-session use disqualifies
-  embedded mode. `[upstream]`
-- **Server**: an external `dolt sql-server`; default port 3307. `[upstream]`
+- **Embedded** (default): linked worktrees can share an external `BEADS_DIR`.
+  Sixteen concurrent writes all persisted in one disposable run, but serialized
+  at roughly 18 seconds. This is a compatibility fallback, not the intended
+  multi-writer mode. `[measured contract @1.2.2/2.2.3]`
+- **Server**: an external `dolt sql-server`; default port 3307. An explicit
+  `bd init --server --external --server-host <loopback> --server-port <port> --database <name>`
+  works with an out-of-tree workspace. `bd dolt show --json` is the usable
+  readiness check (`connection_ok: true` plus exact host, port, and database).
+  `bd dolt status` reports `running: false` and `bd dolt stop` refuses because
+  bd does not own the external process. The devenv process supervisor must own
+  start, logs, restart, and backoff. `[measured contract @1.2.2/2.2.3]`
 - **Shared-server**: one Dolt server at `~/.beads/shared-server/`, default port
   **3308** (3307 is reserved for the plain server, 3306 for real MySQL), with a
   per-project database selected by **prefix**. Enable via
   `dolt.shared-server: true`, `BEADS_DOLT_SHARED_SERVER=1`, or
   `bd init --prefix X --shared-server`. Two projects sharing a prefix share a
   DB; an identity check **refuses the connection** (fails safe, but fails) — the
-  exact error shape is `[unverified]`. `[upstream]`
+  exact error shape is unqualified. The packaged `--shared-server` path did not
+  create a usable explicitly external workspace in the disposable probe, so it
+  is excluded from the MVP rather than repaired by wrapper glue.
+  `[measured contract @1.2.2/2.2.3]`
 
-In SQL-server mode, `--dolt-auto-commit off` does not suppress the store's own
-Dolt commit. Ordinary mutations can commit independently of the CLI flag, so a
-following explicit commit may be commit-if-needed normalization rather than the
-operation that creates the checkpoint. Issue #991 owns qualification of the
-complete mutation, publication, and recovery boundary; the package contract
-alone makes no history-preserving recovery claim.
-`[upstream source @Beads 1.2.2]`
+**The currently qualified serialized checkpoint policy is load-bearing.** In
+SQL-server mode, `--dolt-auto-commit off` does not suppress the store's own Dolt
+commit. Ordinary `CreateIssue` commits its issue/event SQL transaction, returns,
+and then stages and commits through a separately acquired pooled connection; it
+does not use the connection-pinned `RunInTransaction` path. A successful command
+and a complete live working-set read therefore do not prove that the committed,
+publishable HEAD is complete. The rejected concurrent-writer probe demonstrated
+the distinction: every CLI write succeeded and the live rows were visible, but
+cold recovery of the exact published HEAD exposed seven orphan events and
+foreign-key violations. `[measured session @1.2.2/2.2.3]`
 
-**Split-brain**: a stale `.beads/dolt-server.port` file versus an env-pointed
-managed server yields two truths for one DB name; `bd doctor` warns but only
-diagnostically. Machine-wide env pinning of the port makes the stale file
-unreachable. `[upstream]`
+The qualified path holds one repository lock across each complete mutation and
+the sole raw-Dolt pusher. Immediately after acquiring it, a mutation rejects
+pre-existing dirty or invalid state rather than absorbing residue from an
+interrupted predecessor. Before unlocking, it must leave an advanced final HEAD,
+a clean committed working set, zero constraint violations, zero direct
+event/dependency orphans, and unchanged source Git state. A following
+`bd dolt commit` is commit-if-needed normalization, not the source of
+server-mode safety. Three repeated serialized write/publish/absent-state restore
+cycles preserved the exact application state and history; each included a
+post-restore write, forward republish, and third cold restore. A terminal
+negative control proved that dirty incoming state refuses the next mutation
+without executing it or changing HEAD/history. Pull, merge, rebase, conflict
+resolution, repair, and force-push are outside the qualified protocol.
+`[measured recovery probe @1.2.2/2.2.3; upstream source @Beads 1.2.2]`
 
-**Daemon residue**: `BD_NO_DAEMON` appears in the config table and
-`BEADS_NO_DAEMON=1` in a third-party tmux plugin, but the current docs tree
-contains no daemon documentation — plausibly a SQLite-era mechanism superseded
-by the storage modes. It matters because a stray daemon would be a second
-writer. `[unverified]`
+A bounded transaction-native experiment does not replace that policy. Global
+`behavior.dolt_transaction_commit=true` broke fresh migration 0040 and changed
+cold-bootstrap HEAD/history. Enabling it only after DTC-off init/bootstrap
+preserved the tested ordinary concurrent creates, labels, comments, clean state,
+and exact cold restore, but did not cover upgrades, true same-row updates,
+writer/publisher overlap, command messages/authors, or crashes during commits
+and mode transitions. Session-scoped DTC/message settings and direct
+in-transaction `DOLT_COMMIT` are credible ingredients for a future Beads fix;
+the tested rollback failed before `DOLT_COMMIT`, and pinned active transaction
+paths remain heterogeneous. A separate transaction-boundary follow-up may
+reconsider only writer serialization after those gaps close. The pusher remains
+exclusive without an independently proven compare-and-publish protocol.
+`[measured #991 transaction spike @1.2.2/2.2.3; upstream source @Beads 1.2.2]`
+
+**Split-brain**: a stale `.beads/dolt-server.port` is honored and fails loudly
+with connection refused. `BEADS_DOLT_SERVER_PORT` overrides the stale file and
+restores the connection. The process environment and `bd dolt show --json` must
+therefore be authoritative. Killing the server makes writes fail loudly; the
+server log contains the connection/query failure context. A no-auto-commit row
+survived a kill and restart in the disposable probe, but the minimum supported
+recovery remains backup/remote-ref based rather than relying on that working-set
+behavior. `[measured contract @1.2.2/2.2.3]`
+
+**Process residue**: embedded commands leave no resident `bd` or Dolt process.
+External-server mode leaves only the supervisor-owned `dolt sql-server`; bd's
+status/stop commands do not adopt it. No write performed an automatic
+`bd dolt push`. `[measured contract @1.2.2/2.2.3]`
 
 ## Workspace resolution and isolation
 
-Resolution: `BEADS_DIR` if set, else the main repo's `.beads`; linked worktrees
-follow the same chain (shared workspace, no duplication). `bd where` is the
-authoritative active-workspace check — better than testing for `./.beads`, which
-worktrees legitimately lack. `[upstream]`
+With no override, a source checkout and its linked worktree both resolve the
+main worktree's `.beads`. `bd where --json` reports `path`, `database_path`,
+`prefix`, and `schema_version`. Outside Git with no state it exits nonzero with
+JSON `error: no_beads_directory`. `[measured contract @1.2.2/2.2.3]`
 
-`BEADS_DIR` is a full escape hatch: an external workspace shared across
-checkouts, with `bd dolt push/pull` targeting it; combined with `--stealth` it
-yields a repo-invisible tracker. **The subtlety that keeps git-ops off a repo:**
-`BEADS_DIR` bypasses git-repo discovery, but `bd` still _runs_ with cwd = repo
-root (hooks and agent shell calls both do), so the git-ops protection is
-contingent on the env var being present in **every** invocation. If it is
-missing, `bd` falls back to cwd discovery and finds the repo. Therefore
-`no-git-ops` stays load-bearing — and its config must live somewhere `bd` reads
-**without** the env var (a project-local `.beads/config.yaml` or the user-global
-config), not only inside the external dir that `bd` never reads when the var is
-unset. Provenance is split: operating on an out-of-repo DB with the env var set
-is `[measured @1.1.0]`; the env-unset fallback actually performing git-ops
-against the repo — and therefore the exact failsafe-placement requirement — is
-`[unverified]` design reasoning. Prove both paths before relying on containment
-(the plan's probe queue covers this). Even then, `bd` may still _read_ cwd git
-state (e.g. the branch, for protected-branch logic) — reads are harmless; do not
-misread them as a containment failure.
+`BEADS_DIR` is not a fail-closed escape hatch. When it names a missing or empty
+directory, bd silently ignores it and falls back to the source checkout's
+`.beads`. When the variable is unset, the same source fallback applies.
+Therefore every managed invocation must set `BEADS_DIR` **and** assert that
+`bd where --json | .path` exactly equals the declared state path before a write.
+The state directory and config must be materialized before that assertion. A
+neutral non-Git cwd is additionally required for initialization because even a
+valid external workspace does not prevent bd from setting `beads.role` in the
+cwd repository. `[measured contract @1.2.2/2.2.3]`
 
 There is **no ACL or permission model**. Four mechanisms exist, all YAML
 path-lists — whatever is listed is reachable `[upstream]`:

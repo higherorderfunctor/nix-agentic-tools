@@ -1,10 +1,10 @@
 # Dolt remotes, git-backed sync, and encrypted-remote options
 
-> **Last verified:** 2026-08-14, from upstream Dolt/DoltHub documentation and
-> the sources listed at the end; research-complete, design **not** started — no
-> option below is picked. Companions: `bd-reference.md` (the tool itself),
-> `ecosystem.md` (integrations). Decisions land in the register of
-> `docs/plans/beads-package-and-options.md`, not here.
+> **Last verified:** 2026-08-15 against packaged Beads 1.2.2 and Dolt 2.2.3,
+> plus the upstream sources listed at the end. The disposable black-box contract
+> is `checks/beads-contracts.nix`; #991 carries the timestamped investigation
+> record. Companions: `bd-reference.md` (the tool itself) and `ecosystem.md`
+> (integrations). Remote-provider and encryption qualification remains #997.
 
 ## Problem framing — threat model before tooling
 
@@ -104,6 +104,19 @@ underneath it.
   force-push) was **rejected** because it could not land writes atomically under
   concurrency.
 
+The packaged behavior matches this architecture. `bd init --remote <URL>`
+persists the exact URL in `sync.remote`; `bd dolt remote list --json` exposes a
+`git+`-normalized transport URL. The local workspace contains a separate bare
+cache below `embeddeddolt/<database>/.dolt/git-remote-cache/`, including when
+the source and ledger URLs are equal. The source working tree and its ordinary
+branches are untouched. `[measured @Beads 1.2.2 / Dolt 2.2.3]`
+
+One upstream behavior must be actively rejected: if `--remote` is omitted from a
+source checkout with `origin`, bd inherits that source URL as its Dolt remote.
+Consequently the module must always pass the declared ledger URL and verify both
+`sync.remote` and `bd dolt remote list`; it cannot use omission as evidence of
+isolation. `[measured @Beads 1.2.2 / Dolt 2.2.3]`
+
 ### Branch reflection — no, by design
 
 Dolt data lives on one custom ref: **`refs/dolt/data`**. Custom refs are not
@@ -159,8 +172,37 @@ Supporting details:
 limits and Dolt tablefiles get large. Oversized tablefiles are written as a
 sub-tree (`tablefile/0001`, `tablefile/0002`, …) and reassembled transparently
 on read. The default value, its configurability, and the interaction with host
-limits (GitHub warns at 50 MB, hard-fails at 100 MB per object) are unverified —
-see the experiments.
+limits (GitHub warns at 50 MB, hard-fails at 100 MB per object) remain
+provider-scale questions for #997. A representative disposable MVP ledger
+produced seven objects totaling 74,826 bytes under `refs/dolt/data`; the largest
+was a 57,317-byte `.darc` blob, so no chunk boundary was approached. This is a
+fixture-scale contract, not hosting-capacity evidence.
+`[measured @Beads 1.2.2 / Dolt 2.2.3]`
+
+## Qualified MVP ledger lifecycle
+
+The supported lifecycle is explicit and contains no publication daemon:
+
+1. Create a dedicated local state directory and pre-seed its contained config.
+2. From a neutral non-Git cwd, run module-owned `bd init` with the exact ledger
+   URL and non-interactive/skip flags documented in `bd-reference.md`.
+3. Assert exact `bd where`, `sync.remote`, and `bd dolt remote list` values.
+4. Publish only with explicit `bd dolt push`; consume only with explicit
+   `bd dolt pull`. Runtime automation, if any, belongs to #993.
+
+A completely unborn bare Git remote is rejected loudly: GitBlobstore requires an
+ordinary branch/commit before the first Dolt publication. Once seeded, the first
+explicit push creates `refs/dolt/data` plus `refs/heads/__dolt_remote_info__`;
+normal source refs remain unchanged. Local writes do not move the remote ref.
+`[measured @Beads 1.2.2 / Dolt 2.2.3]`
+
+A second independently initialized state directory bootstraps from that ref and
+adopts the ledger identity. In the measured divergence sequence, clones A and B
+both wrote, A pushed, B's stale push failed nonzero with a `non-fast-forward`
+diagnostic and pull hint, then B pull/push and A pull preserved all rows and
+history. This establishes loud stale-writer failure and explicit recovery; it
+does not authorize conflict-resolution strategies that discard either side.
+`[measured @Beads 1.2.2 / Dolt 2.2.3]`
 
 ## Encrypted-remote options
 
@@ -220,9 +262,9 @@ dependency graph, no ready-queue, no cell-level merge. Rebuilding beads' core
 value on top of them is the actual cost. Recorded for completeness; not
 recommended unless the design goal changes.
 
-## Experiments to run locally
+## Post-MVP experiments
 
-Ordered by how much they collapse the option space:
+These are deliberately excluded from the MVP and routed to #997:
 
 1. **Does gcrypt break Dolt's git remote?** Throwaway beads DB against
    `gcrypt::`; force a CAS race with two concurrent `bd dolt push` operations
@@ -230,30 +272,21 @@ Ordered by how much they collapse the option space:
    path out), clean failure (acceptable), working retry (the assumption was
    wrong and the gcrypt path opens up). **Silent data loss is the outcome to
    rule out**; this single test decides whether "git + e2ee" is viable at all.
-   Experiment 2 is an embedded prerequisite: if `bd` rejects or rewrites
-   `gcrypt::` URLs, this experiment cannot run unpatched — run 2 first.
-2. **Does beads pass remote URLs through unmodified?** If `bd` validates or
-   rewrites remote URLs, custom schemes may need a patch. Check before investing
-   in either encrypted path.
-3. **Manifest CAS on a FUSE crypt mount.** Concurrent `CheckAndPut` against an
+   If `bd` rejects or rewrites `gcrypt::` URLs, this experiment cannot run
+   unpatched; the measured `file://` pass-through must not be generalized to
+   custom schemes.
+2. **Manifest CAS on a FUSE crypt mount.** Concurrent `CheckAndPut` against an
    rclone-crypt mount; same failure taxonomy; compare gocryptfs-over-local-FS as
    control.
-4. **Conjoin and GC on the encrypted substrate.** Conjoin rewrites large
+3. **Conjoin and GC on the encrypted substrate.** Conjoin rewrites large
    tablefiles; `bd admin compact` plus Dolt GC deletes them. Confirm neither
    pathologically re-uploads on a crypt mount (the suspected mechanism is rclone
    crypt's dedup/chunking interaction) nor blows the git object limit.
-5. **`maxPartSize` default versus host object limits**, with a DB large enough
+4. **`maxPartSize` default versus host object limits**, with a DB large enough
    to trigger chunking.
-6. **Key-management dry run.** Multi-machine key distribution and a documented
+5. **Key-management dry run.** Multi-machine key distribution and a documented
    recovery path, tested by restoring from ciphertext on a clean machine —
    **before** the DB carries anything valuable.
-7. **Divergent-history pull.** This document covers push-side atomicity
-   exhaustively, but the multi-machine story equally depends on `bd dolt pull`
-   when local and remote Dolt histories have both advanced — the normal case for
-   a two-machine setup. Characterize the conflict shape: does bd surface it,
-   auto-merge cell-level, or fail-and-park, and is any outcome lossy?
-   (Federation's `--strategy ours|theirs` is a different, wrong altitude — do
-   not read its semantics into plain `bd dolt pull`.)
 
 ## Known failure modes to design against
 
