@@ -356,7 +356,7 @@ in {
         # AGENTS.md already carries the repository's Semble search workflow from
         # the generated stacked-workflows fragment. Avoid asking devenv `files.*`
         # to replace that tracked real file with the redundant module projection.
-        instructions.enable = false;
+        instructions.cli.enable = false;
       };
       # Native legacy sandbox model, matching every other repository the maintainer
       # runs. This replaced a named permission profile — see the lockout

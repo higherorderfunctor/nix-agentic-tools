@@ -6,6 +6,7 @@
   pkgs,
   ...
 }: consumerArgs: let
+  contentScope = import ./contentScope.nix {inherit lib;};
   evaluated =
     lib.ai.mcpServer.mkMcpServer {
       name = "semble";
@@ -14,9 +15,7 @@
         type = lib.mkDefault "stdio";
       };
       options.content = lib.mkOption {
-        type = lib.types.enum ["all" "code" "config" "docs"];
-        default = "code";
-        description = "File-content category indexed by the Semble MCP server.";
+        inherit (contentScope) default description type;
       };
     }
     consumerArgs;
@@ -26,9 +25,13 @@
     else if evaluated.package != null
     then "${evaluated.package}/bin/semble-mcp"
     else throw "lib.ai.mcpServers.mkSemble requires either `package` or `command`";
+  contentErrors = contentScope.errors evaluated.content;
 in
-  removeAttrs evaluated ["content"]
-  // {
-    inherit command;
-    args = evaluated.args ++ lib.optionals (evaluated.content != "code") ["--content" evaluated.content];
-  }
+  if contentErrors != []
+  then throw "lib.ai.mcpServers.mkSemble: ${lib.concatStringsSep "\n" contentErrors}"
+  else
+    removeAttrs evaluated ["content"]
+    // {
+      inherit command;
+      args = evaluated.args ++ contentScope.toArgs evaluated.content;
+    }

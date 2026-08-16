@@ -3076,37 +3076,12 @@ in {
     let
       evaluated = evalHm {ai.programs.semble.enable = true;};
       cfg = evaluated.config;
-      claudeRule = cfg.ai.claude.rules.semble;
-      codexRule = cfg.ai.codex.rules.semble;
-      # Semble's Kiro agent is a TYPED record now. Semble deliberately does not
-      # set `ai.kiro.enable` (selecting a runtime configures it; activating it
-      # stays the consumer's call), so nothing is EMITTED here — this test
-      # covers the fanout of option VALUES. `name` staying null in the record
-      # is the contract: the emitter defaults it from the attr key, which is
-      # asserted end-to-end in `semble-kiro-agent-emits-name` below.
-      kiroAgentName = "semble-search";
-      kiroAgentRecord = cfg.ai.kiro.agents.${kiroAgentName};
-      kiroRule = cfg.ai.kiro.rules.semble;
     in
       builtins.length cfg.home.packages
       == 1
       && lib.all (runtime: cfg.ai.${runtime}.mcpServers ? semble) ["claude" "codex" "kiro"]
-      && lib.all (runtime: cfg.ai.${runtime}.rules ? semble) ["claude" "codex" "kiro"]
-      && cfg.ai.claude.agents ? semble-search
-      && cfg.ai.codex.agents ? semble-search
-      && cfg.ai.kiro.agents ? ${kiroAgentName}
-      && cfg.ai.claude.agents.semble-search.tools == ["Bash" "Read"]
-      && claudeRule.source == ../packages/semble/agent-instructions.md
-      && codexRule.source == ../packages/semble/agent-instructions.md
-      && kiroAgentRecord.name == null
-      && kiroAgentRecord.description != null
-      && kiroAgentRecord.tools == ["shell" "read"]
-      # `prompt` is a Nix path in the record; the option's readFile coercion
-      # inlines it. A store path here would mean the path was stringified
-      # instead of read.
-      && !(lib.hasPrefix builtins.storeDir kiroAgentRecord.prompt)
-      && lib.hasInfix "semble" kiroAgentRecord.prompt
-      && kiroRule.source == ../packages/semble/agent-instructions.md
+      && lib.all (runtime: cfg.ai.${runtime}.rules == {}) ["claude" "codex" "kiro"]
+      && lib.all (runtime: !(cfg.ai.${runtime}.agents ? semble-search)) ["claude" "codex" "kiro"]
       && !(cfg.ai.copilot.mcpServers ? semble)
       && !(cfg.ai.copilot.agents ? semble-search)
       && cfg.ai.copilot.rules == {}
@@ -3122,7 +3097,7 @@ in {
     let
       cfg =
         (evalHm {
-          ai.programs.semble.enable = true;
+          ai.programs.semble.subagent.enable = true;
           ai.kiro.enable = true;
         }).config;
       emitted =
@@ -3146,6 +3121,14 @@ in {
             mcp.enable = false;
           };
         }).config;
+      onlyInstructions =
+        (evalDevenv {
+          ai.programs.semble.instructions.cli.enable = true;
+        }).config;
+      onlySubagent =
+        (evalDevenv {
+          ai.programs.semble.subagent.enable = true;
+        }).config;
     in
       builtins.length onlyMcp.packages
       == 1
@@ -3153,8 +3136,16 @@ in {
       && onlyMcp.ai.claude.rules == {}
       && !(onlyMcp.ai.claude.agents ? semble-search)
       && !(noMcp.ai.claude.mcpServers ? semble)
-      && noMcp.ai.claude.rules ? semble
-      && noMcp.ai.claude.agents ? semble-search
+      && noMcp.ai.claude.rules == {}
+      && !(noMcp.ai.claude.agents ? semble-search)
+      && builtins.length onlyInstructions.packages == 1
+      && onlyInstructions.ai.claude.rules ? semble
+      && !(onlyInstructions.ai.claude.agents ? semble-search)
+      && !(onlyInstructions.ai.claude.mcpServers ? semble)
+      && builtins.length onlySubagent.packages == 1
+      && onlySubagent.ai.claude.agents ? semble-search
+      && onlySubagent.ai.claude.rules == {}
+      && !(onlySubagent.ai.claude.mcpServers ? semble)
   );
 
   module-semble-program-overrides = mkTest "semble-program-overrides" (
@@ -3177,7 +3168,7 @@ in {
         (evalDevenv {
           ai = {
             programs.semble.mcp.content = "docs";
-            claude.programs.semble.instructions.enable = true;
+            claude.programs.semble.instructions.cli.enable = true;
             codex.programs.semble.subagent.enable = true;
             kiro.programs.semble.mcp = {
               content = "config";
@@ -3198,8 +3189,8 @@ in {
     in
       top.ai.codex.mcpServers ? semble
       && top.ai.codex.mcpServers.semble.args == ["--content" "docs"]
-      && top.ai.codex.agents ? semble-search
-      && top.ai.codex.rules ? semble
+      && !(top.ai.codex.agents ? semble-search)
+      && top.ai.codex.rules == {}
       && !(top.ai.claude.mcpServers ? semble)
       && !(top.ai.kiro.agents ? semble-search)
       && perFeature.ai.kiro.mcpServers ? semble
@@ -3249,7 +3240,10 @@ in {
     evaluated =
       (evalHm {
         ai = {
-          programs.semble.enable = true;
+          programs.semble = {
+            enable = true;
+            instructions.cli.enable = true;
+          };
           codex.programs.semble.grammars = [pkgs.tree-sitter-grammars.tree-sitter-awk];
           kiro.programs.semble.grammars = [pkgs.tree-sitter-grammars.tree-sitter-jq];
         };
@@ -3553,6 +3547,13 @@ in {
             };
           };
         }).config.ai.claude.mcpServers.semble;
+      codeAndDocs =
+        (evalHm {
+          ai.programs.semble.mcp = {
+            content = ["docs" "code"];
+            enable = true;
+          };
+        }).config.ai.claude.mcpServers.semble;
       replaced =
         (evalHm {
           ai.codex.mcpServers.semble = {
@@ -3567,15 +3568,198 @@ in {
       == []
       && lib.hasSuffix "/bin/semble-mcp" code.command
       && docs.args == ["--content" "docs"]
+      && codeAndDocs.args == ["--content" "code" "docs"]
       && replaced.args == ["--log-level" "debug"]
       && replaced.command == "custom-semble"
   );
+
+  module-semble-mcp-content-validation = mkTest "semble-mcp-content-validation" (
+    let
+      assertionsFor = content:
+        (evalHm {ai.programs.semble.mcp = {inherit content;};}).config.assertions;
+      hasFailure = needle: assertions:
+        builtins.any
+        (assertion: !assertion.assertion && lib.hasInfix needle assertion.message)
+        assertions;
+    in
+      hasFailure "at least one category" (assertionsFor [])
+      && hasFailure "duplicate categories" (assertionsFor ["docs" "docs"])
+      && hasFailure ''combine "all"'' (assertionsFor ["all" "code"])
+  );
+
+  module-semble-mcp-subagent-wiring = mkTest "semble-mcp-subagent-wiring" (
+    let
+      mcpSubagent = {
+        enable = true;
+        interface = "mcp";
+      };
+      rootVisible =
+        (evalHm {
+          ai.kiro.programs.semble = {
+            enable = true;
+            subagent = mcpSubagent;
+          };
+        }).config;
+      isolated =
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            programs.semble = {
+              enable = true;
+              mcp.rootExposure = false;
+              subagent = mcpSubagent;
+            };
+          };
+        }).config;
+      claude =
+        (evalHm {
+          ai.claude.programs.semble = {
+            enable = true;
+            subagent = mcpSubagent;
+          };
+        }).config;
+      unsupported =
+        (evalHm {
+          ai.claude.programs.semble = {
+            enable = true;
+            mcp.rootExposure = false;
+            subagent = mcpSubagent;
+          };
+        }).config;
+      missingMcp =
+        (evalHm {
+          ai.codex.programs.semble = {
+            mcp.enable = false;
+            subagent = mcpSubagent;
+          };
+        }).config;
+      orphaned =
+        (evalHm {
+          ai.kiro.programs.semble = {
+            enable = true;
+            mcp.rootExposure = false;
+          };
+        }).config;
+      failedWith = needle: evaluated:
+        builtins.any
+        (assertion: !assertion.assertion && lib.hasInfix needle assertion.message)
+        evaluated.assertions;
+      mcpPrompt = ../packages/semble/mcp-agent-instructions.md;
+      rootAgent = rootVisible.ai.kiro.agents.semble-search;
+      isolatedAgent = isolated.ai.kiro.agents.semble-search;
+      emitted =
+        builtins.fromJSON
+        (builtins.unsafeDiscardStringContext isolated.home.file.".kiro/agents/semble-search.json".text);
+    in
+      builtins.attrNames rootVisible.ai.kiro.mcpServers
+      == ["semble"]
+      && rootAgent.tools == ["@semble"]
+      && rootAgent.includeMcpJson == false
+      && rootAgent.mcpServers ? semble
+      && builtins.attrNames isolated.ai.kiro.mcpServers == []
+      && isolatedAgent.tools == ["@semble"]
+      && isolatedAgent.includeMcpJson == false
+      && isolatedAgent.mcpServers ? semble
+      && emitted.tools == ["@semble"]
+      && emitted.prompt == builtins.readFile mcpPrompt
+      && emitted.includeMcpJson == false
+      && emitted.mcpServers ? semble
+      && claude.ai.claude.agents.semble-search.tools
+      == ["mcp__semble__find_related" "mcp__semble__search"]
+      && failedWith "only Kiro" unsupported
+      && failedWith "requires the Semble MCP integration" missingMcp
+      && failedWith "requires an enabled MCP-backed" orphaned
+  );
+
+  module-semble-kiro-acp = let
+    evaluated = evalHm {
+      ai.kiro = {
+        enable = true;
+        programs.semble = {
+          enable = true;
+          mcp.rootExposure = false;
+          subagent = {
+            enable = true;
+            interface = "mcp";
+          };
+        };
+      };
+    };
+    agentFile = pkgs.writeText "semble-search.json" evaluated.config.home.file.".kiro/agents/semble-search.json".text;
+    controlFile = pkgs.writeText "control-search.json" (builtins.toJSON {
+      name = "control-search";
+      description = "Negative control without an MCP server.";
+      prompt = "Do nothing.";
+      tools = ["read"];
+    });
+    invalidFile = pkgs.writeText "invalid-search.json" "{}";
+  in
+    pkgs.runCommandLocal "module-test-semble-kiro-acp" {nativeBuildInputs = [pkgs.python3];} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      export HOME="$TMPDIR/home"
+      export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+      export XDG_CACHE_HOME="$TMPDIR/cache"
+      export XDG_CONFIG_HOME="$TMPDIR/config"
+      export XDG_DATA_HOME="$TMPDIR/data"
+      export XDG_STATE_HOME="$TMPDIR/state"
+      mkdir -p "$HOME/.kiro/agents" "$TMPDIR/workspace"
+      cp ${agentFile} "$HOME/.kiro/agents/semble-search.json"
+      cp ${controlFile} "$HOME/.kiro/agents/control-search.json"
+      cp ${invalidFile} "$HOME/.kiro/agents/invalid-search.json"
+
+      validate_status=0
+      # Drive the chat binary that implements `kiro-cli agent validate`
+      # directly. The outer launcher refuses every subcommand before dispatch
+      # in a credential-free Nix sandbox; validation itself requires no login.
+      ${pkgs.ai.kiro-cli}/bin/kiro-cli-chat agent validate \
+        --path "$HOME/.kiro/agents/semble-search.json" \
+        >"$TMPDIR/validate.stdout" 2>"$TMPDIR/validate.stderr" \
+        || validate_status=$?
+      test "$validate_status" -eq 0 || {
+        cat "$TMPDIR/validate.stderr" >&2
+        exit 1
+      }
+      test ! -s "$TMPDIR/validate.stderr" || {
+        cat "$TMPDIR/validate.stderr" >&2
+        exit 1
+      }
+
+      invalid_status=0
+      ${pkgs.ai.kiro-cli}/bin/kiro-cli-chat agent validate \
+        --path "$HOME/.kiro/agents/invalid-search.json" \
+        >"$TMPDIR/invalid.stdout" 2>"$TMPDIR/invalid.stderr" \
+        || invalid_status=$?
+      # Kiro currently exits zero for an invalid file. The stderr assertion is
+      # the real validation signal; the status check pins the trap so a future
+      # behavior change cannot make this negative control vacuous.
+      test "$invalid_status" -eq 0 || {
+        cat "$TMPDIR/invalid.stderr" >&2
+        exit 1
+      }
+      grep -Fq 'is invalid: missing field `name`' "$TMPDIR/invalid.stderr" || {
+        cat "$TMPDIR/invalid.stderr" >&2
+        exit 1
+      }
+
+      # Invoke the chat binary directly and omit --agent-engine: this is Kiro's
+      # v2 ACP path. The driver sends only initialize and session/new, never a
+      # model-bearing session/prompt request.
+      python3 ${./semble-kiro-acp.py} \
+        ${pkgs.ai.kiro-cli}/bin/kiro-cli-chat \
+        semble-search \
+        control-search \
+        "$TMPDIR/workspace" \
+        >"$TMPDIR/acp.json"
+      touch "$out"
+    '';
 
   module-semble-package-override-and-named-kiro-rule = mkTest "semble-package-override-and-named-kiro-rule" (
     let
       evaluated = evalDevenv {
         ai.kiro.programs.semble = {
-          instructions.enable = true;
+          instructions.cli.enable = true;
           package = pkgs.hello;
         };
       };
@@ -3591,14 +3775,14 @@ in {
         builtins.baseNameOf (builtins.head evaluated.config.packages)
       )
       && evaluated.config.ai.kiro.mcpServers == {}
-      && rule.source == ../packages/semble/agent-instructions.md
+      && rule.source == ../packages/semble/cli-instructions.md
   );
 
   module-semble-rule-text-override-wins = mkTest "semble-rule-text-override-wins" (
     let
       evaluated = evalDevenv {
         ai.kiro.rules.semble.text = "Consumer rule.";
-        ai.kiro.programs.semble.instructions.enable = true;
+        ai.kiro.programs.semble.instructions.cli.enable = true;
       };
       rule = evaluated.config.ai.kiro.rules.semble;
     in
@@ -3615,7 +3799,7 @@ in {
           codex.enable = true;
           kiro.enable = true;
         };
-        ai.programs.semble.instructions.enable = true;
+        ai.programs.semble.instructions.cli.enable = true;
       };
       hm = (evalHm nativeConfig).config;
       devenv = (evalDevenv nativeConfig).config;
@@ -3654,7 +3838,9 @@ in {
       && builtins.attrNames (programShape hm ["ai" "programs" "semble"])
       == ["enable" "grammars" "instructions" "mcp" "package" "subagent"]
       && builtins.attrNames (programShape hm ["ai" "programs" "semble"]).mcp
-      == ["content" "enable" "pathMappings"]
+      == ["content" "enable" "pathMappings" "rootExposure"]
+      && builtins.attrNames (programShape hm ["ai" "programs" "semble"]).instructions
+      == ["cli"]
       && lib.all
       (runtime: lib.hasAttrByPath ["ai" runtime "programs" "semble"] hm.options)
       ["claude" "codex" "kiro"]
@@ -3675,6 +3861,28 @@ in {
         lib = hmLib;
         pkgs = helperPkgs;
       } {content = "all";};
+      codeAndDocs = mkSemble {
+        lib = hmLib;
+        pkgs = helperPkgs;
+      } {content = ["docs" "code"];};
+      allMixed =
+        builtins.tryEval
+        (mkSemble {
+          lib = hmLib;
+          pkgs = helperPkgs;
+        } {content = ["all" "code"];}).args;
+      duplicate =
+        builtins.tryEval
+        (mkSemble {
+          lib = hmLib;
+          pkgs = helperPkgs;
+        } {content = ["docs" "docs"];}).args;
+      empty =
+        builtins.tryEval
+        (mkSemble {
+          lib = hmLib;
+          pkgs = helperPkgs;
+        } {content = [];}).args;
       records = import ../packages/semble/lib/integrations.nix;
     in
       code.type
@@ -3682,16 +3890,25 @@ in {
       && code.args == []
       && lib.hasSuffix "/bin/semble-mcp" code.command
       && all.args == ["--content" "all"]
-      && records.rule.source == ../packages/semble/agent-instructions.md
-      && records.semanticAgent.instructions == ../packages/semble/agent-instructions.md
+      && codeAndDocs.args == ["--content" "code" "docs"]
+      && !allMixed.success
+      && !duplicate.success
+      && !empty.success
+      && records.rule.source == ../packages/semble/cli-instructions.md
+      && records.semanticAgent.instructions == ../packages/semble/cli-instructions.md
       && records.semanticAgent.tools == ["Bash" "Read"]
+      && records.mcp.semanticAgent.instructions == ../packages/semble/mcp-agent-instructions.md
+      && records.mcp.semanticAgent.tools
+      == ["mcp__semble__find_related" "mcp__semble__search"]
       # `kiroAgent` is a typed record, not pre-rendered JSON. It deliberately
       # carries NO `name`: the typed `ai.kiro.agents` option defaults that from
       # the attr key, which keeps the id and the filename a single source of
       # truth. `prompt` stays a path here and is readFile-coerced at emission.
       && records.kiroAgent.tools == ["shell" "read"]
       && !(records.kiroAgent ? name)
-      && records.kiroAgent.prompt == ../packages/semble/agent-instructions.md
+      && records.kiroAgent.prompt == ../packages/semble/cli-instructions.md
+      && records.mcp.kiroAgent.prompt == ../packages/semble/mcp-agent-instructions.md
+      && records.mcp.kiroAgent.tools == ["@semble"]
   );
 
   # ── glab ───────────────────────────────────────────────────────────

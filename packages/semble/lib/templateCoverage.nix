@@ -3,9 +3,18 @@
 # bump must stop in CI until a reviewer decides whether each local derivative
 # remains correct.
 {
-  instructions = {
-    disposition = "The module ships CLI guidance and, from 0.5.5, also teaches the MCP content field: the server's session-start instructions never mention content selection and its tool parameter descriptions are bare, so prose is the only channel that teaches it.";
-    reviewedHash = "8305b33df22b54d3db3fa74601e3afbdacd9561d374d287e3c6f0f9d1ae1b6b1";
+  mcpSurface = {
+    disposition = "The MCP-backed agent prompt uses both Semble 0.5.5 tools and their per-call content selector; the complete tools/list descriptions and schemas are snapshotted, while this projection records the prompt's reviewed dependencies.";
+    reviewedTools = {
+      find_related = {
+        arguments = ["content" "file_path" "line" "max_snippet_lines" "repo" "top_k"];
+        required = ["file_path" "line" "repo"];
+      };
+      search = {
+        arguments = ["content" "max_snippet_lines" "query" "repo" "top_k"];
+        required = ["query" "repo"];
+      };
+    };
   };
   templates = {
     "claude.md" = {

@@ -1,9 +1,14 @@
 # Semble integrations
 
-> **Last verified:** 2026-08-15 (commit pending — Semble is the first
-> `ai.programs.*` factory consumer: one option specification generates portable
-> root defaults and capability-gated Claude, Codex, and Kiro overrides; the four
-> runtime-list selectors are retired).
+> **Last verified:** 2026-08-16 (commit pending — Semble's inherited MCP
+> integration now has canonical multi-category defaults, while global CLI
+> guidance and the typed CLI/MCP subagent are independent opt-ins; Kiro can keep
+> an agent-scoped server out of the root pool, and drift review follows the live
+> JSON-RPC tool surface plus package-version provenance). Prior: 2026-08-15
+> (commit pending — Semble is the first `ai.programs.*` factory consumer: one
+> option specification generates portable root defaults and capability-gated
+> Claude, Codex, and Kiro overrides; the four runtime-list selectors are
+> retired).
 
 Semble provides local semantic and lexical code search through a CLI and an MCP
 server. This repository re-exports Numtide's pinned derivation unchanged and
@@ -41,9 +46,10 @@ ai = {
     ];
     package = pkgs.ai.semble;
 
+    instructions.cli.enable = true;
     mcp = {
       enable = true;
-      content = "all";
+      content = ["code" "docs"];
       pathMappings = [
         {
           content = "code";
@@ -62,8 +68,10 @@ ai = {
         }
       ];
     };
-    instructions.enable = false;
-    subagent.enable = false;
+    subagent = {
+      enable = true;
+      interface = "mcp";
+    };
   };
 
   # Program-level on/off replaces runtime lists.
@@ -73,19 +81,34 @@ ai = {
 };
 ```
 
-Every runtime leaf is nullable: null inherits the corresponding
+Every runtime override leaf is nullable: null inherits the corresponding
 `ai.programs.semble` value, while a non-null runtime value wins. After that B4
-resolution, feature selection applies specificity in this order: an explicit
-runtime feature value, an explicit runtime program value, the portable feature
-value, then the portable program value. This makes
-`ai.<runtime>.programs.semble.enable = false` the replacement for removing a
-runtime from the former selector even when a portable feature is explicitly
-enabled; an explicit runtime feature value can still make just that feature
-differ. There is no `runtimes` selector. Program options exist only for Semble's
-declared capability set: Claude, Codex, and Kiro.
+resolution, MCP selection applies specificity in this order: an explicit runtime
+feature value, an explicit runtime program value, the portable feature value,
+then the portable program value. CLI instructions and the subagent are portable
+boolean opt-ins instead: a runtime program `false` retracts them, a runtime
+feature value can differ, and runtime program `true` does not turn them on
+implicitly. This makes `ai.<runtime>.programs.semble.enable = false` the
+replacement for removing a runtime from the former selector even when a portable
+feature is explicitly enabled; an explicit runtime feature value can still make
+just that feature differ. There is no `runtimes` selector. Program options exist
+only for Semble's declared capability set: Claude, Codex, and Kiro.
 
-The MCP content values are `code`, `docs`, `config`, and `all`. `code` uses
-Semble's default and emits no command-line argument.
+The MCP content values are `code`, `docs`, `config`, and `all`. A scalar is
+accepted as a one-element list; several categories may be combined and are
+sorted into canonical argv. Empty lists, duplicates, and `all` mixed with a
+specific category fail evaluation. `["code"]` uses Semble's default and emits no
+command-line argument. Semble 0.5.5's MCP tools also accept one scalar `content`
+value per call, replacing the server default for that call.
+
+`ai.programs.semble.mcp.rootExposure = false` keeps the root MCP pool free of
+Semble while retaining the server inside a Kiro `semble-search` agent. It
+requires that runtime's subagent to be enabled with `interface = "mcp"`. Kiro's
+agent receives `tools = ["@semble"]`, `includeMcpJson = false`, and its own
+`mcpServers.semble` entry whether root exposure is on or off. Claude and Codex
+cannot isolate an agent-scoped server and therefore fail evaluation when root
+exposure is disabled; the integration does not emulate this by weakening the
+root boundary.
 
 `ai.programs.semble.grammars` extends Semble with nixpkgs Tree-sitter grammar
 packages. Each package must expose its canonical `language` attribute and the
@@ -163,26 +186,28 @@ Codex with `sandbox_mode` set to `workspace-write`. That gate is about Codex's
 sandbox rather than about where Semble keeps its index. The module does not
 choose a sandbox mode.
 
-## Instruction content
+## CLI rule and subagent content
 
-Upstream's instructions integration primarily explains the MCP tool names and
-marks its managed block for installer removal. This module instead installs the
-reviewed CLI search guidance shared with the `semble-search` subagent, without
-the non-Nix `uvx` fallback. The distinction is deliberate: `semble-mcp` supplies
-its MCP-tool guidance in the server's own session instructions, while the
-always-loaded `CLAUDE.md`, `AGENTS.md`, or Kiro steering file documents the CLI
-path that remains useful to shell-capable agents.
+`instructions.cli.enable` installs one named `semble` rule containing committed
+CLI guidance, without the non-Nix `uvx` fallback. It defaults false even when
+the program is enabled. The named subagent also defaults false and selects one
+of two committed prompts: `interface = "cli"` uses shell/read tools and the CLI
+prompt; `interface = "mcp"` uses the MCP prompt and restricts Claude/Kiro to
+Semble's two tool names (Codex omits its unsupported tool allowlist natively).
+Keeping separate files prevents a global CLI rule and an MCP-only agent from
+carrying mixed access instructions.
 
 ## Upstream template review gate
 
 `packages/semble/upstream-templates.json` snapshots the four pinned agent
-templates and the installer's instruction block through a separate derivation;
-Semble itself remains unchanged. An `llm-agents` input update regenerates that
-factual snapshot but deliberately leaves the reviewed hashes in
-`lib/templateCoverage.nix` untouched. CI therefore stops on any upstream content
-change until a person checks the local derivatives and updates the matching
-dispositions and hashes. Module evaluation reads only committed files and does
-not introduce IFD.
+templates, the installer block, and a live JSON-RPC `tools/list` response
+through a separate derivation; Semble itself remains unchanged. The four agent
+templates retain human-reviewed hash pins. The installer prose is no longer a
+reviewed hash dependency: a mechanical provenance assertion instead requires its
+embedded `semble[mcp]==<version>` fallback to match the packaged version. The
+exact MCP surface is reviewed separately, and every tool and argument named by
+the committed MCP prompt must remain present. Module evaluation reads only
+committed files and does not introduce IFD.
 
 ## Direct configuration
 
@@ -195,14 +220,15 @@ let
 in {
   ai.codex = {
     mcpServers.semble = nat.lib.ai.mcpServers.mkSemble {inherit lib pkgs;} {
-      content = "docs";
+      content = ["code" "docs"];
     };
-    agents.semble-search = nat.lib.ai.semble.semanticAgent;
+    agents.semble-search = nat.lib.ai.semble.mcp.semanticAgent;
     rules.semble = nat.lib.ai.semble.rule;
   };
 
   ai.kiro = {
-    agents.semble-search = nat.lib.ai.semble.kiroAgent;
+    mcpServers.semble = nat.lib.ai.mcpServers.mkSemble {inherit lib pkgs;} {};
+    agents.semble-search = nat.lib.ai.semble.mcp.kiroAgent;
     rules.semble = nat.lib.ai.semble.rule;
   };
 }
