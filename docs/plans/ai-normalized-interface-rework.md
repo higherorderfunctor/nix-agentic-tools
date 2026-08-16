@@ -1,18 +1,20 @@
 # `ai.*` normalized-interface rework, then semble #858 on top
 
-> **Last verified:** 2026-08-15 (commit pending — PR 6 adds the approved
-> managed-proxy ownership contract to B1a: one used top-level owner, direct
-> runtime owners, explicit duplicate-key failure, and no unused top-level
-> materialization). Prior: 2026-08-15 (commit pending — PR 6 ships all six
-> keyed-pool null tombstones, atomic per-runtime replacement, and
-> definition-provenance checks for package collisions at root and runtime scope;
-> B1/B8/B9/B10 now record the shipped contract). Prior: 2026-08-15 (commit
-> pending — PR 5 retires the list-shaped instructions surface, types context as
-> text-XOR-source with root-first composition, and gives keyed rules a
-> normalized matcher; B5a/B6a and the removed B10 blocker record those
-> decisions). Prior: 2026-08-15 (commit pending — PR 3 now follows the later
-> execution brief: `supportedPools` generalizes the record capability gate,
-> Kimchi's dead rules options are removed, and boundary B0 records the
+> **Last verified:** 2026-08-15 (commit pending — PR 7 ships the `ai.programs.*`
+> factory and relocates Semble with B4 runtime overrides, program-level runtime
+> negation, and the current scalar MCP content contract). Prior: 2026-08-15
+> (commit pending — PR 6 adds the approved managed-proxy ownership contract to
+> B1a: one used top-level owner, direct runtime owners, explicit duplicate-key
+> failure, and no unused top-level materialization). Prior: 2026-08-15 (commit
+> pending — PR 6 ships all six keyed-pool null tombstones, atomic per-runtime
+> replacement, and definition-provenance checks for package collisions at root
+> and runtime scope; B1/B8/B9/B10 now record the shipped contract). Prior:
+> 2026-08-15 (commit pending — PR 5 retires the list-shaped instructions
+> surface, types context as text-XOR-source with root-first composition, and
+> gives keyed rules a normalized matcher; B5a/B6a and the removed B10 blocker
+> record those decisions). Prior: 2026-08-15 (commit pending — PR 3 now follows
+> the later execution brief: `supportedPools` generalizes the record capability
+> gate, Kimchi's dead rules options are removed, and boundary B0 records the
 > unsupported-root degradation contract). Prior: 2026-08-14 against `main` at
 > `0fe1f1fd`, by two verification passes (twelve agents, then seven) over the
 > preceding design session's working notes. Every `file:line` below was re-read;
@@ -114,11 +116,13 @@ Two packages claiming one key: fail, at both root and per-runtime (B8/B9), via
 definition provenance. Level-versus-level replaces; package-versus-package
 fails.
 
-`semble.mcp.content` default stays `["code"]`. **The decision stands; its stated
-rationale was wrong twice and is replaced — see R5.** The correct reason is that
-0.5.5 scopes the ON-DISK index directory by content set, and `["code"]` is the
-one value that short-circuits to the legacy bare `index` directory, so it shares
-an index with ordinary CLI usage instead of building a second copy.
+`ai.programs.semble.mcp.content` stays the scalar `"code"` through PR 7. #858
+will widen it to a list whose default is `["code"]`. **That future decision
+stands; its stated rationale was wrong twice and is replaced — see R5.** The
+correct reason is that 0.5.5 scopes the ON-DISK index directory by content set,
+and `["code"]` is the one value that short-circuits to the legacy bare `index`
+directory, so it shares an index with ordinary CLI usage instead of building a
+second copy.
 
 Version targeting: semble options are tied to the overlay, so the design targets
 0.5.5 rather than the pinned 0.5.4. This makes the semble work depend on the
@@ -169,8 +173,9 @@ below to match, and its "fail on collision" arm is withdrawn.
 None of these four appeared in the previous draft's own "asserted then refuted"
 list. That list was not the safety net it looked like; this section replaces it.
 
-**R5 — the `semble.mcp.content = ["code"]` rationale was wrong, twice.** The
-decision survives; only the reasoning changes.
+**R5 — the future `ai.programs.semble.mcp.content = ["code"]` rationale was
+wrong, twice.** The #858 decision survives; only the reasoning changes. PR 7
+retains the current scalar `"code"` value.
 
 The original wording — "a per-call `content` builds a separate cached index per
 content set, so defaulting broad multiplies indexes" — is **refuted**, because
@@ -1070,10 +1075,11 @@ about a second, with zero added closure. Negative control discriminates.
 
 ### B6. Option set under the relocation
 
-`mcp.rootExposure` stays. It is not redundant under A2: negating
-`ai.<runtime>.programs.semble.mcp` turns semble's MCP off for that runtime
-entirely, agent included, whereas `rootExposure = false` suppresses only the
-`mcpServers` pool entry while leaving the agent's own server block intact.
+`mcp.rootExposure` stays. It is not redundant under A2: setting
+`ai.<runtime>.programs.semble.mcp.enable = false` turns Semble's MCP off for
+that runtime entirely, agent included, whereas `rootExposure = false` suppresses
+only the `mcpServers` pool entry while leaving the agent's own server block
+intact.
 
 Verified (wt): `rootExposure` writes the **per-runtime** pool
 (`packages/semble/modules/common.nix:155`), so it is not the A1 violation it

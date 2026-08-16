@@ -22,15 +22,24 @@
   program = programFactory.mkProgram (import ./options.nix {inherit lib pkgs;});
   records = import ../lib/integrations.nix;
   runtimes = program.supportedRuntimes;
-  cacheDir = cacheLocation {inherit config lib;};
+  cacheRoot = cacheLocation {inherit config lib;};
   customizePackage = import ../lib/withGrammars.nix {inherit lib pkgs;};
 
-  featureEnabled = cfg: feature:
-    if feature.enable != null
-    then feature.enable
-    else cfg.enable;
+  featureEnabled = portable: override: featureName: let
+    portableFeature = portable.${featureName}.enable;
+    runtimeFeature = override.${featureName}.enable;
+  in
+    if runtimeFeature != null
+    then runtimeFeature
+    else if override.enable != null
+    then override.enable
+    else if portableFeature != null
+    then portableFeature
+    else portable.enable;
 
   mkState = runtime: let
+    portable = config.ai.programs.semble;
+    override = config.ai.${runtime}.programs.semble;
     cfg = program.resolve config runtime;
     grammarLanguages = map (grammar: grammar.language or "") cfg.grammars;
     mappingPatterns = lib.concatMap (mapping: mapping.patterns) cfg.mcp.pathMappings;
@@ -44,25 +53,7 @@
       if customizationValid
       then customizePackage cfg.package cfg.grammars cfg.mcp.pathMappings
       else cfg.package;
-    semblePackage =
-      if !relocatesCache
-      then customizedPackage
-      else
-        pkgs.symlinkJoin {
-          # Name the wrapper after its input so package overrides remain
-          # observable in module evaluation and generated store paths.
-          name = "${lib.getName customizedPackage}-wrapped";
-          paths = [customizedPackage];
-          nativeBuildInputs = [pkgs.makeWrapper];
-          passthru = customizedPackage.passthru or {};
-          postBuild = ''
-            for bin in "$out"/bin/*; do
-              wrapProgram "$bin" \
-                --set SEMBLE_CACHE_LOCATION ${lib.escapeShellArg cacheDir}
-            done
-          '';
-        };
-    selected = feature: featureEnabled cfg feature;
+    selected = featureName: featureEnabled portable override featureName;
   in {
     inherit
       cfg
@@ -74,33 +65,84 @@
       pathMappingsValid
       runtime
       selected
-      semblePackage
       ;
-    integrationActive = lib.any selected [cfg.instructions cfg.mcp cfg.subagent];
+    integrationActive = lib.any selected ["instructions" "mcp" "subagent"];
   };
 
   states = lib.genAttrs runtimes mkState;
   stateList = lib.attrValues states;
   activeStates = builtins.filter (state: state.integrationActive) stateList;
   integrationActive = activeStates != [];
-  codexSelected = lib.any states.codex.selected [
-    states.codex.cfg.instructions
-    states.codex.cfg.mcp
-    states.codex.cfg.subagent
-  ];
-  uniquePackages = packages:
-    lib.attrValues (builtins.listToAttrs (map (package: {
-        name = builtins.unsafeDiscardStringContext (toString package);
-        value = package;
+  codexSelected = lib.any states.codex.selected ["instructions" "mcp" "subagent"];
+  packageKey = package: builtins.hashString "sha256" (builtins.unsafeDiscardStringContext (toString package));
+  variantKeys = lib.unique (map (state: packageKey state.customizedPackage) activeStates);
+  variantCount = lib.length variantKeys;
+  variants =
+    builtins.listToAttrs
+    (map (state: let
+        key = packageKey state.customizedPackage;
+        variantCache =
+          if variantCount == 1
+          then cacheRoot
+          else "${cacheRoot}/variants/${builtins.substring 0 16 key}";
+        wrappedPackage =
+          if !relocatesCache
+          then state.customizedPackage
+          else
+            pkgs.symlinkJoin {
+              name = "${lib.getName state.customizedPackage}-wrapped";
+              paths = [state.customizedPackage];
+              nativeBuildInputs = [pkgs.makeWrapper];
+              passthru = state.customizedPackage.passthru or {};
+              postBuild = ''
+                for bin in "$out"/bin/*; do
+                  wrapProgram "$bin" \
+                    --set SEMBLE_CACHE_LOCATION ${lib.escapeShellArg variantCache}
+                done
+              '';
+            };
+      in {
+        name = key;
+        value = {
+          cacheDir = variantCache;
+          package = state.customizedPackage;
+          inherit wrappedPackage;
+        };
       })
-      packages));
-  activePackages = uniquePackages (map (state: state.semblePackage) activeStates);
-  activeCustomizedPackages = uniquePackages (map (state: state.customizedPackage) activeStates);
-  cacheGuardPackage =
-    if activeCustomizedPackages == []
-    then states.claude.customizedPackage
-    else builtins.head activeCustomizedPackages;
-  expectedPackages = lib.concatStringsSep ":" (map toString activeCustomizedPackages);
+      activeStates);
+  variantFor = state: variants.${packageKey state.customizedPackage};
+  statePackage = state: (variantFor state).wrappedPackage;
+  multiVariant = variantCount > 1;
+  commandFor = state:
+    if multiVariant
+    then "semble-${state.runtime}"
+    else "semble";
+  recordsFor = state: records.forCommand (commandFor state);
+
+  installedPackage =
+    if !multiVariant
+    then statePackage (builtins.head activeStates)
+    else let
+      canonicalState = builtins.head activeStates;
+      canonicalPackage = statePackage canonicalState;
+      runtimeLinks =
+        lib.concatMapStringsSep "\n" (state: ''
+          ${pkgs.coreutils}/bin/ln -s ${statePackage state}/bin/semble "$out/bin/semble-${state.runtime}"
+        '')
+        activeStates;
+    in
+      pkgs.runCommand "semble-program-variants" {
+        passthru = {
+          sembleCacheLocations = lib.genAttrs (map (state: state.runtime) activeStates) (runtime: (variantFor states.${runtime}).cacheDir);
+          sembleRuntimePackages = lib.genAttrs (map (state: state.runtime) activeStates) (runtime: statePackage states.${runtime});
+        };
+      } ''
+        ${pkgs.coreutils}/bin/mkdir -p "$out/bin"
+        for bin in ${canonicalPackage}/bin/*; do
+          ${pkgs.coreutils}/bin/ln -s "$bin" "$out/bin/$(basename "$bin")"
+        done
+        ${runtimeLinks}
+      '';
 
   cacheGuard = pkgs.writeShellApplication {
     name = "semble-cache-guard";
@@ -108,27 +150,29 @@
     text = ''
       shopt -s inherit_errexit 2>/dev/null || :
 
-      cache_dir=${lib.escapeShellArg cacheDir}
-      expected=${lib.escapeShellArg expectedPackages}
-      stamp="$cache_dir/.nix-package"
-      previous=
+      ${lib.concatMapStringsSep "\n" (variant: ''
+        cache_dir=${lib.escapeShellArg variant.cacheDir}
+        expected=${lib.escapeShellArg (toString variant.package)}
+        stamp="$cache_dir/.nix-package"
+        previous=
 
-      ${pkgs.coreutils}/bin/mkdir -p "$cache_dir"
-      if [ -r "$stamp" ]; then
-        IFS= read -r previous < "$stamp" || :
-      fi
+        ${pkgs.coreutils}/bin/mkdir -p "$cache_dir"
+        if [ -r "$stamp" ]; then
+          IFS= read -r previous < "$stamp" || :
+        fi
 
-      if [ "$previous" != "$expected" ]; then
-        printf 'Semble package changed; clearing indexes in %s\n' "$cache_dir"
-        SEMBLE_CACHE_LOCATION="$cache_dir" \
-          ${cacheGuardPackage}/bin/semble clear index >/dev/null
+        if [ "$previous" != "$expected" ]; then
+          printf 'Semble package changed; clearing indexes in %s\n' "$cache_dir"
+          SEMBLE_CACHE_LOCATION="$cache_dir" \
+            ${variant.package}/bin/semble clear index >/dev/null
 
-        temporary="$(${pkgs.coreutils}/bin/mktemp "$cache_dir/.nix-package.XXXXXX")"
-        trap '${pkgs.coreutils}/bin/rm -f "$temporary"' EXIT
-        printf '%s\n' "$expected" > "$temporary"
-        ${pkgs.coreutils}/bin/mv -f "$temporary" "$stamp"
-        trap - EXIT
-      fi
+          temporary="$(${pkgs.coreutils}/bin/mktemp "$cache_dir/.nix-package.XXXXXX")"
+          trap '${pkgs.coreutils}/bin/rm -f "$temporary"' EXIT
+          printf '%s\n' "$expected" > "$temporary"
+          ${pkgs.coreutils}/bin/mv -f "$temporary" "$stamp"
+          trap - EXIT
+        fi
+      '') (lib.attrValues variants)}
     '';
   };
 
@@ -149,7 +193,7 @@
 
   mcpEntry = state: {
     args = lib.optionals (state.cfg.mcp.content != "code") ["--content" state.cfg.mcp.content];
-    command = "${state.semblePackage}/bin/semble-mcp";
+    command = "${statePackage state}/bin/semble-mcp";
     type = "stdio";
   };
 
@@ -157,13 +201,13 @@
     state = states.${runtime};
   in
     lib.mkMerge [
-      (lib.mkIf (state.selected state.cfg.instructions) {
-        ai.${runtime}.rules.semble = lib.mkDefault records.rule;
+      (lib.mkIf (state.selected "instructions") {
+        ai.${runtime}.rules.semble = lib.mkDefault (recordsFor state).rule;
       })
-      (lib.mkIf (state.selected state.cfg.mcp) {
+      (lib.mkIf (state.selected "mcp") {
         ai.${runtime}.mcpServers.semble = lib.mkDefault (mcpEntry state);
       })
-      (lib.mkIf (state.selected state.cfg.subagent) {
+      (lib.mkIf (state.selected "subagent") {
         # Both records are typed attrsets (Kiro's shape differs from the
         # portable semantic one, but neither is pre-rendered). Default the
         # whole entry so a consumer can replace it atomically. Claude/Codex
@@ -171,8 +215,8 @@
         # tombstones; Kiro's runtime-native agent pool is replace-only.
         ai.${runtime}.agents.semble-search = lib.mkDefault (
           if runtime == "kiro"
-          then records.kiroAgent
-          else records.semanticAgent
+          then (recordsFor state).kiroAgent
+          else (recordsFor state).semanticAgent
         );
       })
     ];
@@ -209,7 +253,7 @@ in {
       }
       (lib.mkIf integrationActive
         (lib.mkMerge [
-          (installPackages activePackages)
+          (installPackages [installedPackage])
           (installCacheInvalidation {
             inherit cacheGuard lib;
           })
@@ -217,7 +261,7 @@ in {
       # Uniform across backends now that the location is a plain value rather
       # than a round-trip through the shell environment.
       (lib.mkIf codexSelected {
-        ai.codex.internal._integration_writable_roots = lib.mkAfter [cacheDir];
+        ai.codex.internal._integration_writable_roots = lib.mkAfter [(variantFor states.codex).cacheDir];
       })
     ]
     ++ map runtimeConfig runtimes

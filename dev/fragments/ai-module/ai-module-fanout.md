@@ -3,32 +3,34 @@
 > **Last verified:** 2026-08-15 (commit pending — the `ai.programs.*` factory
 > generates portable defaults and capability-gated runtime override trees from
 > one program specification; Semble is its first consumer and uses program-level
-> enable negation instead of runtime selectors). Prior: 2026-08-15 (commit
-> pending — top-level proxied MCP declarations now own one shared managed daemon
-> and fan out only lowered client entries; runtime declarations own directly,
-> duplicate ownership keys fail explicitly, and unused top-level owners are
-> never materialized). Prior: 2026-08-15 (commit pending — normalized keyed
-> pools use atomic per-runtime replacement and null tombstones, with same-scope
-> package ownership checked from definition provenance). Prior: 2026-08-15
-> (commit pending — context is a typed `text`-XOR-`source` record that composes
-> root-first with runtime context and names its native artifact per runtime.
-> Rules carry a normalized `matcher`; Claude, Kiro, Copilot, and Codex lower it
-> to native metadata or explicit prose, and devenv AGENTS.md consumers share one
-> keyed deduplicating writer; the list-shaped `instructions` surface is retired
-> rather than aliased). Prior: 2026-08-15 (commit pending — every normalized
-> pool crosses into a runtime only when its app record lists it in
-> `supportedPools`; all five runtimes now list the closed normalized `settings`
-> submodule, runtime-native passthrough moved to `nativeSettings`, per-runtime
-> fields resolve against the root independently, and Codex integration roots
-> travel through a hidden internal channel before native TOML emission). Prior:
-> 2026-08-14 (commit pending — Copilot's `ai.instructions` / `ai.rules`
-> destination is per-BACKEND and this entry named only one of them. Home Manager
-> wrote a hardcoded `.github/instructions/`, which resolves to
-> `$HOME/.github/instructions/` — a directory copilot-cli never reads — so every
-> named instruction and every rule was emitted and then ignored. It now routes
-> through `ai.copilot.configDir`, matching every other HM artifact this module
-> writes. See `copilot-config-delivery.md` for why the two backends address
-> genuinely different consumers). Prior: 2026-08-14 (commit pending — adds the
+> enable negation instead of runtime selectors; divergent runtime package
+> customizations use collision-free command aliases and isolated caches). Prior:
+> 2026-08-15 (commit pending — top-level proxied MCP declarations now own one
+> shared managed daemon and fan out only lowered client entries; runtime
+> declarations own directly, duplicate ownership keys fail explicitly, and
+> unused top-level owners are never materialized). Prior: 2026-08-15 (commit
+> pending — normalized keyed pools use atomic per-runtime replacement and null
+> tombstones, with same-scope package ownership checked from definition
+> provenance). Prior: 2026-08-15 (commit pending — context is a typed
+> `text`-XOR-`source` record that composes root-first with runtime context and
+> names its native artifact per runtime. Rules carry a normalized `matcher`;
+> Claude, Kiro, Copilot, and Codex lower it to native metadata or explicit
+> prose, and devenv AGENTS.md consumers share one keyed deduplicating writer;
+> the list-shaped `instructions` surface is retired rather than aliased). Prior:
+> 2026-08-15 (commit pending — every normalized pool crosses into a runtime only
+> when its app record lists it in `supportedPools`; all five runtimes now list
+> the closed normalized `settings` submodule, runtime-native passthrough moved
+> to `nativeSettings`, per-runtime fields resolve against the root
+> independently, and Codex integration roots travel through a hidden internal
+> channel before native TOML emission). Prior: 2026-08-14 (commit pending —
+> Copilot's `ai.instructions` / `ai.rules` destination is per-BACKEND and this
+> entry named only one of them. Home Manager wrote a hardcoded
+> `.github/instructions/`, which resolves to `$HOME/.github/instructions/` — a
+> directory copilot-cli never reads — so every named instruction and every rule
+> was emitted and then ignored. It now routes through `ai.copilot.configDir`,
+> matching every other HM artifact this module writes. See
+> `copilot-config-delivery.md` for why the two backends address genuinely
+> different consumers). Prior: 2026-08-14 (commit pending — adds the
 > Kiro-specific `extraPackages` runtime PATH prefix, shared by both backends
 > through the existing launcher wrapper and deliberately not promoted to
 > `ai.shell` or a cross-runtime pool). Prior: 2026-08-05 (commit pending —
@@ -528,8 +530,11 @@ behavior.
 The program implementation consumes only resolved per-runtime records and may
 write `ai.<runtime>.<pool>` entries at `mkDefault` priority; it must never write
 the root pools. A runtime-specific program `enable = false` is the runtime-list
-replacement. The program still must not set `ai.<runtime>.enable`, because
-package/CLI activation remains an explicit consumer choice.
+replacement. For Semble feature selection, an explicit runtime feature value is
+more specific still; otherwise the runtime program value takes precedence over
+an inherited portable feature value. The program still must not set
+`ai.<runtime>.enable`, because package/CLI activation remains an explicit
+consumer choice.
 
 Semble is the first factory consumer. Its single spec supports Claude, Codex,
 and Kiro, and generates its named MCP, agent, and `semble` rule defaults in both
@@ -537,17 +542,20 @@ backend evaluations. The rule composes into Claude and Codex's single
 always-loaded files and lets Kiro's directory-native renderer write `semble.md`.
 
 Semble also treats Codex's selected sandbox mode as an integration boundary. A
-selected Codex feature plus `sandbox_mode = "workspace-write"` appends the
-effective Semble cache to `sandbox_workspace_write.writable_roots`. Home Manager
-uses `${config.xdg.cacheHome}/semble`. Any Codex-targeted devenv integration
-defaults `SEMBLE_CACHE_LOCATION` to `${config.devenv.state}/semble-cache`;
-workspace-write mode grants the final environment value so consumer overrides
-stay coherent. The convenience module does not select a sandbox mode, and
-read-only or unrestricted modes get no writable-root contribution. Codex's beta
-`default_permissions`/`permissions` model does not compose with those legacy
-sandbox settings. A named permission profile is an explicit security boundary
-and must grant the cache path in its own `filesystem` table; user-global
-integrations must not silently widen every higher-precedence profile.
+selected Codex feature plus `sandbox_mode = "workspace-write"` appends that
+runtime's effective Semble cache to `sandbox_workspace_write.writable_roots`.
+Home Manager's cache family starts at `${config.xdg.cacheHome}/semble`; devenv's
+starts at `${config.devenv.state}/semble-cache`. One resolved package uses that
+root. Distinct runtime packages use package-keyed `variants/` subdirectories,
+receive runtime-specific CLI aliases, and never share an incompatible
+customization fingerprint. Launcher wrappers fix `SEMBLE_CACHE_LOCATION` for
+their own variant; there is no consumer environment override. The convenience
+module does not select a sandbox mode, and read-only or unrestricted modes get
+no writable-root contribution. Codex's beta `default_permissions`/`permissions`
+model does not compose with those legacy sandbox settings. A named permission
+profile is an explicit security boundary and must grant the cache path in its
+own `filesystem` table; user-global integrations must not silently widen every
+higher-precedence profile.
 
 Codex itself contributes the roots needed by its normal backend lifecycle when
 the consumer selects legacy `sandbox_mode = "workspace-write"`: Home Manager

@@ -3149,7 +3149,10 @@ in {
           ai = {
             programs.semble = {
               enable = true;
-              mcp.content = "docs";
+              mcp = {
+                content = "docs";
+                enable = true;
+              };
             };
             claude.programs.semble.enable = false;
             kiro.programs.semble.enable = false;
@@ -3167,6 +3170,16 @@ in {
             };
           };
         }).config;
+      runtimeFeatureWins =
+        (evalHm {
+          ai = {
+            programs.semble.mcp.enable = true;
+            codex.programs.semble = {
+              enable = false;
+              mcp.enable = true;
+            };
+          };
+        }).config;
     in
       top.ai.codex.mcpServers ? semble
       && top.ai.codex.mcpServers.semble.args == ["--content" "docs"]
@@ -3181,6 +3194,8 @@ in {
       && perFeature.ai.codex.rules == {}
       && perFeature.ai.codex.agents ? semble-search
       && !(perFeature.ai.kiro.agents ? semble-search)
+      && runtimeFeatureWins.ai.codex.mcpServers ? semble
+      && !(runtimeFeatureWins.ai.codex.rules ? semble)
   );
 
   module-semble-extra-grammars-and-cache-hooks = mkTest "semble-extra-grammars-and-cache-hooks" (
@@ -3214,6 +3229,45 @@ in {
       && lib.hasInfix "semble-cache-guard" devenv.enterShell
       && lib.hasSuffix "/bin/semble-mcp" devenv.ai.codex.mcpServers.semble.command
   );
+
+  module-semble-runtime-package-variants = let
+    evaluated =
+      (evalHm {
+        ai = {
+          programs.semble.enable = true;
+          codex.programs.semble.grammars = [pkgs.tree-sitter-grammars.tree-sitter-awk];
+          kiro.programs.semble.grammars = [pkgs.tree-sitter-grammars.tree-sitter-jq];
+        };
+      }).config;
+    installedPackage = builtins.head evaluated.home.packages;
+    cacheByRuntime = installedPackage.sembleCacheLocations;
+    cacheLocations = lib.attrValues cacheByRuntime;
+    runtimePackages = installedPackage.sembleRuntimePackages;
+  in
+    assert builtins.length evaluated.home.packages == 1;
+    assert builtins.length (lib.unique cacheLocations) == 3;
+    assert lib.hasInfix "semble-claude search" evaluated.ai.claude.rules.semble.text;
+    assert lib.hasInfix "semble-codex search" evaluated.ai.codex.rules.semble.text;
+    assert lib.hasInfix "semble-kiro search" evaluated.ai.kiro.rules.semble.text;
+    assert runtimePackages.claude != runtimePackages.codex;
+    assert runtimePackages.codex != runtimePackages.kiro;
+      pkgs.runCommand "module-test-semble-runtime-package-variants" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
+        test -x ${installedPackage}/bin/semble
+        test -x ${installedPackage}/bin/semble-claude
+        test -x ${installedPackage}/bin/semble-codex
+        test -x ${installedPackage}/bin/semble-kiro
+        test "$(${pkgs.coreutils}/bin/readlink -f ${installedPackage}/bin/semble-claude)" \
+          != "$(${pkgs.coreutils}/bin/readlink -f ${installedPackage}/bin/semble-codex)"
+        test "$(${pkgs.coreutils}/bin/readlink -f ${installedPackage}/bin/semble-codex)" \
+          != "$(${pkgs.coreutils}/bin/readlink -f ${installedPackage}/bin/semble-kiro)"
+        ${pkgs.gnugrep}/bin/grep -F ${lib.escapeShellArg cacheByRuntime.claude} ${runtimePackages.claude}/bin/semble
+        ${pkgs.gnugrep}/bin/grep -F ${lib.escapeShellArg cacheByRuntime.codex} ${runtimePackages.codex}/bin/semble
+        ${pkgs.gnugrep}/bin/grep -F ${lib.escapeShellArg cacheByRuntime.kiro} ${runtimePackages.kiro}/bin/semble
+        ${pkgs.coreutils}/bin/touch "$out"
+      '';
 
   module-semble-path-mapping-validation = mkTest "semble-path-mapping-validation" (
     let

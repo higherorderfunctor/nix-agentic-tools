@@ -1,20 +1,24 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-08-15 (commit pending — normalized guidance is now a
-> typed context record plus keyed rules; the list-shaped instructions option and
-> shared instruction type are gone). Prior: 2026-08-15 (commit pending —
-> runtime-shaped config moved from `ai.<runtime>.settings` to `nativeSettings`,
-> the new closed `settings` submodule is normalized across all runtimes, and
-> Codex integration roots use a hidden internal contribution channel). Prior:
-> 2026-08-14 (commit pending — Semble's shared module now lowers grammar and
-> path mappings identically through both facets, with one package-identity cache
-> guard and cache-location wrapper per backend; HM's XDG cache remains
-> authoritative on Darwin too). Prior: 2026-08-05 (commit pending — the Codex
-> named-profile delivery-path example is retained but `ai.codex.profiles` is now
-> LOCKED OUT and fails evaluation; the asymmetry it teaches is still correct,
-> the option is not usable). Prior: 2026-08-05 (commit pending — glab's Linux
-> Home Manager facet can queue one OS-keyring synchronization per activation
-> through a graphical-session path unit; the shared option is an explicit devenv
+> **Last verified:** 2026-08-15 (commit pending — Semble's program-factory
+> relocation preserves one HM/devenv declaration and lowering path; identical
+> runtime package variants share one wrapper/cache while divergent variants use
+> a collision-free aggregate and isolated caches). Prior: 2026-08-15 (commit
+> pending — normalized guidance is now a typed context record plus keyed rules;
+> the list-shaped instructions option and shared instruction type are gone).
+> Prior: 2026-08-15 (commit pending — runtime-shaped config moved from
+> `ai.<runtime>.settings` to `nativeSettings`, the new closed `settings`
+> submodule is normalized across all runtimes, and Codex integration roots use a
+> hidden internal contribution channel). Prior: 2026-08-14 (commit pending —
+> Semble's shared module now lowers grammar and path mappings identically
+> through both facets, with one package-identity cache guard and cache-location
+> wrapper per backend; HM's XDG cache remains authoritative on Darwin too).
+> Prior: 2026-08-05 (commit pending — the Codex named-profile delivery-path
+> example is retained but `ai.codex.profiles` is now LOCKED OUT and fails
+> evaluation; the asymmetry it teaches is still correct, the option is not
+> usable). Prior: 2026-08-05 (commit pending — glab's Linux Home Manager facet
+> can queue one OS-keyring synchronization per activation through a
+> graphical-session path unit; the shared option is an explicit devenv
 > exclusion, and the ordinary wrapper stops exporting the synchronized token).
 > Prior: 2026-08-05 (commit pending — enabled glab facets contribute their
 > effective config directory to Codex's legacy workspace-write sandbox; this
@@ -361,26 +365,28 @@ Note this is NOT free for every module: it only works when the options carry no
 facet-specific defaults or `defaultText`. Modules whose options reference
 `home.` or `files.` paths still need the per-facet declaration.
 
-`packages/semble` takes the pattern one step further: one shared option
-declaration and one shared runtime-fanout module are parameterized by the
-package installation and activation sinks (`home.packages` plus
+`packages/semble` takes the pattern one step further: one program specification
+feeds the shared factory, and one shared runtime-fanout module is parameterized
+by the package installation and activation sinks (`home.packages` plus
 `home.activation` versus devenv `packages` plus `enterShell`). Feature and
 runtime selection therefore cannot drift between backends. Runtime selection
 contributes defaults to `ai.<runtime>.*` but deliberately does not set
 `ai.<runtime>.enable`; choosing an integration is not authority to enable the
 corresponding CLI.
 
-Both sinks wrap every Semble entry point with their selected cache location.
-Home Manager deliberately fixes the user-global root at
+Both sinks wrap every Semble entry point with its selected cache location. Home
+Manager deliberately fixes the user-global root at
 `${config.xdg.cacheHome}/semble`, including on Darwin where Semble's native
 platform default differs; devenv fixes the project root under its state
-directory. The activation guards therefore clear and stamp the same indexes the
-installed CLI and MCP server use. The shared `grammars` and `pathMappings`
-options customize the package before either sink receives it, so grammar
-loading, mapped-file discovery, and package-identity invalidation cannot drift
-between Home Manager and devenv. Customized packages also stamp their grammar
-and mapping fingerprint into index metadata, protecting package-only consumers
-that do not use either module's activation guard.
+directory. Runtime states that resolve to one customized derivation share its
+wrapper and the established cache root. Divergent `package`, `grammars`, or
+`mcp.pathMappings` values produce package-keyed cache directories and one
+collision-free installed aggregate: generated guidance uses runtime-specific CLI
+aliases, while MCP commands point at their exact wrappers. The activation guards
+therefore clear and stamp the same variant indexes the installed CLI and MCP
+servers use. Customized packages also stamp their grammar and mapping
+fingerprint into index metadata, protecting package-only consumers that do not
+use either module's activation guard.
 
 **Intentional differences** exist and are NOT parity gaps:
 

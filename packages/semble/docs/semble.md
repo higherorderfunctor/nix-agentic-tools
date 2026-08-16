@@ -75,11 +75,14 @@ ai = {
 
 Every runtime leaf is nullable: null inherits the corresponding
 `ai.programs.semble` value, while a non-null runtime value wins. After that B4
-resolution, a feature's nullable `enable` inherits the resolved program-level
-`enable`. Set `ai.<runtime>.programs.semble.enable = false` to disable Semble
-for one runtime, or set an individual feature `enable` when only that feature
-should differ. There is no `runtimes` selector. Program options exist only for
-Semble's declared capability set: Claude, Codex, and Kiro.
+resolution, feature selection applies specificity in this order: an explicit
+runtime feature value, an explicit runtime program value, the portable feature
+value, then the portable program value. This makes
+`ai.<runtime>.programs.semble.enable = false` the replacement for removing a
+runtime from the former selector even when a portable feature is explicitly
+enabled; an explicit runtime feature value can still make just that feature
+differ. There is no `runtimes` selector. Program options exist only for Semble's
+declared capability set: Claude, Codex, and Kiro.
 
 The MCP content values are `code`, `docs`, `config`, and `all`. `code` uses
 Semble's default and emits no command-line argument.
@@ -112,14 +115,21 @@ Shebang-based inference is deliberately out of scope. Extensionless scripts must
 be listed through `pathMappings`; the integration does not read file contents to
 guess their language.
 
-Any active integration installs its resolved program package. Named MCP and rule
-entries, plus Claude and Codex normalized subagents, use a whole-entry
-`mkDefault`, so an ordinary consumer value replaces the generated record
-atomically and `null` suppresses it for that runtime. Kiro's runtime-native
-subagent is not a normalized nullable pool: consumers can replace the generated
-entry atomically, but cannot suppress it with `null`. Claude and Codex compose
-the guidance into their single always-loaded `CLAUDE.md` and `AGENTS.md` files.
-Kiro receives the same named rule and writes it to `.kiro/steering/semble.md`.
+Active runtimes whose package, grammar, and mapping values resolve to the same
+customized derivation share one installed wrapper and cache. When those values
+produce several derivations, the module installs one collision-free aggregate:
+its ordinary `semble` command targets a stable canonical variant, while
+runtime-generated guidance uses `semble-<runtime>` and each MCP entry points
+directly at its own variant. Distinct variants use package-keyed cache
+subdirectories, so incompatible customization fingerprints never alternate in
+one index. Named MCP and rule entries, plus Claude and Codex normalized
+subagents, use a whole-entry `mkDefault`, so an ordinary consumer value replaces
+the generated record atomically and `null` suppresses it for that runtime.
+Kiro's runtime-native subagent is not a normalized nullable pool: consumers can
+replace the generated entry atomically, but cannot suppress it with `null`.
+Claude and Codex compose the guidance into their single always-loaded
+`CLAUDE.md` and `AGENTS.md` files. Kiro receives the same named rule and writes
+it to `.kiro/steering/semble.md`.
 
 Home Manager fixes the global cache at `${config.xdg.cacheHome}/semble`, even on
 Darwin where Semble's platform default would otherwise be `~/Library/Caches`.
@@ -130,13 +140,16 @@ value never enters the surrounding user or project shell. Consumer override of
 the variable through `env` is deliberately gone: devenv/Nix is the only config
 path.
 
-Both backends record the effective Semble package store path in their cache
-root. Home Manager activation checks the user-global cache; devenv shell entry
-checks only that project's relocated cache. A missing or changed stamp clears
-all indexes in that root before recording the new identity. Extra grammars and
-path mappings both change the effective package path, so changing either uses
-the same invalidation path as a Semble version update. Savings data and the
-separate upstream bundled-grammar extraction cache are left alone.
+Both backends record each effective Semble package store path in its assigned
+cache directory. A single active package keeps the established cache root;
+multiple distinct packages use stable package-keyed directories below
+`variants/`. Home Manager activation checks the user-global cache family; devenv
+shell entry checks only that project's relocated cache family. A missing or
+changed stamp clears the indexes in that variant directory before recording the
+new identity. Extra grammars and path mappings both change the effective package
+path, so changing either uses the same invalidation path as a Semble version
+update. Savings data and the separate upstream bundled-grammar extraction cache
+are left alone.
 
 The devenv relocation is unconditional: a project-local index is the point, and
 nothing about it is Codex-specific. Until 2026-08-10 it read otherwise, because
