@@ -118,6 +118,17 @@ Consequently the module must always pass the declared ledger URL and verify both
 `sync.remote` and `bd dolt remote list`; it cannot use omission as evidence of
 isolation. `[measured @Beads 1.2.2 / Dolt 2.2.3]`
 
+Existing state needs a separate boundary. Re-running
+`bd init --init-if-missing --remote <declared>` skips and leaves the inherited
+URL unchanged. `bd dolt remote add origin <declared>` replaces that existing
+remote in place, updates `sync.remote`, and preserves local rows. Before any
+write or publication, a declarative owner must compare the complete remote set
+and either fail closed or run that measured replace-and-verify primitive; an
+unverified mismatch must never remain usable. The qualified postcondition is
+exactly one remote named `origin`, with both `url` and `sql_url` equal to the
+`git+`-normalized declared URL and `status: ok`.
+`[measured @Beads 1.2.2 / Dolt 2.2.3]`
+
 ### Branch reflection — no, by design
 
 Dolt data lives on one custom ref: **`refs/dolt/data`**. Custom refs are not
@@ -194,16 +205,21 @@ The supported lifecycle is explicit and contains no publication daemon:
 A completely unborn bare Git remote is rejected loudly: GitBlobstore requires an
 ordinary branch/commit before the first Dolt publication. Once seeded, the first
 explicit push creates `refs/dolt/data` plus `refs/heads/__dolt_remote_info__`;
-normal source refs remain unchanged. Local writes do not move the remote ref.
+normal source refs remain unchanged. Local writes do not move the remote ref. An
+independent bootstrap performed after a local-only write still saw exactly the
+published row and could not resolve the unpublished issue ID, excluding a
+delayed publisher rather than relying on an immediate ref snapshot alone.
 `[measured @Beads 1.2.2 / Dolt 2.2.3]`
 
 A second independently initialized state directory bootstraps from that ref and
 adopts the ledger identity. In the measured divergence sequence, clones A and B
 both wrote, A pushed, B's stale push failed nonzero with a `non-fast-forward`
 diagnostic and pull hint, then B pull/push and A pull preserved all rows and
-history. This establishes loud stale-writer failure and explicit recovery; it
-does not authorize conflict-resolution strategies that discard either side.
-`[measured @Beads 1.2.2 / Dolt 2.2.3]`
+history. The contract records each divergent create's Dolt commit hash and
+asserts that both remain reachable in A's final `dolt_log`; row count alone is
+not treated as history evidence. This establishes loud stale-writer failure and
+explicit recovery; it does not authorize conflict-resolution strategies that
+discard either side. `[measured @Beads 1.2.2 / Dolt 2.2.3]`
 
 ## Encrypted-remote options
 

@@ -12,12 +12,16 @@
 > v1.1.0 binary during a hands-on evaluation (2026-07).
 > `[measured package @1.2.2]` — asserted by the Nix package's build or install
 > checks. `[measured contract @1.2.2/2.2.3]` — asserted by the disposable
-> black-box `beads-contracts` flake check. `[measured Dolt @2.2.3]` — observed
-> by running the pinned Dolt binary under a clean temporary home. `[upstream]` —
-> read from upstream docs or source at the date above. `[unverified]` — carried
-> from research that never executed the binary; quarantine until probed. Claims
-> can go stale in either direction; re-verify against the pinned version before
-> building on a load-bearing one.
+> black-box `beads-contracts` flake check.
+> `[measured server probe @1.2.2/2.2.3]` — asserted by
+> `checks/beads-server-contracts.sh`, a dynamic-port disposable probe run
+> outside the Nix build sandbox. `[measured session @1.2.2/2.2.3]` — retained in
+> #991's timestamped investigation record, but not asserted by either durable
+> probe. `[measured Dolt @2.2.3]` — observed by running the pinned Dolt binary
+> under a clean temporary home. `[upstream]` — read from upstream docs or source
+> at the date above. `[unverified]` — carried from research that never executed
+> the binary; quarantine until probed. Claims can go stale in either direction;
+> re-verify against the pinned version before building on a load-bearing one.
 
 ## What beads is
 
@@ -150,10 +154,14 @@ rebuild from JSONL `[measured @1.1.0]`.
 
 **Secrets.** Dolt-server credentials live in an INI file at
 `~/.config/beads/credentials` (directory `beads`, **not** `bd`), sections keyed
-`[host:port]`, with a stderr warning when the file is group/world-readable.
-Resolution order: `BEADS_DOLT_PASSWORD` → credentials file → empty. Keys
+`[host:port]`. The pinned binary warns on a mode-0644 fake credentials file and
+stops warning after mode 0600; the server probe uses no real secret. Resolution
+order is documented upstream as `BEADS_DOLT_PASSWORD` → credentials file →
+empty, but value precedence is not independently qualified because the
+passwordless disposable root account accepts arbitrary password values. Keys
 matching `api_key|secret|token|password` are **refused** on a git-tracked
-`config.yaml` unless `--force-git-tracked`. `[upstream]`
+`config.yaml` unless `--force-git-tracked`.
+`[measured server probe @1.2.2/2.2.3; upstream for precedence]`
 
 ## Init residue and the pure-data-engine posture
 
@@ -166,6 +174,17 @@ Adding `--stealth` leaves HEAD unchanged but still sets `beads.role`, writes
 Pre-seeding an external config with `no-git-ops: true` stops source commits but
 does not stop the `beads.role` mutation when cwd is a Git checkout.
 `[measured contract @1.2.2/2.2.3]`
+
+The ordinary skip-flags fixture's complete top-level residue is `.beads/` with
+`.gitignore`, `.local_version`, `README.md`, `config.yaml`,
+`interactions.jsonl`, and `metadata.json`, plus root `.gitignore`. Its init
+commit tracks all except `.local_version`; its exact subject is
+`bd init: initialize beads issue tracking`. The only local Git-config delta is
+`beads.role=maintainer`, and the pre-existing hook set is unchanged. Standalone
+`--stealth` creates the same Beads top-level files, keeps the worktree clean and
+HEAD fixed, leaves hooks/AGENTS.md absent, adds only `beads.role`, writes
+exactly `no-git-ops: true`, and appends the six exclude entries asserted by the
+contract check. `[measured contract @1.2.2/2.2.3]`
 
 The minimal contained initialization is module-owned: run from a neutral,
 non-Git cwd with an explicit out-of-tree `BEADS_DIR`; create its mode-0700
@@ -211,7 +230,7 @@ Storage layout under a project-local workspace: `.beads/config.yaml` (track),
   readiness check (`connection_ok: true` plus exact host, port, and database).
   `bd dolt status` reports `running: false` and `bd dolt stop` refuses because
   bd does not own the external process. The devenv process supervisor must own
-  start, logs, restart, and backoff. `[measured contract @1.2.2/2.2.3]`
+  start, logs, restart, and backoff. `[measured server probe @1.2.2/2.2.3]`
 - **Shared-server**: one Dolt server at `~/.beads/shared-server/`, default port
   **3308** (3307 is reserved for the plain server, 3306 for real MySQL), with a
   per-project database selected by **prefix**. Enable via
@@ -221,7 +240,7 @@ Storage layout under a project-local workspace: `.beads/config.yaml` (track),
   exact error shape is unqualified. The packaged `--shared-server` path did not
   create a usable explicitly external workspace in the disposable probe, so it
   is excluded from the MVP rather than repaired by wrapper glue.
-  `[measured contract @1.2.2/2.2.3]`
+  `[measured session @1.2.2/2.2.3]`
 
 **The currently qualified serialized checkpoint policy is load-bearing.** In
 SQL-server mode, `--dolt-auto-commit off` does not suppress the store's own Dolt
@@ -270,12 +289,14 @@ therefore be authoritative. Killing the server makes writes fail loudly; the
 server log contains the connection/query failure context. A no-auto-commit row
 survived a kill and restart in the disposable probe, but the minimum supported
 recovery remains backup/remote-ref based rather than relying on that working-set
-behavior. `[measured contract @1.2.2/2.2.3]`
+behavior. `[measured server probe @1.2.2/2.2.3]`
 
-**Process residue**: embedded commands leave no resident `bd` or Dolt process.
-External-server mode leaves only the supervisor-owned `dolt sql-server`; bd's
-status/stop commands do not adopt it. No write performed an automatic
-`bd dolt push`. `[measured contract @1.2.2/2.2.3]`
+**Process residue**: embedded commands left no resident `bd` or Dolt process in
+the measured session. External-server mode leaves only the supervisor-owned
+`dolt sql-server`; bd's status/stop commands do not adopt it, and the durable
+probe's cleanup trap terminates it. No write performed an automatic
+`bd dolt push`.
+`[measured session @1.2.2/2.2.3; measured server probe @1.2.2/2.2.3; measured contract @1.2.2/2.2.3 for publication]`
 
 ## Workspace resolution and isolation
 

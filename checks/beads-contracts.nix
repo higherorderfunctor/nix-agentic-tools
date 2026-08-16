@@ -42,6 +42,7 @@ in
       cat > "$state/config.yaml" <<'YAML'
     no-git-ops: true
     YAML
+      chmod 600 "$state/config.yaml"
     }
 
     run_bd() {
@@ -56,7 +57,7 @@ in
           XDG_DATA_HOME="$root/home/.local/share" \
           BEADS_DIR="$state" \
           PATH="$PATH" \
-          ${qualifiedBeads}/bin/bd "$@"
+          timeout --signal=TERM 120 ${qualifiedBeads}/bin/bd "$@"
       )
     }
 
@@ -72,7 +73,7 @@ in
           XDG_DATA_HOME="$root/home/.local/share" \
           BEADS_DIR="$state" \
           PATH="$PATH" \
-          ${beads}/bin/bd "$@"
+          timeout --signal=TERM 120 ${beads}/bin/bd "$@"
       )
     }
 
@@ -106,15 +107,17 @@ in
       > "$contained/init.out" 2>&1
     [ -z "$(find "$contained/cwd" -mindepth 1 -print -quit)" ] \
       || fail "contained init wrote into its neutral cwd"
+    expect_eq "contained state mode" "700" "$(stat -c %a "$contained/state")"
+    expect_eq "contained config mode" "600" "$(stat -c %a "$contained/state/config.yaml")"
     expect_eq \
       "contained bd where" \
       "$contained/state" \
       "$(run_bd "$contained" "$contained/cwd" "$contained/state" where --json | jq -r .path)"
     expect_eq \
-      "no-git-ops provenance" \
-      "config.yaml" \
+      "no-git-ops effective value and provenance" \
+      "true|config.yaml" \
       "$(run_bd "$contained" "$contained/cwd" "$contained/state" config show --json \
-        | jq -r '.[] | select(.key == "no-git-ops") | .source')"
+        | jq -r '.[] | select(.key == "no-git-ops") | [.value, .source] | join("|")')"
     expect_eq \
       "embedded auto-commit default" \
       "on" \
@@ -170,15 +173,55 @@ in
     git -C "$source_init/repo" config user.email probe@example.invalid
     git -C "$source_init/repo" config user.name Probe
     git -C "$source_init/repo" commit -q --allow-empty -m seed
+    git -C "$source_init/repo" config --local --list | sort > "$source_init/config.before"
+    find "$source_init/repo/.git/hooks" -maxdepth 1 -type f -printf '%f\n' \
+      | sort > "$source_init/hooks.before"
     source_before="$(git -C "$source_init/repo" rev-parse HEAD)"
     (
       cd "$source_init/repo"
-      env -i HOME="$source_init/home" PATH="$PATH" ${qualifiedBeads}/bin/bd \
+      env -i HOME="$source_init/home" PATH="$PATH" timeout --signal=TERM 120 \
+        ${qualifiedBeads}/bin/bd \
         "''${init_args[@]}" > "$source_init/init.out" 2>&1
     )
     source_after="$(git -C "$source_init/repo" rev-parse HEAD)"
     [ "$source_before" != "$source_after" ] \
       || fail "skip flags unexpectedly stopped bd init from committing"
+    expect_eq \
+      "ordinary init commit subject" \
+      "bd init: initialize beads issue tracking" \
+      "$(git -C "$source_init/repo" log -1 --format=%s)"
+    cat > "$source_init/tracked.expected" <<'FILES'
+    .beads/.gitignore
+    .beads/README.md
+    .beads/config.yaml
+    .beads/interactions.jsonl
+    .beads/metadata.json
+    .gitignore
+    FILES
+    git -C "$source_init/repo" ls-tree -r --name-only HEAD > "$source_init/tracked.actual"
+    diff -u "$source_init/tracked.expected" "$source_init/tracked.actual" \
+      || fail "ordinary init tracked residue changed"
+    cat > "$source_init/state-files.expected" <<'FILES'
+    .gitignore
+    .local_version
+    README.md
+    config.yaml
+    interactions.jsonl
+    metadata.json
+    FILES
+    find "$source_init/repo/.beads" -maxdepth 1 -type f -printf '%f\n' \
+      | sort > "$source_init/state-files.actual"
+    diff -u "$source_init/state-files.expected" "$source_init/state-files.actual" \
+      || fail "ordinary init state residue changed"
+    git -C "$source_init/repo" config --local --list | sort > "$source_init/config.after"
+    expect_eq \
+      "ordinary init local Git config delta" \
+      "beads.role=maintainer" \
+      "$(comm -13 "$source_init/config.before" "$source_init/config.after")"
+    find "$source_init/repo/.git/hooks" -maxdepth 1 -type f -printf '%f\n' \
+      | sort > "$source_init/hooks.after"
+    cmp "$source_init/hooks.before" "$source_init/hooks.after" \
+      || fail "--skip-hooks changed Git hooks"
     [ ! -e "$source_init/repo/AGENTS.md" ] || fail "--skip-agents wrote AGENTS.md"
     [ ! -e "$source_init/repo/.git/hooks/pre-commit" ] || fail "--skip-hooks wrote pre-commit"
 
@@ -189,16 +232,46 @@ in
     git -C "$stealth/repo" config user.email probe@example.invalid
     git -C "$stealth/repo" config user.name Probe
     git -C "$stealth/repo" commit -q --allow-empty -m seed
+    git -C "$stealth/repo" config --local --list | sort > "$stealth/config.before"
+    find "$stealth/repo/.git/hooks" -maxdepth 1 -type f -printf '%f\n' \
+      | sort > "$stealth/hooks.before"
     stealth_before="$(git -C "$stealth/repo" rev-parse HEAD)"
     (
       cd "$stealth/repo"
-      env -i HOME="$stealth/home" PATH="$PATH" ${qualifiedBeads}/bin/bd \
-        "''${init_args[@]}" --stealth > "$stealth/init.out" 2>&1
+      env -i HOME="$stealth/home" PATH="$PATH" timeout --signal=TERM 120 \
+        ${qualifiedBeads}/bin/bd \
+        init --init-if-missing --non-interactive --prefix contract --stealth \
+        > "$stealth/init.out" 2>&1
     )
     expect_eq "stealth leaves HEAD" "$stealth_before" "$(git -C "$stealth/repo" rev-parse HEAD)"
     expect_eq "stealth writes beads.role" "maintainer" "$(git -C "$stealth/repo" config beads.role)"
-    grep -Fq ".beads/" "$stealth/repo/.git/info/exclude" \
-      || fail "stealth did not mutate .git/info/exclude"
+    expect_eq "stealth leaves a clean worktree" "" "$(git -C "$stealth/repo" status --short)"
+    expect_eq "stealth config" "no-git-ops: true" "$(cat "$stealth/repo/.beads/config.yaml")"
+    git -C "$stealth/repo" config --local --list | sort > "$stealth/config.after"
+    expect_eq \
+      "stealth local Git config delta" \
+      "beads.role=maintainer" \
+      "$(comm -13 "$stealth/config.before" "$stealth/config.after")"
+    find "$stealth/repo/.git/hooks" -maxdepth 1 -type f -printf '%f\n' \
+      | sort > "$stealth/hooks.after"
+    cmp "$stealth/hooks.before" "$stealth/hooks.after" \
+      || fail "stealth changed Git hooks"
+    [ ! -e "$stealth/repo/AGENTS.md" ] || fail "stealth wrote AGENTS.md"
+    find "$stealth/repo/.beads" -maxdepth 1 -type f -printf '%f\n' \
+      | sort > "$stealth/state-files.actual"
+    diff -u "$source_init/state-files.expected" "$stealth/state-files.actual" \
+      || fail "stealth state residue changed"
+    # cspell:ignore proxieddb
+    for excluded in \
+      ".beads/" \
+      ".claude/settings.local.json" \
+      ".dolt/" \
+      "*.db" \
+      ".beads-credential-key" \
+      ".beads/proxieddb/"; do
+      grep -Fxq "$excluded" "$stealth/repo/.git/info/exclude" \
+        || fail "stealth exclude is missing $excluded"
+    done
 
     # Unset discovery follows the common Git directory into linked worktrees.
     # A missing or empty BEADS_DIR does not fail closed: it is ignored and the
@@ -221,17 +294,35 @@ in
     # Independent writers launched from a checkout and its linked worktree can
     # share one external embedded workspace. The fallback is safe but slow;
     # external server mode remains the intended concurrent topology.
+    writer_labels=()
+    writer_processes=()
     for writer in 1 2 3 4; do
       run_bd "$contained" "$source_init/repo" "$contained/state" \
         create "main writer $writer" --silent > "$contained/main-$writer.out" &
+      writer_processes+=("$!")
+      writer_labels+=("main-$writer")
       run_bd "$contained" "$source_init/linked" "$contained/state" \
         create "linked writer $writer" --silent > "$contained/linked-$writer.out" &
+      writer_processes+=("$!")
+      writer_labels+=("linked-$writer")
     done
-    wait
+    for index in "''${!writer_processes[@]}"; do
+      if ! wait "''${writer_processes[$index]}"; then
+        fail "linked-worktree writer ''${writer_labels[$index]} failed"
+      fi
+    done
     expect_eq \
       "linked-worktree embedded writers persist" \
       "10" \
       "$(run_bd "$contained" "$contained/cwd" "$contained/state" list --json | jq length)"
+    for writer in 1 2 3 4; do
+      run_bd "$contained" "$contained/cwd" "$contained/state" list --json \
+        | jq -e --arg title "main writer $writer" 'any(.[]; .title == $title)' > /dev/null \
+        || fail "main writer $writer row is missing"
+      run_bd "$contained" "$contained/cwd" "$contained/state" list --json \
+        | jq -e --arg title "linked writer $writer" 'any(.[]; .title == $title)' > /dev/null \
+        || fail "linked writer $writer row is missing"
+    done
 
     missing="$probe/missing"
     make_home "$missing"
@@ -267,6 +358,31 @@ in
       "git+file://$remote/source.git" \
       "$(run_bd "$remote" "$remote/source" "$remote/no-remote-state" \
         dolt remote list --json | jq -r '.[0].url')"
+    inherited_issue="$(run_bd "$remote" "$remote/source" "$remote/no-remote-state" \
+      create "preserved across remote repair" --silent)"
+    run_bd "$remote" "$remote/source" "$remote/no-remote-state" "''${init_args[@]}" \
+      --remote "file://$remote/ledger.git" > "$remote/second-init-with-remote.out" 2>&1
+    grep -Fq "Skipping init: workspace already initialized." "$remote/second-init-with-remote.out" \
+      || fail "existing-state init did not skip"
+    expect_eq \
+      "existing-state init leaves inherited remote unchanged" \
+      "git+file://$remote/source.git" \
+      "$(run_bd "$remote" "$remote/source" "$remote/no-remote-state" \
+        dolt remote list --json | jq -r '.[0].url')"
+    run_bd "$remote" "$remote/source" "$remote/no-remote-state" \
+      dolt remote add origin "file://$remote/ledger.git" > "$remote/repair-remote.out"
+    expect_eq \
+      "remote add repairs config pass-through" \
+      "file://$remote/ledger.git" \
+      "$(run_bd "$remote" "$remote/source" "$remote/no-remote-state" config show --json \
+        | jq -r '.[] | select(.key == "sync.remote") | .value')"
+    expect_eq \
+      "remote add repairs the complete remote set" \
+      "[{\"name\":\"origin\",\"url\":\"git+file://$remote/ledger.git\",\"sql_url\":\"git+file://$remote/ledger.git\",\"status\":\"ok\"}]" \
+      "$(run_bd "$remote" "$remote/source" "$remote/no-remote-state" \
+        dolt remote list --json | jq -c '[.[] | {name, url, sql_url, status}]')"
+    run_bd "$remote" "$remote/source" "$remote/no-remote-state" \
+      show "$inherited_issue" --json > /dev/null
 
     make_state "$remote/equal-url-state"
     run_bd "$remote" "$remote/source" "$remote/equal-url-state" "''${init_args[@]}" \
@@ -276,6 +392,11 @@ in
       "file://$remote/source.git" \
       "$(run_bd "$remote" "$remote/source" "$remote/equal-url-state" config show --json \
         | jq -r '.[] | select(.key == "sync.remote") | .value')"
+    expect_eq \
+      "equal URL complete remote set" \
+      "[{\"name\":\"origin\",\"url\":\"git+file://$remote/source.git\",\"sql_url\":\"git+file://$remote/source.git\",\"status\":\"ok\"}]" \
+      "$(run_bd "$remote" "$remote/source" "$remote/equal-url-state" \
+        dolt remote list --json | jq -c '[.[] | {name, url, sql_url, status}]')"
     source_remote_main="$(git -C "$remote/source.git" rev-parse refs/heads/main)"
     run_bd "$remote" "$remote/source" "$remote/equal-url-state" \
       create "equal URL seed" --silent > /dev/null
@@ -300,10 +421,10 @@ in
       "$(run_bd "$remote" "$remote/source" "$remote/state-a" config show --json \
         | jq -r '.[] | select(.key == "sync.remote") | .value')"
     expect_eq \
-      "Dolt URL normalization" \
-      "git+file://$remote/ledger.git" \
+      "declared ledger is the complete remote set" \
+      "[{\"name\":\"origin\",\"url\":\"git+file://$remote/ledger.git\",\"sql_url\":\"git+file://$remote/ledger.git\",\"status\":\"ok\"}]" \
       "$(run_bd "$remote" "$remote/source" "$remote/state-a" \
-        dolt remote list --json | jq -r '.[0].url')"
+        dolt remote list --json | jq -c '[.[] | {name, url, sql_url, status}]')"
     expect_eq \
       "source origin stays distinct" \
       "file://$remote/source.git" \
@@ -321,8 +442,16 @@ in
       | grep -q . || fail "Dolt did not create a dedicated local bare cache"
 
     published="$(git -C "$remote/ledger.git" rev-parse refs/dolt/data)"
-    run_bd "$remote" "$remote/source" "$remote/state-a" \
-      create "local only" --silent > /dev/null
+    local_id="$(run_bd "$remote" "$remote/source" "$remote/state-a" \
+      create "local only" --silent)"
+    # cspell:disable-next-line
+    state_a_db="$(find "$remote/state-a/embeddeddolt" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+    a_commit="$(
+      cd "$state_a_db"
+      env -i HOME="$remote/home" PATH="$PATH" ${dolt}/bin/dolt sql -r json \
+        -q "SELECT commit_hash FROM dolt_log WHERE message = 'bd: create $local_id' LIMIT 1" \
+        | jq -r '.rows[0].commit_hash'
+    )"
     expect_eq \
       "writes do not publish in background" \
       "$published" \
@@ -336,11 +465,33 @@ in
       > "$remote/init-b.out" 2>&1
     run_bd "$remote/clone-b" "$remote/clone-b/cwd" "$remote/clone-b/state" \
       show "$first_id" --json > /dev/null
+    if run_bd "$remote/clone-b" "$remote/clone-b/cwd" "$remote/clone-b/state" \
+      show "$local_id" --json > "$remote/clone-b-local-only.out" 2>&1; then
+      fail "unpublished issue appeared in an independently bootstrapped clone"
+    fi
+    expect_eq \
+      "independent bootstrap excludes unpublished rows" \
+      "1" \
+      "$(run_bd "$remote/clone-b" "$remote/clone-b/cwd" "$remote/clone-b/state" \
+        list --json | jq length)"
+    expect_eq \
+      "independent bootstrap observes no delayed publication" \
+      "$published" \
+      "$(git -C "$remote/ledger.git" rev-parse refs/dolt/data)"
 
     run_bd "$remote" "$remote/source" "$remote/state-a" dolt push \
       > "$remote/push-a.out"
-    run_bd "$remote/clone-b" "$remote/clone-b/cwd" "$remote/clone-b/state" \
-      create "divergent clone" --silent > /dev/null
+    divergent_id="$(run_bd "$remote/clone-b" "$remote/clone-b/cwd" "$remote/clone-b/state" \
+      create "divergent clone" --silent)"
+    # cspell:disable-next-line
+    state_b_db="$(find "$remote/clone-b/state/embeddeddolt" \
+      -mindepth 1 -maxdepth 1 -type d -print -quit)"
+    b_commit="$(
+      cd "$state_b_db"
+      env -i HOME="$remote/clone-b/home" PATH="$PATH" ${dolt}/bin/dolt sql -r json \
+        -q "SELECT commit_hash FROM dolt_log WHERE message = 'bd: create $divergent_id' LIMIT 1" \
+        | jq -r '.rows[0].commit_hash'
+    )"
     if run_bd "$remote/clone-b" "$remote/clone-b/cwd" "$remote/clone-b/state" \
       dolt push > "$remote/stale-push.out" 2>&1; then
       fail "stale clone push unexpectedly succeeded"
@@ -357,6 +508,15 @@ in
       "divergent history preserves all issues" \
       "3" \
       "$(run_bd "$remote" "$remote/source" "$remote/state-a" list --json | jq length)"
+    expect_eq \
+      "both divergent commits remain in final history" \
+      "2" \
+      "$(
+        cd "$state_a_db"
+        env -i HOME="$remote/home" PATH="$PATH" ${dolt}/bin/dolt sql -r json \
+          -q "SELECT COUNT(*) AS n FROM dolt_log WHERE commit_hash IN ('$a_commit', '$b_commit')" \
+          | jq -r '.rows[0].n'
+      )"
 
     # Dolt's supported state root contains both global config and local event
     # files. No-flush alone still collects; metrics.disabled=true prevents the
@@ -377,8 +537,13 @@ in
     # cspell:disable-next-line
     find "$telemetry/control-home/.dolt/eventsData" -name '*.devts' -print -quit \
       | grep -q . || fail "no-flush control no longer creates local Dolt events"
+    expect_eq \
+      "Dolt global config mode" \
+      "777" \
+      "$(stat -c %a "$telemetry/control-home/.dolt/config_global.json")"
 
     mkdir -p "$telemetry/contained-root" "$telemetry/contained-repo"
+    chmod 700 "$telemetry/contained-root"
     env -i HOME="$telemetry/control-home" DOLT_ROOT_PATH="$telemetry/contained-root" \
       DOLT_DISABLE_EVENT_FLUSH=1 PATH="$PATH" \
       ${dolt}/bin/dolt config --global --add metrics.disabled true
@@ -397,6 +562,14 @@ in
     )
     [ -f "$telemetry/contained-root/.dolt/config_global.json" ] \
       || fail "DOLT_ROOT_PATH did not contain global config"
+    expect_eq \
+      "contained Dolt outer-root mode" \
+      "700" \
+      "$(stat -c %a "$telemetry/contained-root")"
+    expect_eq \
+      "Dolt preserves its broad inner config mode" \
+      "777" \
+      "$(stat -c %a "$telemetry/contained-root/.dolt/config_global.json")"
     # cspell:disable-next-line
     if find "$telemetry/contained-root/.dolt/eventsData" -name '*.devts' -print -quit \
       | grep -q .; then
