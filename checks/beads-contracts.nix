@@ -125,6 +125,41 @@ in
     grep -Fq "Skipping init: workspace already initialized." "$contained/second-init.out" \
       || fail "--init-if-missing is not idempotent"
 
+    # With auto-commit disabled, writes remain readable in the Dolt working set
+    # without advancing history. One explicit checkpoint commits the batch.
+    # cspell:disable-next-line
+    contained_db="$(find "$contained/state/embeddeddolt" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+    history_before="$(
+      cd "$contained_db"
+      env -i HOME="$contained/home" PATH="$PATH" ${dolt}/bin/dolt \
+        sql -r json -q 'SELECT COUNT(*) AS n FROM dolt_log' | jq -r '.rows[0].n'
+    )"
+    run_bd "$contained" "$contained/cwd" "$contained/state" \
+      --dolt-auto-commit off create "batch one" --silent > /dev/null
+    run_bd "$contained" "$contained/cwd" "$contained/state" \
+      --dolt-auto-commit off create "batch two" --silent > /dev/null
+    history_uncommitted="$(
+      cd "$contained_db"
+      env -i HOME="$contained/home" PATH="$PATH" ${dolt}/bin/dolt \
+        sql -r json -q 'SELECT COUNT(*) AS n FROM dolt_log' | jq -r '.rows[0].n'
+    )"
+    expect_eq "disabled auto-commit leaves history unchanged" "$history_before" "$history_uncommitted"
+    expect_eq \
+      "disabled auto-commit keeps rows readable" \
+      "2" \
+      "$(run_bd "$contained" "$contained/cwd" "$contained/state" list --json | jq length)"
+    run_bd "$contained" "$contained/cwd" "$contained/state" \
+      dolt commit -m "explicit fixture checkpoint" > /dev/null
+    history_after_checkpoint="$(
+      cd "$contained_db"
+      env -i HOME="$contained/home" PATH="$PATH" ${dolt}/bin/dolt \
+        sql -r json -q 'SELECT COUNT(*) AS n FROM dolt_log' | jq -r '.rows[0].n'
+    )"
+    expect_eq \
+      "explicit checkpoint advances history once" \
+      "$((history_before + 1))" \
+      "$history_after_checkpoint"
+
     # The tempting source-checkout spellings are not contained. Skip flags
     # suppress agents/hooks but still create and commit Beads files. Stealth
     # avoids that commit but mutates local Git config and info/exclude.
@@ -183,6 +218,21 @@ in
       where --json | jq -r .path)"
     expect_eq "empty BEADS_DIR falls back" "$main_where" "$fallback_where"
 
+    # Independent writers launched from a checkout and its linked worktree can
+    # share one external embedded workspace. The fallback is safe but slow;
+    # external server mode remains the intended concurrent topology.
+    for writer in 1 2 3 4; do
+      run_bd "$contained" "$source_init/repo" "$contained/state" \
+        create "main writer $writer" --silent > "$contained/main-$writer.out" &
+      run_bd "$contained" "$source_init/linked" "$contained/state" \
+        create "linked writer $writer" --silent > "$contained/linked-$writer.out" &
+    done
+    wait
+    expect_eq \
+      "linked-worktree embedded writers persist" \
+      "10" \
+      "$(run_bd "$contained" "$contained/cwd" "$contained/state" list --json | jq length)"
+
     missing="$probe/missing"
     make_home "$missing"
     mkdir -p "$missing/cwd"
@@ -218,6 +268,26 @@ in
       "$(run_bd "$remote" "$remote/source" "$remote/no-remote-state" \
         dolt remote list --json | jq -r '.[0].url')"
 
+    make_state "$remote/equal-url-state"
+    run_bd "$remote" "$remote/source" "$remote/equal-url-state" "''${init_args[@]}" \
+      --remote "file://$remote/source.git" > "$remote/equal-url-init.out" 2>&1
+    expect_eq \
+      "equal source and ledger URL is explicit" \
+      "file://$remote/source.git" \
+      "$(run_bd "$remote" "$remote/source" "$remote/equal-url-state" config show --json \
+        | jq -r '.[] | select(.key == "sync.remote") | .value')"
+    source_remote_main="$(git -C "$remote/source.git" rev-parse refs/heads/main)"
+    run_bd "$remote" "$remote/source" "$remote/equal-url-state" \
+      create "equal URL seed" --silent > /dev/null
+    run_bd "$remote" "$remote/source" "$remote/equal-url-state" dolt push \
+      > "$remote/equal-url-push.out"
+    find "$remote/equal-url-state" -type d -path '*/git-remote-cache/*/repo.git' -print -quit \
+      | grep -q . || fail "equal URL did not create a dedicated local bare cache"
+    expect_eq \
+      "equal URL publication leaves source main unchanged" \
+      "$source_remote_main" \
+      "$(git -C "$remote/source.git" rev-parse refs/heads/main)"
+
     # The Git remote adapter refuses a completely unborn remote. Seed an ordinary
     # branch first; Dolt publication remains isolated on refs/dolt/data.
     git -C "$remote/source" push -q "file://$remote/ledger.git" main:main
@@ -245,6 +315,8 @@ in
       > "$remote/first-push.out"
     git -C "$remote/ledger.git" rev-parse --verify refs/dolt/data > /dev/null \
       || fail "explicit push did not create refs/dolt/data"
+    git -C "$remote/ledger.git" rev-parse --verify refs/heads/__dolt_remote_info__ > /dev/null \
+      || fail "explicit push did not create the Dolt remote metadata ref"
     find "$remote/state-a" -type d -path '*/git-remote-cache/*/repo.git' -print -quit \
       | grep -q . || fail "Dolt did not create a dedicated local bare cache"
 

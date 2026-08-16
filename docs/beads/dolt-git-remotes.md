@@ -108,8 +108,9 @@ The packaged behavior matches this architecture. `bd init --remote <URL>`
 persists the exact URL in `sync.remote`; `bd dolt remote list --json` exposes a
 `git+`-normalized transport URL. The local workspace contains a separate bare
 cache below `embeddeddolt/<database>/.dolt/git-remote-cache/`, including when
-the source and ledger URLs are equal. The source working tree and its ordinary
-branches are untouched. `[measured @Beads 1.2.2 / Dolt 2.2.3]`
+the source and ledger URLs are equal. The cache is materialized by the first
+sync operation, not necessarily by init alone. The source working tree and its
+ordinary branches are untouched. `[measured @Beads 1.2.2 / Dolt 2.2.3]`
 
 One upstream behavior must be actively rejected: if `--remote` is omitted from a
 source checkout with `origin`, bd inherits that source URL as its Dolt remote.
