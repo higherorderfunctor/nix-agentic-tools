@@ -247,7 +247,7 @@ Storage layout under a project-local workspace: `.beads/config.yaml` (track),
 - **Embedded** (default): linked worktrees can share an external `BEADS_DIR`.
   Sixteen concurrent writes all persisted in one disposable run, but serialized
   at roughly 18 seconds. This is a compatibility fallback, not the intended
-  multi-writer mode. `[measured contract @1.2.2/2.2.3]`
+  multi-writer mode. `[measured session @1.2.2/2.2.3]`
 - **Server**: an external `dolt sql-server`; default port 3307. An explicit
   `bd init --server --external --server-host <loopback> --server-port <port> --database <name>`
   works with an out-of-tree workspace. Before mutation, the durable probe

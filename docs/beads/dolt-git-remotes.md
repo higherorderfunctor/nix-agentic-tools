@@ -277,14 +277,18 @@ fix changes the discrimination result, not the module-pusher ownership decision.
 Publication is module-explicit. Beads-side auto-push and export stay inert, so
 agents and operators never publish imperatively. Remote divergence, dirty state,
 constraint violations, or direct application orphans reject publication before
-the raw pusher runs. Recovery is a cold `bd bootstrap` into an absent isolated
-database followed by exact verification; an existing database is verified in
-place rather than bootstrapped again. After a verified restore, the probe proves
-a new write, a forward no-force republish under the same lock, and a third exact
-cold restore. It never repairs an invalid head. Pull, merge, rebase, conflict
-resolution, and force-push are deliberately unqualified and forbidden. Runtime
-implementation belongs to #992 and process wiring to #993; neither may weaken
-this #991 boundary. `[measured recovery probe @Beads 1.2.2 / Dolt 2.2.3]`
+the raw pusher runs. The bounded recovery probe exercises divergence at the
+publication boundary and dirty state at the mutation boundary; the shared pusher
+preflight structurally enforces constraint and direct-orphan refusal without
+manufacturing a committed-invalid corruption fixture. Recovery is a cold
+`bd bootstrap` into an absent isolated database followed by exact verification;
+an existing database is verified in place rather than bootstrapped again. After
+a verified restore, the probe proves a new write, a forward no-force republish
+under the same lock, and a third exact cold restore. It never repairs an invalid
+head. Pull, merge, rebase, conflict resolution, and force-push are deliberately
+unqualified and forbidden. Runtime implementation belongs to #992 and process
+wiring to #993; neither may weaken this #991 boundary.
+`[measured recovery probe @Beads 1.2.2 / Dolt 2.2.3; implementation review]`
 
 ## Encrypted-remote options
 

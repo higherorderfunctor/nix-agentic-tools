@@ -492,6 +492,14 @@ snapshot_phase() {
   run_dolt_in "$active_data/$active_database" log --oneline >"$destination.history"
 }
 
+assert_expected_actors() {
+  local snapshot="$1" actor
+  for actor in claude codex human; do
+    jq -e --arg actor "$actor" 'any(.[]; .actor == $actor)' "$snapshot.actors" \
+      >/dev/null || fail "source snapshot omitted expected actor $actor"
+  done
+}
+
 compare_snapshots() {
   local expected="$1" actual="$2" label="$3" component
   for component in \
@@ -589,6 +597,7 @@ run_scenario() {
   done
 
   snapshot_phase "$scenario_root/source"
+  assert_expected_actors "$scenario_root/source"
   source_remote_ref="$(publish_locked absent source-push)" ||
     fail "source pusher rejected a clean initial publication"
   if publish_locked "not-$source_remote_ref" divergence-control >/dev/null 2>&1; then
@@ -704,4 +713,3 @@ printf 'serialized_recovery_runs=3\n'
 printf 'constraint_violations=0\n'
 printf 'dependency_orphans=0\n'
 printf 'event_orphans=0\n'
-printf 'pull_merge_rebase_force_commands=0\n'
