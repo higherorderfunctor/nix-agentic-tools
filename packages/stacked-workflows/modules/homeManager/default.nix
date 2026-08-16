@@ -46,7 +46,7 @@ in {
   imports = [
     (import ../../../../lib/ai/mkSkillPackageModule.nix {
       name = "stacked-workflows";
-      enableDescription = "stacked workflow skills, skill-routing rule, and git-config presets (user-global)";
+      enableDescription = "stacked workflow skills and skill-routing rule in each enabled runtime";
       skills = {pkgs, ...}: pkgs.stacked-workflows-content.passthru.skills;
       rules = {
         lib,
@@ -67,6 +67,11 @@ in {
         - `"minimal"` -- required + strongly recommended settings
         - `"full"` -- all recommended settings (branchless, revise, general git)
         - `"none"` -- no git configuration changes
+
+        The preset is applied only when
+        `ai.programs.stacked-workflows.enable` is true. Per-runtime program
+        overrides control only that runtime's skills and routing rule; they do
+        not enable or disable this machine-wide Git companion.
 
         All values are set at `mkDefault` priority so you can override
         individual keys at normal priority in `programs.git.settings`.

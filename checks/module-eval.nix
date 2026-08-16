@@ -572,15 +572,16 @@
     ai = lib.genAttrs harnessNames (_: {enable = true;});
   };
 
-  rootPoolProbeConfig =
-    runtimePoolProbeConfig
-    // {
-      ai.programs = {
-        living-workflow.enable = true;
-        semble.enable = true;
-        stacked-workflows.enable = true;
-      };
+  withEnabledProgramProbes = names:
+    lib.recursiveUpdate runtimePoolProbeConfig {
+      ai.programs = lib.genAttrs names (_: {enable = true;});
     };
+
+  rootPoolProbeConfig = withEnabledProgramProbes [
+    "living-workflow"
+    "semble"
+    "stacked-workflows"
+  ];
 
   # Definition provenance is post-priority filtering. The all-active probe is
   # still useful, but a whole-option mkForce from one package could otherwise
@@ -590,9 +591,9 @@
   # every first-party integration that writes a normalized pool.
   packagePoolProbeConfigs = [
     runtimePoolProbeConfig
-    (runtimePoolProbeConfig // {ai.programs.semble.enable = true;})
-    (runtimePoolProbeConfig // {ai.programs.living-workflow.enable = true;})
-    (runtimePoolProbeConfig // {ai.programs.stacked-workflows.enable = true;})
+    (withEnabledProgramProbes ["living-workflow"])
+    (withEnabledProgramProbes ["semble"])
+    (withEnabledProgramProbes ["stacked-workflows"])
     rootPoolProbeConfig
   ];
 
@@ -910,6 +911,16 @@ in {
 
   module-ai-no-root-pool-writes-devenv = mkTest "ai-no-root-pool-writes-devenv" (
     rootPoolClean "devenv" (evalDevenv rootPoolProbeConfig)
+  );
+
+  # The provenance probe must retain runtime enables while adding program
+  # enables. A shallow merge here silently makes runtime-gated callbacks
+  # unreachable and turns the guard into a false negative.
+  module-ai-root-pool-probe-retains-runtime-enables = mkTest "ai-root-pool-probe-retains-runtime-enables" (
+    lib.all (runtime: rootPoolProbeConfig.ai.${runtime}.enable) harnessNames
+    && lib.all
+    (program: rootPoolProbeConfig.ai.programs.${program}.enable)
+    ["living-workflow" "semble" "stacked-workflows"]
   );
 
   # Package ownership is checked independently per scope. These production
@@ -8545,6 +8556,34 @@ in {
       && !(result.config.ai.codex.rules ? stacked-workflows-router)
   );
 
+  # Runtime overrides control runtime pool writes only. A runtime-only enable
+  # cannot activate the machine-wide Git companion when the portable program
+  # remains disabled.
+  module-sws-git-preset-requires-portable-enable = mkTest "sws-git-preset-requires-portable-enable" (
+    let
+      result = evalHm {
+        ai.codex.programs.stacked-workflows.enable = true;
+        stacked-workflows.gitPreset = "minimal";
+      };
+    in
+      !(result.config.programs.git.settings ? branchless)
+      && result.config.ai.codex.skills ? stack-fix
+  );
+
+  # Conversely, a runtime negation does not retract Git configuration selected
+  # by the portable program enable.
+  module-sws-runtime-negation-keeps-git-preset = mkTest "sws-runtime-negation-keeps-git-preset" (
+    let
+      result = evalHm {
+        ai.programs.stacked-workflows.enable = true;
+        ai.codex.programs.stacked-workflows.enable = false;
+        stacked-workflows.gitPreset = "minimal";
+      };
+    in
+      result.config.programs.git.settings ? branchless
+      && !(result.config.ai.codex.skills ? stack-fix)
+  );
+
   # Git config applies when preset is "minimal".
   module-sws-git-config-minimal = mkTest "sws-git-config-minimal" (
     let
@@ -8603,11 +8642,11 @@ in {
 
   # ── living-workflow module (skill packaging + XDG state) ─────────
   #
-  # HM is the PRIMARY scope (user-global), INVERTING the sws choice (sws keeps
-  # skills in its devenv module; living-workflow's HM module installs
-  # user-global). The skill is Nix-GENERATED (bakes the XDG state base into
-  # SKILL.md) and fed to ai.skills as its store-path STRING — the value shape
-  # every consumer (upstream claude mkSkillEntry, our mkSkillEntries, the devenv
+  # HM is the PRIMARY scope (user-global), while the devenv module is its
+  # project-local parity mirror, matching stacked-workflows' two-backend shape.
+  # The skill is Nix-GENERATED (bakes the XDG state base into SKILL.md) and fed
+  # to each runtime skills pool as its store-path STRING — the value shape every
+  # consumer (upstream claude mkSkillEntry, our mkSkillEntries, the devenv
   # walker) materializes as a recursive DIRECTORY.
 
   # Default: the portable living-workflow program enable defaults to false.

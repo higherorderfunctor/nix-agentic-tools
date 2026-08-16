@@ -97,16 +97,25 @@ _: {
         "shell-option"
       ];
     };
-    # ai-skills: uniform delegation pattern (all branches go through
-    # programs.<cli>.skills, no direct home.file). Scoped to the
-    # per-package factory modules + the skill helper.
+    # ai-skills: uniform skill layout through native program options or shared
+    # recursive helpers. Scoped to the runtime implementations, package factory
+    # modules, and skill helper.
     ai-skills = {
       scopes = [
         "lib/ai/hm-helpers.nix"
+        "lib/ai/mkSkillPackageModule.nix"
+        "packages/chatgpt-codex/lib/mkCodex.nix"
         "packages/chatgpt-codex/modules/**"
+        "packages/claude-code/lib/mkClaude.nix"
         "packages/claude-code/modules/**"
+        "packages/copilot-cli/lib/mkCopilot.nix"
         "packages/copilot-cli/modules/**"
+        "packages/kimchi/lib/mkKimchi.nix"
+        "packages/kimchi/modules/**"
+        "packages/kiro-cli/lib/mkKiro.nix"
         "packages/kiro-cli/modules/**"
+        "packages/living-workflow/modules/**"
+        "packages/stacked-workflows/modules/**"
       ];
       sources = ["skills-fanout-pattern"];
     };

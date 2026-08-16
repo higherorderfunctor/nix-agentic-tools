@@ -45,9 +45,15 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
     [`dev/fragments/ai-module/shell-option.md`](dev/fragments/ai-module/shell-option.md)
 
 - **`ai-skills`**
-  - Match: `lib/ai/hm-helpers.nix`, `packages/chatgpt-codex/modules/**`,
-    `packages/claude-code/modules/**`, `packages/copilot-cli/modules/**`,
-    `packages/kiro-cli/modules/**`
+  - Match: `lib/ai/hm-helpers.nix`, `lib/ai/mkSkillPackageModule.nix`,
+    `packages/chatgpt-codex/lib/mkCodex.nix`,
+    `packages/chatgpt-codex/modules/**`,
+    `packages/claude-code/lib/mkClaude.nix`, `packages/claude-code/modules/**`,
+    `packages/copilot-cli/lib/mkCopilot.nix`, `packages/copilot-cli/modules/**`,
+    `packages/kimchi/lib/mkKimchi.nix`, `packages/kimchi/modules/**`,
+    `packages/kiro-cli/lib/mkKiro.nix`, `packages/kiro-cli/modules/**`,
+    `packages/living-workflow/modules/**`,
+    `packages/stacked-workflows/modules/**`
   - Read:
     [`dev/fragments/ai-skills/skills-fanout-pattern.md`](dev/fragments/ai-skills/skills-fanout-pattern.md)
 
