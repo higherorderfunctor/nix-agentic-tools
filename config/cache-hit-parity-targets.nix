@@ -42,6 +42,7 @@ _: {
     git-revise = {consumerPath = ["ai" "gitTools" "git-revise"];};
 
     # ── Dev tools — live at `consumerPkgs.ai.devTools.<name>` ──
+    beads = {consumerPath = ["ai" "devTools" "beads"];};
     gh = {consumerPath = ["ai" "devTools" "gh"];};
     glab = {consumerPath = ["ai" "devTools" "glab"];};
     oxlint = {consumerPath = ["ai" "devTools" "oxlint"];};

@@ -213,6 +213,7 @@ Agent-adjacent development utilities exposed as `pkgs.ai.devTools.*`.
 <!-- prettier-ignore -->
 | Package | Description |
 |---------|-------------|
+| `beads` | Graph-based issue tracker for AI coding agents |
 | `gh` | GitHub CLI |
 | `glab` | GitLab CLI |
 | `oxlint` | Fast JS/TS linter with type-aware (tsgo) linting and JS plugins |

@@ -82,7 +82,7 @@
       echo "ok — ${name} floor $recorded matches ${goModPath}" > "$out"
     '';
   # ── Positive controls for the shared parser ──────────────────────
-  # None of the seven packages currently carries a `toolchain` directive,
+  # None of the eight packages currently carries a `toolchain` directive,
   # so that half of `go_floor_of` is DORMANT — exercised by nothing, and
   # therefore free to rot until the first package that needs it. Same
   # reasoning `checks/go-toolchain-floor.nix` gives for covering all three

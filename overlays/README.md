@@ -25,10 +25,10 @@ computed at eval time via `overlays/lib.nix:mkVersion`
   `rustPlatform.importCargoLock { lockFile = "${src}/Cargo.lock"; }` instead
   (IFD) so one hash covers both — see `generic/fblog.nix` and
   `git-tools/git-branchless.nix`.
-- **Go packages with a sidecar `vendorHash`** (`gh`, `gluetun`, `oh-my-posh`,
-  `otel-tui`): a Go vendor set cannot be derived from a lockfile the way
-  `importCargoLock` derives one from `Cargo.lock`, so `vendorHash` has to be
-  recorded — and it goes in the sidecar, never inline, because
+- **Go packages with a sidecar `vendorHash`** (`beads`, `gh`, `gluetun`,
+  `oh-my-posh`, `otel-tui`): a Go vendor set cannot be derived from a lockfile
+  the way `importCargoLock` derives one from `Cargo.lock`, so `vendorHash` has
+  to be recorded — and it goes in the sidecar, never inline, because
   `ghArchiveUpdateScript` would otherwise leave it stale on every bump (the same
   transitive-hash gap as an inline `cargoHash`). `mkUpdateScript` rebuilds the
   sidecar from scratch, destroying any key it does not write itself, so each
@@ -140,6 +140,7 @@ computed at eval time via `overlays/lib.nix:mkVersion`
 | git-absorb            | gitTools   | GitHub main             | cargo (nixpkgs override)  | `git-absorb`          | cargo test    | --version           |
 | git-branchless        | gitTools   | flake input             | cargo (upstream overlay)  | —                     | upstream      | —                   |
 | git-revise            | gitTools   | GitHub main             | python (nixpkgs override) | `git-revise`          | pytest        | nixpkgs             |
+| beads                 | devTools   | GitHub stable release   | go (nixpkgs override)     | `beads`               | go test       | version + wrapper   |
 | gh                    | devTools   | GitHub archive          | go (nixpkgs override)     | `gh`                  | — (doCheck 0) | --version           |
 | glab                  | devTools   | GitLab tag (fetcher)    | go (nixpkgs override)     | `glab`                | —             | --version           |
 | oxlint                | devTools   | GitHub main             | pnpm (nixpkgs override)   | `oxlint`              | installCheck  | --type-aware        |
