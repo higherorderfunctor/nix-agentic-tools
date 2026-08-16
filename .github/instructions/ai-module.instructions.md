@@ -10,22 +10,22 @@ applyTo: "checks/module-eval.nix,lib/ai/agent.nix,lib/ai/ai-common.nix,lib/ai/ap
 > **Last verified:** 2026-08-16 (commit pending — `mkSkillPackageModule` now
 > consumes the `ai.programs.*` factory, moving stacked-workflows and
 > living-workflow enablement into portable plus per-runtime B4 option trees
-> while preserving their per-runtime pool writes; stacked-workflows'
-> machine-wide `gitPreset` remains an HM-only top-level companion). Prior:
-> 2026-08-15 (commit pending — the `ai.programs.*` factory generates portable
-> defaults and capability-gated runtime override trees from one program
-> specification; Semble is its first consumer and uses program-level enable
-> negation instead of runtime selectors; divergent runtime package
-> customizations use collision-free command aliases and isolated caches). Prior:
-> 2026-08-15 (commit pending — top-level proxied MCP declarations now own one
-> shared managed daemon and fan out only lowered client entries; runtime
-> declarations own directly, duplicate ownership keys fail explicitly, and
-> unused top-level owners are never materialized). Prior: 2026-08-15 (commit
-> pending — normalized keyed pools use atomic per-runtime replacement and null
-> tombstones, with same-scope package ownership checked from definition
-> provenance). Prior: 2026-08-15 (commit pending — context is a typed
-> `text`-XOR-`source` record that composes root-first with runtime context and
-> names its native artifact per runtime. Rules carry a normalized `matcher`;
+> while preserving their per-runtime pool writes; the skills inventory now
+> includes Kimchi; stacked-workflows' machine-wide `gitPreset` remains an
+> HM-only top-level companion). Prior: 2026-08-15 (commit pending — the
+> `ai.programs.*` factory generates portable defaults and capability-gated
+> runtime override trees from one program specification; Semble is its first
+> consumer and uses program-level enable negation instead of runtime selectors;
+> divergent runtime package customizations use collision-free command aliases
+> and isolated caches). Prior: 2026-08-15 (commit pending — top-level proxied
+> MCP declarations now own one shared managed daemon and fan out only lowered
+> client entries; runtime declarations own directly, duplicate ownership keys
+> fail explicitly, and unused top-level owners are never materialized). Prior:
+> 2026-08-15 (commit pending — normalized keyed pools use atomic per-runtime
+> replacement and null tombstones, with same-scope package ownership checked
+> from definition provenance). Prior: 2026-08-15 (commit pending — context is a
+> typed `text`-XOR-`source` record that composes root-first with runtime context
+> and names its native artifact per runtime. Rules carry a normalized `matcher`;
 > Claude, Kiro, Copilot, and Codex lower it to native metadata or explicit
 > prose, and devenv AGENTS.md consumers share one keyed deduplicating writer;
 > the list-shaped `instructions` surface is retired rather than aliased). Prior:
@@ -342,8 +342,8 @@ enabled ecosystem whose native model preserves the option's semantics):
   normalized default, and a native null excludes that runtime from emission.
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
-  and repository-local `.agents/skills` in devenv; Claude, Copilot, and Kiro use
-  their established native directories.
+  and repository-local `.agents/skills` in devenv; Claude, Copilot, Kimchi, and
+  Kiro use their established native directories.
 - `ai.agents` — either legacy Markdown/path entries for Claude and Copilot or a
   portable `{ description, instructions, tools?, codex? }` record. Semantic
   records render Claude/Copilot frontmatter plus body and Codex standalone TOML.

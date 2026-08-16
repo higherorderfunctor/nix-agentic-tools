@@ -574,7 +574,7 @@
     |---------|-------------|--------------|--------|
     | Stacked workflow skills | Copy skills/ | `ai.programs.stacked-workflows.enable` | `ai.programs.stacked-workflows.enable` |
     | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
-    | Unified MCP config | Manual native config | `ai.mcpServers.*` (all four CLIs) | `ai.mcpServers.*` (all four CLIs) |
+    | Unified MCP config | Manual native config | `ai.mcpServers.*` (all five CLIs) | `ai.mcpServers.*` (all five CLIs) |
     | Typed MCP settings | N/A | Shared schema + native extensions | Shared schema + native extensions |
     | MCP credentials | Manual env vars | `plain`, `file`, or `helper` | `plain`, `file`, or `helper` |
     | Semble search integrations | Manual install | `ai.programs.semble` (Claude + Codex + Kiro) | Same; project-native paths |
@@ -597,8 +597,8 @@
     <summary><strong>Unified ai.* Module</strong></summary>
 
     Single source of truth for shared config across Claude, Codex, Copilot,
-    and Kiro. Only semantics a runtime can preserve fan out; the feature matrix
-    above names deliberate exclusions. Scalar defaults use `mkDefault`
+    Kimchi, and Kiro. Only semantics a runtime can preserve fan out; the feature
+    matrix above names deliberate exclusions. Scalar defaults use `mkDefault`
     priority, so per-CLI overrides always win.
 
     ```nix
@@ -606,6 +606,7 @@
       claude.enable = true;
       codex.enable = true;
       copilot.enable = true;
+      kimchi.enable = true;
       kiro.enable = true;
 
       skills.my-skill = ./skills/my-skill;

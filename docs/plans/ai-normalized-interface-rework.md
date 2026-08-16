@@ -313,8 +313,10 @@ A structural check is REQUIRED as a backstop, and **no such check exists today**
 > cosmetic.
 >
 > A1's own preferred answer — "prefer a factory that … makes the fanout
-> structural" — now governs `ai.programs.*`. The broader guard remains until the
-> row 8 package moves are complete; that work is outside PR 7b.
+> structural" — now governs `ai.programs.*`. The broader guard remains after the
+> row 8 package moves because program callbacks and non-program contributors can
+> still write the wrong pool level; structural program options narrow the risk
+> but do not enforce pool ownership by themselves.
 
 Runtime provenance guards leak — an inline module reports `<unknown-file>`,
 indistinguishable from a consumer's inline config — so prefer a factory that

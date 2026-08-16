@@ -76,6 +76,8 @@
   sharedDescriptionsThatMustDiscussKimchi = [
     "ai.context"
     "ai.rules"
+    "ai.skills"
+    "ai.skillsDir"
   ];
   copilotDescriptionsThatMustDiscussHmNoop = [
     "ai.copilot.context"

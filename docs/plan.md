@@ -432,11 +432,9 @@ Moderate confidence, needs some investigation or design.
       and `DISABLE_INSTALLATION_CHECKS=1` defensively in the Bun
       wrapper. Design decision: always-on vs overridable via settings.
 
-- [ ] **AI.skills stacked-workflows special case** — currently
-      consumers need to enable stacked-workflows AND set `ai.skills`
-      separately. Augment to support a single-line
-      `stacked-workflows.enable = true` that pulls SWS skills into
-      every enabled ecosystem via `ai.skills`.
+- [x] **AI.skills stacked-workflows program integration** — shipped in #982:
+      `ai.programs.stacked-workflows.enable = true` contributes the packaged
+      skills to every supported runtime, with nullable per-runtime overrides.
 
 - [ ] **Codify gap: ai.skills factory layout** — create a new scoped
       architecture fragment documenting the post-factory skills fanout
