@@ -358,13 +358,10 @@ in {
         # to replace that tracked real file with the redundant module projection.
         instructions.cli.enable = false;
       };
-      # Native legacy sandbox model, matching every other repository the maintainer
-      # runs. This replaced a named permission profile — see the lockout
-      # comment in packages/chatgpt-codex/lib/mkCodex.nix for why the beta
-      # model is now unreachable, and note the concrete regression it caused
-      # HERE: the profile never restated `~/.cache/nix`, so a sandboxed
-      # `nix build` in this repository could not write its own cache while the
-      # identical grant was live in every other checkout.
+      # Keep the project on the legacy sandbox model while the loaded Home
+      # Manager user layer still uses it. Named permissions are enabled by the
+      # module, but Codex does not compose them with legacy settings across
+      # config layers; the user layer must migrate first.
       #
       # `${config.devenv.root}/.git`, the effective Nix cache root, and the
       # project-local Semble cache are contributed automatically once their
@@ -706,9 +703,8 @@ in {
     echo "Validating devenv configuration..."
     # Per-runtime ai.shell delivery, against the real artifacts on PATH.
     ${lib.getExe verifyAiShell}
-    # Codex must inject no ARGV: a reintroduced `--profile` would silently take
-    # the locked-out beta permission model back with it. That is what this
-    # guard has always been protecting.
+    # Codex must inject no ARGV: a separate `--profile` config layer would make
+    # cross-layer permission behavior harder to inspect and validate.
     #
     # It used to assert "is the unwrapped package", which was a proxy for the
     # same thing and stopped being true on 2026-08-10: Codex is now wrapped to
@@ -727,7 +723,7 @@ in {
     nat_codex_config=.codex/config.toml
     test -f "$nat_codex_config" || { echo "FAIL: Codex project config was not written"; exit 1; }
     ${pkgs.gnugrep}/bin/grep -Fq 'sandbox_mode = "workspace-write"' "$nat_codex_config" || { echo "FAIL: Codex project config does not select the legacy workspace-write sandbox"; exit 1; }
-    ! ${pkgs.gnugrep}/bin/grep -Eq '^(default_permissions|\[permissions)' "$nat_codex_config" || { echo "FAIL: Codex project config carries the locked-out beta permission model"; exit 1; }
+    ! ${pkgs.gnugrep}/bin/grep -Eq '^(default_permissions|\[permissions)' "$nat_codex_config" || { echo "FAIL: Codex project config selects named permissions before the user-layer migration"; exit 1; }
     test ! -e "''${CODEX_HOME:-$HOME/.codex}/nix-agentic-tools.config.toml" || { echo "FAIL: a stale nix-agentic-tools Codex profile is still materialized in CODEX_HOME"; exit 1; }
     # The module-contributed roots. Semble is interactive-only, so its scoped
     # cache is absent from the deliberately lean CI evaluation. `cache/nix` is

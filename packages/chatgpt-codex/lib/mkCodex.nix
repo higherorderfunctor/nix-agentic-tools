@@ -293,7 +293,7 @@
       default_permissions = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
-        description = "LOCKED OUT. Named or built-in beta permission profile Codex applies by default. Setting this fails evaluation: the beta model silently overrides legacy sandbox settings in lower config layers. Use sandbox_mode/sandbox_workspace_write.";
+        description = "Named or built-in permission profile Codex applies by default. Do not combine this permission model with sandbox_mode/sandbox_workspace_write in any loaded config layer.";
       };
       features = lib.mkOption {
         type = lib.types.nullOr (lib.types.submodule {
@@ -337,7 +337,7 @@
       permissions = lib.mkOption {
         type = lib.types.attrsOf permissionProfileType;
         default = {};
-        description = "LOCKED OUT. Beta named least-privilege filesystem and network permission profiles. Setting this fails evaluation: the beta model silently overrides legacy sandbox settings in lower config layers. Use sandbox_mode/sandbox_workspace_write.";
+        description = "Named least-privilege filesystem and network permission profiles. Profiles with the same name merge across Codex config layers.";
       };
       projects = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule {
@@ -389,20 +389,54 @@
       };
     };
   };
-  applyIntegrationRoots = settings: integrationRoots: let
+  applyWorkspaceWriteRoots = settings: writableRoots: let
     workspaceSettings = settings.sandbox_workspace_write;
     existingRoots =
       if workspaceSettings == null
       then []
       else workspaceSettings.writable_roots;
   in
-    if settings.sandbox_mode == "workspace-write" && integrationRoots != []
+    if settings.sandbox_mode == "workspace-write" && writableRoots != []
     then
       settings
       // {
         sandbox_workspace_write =
           (lib.optionalAttrs (workspaceSettings != null) workspaceSettings)
-          // {writable_roots = lib.unique (existingRoots ++ integrationRoots);};
+          // {writable_roots = lib.unique (existingRoots ++ writableRoots);};
+      }
+    else settings;
+  applyIntegrationRoots = settings: integrationRoots: let
+    selectedPermissionName = settings.default_permissions;
+    hasSelectedCustomProfile =
+      selectedPermissionName
+      != null
+      && !lib.hasPrefix ":" selectedPermissionName;
+    selectedProfile = settings.permissions.${selectedPermissionName} or {};
+    selectedFilesystem =
+      if (selectedProfile.filesystem or null) == null
+      then {}
+      else selectedProfile.filesystem;
+    integrationFilesystem = lib.genAttrs (lib.unique integrationRoots) (_: "write");
+  in
+    if settings.sandbox_mode == "workspace-write" && integrationRoots != []
+    then applyWorkspaceWriteRoots settings integrationRoots
+    else if hasSelectedCustomProfile && integrationRoots != []
+    then
+      settings
+      // {
+        permissions =
+          settings.permissions
+          // {
+            ${selectedPermissionName} =
+              selectedProfile
+              // {
+                # A profile can be defined in a lower Codex config layer and
+                # receive this layer's integration roots by name. An explicit
+                # rule in this settings tree at the same path still wins;
+                # normal Codex precedence applies between emitted files.
+                filesystem = integrationFilesystem // selectedFilesystem;
+              };
+          };
       }
     else settings;
   hasPermissionProfiles = settings:
@@ -542,59 +576,10 @@
     message = "${optionPath} must use either sandbox_mode/sandbox_workspace_write or default_permissions/permissions, never both";
   };
 
-  # ── Codex beta permission model: DELIBERATELY LOCKED OUT ──────────────
-  #
-  # `default_permissions`, `permissions`, and the named `profiles` layers that
-  # carry them are typed below and emit correctly. They are nonetheless
-  # unreachable: every entry point asserts. This is a considered product
-  # decision, not an unfinished migration — do not "restore" them to make the
-  # types look used.
-  #
-  # WHY. Codex resolves the beta model and the legacy
-  # `sandbox_mode`/`sandbox_workspace_write` model as MUTUALLY EXCLUSIVE, and
-  # when both are present the beta model wins OUTRIGHT — it does not merge, and
-  # it does not warn. `mkSandboxModelAssertion` above catches that mix within a
-  # single settings tree, which is the only scope a Nix evaluation can see.
-  # It structurally CANNOT catch the mix across config LAYERS, because the
-  # layers are separate files owned by separate evaluations:
-  #
-  #   ~/.codex/config.toml            (Home Manager)  -> legacy, N writable roots
-  #   ~/.codex/<name>.config.toml     (a devenv repo) -> beta permissions
-  #
-  # Stack those with `codex --profile <name>` and every writable root the user
-  # config granted silently evaporates. Measured 2026-08-05 with
-  # `codex sandbox` (0.146.1, no model in the loop) against this repository's
-  # own former profile: `~/.cache/nix` came back DENY here while the identical
-  # grant was live in every other checkout on the machine, because the profile
-  # never restated it. A sandboxed `nix build` cannot write its cache, and
-  # nothing anywhere reports why.
-  #
-  # The failure is silent in both directions and survives review: the profile
-  # reads as correct in isolation, the user config reads as correct in
-  # isolation, and the interaction is only visible by probing the resolved
-  # policy. That is the specific footgun this lockout closes.
-  #
-  # TO RE-ENABLE, the layering has to be made safe first — at minimum, the
-  # composed policy must be inspectable from Nix, or the beta model must
-  # inherit rather than replace the layers beneath it. Deleting these
-  # assertions without solving that reinstates the footgun exactly.
-  mkBetaPermissionLockout = optionPath: settings: [
-    {
-      assertion = settings.default_permissions == null;
-      message = "${optionPath}.default_permissions is locked out: Codex's beta permission model silently overrides legacy sandbox settings in lower config layers. See the lockout comment in packages/chatgpt-codex/lib/mkCodex.nix.";
-    }
-    {
-      assertion = settings.permissions == {};
-      message = "${optionPath}.permissions is locked out: Codex's beta permission model silently overrides legacy sandbox settings in lower config layers. See the lockout comment in packages/chatgpt-codex/lib/mkCodex.nix.";
-    }
-  ];
-
-  # Locked out with the beta permission model above: a named profile is the
-  # LAYER whose silent override of lower-layer sandbox settings is the whole
-  # hazard, so it is closed even when the profile itself carries no
-  # `permissions` table. The per-profile shape assertions below are retained
-  # unreached, so re-enabling restores a validated surface rather than a bare
-  # option.
+  # CLI config profiles are whole extra files selected with `codex --profile`.
+  # Keep this separate surface locked until its cross-layer lifecycle is
+  # needed and tested. It is not the `[permissions.<name>]` model above: named
+  # permission tables merge normally across the user and project base files.
   mkProfileAssertions = profiles:
     [
       {
@@ -889,13 +874,10 @@ in
         type = lib.types.attrsOf codexSettingsType;
         default = {};
         description = ''
-          LOCKED OUT. Setting this fails evaluation. A named profile is a
-          config LAYER, and Codex resolves a layer carrying the beta
-          permission model by overriding — not merging — the legacy
-          `sandbox_mode`/`sandbox_workspace_write` settings beneath it,
-          silently dropping every writable root the lower layer granted. Nix
-          cannot see across layers to catch that. See the lockout comment in
-          `packages/chatgpt-codex/lib/mkCodex.nix`.
+          LOCKED OUT. Setting this fails evaluation. These are whole extra
+          config files selected by `codex --profile`; they are unrelated to
+          the mergeable `[permissions.<name>]` tables in nativeSettings. Keep
+          using nativeSettings unless a separate CLI config layer is required.
 
           Named user configuration layers written as
           `''${configDir}/<name>.config.toml` and selected explicitly with
@@ -978,7 +960,6 @@ in
         mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
         ++ mkProfileAssertions cfg.profiles
-        ++ mkBetaPermissionLockout "ai.codex.nativeSettings" cfg.nativeSettings
         ++ [
           (mkSizeAssertion {
             inherit cfg;
@@ -1055,7 +1036,7 @@ in
     }: let
       hasNativeMcpServers = cfg.nativeSettings ? mcp_servers;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
-      settings = helpers.filterNulls ((applyIntegrationRoots cfg.nativeSettings cfg.internal._integration_writable_roots)
+      settings = helpers.filterNulls ((applyIntegrationRoots (applyWorkspaceWriteRoots cfg.nativeSettings ["${config.devenv.root}/.git"]) cfg.internal._integration_writable_roots)
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
         });
@@ -1075,8 +1056,7 @@ in
     in {
       ai = {
         codex.internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter (
-          ["${config.devenv.root}/.git"]
-          ++ lib.optional (nixCacheRoot != null) nixCacheRoot
+          lib.optional (nixCacheRoot != null) nixCacheRoot
         ));
         codex.nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
           model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
@@ -1095,7 +1075,6 @@ in
         mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
         ++ mkProfileAssertions cfg.profiles
-        ++ mkBetaPermissionLockout "ai.codex.nativeSettings" cfg.nativeSettings
         ++ [
           {
             assertion = mergedServers == {} || !hasNativeMcpServers;

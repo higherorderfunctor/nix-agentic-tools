@@ -130,13 +130,11 @@
       # publishes a closed set; the flag itself remains invocation-only.
       #
       # `--profile` and `--permission-profile` keep this disposition even
-      # though their declarative counterparts (`ai.codex.profiles`,
-      # `ai.codex.nativeSettings.default_permissions`,
-      # `ai.codex.nativeSettings.permissions`) are currently
-      # LOCKED OUT by assertion. The classification records that a typed
-      # representation EXISTS, not that it is reachable; see the lockout
-      # comment in ./mkCodex.nix. Do not reclassify them as unrepresented —
-      # that would assert this repository has no model for the flags at all.
+      # though the whole-file declarative counterpart for `--profile`
+      # (`ai.codex.profiles`) is currently locked out by assertion. Named
+      # permission tables selected by `default_permissions` are supported
+      # independently. The classification records that a typed representation
+      # exists; do not reclassify either flag as unrepresented.
       #
       # `--approve-for-me` is the one entry whose durable counterpart is a PAIR
       # of typed settings rather than a single key. Its help — route approval

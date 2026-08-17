@@ -7,32 +7,36 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # CI-lean closure taxonomy
 
-> **Last verified:** 2026-08-15 (commit pending — the interactive-only Semble
-> gate moved unchanged to `ai.codex.programs.semble.enable`; grammar and path
-> customization now follow the same generated runtime program tree). Prior:
-> 2026-08-14 (commit pending — the local shell now enables the flake-pinned
-> Semble module with AWK and jq parsers plus repository path mappings, while the
-> `!isCI` gate keeps the CI devenv-test closure unchanged). Prior: 2026-08-12
-> (commit pending — the job now carries always-on telemetry for issue #821's
-> intermittent local-source store-path failure. The closure taxonomy below is
-> untouched: nothing was added to the shell, and the cache key, prefix fallback
-> and `gc-max-store-size-linux` bound are all unchanged. The new section at the
-> end records only the ONE fact about that telemetry that is invisible from the
-> code — the cache step now carries `id: nix-cache` because a later step reads
-> its restore outputs. Every other rationale is commented at its own site in
-> `devenv-test.yml` and is deliberately NOT restated here; a fragment that
-> duplicates a comment is a second copy to keep true). Prior: 2026-08-05 (commit
-> pending — the repo-aware Codex wrapper and the `nix-agentic-tools` permission
-> profile are both DELETED; this shell converges on the legacy `workspace-write`
-> sandbox that every other repository the maintainer runs already uses, and the
-> beta permission model is locked out at the factory. Two measured facts drove
-> it, both from `codex sandbox` on 0.146.1 with no model in the loop: the
-> profile denied `~/.cache/nix` while the identical grant was live everywhere
-> else, and it ALLOWED the primary checkout's working tree, which is the
-> opposite of what its own comment claimed). Prior: 2026-08-05 (commit pending —
-> records that `devenv-test` remains always-reporting but is no longer required
-> by branch protection; the path-filter constraint is therefore optional rather
-> than load-bearing). Prior: 2026-08-03 (commit pending — makes `devenv-test` an
+> **Last verified:** 2026-08-17 (commit pending — named Codex permission tables
+> are enabled at the module boundary, but this repository deliberately remains
+> on legacy workspace-write until its Home Manager user layer migrates first;
+> Codex does not compose the two models across config layers). Prior: 2026-08-15
+> (commit pending — the interactive-only Semble gate moved unchanged to
+> `ai.codex.programs.semble.enable`; grammar and path customization now follow
+> the same generated runtime program tree). Prior: 2026-08-14 (commit pending —
+> the local shell now enables the flake-pinned Semble module with AWK and jq
+> parsers plus repository path mappings, while the `!isCI` gate keeps the CI
+> devenv-test closure unchanged). Prior: 2026-08-12 (commit pending — the job
+> now carries always-on telemetry for issue #821's intermittent local-source
+> store-path failure. The closure taxonomy below is untouched: nothing was added
+> to the shell, and the cache key, prefix fallback and `gc-max-store-size-linux`
+> bound are all unchanged. The new section at the end records only the ONE fact
+> about that telemetry that is invisible from the code — the cache step now
+> carries `id: nix-cache` because a later step reads its restore outputs. Every
+> other rationale is commented at its own site in `devenv-test.yml` and is
+> deliberately NOT restated here; a fragment that duplicates a comment is a
+> second copy to keep true). Prior: 2026-08-05 (commit pending — the repo-aware
+> Codex wrapper and the `nix-agentic-tools` permission profile are both DELETED;
+> this shell converges on the legacy `workspace-write` sandbox that every other
+> repository the maintainer runs already uses, and the beta permission model is
+> locked out at the factory. Two measured facts drove it, both from
+> `codex sandbox` on 0.146.1 with no model in the loop: the profile denied
+> `~/.cache/nix` while the identical grant was live everywhere else, and it
+> ALLOWED the primary checkout's working tree, which is the opposite of what its
+> own comment claimed). Prior: 2026-08-05 (commit pending — records that
+> `devenv-test` remains always-reporting but is no longer required by branch
+> protection; the path-filter constraint is therefore optional rather than
+> load-bearing). Prior: 2026-08-03 (commit pending — makes `devenv-test` an
 > always-reporting required context while preserving the cold closure only for
 > relevant paths). Prior: 2026-08-03 (commit pending — updates the
 > consumer-export taxonomy after dev tools move beneath `pkgs.ai.devTools`;
@@ -90,25 +94,25 @@ enterTest assertions) invoke it?** If not, it goes in the `!isCI` list. When in
 doubt, `CI=1 devenv test` locally is the oracle — green means the gate never
 needed it.
 
-### Codex ships unwrapped, on the legacy sandbox
+### Codex ships unwrapped, with its permission migration staged
 
 This repository used to supply a `codexForRepository` wrapper through
 `ai.codex.package`, injecting `--cd` and `--profile nix-agentic-tools` for
-runtime command families only. **Both the wrapper and the profile are gone.**
-Codex is now the plain package with a legacy `sandbox_mode = "workspace-write"`
-project config, matching nixos-config and the maintainer's work repository. Do
-not reintroduce the wrapper: `--profile` is what dragged the beta permission
-model back in, and the model is locked out at the factory (see the lockout
-comment in `packages/chatgpt-codex/lib/mkCodex.nix`).
+runtime command families only. The wrapper remains gone: Codex is the plain
+package, and the selected permission policy lives in the normal user/project
+config stack rather than a separate `--profile` config layer.
 
-Two measured facts retired the profile, both from `codex sandbox` on 0.146.1,
-which resolves the policy with no model in the loop:
+Named permission tables are now supported by the module and same-named tables
+merge across user and project layers. They do not compose with legacy
+`sandbox_mode` settings anywhere in the loaded stack, however. The current Home
+Manager user layer is still legacy, so this project must remain legacy too. The
+rollout order is module support, user-layer migration, then project-layer
+migration; changing the project first recreates the silent cross-layer conflict
+the old lockout prevented. Two measurements constrain the eventual profile:
 
-- **It denied `~/.cache/nix`.** Beta permission profiles do not compose with the
-  legacy `sandbox_workspace_write` table, so the module's automatic Nix-cache
-  root never reached the profile and the profile never restated it. A sandboxed
-  `nix build` here could not write its own cache, while the identical grant was
-  live in every other checkout on the machine. Nothing reported it.
+- **The old mixed model denied `~/.cache/nix`.** Automatic integration roots now
+  lower into a selected custom permission profile as direct filesystem writes,
+  so the later migration need not restate them by hand.
 - **It ALLOWED the primary checkout's working tree.** The profile's own comment
   claimed it granted the shared Git directory "without granting write access to
   the main checkout's working files". `extends = ":workspace"` plus
@@ -117,23 +121,23 @@ which resolves the policy with no model in the loop:
 
 `devenv.nix` declares only the worktree collection root the factory cannot infer
 (work spans sibling worktrees of one clone, so a session started in any of them
-must write the others). The repository now enables Semble only outside CI, pins
-it to this flake, adds AWK and jq Tree-sitter grammars, and maps its
-non-standard Bash, Gitignore, JSON, and Markdown paths. Its devenv facet
-contributes `${config.devenv.state}/semble-cache` automatically and invalidates
-indexes in that scoped root when the effective package changes. Its instruction
-facet stays off because the tracked, fragment-generated `AGENTS.md` already
-carries the same search workflow and devenv cannot replace that real file with a
-`files.*` symlink. The user-global cache is no longer in play for this shell.
-Keeping `ai.codex.programs.semble.enable = !isCI` is load-bearing: the CI gate
-does not invoke Semble and must not realize its model, MCP, or grammar closure.
+must write the others). The repository enables Semble only outside CI, pins it
+to this flake, adds AWK and jq Tree-sitter grammars, and maps its non-standard
+Bash, Gitignore, JSON, and Markdown paths. Its devenv facet contributes
+`${config.devenv.state}/semble-cache` automatically and invalidates indexes in
+that scoped root when the effective package changes. Its instruction facet stays
+off because the tracked, fragment-generated `AGENTS.md` already carries the same
+search workflow and devenv cannot replace that real file with a `files.*`
+symlink. The user-global cache is no longer in play for this shell. Keeping
+`ai.codex.programs.semble.enable = !isCI` is load-bearing: the CI gate does not
+invoke Semble and must not realize its model, MCP, or grammar closure.
 
 `${config.devenv.root}/.git`, the effective Nix cache root, and the scoped
 Semble cache are contributed by their owning devenv modules and must not be
-hand-written. enterTest asserts the unwrapped binary is on PATH, that the
-project config selects `workspace-write` and carries no beta keys, that no stale
-profile remains in `CODEX_HOME`, and that all four local roots are present (the
-interactive-only Semble root is deliberately absent in CI).
+hand-written. enterTest asserts the wrapper injects no `--profile`, that the
+project config remains on workspace-write with no named permission keys, that no
+stale whole-file profile remains in `CODEX_HOME`, and that all four local roots
+are present (the interactive-only Semble root is deliberately absent in CI).
 
 Two proofs to preserve when touching the gates: with `CI` unset the shell must
 contain grammar/path-customized Semble and its scoped cache root, while

@@ -1364,14 +1364,10 @@ in {
       && !(devenv.config.files ? ".codex/hooks.json")
   );
 
-  # ── Beta permission model lockout ──────────────────────────────────────
-  # A profile-materializer lifecycle test and a materializer collision test
-  # lived here and drove `ai.codex.profiles` end to end. That option and the
-  # `default_permissions`/`permissions` settings beside it are now locked out
-  # (see the lockout comment in packages/chatgpt-codex/lib/mkCodex.nix), so
-  # their runtime behavior is unreachable and these assert the lockout itself.
-  # The profile name-shape and intra-layer sandbox-model tests below are kept:
-  # they cover the surface that has to still be valid if this is ever undone.
+  # ── Permission models and CLI config-profile lockout ───────────────────
+  # `[permissions.<name>]` tables are ordinary mergeable Codex config and are
+  # supported. `ai.codex.profiles` is the distinct whole-file `--profile`
+  # surface; its materialization remains locked until that lifecycle is needed.
   module-codex-profiles-locked-out = mkTest "codex-profiles-locked-out" (
     let
       config.ai.codex = {
@@ -1387,34 +1383,29 @@ in {
       rejects (evalHm config) && rejects (evalDevenv config)
   );
 
-  module-codex-default-permissions-locked-out = mkTest "codex-default-permissions-locked-out" (
+  module-codex-default-permissions-enabled = mkTest "codex-default-permissions-enabled" (
     let
       config.ai.codex = {
         enable = true;
         nativeSettings.default_permissions = ":workspace";
       };
-      rejects = evaluated:
-        builtins.any (assertion:
-          !assertion.assertion
-          && lib.hasInfix "ai.codex.nativeSettings.default_permissions is locked out" assertion.message)
-        evaluated.config.assertions;
+      passes = evaluated: builtins.all (assertion: assertion.assertion) evaluated.config.assertions;
     in
-      rejects (evalHm config) && rejects (evalDevenv config)
+      passes (evalHm config) && passes (evalDevenv config)
   );
 
-  module-codex-permissions-locked-out = mkTest "codex-permissions-locked-out" (
+  module-codex-permissions-enabled = mkTest "codex-permissions-enabled" (
     let
       config.ai.codex = {
         enable = true;
-        nativeSettings.permissions.project-edit.extends = ":workspace";
+        nativeSettings = {
+          default_permissions = "project-edit";
+          permissions.project-edit.extends = ":workspace";
+        };
       };
-      rejects = evaluated:
-        builtins.any (assertion:
-          !assertion.assertion
-          && lib.hasInfix "ai.codex.nativeSettings.permissions is locked out" assertion.message)
-        evaluated.config.assertions;
+      passes = evaluated: builtins.all (assertion: assertion.assertion) evaluated.config.assertions;
     in
-      rejects (evalHm config) && rejects (evalDevenv config)
+      passes (evalHm config) && passes (evalDevenv config)
   );
 
   module-codex-profile-name-rejects-unsafe-stems = mkTest "codex-profile-name-rejects-unsafe-stems" (
@@ -1481,10 +1472,9 @@ in {
       hm = evalHm config;
       devenv = evalDevenv config;
       profile = hm.config.home.file.".codex/deep-review.config.toml".source.value;
-      # Emission parity is still proven while the option is locked out, so
-      # re-enabling restores a TESTED path rather than an untested one. The
-      # lockout must also be the ONLY thing blocking it — if a second assertion
-      # starts failing here, the retained code has rotted behind the lock.
+      # Emission parity is still proven while this separate option is locked
+      # out. The lockout must also be the ONLY thing blocking it — if a second
+      # assertion starts failing here, the retained code has rotted behind it.
       failing = builtins.filter (assertion: !assertion.assertion) devenv.config.assertions;
     in
       profile
@@ -1987,8 +1977,10 @@ in {
           };
         };
       };
-      hmSettings = hmCodexSettings (evalHm config);
-      devenvSettings = (evalDevenv config).config.files.".codex/config.toml".source.value;
+      hm = evalHm config;
+      devenv = evalDevenv config;
+      hmSettings = hmCodexSettings hm;
+      devenvSettings = devenv.config.files.".codex/config.toml".source.value;
       withoutBackendRoots = settings:
         settings
         // {
@@ -2098,15 +2090,79 @@ in {
           };
         };
       };
-      hmSettings = hmCodexSettings (evalHm config);
-      devenvSettings = (evalDevenv config).config.files.".codex/config.toml".source.value;
+      hm = evalHm config;
+      devenv = evalDevenv config;
+      hmSettings = hmCodexSettings hm;
+      devenvSettings = devenv.config.files.".codex/config.toml".source.value;
+      withoutBackendRoots = settings:
+        settings
+        // {
+          permissions.project-edit =
+            settings.permissions.project-edit
+            // {
+              filesystem = removeAttrs settings.permissions.project-edit.filesystem [
+                "/home/test/.cache/nix"
+                "/tmp/devenv-root/.git"
+              ];
+            };
+        };
     in
-      hmSettings
-      == devenvSettings
+      withoutBackendRoots hmSettings
+      == withoutBackendRoots devenvSettings
       && hmSettings.default_permissions == "project-edit"
       && hmSettings.permissions.project-edit.filesystem.":minimal" == "read"
       && hmSettings.permissions.project-edit.filesystem.":workspace_roots"."**/*.env" == "deny"
       && hmSettings.permissions.project-edit.network.domains."*.github.com" == "allow"
+      && hmSettings.permissions.project-edit.filesystem."/home/test/.cache/nix" == "write"
+      && !(devenvSettings.permissions.project-edit.filesystem ? "/tmp/devenv-root/.git")
+      && builtins.all (assertion: assertion.assertion) hm.config.assertions
+      && builtins.all (assertion: assertion.assertion) devenv.config.assertions
+  );
+
+  module-codex-permission-profile-layer-composition = mkTest "codex-permission-profile-layer-composition" (
+    let
+      user = evalHm {
+        ai.codex = {
+          enable = true;
+          nativeSettings = {
+            default_permissions = "project-edit";
+            permissions.project-edit = {
+              extends = ":workspace";
+              filesystem."/tmp/shared" = "deny";
+              network.enabled = true;
+            };
+          };
+        };
+      };
+      project = evalDevenv {
+        ai.codex = {
+          enable = true;
+          nativeSettings = {
+            default_permissions = "project-edit";
+            permissions.project-edit.filesystem = {
+              "/tmp/project-cache" = "write";
+              "/tmp/shared" = "write";
+            };
+          };
+        };
+      };
+      userSettings = hmCodexSettings user;
+      projectSettings = project.config.files.".codex/config.toml".source.value;
+      # Codex merges same-named permission tables by key and gives the project
+      # file higher precedence. Model that documented artifact composition
+      # explicitly instead of comparing two independent full configurations.
+      composedProfile = lib.recursiveUpdate userSettings.permissions.project-edit projectSettings.permissions.project-edit;
+    in
+      userSettings.default_permissions
+      == "project-edit"
+      && projectSettings.default_permissions == "project-edit"
+      && composedProfile.extends == ":workspace"
+      && composedProfile.network.enabled
+      && composedProfile.filesystem."/home/test/.cache/nix" == "write"
+      && composedProfile.filesystem."/tmp/project-cache" == "write"
+      && composedProfile.filesystem."/tmp/shared" == "write"
+      && builtins.all (assertion: assertion.assertion) user.config.assertions
+      && builtins.all (assertion: assertion.assertion) project.config.assertions
   );
 
   module-codex-permission-profiles-toml-syntax = let
@@ -3020,14 +3076,16 @@ in {
           ai.codex.nativeSettings.sandbox_mode = "workspace-write";
           ai.claude.programs.semble.enable = true;
         }).config;
-      profileOnly =
-        (evalDevenv {
-          ai.codex.nativeSettings = {
-            default_permissions = "project-edit";
-            permissions.project-edit.description = "Project edit profile.";
-          };
-          ai.codex.programs.semble.enable = true;
-        }).config;
+      profileConfig.ai.codex = {
+        enable = true;
+        nativeSettings.default_permissions = "project-edit";
+        programs.semble.enable = true;
+      };
+      profileOnly = (evalDevenv profileConfig).config;
+      profileDenied =
+        (evalDevenv (lib.recursiveUpdate profileConfig {
+          ai.codex.nativeSettings.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" = "deny";
+        })).config;
     in
       builtins.all
       (root: builtins.elem root (hmCodexSettings hmEval).sandbox_workspace_write.writable_roots)
@@ -3044,7 +3102,10 @@ in {
       && readOnly.ai.codex.nativeSettings.sandbox_workspace_write == null
       && noCodex.ai.codex.nativeSettings.sandbox_workspace_write == null
       && profileOnly.ai.codex.nativeSettings.sandbox_workspace_write == null
+      && profileOnly.files.".codex/config.toml".source.value.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" == "write"
+      && profileDenied.files.".codex/config.toml".source.value.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" == "deny"
       && builtins.all (assertion: assertion.assertion) profileOnly.assertions
+      && builtins.all (assertion: assertion.assertion) profileDenied.assertions
   );
 
   # CONTENT coverage for semble's relocated cache. The parity test above can
