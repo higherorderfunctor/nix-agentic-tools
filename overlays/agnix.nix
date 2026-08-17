@@ -34,12 +34,12 @@
     rustc = rust;
   };
 
-  rev = "29e0840734720582a80d35bbcaf04a888095cb40";
+  rev = "e89a2ab66d0414ce05161f882c8153fa59760e35";
   src = fetchFromGitHub {
     owner = "agent-sh";
     repo = "agnix";
     inherit rev;
-    hash = "sha256-MS/4Ft9eI0q79cuddbh1JgHbFaN8CmCyR5xiNaFbt24=";
+    hash = "sha256-U/2ZrKtA+mcwUuieF8GKrghYfLar2vUyFJbTu2BqQ8Q=";
   };
 in
   rustPlatform.buildRustPackage {
