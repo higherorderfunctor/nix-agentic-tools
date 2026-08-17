@@ -133,6 +133,7 @@ getdents
 getkimchi
 getpid
 gitbook
+gitdir
 gitfile
 githubcopilot
 gitref

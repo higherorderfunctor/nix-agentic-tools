@@ -3,6 +3,7 @@
   getEnv ? builtins.getEnv,
   lib,
   pkgs,
+  resolveGitCommonDir ? import ./resolveGitCommonDir.nix {inherit lib;},
   ...
 }: let
   agent = import ../../../lib/ai/agent.nix {inherit lib;};
@@ -521,7 +522,7 @@
           // {writable_roots = lib.unique (existingRoots ++ writableRoots);};
       }
     else settings;
-  applyIntegrationRoots = settings: integrationRoots: let
+  applyNamedPermissionRoots = settings: permissionRoots: let
     selectedPermissionName = settings.default_permissions;
     hasSelectedCustomProfile =
       selectedPermissionName
@@ -532,11 +533,9 @@
       if (selectedProfile.filesystem or null) == null
       then {}
       else selectedProfile.filesystem;
-    integrationFilesystem = lib.genAttrs (lib.unique integrationRoots) (_: "write");
+    integrationFilesystem = lib.genAttrs (lib.unique permissionRoots) (_: "write");
   in
-    if settings.sandbox_mode == "workspace-write" && integrationRoots != []
-    then applyWorkspaceWriteRoots settings integrationRoots
-    else if hasSelectedCustomProfile && integrationRoots != []
+    if hasSelectedCustomProfile && permissionRoots != []
     then
       settings
       // {
@@ -555,6 +554,10 @@
           };
       }
     else settings;
+  applyIntegrationRoots = settings: integrationRoots:
+    if settings.sandbox_mode == "workspace-write" && integrationRoots != []
+    then applyWorkspaceWriteRoots settings integrationRoots
+    else applyNamedPermissionRoots settings integrationRoots;
   hasPermissionProfiles = settings:
     helpers.filterNulls (lib.filterAttrs
       (name: _: builtins.elem name ["default_permissions" "permissions"])
@@ -1171,7 +1174,16 @@ in
     }: let
       hasNativeMcpServers = cfg.nativeSettings ? mcp_servers;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
-      settings = helpers.filterNulls ((applyIntegrationRoots (applyWorkspaceWriteRoots cfg.nativeSettings ["${config.devenv.root}/.git"]) cfg.internal._integration_writable_roots)
+      configuredGitRoot = lib.attrByPath ["git" "root"] null config;
+      gitRoot =
+        if configuredGitRoot != null
+        then configuredGitRoot
+        else config.devenv.root;
+      gitCommonDir = resolveGitCommonDir gitRoot;
+      legacySettings = applyWorkspaceWriteRoots cfg.nativeSettings ["${config.devenv.root}/.git"];
+      integrationSettings = applyIntegrationRoots legacySettings cfg.internal._integration_writable_roots;
+      permissionSettings = applyNamedPermissionRoots integrationSettings (lib.optional (gitCommonDir != null) gitCommonDir);
+      settings = helpers.filterNulls (permissionSettings
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
         });

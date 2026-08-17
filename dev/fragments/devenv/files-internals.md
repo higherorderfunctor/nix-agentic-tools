@@ -1,32 +1,35 @@
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-08-17 (commit pending — Codex deliberately uses
-> devenv's one-entry directory symlink behavior because 0.147.0 discovers that
-> layout but ignores a real skill directory containing symlinked leaves; a
-> pre-files migration validates ownership and moves the legacy directory intact
-> to a recoverable state backup). Prior: 2026-08-16 (commit pending — Kiro
-> 2.18.1 now discovers and live-reloads symlink replacement in both project and
-> Home-Manager-like layouts, so runtime steering moved to `ai.kiro.files` and
-> ordinary `files.*` delivery; generated tracked instruction projections remain
-> copies because store symlinks cannot be committed portably). Prior: 2026-08-15
-> (commit pending — Codex, glab, and Semble writable-root fanout now travels
-> through the hidden `ai.codex.internal._integration_writable_roots` channel and
-> is folded into native config at emission; it still creates no `files.*`
-> artifact). Prior: 2026-08-14 (commit pending — Semble's shell-entry cache
-> guard remains an environment/settings lifecycle effect and creates no
-> `files.*` artifact). Prior: 2026-08-05 (commit pending — re-verifies that
-> Codex's environment resolver and sandbox-root fanout create no `files.*`
-> artifact while its test override moves out of the formal module argument set).
-> Prior: 2026-08-05 (commit pending — Codex and glab sandbox-root fanout is
-> settings/environment integration and deliberately creates no `files.*`
-> artifact). Prior: 2026-08-02 (commit pending — Semble's devenv facet keeps its
-> sandbox-writable cache in project state and exports the same path through
-> `SEMBLE_CACHE_LOCATION`; this is environment/settings fanout, not a `files.*`
-> artifact). Prior: 2026-07-21 (commit pending — corrects the Kiro-symlink
-> citation to kirodotdev/Kiro#9787 with the engine qualifier, and the
-> `files.<name>.source` claim; earlier revision added auto-regeneration via
-> `gen` import). devenv internals are pinned to whatever version is in
-> flake.lock; if you touch `modules/devenv/**`,
+> **Last verified:** 2026-08-17 (commit pending — Codex's devenv backend now
+> resolves linked-worktree Git metadata into a direct named-profile permission;
+> like the existing cache-root fanout, this evaluation-only settings effect
+> creates no `files.*` artifact). Prior: 2026-08-17 (commit pending — Codex
+> deliberately uses devenv's one-entry directory symlink behavior because
+> 0.147.0 discovers that layout but ignores a real skill directory containing
+> symlinked leaves; a pre-files migration validates ownership and moves the
+> legacy directory intact to a recoverable state backup). Prior: 2026-08-16
+> (commit pending — Kiro 2.18.1 now discovers and live-reloads symlink
+> replacement in both project and Home-Manager-like layouts, so runtime steering
+> moved to `ai.kiro.files` and ordinary `files.*` delivery; generated tracked
+> instruction projections remain copies because store symlinks cannot be
+> committed portably). Prior: 2026-08-15 (commit pending — Codex, glab, and
+> Semble writable-root fanout now travels through the hidden
+> `ai.codex.internal._integration_writable_roots` channel and is folded into
+> native config at emission; it still creates no `files.*` artifact). Prior:
+> 2026-08-14 (commit pending — Semble's shell-entry cache guard remains an
+> environment/settings lifecycle effect and creates no `files.*` artifact).
+> Prior: 2026-08-05 (commit pending — re-verifies that Codex's environment
+> resolver and sandbox-root fanout create no `files.*` artifact while its test
+> override moves out of the formal module argument set). Prior: 2026-08-05
+> (commit pending — Codex and glab sandbox-root fanout is settings/environment
+> integration and deliberately creates no `files.*` artifact). Prior: 2026-08-02
+> (commit pending — Semble's devenv facet keeps its sandbox-writable cache in
+> project state and exports the same path through `SEMBLE_CACHE_LOCATION`; this
+> is environment/settings fanout, not a `files.*` artifact). Prior: 2026-07-21
+> (commit pending — corrects the Kiro-symlink citation to kirodotdev/Kiro#9787
+> with the engine qualifier, and the `files.<name>.source` claim; earlier
+> revision added auto-regeneration via `gen` import). devenv internals are
+> pinned to whatever version is in flake.lock; if you touch `modules/devenv/**`,
 > `lib/hm-helpers.nix:mkDevenvSkillEntries`, `devenv.nix` `files` block, or
 > anywhere that uses `files.*.source` and this fragment isn't updated in the
 > same commit, stop and fix it.

@@ -12,10 +12,14 @@
   # override it there. `_module.args` injection is unsupported and silently
   # falls back to `builtins.getEnv` rather than erroring.
   codexGetEnv = args.codexGetEnv or builtins.getEnv;
+  codexGitCommonDirResolver =
+    args.codexGitCommonDirResolver
+    or (import ../../lib/resolveGitCommonDir.nix {inherit lib;});
 in
   (aiLib.app.devenvTransform (import ../../lib/mkCodex.nix {
     getEnv = codexGetEnv;
     lib = lib // {ai = aiLib;};
     inherit pkgs;
+    resolveGitCommonDir = codexGitCommonDirResolver;
   }))
   args
