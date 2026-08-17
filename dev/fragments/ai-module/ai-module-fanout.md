@@ -1,34 +1,35 @@
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-08-17 (commit pending — devenv Codex now contributes
-> its profile-materializer state and the effective treefmt cache when treefmt is
-> enabled; both lower through the same permission-model-aware integration-root
-> pool, while process caches without an enabled owner receive no grant). Prior:
-> 2026-08-17 (commit pending — Codex named permission tables are enabled now
-> that upstream documents their same-name cross-layer merge; the hidden
-> integration-root pool lowers into either legacy workspace-write or the
-> selected custom permission profile, with explicit consumer rules winning at
-> the same path. Whole-file `codex --profile` layers remain a separate locked
-> surface). Prior: 2026-08-16 (commit pending — every runtime now exposes the
-> one-way `ai.<runtime>.files` static-output seam; normalized context/rules and
-> the single-owner repository AGENTS.md traverse it before native backend sinks,
-> including enabled-only public shared-target arbitration and lazy discarded
-> defaults, while Kiro uses verified symlink reload and enable-independent
-> one-shot legacy retirement with an explicit old-custom-directory transition).
-> Prior: 2026-08-16 (commit pending — Semble distinguishes its program-inherited
-> MCP integration from explicit CLI-rule and named-agent opt-ins; MCP agents use
-> a committed tool-specific prompt, and only Kiro may retain an agent-scoped
-> server while suppressing root exposure). Prior: 2026-08-16 (commit pending —
-> Kiro's shared factory now exposes a default-on `useFhsSandbox`
-> package-selection option in both backends, and places `trustedMcpTools` on the
-> inner FHS payload so devenv launcher dispatch cannot bypass it). Prior:
-> 2026-08-16 (commit pending — `mkSkillPackageModule` now consumes the
-> `ai.programs.*` factory, moving stacked-workflows and living-workflow
-> enablement into portable plus per-runtime B4 option trees while preserving
-> their per-runtime pool writes; runtime inventories now cover all five
-> registered ecosystems; stacked-workflows' machine-wide `gitPreset` remains an
-> HM-only top-level companion). Prior: 2026-08-15 (commit pending — the
-> `ai.programs.*` factory generates portable defaults and capability-gated
+> the effective treefmt cache only when treefmt is enabled, lowering it through
+> the permission-model-aware integration-root pool; the locked whole-file
+> profile materializer exits before creating empty state, avoiding a grant over
+> every repository's profile-state parent, while processes without an enabled
+> owner receive no grant). Prior: 2026-08-17 (commit pending — Codex named
+> permission tables are enabled now that upstream documents their same-name
+> cross-layer merge; the hidden integration-root pool lowers into either legacy
+> workspace-write or the selected custom permission profile, with explicit
+> consumer rules winning at the same path. Whole-file `codex --profile` layers
+> remain a separate locked surface). Prior: 2026-08-16 (commit pending — every
+> runtime now exposes the one-way `ai.<runtime>.files` static-output seam;
+> normalized context/rules and the single-owner repository AGENTS.md traverse it
+> before native backend sinks, including enabled-only public shared-target
+> arbitration and lazy discarded defaults, while Kiro uses verified symlink
+> reload and enable-independent one-shot legacy retirement with an explicit
+> old-custom-directory transition). Prior: 2026-08-16 (commit pending — Semble
+> distinguishes its program-inherited MCP integration from explicit CLI-rule and
+> named-agent opt-ins; MCP agents use a committed tool-specific prompt, and only
+> Kiro may retain an agent-scoped server while suppressing root exposure).
+> Prior: 2026-08-16 (commit pending — Kiro's shared factory now exposes a
+> default-on `useFhsSandbox` package-selection option in both backends, and
+> places `trustedMcpTools` on the inner FHS payload so devenv launcher dispatch
+> cannot bypass it). Prior: 2026-08-16 (commit pending — `mkSkillPackageModule`
+> now consumes the `ai.programs.*` factory, moving stacked-workflows and
+> living-workflow enablement into portable plus per-runtime B4 option trees
+> while preserving their per-runtime pool writes; runtime inventories now cover
+> all five registered ecosystems; stacked-workflows' machine-wide `gitPreset`
+> remains an HM-only top-level companion). Prior: 2026-08-15 (commit pending —
+> the `ai.programs.*` factory generates portable defaults and capability-gated
 > runtime override trees from one program specification; Semble is its first
 > consumer and uses program-level enable negation instead of runtime selectors;
 > divergent runtime package customizations use collision-free command aliases
@@ -651,14 +652,14 @@ Codex itself contributes the roots needed by its normal backend lifecycle when
 the consumer selects either legacy `sandbox_mode = "workspace-write"` or a
 custom named permission profile: Home Manager adds
 `${config.xdg.cacheHome}/nix`; devenv adds the effective process user's Nix
-cache and
-`${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/codex-profiles`, where
-its profile materializer keeps the per-repository ownership manifest and lock.
-When `treefmt.enable`, devenv also adds
+cache. When `treefmt.enable`, devenv also adds
 `${XDG_CACHE_HOME:-$HOME/.cache}/treefmt`; a disabled or absent treefmt module
-adds nothing. The effective cache and state homes follow their XDG variables
-when present and otherwise use their conventional `$HOME` fallbacks. Legacy
-workspace-write additionally receives `${config.devenv.root}/.git`. Named
+adds nothing. The effective cache home follows `XDG_CACHE_HOME` when present and
+otherwise uses its conventional `$HOME` fallback. The locked whole-file profile
+materializer exits before creating its state directory when it has neither
+desired profiles nor an existing ownership manifest. Codex therefore receives no
+broad grant over the XDG state parent holding every repository's profile state.
+Legacy workspace-write additionally receives `${config.devenv.root}/.git`. Named
 permissions deliberately do not: in a linked worktree that path is a pointer
 file, and granting it makes Codex synthesize an invalid `<pointer>/.git` mount.
 A named-profile consumer must grant the resolved shared common Git directory

@@ -734,7 +734,7 @@ in {
     for nat_want in ${lib.escapeShellArgs (
       [worktreesRoot]
       ++ lib.optional (!isCI) sembleCache
-      ++ ["${devenvRoot}/.git" "cache/nix" "cache/treefmt" "nix-agentic-tools/codex-profiles"]
+      ++ ["${devenvRoot}/.git" "cache/nix" "cache/treefmt"]
     )}; do
       case "$nat_roots" in
         *"$nat_want"*) ;;
@@ -883,20 +883,26 @@ in {
           ${pkgs.git}/bin/git rev-parse --git-dir >/dev/null 2>&1 || exit 0
           hooks_dir="$(${pkgs.git}/bin/git rev-parse --path-format=absolute --git-path hooks)"
           [ -d "$hooks_dir" ] || exit 0
+          exec {isolate_lock_fd}> "$hooks_dir/.devenv-isolate.lock"
+          ${lib.getExe pkgs.flock} "$isolate_lock_fd"
 
           # Rewrite only prek-generated hooks (they carry a baked
           # --config="<abs>"); git-branchless hooks have neither marker
           # and are left untouched. Idempotent: re-running matches the
           # already-dynamic value and rewrites it to the same text.
           #
-          # GNU tools are pinned to store paths (the repo convention) so
-          # the rewrite behaves identically on darwin, where a host BSD
-          # sed would reject `-i` without a suffix argument. The
+          # GNU tools are pinned to store paths (the repo convention). The
           # `$(git ...)` INSIDE the replacement is written verbatim into
           # the hook and runs at COMMIT time under git's own hook
           # environment (git is always on PATH there), so it stays bare —
           # pinning a store path there would break the hook if that path
           # were garbage-collected.
+          #
+          # The shared lock serializes concurrent rewrite tasks. Each complete
+          # hook is rendered to a temp file in the hooks directory, receives
+          # the original mode, and is published with a same-filesystem rename;
+          # a concurrent commit therefore sees either complete generation,
+          # never a truncated mixture.
           #
           # The same hooks also get project-local runtime state and a bootstrap
           # preflight injected ahead of their `exec`. PREK_HOME from a devenv
@@ -944,30 +950,32 @@ in {
             [ -f "$hook" ] || continue
             ${pkgs.gnugrep}/bin/grep -q 'prek' "$hook" || continue
             ${pkgs.gnugrep}/bin/grep -q -- '--config=' "$hook" || continue
-            ${pkgs.gnused}/bin/sed -i 's#--config="[^"]*"#--config="$(git rev-parse --show-toplevel)/.pre-commit-config.yaml"#' "$hook"
 
             # Idempotent: the marker gates re-injection, so running this
             # task twice leaves the hooks byte-identical.
             if ${pkgs.gnugrep}/bin/grep -qF -- "$guard_marker" "$hook"; then
-              continue
+              need_guard=""
+            else
+              need_guard=1
             fi
-            tmp="$(${pkgs.coreutils}/bin/mktemp)"
+            tmp="$(${pkgs.coreutils}/bin/mktemp "$hooks_dir/.devenv-hook.XXXXXX")"
+            trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
             injected=""
-            while IFS= read -r line; do
-              case "$line" in
-                'exec '*)
-                  if [ -z "$injected" ]; then
-                    printf '%s' "$guard"
-                    injected=1
-                  fi
-                  ;;
-              esac
-              printf '%s\n' "$line"
-            done <"$hook" >"$tmp"
-            # Copy back THROUGH the original inode rather than moving the
-            # temp file over it: that preserves the hook's executable bit.
-            ${pkgs.coreutils}/bin/cat "$tmp" >"$hook"
-            ${pkgs.coreutils}/bin/rm -f "$tmp"
+            ${pkgs.gnused}/bin/sed 's#--config="[^"]*"#--config="$(git rev-parse --show-toplevel)/.pre-commit-config.yaml"#' "$hook" \
+              | while IFS= read -r line || [ -n "$line" ]; do
+                case "$line" in
+                  'exec '*)
+                    if [ -n "$need_guard" ] && [ -z "$injected" ]; then
+                      printf '%s' "$guard"
+                      injected=1
+                    fi
+                    ;;
+                esac
+                printf '%s\n' "$line"
+              done >"$tmp"
+            ${pkgs.coreutils}/bin/chmod --reference="$hook" "$tmp"
+            ${pkgs.coreutils}/bin/mv -f "$tmp" "$hook"
+            trap - EXIT
           done
         '';
       };

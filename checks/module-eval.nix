@@ -1271,7 +1271,6 @@ in {
       devenvXdgRoots = rootsWithEnvironment {
         HOME = "/home/ignored";
         XDG_CACHE_HOME = "/tmp/xdg-cache";
-        XDG_STATE_HOME = "/tmp/xdg-state";
       };
     in
       hmRoots
@@ -1281,13 +1280,11 @@ in {
       == [
         "/tmp/devenv-root/.git"
         "/home/test/.cache/nix"
-        "/home/test/.local/state/nix-agentic-tools/codex-profiles"
       ]
       && devenvXdgRoots
       == [
         "/tmp/devenv-root/.git"
         "/tmp/xdg-cache/nix"
-        "/tmp/xdg-state/nix-agentic-tools/codex-profiles"
       ]
   );
 
@@ -1296,7 +1293,6 @@ in {
       environment = {
         HOME = "/home/ignored";
         XDG_CACHE_HOME = "/tmp/xdg-cache";
-        XDG_STATE_HOME = "/tmp/xdg-state";
       };
       evaluate = settings:
         (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.files.".codex/config.toml".source.value;
@@ -1328,12 +1324,11 @@ in {
       };
       expectedIntegrationRoots = [
         "/tmp/xdg-cache/nix"
-        "/tmp/xdg-state/nix-agentic-tools/codex-profiles"
         "/tmp/xdg-cache/treefmt"
       ];
     in
       legacy.sandbox_workspace_write.writable_roots
-      == ["/tmp/xdg-cache/treefmt" "/tmp/devenv-root/.git" "/tmp/xdg-cache/nix" "/tmp/xdg-state/nix-agentic-tools/codex-profiles"]
+      == ["/tmp/xdg-cache/treefmt" "/tmp/devenv-root/.git" "/tmp/xdg-cache/nix"]
       && builtins.all (root: named.permissions.project-edit.filesystem.${root} == "write") expectedIntegrationRoots
       && !(named.permissions.project-edit.filesystem ? "/tmp/devenv-root/.git")
       && !(builtins.elem "/tmp/xdg-cache/treefmt" disabled.sandbox_workspace_write.writable_roots)
@@ -1551,6 +1546,24 @@ in {
       && builtins.length failing == 1
       && lib.hasInfix "ai.codex.profiles is locked out" (builtins.head failing).message
   );
+
+  module-codex-empty-profile-materializer-writes-no-state = let
+    command =
+      (evalDevenv {ai.codex.enable = true;}).config.tasks."ai:codex:materialize-profiles".exec;
+  in
+    pkgs.runCommand "module-test-codex-empty-profile-materializer-writes-no-state" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      mkdir -p home project
+      HOME="$PWD/home" \
+        DEVENV_ROOT="$PWD/project" \
+        XDG_STATE_HOME="$PWD/state" \
+        ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg command}
+
+      test ! -e state/nix-agentic-tools/codex-profiles
+      touch "$out"
+    '';
 
   module-codex-mcp-lowering-parity = mkTest "codex-mcp-lowering-parity" (
     let

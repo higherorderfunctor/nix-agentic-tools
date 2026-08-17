@@ -7,11 +7,14 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # CI-lean closure taxonomy
 
-> **Last verified:** 2026-08-17 (commit pending — named Codex permission tables
-> are enabled at the module boundary, but this repository deliberately remains
-> on legacy workspace-write until its Home Manager user layer migrates first;
-> Codex does not compose the two models across config layers). Prior: 2026-08-15
-> (commit pending — the interactive-only Semble gate moved unchanged to
+> **Last verified:** 2026-08-17 (commit pending — enabled treefmt now
+> contributes its effective cache through the same permission-model-aware Codex
+> root pool; enterTest expects five local roots and four in CI). Prior:
+> 2026-08-17 (commit pending — named Codex permission tables are enabled at the
+> module boundary, but this repository deliberately remains on legacy
+> workspace-write until its Home Manager user layer migrates first; Codex does
+> not compose the two models across config layers). Prior: 2026-08-15 (commit
+> pending — the interactive-only Semble gate moved unchanged to
 > `ai.codex.programs.semble.enable`; grammar and path customization now follow
 > the same generated runtime program tree). Prior: 2026-08-14 (commit pending —
 > the local shell now enables the flake-pinned Semble module with AWK and jq
@@ -132,12 +135,14 @@ symlink. The user-global cache is no longer in play for this shell. Keeping
 `ai.codex.programs.semble.enable = !isCI` is load-bearing: the CI gate does not
 invoke Semble and must not realize its model, MCP, or grammar closure.
 
-`${config.devenv.root}/.git`, the effective Nix cache root, and the scoped
-Semble cache are contributed by their owning devenv modules and must not be
-hand-written. enterTest asserts the wrapper injects no `--profile`, that the
-project config remains on workspace-write with no named permission keys, that no
-stale whole-file profile remains in `CODEX_HOME`, and that all four local roots
-are present (the interactive-only Semble root is deliberately absent in CI).
+`${config.devenv.root}/.git`, the effective Nix and treefmt cache roots, and the
+scoped Semble cache are contributed by their owning devenv modules and must not
+be hand-written. The worktree collection root remains explicit repository
+topology. enterTest asserts the wrapper injects no `--profile`, that the project
+config remains on workspace-write with no named permission keys, that no stale
+whole-file profile remains in `CODEX_HOME`, and that all five local roots are
+present (the interactive-only Semble root is deliberately absent, leaving four,
+in CI).
 
 Two proofs to preserve when touching the gates: with `CI` unset the shell must
 contain grammar/path-customized Semble and its scoped cache root, while

@@ -566,15 +566,16 @@ the repo before committing.
 > `PREK_HOME` from the committing worktree, so commits launched outside a devenv
 > shell retain isolated project-local state instead of falling back to the
 > user-global XDG cache; the bootstrap diagnostic now names shell entry as the
-> only materialization path). Prior: 2026-08-15 (commit pending — adds the
-> adversarial subagent-review protocol that SUBSTITUTES for the Copilot loop
-> while its quota is exhausted, roughly two weeks from 2026-08-15. Written
-> because an agent cannot review its own output, and because the operator had
-> been having to ask for an independent reviewer by hand each time. Includes the
-> refuter+defender pairing and the never-self-adjudicate rule, both of which
-> exist because refute-by-default on your own work is a second discard filter
-> rather than a check). Prior: 2026-08-14 (commit pending — TWO corrections. (1)
-> The required-status-check list said FOUR; there are SIX, both `kiro-patched`
+> only materialization path, and shared-hook rewrites serialize and publish by
+> atomic rename). Prior: 2026-08-15 (commit pending — adds the adversarial
+> subagent-review protocol that SUBSTITUTES for the Copilot loop while its quota
+> is exhausted, roughly two weeks from 2026-08-15. Written because an agent
+> cannot review its own output, and because the operator had been having to ask
+> for an independent reviewer by hand each time. Includes the refuter+defender
+> pairing and the never-self-adjudicate rule, both of which exist because
+> refute-by-default on your own work is a second discard filter rather than a
+> check). Prior: 2026-08-14 (commit pending — TWO corrections. (1) The
+> required-status-check list said FOUR; there are SIX, both `kiro-patched`
 > contexts having been promoted 2026-08-13 with PR #895. This file was wrong in
 > two places, `ci-update-workflow.md` was wrong in two more, and
 > `.github/workflows/update.yml` was wrong a third way — "five", including the
@@ -1190,6 +1191,13 @@ validates against, and keeps commits launched from editors or agents from
 falling back to a shared user-global cache. A new worktree must enter
 `devenv shell` once to materialize its config; running an arbitrary devenv task
 does not create the `files.*` artifact.
+
+The rewrite task takes a lock in the shared hooks directory and publishes each
+complete hook with a same-filesystem rename after preserving its mode. Two shell
+entries therefore serialize their rewrites, and a concurrent commit sees an old
+or new complete hook rather than a partially truncated script. The upstream
+installer still runs immediately before the rewrite task in each shell's devenv
+DAG; do not split or reorder that dependency edge.
 
 One more shared thing, and it lives outside the repository entirely: **the
 agent's own memory directory is shared across concurrent sessions, and no
