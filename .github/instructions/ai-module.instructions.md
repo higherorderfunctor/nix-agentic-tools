@@ -7,7 +7,12 @@ applyTo: "checks/module-eval.nix,lib/ai/agent.nix,lib/ai/ai-common.nix,lib/ai/ap
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-16 (commit pending — every runtime now exposes the
+> **Last verified:** 2026-08-17 (commit pending — Codex named permission tables
+> are enabled now that upstream documents their same-name cross-layer merge; the
+> hidden integration-root pool lowers into either legacy workspace-write or the
+> selected custom permission profile, with explicit consumer rules winning at
+> the same path. Whole-file `codex --profile` layers remain a separate locked
+> surface). Prior: 2026-08-16 (commit pending — every runtime now exposes the
 > one-way `ai.<runtime>.files` static-output seam; normalized context/rules and
 > the single-owner repository AGENTS.md traverse it before native backend sinks,
 > including enabled-only public shared-target arbitration and lazy discarded
@@ -300,26 +305,19 @@ The ai module fans out TWO kinds of configuration:
   MCP configuration is composed into that shared user file or the static project
   file through the same typed server pool. Stable security settings type
   `allow_login_shell`, `approval_policy` (including granular prompt categories),
-  `approvals_reviewer`, `sandbox_mode`, and `sandbox_workspace_write`. Beta
+  `approvals_reviewer`, `sandbox_mode`, and `sandbox_workspace_write`.
   `default_permissions` and named `permissions` profiles type inheritance,
   workspace roots, filesystem access and scoped paths, deny-glob scan depth, and
-  network proxy/domain/socket policy. **All three of `default_permissions`,
-  `permissions`, and `profiles` are LOCKED OUT: they are typed and emit
-  correctly, but setting any of them fails evaluation.** The two sandbox models
-  are mutually exclusive and Codex resolves a layer carrying the beta model by
-  OVERRIDING rather than merging the legacy settings beneath it, silently
-  dropping every writable root the lower layer granted. The intra-layer
-  assertion below is the only scope a Nix evaluation can see; the cross-layer
-  case is structurally invisible to it, which is why the surface is closed
-  rather than merely asserted. See the lockout comment in
-  `packages/chatgpt-codex/lib/mkCodex.nix` for the measurement that drove it and
-  what re-enabling would require. The mechanics below are retained because they
-  are what re-enabling would restore. The older sandbox model and permission
-  profiles are mutually exclusive, so the module fails when both are present.
-  Profile names and inheritance graphs remain runtime-validated by Codex because
-  config layers may contribute parents dynamically. `ai.codex.profiles.<name>`
-  uses the same typed/freeform settings schema and emits a separate static
-  `${configDir}/<name>.config.toml` user layer selected with
+  network proxy/domain/socket policy. Codex merges entries under the same named
+  permission profile across user and project config layers; both backends may
+  therefore contribute to one policy without restating lower-layer roots. The
+  older sandbox model and permission profiles remain mutually exclusive, so the
+  module fails when both appear in one settings tree and consumers must not put
+  legacy `sandbox_mode` in another loaded layer. Profile names and inheritance
+  graphs remain runtime-validated by Codex because config layers may contribute
+  parents dynamically. `ai.codex.profiles.<name>` is a distinct, still locked
+  surface: it uses the same typed/freeform settings schema and would emit a
+  separate static `${configDir}/<name>.config.toml` user layer selected with
   `codex --profile <name>`. Home Manager links that whole file directly. Codex
   resolves named profiles only from user CODEX_HOME, so devenv cannot place an
   inert copy beside project config; instead a pre-shell task materializes the
@@ -634,40 +632,43 @@ supports every registered runtime. The rule composes into Claude and Codex's
 single always-loaded files and lets Kiro's directory-native renderer write
 `semble.md`.
 
-Semble also treats Codex's selected sandbox mode as an integration boundary. A
-selected Codex feature plus `sandbox_mode = "workspace-write"` appends that
-runtime's effective Semble cache to `sandbox_workspace_write.writable_roots`.
-Home Manager's cache family starts at `${config.xdg.cacheHome}/semble`; devenv's
-starts at `${config.devenv.state}/semble-cache`. One resolved package uses that
-root. Distinct runtime packages use package-keyed `variants/` subdirectories,
-receive runtime-specific CLI aliases, and never share an incompatible
-customization fingerprint. Launcher wrappers fix `SEMBLE_CACHE_LOCATION` for
-their own variant; there is no consumer environment override. The convenience
-module does not select a sandbox mode, and read-only or unrestricted modes get
-no writable-root contribution. Codex's beta `default_permissions`/`permissions`
-model does not compose with those legacy sandbox settings. A named permission
-profile is an explicit security boundary and must grant the cache path in its
-own `filesystem` table; user-global integrations must not silently widen every
-higher-precedence profile.
+Semble also treats Codex's selected permission model as an integration boundary.
+A selected Codex feature appends that runtime's effective Semble cache to the
+hidden integration-root pool. Legacy `sandbox_mode = "workspace-write"` lowers
+it to `sandbox_workspace_write.writable_roots`; a selected custom permission
+profile lowers it to a direct `filesystem.<path> = "write"` rule. Home Manager's
+cache family starts at `${config.xdg.cacheHome}/semble`; devenv's starts at
+`${config.devenv.state}/semble-cache`. One resolved package uses that root.
+Distinct runtime packages use package-keyed `variants/` subdirectories, receive
+runtime-specific CLI aliases, and never share an incompatible customization
+fingerprint. Launcher wrappers fix `SEMBLE_CACHE_LOCATION` for their own
+variant; there is no consumer environment override. The convenience module does
+not select a permission model. Read-only, unrestricted, built-in, or unselected
+profiles get no writable-root contribution. An explicit filesystem rule at the
+same path wins over the integration default, so a consumer can narrow or deny a
+contributed cache without disabling the owning integration.
 
 Codex itself contributes the roots needed by its normal backend lifecycle when
-the consumer selects legacy `sandbox_mode = "workspace-write"`: Home Manager
-adds `${config.xdg.cacheHome}/nix`; devenv adds `${config.devenv.root}/.git`
-plus the effective process user's Nix cache. The devenv cache follows
-`XDG_CACHE_HOME` when present and otherwise `$HOME/.cache`. The Git root is
-deliberately repository-local; a parent directory used for several worktrees
-remains an explicit consumer policy choice.
+the consumer selects either legacy `sandbox_mode = "workspace-write"` or a
+custom named permission profile: Home Manager adds
+`${config.xdg.cacheHome}/nix`; devenv adds the effective process user's Nix
+cache. The devenv cache follows `XDG_CACHE_HOME` when present and otherwise
+`$HOME/.cache`. Legacy workspace-write additionally receives
+`${config.devenv.root}/.git`. Named permissions deliberately do not: in a linked
+worktree that path is a pointer file, and granting it makes Codex synthesize an
+invalid `<pointer>/.git` mount. A named-profile consumer must grant the resolved
+shared common Git directory directly. That directory and a parent used for
+several worktrees remain explicit repository-topology policy.
 
 Enabled integrations can append their own runtime-owned state through the hidden
 `ai.codex.internal._integration_writable_roots` pool. It is module plumbing
 rather than a user setting, is omitted from generated option docs, and is folded
-into native `sandbox_workspace_write.writable_roots` only when Codex emits its
-config. The glab facets add the effective `glab.configDir`, so a devenv consumer
-may point project-local glab at an existing Home Manager `~/.config/glab-cli`
-and reuse its authentication without another login. The default devenv glab
-directory remains project-local state. These automatic roots apply only to the
-legacy workspace-write settings. Named permission profiles remain explicit
-security boundaries and must declare equivalent paths themselves.
+into native `sandbox_workspace_write.writable_roots` or the selected custom
+permission profile only when Codex emits its config. The glab facets add the
+effective `glab.configDir`, so a devenv consumer may point project-local glab at
+an existing Home Manager `~/.config/glab-cli` and reuse its authentication
+without another login. The default devenv glab directory remains project-local
+state.
 
 **Worked example — stacked-workflows skills.** Because a skills value set in one
 backend is invisible to the other, the stacked-workflows package contributes its
