@@ -178,6 +178,10 @@
         type = lib.types.attrsOf lib.types.str;
         default = {};
       };
+      git.root = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = "/tmp/devenv-root";
+      };
       files = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
@@ -280,6 +284,7 @@
     lib.evalModules {
       specialArgs =
         {
+          codexGitCommonDirResolver = _: null;
           lib = hmLib;
           pkgs = pkgs // {ai = pkgs.ai or {};};
         }
@@ -1332,6 +1337,151 @@ in {
       && builtins.all (root: named.permissions.project-edit.filesystem.${root} == "write") expectedIntegrationRoots
       && !(named.permissions.project-edit.filesystem ? "/tmp/devenv-root/.git")
       && !(builtins.elem "/tmp/xdg-cache/treefmt" disabled.sandbox_workspace_write.writable_roots)
+  );
+
+  module-codex-git-common-dir-permission = mkTest "codex-git-common-dir-permission" (
+    let
+      entries = [
+        {
+          path = "/repos/main/.git";
+          type = "directory";
+        }
+        {
+          path = "/repos/main/.git/HEAD";
+          type = "regular";
+        }
+        {
+          path = "/repos/main/.git/config";
+          type = "regular";
+        }
+        {
+          path = "/repos/main/.git/objects";
+          type = "directory";
+        }
+        {
+          content = "gitdir: ../main/.git/worktrees/sibling\n";
+          path = "/repos/sibling/.git";
+          type = "regular";
+        }
+        {
+          path = "/repos/main/.git/worktrees/sibling";
+          type = "directory";
+        }
+        {
+          path = "/repos/main/.git/worktrees/sibling/HEAD";
+          type = "regular";
+        }
+        {
+          content = "../..\n";
+          path = "/repos/main/.git/worktrees/sibling/commondir";
+          type = "regular";
+        }
+        {
+          content = "gitdir: /repos/main/.git/worktrees/arbitrary\n";
+          path = "/scratch/agent/.git";
+          type = "regular";
+        }
+        {
+          path = "/repos/main/.git/worktrees/arbitrary";
+          type = "directory";
+        }
+        {
+          path = "/repos/main/.git/worktrees/arbitrary/HEAD";
+          type = "regular";
+        }
+        {
+          content = "/repos/main/.git\n";
+          path = "/repos/main/.git/worktrees/arbitrary/commondir";
+          type = "regular";
+        }
+        {
+          path = "/repos/separate/.git";
+          type = "directory";
+        }
+        {
+          path = "/repos/separate/.git/HEAD";
+          type = "regular";
+        }
+        {
+          content = "../shared-git\n";
+          path = "/repos/separate/.git/commondir";
+          type = "regular";
+        }
+        {
+          path = "/repos/separate/shared-git";
+          type = "directory";
+        }
+        {
+          path = "/repos/separate/shared-git/config";
+          type = "regular";
+        }
+        {
+          path = "/repos/separate/shared-git/objects";
+          type = "directory";
+        }
+        {
+          content = "not a gitdir pointer\n";
+          path = "/repos/malformed/.git";
+          type = "regular";
+        }
+        {
+          content = "gitdir: /\n";
+          path = "/repos/unsafe/.git";
+          type = "regular";
+        }
+        {
+          path = "/";
+          type = "directory";
+        }
+      ];
+      filesystem = lib.listToAttrs (map (entry: lib.nameValuePair entry.path (removeAttrs entry ["path"])) entries);
+      resolver = import ../packages/chatgpt-codex/lib/resolveGitCommonDir.nix {
+        inherit lib;
+        pathExists = path: builtins.hasAttr path filesystem;
+        readFile = path: filesystem.${path}.content;
+        readFileType = path: filesystem.${path}.type;
+      };
+      evaluate = root: settings:
+        (evalDevenvWithSpecialArgs {codexGitCommonDirResolver = resolver;} {
+          ai.codex = {
+            enable = true;
+            nativeSettings = settings;
+          };
+          devenv.root = root;
+          git.root = root;
+        }).config.files.".codex/config.toml".source.value;
+      namedSettings = {
+        default_permissions = "project-edit";
+        permissions.project-edit.extends = ":workspace";
+      };
+      primary = evaluate "/repos/main" namedSettings;
+      sibling = evaluate "/repos/sibling" namedSettings;
+      arbitrary = evaluate "/scratch/agent" namedSettings;
+      directoryCommon = evaluate "/repos/separate" namedSettings;
+      nonGit = evaluate "/repos/plain" namedSettings;
+      legacy = evaluate "/repos/sibling" {sandbox_mode = "workspace-write";};
+      denied = evaluate "/repos/sibling" (lib.recursiveUpdate namedSettings {
+        permissions.project-edit.filesystem."/repos/main/.git" = "deny";
+      });
+      primaryFilesystem = primary.permissions.project-edit.filesystem;
+      siblingFilesystem = sibling.permissions.project-edit.filesystem;
+      arbitraryFilesystem = arbitrary.permissions.project-edit.filesystem;
+      malformed = builtins.tryEval (evaluate "/repos/malformed" namedSettings);
+      unsafe = builtins.tryEval (evaluate "/repos/unsafe" namedSettings);
+    in
+      primaryFilesystem."/repos/main/.git"
+      == "write"
+      && siblingFilesystem."/repos/main/.git" == "write"
+      && arbitraryFilesystem."/repos/main/.git" == "write"
+      && directoryCommon.permissions.project-edit.filesystem."/repos/separate/shared-git" == "write"
+      && !(siblingFilesystem ? "/repos/sibling/.git")
+      && !(siblingFilesystem ? "/repos/main/.git/worktrees/sibling")
+      && !(siblingFilesystem ? "/repos/main/.git/.git")
+      && !(nonGit.permissions.project-edit ? filesystem)
+      && legacy.sandbox_workspace_write.writable_roots == ["/repos/sibling/.git"]
+      && denied.permissions.project-edit.filesystem."/repos/main/.git" == "deny"
+      && !malformed.success
+      && !unsafe.success
   );
 
   module-codex-default-getenv-needs-no-module-arg = mkTest "codex-default-getenv-needs-no-module-arg" (

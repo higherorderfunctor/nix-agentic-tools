@@ -7,14 +7,18 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # CI-lean closure taxonomy
 
-> **Last verified:** 2026-08-17 (commit pending — enabled treefmt now
-> contributes its effective cache through the same permission-model-aware Codex
-> root pool; enterTest expects five local roots and four in CI). Prior:
-> 2026-08-17 (commit pending — named Codex permission tables are enabled at the
-> module boundary, but this repository deliberately remains on legacy
-> workspace-write until its Home Manager user layer migrates first; Codex does
-> not compose the two models across config layers). Prior: 2026-08-15 (commit
-> pending — the interactive-only Semble gate moved unchanged to
+> **Last verified:** 2026-08-17 (commit pending — the staged Codex named-profile
+> migration now receives the canonical Git common directory automatically,
+> including from linked worktrees, while this repository's still-legacy config
+> retains its existing `.git` workspace root until the separate migration).
+> Prior: 2026-08-17 (commit pending — enabled treefmt now contributes its
+> effective cache through the same permission-model-aware Codex root pool;
+> enterTest expects five local roots and four in CI). Prior: 2026-08-17 (commit
+> pending — named Codex permission tables are enabled at the module boundary,
+> but this repository deliberately remains on legacy workspace-write until its
+> Home Manager user layer migrates first; Codex does not compose the two models
+> across config layers). Prior: 2026-08-15 (commit pending — the
+> interactive-only Semble gate moved unchanged to
 > `ai.codex.programs.semble.enable`; grammar and path customization now follow
 > the same generated runtime program tree). Prior: 2026-08-14 (commit pending —
 > the local shell now enables the flake-pinned Semble module with AWK and jq
@@ -135,14 +139,16 @@ symlink. The user-global cache is no longer in play for this shell. Keeping
 `ai.codex.programs.semble.enable = !isCI` is load-bearing: the CI gate does not
 invoke Semble and must not realize its model, MCP, or grammar closure.
 
-`${config.devenv.root}/.git`, the effective Nix and treefmt cache roots, and the
-scoped Semble cache are contributed by their owning devenv modules and must not
-be hand-written. The worktree collection root remains explicit repository
-topology. enterTest asserts the wrapper injects no `--profile`, that the project
-config remains on workspace-write with no named permission keys, that no stale
-whole-file profile remains in `CODEX_HOME`, and that all five local roots are
-present (the interactive-only Semble root is deliberately absent, leaving four,
-in CI).
+The effective Nix and treefmt cache roots and the scoped Semble cache are
+contributed by their owning devenv modules and must not be hand-written. Legacy
+workspace-write also retains `${config.devenv.root}/.git`; after the staged
+named-profile migration, the Codex module instead resolves and directly grants
+the canonical Git common directory without promoting it to a workspace root. The
+worktree collection root remains explicit repository topology. enterTest asserts
+the wrapper injects no `--profile`, that the project config remains on
+workspace-write with no named permission keys, that no stale whole-file profile
+remains in `CODEX_HOME`, and that all five local roots are present (the
+interactive-only Semble root is deliberately absent, leaving four, in CI).
 
 Two proofs to preserve when touching the gates: with `CI` unset the shell must
 contain grammar/path-customized Semble and its scoped cache root, while
@@ -175,33 +181,36 @@ this paragraph would rot the next time one is added.)
 
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-08-17 (commit pending — Codex deliberately uses
-> devenv's one-entry directory symlink behavior because 0.147.0 discovers that
-> layout but ignores a real skill directory containing symlinked leaves; a
-> pre-files migration validates ownership and moves the legacy directory intact
-> to a recoverable state backup). Prior: 2026-08-16 (commit pending — Kiro
-> 2.18.1 now discovers and live-reloads symlink replacement in both project and
-> Home-Manager-like layouts, so runtime steering moved to `ai.kiro.files` and
-> ordinary `files.*` delivery; generated tracked instruction projections remain
-> copies because store symlinks cannot be committed portably). Prior: 2026-08-15
-> (commit pending — Codex, glab, and Semble writable-root fanout now travels
-> through the hidden `ai.codex.internal._integration_writable_roots` channel and
-> is folded into native config at emission; it still creates no `files.*`
-> artifact). Prior: 2026-08-14 (commit pending — Semble's shell-entry cache
-> guard remains an environment/settings lifecycle effect and creates no
-> `files.*` artifact). Prior: 2026-08-05 (commit pending — re-verifies that
-> Codex's environment resolver and sandbox-root fanout create no `files.*`
-> artifact while its test override moves out of the formal module argument set).
-> Prior: 2026-08-05 (commit pending — Codex and glab sandbox-root fanout is
-> settings/environment integration and deliberately creates no `files.*`
-> artifact). Prior: 2026-08-02 (commit pending — Semble's devenv facet keeps its
-> sandbox-writable cache in project state and exports the same path through
-> `SEMBLE_CACHE_LOCATION`; this is environment/settings fanout, not a `files.*`
-> artifact). Prior: 2026-07-21 (commit pending — corrects the Kiro-symlink
-> citation to kirodotdev/Kiro#9787 with the engine qualifier, and the
-> `files.<name>.source` claim; earlier revision added auto-regeneration via
-> `gen` import). devenv internals are pinned to whatever version is in
-> flake.lock; if you touch `modules/devenv/**`,
+> **Last verified:** 2026-08-17 (commit pending — Codex's devenv backend now
+> resolves linked-worktree Git metadata into a direct named-profile permission;
+> like the existing cache-root fanout, this evaluation-only settings effect
+> creates no `files.*` artifact). Prior: 2026-08-17 (commit pending — Codex
+> deliberately uses devenv's one-entry directory symlink behavior because
+> 0.147.0 discovers that layout but ignores a real skill directory containing
+> symlinked leaves; a pre-files migration validates ownership and moves the
+> legacy directory intact to a recoverable state backup). Prior: 2026-08-16
+> (commit pending — Kiro 2.18.1 now discovers and live-reloads symlink
+> replacement in both project and Home-Manager-like layouts, so runtime steering
+> moved to `ai.kiro.files` and ordinary `files.*` delivery; generated tracked
+> instruction projections remain copies because store symlinks cannot be
+> committed portably). Prior: 2026-08-15 (commit pending — Codex, glab, and
+> Semble writable-root fanout now travels through the hidden
+> `ai.codex.internal._integration_writable_roots` channel and is folded into
+> native config at emission; it still creates no `files.*` artifact). Prior:
+> 2026-08-14 (commit pending — Semble's shell-entry cache guard remains an
+> environment/settings lifecycle effect and creates no `files.*` artifact).
+> Prior: 2026-08-05 (commit pending — re-verifies that Codex's environment
+> resolver and sandbox-root fanout create no `files.*` artifact while its test
+> override moves out of the formal module argument set). Prior: 2026-08-05
+> (commit pending — Codex and glab sandbox-root fanout is settings/environment
+> integration and deliberately creates no `files.*` artifact). Prior: 2026-08-02
+> (commit pending — Semble's devenv facet keeps its sandbox-writable cache in
+> project state and exports the same path through `SEMBLE_CACHE_LOCATION`; this
+> is environment/settings fanout, not a `files.*` artifact). Prior: 2026-07-21
+> (commit pending — corrects the Kiro-symlink citation to kirodotdev/Kiro#9787
+> with the engine qualifier, and the `files.<name>.source` claim; earlier
+> revision added auto-regeneration via `gen` import). devenv internals are
+> pinned to whatever version is in flake.lock; if you touch `modules/devenv/**`,
 > `lib/hm-helpers.nix:mkDevenvSkillEntries`, `devenv.nix` `files` block, or
 > anywhere that uses `files.*.source` and this fragment isn't updated in the
 > same commit, stop and fix it.
