@@ -647,13 +647,17 @@
         declare -A should_manage=()
         ${desiredAssignments}
 
-        ${pkgs.coreutils}/bin/mkdir -p "$state_dir"
-        exec {profile_lock_fd}> "$state_dir/lock"
-        ${lib.getExe pkgs.flock} "$profile_lock_fd"
-
+        # Whole-file profiles remain locked out. Avoid manufacturing a lock
+        # directory for the ordinary empty case: doing so would force every
+        # sandboxed devenv invocation to grant the shared parent containing
+        # every repository's ownership state.
         if [ "''${#desired_targets[@]}" -eq 0 ] && [ ! -f "$manifest" ]; then
           exit 0
         fi
+
+        ${pkgs.coreutils}/bin/mkdir -p "$state_dir"
+        exec {profile_lock_fd}> "$state_dir/lock"
+        ${lib.getExe pkgs.flock} "$profile_lock_fd"
 
         ${pkgs.coreutils}/bin/mkdir -p "$profile_dir"
 
@@ -1046,17 +1050,26 @@ in
       };
       environmentCacheHome = getEnv "XDG_CACHE_HOME";
       environmentHome = getEnv "HOME";
-      nixCacheRoot =
+      effectiveCacheHome =
         if environmentCacheHome != ""
-        then "${environmentCacheHome}/nix"
+        then environmentCacheHome
         else if environmentHome != ""
-        then "${environmentHome}/.cache/nix"
+        then "${environmentHome}/.cache"
+        else null;
+      nixCacheRoot =
+        if effectiveCacheHome != null
+        then "${effectiveCacheHome}/nix"
+        else null;
+      treefmtCacheRoot =
+        if lib.attrByPath ["treefmt" "enable"] false config && effectiveCacheHome != null
+        then "${effectiveCacheHome}/treefmt"
         else null;
       agentsMdRules = lib.mapAttrs mkRuleBody mergedRules;
     in {
       ai = {
         codex.internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter (
           lib.optional (nixCacheRoot != null) nixCacheRoot
+          ++ lib.optional (treefmtCacheRoot != null) treefmtCacheRoot
         ));
         codex.nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
           model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
