@@ -432,7 +432,8 @@
               // {
                 # A profile can be defined in a lower Codex config layer and
                 # receive this layer's integration roots by name. An explicit
-                # consumer rule at the same path still wins.
+                # rule in this settings tree at the same path still wins;
+                # normal Codex precedence applies between emitted files.
                 filesystem = integrationFilesystem // selectedFilesystem;
               };
           };

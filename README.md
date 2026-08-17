@@ -354,22 +354,20 @@ same. OpenSSH batch mode makes missing credentials fail instead of opening a
 password dialog. Set `ai.gitSshConfigWorkaround = false` to manage this
 yourself.
 
-For Codex's `workspace-write` sandbox, the module automatically adds the Nix
-cache and, under devenv, the current repository's `.git`. Integration modules
-add their own state when enabled: Semble adds its cache and glab adds its
-effective `configDir`. A parent containing multiple worktrees remains an
-explicit consumer root.
+Codex supports either the legacy `sandbox_mode` model or named permissions
+through `ai.codex.nativeSettings.default_permissions` and
+`ai.codex.nativeSettings.permissions`. Do not mix those models in any loaded
+config layer. Same-named permission tables merge across user and project files.
+The distinct `ai.codex.profiles` option, which would materialize whole extra
+files selected with `codex --profile`, remains locked out.
 
-Codex's beta permission model — `ai.codex.profiles`,
-`ai.codex.nativeSettings.default_permissions`, and
-`ai.codex.nativeSettings.permissions` — is **locked out** and fails evaluation
-if set. Those layers do not inherit the automatic roots above; worse, Codex
-resolves a layer carrying them by overriding rather than merging the
-`sandbox_mode`/`sandbox_workspace_write` settings beneath it, silently dropping
-every writable root the lower layer granted. Nix cannot see across config layers
-to catch that, so the surface is closed until the layering can be made safe. Use
-`ai.codex.nativeSettings.sandbox_mode` /
-`ai.codex.nativeSettings.sandbox_workspace_write`.
+With legacy `workspace-write`, the module automatically adds the Nix cache and,
+under devenv, the current repository's `.git`. With a selected custom permission
+profile, integration-owned roots become direct filesystem writes in that
+profile. Integration modules add their own state only when enabled: Semble adds
+its cache and glab adds its effective `configDir`. Explicit rules in the same
+emitted layer win at identical paths. A parent containing multiple worktrees
+remains an explicit consumer root.
 
 > **Kiro steering-copy upgrade:** when upgrading from a release that
 > materialized steering as real copies, keep the previous `ai.kiro.configDir`

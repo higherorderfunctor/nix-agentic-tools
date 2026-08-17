@@ -2119,6 +2119,52 @@ in {
       && builtins.all (assertion: assertion.assertion) devenv.config.assertions
   );
 
+  module-codex-permission-profile-layer-composition = mkTest "codex-permission-profile-layer-composition" (
+    let
+      user = evalHm {
+        ai.codex = {
+          enable = true;
+          nativeSettings = {
+            default_permissions = "project-edit";
+            permissions.project-edit = {
+              extends = ":workspace";
+              filesystem."/tmp/shared" = "deny";
+              network.enabled = true;
+            };
+          };
+        };
+      };
+      project = evalDevenv {
+        ai.codex = {
+          enable = true;
+          nativeSettings = {
+            default_permissions = "project-edit";
+            permissions.project-edit.filesystem = {
+              "/tmp/project-cache" = "write";
+              "/tmp/shared" = "write";
+            };
+          };
+        };
+      };
+      userSettings = hmCodexSettings user;
+      projectSettings = project.config.files.".codex/config.toml".source.value;
+      # Codex merges same-named permission tables by key and gives the project
+      # file higher precedence. Model that documented artifact composition
+      # explicitly instead of comparing two independent full configurations.
+      composedProfile = lib.recursiveUpdate userSettings.permissions.project-edit projectSettings.permissions.project-edit;
+    in
+      userSettings.default_permissions
+      == "project-edit"
+      && projectSettings.default_permissions == "project-edit"
+      && composedProfile.extends == ":workspace"
+      && composedProfile.network.enabled
+      && composedProfile.filesystem."/home/test/.cache/nix" == "write"
+      && composedProfile.filesystem."/tmp/project-cache" == "write"
+      && composedProfile.filesystem."/tmp/shared" == "write"
+      && builtins.all (assertion: assertion.assertion) user.config.assertions
+      && builtins.all (assertion: assertion.assertion) project.config.assertions
+  );
+
   module-codex-permission-profiles-toml-syntax = let
     evaluated = evalHm {
       ai.codex = {

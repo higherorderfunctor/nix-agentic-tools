@@ -645,8 +645,10 @@ fingerprint. Launcher wrappers fix `SEMBLE_CACHE_LOCATION` for their own
 variant; there is no consumer environment override. The convenience module does
 not select a permission model. Read-only, unrestricted, built-in, or unselected
 profiles get no writable-root contribution. An explicit filesystem rule at the
-same path wins over the integration default, so a consumer can narrow or deny a
-contributed cache without disabling the owning integration.
+same path in the same emitted layer wins over the integration default, so that
+layer can narrow or deny a contributed cache without disabling the owning
+integration. Normal Codex precedence still applies across files: a
+higher-precedence project layer can replace a lower user-layer rule.
 
 Codex itself contributes the roots needed by its normal backend lifecycle when
 the consumer selects either legacy `sandbox_mode = "workspace-write"` or a

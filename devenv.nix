@@ -107,11 +107,12 @@
   # `worktreesRoot` resolves to the same directory whichever one the shell is
   # entered from. Codex's writable roots are derived from it below.
   #
-  # The common Git directory needs a direct filesystem grant rather than being
-  # declared a workspace root. Making it a workspace root causes Codex's Git
-  # metadata expansion to synthesize `<common-dir>/.git`, which breaks
-  # git-branchless in linked worktrees. Sibling worktrees are genuine workspace
-  # roots because sessions intentionally edit across them.
+  # This previously claimed the Codex permission profile granted the shared
+  # Git directory "without granting write access to the main checkout's
+  # working files". That was never true of the config it described: `extends =
+  # ":workspace"` plus `:workspace_roots."." = "write"` made the checked-out
+  # working tree writable, measured with `codex sandbox` on 2026-08-05. The
+  # claim is recorded here only so it is not reintroduced from memory.
   devenvRoot = toString config.devenv.root;
   devenvRootParent = builtins.dirOf devenvRoot;
   devenvRootParentName = builtins.baseNameOf devenvRootParent;
@@ -120,14 +121,6 @@
     then "${builtins.dirOf devenvRootParent}/${lib.removeSuffix "-worktrees" devenvRootParentName}"
     else devenvRoot;
   worktreesRoot = "${repositoryRoot}-worktrees";
-  environmentCacheHome = builtins.getEnv "XDG_CACHE_HOME";
-  environmentHome = builtins.getEnv "HOME";
-  codexNixCacheRoot =
-    if environmentCacheHome != ""
-    then "${environmentCacheHome}/nix"
-    else if environmentHome != ""
-    then "${environmentHome}/.cache/nix"
-    else null;
   # The enabled Semble devenv facet owns this project-local cache, contributes
   # it to Codex's writable roots, and invalidates its indexes when the effective
   # Semble package (including extra grammars) changes.
@@ -365,27 +358,28 @@ in {
         # to replace that tracked real file with the redundant module projection.
         instructions.cli.enable = false;
       };
-      # Use the same named permission profile as Home Manager. Codex merges
-      # same-named permission tables across config layers, so the user-level
-      # Nix cache and project-level roots remain effective together. The
-      # effective Nix cache and project-local Semble cache are contributed
-      # automatically by their owning modules. The linked-worktree `.git`
-      # pointer is deliberately absent: granting it makes Codex synthesize the
-      # invalid `<pointer>/.git` mount this profile exists to avoid.
+      # Keep the project on the legacy sandbox model while the loaded Home
+      # Manager user layer still uses it. Named permissions are enabled by the
+      # module, but Codex does not compose them with legacy settings across
+      # config layers; the user layer must migrate first.
+      #
+      # `${config.devenv.root}/.git`, the effective Nix cache root, and the
+      # project-local Semble cache are contributed automatically once their
+      # owning integrations are enabled. Only the worktree collection remains
+      # consumer policy here.
       nativeSettings = {
         approval_policy = "never";
-        default_permissions = "repo-worktrees";
         model = "gpt-5.6-sol";
         model_reasoning_effort = "high";
-        permissions.repo-worktrees = {
-          description = "Edit this repository and its sibling worktrees.";
-          extends = ":workspace";
-          filesystem = {
-            "${repositoryRoot}" = "read";
-            "${repositoryRoot}/.git" = "write";
-          };
-          network.enabled = true;
-          workspace_roots."${worktreesRoot}" = true;
+        sandbox_mode = "workspace-write";
+        sandbox_workspace_write = {
+          network_access = true;
+          writable_roots = [
+            # The worktree collection, not this checkout: work routinely spans
+            # sibling worktrees of one clone, and a session started in any of
+            # them must be able to write the others.
+            worktreesRoot
+          ];
         };
       };
     };
@@ -709,8 +703,8 @@ in {
     echo "Validating devenv configuration..."
     # Per-runtime ai.shell delivery, against the real artifacts on PATH.
     ${lib.getExe verifyAiShell}
-    # Codex must inject no ARGV: the selected permission policy lives in the
-    # ordinary user/project config stack, not in a separate `--profile` layer.
+    # Codex must inject no ARGV: a separate `--profile` config layer would make
+    # cross-layer permission behavior harder to inspect and validate.
     #
     # It used to assert "is the unwrapped package", which was a proxy for the
     # same thing and stopped being true on 2026-08-10: Codex is now wrapped to
@@ -728,22 +722,25 @@ in {
     fi
     nat_codex_config=.codex/config.toml
     test -f "$nat_codex_config" || { echo "FAIL: Codex project config was not written"; exit 1; }
-    ${pkgs.gnugrep}/bin/grep -Fqx 'default_permissions = "repo-worktrees"' "$nat_codex_config" || { echo "FAIL: Codex project config does not select repo-worktrees permissions"; exit 1; }
-    ${pkgs.gnugrep}/bin/grep -Fqx '[permissions.repo-worktrees]' "$nat_codex_config" || { echo "FAIL: Codex repo-worktrees permission profile is missing"; exit 1; }
-    ! ${pkgs.gnugrep}/bin/grep -Eq '^(sandbox_mode|\[sandbox_workspace_write\])' "$nat_codex_config" || { echo "FAIL: Codex project config mixes legacy and named permission models"; exit 1; }
+    ${pkgs.gnugrep}/bin/grep -Fq 'sandbox_mode = "workspace-write"' "$nat_codex_config" || { echo "FAIL: Codex project config does not select the legacy workspace-write sandbox"; exit 1; }
+    ! ${pkgs.gnugrep}/bin/grep -Eq '^(default_permissions|\[permissions)' "$nat_codex_config" || { echo "FAIL: Codex project config carries the locked-out beta permission model"; exit 1; }
     test ! -e "''${CODEX_HOME:-$HOME/.codex}/nix-agentic-tools.config.toml" || { echo "FAIL: a stale nix-agentic-tools Codex profile is still materialized in CODEX_HOME"; exit 1; }
-    # Direct filesystem entries are intentionally exact-path checks: the
-    # common Git directory must never become a workspace root and trigger
-    # Codex's synthetic `<common-dir>/.git` expansion.
+    # The module-contributed roots. Semble is interactive-only, so its scoped
+    # cache is absent from the deliberately lean CI evaluation. `cache/nix` is
+    # the regression this convergence fixed: the former permission profile
+    # never restated it, so a sandboxed `nix build` here could not write its own
+    # cache.
+    nat_roots="$(${pkgs.gnugrep}/bin/grep -F 'writable_roots' "$nat_codex_config")"
     for nat_want in ${lib.escapeShellArgs (
-      ["${repositoryRoot}/.git"]
+      [worktreesRoot]
       ++ lib.optional (!isCI) sembleCache
-      ++ lib.optional (codexNixCacheRoot != null) codexNixCacheRoot
+      ++ ["${devenvRoot}/.git" "cache/nix"]
     )}; do
-      ${pkgs.gnugrep}/bin/grep -Fq "\"$nat_want\" = \"write\"" "$nat_codex_config" || { echo "FAIL: Codex permission profile is missing direct write root $nat_want"; exit 1; }
+      case "$nat_roots" in
+        *"$nat_want"*) ;;
+        *) echo "FAIL: Codex writable_roots is missing $nat_want"; exit 1 ;;
+      esac
     done
-    ${pkgs.gnugrep}/bin/grep -Fq "\"${repositoryRoot}\" = \"read\"" "$nat_codex_config" || { echo "FAIL: Codex permission profile cannot discover the primary checkout"; exit 1; }
-    ${pkgs.gnugrep}/bin/grep -Fq "\"${worktreesRoot}\" = true" "$nat_codex_config" || { echo "FAIL: Codex permission profile is missing the worktree collection"; exit 1; }
     test -f .claude/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .claude/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     # Deref'd references must resolve on disk (guards the dangling-symlink
     # regression end-to-end, not just at the store-path level).
