@@ -46,11 +46,24 @@ in
       fail "publisher did not advance refs/dolt/data"
     }
 
+    find_free_port() {
+      local candidate first
+      first="$((43000 + ($$ % 1000)))"
+      for candidate in $(seq "$first" "$((first + 249))"); do
+        if ! ${pkgs.coreutils}/bin/timeout 1 ${pkgs.bash}/bin/bash -c \
+          "exec 3<>/dev/tcp/127.0.0.1/$candidate" >/dev/null 2>&1; then
+          printf '%s\n' "$candidate"
+          return
+        fi
+      done
+      fail "could not find an unused loopback port"
+    }
+
     wait_for_port() {
-      local attempt
+      local attempt port="$1"
       for attempt in $(seq 1 120); do
         if ${pkgs.coreutils}/bin/timeout 1 ${pkgs.bash}/bin/bash -c \
-          'exec 3<>/dev/tcp/127.0.0.1/13307' >/dev/null 2>&1; then
+          "exec 3<>/dev/tcp/127.0.0.1/$port" >/dev/null 2>&1; then
           return
         fi
         sleep 0.1
@@ -67,7 +80,7 @@ in
     }
 
     run_scenario() {
-      local actor_id actual_ref before_ref client_pid cold_server_pid database db_path dirty_head entry entry_dir fixture foreign_pid holder_pid interval_id label lifecycle_script linked_id lock_path origin_mode publish_pid publisher_pid server_pid startup_ref state_hash state_root
+      local actor_id actual_ref before_ref client_pid cold_server_pid database db_path dirty_head entry entry_dir fixture foreign_pid holder_pid interval_id label lifecycle_script linked_id lock_path origin_mode port publish_pid publisher_pid server_pid startup_ref state_hash state_root
       label="$1"
       origin_mode="$2"
       fixture="$TMPDIR/$label"
@@ -77,9 +90,11 @@ in
       foreign_pid=""
       publisher_pid=""
       server_pid=""
+      port="$(find_free_port)"
       mkdir -p "$fixture/home" "$fixture/state"
       cp ${lib.getExe' lifecycle.lifecycle "beads-lifecycle"} "$lifecycle_script"
       sed -i "s|@FIXTURE@|$fixture|g" "$lifecycle_script"
+      sed -i "s|13307|$port|g" "$lifecycle_script"
       chmod +x "$lifecycle_script"
       mkdir -p "$entry_dir"
       for entry in bd beads-bootstrap beads-checkpoint beads-diagnostics beads-publish beads-status; do
@@ -138,11 +153,11 @@ in
         cd "$fixture/foreign-data"
         DOLT_ROOT_PATH="$fixture/foreign-root" ${cfg.package.dolt}/bin/dolt init >/dev/null
         DOLT_ROOT_PATH="$fixture/foreign-root" ${cfg.package.dolt}/bin/dolt \
-          sql-server --host 127.0.0.1 --port 13307
+          sql-server --host 127.0.0.1 --port "$port"
       ) >"$fixture/foreign-server.out" 2>&1 &
       foreign_pid="$!"
       trap 'stop_process "$publisher_pid"; stop_process "$cold_server_pid"; stop_process "$foreign_pid"; stop_process "$server_pid"' RETURN
-      wait_for_port
+      wait_for_port "$port"
       if (cd "$fixture/source" && "$entry_dir/beads-bootstrap") \
         >"$fixture/foreign-bootstrap.out" 2>&1; then
         fail "$label bootstrap accepted an unowned listener"
@@ -185,10 +200,12 @@ in
       ) &
       holder_pid="$!"
       while [ ! -e "$fixture/lock-held" ]; do sleep 0.02; done
-      (cd "$fixture/source" && "$entry_dir/bd" --actor human create "$label source issue" --silent) \
+      (cd "$fixture/source" && XDG_RUNTIME_DIR="$fixture/runtime-a" \
+        "$entry_dir/bd" --actor human create "$label source issue" --silent) \
         >"$fixture/actor-id" &
       client_pid="$!"
-      (cd "$fixture/linked" && "$entry_dir/beads-checkpoint") >"$fixture/contended-checkpoint.out" &
+      (cd "$fixture/linked" && XDG_RUNTIME_DIR="$fixture/runtime-b" \
+        "$entry_dir/beads-checkpoint") >"$fixture/contended-checkpoint.out" &
       publish_pid="$!"
       sleep 1
       kill -0 "$client_pid" 2>/dev/null || fail "$label guarded mutation bypassed the repository lock"
@@ -229,7 +246,8 @@ in
       ) &
       holder_pid="$!"
       while [ ! -e "$fixture/lock-held" ]; do sleep 0.02; done
-      (cd "$fixture/source" && "$lifecycle_script" publisher) >"$fixture/publisher.out" 2>&1 &
+      (cd "$fixture/source" && XDG_RUNTIME_DIR="$fixture/runtime-a" \
+        "$lifecycle_script" publisher) >"$fixture/publisher.out" 2>&1 &
       publisher_pid="$!"
       sleep 1
       kill -0 "$publisher_pid" 2>/dev/null || fail "$label pusher bypassed the repository lock"
