@@ -24,7 +24,8 @@
   inherit (pkgs) lib;
   root = "/tmp/devenv-root";
   # Minimal stubs for the devenv options claude.nix reads (config.devenv.root,
-  # config.git-hooks.*) and writes (files, enterShell, changelogs, infoSections).
+  # config.git-hooks.*) and writes (assertions, files, enterShell, changelogs,
+  # infoSections).
   # Re-derive against devenv's claude.nix on a devenv bump if this eval breaks.
   ev = lib.evalModules {
     specialArgs = {inherit pkgs;};
@@ -32,6 +33,10 @@
       (import "${inputs.devenv}/src/modules/integrations/claude.nix")
       {
         options = {
+          assertions = lib.mkOption {
+            type = lib.types.listOf lib.types.unspecified;
+            default = [];
+          };
           devenv.root = lib.mkOption {
             type = lib.types.str;
             default = root;
