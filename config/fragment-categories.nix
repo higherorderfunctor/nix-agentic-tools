@@ -124,6 +124,7 @@ _: {
     beads = {
       scopes = [
         "checks/beads-lifecycle.nix"
+        "checks/module-eval.nix"
         "docs/beads/bd-reference.md"
         "docs/beads/dolt-git-remotes.md"
         "overlays/dev-tools/beads.nix"

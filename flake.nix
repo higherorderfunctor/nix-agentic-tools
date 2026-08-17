@@ -237,7 +237,7 @@
       pkgs = pkgsFor system;
       bareCommandsCheck = {bare-commands = import ./checks/bare-commands.nix {inherit pkgs;};};
       beadsContractsCheck = {beads-contracts = import ./checks/beads-contracts.nix {inherit pkgs;};};
-      beadsLifecycleCheck = {beads-lifecycle = import ./checks/beads-lifecycle.nix {inherit lib pkgs;};};
+      beadsLifecycleCheck = {beads-lifecycle = import ./checks/beads-lifecycle.nix {inherit lib pkgs self;};};
       cacheHitParityCheck = import ./checks/cache-hit-parity.nix {inherit inputs lib pkgs self;};
       codexCoverageCheck = import ./checks/chatgpt-codex-coverage.nix {inherit lib pkgs;};
       codexExtractedCheck = import ./checks/chatgpt-codex-extracted.nix {inherit pkgs self;};

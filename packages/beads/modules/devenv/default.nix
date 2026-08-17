@@ -5,8 +5,28 @@
   ...
 }: let
   cfg = config.services.beads;
-  lifecycle = import ../../lib/mkLifecycle.nix {inherit cfg lib pkgs;};
-  lifecycleExe = lib.getExe' lifecycle.lifecycle "beads-lifecycle";
+  hasDolt = cfg.package ? dolt;
+  issuePrefixValid =
+    cfg.issuePrefix
+    != null
+    && builtins.match "^[a-z][a-z0-9_-]*$" cfg.issuePrefix != null;
+  ledgerUrlValid =
+    cfg.ledgerUrl
+    != null
+    && cfg.ledgerUrl != ""
+    && !lib.hasInfix "\n" cfg.ledgerUrl
+    && !lib.hasInfix "\r" cfg.ledgerUrl
+    && builtins.match "^[Hh][Tt][Tt][Pp][Ss]?://[^/@]+@.*$" cfg.ledgerUrl == null
+    && builtins.match "^[A-Za-z][A-Za-z0-9+.-]*://[^/@]*:[^/@]+@.*$" cfg.ledgerUrl == null;
+  lifecycleReady = hasDolt && issuePrefixValid && ledgerUrlValid;
+  lifecycle =
+    if lifecycleReady
+    then import ../../lib/mkLifecycle.nix {inherit cfg lib pkgs;}
+    else null;
+  lifecycleExe =
+    if lifecycleReady
+    then lib.getExe' lifecycle.lifecycle "beads-lifecycle"
+    else null;
 in {
   imports = [(import ../options.nix {inherit lib;})];
 
@@ -50,7 +70,7 @@ in {
         }
       ];
     }
-    (lib.mkIf cfg.enable {
+    (lib.mkIf (cfg.enable && lifecycleReady) {
       packages = [lifecycle.package];
 
       processes = {

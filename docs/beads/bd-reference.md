@@ -131,13 +131,18 @@ the Beads package's `passthru.dolt`. It is devenv-only: there is no
 repository deliberately leaves it disabled; #994 owns the first real-ledger
 exercise after #993 supplies agent-runtime wiring.
 
-`devenv up` starts one shared external Dolt daemon and the sole publisher. The
-publisher waits for the daemon, performs module-owned initialization or exact
-existing-state verification, drains once at startup, then publishes on the
-bounded interval. Shell activation runs only `beads:prepare`, which creates and
-verifies contained runtime configuration and never publishes. Operators and
-agents do not run `bd init`; `beads-bootstrap` and the `beads:bootstrap` task
-are the explicit module-owned entry points.
+`devenv up` starts the shared external Dolt daemon and a publisher process. The
+daemon holds a repository-scoped lifetime lease, and clients require that lease
+plus loopback readiness before initialization. Every publisher invocation uses
+the sole validated raw-Dolt pusher path under the repository lock. The pusher
+quiesces the leased Dolt child before opening its data directory, publishes,
+then resumes the child before final validation and unlock. It performs
+module-owned initialization or exact existing-state verification, drains once at
+startup, then publishes on the bounded interval. Shell activation runs only
+`beads:prepare`, which creates and verifies contained runtime configuration
+under the same lock and never publishes. Operators and agents do not run
+`bd init`; `beads-bootstrap` and the `beads:bootstrap` task are the explicit
+module-owned entry points.
 
 The installed `bd` acquires the repository-wide lock even for reads, rejects
 unqualified lifecycle/configuration/recovery commands, verifies clean valid
@@ -147,9 +152,11 @@ unlocking. `beads-checkpoint`, `beads-status`, and `beads-diagnostics` expose
 the corresponding validation and observation paths. Runtime state is selected
 from the shared Git common directory below `XDG_STATE_HOME`, so linked worktrees
 share one ledger without writing into either checkout. The isolated fixture
-covers equal and different source/ledger URLs, linked-worktree writes, safe
-re-entry, startup publication, remote divergence, dirty refusal, and unchanged
-source/global configuration. `[measured lifecycle check @1.2.2/2.2.4]`
+covers equal and different source/ledger URLs, linked-worktree lock contention,
+foreign-port refusal, safe re-entry, cold existing-ledger bootstrap, startup and
+interval publication contents, remote divergence, dirty and committed invalid
+refusal, public entry points, and unchanged source/global configuration.
+`[measured lifecycle check @1.2.2/2.2.4]`
 
 **Unattended bump risk.** The update target proves that a new stable release
 builds and preserves the package contract, but it does not open or migrate an

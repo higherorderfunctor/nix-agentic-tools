@@ -140,6 +140,12 @@ in {
     ! "$grep" -Fq '_integration_writable_roots' "${docs.hmOptionsDoc.optionsCommonMark}"
     ! "$grep" -Fq '_integration_writable_roots' "${docs.devenvOptionsDoc.optionsCommonMark}"
 
+    # Devenv-only service APIs still belong in the consumer reference. This
+    # positive control prevents an omitted transform prefix from silently
+    # filtering the complete Beads module tree.
+    "$jq" --exit-status 'has("services.beads.enable")' "${devenvJson}" >/dev/null
+    "$grep" -Fq 'services\.beads\.enable' "${docs.devenvOptionsDoc.optionsCommonMark}"
+
     # Exercise every runtime namespace in the CommonMark renderings too; JSON
     # parity alone would let a broken markdown generator remain dormant after
     # the doc-site removal. nixos-render-docs escapes dots in option headings.

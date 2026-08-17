@@ -297,6 +297,7 @@
     "glab."
     "kiro."
     "living-workflow."
+    "services.beads."
     "stacked-workflows."
   ];
 

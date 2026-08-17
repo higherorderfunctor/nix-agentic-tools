@@ -11410,6 +11410,7 @@ in {
       beadsAssertions = lib.filter (assertion: lib.hasPrefix "services.beads" assertion.message) ev.config.assertions;
     in
       lib.any (assertion: !assertion.assertion) beadsAssertions
+      && ev.config.packages == []
   );
 
   module-beads-default-disabled = mkTest "beads-default-disabled" (
@@ -11443,5 +11444,33 @@ in {
       && ev.config.tasks."beads:prepare".before == ["devenv:enterShell"]
       && lib.hasInfix " publisher" ev.config.processes.beads-publisher.exec
       && lib.hasInfix " server" ev.config.processes.beads-server.exec
+  );
+
+  module-beads-missing-required-options-rejected = mkTest "beads-missing-required-options-rejected" (
+    let
+      ev = evalDevenv {services.beads.enable = true;};
+      beadsAssertions = lib.filter (assertion: lib.hasPrefix "services.beads" assertion.message) ev.config.assertions;
+    in
+      builtins.length (lib.filter (assertion: !assertion.assertion) beadsAssertions)
+      == 2
+      && ev.config.packages == []
+      && ev.config.processes == {}
+  );
+
+  module-beads-package-without-dolt-rejected = mkTest "beads-package-without-dolt-rejected" (
+    let
+      ev = evalDevenv {
+        services.beads = {
+          enable = true;
+          issuePrefix = "fixture";
+          ledgerUrl = "file:///tmp/beads-ledger.git";
+          package = pkgs.writeShellScriptBin "bd" "exit 0";
+        };
+      };
+      beadsAssertions = lib.filter (assertion: lib.hasPrefix "services.beads" assertion.message) ev.config.assertions;
+    in
+      lib.any (assertion: !assertion.assertion) beadsAssertions
+      && ev.config.packages == []
+      && ev.config.processes == {}
   );
 }

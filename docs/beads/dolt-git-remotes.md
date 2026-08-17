@@ -268,11 +268,13 @@ issue #1025.
 
 The settled module pusher derives the database name from `.beads/metadata.json`,
 acquires the same repository lock used by mutations, requires a clean valid
-working set and the expected remote ref, and runs raw
+working set and the expected remote ref, and asks the repository-leased server
+process to quiesce its Dolt child. It then runs raw
 `dolt push --set-upstream origin main` from the server data directory without
-force. That fresh Dolt process recreates exactly one usable bare cache,
-publishes `refs/dolt/data`, and heals the still-running server: the next
-`bd dolt push` succeeds without a restart. No version override, Dolt patch,
+force and resumes a fresh child before final validation and unlock. Quiescing
+both flushes the committed server checkpoint and prevents the raw process and
+SQL daemon from opening the same database concurrently; the fresh child also
+starts without the failed-clone cache entry. No version override, Dolt patch,
 cache-path glue, or manual operator/agent push is required. A future upstream
 fix changes the discrimination result, not the module-pusher ownership decision.
 `[measured server probe @Beads 1.2.2 / Dolt 2.2.3; requalified @Beads 1.2.2 / Dolt 2.2.4]`
@@ -293,9 +295,11 @@ unqualified and forbidden. `services.beads` implements this boundary with one
 shared state root for linked worktrees, a guarded installed `bd`, external
 daemon and publisher process entries, durable expected-remote and published-HEAD
 checkpoints, and activation that only prepares contained state. The isolated
-lifecycle fixture exercises module-owned init/re-entry, startup drain, equal and
-different source-origin topology, dirty refusal, and divergence refusal. #993
-may add agent-runtime wiring but may not weaken this boundary.
+lifecycle fixture exercises module-owned init/re-entry, cold existing-ledger
+bootstrap, startup and interval drain contents, equal and different
+source-origin topology, lock contention, dirty and committed-invalid refusal,
+foreign-port ownership, and divergence refusal. #993 may add agent-runtime
+wiring but may not weaken this boundary.
 `[measured recovery probe @Beads 1.2.2 / Dolt 2.2.3; measured lifecycle check @Beads 1.2.2 / Dolt 2.2.4]`
 
 ## Encrypted-remote options

@@ -71,9 +71,8 @@
                   ${pkgs.coreutils}/bin/rm -f "$after"
                 }
 
-                prepare() {
-                  local expected_config expected_owner new_state=0 state_base state_hash temporary
-
+                resolve_state() {
+                  local lock_base state_base state_hash
                   source_root="$(${pkgs.git}/bin/git rev-parse --show-toplevel 2>/dev/null)" \
                     || fail "run inside a Git worktree"
                   common_dir="$(${pkgs.git}/bin/git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
@@ -81,15 +80,33 @@
                   state_hash="$(printf '%s' "$common_dir" | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.gawk}/bin/awk '{print $1}')"
                   state_base="''${XDG_STATE_HOME:-''${HOME:?HOME is required}/.local/state}"
                   state_root="$state_base/nix-agentic-tools/beads/$state_hash"
+                  lock_base="''${XDG_RUNTIME_DIR:-$state_base}/nix-agentic-tools/beads-locks"
                   beads_dir="$state_root/.beads"
                   dolt_data="$state_root/dolt-data"
                   dolt_root="$state_root/dolt-root"
                   neutral_cwd="$state_root/neutral"
-                  repository_lock="$state_root/repository.lock"
+                  repository_lock="$lock_base/$state_hash.lock"
                   server_lock="$state_root/server.lock"
+                  server_pid_file="$state_root/server.pid"
+                  server_restart_file="$state_root/server.restart"
                   expected_remote_file="$state_root/expected-remote.oid"
                   published_head_file="$state_root/published-head"
                   owner_file="$state_root/owner"
+                }
+
+                prepare_lock_namespace() {
+                  local lock_directory
+                  lock_directory="$(${pkgs.coreutils}/bin/dirname "$repository_lock")"
+                  ${pkgs.coreutils}/bin/install -d -m 0700 "$lock_directory"
+                  [ ! -L "$lock_directory" ] || fail "repository lock directory must not be a symlink"
+                  [ "$(${pkgs.coreutils}/bin/stat -c %u "$lock_directory")" = "$(${pkgs.coreutils}/bin/id -u)" ] \
+                    || fail "repository lock directory is owned by another user"
+                  [ "$(${pkgs.coreutils}/bin/stat -c %a "$lock_directory")" = 700 ] \
+                    || fail "repository lock directory mode is not 0700"
+                }
+
+                prepare_locked() {
+                  local expected_config expected_owner new_state=0 temporary
 
                   if [ ! -e "$owner_file" ]; then
                     if [ -e "$beads_dir/metadata.json" ] || [ -e "$expected_remote_file" ] || [ -e "$published_head_file" ]; then
@@ -153,6 +170,18 @@
                     || fail "contained Dolt metrics must remain disabled"
                 }
 
+                begin_locked() {
+                  resolve_state
+                  prepare_lock_namespace
+                  acquire_repository_lock
+                  prepare_locked
+                }
+
+                prepare() {
+                  begin_locked
+                  release_repository_lock
+                }
+
           run_bd_raw() {
             (
               cd "$neutral_cwd"
@@ -184,14 +213,59 @@
                   )
                 }
 
-      server_ready() {
+      port_ready() {
         ${pkgs.coreutils}/bin/timeout 1 \
           ${pkgs.bash}/bin/bash -c \
           "exec 3<>/dev/tcp/127.0.0.1/$server_port" >/dev/null 2>&1
                 }
 
+                module_server_ready() {
+                  local probe_lock_fd
+                  [ -f "$server_lock" ] || return 1
+                  exec {probe_lock_fd}<>"$server_lock" || return 1
+                  if ${pkgs.util-linux}/bin/flock -n "$probe_lock_fd"; then
+                    ${pkgs.util-linux}/bin/flock -u "$probe_lock_fd" || :
+                    exec {probe_lock_fd}>&-
+                    return 1
+                  fi
+                  exec {probe_lock_fd}>&-
+                  port_ready
+                }
+
                 require_server() {
-                  server_ready || fail "the module-owned Dolt daemon is not ready on 127.0.0.1:$server_port"
+                  module_server_ready \
+                    || fail "the module-owned Dolt daemon is not ready on 127.0.0.1:$server_port"
+                }
+
+                quiesce_server() {
+                  local attempt server_pid
+                  [ -f "$server_pid_file" ] || fail "the module-owned Dolt daemon has no process checkpoint"
+                  server_pid="$(${pkgs.coreutils}/bin/cat "$server_pid_file")"
+                  [[ "$server_pid" =~ ^[0-9]+$ ]] || fail "the module-owned Dolt daemon has an invalid process checkpoint"
+                  ${pkgs.coreutils}/bin/kill -0 "$server_pid" 2>/dev/null \
+                    || fail "the module-owned Dolt daemon process is absent"
+                  atomic_line "$server_restart_file" publish
+                  ${pkgs.coreutils}/bin/kill -TERM "$server_pid"
+                  for attempt in $(${pkgs.coreutils}/bin/seq 1 120); do
+                    if ! port_ready; then
+                      return
+                    fi
+                    ${pkgs.coreutils}/bin/sleep 0.1
+                  done
+                  ${pkgs.coreutils}/bin/rm -f "$server_restart_file"
+                  fail "the module-owned Dolt daemon did not quiesce for publication"
+                }
+
+                resume_server() {
+                  local attempt
+                  ${pkgs.coreutils}/bin/rm -f "$server_restart_file"
+                  for attempt in $(${pkgs.coreutils}/bin/seq 1 120); do
+                    if module_server_ready; then
+                      return
+                    fi
+                    ${pkgs.coreutils}/bin/sleep 0.1
+                  done
+                  fail "the module-owned Dolt daemon did not resume after publication"
                 }
 
                 database_sql() {
@@ -251,6 +325,8 @@
                   [ "$actual" = "$beads_dir" ] || fail "Beads resolved outside module-owned state"
                   actual="$(run_bd_raw config show --json | ${pkgs.jq}/bin/jq -r '.[] | select(.key == "sync.remote") | .value')"
                   [ "$actual" = "$ledger_url" ] || fail "Beads sync.remote differs from the declared URL"
+                  actual="$(run_bd_raw config show --json | ${pkgs.jq}/bin/jq -r '.[] | select(.key == "issue-prefix") | .value')"
+                  [ "$actual" = "$issue_prefix" ] || fail "Beads issue-prefix differs from the declared prefix"
                   expected_remote="git+$ledger_url"
                   actual_remote="$(run_bd_raw dolt remote list --json | ${pkgs.jq}/bin/jq -c '[.[] | {name, url, sql_url, status}]')" \
                     || fail "could not inspect the Beads Dolt remote"
@@ -348,15 +424,13 @@
                 }
 
                 bootstrap() {
-                  prepare
-                  acquire_repository_lock
+                  begin_locked
                   bootstrap_locked
                   release_repository_lock
                 }
 
                 checkpoint() {
-                  prepare
-                  acquire_repository_lock
+                  begin_locked
                   bootstrap_locked >/dev/null
                   assert_clean_valid
                   printf 'clean checkpoint %s\n' "$(head_hash)"
@@ -400,17 +474,16 @@
                   local before command rc
                   command="$(command_name "$@")"
                   case "$command" in
-                    "" | completion | help | human | init-safety | metrics | quickstart | version)
+                    "" | completion | help | human | init-safety | quickstart | version)
                       exec "$bd_bin" "$@"
                       ;;
-              admin | ado | bootstrap | branch | compact | config | doctor | dolt | federation | flatten | gc | github | gitlab | hooks | init | jira | linear | mail | migrate | notion | onboard | prune | purge | recompute-blocked | repo | restore | rules | setup | ship | sql | sync | upgrade | vc | worktree)
+              admin | ado | bootstrap | branch | compact | config | doctor | dolt | federation | flatten | gc | github | gitlab | hooks | init | jira | linear | mail | metrics | migrate | notion | onboard | prune | purge | recompute-blocked | rename-prefix | repo | restore | rules | setup | ship | sql | sync | upgrade | vc | worktree)
                 fail "bd $command is outside the guarded repository mutation surface"
                 ;;
               *) : ;;
                   esac
 
-                  prepare
-                  acquire_repository_lock
+                  begin_locked
                   bootstrap_locked >/dev/null
                   assert_clean_valid
                   before="$(head_hash)"
@@ -433,8 +506,7 @@
 
                 publish_once() {
                   local actual after before local_head published source_before
-                  prepare
-                  acquire_repository_lock
+                  begin_locked
                   bootstrap_locked >/dev/null
                   assert_clean_valid
                   source_before="$(${pkgs.coreutils}/bin/mktemp "$state_root/.source-before.XXXXXX")"
@@ -452,10 +524,28 @@
                     return
                   fi
 
-                  run_dolt "$dolt_data/$database" push --set-upstream origin main
-                  after="$(remote_ref)"
-                  [ "$after" != absent ] || fail "publication did not create refs/dolt/data"
-                  [ "$after" != "$before" ] || fail "publication did not advance refs/dolt/data"
+                  # A raw Dolt process and the SQL daemon must never open the
+                  # same database concurrently. Stopping the child also
+                  # flushes its committed checkpoint before the no-force push;
+                  # the server lease remains held by its small restart loop.
+                  quiesce_server
+                  if ! run_dolt "$dolt_data/$database" push --set-upstream origin main; then
+                    resume_server
+                    fail "raw Dolt publication failed"
+                  fi
+                  if ! after="$(remote_ref)"; then
+                    resume_server
+                    fail "could not verify refs/dolt/data after publication"
+                  fi
+                  if [ "$after" = absent ]; then
+                    resume_server
+                    fail "publication did not create refs/dolt/data"
+                  fi
+                  if [ "$after" = "$before" ]; then
+                    resume_server
+                    fail "publication did not advance refs/dolt/data"
+                  fi
+                  resume_server
                   assert_clean_valid
                   atomic_line "$expected_remote_file" "$after"
                   atomic_line "$published_head_file" "$local_head"
@@ -467,8 +557,7 @@
 
                 status() {
                   local actual expected initialized=false local_head=null published=null
-                  prepare
-                  acquire_repository_lock
+                  begin_locked
                   if [ -d "$dolt_data/$database" ]; then
                     require_server
                     assert_clean_valid
@@ -495,16 +584,18 @@
                 }
 
                 diagnostics() {
-                  prepare
+                  begin_locked
                   printf 'bd: '
                   "$bd_bin" --version
                   printf 'dolt: '
                   DOLT_ROOT_PATH="$dolt_root" "$dolt_bin" version | ${pkgs.coreutils}/bin/head -n 1
+                  release_repository_lock
                   status
                 }
 
                 publisher() {
-                  while ! server_ready; do
+                  resolve_state
+                  while ! module_server_ready; do
                     ${pkgs.coreutils}/bin/sleep 1
                   done
                   publish_once
@@ -515,19 +606,50 @@
                 }
 
                 server() {
-                  prepare
+                  local server_child_pid="" server_rc
+                  begin_locked
+                  release_repository_lock
                   exec {server_lock_fd}>"$server_lock" || fail "could not open the server lock"
                   if ! ${pkgs.util-linux}/bin/flock -n "$server_lock_fd"; then
                     fail "the shared repository Dolt daemon is already owned"
                   fi
-                  if server_ready; then
-                    fail "a Dolt daemon is already serving the lifecycle state"
-            fi
-            cd "$dolt_data"
-            exec ${pkgs.coreutils}/bin/env \
-              DOLT_DISABLE_EVENT_FLUSH=1 \
-              DOLT_ROOT_PATH="$dolt_root" \
-              "$dolt_bin" sql-server --host 127.0.0.1 --port "$server_port"
+                  if port_ready; then
+                    fail "another process is already listening on the declared Dolt port"
+                  fi
+                  [ ! -e "$server_restart_file" ] \
+                    || fail "a stale server restart request requires operator diagnosis"
+                  ${pkgs.coreutils}/bin/rm -f "$server_pid_file"
+                  trap '
+                    if [ -n "$server_child_pid" ] && ${pkgs.coreutils}/bin/kill -0 "$server_child_pid" 2>/dev/null; then
+                      ${pkgs.coreutils}/bin/kill -TERM "$server_child_pid" 2>/dev/null || :
+                      wait "$server_child_pid" 2>/dev/null || :
+                    fi
+                    ${pkgs.coreutils}/bin/rm -f "$server_pid_file"
+                  ' EXIT
+                  while true; do
+                    (
+                      cd "$dolt_data"
+                      exec ${pkgs.coreutils}/bin/env \
+                        DOLT_DISABLE_EVENT_FLUSH=1 \
+                        DOLT_ROOT_PATH="$dolt_root" \
+                        "$dolt_bin" sql-server --host 127.0.0.1 --port "$server_port"
+                    ) &
+                    server_child_pid="$!"
+                    atomic_line "$server_pid_file" "$server_child_pid"
+                    if wait "$server_child_pid"; then
+                      server_rc=0
+                    else
+                      server_rc="$?"
+                    fi
+                    server_child_pid=""
+                    ${pkgs.coreutils}/bin/rm -f "$server_pid_file"
+                    if [ ! -e "$server_restart_file" ]; then
+                      return "$server_rc"
+                    fi
+                    while [ -e "$server_restart_file" ]; do
+                      ${pkgs.coreutils}/bin/sleep 0.1
+                    done
+                  done
                 }
 
                 subcommand="''${1:-}"
