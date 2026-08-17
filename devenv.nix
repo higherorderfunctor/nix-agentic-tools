@@ -723,7 +723,7 @@ in {
     nat_codex_config=.codex/config.toml
     test -f "$nat_codex_config" || { echo "FAIL: Codex project config was not written"; exit 1; }
     ${pkgs.gnugrep}/bin/grep -Fq 'sandbox_mode = "workspace-write"' "$nat_codex_config" || { echo "FAIL: Codex project config does not select the legacy workspace-write sandbox"; exit 1; }
-    ! ${pkgs.gnugrep}/bin/grep -Eq '^(default_permissions|\[permissions)' "$nat_codex_config" || { echo "FAIL: Codex project config carries the locked-out beta permission model"; exit 1; }
+    ! ${pkgs.gnugrep}/bin/grep -Eq '^(default_permissions|\[permissions)' "$nat_codex_config" || { echo "FAIL: Codex project config selects named permissions before the user-layer migration"; exit 1; }
     test ! -e "''${CODEX_HOME:-$HOME/.codex}/nix-agentic-tools.config.toml" || { echo "FAIL: a stale nix-agentic-tools Codex profile is still materialized in CODEX_HOME"; exit 1; }
     # The module-contributed roots. Semble is interactive-only, so its scoped
     # cache is absent from the deliberately lean CI evaluation. `cache/nix` is
