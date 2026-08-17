@@ -15,12 +15,12 @@
   vu = import ../lib.nix;
   tsgolint = import ./tsgolint.nix {inherit inputs final;};
 
-  rev = "63ff8ef0a132e92875e07c53227c09a4e21fb866";
+  rev = "e60f50b7c8b33584069dead594ac4f2b13f4bf88";
   unpatchedSrc = ourPkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-If9wWHO2A2ByQ3VsxyVYBH+g2ffbd7GmfH9HszD/oxk=";
+    hash = "sha256-BCYWgQ2BnqNJB+fXYWdtzO9J/FLGt0pqQhMFSvunJIo=";
   };
   # @napi-rs/cli's filesystem reconciliation probes a process incarnation with
   # execFile(/bin/ps) on Darwin. Node can reject that spawn synchronously under
@@ -81,13 +81,13 @@ in
     inherit version src;
     cargoDeps = ourPkgs.rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
-      hash = "sha256-be1B8v8tf40KXx3/5HvQiowwVn7SaG2bq8LP/eRHmHI=";
+      hash = "sha256-1LA3Mr4/fhBDlRy5/xKAaRXafwHFzST0SZIhlxJ8xAQ=";
     };
     pnpmDeps = ourPkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
       pnpm = ourPkgs.pnpm_11;
       fetcherVersion = 4;
-      hash = "sha256-1n1JoLTX6esIkQxRsLtc+7BU7ueC+L9nDdQJopgRqhE=";
+      hash = "sha256-igiyjhUfQy5GW5fn3br0QNZzMiSDdrAxbj0gK6MSvm8=";
     };
     # Oxc declares pnpm 11.17.0. Replace nixpkgs Oxlint's pnpm 10 build input
     # as well as its dependency fetcher so both phases use the upstream major.
