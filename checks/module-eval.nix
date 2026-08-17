@@ -11446,6 +11446,23 @@ in {
       && lib.hasInfix " server" ev.config.processes.beads-server.exec
   );
 
+  module-beads-invalid-dolt-passthru-rejected = mkTest "beads-invalid-dolt-passthru-rejected" (
+    let
+      ev = evalDevenv {
+        services.beads = {
+          enable = true;
+          issuePrefix = "fixture";
+          ledgerUrl = "file:///tmp/beads-ledger.git";
+          package = pkgs.runCommand "bd-with-invalid-dolt" {passthru.dolt = null;} "mkdir -p $out/bin";
+        };
+      };
+      beadsAssertions = lib.filter (assertion: lib.hasPrefix "services.beads" assertion.message) ev.config.assertions;
+    in
+      lib.any (assertion: !assertion.assertion) beadsAssertions
+      && ev.config.packages == []
+      && ev.config.processes == {}
+  );
+
   module-beads-missing-required-options-rejected = mkTest "beads-missing-required-options-rejected" (
     let
       ev = evalDevenv {services.beads.enable = true;};

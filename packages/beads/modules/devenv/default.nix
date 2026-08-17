@@ -5,7 +5,7 @@
   ...
 }: let
   cfg = config.services.beads;
-  hasDolt = cfg.package ? dolt;
+  hasDolt = cfg.package ? dolt && lib.isDerivation cfg.package.dolt;
   issuePrefixValid =
     cfg.issuePrefix
     != null
@@ -44,8 +44,8 @@ in {
           message = "services.beads.ledgerUrl is required when services.beads.enable is true";
         }
         {
-          assertion = !cfg.enable || cfg.package ? dolt;
-          message = "services.beads.package must expose its exact Dolt runtime as passthru.dolt";
+          assertion = !cfg.enable || hasDolt;
+          message = "services.beads.package must expose its exact Dolt derivation as passthru.dolt";
         }
         {
           assertion =

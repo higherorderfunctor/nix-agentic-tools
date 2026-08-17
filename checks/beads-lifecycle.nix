@@ -115,9 +115,10 @@ in
       git -C "$fixture/linked" status --short --untracked-files=all >"$fixture/linked.status.before"
       git -C "$fixture/linked" config --local --list | sort >"$fixture/linked.config.before"
 
-      (cd "$fixture/source" && "$lifecycle_script" prepare) &
+      mkdir -p "$fixture/runtime-a" "$fixture/runtime-b"
+      (cd "$fixture/source" && XDG_RUNTIME_DIR="$fixture/runtime-a" "$lifecycle_script" prepare) &
       client_pid="$!"
-      (cd "$fixture/linked" && "$lifecycle_script" prepare) &
+      (cd "$fixture/linked" && XDG_RUNTIME_DIR="$fixture/runtime-b" "$lifecycle_script" prepare) &
       publish_pid="$!"
       wait "$client_pid"
       wait "$publish_pid"
@@ -148,6 +149,8 @@ in
       fi
       grep -Fq "module-owned Dolt daemon is not ready" "$fixture/foreign-bootstrap.out" \
         || fail "$label rejected the foreign listener for the wrong reason"
+      [ ! -e "$fixture/foreign-data/beads_fixture" ] \
+        || fail "$label foreign listener received a database mutation"
       if (cd "$fixture/source" && "$lifecycle_script" server) \
         >"$fixture/foreign-port.out" 2>&1; then
         fail "$label server accepted a foreign port collision"
@@ -187,9 +190,12 @@ in
       client_pid="$!"
       (cd "$fixture/linked" && "$entry_dir/beads-checkpoint") >"$fixture/contended-checkpoint.out" &
       publish_pid="$!"
-      sleep 0.2
+      sleep 1
       kill -0 "$client_pid" 2>/dev/null || fail "$label guarded mutation bypassed the repository lock"
       kill -0 "$publish_pid" 2>/dev/null || fail "$label checkpoint bypassed the repository lock"
+      [ ! -s "$fixture/actor-id" ] || fail "$label guarded mutation produced output while the lock was held"
+      [ ! -s "$fixture/contended-checkpoint.out" ] \
+        || fail "$label checkpoint produced output while the lock was held"
       touch "$fixture/release-lock"
       wait "$holder_pid"
       wait "$client_pid"
@@ -225,14 +231,68 @@ in
       while [ ! -e "$fixture/lock-held" ]; do sleep 0.02; done
       (cd "$fixture/source" && "$lifecycle_script" publisher) >"$fixture/publisher.out" 2>&1 &
       publisher_pid="$!"
-      sleep 0.2
+      sleep 1
       kill -0 "$publisher_pid" 2>/dev/null || fail "$label pusher bypassed the repository lock"
+      if git -C "$fixture/ledger.git" rev-parse --verify refs/dolt/data >/dev/null 2>&1; then
+        fail "$label pusher published while the repository lock was held"
+      fi
       touch "$fixture/release-lock"
       wait "$holder_pid"
       wait_for_ref_change "$fixture/ledger.git" "$before_ref" "$fixture/publisher.out"
       startup_ref="$(git -C "$fixture/ledger.git" rev-parse refs/dolt/data)"
+      (cd "$fixture/source" && "$entry_dir/beads-status") >/dev/null
+      stop_process "$publisher_pid"
+      publisher_pid=""
+      stop_process "$server_pid"
+      server_pid=""
+
+      # Consume the startup ref before any interval write so a later push
+      # cannot mask an incomplete startup drain.
+      git init -q -b main "$fixture/startup-source"
+      git -C "$fixture/startup-source" commit -q --allow-empty -m seed
+      (cd "$fixture/startup-source" && "$lifecycle_script" server) \
+        >"$fixture/startup-server.out" 2>&1 &
+      cold_server_pid="$!"
+      for _attempt in $(seq 1 120); do
+        if (cd "$fixture/startup-source" && "$entry_dir/beads-bootstrap") \
+          >"$fixture/startup-bootstrap.out" 2>&1; then
+          break
+        fi
+        sleep 0.1
+      done
+      grep -Fq "initialized module-owned Beads state" "$fixture/startup-bootstrap.out" \
+        || fail "$label startup-ref consumer did not cold bootstrap"
+      (cd "$fixture/startup-source" && "$entry_dir/bd" show "$actor_id" --json) >/dev/null
+      (cd "$fixture/startup-source" && "$entry_dir/bd" show "$linked_id" --json) >/dev/null
+      stop_process "$cold_server_pid"
+      cold_server_pid=""
+
+      (cd "$fixture/source" && "$lifecycle_script" server) \
+        >"$fixture/server-before-interval.out" 2>&1 &
+      server_pid="$!"
+      for _attempt in $(seq 1 120); do
+        if (cd "$fixture/source" && "$entry_dir/beads-bootstrap") \
+          >"$fixture/bootstrap-before-interval.out" 2>&1; then
+          break
+        fi
+        sleep 0.1
+      done
+      grep -Fq "verified existing module-owned Beads state" "$fixture/bootstrap-before-interval.out" \
+        || fail "$label original state did not resume before interval publication"
+      (cd "$fixture/source" && "$lifecycle_script" publisher) \
+        >"$fixture/publisher-interval.out" 2>&1 &
+      publisher_pid="$!"
+      for _attempt in $(seq 1 120); do
+        if grep -Fq "publication already drained" "$fixture/publisher-interval.out"; then
+          break
+        fi
+        sleep 0.1
+      done
+      grep -Fq "publication already drained" "$fixture/publisher-interval.out" \
+        || fail "$label interval publisher did not complete its startup no-op"
       interval_id="$(cd "$fixture/source" && "$entry_dir/bd" --actor human create "$label interval issue" --silent)"
-      wait_for_ref_change "$fixture/ledger.git" "$startup_ref" "$fixture/publisher.out"
+      wait_for_ref_change "$fixture/ledger.git" "$startup_ref" "$fixture/publisher-interval.out"
+      (cd "$fixture/source" && "$entry_dir/beads-status") >/dev/null
       stop_process "$publisher_pid"
       publisher_pid=""
       actual_ref="$(git -C "$fixture/ledger.git" rev-parse refs/dolt/data)"
@@ -329,7 +389,7 @@ in
         (
           cd "$db_path"
           DOLT_ROOT_PATH="$state_root/dolt-root" ${cfg.package.dolt}/bin/dolt \
-            sql -r json -q "SET FOREIGN_KEY_CHECKS=0; INSERT INTO dependencies (issue_id, depends_on_issue_id, type, created_at, created_by) VALUES ('missing-owner', '$actor_id', 'blocks', NOW(), 'fixture'); SET FOREIGN_KEY_CHECKS=1; CALL DOLT_ADD('dependencies'); CALL DOLT_COMMIT('-m', 'fixture: committed orphan');" \
+            sql -r json -q "SET FOREIGN_KEY_CHECKS=0; INSERT INTO dependencies (id, issue_id, depends_on_issue_id, type, created_at, created_by) VALUES ('fixture-orphan-dependency', 'missing-owner', '$actor_id', 'blocks', NOW(), 'fixture'); SET FOREIGN_KEY_CHECKS=1; CALL DOLT_ADD('dependencies'); CALL DOLT_COMMIT('-m', 'fixture: committed orphan');" \
             >/dev/null
         )
         if (cd "$fixture/source" && "$entry_dir/bd" create "must not execute" --silent) \

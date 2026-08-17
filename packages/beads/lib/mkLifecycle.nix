@@ -72,7 +72,7 @@
                 }
 
                 resolve_state() {
-                  local lock_base state_base state_hash
+                  local state_base state_hash
                   source_root="$(${pkgs.git}/bin/git rev-parse --show-toplevel 2>/dev/null)" \
                     || fail "run inside a Git worktree"
                   common_dir="$(${pkgs.git}/bin/git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
@@ -80,12 +80,11 @@
                   state_hash="$(printf '%s' "$common_dir" | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.gawk}/bin/awk '{print $1}')"
                   state_base="''${XDG_STATE_HOME:-''${HOME:?HOME is required}/.local/state}"
                   state_root="$state_base/nix-agentic-tools/beads/$state_hash"
-                  lock_base="''${XDG_RUNTIME_DIR:-$state_base}/nix-agentic-tools/beads-locks"
                   beads_dir="$state_root/.beads"
                   dolt_data="$state_root/dolt-data"
                   dolt_root="$state_root/dolt-root"
                   neutral_cwd="$state_root/neutral"
-                  repository_lock="$lock_base/$state_hash.lock"
+                  repository_lock="$state_base/nix-agentic-tools/beads-locks/$state_hash.lock"
                   server_lock="$state_root/server.lock"
                   server_pid_file="$state_root/server.pid"
                   server_restart_file="$state_root/server.restart"
@@ -238,7 +237,7 @@
                 }
 
                 quiesce_server() {
-                  local attempt server_pid
+                  local _attempt server_pid
                   [ -f "$server_pid_file" ] || fail "the module-owned Dolt daemon has no process checkpoint"
                   server_pid="$(${pkgs.coreutils}/bin/cat "$server_pid_file")"
                   [[ "$server_pid" =~ ^[0-9]+$ ]] || fail "the module-owned Dolt daemon has an invalid process checkpoint"
@@ -246,8 +245,8 @@
                     || fail "the module-owned Dolt daemon process is absent"
                   atomic_line "$server_restart_file" publish
                   ${pkgs.coreutils}/bin/kill -TERM "$server_pid"
-                  for attempt in $(${pkgs.coreutils}/bin/seq 1 120); do
-                    if ! port_ready; then
+                  for _attempt in $(${pkgs.coreutils}/bin/seq 1 120); do
+                    if ! port_ready && [ ! -e "$server_pid_file" ]; then
                       return
                     fi
                     ${pkgs.coreutils}/bin/sleep 0.1
@@ -257,9 +256,9 @@
                 }
 
                 resume_server() {
-                  local attempt
+                  local _attempt
                   ${pkgs.coreutils}/bin/rm -f "$server_restart_file"
-                  for attempt in $(${pkgs.coreutils}/bin/seq 1 120); do
+                  for _attempt in $(${pkgs.coreutils}/bin/seq 1 120); do
                     if module_server_ready; then
                       return
                     fi

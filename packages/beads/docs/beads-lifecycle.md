@@ -14,12 +14,13 @@ The declared Git ledger URL is embedded unmodified in the generated lifecycle
 launcher and must not contain credentials. Runtime Git and SSH credential
 discovery remains user-owned. Every other writable artifact lives below a
 mode-0700 directory derived at runtime from the shared Git common-directory path
-and `XDG_STATE_HOME`. A minimal mode-0700 lock namespace is established below
-`XDG_RUNTIME_DIR`, or the same state base when no runtime directory is set,
-before any owned state is created. Source and linked worktrees therefore select
-one state root, one external Dolt data directory, one contained
-`DOLT_ROOT_PATH`, and one repository lock. No state path, credential value, or
-generated credentials file is copied into the Nix store or source checkout.
+and `XDG_STATE_HOME`. A minimal mode-0700 lock namespace is established from
+that same stable state base before any owned state is created. Ambient
+`XDG_RUNTIME_DIR` changes therefore cannot split serialization while two
+processes address the same ledger state. Source and linked worktrees select one
+state root, one external Dolt data directory, one contained `DOLT_ROOT_PATH`,
+and one repository lock. No state path, credential value, or generated
+credentials file is copied into the Nix store or source checkout.
 
 `beads:prepare` runs before shell entry. Under the repository lock it creates
 and verifies only contained runtime configuration, including
