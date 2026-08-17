@@ -119,6 +119,25 @@ _: {
       ];
       sources = ["skills-fanout-pattern"];
     };
+    # beads: the contained devenv lifecycle, serialized checkpoint protocol,
+    # and sole raw-Dolt publication boundary.
+    beads = {
+      scopes = [
+        "checks/beads-lifecycle.nix"
+        "checks/module-eval.nix"
+        "docs/beads/bd-reference.md"
+        "docs/beads/dolt-git-remotes.md"
+        "overlays/dev-tools/beads.nix"
+        "packages/beads/**"
+      ];
+      sources = [
+        {
+          location = "package";
+          name = "beads-lifecycle";
+          dir = "beads";
+        }
+      ];
+    };
     # claude-code: wrapper chain plus the heron_brook delegation-clamp
     # mitigation. Spans the claude-code overlay package and the
     # factory-built module.

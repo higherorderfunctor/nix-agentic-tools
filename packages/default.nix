@@ -4,6 +4,7 @@
 {
   agnix = import ./agnix;
   aihubmix-mcp = import ./aihubmix-mcp;
+  beads = import ./beads;
   chatgpt-codex = import ./chatgpt-codex;
   claude-code = import ./claude-code;
   context7-mcp = import ./context7-mcp;

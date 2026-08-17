@@ -226,6 +226,11 @@
         default = [];
         description = "Devenv packages.";
       };
+      processes = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+        description = "Devenv processes.";
+      };
       # Stub: devenv's task runner — the steering materializer emits its
       # prune+write task here.
       tasks = lib.mkOption {
@@ -297,6 +302,7 @@
     "glab."
     "kiro."
     "living-workflow."
+    "services.beads."
     "stacked-workflows."
   ];
 

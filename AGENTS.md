@@ -57,6 +57,13 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
   - Read:
     [`dev/fragments/ai-skills/skills-fanout-pattern.md`](dev/fragments/ai-skills/skills-fanout-pattern.md)
 
+- **`beads`**
+  - Match: `checks/beads-lifecycle.nix`, `checks/module-eval.nix`,
+    `docs/beads/bd-reference.md`, `docs/beads/dolt-git-remotes.md`,
+    `overlays/dev-tools/beads.nix`, `packages/beads/**`
+  - Read:
+    [`packages/beads/docs/beads-lifecycle.md`](packages/beads/docs/beads-lifecycle.md)
+
 - **`claude-code`**
   - Match: `overlays/claude-code.nix`, `packages/claude-code/**`
   - Read:

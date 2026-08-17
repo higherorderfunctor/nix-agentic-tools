@@ -100,6 +100,10 @@ in
       (prev.passthru or {})
       // {
         inherit fixGoFloor fixVendorHash goFloor;
+        # The lifecycle module must launch the exact Dolt paired with this
+        # Beads build. Exposing that already-used dependency as metadata avoids
+        # a second, independently drifting package choice in the module.
+        inherit (ourPkgs) dolt;
         updateScript = vu.ghArchiveUpdateScript {
           extraExtract = ''
             ${fixVendorHash}
