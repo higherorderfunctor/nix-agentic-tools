@@ -7,8 +7,9 @@
 #
 # The body is shared with `devenvTransform.nix` — see
 # `mkBackendTransform.nix`, of which this selects the `hm` record key.
-# The backend-specific emission (`home.file.*` and friends) lives in
-# the per-app factory's `hm.config` callback, not here.
+# Static `ai.<runtime>.files` entries lower through the generic sink in the
+# shared body. Runtime-specific lifecycle outputs (`home.activation.*`, native
+# program options, mutable files) remain in each factory's `hm.config` callback.
 {lib}:
 import ./mkBackendTransform.nix {
   inherit lib;

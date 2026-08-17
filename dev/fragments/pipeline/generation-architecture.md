@@ -1,5 +1,10 @@
 ## Generation Architecture
 
+> **Last verified:** 2026-08-16 (commit pending — generated repository
+> instruction projections remain real copies for Git portability, while consumer
+> runtime instructions now traverse `ai.<runtime>.files`; Kiro 2.18.1 follows
+> the resulting steering symlinks).
+
 Content is generated via Nix derivations wrapped in devenv tasks, organized by
 scope:
 
@@ -42,12 +47,14 @@ here drives the materializer; it is described because the code is retained for
 re-enablement. These app-level materialization tasks are separate from the
 repository instruction generator described here.
 
-Instruction files are the exception: they are **copies**, not symlinks,
-materialized on every shell entry by `generate:instructions:materialize`
-(`before = ["devenv:enterShell"]`). Kiro cannot read symlinked steering — it
-discovers by scanning the directory and the scan skips symlinks — and the
-git-tracked outputs cannot be symlinks either, since a store symlink commits as
-an absolute `/nix/store` path. See the devenv files-internals fragment.
+Repository-generated instruction projections are the exception: they are
+**copies**, not symlinks, materialized on every shell entry by
+`generate:instructions:materialize` (`before = ["devenv:enterShell"]`).
+Git-tracked outputs cannot be symlinks, since a store symlink commits as an
+absolute `/nix/store` path. This is separate from consumer module delivery:
+normalized runtime context/rules enter `ai.<runtime>.files` and lower to
+ordinary backend symlinks. A 2.18.1 live spike confirmed Kiro steering now loads
+through that path. See the devenv files-internals fragment.
 
 ### Running Generation
 

@@ -24,11 +24,13 @@
 #     hm = {
 #       options ? {};                # HM-only option additions
 #       defaults ? {};               # HM-only default overrides
+#       migrationConfig ? _: {};     # bounded cleanup outside runtime enable
 #       config ? _: {};              # consumer callback projecting merged view → module attrs
 #     };
 #     devenv = {
 #       options ? {};                # devenv-only option additions
 #       defaults ? {};               # devenv-only default overrides
+#       migrationConfig ? _: {};     # bounded cleanup outside runtime enable
 #       config ? _: {};              # consumer callback
 #     };
 #   }

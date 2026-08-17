@@ -1,13 +1,15 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-08-16 (commit pending — the `kiro-wrapper` category
-> now scopes `checks/kiro-fhs-contract.nix`, so an editor changing the upstream
-> sandbox tripwire receives the FHS and launcher architecture sources it
-> enforces). Prior: 2026-08-16 (commit pending — Living Workflow now has a
-> package-sourced routed architecture category, and the Stacked Workflows guide
-> moved from `dev/fragments/` to its package `docs/` directory; both resolve
-> through the existing location discriminator). Prior: 2026-08-16 (commit
-> pending — generated README guidance now uses
+> **Last verified:** 2026-08-16 (commit pending — generated README guidance now
+> documents the per-runtime literal-file seam and removes the superseded Kiro
+> steering-copy uninstall sequence). Prior: 2026-08-16 (commit pending — the
+> `kiro-wrapper` category now scopes `checks/kiro-fhs-contract.nix`, so an
+> editor changing the upstream sandbox tripwire receives the FHS and launcher
+> architecture sources it enforces). Prior: 2026-08-16 (commit pending — Living
+> Workflow now has a package-sourced routed architecture category, and the
+> Stacked Workflows guide moved from `dev/fragments/` to its package `docs/`
+> directory; both resolve through the existing location discriminator). Prior:
+> 2026-08-16 (commit pending — generated README guidance now uses
 > `ai.programs.stacked-workflows.enable`, documents B4 runtime negation, and
 > keeps the HM-only `stacked-workflows.gitPreset` companion visibly separate).
 > Prior: 2026-08-15 (commit pending — Semble's co-located architecture document

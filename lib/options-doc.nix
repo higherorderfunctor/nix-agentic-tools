@@ -176,16 +176,16 @@
       # Stub: devenv's enterShell hook. The kiro-cli devenv module
       # assembles settings/mcp.json through it (a real file, not a store
       # symlink, so a SOPS-injected url can be substituted in).
-      # types.lines because several mkIf blocks contribute. (Hooks and
-      # steering used to write here too; both now ride the shared
-      # materializer's own task.)
+      # types.lines because several mkIf blocks contribute. Hooks now ride the
+      # shared materializer's task; steering uses the generic runtime-files
+      # sink, with a separate one-shot legacy retirement task.
       enterShell = lib.mkOption {
         type = lib.types.lines;
         default = "";
         description = "Devenv shell entry hook.";
       };
-      # Stub: devenv's enterTest hook — the steering materializer emits
-      # a real-file backstop fragment through it.
+      # Stub: devenv's enterTest hook — the hook materializer emits a real-file
+      # backstop fragment through it.
       enterTest = lib.mkOption {
         type = lib.types.lines;
         default = "";
@@ -231,8 +231,8 @@
         default = {};
         description = "Devenv processes.";
       };
-      # Stub: devenv's task runner — the steering materializer emits its
-      # prune+write task here.
+      # Stub: devenv's task runner — Kiro hooks emit a prune+write task and the
+      # steering migration emits one manifest-guarded retirement task here.
       tasks = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};

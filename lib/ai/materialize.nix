@@ -2,10 +2,11 @@
 #
 # Consumes a `{ <name> = { text, source, strategy }; }` attrset (see
 # `fileEntryType`) plus a target directory, and emits per-backend
-# writers. Two surfaces use it today — `ai.kiro.steeringFiles` (both
-# strategies) and the Kiro hooks surface (copy only; v3 drops symlinked
-# hooks) — so caller-facing messages take an explicit `surface` label
-# rather than saying "steering".
+# writers. Kiro hooks are its remaining production caller (copy only; v3 drops
+# symlinked hooks). Kiro steering moved to the common `ai.kiro.files` symlink
+# sink after a 2.18.1 loader spike; one-shot retirement helpers drain and remove
+# the legacy steering-copy manifest without retaining output authority. Caller-
+# facing messages still take an explicit `surface` label.
 #
 # The writers emit:
 #
@@ -206,6 +207,33 @@ in rec {
     fi
   '';
 
+  # One-shot compatibility retirement. Unlike an empty normal materializer,
+  # this is safe to emit even while its runtime is disabled: it is a complete
+  # no-op when the legacy manifest does not exist, and removes that manifest
+  # after pruning so future generations remain inert.
+  mkRetirementScript = {
+    common,
+    coreutils,
+  }:
+    ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      NAT_MAT_RETIRE_MANIFEST="${common.stateDirExpr}/${common.stateSlug}.manifest"
+      if [ -f "$NAT_MAT_RETIRE_MANIFEST" ]; then
+    ''
+    + mkPrologue common
+    + mkSweep coreutils
+    + mkPruneCore {
+      inherit (common) stateSlug;
+      inherit coreutils;
+      currentNames = [];
+    }
+    + mkEpilogue common.stateSlug
+    + ''
+        ${coreutils}/bin/rm -f -- "$NAT_MAT_MANIFEST"
+      fi
+    '';
+
   # [B8] Stale-temp sweep — the ONE declared non-manifest deletion
   # class: dot-prefixed files carrying the RESERVED `.nat-tmp.` infix.
   # The infix, not the name shape, is the safety proof: a bare
@@ -403,6 +431,25 @@ in rec {
       );
     };
 
+  mkHmRetirement = {
+    targetDir,
+    stateSlug,
+    coreutils,
+    flock,
+  }:
+    assert lib.assertMsg (nameSafe stateSlug)
+    "materialize: stateSlug must match ${nameRegex}: '${stateSlug}'"; let
+      common = {
+        inherit stateSlug coreutils flock;
+        targetDirExpr = "$HOME/${targetDir}";
+        stateDirExpr = "\${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/materialize";
+      };
+    in {
+      "retire-materialize-${stateSlug}" = lib.hm.dag.entryBefore ["checkLinkTargets"] (
+        scopedActivation (mkRetirementScript {inherit common coreutils;})
+      );
+    };
+
   # ── devenv copy writer: one prune+write task [B4] ──────────────────
   #
   # `after = ["devenv:files:cleanup"]` and the CONDITIONAL
@@ -452,6 +499,26 @@ in rec {
           files = copies;
         }
         + mkEpilogue stateSlug;
+      after = ["devenv:files:cleanup"];
+      before = ["devenv:enterShell"] ++ lib.optional hasFiles "devenv:files";
+    };
+
+  mkDevenvRetirementTask = {
+    targetDir,
+    stateSlug,
+    hasFiles,
+    coreutils,
+    flock,
+  }:
+    assert lib.assertMsg (nameSafe stateSlug)
+    "materialize: stateSlug must match ${nameRegex}: '${stateSlug}'"; let
+      common = {
+        inherit stateSlug coreutils flock;
+        targetDirExpr = "$DEVENV_ROOT/${targetDir}";
+        stateDirExpr = "$DEVENV_STATE/nix-agentic-tools/materialize";
+      };
+    in {
+      exec = mkRetirementScript {inherit common coreutils;};
       after = ["devenv:files:cleanup"];
       before = ["devenv:enterShell"] ++ lib.optional hasFiles "devenv:files";
     };

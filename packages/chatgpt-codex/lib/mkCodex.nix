@@ -779,25 +779,27 @@
     };
 
   mkSizeAssertion = {
-    agentsMd,
     cfg,
-    mergedRules,
-    mergedContext,
+    finalEntry,
   }: let
-    contextContribution =
-      lib.optional (mergedContext != null)
-      "context=${toString (builtins.stringLength (aiCommon.readContent mergedContext))} bytes";
-    ruleContributions =
-      lib.mapAttrsToList (name: rule: "rule:${name}=${toString (builtins.stringLength (mkRuleBody name rule))} bytes")
-      mergedRules;
-    renderedBytes = builtins.stringLength agentsMd;
+    finalText =
+      if finalEntry == null
+      then null
+      else finalEntry.text or null;
+    renderedBytes =
+      if finalText == null
+      then 0
+      else builtins.stringLength finalText;
   in {
-    assertion = renderedBytes <= cfg.projectDocMaxBytes;
+    # Store-backed sources stay lazy: reading a derivation output here would
+    # introduce IFD. Inline generated/replacement content is checked after B7
+    # arbitration; tombstones and source entries do not force discarded text.
+    assertion = finalText == null || renderedBytes <= cfg.projectDocMaxBytes;
     message = ''
       Codex AGENTS.md renders to ${toString renderedBytes} bytes, exceeding
       ai.codex.projectDocMaxBytes (${toString cfg.projectDocMaxBytes} bytes).
-      Contributions: ${lib.concatStringsSep ", " (contextContribution ++ ruleContributions)}.
-      Trim the contributing content or raise ai.codex.projectDocMaxBytes.
+      Trim or replace the final inline content, or raise
+      ai.codex.projectDocMaxBytes.
     '';
   };
 in
@@ -938,12 +940,16 @@ in
       moduleEnvironmentVariables,
       resolvedShell,
       mergedContext,
+      hasMergedContext,
       topHooks,
       resolvedSettings,
       ...
     }: let
       agentsMd = mkAgentsMd {inherit mergedContext mergedRules;};
+      hasAgentsMdContent = hasMergedContext || mergedRules != {};
+      agentsMdTarget = "${cfg.configDir}/${cfg.context.filename}";
       configFile = "${cfg.configDir}/config.toml";
+      finalAgentsMdEntry = cfg.files.${agentsMdTarget} or null;
       hasNativeMcpServers = cfg.nativeSettings ? mcp_servers;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       settings = helpers.filterNulls ((applyIntegrationRoots cfg.nativeSettings cfg.internal._integration_writable_roots)
@@ -952,9 +958,21 @@ in
         });
       settingsStateName = "codex-config-${builtins.hashString "sha256" configFile}";
     in {
-      ai.codex.internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter ["${config.xdg.cacheHome}/nix"]);
-      ai.codex.nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
-        model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
+      # Codex has no named Markdown rule surface, so context and rules are
+      # composed first and the resulting AGENTS.md enters the runtime file map
+      # as one replaceable default.
+      ai.codex = {
+        files = lib.mkIf hasAgentsMdContent {
+          ${agentsMdTarget} = lib.mkDefault (
+            if agentsMd == ""
+            then null
+            else {text = agentsMd;}
+          );
+        };
+        internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter ["${config.xdg.cacheHome}/nix"]);
+        nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
+          model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
+        };
       };
       assertions =
         mkAgentAssertions mergedAgents
@@ -962,7 +980,10 @@ in
         ++ mkProfileAssertions cfg.profiles
         ++ mkBetaPermissionLockout "ai.codex.nativeSettings" cfg.nativeSettings
         ++ [
-          (mkSizeAssertion {inherit agentsMd cfg mergedContext mergedRules;})
+          (mkSizeAssertion {
+            inherit cfg;
+            finalEntry = finalAgentsMdEntry;
+          })
           {
             assertion = mergedServers == {} || !hasNativeMcpServers;
             message = "ai.codex.nativeSettings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
@@ -999,9 +1020,6 @@ in
           stateName = settingsStateName;
         });
         file = lib.mkMerge [
-          (lib.mkIf (agentsMd != "") {
-            "${cfg.configDir}/${cfg.context.filename}".text = agentsMd;
-          })
           (helpers.mkSkillEntries ".agents" mergedSkills)
           (mkAgentEntries cfg.configDir mergedAgents)
           (mkExecpolicyEntries cfg.configDir cfg.execpolicyRules)
@@ -1030,6 +1048,7 @@ in
       moduleEnvironmentVariables,
       resolvedShell,
       mergedContext,
+      hasMergedContext,
       topHooks,
       resolvedSettings,
       ...
@@ -1064,10 +1083,11 @@ in
         };
         internal.agentsMd.${cfg.context.filename} =
           {
+            hasContent = lib.mkDefault (hasMergedContext || mergedRules != {});
             maxBytes = cfg.projectDocMaxBytes;
             rules = agentsMdRules;
           }
-          // lib.optionalAttrs (mergedContext != null) {
+          // lib.optionalAttrs hasMergedContext {
             context = aiCommon.readContent mergedContext;
           };
       };

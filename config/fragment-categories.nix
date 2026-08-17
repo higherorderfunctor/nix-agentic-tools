@@ -73,6 +73,9 @@ _: {
         "lib/ai/app/**"
         "lib/ai/default.nix"
         "lib/ai/hooks.nix"
+        # Lifecycle helper behind the manifest-guarded, enable-independent
+        # migration exception documented by the fanout fragments.
+        "lib/ai/materialize.nix"
         # The one factory that contributes to the pools from inside this repo,
         # so it is exactly where collision-semantics' "where a MODULE may
         # contribute" rule has to be read before editing. Previously unscoped.
@@ -82,6 +85,8 @@ _: {
         "lib/ai/program.nix"
         # The runtime registry that file and sharedOptions.nix share.
         "lib/ai/runtimes.nix"
+        # Final B7 static-file registry and generic backend lowering.
+        "lib/ai/runtime-files.nix"
         "lib/ai/sharedOptions.nix"
         "packages/*/lib/mk*.nix"
         "packages/chatgpt-codex/modules/**"

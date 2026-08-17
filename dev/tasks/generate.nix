@@ -13,12 +13,11 @@
 
   # Materialize generated instruction files into the working tree.
   #
-  # ONE mechanism for all five groups: a real file copy. Kiro discovers
-  # steering by scanning a directory and the scan skips symlinks, so devenv
-  # `files.*` (symlink mode) could silently leave .kiro/steering unreadable.
-  # The tracked outputs additionally cannot be symlinks at all — a store
-  # symlink commits as mode 120000 holding an absolute /nix/store path,
-  # meaningless in any other clone.
+  # ONE mechanism for all five groups: a real file copy. These are tracked
+  # repository projections, so they cannot be store symlinks: Git would commit
+  # mode 120000 with an absolute /nix/store target that is meaningless in any
+  # other clone. Consumer-module Kiro steering is separate and now uses the
+  # ordinary runtime-files symlink sink after the pinned loader spike.
   #
   # Idempotent on purpose: an unchanged file is never rewritten, so mtimes
   # don't churn on every direnv reload. Writes go through mktemp+mv so a

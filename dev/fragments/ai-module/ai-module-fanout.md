@@ -1,19 +1,25 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-16 (commit pending — Semble distinguishes its
-> program-inherited MCP integration from explicit CLI-rule and named-agent
-> opt-ins; MCP agents use a committed tool-specific prompt, and only Kiro may
-> retain an agent-scoped server while suppressing root exposure). Prior:
-> 2026-08-16 (commit pending — Kiro's shared factory now exposes a default-on
-> `useFhsSandbox` package-selection option in both backends, and places
-> `trustedMcpTools` on the inner FHS payload so devenv launcher dispatch cannot
-> bypass it). Prior: 2026-08-16 (commit pending — `mkSkillPackageModule` now
-> consumes the `ai.programs.*` factory, moving stacked-workflows and
-> living-workflow enablement into portable plus per-runtime B4 option trees
-> while preserving their per-runtime pool writes; runtime inventories now cover
-> all five registered ecosystems; stacked-workflows' machine-wide `gitPreset`
-> remains an HM-only top-level companion). Prior: 2026-08-15 (commit pending —
-> the `ai.programs.*` factory generates portable defaults and capability-gated
+> **Last verified:** 2026-08-16 (commit pending — every runtime now exposes the
+> one-way `ai.<runtime>.files` static-output seam; normalized context/rules and
+> the single-owner repository AGENTS.md traverse it before native backend sinks,
+> including enabled-only public shared-target arbitration and lazy discarded
+> defaults, while Kiro uses verified symlink reload and enable-independent
+> one-shot legacy retirement with an explicit old-custom-directory transition).
+> Prior: 2026-08-16 (commit pending — Semble distinguishes its program-inherited
+> MCP integration from explicit CLI-rule and named-agent opt-ins; MCP agents use
+> a committed tool-specific prompt, and only Kiro may retain an agent-scoped
+> server while suppressing root exposure). Prior: 2026-08-16 (commit pending —
+> Kiro's shared factory now exposes a default-on `useFhsSandbox`
+> package-selection option in both backends, and places `trustedMcpTools` on the
+> inner FHS payload so devenv launcher dispatch cannot bypass it). Prior:
+> 2026-08-16 (commit pending — `mkSkillPackageModule` now consumes the
+> `ai.programs.*` factory, moving stacked-workflows and living-workflow
+> enablement into portable plus per-runtime B4 option trees while preserving
+> their per-runtime pool writes; runtime inventories now cover all five
+> registered ecosystems; stacked-workflows' machine-wide `gitPreset` remains an
+> HM-only top-level companion). Prior: 2026-08-15 (commit pending — the
+> `ai.programs.*` factory generates portable defaults and capability-gated
 > runtime override trees from one program specification; Semble is its first
 > consumer and uses program-level enable negation instead of runtime selectors;
 > divergent runtime package customizations use collision-free command aliases
@@ -175,7 +181,7 @@ directly; do not restore parallel handwritten lists.
 ### There is no `ai.enable`
 
 The `ai` module has **no master enable option**. Each per-CLI sub-enable is the
-sole gate for that ecosystem's fanout:
+sole gate for that ecosystem's product output:
 
 | Consumer sets              | What fires                                                            |
 | -------------------------- | --------------------------------------------------------------------- |
@@ -190,6 +196,15 @@ via `mkDefault`, so consumers don't have to set enable twice. Codex and Kimchi
 have no upstream modules: their factories install the selected package directly
 in each backend. For CLIs that do have an upstream module, a consumer can still
 override the corresponding `programs.<cli>.enable` explicitly.
+
+The one bounded exception is `migrationConfig`: ownership-safe retirement may
+run outside the enable gate when the generation that disables a runtime must
+remove files recorded by an older implementation. It must be manifest-guarded,
+emit no product content, and become inert after deleting its legacy manifest.
+Kiro's one-shot steering-copy retirement is the current sole caller. It derives
+the old target from the current `configDir`, so a custom directory must remain
+unchanged for that retirement generation; change or remove it only after one
+activation/shell entry has drained the old manifest.
 
 ### Why there's no master switch
 
@@ -387,16 +402,21 @@ enabled ecosystem whose native model preserves the option's semantics):
   when both are present. Claude defaults to `CLAUDE.md`; Codex, Kiro, and Kimchi
   default to `AGENTS.md`; Copilot defaults to `copilot-instructions.md`. Copilot
   emits normalized context only on devenv because its live surface is the
-  repository consumed by github.com, not copilot-cli's user home.
+  repository consumed by github.com, not copilot-cli's user home. The transform
+  derives structural `hasMergedContext` metadata before composition, so a
+  final-file replacement or tombstone does not read discarded source-backed
+  root/runtime context.
 - `ai.rules` — named Markdown rules. Codex appends these alphabetically to its
   AGENTS.md after context with trace comments. `matcher = null` means always-on;
   non-empty glob lists lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot
   `applyTo`, and a Codex prose scope preamble. Kiro alone retains native
-  `manual`/`auto` inclusion overrides. The complete rendered file must fit
-  `ai.codex.projectDocMaxBytes` (32 KiB by default), or evaluation fails with
-  per-contribution byte diagnostics. Codex also rejects `matcher = []` as
-  ambiguous; use `null` for always-on content or a non-empty list for scoped
-  content.
+  `manual`/`auto` inclusion overrides. After B7 arbitration, a surviving inline
+  Codex AGENTS.md must fit `ai.codex.projectDocMaxBytes` (32 KiB by default), or
+  evaluation fails with a final-file diagnostic. A replacement or tombstone
+  suppresses the generated bytes before they are read; a surviving store-backed
+  `source` stays lazy and is therefore not size-checked at eval. Codex also
+  rejects `matcher = []` as ambiguous; use `null` for always-on content or a
+  non-empty list for scoped content.
 - `ai.mcpServers` — typed MCP definitions merged with
   `ai.<ecosystem>.mcpServers`. Codex lowers the merged pool to native
   `[mcp_servers.<name>]` TOML tables in both backends. It reuses the common MCP
@@ -485,6 +505,37 @@ backend lowering, not divergent declarations: `ai.codex.profiles` is one typed
 surface, with HM linking its user-global files and devenv materializing the same
 whole-file layers from repository declarations into the native user lookup
 location.
+
+### Final literal-file seam
+
+Every runtime declares `ai.<runtime>.files`; there is deliberately no root
+`ai.files`. Keys are non-empty normalized relative paths interpreted against the
+backend root (HOME for Home Manager, project root for devenv). Each non-null
+entry sets exactly one of `text` or `source`, plus optional `executable` intent.
+Generators contribute whole entries with `mkDefault`; an ordinary consumer entry
+replaces the complete generated file, and null suppresses it. Divergent
+same-priority definitions fail rather than field-merging or concatenating.
+
+The graph is one-way: normalized pools compose, runtime routing chooses a
+target, the target renderer emits final bytes into `ai.<runtime>.files`, and the
+shared backend transform lowers surviving entries to `home.file` or devenv
+`files`. Claude context/rules, Codex user AGENTS.md, Copilot's repository
+context/instructions, Kimchi harness AGENTS.md, and Kiro Home Manager
+context/steering all use the runtime maps. Repository-local Codex/Kiro AGENTS.md
+retains one divergence-checking owner and enters the same architecture through
+hidden `ai.internal.files`, never through competing runtime writers. Public
+Codex/Kiro entries for a shared target arbitrate inside that owner before its
+single native sink: equal entries deduplicate, divergence fails, an ordinary
+entry replaces the generated default, and null suppresses it.
+
+This is a static literal seam, not a universal file abstraction. Secret-bearing
+or merge/reconciliation-owned settings, agents, skills, hooks, and runtime state
+keep their existing typed lifecycle owners. Kiro steering uses ordinary symlinks
+after live 2.18.1 spikes confirmed startup discovery and same-session
+replacement reload in both global and project layouts; the Kiro hook
+materializer remains because hook symlink behavior was not part of that result.
+A manifest-guarded, enable-independent one-shot retirement drains only legacy
+manifest-owned steering copies and then removes its obsolete ledger.
 
 ### Documentation parity is capability parity
 

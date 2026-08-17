@@ -6,9 +6,8 @@ in {
   app = import ./app {inherit lib;};
   apps = import ./apps {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
-  # Strategy-driven file materializer (steering surfaces): symlink
-  # entries keep the legacy declarative shapes; copy entries become
-  # REAL files via generated HM activation / devenv task writers.
+  # Strategy-driven file materializer retained for lifecycle-owned artifacts
+  # such as Kiro hooks that require ownership-safe real-file delivery.
   materialize = import ./materialize.nix {inherit lib;};
   mcpServer = import ./mcpServer {inherit lib;};
   mcpServers = import ./mcpServers {inherit lib;};

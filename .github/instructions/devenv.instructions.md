@@ -166,12 +166,16 @@ this paragraph would rot the next time one is added.)
 
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-08-15 (commit pending — Codex, glab, and Semble
-> writable-root fanout now travels through the hidden
-> `ai.codex.internal._integration_writable_roots` channel and is folded into
-> native config at emission; it still creates no `files.*` artifact). Prior:
-> 2026-08-14 (commit pending — Semble's shell-entry cache guard remains an
-> environment/settings lifecycle effect and creates no `files.*` artifact).
+> **Last verified:** 2026-08-16 (commit pending — Kiro 2.18.1 now discovers and
+> live-reloads symlink replacement in both project and Home-Manager-like
+> layouts, so runtime steering moved to `ai.kiro.files` and ordinary `files.*`
+> delivery; generated tracked instruction projections remain copies because
+> store symlinks cannot be committed portably). Prior: 2026-08-15 (commit
+> pending — Codex, glab, and Semble writable-root fanout now travels through the
+> hidden `ai.codex.internal._integration_writable_roots` channel and is folded
+> into native config at emission; it still creates no `files.*` artifact).
+> Prior: 2026-08-14 (commit pending — Semble's shell-entry cache guard remains
+> an environment/settings lifecycle effect and creates no `files.*` artifact).
 > Prior: 2026-08-05 (commit pending — re-verifies that Codex's environment
 > resolver and sandbox-root fanout create no `files.*` artifact while its test
 > override moves out of the formal module argument set). Prior: 2026-08-05
@@ -352,16 +356,17 @@ files**.
 
 Why copies rather than `files.*`:
 
-- **Kiro v3 cannot read symlinked steering.** The v3 engine (the shipped default
-  via `--tui --v3`) discovers by scanning the directory and keeps only
-  `entry.isFile()` entries, silently dropping symlinks (kirodotdev/Kiro#9787);
-  the v2/classic engine follows them fine. This is the same reason the inline
-  hook JSON is installed via `enterShell` rather than `files.*`, and why the
-  factory's steering emitters now deliver via the strategy-driven materializer
-  (`lib/ai/materialize.nix`) instead of symlinks.
 - **The tracked outputs cannot be symlinks at all.** A store symlink commits as
   mode `120000` holding an absolute `/nix/store` path — meaningless in any other
   clone.
+
+The earlier Kiro-loader rationale is stale. Bounded live-TUI spikes against the
+pinned 2.18.1 release used `/context show` to prove both startup discovery and
+same-session symlink replacement reload in project-local and isolated global
+layouts. Factory-generated steering therefore traverses `ai.kiro.files` and the
+ordinary backend symlink sink. Kiro hooks retain real-file materialization
+because the steering probes did not revalidate hook loading or its ownership
+lifecycle.
 
 The materializer is idempotent (`cmp` before writing, so mtimes do not churn on
 reload), atomic (`mktemp` + `mv`, so a concurrent agent session never reads a

@@ -3,10 +3,11 @@
 # Standing decision (amended 2026-07-21 with operator approval):
 # `nix flake check` remains THE validation entrypoint; this workflow is
 # a NON-entrypoint runtime gate for exactly one defect class the flake
-# check structurally cannot see — whether generated instruction files
-# actually land on disk as REAL files at shell entry (kiro-cli v3
-# silently drops store symlinks; devenv.nix enterTest asserts the
-# materialized results). The original never-wire-devenv-test-to-CI rule
+# check structurally cannot see — whether repository-generated instruction
+# projections actually land on disk as portable REAL files at shell entry
+# (devenv.nix enterTest asserts the results). Consumer runtime files may use
+# backend symlinks; the projection copy is a separate Git-portability concern.
+# The original never-wire-devenv-test-to-CI rule
 # existed because of a cold-store eval bug on an older devenv; the
 # pinned 2.x rev runs green (proven live on PR #438).
 #
