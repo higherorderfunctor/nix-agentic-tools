@@ -7,9 +7,13 @@ applyTo: "checks/module-eval.nix,lib/ai/agent.nix,lib/ai/ai-common.nix,lib/ai/ap
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-17 (commit pending — Codex named permission tables
-> are enabled now that upstream documents their same-name cross-layer merge; the
-> hidden integration-root pool lowers into either legacy workspace-write or the
+> **Last verified:** 2026-08-17 (commit pending — devenv Codex now contributes
+> its profile-materializer state and the effective treefmt cache when treefmt is
+> enabled; both lower through the same permission-model-aware integration-root
+> pool, while process caches without an enabled owner receive no grant). Prior:
+> 2026-08-17 (commit pending — Codex named permission tables are enabled now
+> that upstream documents their same-name cross-layer merge; the hidden
+> integration-root pool lowers into either legacy workspace-write or the
 > selected custom permission profile, with explicit consumer rules winning at
 > the same path. Whole-file `codex --profile` layers remain a separate locked
 > surface). Prior: 2026-08-16 (commit pending — every runtime now exposes the
@@ -654,13 +658,19 @@ Codex itself contributes the roots needed by its normal backend lifecycle when
 the consumer selects either legacy `sandbox_mode = "workspace-write"` or a
 custom named permission profile: Home Manager adds
 `${config.xdg.cacheHome}/nix`; devenv adds the effective process user's Nix
-cache. The devenv cache follows `XDG_CACHE_HOME` when present and otherwise
-`$HOME/.cache`. Legacy workspace-write additionally receives
-`${config.devenv.root}/.git`. Named permissions deliberately do not: in a linked
-worktree that path is a pointer file, and granting it makes Codex synthesize an
-invalid `<pointer>/.git` mount. A named-profile consumer must grant the resolved
-shared common Git directory directly. That directory and a parent used for
-several worktrees remain explicit repository-topology policy.
+cache and
+`${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/codex-profiles`, where
+its profile materializer keeps the per-repository ownership manifest and lock.
+When `treefmt.enable`, devenv also adds
+`${XDG_CACHE_HOME:-$HOME/.cache}/treefmt`; a disabled or absent treefmt module
+adds nothing. The effective cache and state homes follow their XDG variables
+when present and otherwise use their conventional `$HOME` fallbacks. Legacy
+workspace-write additionally receives `${config.devenv.root}/.git`. Named
+permissions deliberately do not: in a linked worktree that path is a pointer
+file, and granting it makes Codex synthesize an invalid `<pointer>/.git` mount.
+A named-profile consumer must grant the resolved shared common Git directory
+directly. That directory and a parent used for several worktrees remain explicit
+repository-topology policy.
 
 Enabled integrations can append their own runtime-owned state through the hidden
 `ai.codex.internal._integration_writable_roots` pool. It is module plumbing

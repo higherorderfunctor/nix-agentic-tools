@@ -202,6 +202,10 @@
         type = lib.types.attrsOf lib.types.anything;
         default = {};
       };
+      treefmt.enable = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+      };
       claude.code = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
@@ -1262,16 +1266,77 @@ in {
       hmRoots = (hmCodexSettings (evalHm settings)).sandbox_workspace_write.writable_roots;
       rootsWithEnvironment = environment:
         (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.files.".codex/config.toml".source.value.sandbox_workspace_write.writable_roots;
+      devenvNoEnvironmentRoots = rootsWithEnvironment {};
       devenvHomeRoots = rootsWithEnvironment {HOME = "/home/test";};
       devenvXdgRoots = rootsWithEnvironment {
         HOME = "/home/ignored";
         XDG_CACHE_HOME = "/tmp/xdg-cache";
+        XDG_STATE_HOME = "/tmp/xdg-state";
       };
     in
       hmRoots
       == ["/home/test/.cache/nix"]
-      && devenvHomeRoots == ["/tmp/devenv-root/.git" "/home/test/.cache/nix"]
-      && devenvXdgRoots == ["/tmp/devenv-root/.git" "/tmp/xdg-cache/nix"]
+      && devenvNoEnvironmentRoots == ["/tmp/devenv-root/.git"]
+      && devenvHomeRoots
+      == [
+        "/tmp/devenv-root/.git"
+        "/home/test/.cache/nix"
+        "/home/test/.local/state/nix-agentic-tools/codex-profiles"
+      ]
+      && devenvXdgRoots
+      == [
+        "/tmp/devenv-root/.git"
+        "/tmp/xdg-cache/nix"
+        "/tmp/xdg-state/nix-agentic-tools/codex-profiles"
+      ]
+  );
+
+  module-codex-enabled-integration-sandbox-roots = mkTest "codex-enabled-integration-sandbox-roots" (
+    let
+      environment = {
+        HOME = "/home/ignored";
+        XDG_CACHE_HOME = "/tmp/xdg-cache";
+        XDG_STATE_HOME = "/tmp/xdg-state";
+      };
+      evaluate = settings:
+        (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.files.".codex/config.toml".source.value;
+      legacy = evaluate {
+        ai.codex = {
+          enable = true;
+          nativeSettings = {
+            sandbox_mode = "workspace-write";
+            sandbox_workspace_write.writable_roots = ["/tmp/xdg-cache/treefmt"];
+          };
+        };
+        treefmt.enable = true;
+      };
+      named = evaluate {
+        ai.codex = {
+          enable = true;
+          nativeSettings = {
+            default_permissions = "project-edit";
+            permissions.project-edit.extends = ":workspace";
+          };
+        };
+        treefmt.enable = true;
+      };
+      disabled = evaluate {
+        ai.codex = {
+          enable = true;
+          nativeSettings.sandbox_mode = "workspace-write";
+        };
+      };
+      expectedIntegrationRoots = [
+        "/tmp/xdg-cache/nix"
+        "/tmp/xdg-state/nix-agentic-tools/codex-profiles"
+        "/tmp/xdg-cache/treefmt"
+      ];
+    in
+      legacy.sandbox_workspace_write.writable_roots
+      == ["/tmp/xdg-cache/treefmt" "/tmp/devenv-root/.git" "/tmp/xdg-cache/nix" "/tmp/xdg-state/nix-agentic-tools/codex-profiles"]
+      && builtins.all (root: named.permissions.project-edit.filesystem.${root} == "write") expectedIntegrationRoots
+      && !(named.permissions.project-edit.filesystem ? "/tmp/devenv-root/.git")
+      && !(builtins.elem "/tmp/xdg-cache/treefmt" disabled.sandbox_workspace_write.writable_roots)
   );
 
   module-codex-default-getenv-needs-no-module-arg = mkTest "codex-default-getenv-needs-no-module-arg" (

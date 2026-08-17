@@ -1046,17 +1046,38 @@ in
       };
       environmentCacheHome = getEnv "XDG_CACHE_HOME";
       environmentHome = getEnv "HOME";
-      nixCacheRoot =
+      environmentStateHome = getEnv "XDG_STATE_HOME";
+      effectiveCacheHome =
         if environmentCacheHome != ""
-        then "${environmentCacheHome}/nix"
+        then environmentCacheHome
         else if environmentHome != ""
-        then "${environmentHome}/.cache/nix"
+        then "${environmentHome}/.cache"
+        else null;
+      effectiveStateHome =
+        if environmentStateHome != ""
+        then environmentStateHome
+        else if environmentHome != ""
+        then "${environmentHome}/.local/state"
+        else null;
+      codexProfileStateRoot =
+        if effectiveStateHome != null
+        then "${effectiveStateHome}/nix-agentic-tools/codex-profiles"
+        else null;
+      nixCacheRoot =
+        if effectiveCacheHome != null
+        then "${effectiveCacheHome}/nix"
+        else null;
+      treefmtCacheRoot =
+        if lib.attrByPath ["treefmt" "enable"] false config && effectiveCacheHome != null
+        then "${effectiveCacheHome}/treefmt"
         else null;
       agentsMdRules = lib.mapAttrs mkRuleBody mergedRules;
     in {
       ai = {
         codex.internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter (
           lib.optional (nixCacheRoot != null) nixCacheRoot
+          ++ lib.optional (codexProfileStateRoot != null) codexProfileStateRoot
+          ++ lib.optional (treefmtCacheRoot != null) treefmtCacheRoot
         ));
         codex.nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
           model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;

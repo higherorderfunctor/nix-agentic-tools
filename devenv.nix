@@ -734,13 +734,23 @@ in {
     for nat_want in ${lib.escapeShellArgs (
       [worktreesRoot]
       ++ lib.optional (!isCI) sembleCache
-      ++ ["${devenvRoot}/.git" "cache/nix"]
+      ++ ["${devenvRoot}/.git" "cache/nix" "cache/treefmt" "nix-agentic-tools/codex-profiles"]
     )}; do
       case "$nat_roots" in
         *"$nat_want"*) ;;
         *) echo "FAIL: Codex writable_roots is missing $nat_want"; exit 1 ;;
       esac
     done
+    ${lib.optionalString (!isCI) ''
+      nat_hooks_dir="$(${pkgs.git}/bin/git rev-parse --path-format=absolute --git-path hooks)"
+      for nat_hook in pre-commit commit-msg; do
+        nat_hook_path="$nat_hooks_dir/$nat_hook"
+        ${pkgs.gnugrep}/bin/grep -Fq 'PREK_HOME="$(git rev-parse --show-toplevel)/.devenv/state/prek"' "$nat_hook_path" \
+          || { echo "FAIL: $nat_hook does not isolate PREK_HOME per worktree"; exit 1; }
+        ${pkgs.gnugrep}/bin/grep -Fq -- '--config="$(git rev-parse --show-toplevel)/.pre-commit-config.yaml"' "$nat_hook_path" \
+          || { echo "FAIL: $nat_hook does not isolate the prek config per worktree"; exit 1; }
+      done
+    ''}
     test -f .claude/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .claude/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     # Deref'd references must resolve on disk (guards the dangling-symlink
     # regression end-to-end, not just at the store-path level).
@@ -888,8 +898,11 @@ in {
           # pinning a store path there would break the hook if that path
           # were garbage-collected.
           #
-          # The same hooks also get a bootstrap preflight injected ahead
-          # of their `exec`. A brand-new worktree has NO
+          # The same hooks also get project-local runtime state and a bootstrap
+          # preflight injected ahead of their `exec`. PREK_HOME from a devenv
+          # shell is not inherited by commits launched from an editor or agent,
+          # so derive it from the committing worktree instead of falling back
+          # to the user-global XDG cache. A brand-new worktree has NO
           # .pre-commit-config.yaml at all: it is a devenv `files.*`
           # artifact materialized on shell entry, and `git worktree add`
           # runs no devenv. Left to itself prek then volunteers three
@@ -904,6 +917,8 @@ in {
           guard_marker="devenv worktree bootstrap guard"
           IFS= read -r -d "" guard <<'GUARD' || :
           # --- devenv worktree bootstrap guard (hooks:isolate-config) ---
+          PREK_HOME="$(git rev-parse --show-toplevel)/.devenv/state/prek"
+          export PREK_HOME
           _devenv_config="$(git rev-parse --show-toplevel)/.pre-commit-config.yaml"
           if [ ! -f "$_devenv_config" ]; then
               echo 'prek: this worktree has not been bootstrapped.' >&2
@@ -913,7 +928,7 @@ in {
               echo '  materialized on devenv shell entry, and "git worktree add"' >&2
               echo '  does not run devenv.' >&2
               echo >&2
-              echo '  Fix: run "devenv shell" (or any devenv task) in this worktree' >&2
+              echo '  Fix: run "devenv shell" in this worktree' >&2
               echo '  once, then commit again.' >&2
               echo >&2
               echo '  Do NOT silence this with PREK_ALLOW_NO_CONFIG=1,' >&2

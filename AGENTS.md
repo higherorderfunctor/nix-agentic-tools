@@ -562,15 +562,19 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-15 (commit pending — adds the adversarial
-> subagent-review protocol that SUBSTITUTES for the Copilot loop while its quota
-> is exhausted, roughly two weeks from 2026-08-15. Written because an agent
-> cannot review its own output, and because the operator had been having to ask
-> for an independent reviewer by hand each time. Includes the refuter+defender
-> pairing and the never-self-adjudicate rule, both of which exist because
-> refute-by-default on your own work is a second discard filter rather than a
-> check). Prior: 2026-08-14 (commit pending — TWO corrections. (1) The
-> required-status-check list said FOUR; there are SIX, both `kiro-patched`
+> **Last verified:** 2026-08-17 (commit pending — shared prek hooks now derive
+> `PREK_HOME` from the committing worktree, so commits launched outside a devenv
+> shell retain isolated project-local state instead of falling back to the
+> user-global XDG cache; the bootstrap diagnostic now names shell entry as the
+> only materialization path). Prior: 2026-08-15 (commit pending — adds the
+> adversarial subagent-review protocol that SUBSTITUTES for the Copilot loop
+> while its quota is exhausted, roughly two weeks from 2026-08-15. Written
+> because an agent cannot review its own output, and because the operator had
+> been having to ask for an independent reviewer by hand each time. Includes the
+> refuter+defender pairing and the never-self-adjudicate rule, both of which
+> exist because refute-by-default on your own work is a second discard filter
+> rather than a check). Prior: 2026-08-14 (commit pending — TWO corrections. (1)
+> The required-status-check list said FOUR; there are SIX, both `kiro-patched`
 > contexts having been promoted 2026-08-13 with PR #895. This file was wrong in
 > two places, `ci-update-workflow.md` was wrong in two more, and
 > `.github/workflows/update.yml` was wrong a third way — "five", including the
@@ -1177,11 +1181,15 @@ Linked worktrees of one clone share the common `.git` directory, so these are
   Serialize stack-skill operations across concurrent worktrees; they are not
   session-isolated.
 
-The prek **config** is the one thing made per-worktree: the
+The prek **config and runtime state** are the things made per-worktree: the
 `hooks:isolate-config` devenv task rewrites the installed hooks so they resolve
 `.pre-commit-config.yaml` from the _committing_ worktree's toplevel at hook-run
-time. That is what stops a shell entry in one worktree from changing what
-another worktree validates against.
+time, and exports `PREK_HOME` beneath that same worktree's `.devenv/state`. That
+is what stops a shell entry in one worktree from changing what another worktree
+validates against, and keeps commits launched from editors or agents from
+falling back to a shared user-global cache. A new worktree must enter
+`devenv shell` once to materialize its config; running an arbitrary devenv task
+does not create the `files.*` artifact.
 
 One more shared thing, and it lives outside the repository entirely: **the
 agent's own memory directory is shared across concurrent sessions, and no
