@@ -26,6 +26,7 @@
 #     <backend> ? {
 #       options ? {};          # backend-only option additions
 #       defaults ? {};         # backend-only default overrides
+#       migrationConfig ? _: {}; # bounded cleanup emitted outside enable gate
 #       config ? _: {};        # consumer callback:
 #                              #   {cfg, config, merged*, mergedContext, topHooks,
 #                              #    resolvedSettings}
@@ -44,6 +45,7 @@
 }: appRecord: {config, ...}: let
   aiCommon = import ../ai-common.nix {inherit lib;};
   dirHelpers = import ../dir-helpers.nix {inherit lib;};
+  runtimeFiles = import ../runtime-files.nix {inherit lib;};
   # `pkgs` comes off the RECORD, never from the module arguments. Naming
   # it in this function's formals makes the module system resolve it via
   # `_module.args`, which requires `config` and deadlocks against any
@@ -126,9 +128,22 @@
     GIT_SSH_COMMAND = sandboxSshCommand;
   };
 
+  contextValues = [config.ai.context cfg.context];
+  # Presence must stay structural. `composeContent` reads source-backed bytes
+  # when two values compose, so using `mergedContext != null` as a generator
+  # gate would force a discarded default before B7 replacement or tombstone
+  # arbitration.
+  hasMergedContext =
+    if supportsPool "context"
+    then
+      lib.any (value:
+        aiCommon.hasContent value
+        && ((value.text or null) == null || value.text != ""))
+      contextValues
+    else false;
   mergedContext =
     if supportsPool "context"
-    then aiCommon.composeContent [config.ai.context cfg.context]
+    then aiCommon.composeContent contextValues
     else null;
   topHooks =
     if supportsPool "hooks"
@@ -139,6 +154,7 @@
   backendOptions = backendSpec.options or {};
   backendDefaults = backendSpec.defaults or {};
   backendConfigFn = backendSpec.config or (_: {});
+  migrationConfigFn = backendSpec.migrationConfig or (_: {});
 
   defaults = appRecord.defaults or {};
   package = backendDefaults.package or defaults.package or null;
@@ -146,13 +162,39 @@
   # `config` rides along so callbacks can observe sibling backend
   # options — e.g. the devenv materializer's conditional `devenv:files`
   # task edge needs `config.files != {}`.
-  customConfig = backendConfigFn {
-    inherit cfg config mergedServers mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables moduleEnvironmentVariables mergedAgents mergedContext resolvedSettings resolvedShell topHooks;
+  callbackArgs = {
+    inherit cfg config mergedServers mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables moduleEnvironmentVariables mergedAgents mergedContext hasMergedContext resolvedSettings resolvedShell topHooks;
   };
+  customConfig = backendConfigFn callbackArgs;
+  migrationConfig = migrationConfigFn callbackArgs;
+  # Repository AGENTS.md targets have one cross-runtime owner. Codex and Kiro
+  # public file entries for those paths arbitrate inside sharedAgentsMd.nix;
+  # letting their ordinary sinks lower the same target independently would
+  # bypass whole-entry replacement and null tombstones at B7.
+  sharedAgentsMdTargets =
+    if backend == "devenv" && builtins.elem appRecord.name ["codex" "kiro"]
+    then
+      builtins.attrNames (
+        lib.attrByPath ["ai" "internal" "agentsMd"] {} config
+      )
+    else [];
+  runtimeSinkFiles = builtins.removeAttrs cfg.files sharedAgentsMdTargets;
 in {
   options.ai.${appRecord.name} =
     {
       enable = lib.mkEnableOption appRecord.name;
+      files = lib.mkOption {
+        type = runtimeFiles.fileMapType;
+        default = {};
+        apply = runtimeFiles.validateFiles appRecord.name;
+        description = ''
+          Final static files owned by ${appRecord.name}, keyed by a path relative
+          to the active backend root (HOME for Home Manager, project root for
+          devenv). Set exactly one of `text` or `source`; `null` suppresses a
+          generated default. Generated entries use whole-file `mkDefault`
+          priority, so an ordinary consumer entry replaces the complete file.
+        '';
+      };
       package = lib.mkOption {
         type = lib.types.package;
         default = package;
@@ -274,6 +316,9 @@ in {
 
   config = lib.mkMerge [
     {_module.args.aiTransformers = appRecord.transformers;}
+    # Narrow compatibility cleanup may need to run on the generation that
+    # disables a runtime. Product output remains solely inside cfg.enable.
+    migrationConfig
     # L2b → L3 fanout for per-CLI Dir options. Expansion happens
     # unconditionally (no mkIf cfg.enable) so the normalized option value is
     # complete even when the CLI is disabled. Actual on-disk emission remains
@@ -288,6 +333,12 @@ in {
         dirHelpers.skillsFromDir cfg.skillsDir
       );
     }))
-    (lib.mkIf cfg.enable customConfig)
+    (lib.mkIf cfg.enable (lib.mkMerge [
+      customConfig
+      (runtimeFiles.mkBackendSink {
+        inherit backend;
+        files = runtimeSinkFiles;
+      })
+    ]))
   ];
 }

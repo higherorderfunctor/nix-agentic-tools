@@ -440,16 +440,20 @@
     then lib.head hits
     else throw "module-test-${name}: expected exactly one rendered mcp-config.json, found ${toString (lib.length hits)}";
 
-  # ── Steering materializer helpers ────────────────────────────────
-  # Kiro steering emission migrated from home.file/files.* symlinks to
-  # the derived `ai.kiro.steeringFiles` attrset + the shared
-  # strategy-driven materializer (lib/ai/materialize.nix). Accessors
-  # read the attrset; byte-level checks read the copy writers' heredoc
-  # bodies out of the generated scripts.
+  # ── Kiro file/materializer helpers ────────────────────────────────
+  # Steering now lives in the common runtime file map. Strip its native prefix
+  # in tests that care about the logical steering filenames rather than the
+  # backend target. The empty legacy materializer remains only to retire copies
+  # that a previous generation recorded as owned.
   matLib = aiBase.materialize;
-  hmPruneScript = ev: (ev.config.home.activation."materialize-kiro-steering-prune" or {}).text or "";
-  hmWriteScript = ev: (ev.config.home.activation."materialize-kiro-steering-write" or {}).text or "";
-  dvTaskExec = ev: ((ev.config.tasks or {})."ai:kiro:materialize-steering" or {}).exec or "";
+  kiroSteeringFiles = evaluated: let
+    prefix = "${evaluated.config.ai.kiro.configDir}/steering/";
+  in
+    lib.mapAttrs' (target: entry:
+      lib.nameValuePair (lib.removePrefix prefix target) entry)
+    (lib.filterAttrs (target: _entry: lib.hasPrefix prefix target) evaluated.config.ai.kiro.files);
+  hmRetirementScript = ev: (ev.config.home.activation."retire-materialize-kiro-steering" or {}).text or "";
+  dvTaskExec = ev: ((ev.config.tasks or {})."ai:kiro:retire-steering-copies" or {}).exec or "";
   # Kiro HOOKS ride the same materializer (copy-only; v3 drops symlinked
   # hooks), so they get the same accessor trio against the hooks slug.
   hmHookPruneScript = ev: (ev.config.home.activation."materialize-kiro-hooks-prune" or {}).text or "";
@@ -2916,13 +2920,11 @@ in {
       && lib.hasInfix "renders to 32769 bytes" aboveAssertion.message
       && lib.hasInfix "projectDocMaxBytes (32768 bytes)" aboveAssertion.message
       && diagnosticAssertion != null
-      && lib.hasInfix "rule:named=" diagnosticAssertion.message
-      && lib.hasInfix "rule:oversize=" diagnosticAssertion.message
+      && lib.hasInfix "replace the final inline content" diagnosticAssertion.message
       && unicodeAssertion != null
       && lib.hasInfix "renders to 2 bytes" unicodeAssertion.message
       && lib.hasInfix "projectDocMaxBytes (1 bytes)" unicodeAssertion.message
-      && lib.hasInfix "context=2 bytes" unicodeAssertion.message
-      && lib.hasInfix "Trim the contributing content or raise" unicodeAssertion.message
+      && lib.hasInfix "Trim or replace" unicodeAssertion.message
   );
 
   module-codex-shared-size-guard-covers-kiro-only-content = mkTest "codex-shared-size-guard-covers-kiro-only-content" (
@@ -3810,8 +3812,8 @@ in {
       };
       hm = (evalHm nativeConfig).config;
       devenv = (evalDevenv nativeConfig).config;
-      hmKiroSteering = hm.ai.kiro.steeringFiles;
-      devenvKiroSteering = devenv.ai.kiro.steeringFiles;
+      hmKiroSteering = kiroSteeringFiles (evalHm nativeConfig);
+      devenvKiroSteering = kiroSteeringFiles (evalDevenv nativeConfig);
       hmKiroInstruction = (hmKiroSteering."semble.md" or {}).text or "";
       hmClaudeRule = (hm.home.file.".claude/rules/semble.md" or {}).text or "";
     in
@@ -4664,6 +4666,459 @@ in {
       && devenv.config.ai.kiro.enable
   );
 
+  # ── A5a: final per-runtime literal file registry ────────────────────
+  module-runtime-files-option-parity = mkTest "runtime-files-option-parity" (
+    let
+      hm = evalHm {};
+      devenv = evalDevenv {};
+      optionType = evaluated: runtime:
+        (lib.getAttrFromPath ["ai" runtime "files"] evaluated.options).type.description;
+    in
+      lib.all (runtime: optionType hm runtime == optionType devenv runtime) harnessNames
+  );
+
+  module-runtime-files-lower-to-both-backends = mkTest "runtime-files-lower-to-both-backends" (
+    let
+      checkRuntime = runtime: let
+        textTarget = "literal/${runtime}.txt";
+        sourceTarget = "literal/${runtime}.source";
+        config = {
+          ai.${runtime} = {
+            enable = true;
+            files = {
+              ${textTarget} = {
+                executable = true;
+                text = "${runtime}-TEXT";
+              };
+              ${sourceTarget}.source = ./fixtures/kiro-steering/alpha.md;
+            };
+          };
+        };
+        hm = (evalHm config).config;
+        devenv = (evalDevenv config).config;
+      in
+        hm.home.file.${textTarget}.text
+        == hm.ai.${runtime}.files.${textTarget}.text
+        && devenv.files.${textTarget}.text == devenv.ai.${runtime}.files.${textTarget}.text
+        && hm.home.file.${textTarget}.executable
+        && devenv.files.${textTarget}.executable
+        && hm.home.file.${sourceTarget}.source == ./fixtures/kiro-steering/alpha.md
+        && devenv.files.${sourceTarget}.source == ./fixtures/kiro-steering/alpha.md
+        && !(hm.home.file.${sourceTarget} ? text)
+        && !(devenv.files.${sourceTarget} ? text);
+    in
+      lib.all checkRuntime harnessNames
+  );
+
+  module-runtime-files-disabled-runtime-does-not-emit = mkTest "runtime-files-disabled-runtime-does-not-emit" (
+    let
+      target = "literal/disabled.txt";
+      config.ai.claude.files.${target}.text = "DECLARED-BUT-DISABLED";
+      hm = (evalHm config).config;
+      devenv = (evalDevenv config).config;
+    in
+      hm.ai.claude.files.${target}.text
+      == "DECLARED-BUT-DISABLED"
+      && !(hm.home.file ? ${target})
+      && !(devenv.files ? ${target})
+  );
+
+  module-runtime-files-invalid-targets-rejected = mkTest "runtime-files-invalid-targets-rejected" (
+    let
+      rejected = target: let
+        attempt = builtins.tryEval (let
+          evaluated = evalHm {
+            ai.claude.files.${target}.text = "invalid";
+          };
+        in
+          builtins.deepSeq evaluated.config.ai.claude.files true);
+      in
+        !attempt.success;
+    in
+      lib.all rejected ["" "/absolute" "double//slash" "./dot" "parent/../escape"]
+  );
+
+  module-runtime-files-content-shape-rejected = mkTest "runtime-files-content-shape-rejected" (
+    let
+      rejected = entry: let
+        attempt = builtins.tryEval (let
+          evaluated = evalHm {
+            ai.claude.files."literal/invalid" = entry;
+          };
+        in
+          builtins.deepSeq evaluated.config.ai.claude.files true);
+      in
+        !attempt.success;
+    in
+      rejected {}
+      && rejected {
+        source = ./fixtures/kiro-steering/alpha.md;
+        text = "both";
+      }
+  );
+
+  module-runtime-files-generated-default-tombstone = mkTest "runtime-files-generated-default-tombstone" (
+    let
+      target = ".claude/CLAUDE.md";
+      config.ai.claude = {
+        enable = true;
+        context.text = "GENERATED-CONTEXT";
+        files.${target} = null;
+      };
+      hm = (evalHm config).config;
+      devenv = (evalDevenv config).config;
+    in
+      hm.ai.claude.files.${target}
+      == null
+      && devenv.ai.claude.files.${target} == null
+      && !(hm.home.file ? ${target})
+      && !(devenv.files ? ${target})
+  );
+
+  # Positive inclusion inventory: every primary normalized output reaches its
+  # runtime map, or the one shared repository AGENTS.md map, before lowering.
+  module-runtime-files-primary-inclusion-contract = mkTest "runtime-files-primary-inclusion-contract" (
+    let
+      config = {
+        ai = {
+          context.text = "SHARED-CONTEXT";
+          rules.scoped = {
+            matcher = ["src/**"];
+            text = "SCOPED-RULE";
+          };
+          claude.enable = true;
+          codex.enable = true;
+          copilot.enable = true;
+          kimchi.enable = true;
+          kiro.enable = true;
+        };
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+      hmConfig = hm.config;
+      devenvConfig = devenv.config;
+    in
+      hmConfig.ai.claude.files ? ".claude/CLAUDE.md"
+      && hmConfig.ai.claude.files ? ".claude/rules/scoped.md"
+      && hmConfig.ai.codex.files ? ".codex/AGENTS.md"
+      && hmConfig.ai.kimchi.files ? ".config/kimchi/harness/AGENTS.md"
+      && hmConfig.ai.kiro.files ? ".kiro/steering/AGENTS.md"
+      && hmConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
+      && devenvConfig.ai.claude.files ? ".claude/CLAUDE.md"
+      && devenvConfig.ai.claude.files ? ".claude/rules/scoped.md"
+      && devenvConfig.ai.copilot.files ? ".github/copilot-instructions.md"
+      && devenvConfig.ai.copilot.files ? ".github/instructions/scoped.instructions.md"
+      && devenvConfig.ai.kimchi.files ? ".config/kimchi/harness/AGENTS.md"
+      && devenvConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
+      && devenvConfig.ai.internal.files ? "AGENTS.md"
+      && devenvConfig.ai.internal.files."AGENTS.md".text == devenvConfig.files."AGENTS.md".text
+      && !(devenvConfig.files."AGENTS.md" ? source)
+  );
+
+  module-runtime-files-shared-agentsmd-arbitration = mkTest "runtime-files-shared-agentsmd-arbitration" (
+    let
+      base = {
+        ai = {
+          codex.enable = true;
+          context.text = "GENERATED-SHARED-CONTEXT";
+          kiro.enable = true;
+        };
+      };
+      replaced = evalDevenv (lib.recursiveUpdate base {
+        ai.codex.files."AGENTS.md".text = "CONSUMER-REPLACEMENT";
+      });
+      suppressed = evalDevenv (lib.recursiveUpdate base {
+        ai.kiro.files."AGENTS.md" = null;
+      });
+      deduplicated = evalDevenv (lib.recursiveUpdate base {
+        ai.codex.files."AGENTS.md".text = "SHARED-CONSUMER";
+        ai.kiro.files."AGENTS.md".text = "SHARED-CONSUMER";
+      });
+      divergent = builtins.tryEval (let
+        evaluated = evalDevenv (lib.recursiveUpdate base {
+          ai.codex.files."AGENTS.md".text = "CODEX-CONSUMER";
+          ai.kiro.files."AGENTS.md".text = "KIRO-CONSUMER";
+        });
+      in
+        builtins.deepSeq evaluated.config.ai.internal.files."AGENTS.md" true);
+    in
+      replaced.config.ai.internal.files."AGENTS.md".text
+      == "CONSUMER-REPLACEMENT"
+      && replaced.config.files."AGENTS.md".text == "CONSUMER-REPLACEMENT"
+      && suppressed.config.ai.internal.files."AGENTS.md" == null
+      && !(suppressed.config.files ? "AGENTS.md")
+      && deduplicated.config.ai.internal.files."AGENTS.md".text == "SHARED-CONSUMER"
+      && deduplicated.config.files."AGENTS.md".text == "SHARED-CONSUMER"
+      && !divergent.success
+  );
+
+  module-runtime-files-shared-agentsmd-ignores-disabled-runtime = mkTest "runtime-files-shared-agentsmd-ignores-disabled-runtime" (
+    let
+      withDormantEntry = {
+        activeRuntime,
+        dormantRuntime,
+        entry,
+      }:
+        evalDevenv {
+          ai = {
+            context.text = "ACTIVE-SHARED-CONTEXT";
+            ${activeRuntime}.enable = true;
+            ${dormantRuntime}.files."AGENTS.md" = entry;
+          };
+        };
+      evaluations = [
+        (withDormantEntry {
+          activeRuntime = "codex";
+          dormantRuntime = "kiro";
+          entry.text = "DORMANT-KIRO";
+        })
+        (withDormantEntry {
+          activeRuntime = "codex";
+          dormantRuntime = "kiro";
+          entry = null;
+        })
+        (withDormantEntry {
+          activeRuntime = "kiro";
+          dormantRuntime = "codex";
+          entry.text = "DORMANT-CODEX";
+        })
+        (withDormantEntry {
+          activeRuntime = "kiro";
+          dormantRuntime = "codex";
+          entry = null;
+        })
+      ];
+    in
+      lib.all (evaluated:
+        evaluated.config.files ? "AGENTS.md"
+        && lib.hasInfix "ACTIVE-SHARED-CONTEXT" evaluated.config.files."AGENTS.md".text
+        && !(lib.hasInfix "DORMANT-" evaluated.config.files."AGENTS.md".text))
+      evaluations
+  );
+
+  module-runtime-files-size-guard-follows-final-entry = mkTest "runtime-files-size-guard-follows-final-entry" (
+    let
+      oversized = lib.concatStrings (lib.replicate 64 "x");
+      hmReplacement = evalHm {
+        ai.codex = {
+          context.text = oversized;
+          enable = true;
+          files.".codex/AGENTS.md".text = "short";
+          projectDocMaxBytes = 8;
+        };
+      };
+      hmTombstone = evalHm {
+        ai.codex = {
+          context.text = oversized;
+          enable = true;
+          files.".codex/AGENTS.md" = null;
+          projectDocMaxBytes = 8;
+        };
+      };
+      devenvReplacement = evalDevenv {
+        ai = {
+          codex = {
+            enable = true;
+            files."AGENTS.md".text = "short";
+            projectDocMaxBytes = 8;
+          };
+          context.text = oversized;
+        };
+      };
+      devenvTombstone = evalDevenv {
+        ai = {
+          codex = {
+            enable = true;
+            files."AGENTS.md" = null;
+            projectDocMaxBytes = 8;
+          };
+          context.text = oversized;
+        };
+      };
+    in
+      builtins.all (assertion: assertion.assertion) hmReplacement.config.assertions
+      && builtins.all (assertion: assertion.assertion) hmTombstone.config.assertions
+      && builtins.all (assertion: assertion.assertion) devenvReplacement.config.assertions
+      && builtins.all (assertion: assertion.assertion) devenvTombstone.config.assertions
+      && hmReplacement.config.home.file.".codex/AGENTS.md".text == "short"
+      && !(hmTombstone.config.home.file ? ".codex/AGENTS.md")
+      && devenvReplacement.config.files."AGENTS.md".text == "short"
+      && !(devenvTombstone.config.files ? "AGENTS.md")
+  );
+
+  module-runtime-files-discarded-codex-source-stays-lazy = mkTest "runtime-files-discarded-codex-source-stays-lazy" (
+    let
+      source = pkgs.runCommand "discarded-codex-context-must-not-build" {} ''
+        exit 1
+      '';
+      hmReplacement = evalHm {
+        ai = {
+          context = {inherit source;};
+          codex = {
+            context.text = "RUNTIME-CONTEXT";
+            enable = true;
+            files.".codex/AGENTS.md".text = "HM-REPLACEMENT";
+          };
+        };
+      };
+      hmTombstone = evalHm {
+        ai = {
+          context = {inherit source;};
+          codex = {
+            context.text = "RUNTIME-CONTEXT";
+            enable = true;
+            files.".codex/AGENTS.md" = null;
+          };
+        };
+      };
+      devenvReplacement = evalDevenv {
+        ai = {
+          context = {inherit source;};
+          codex = {
+            context.text = "RUNTIME-CONTEXT";
+            enable = true;
+            files."AGENTS.md".text = "DEVENV-REPLACEMENT";
+          };
+        };
+      };
+      devenvTombstone = evalDevenv {
+        ai = {
+          context = {inherit source;};
+          codex = {
+            context.text = "RUNTIME-CONTEXT";
+            enable = true;
+            files."AGENTS.md" = null;
+          };
+        };
+      };
+      hmKiroTombstone = evalHm {
+        ai = {
+          context = {inherit source;};
+          kiro = {
+            context.text = "RUNTIME-CONTEXT";
+            enable = true;
+            files.".kiro/steering/AGENTS.md" = null;
+          };
+        };
+      };
+      devenvKiroTombstone = evalDevenv {
+        ai = {
+          context = {inherit source;};
+          kiro = {
+            context.text = "RUNTIME-CONTEXT";
+            enable = true;
+            files."AGENTS.md" = null;
+          };
+        };
+      };
+    in
+      hmReplacement.config.home.file.".codex/AGENTS.md".text
+      == "HM-REPLACEMENT"
+      && !(hmTombstone.config.home.file ? ".codex/AGENTS.md")
+      && devenvReplacement.config.files."AGENTS.md".text == "DEVENV-REPLACEMENT"
+      && !(devenvTombstone.config.files ? "AGENTS.md")
+      && !(hmKiroTombstone.config.home.file ? ".kiro/steering/AGENTS.md")
+      && !(devenvKiroTombstone.config.files ? "AGENTS.md")
+  );
+
+  module-runtime-files-generated-empty-codex-source-omitted = mkTest "runtime-files-generated-empty-codex-source-omitted" (
+    let
+      source = ./fixtures/empty;
+      hmCodex = evalHm {
+        ai = {
+          context = {inherit source;};
+          codex.enable = true;
+        };
+      };
+      devenvCodex = evalDevenv {
+        ai = {
+          context = {inherit source;};
+          codex.enable = true;
+        };
+      };
+      devenvKiro = evalDevenv {
+        ai = {
+          context = {inherit source;};
+          kiro.enable = true;
+        };
+      };
+      explicitEmpty = evalDevenv {
+        ai.codex = {
+          enable = true;
+          files."AGENTS.md".text = "";
+        };
+      };
+    in
+      !(hmCodex.config.home.file ? ".codex/AGENTS.md")
+      && !(devenvCodex.config.files ? "AGENTS.md")
+      && !(devenvKiro.config.files ? "AGENTS.md")
+      && explicitEmpty.config.files."AGENTS.md".text == ""
+  );
+
+  module-runtime-files-discarded-composed-context-stays-lazy = mkTest "runtime-files-discarded-composed-context-stays-lazy" (
+    let
+      source = pkgs.runCommand "discarded-runtime-contexts-must-not-build" {} ''
+        exit 1
+      '';
+      hmClaude = evalHm {
+        ai = {
+          context = {inherit source;};
+          claude = {
+            context.text = "RUNTIME-CONTEXT";
+            enable = true;
+            files.".claude/CLAUDE.md".text = "CLAUDE-REPLACEMENT";
+          };
+        };
+      };
+      devenvClaude = evalDevenv {
+        ai = {
+          context = {inherit source;};
+          claude = {
+            context.text = "RUNTIME-CONTEXT";
+            enable = true;
+            files.".claude/CLAUDE.md".text = "CLAUDE-REPLACEMENT";
+          };
+        };
+      };
+      devenvCopilot = evalDevenv {
+        ai = {
+          context = {inherit source;};
+          copilot = {
+            context.text = "RUNTIME-CONTEXT";
+            enable = true;
+            files.".github/copilot-instructions.md".text = "COPILOT-REPLACEMENT";
+          };
+        };
+      };
+      hmKimchi = evalHm {
+        ai = {
+          context = {inherit source;};
+          kimchi = {
+            context.text = "RUNTIME-CONTEXT";
+            enable = true;
+            files.".config/kimchi/harness/AGENTS.md".text = "KIMCHI-REPLACEMENT";
+          };
+        };
+      };
+      devenvKimchi = evalDevenv {
+        ai = {
+          context = {inherit source;};
+          kimchi = {
+            context.text = "RUNTIME-CONTEXT";
+            enable = true;
+            files.".config/kimchi/harness/AGENTS.md".text = "KIMCHI-REPLACEMENT";
+          };
+        };
+      };
+    in
+      hmClaude.config.home.file.".claude/CLAUDE.md".text
+      == "CLAUDE-REPLACEMENT"
+      && devenvClaude.config.files.".claude/CLAUDE.md".text == "CLAUDE-REPLACEMENT"
+      && devenvCopilot.config.files.".github/copilot-instructions.md".text == "COPILOT-REPLACEMENT"
+      && hmKimchi.config.home.file.".config/kimchi/harness/AGENTS.md".text == "KIMCHI-REPLACEMENT"
+      && devenvKimchi.config.files.".config/kimchi/harness/AGENTS.md".text == "KIMCHI-REPLACEMENT"
+  );
+
   module-claude-shared-rule-emits-native-file = mkTest "claude-shared-rule-emits-native-file" (
     let
       evaluated = evalHm {
@@ -4684,10 +5139,7 @@ in {
   module-claude-no-guidance-no-file = mkTest "claude-no-guidance-no-file" (
     let
       evaluated = evalHm {ai.claude.enable = true;};
-      # With no rules and no context merged, nothing writes the
-      # `home.file` CLAUDE.md path (the generic aggregate writer is retired;
-      # context flows through programs.claude-code.context instead). Regression
-      # guard that the aggregate stays gone.
+      # With no rules and no context merged, nothing enters the final file map.
     in
       !(evaluated.config.home.file ? ".claude/CLAUDE.md")
   );
@@ -4708,9 +5160,8 @@ in {
       lib.hasInfix "Claude-specific rule." rule
   );
 
-  # Claude HM keeps context in the upstream context writer and emits each keyed
-  # rule once in `.claude/rules/<name>.md`. No generic aggregate may claim the
-  # same CLAUDE.md path.
+  # Claude HM emits context and each keyed rule through ai.claude.files before
+  # the generic backend sink.
   module-claude-hm-context-and-rules = mkTest "claude-hm-context-and-rules" (
     let
       evaluated = evalHm {
@@ -4731,17 +5182,15 @@ in {
           };
         };
       };
-      ctx = evaluated.config.programs.claude-code.context or "";
       aggregate = evaluated.config.home.file.".claude/CLAUDE.md" or null;
       ruleFile = evaluated.config.home.file.".claude/rules/named-rule.md" or null;
     in
-      # (a) no generic-aggregate writer on CLAUDE.md — context owns it (upstream).
-      aggregate
-      == null
-      && ctx == "CONTEXT-BASELINE-TOKEN."
+      aggregate.text
+      == evaluated.config.ai.claude.files.".claude/CLAUDE.md".text
+      && aggregate.text == "CONTEXT-BASELINE-TOKEN."
       && ruleFile != null
+      && ruleFile.text == evaluated.config.ai.claude.files.".claude/rules/named-rule.md".text
       && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (ruleFile.text or "")
-      && !(lib.hasInfix "NAMED-RULE-BODY-TOKEN." ctx)
       && evaluated.config.home.file ? ".claude/rules/unnamed.md"
   );
 
@@ -4832,9 +5281,7 @@ in {
   );
 
   # Kiro HM keeps context in the `AGENTS.md` steering entry and emits each keyed
-  # rule as `<name>.md`, with no stray path-shaped aggregate key.
-  # Accessors read the derived ai.kiro.steeringFiles attrset (emission
-  # is via the strategy-driven materializer).
+  # rule as `<name>.md` through the common runtime file map.
   module-kiro-hm-context-and-rules = mkTest "kiro-hm-context-and-rules" (
     let
       evaluated = evalHm {
@@ -4852,7 +5299,7 @@ in {
           };
         };
       };
-      steering = evaluated.config.ai.kiro.steeringFiles;
+      steering = kiroSteeringFiles evaluated;
       contextFile = (steering."AGENTS.md" or {}).text or "";
       unnamedFile = steering."unnamed.md" or null;
       namedFile = steering."named-rule.md" or null;
@@ -4861,7 +5308,6 @@ in {
       && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile)
       && unnamedFile != null
       && lib.hasInfix "UNNAMED-INSTR-TOKEN." (unnamedFile.text or "")
-      && !(lib.any (n: lib.hasInfix "/" n) (lib.attrNames steering))
       && namedFile != null
       && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (namedFile.text or "")
   );
@@ -4885,14 +5331,13 @@ in {
           };
         };
       };
-      steering = evaluated.config.ai.kiro.steeringFiles;
+      steering = kiroSteeringFiles evaluated;
       contextFile = (evaluated.config.files."AGENTS.md" or {}).text or "";
       namedFile = steering."named-rule.md" or null;
     in
       lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
       && lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile
       && !(steering ? "AGENTS.md")
-      && !(lib.any (n: lib.hasInfix "/" n) (lib.attrNames steering))
       && namedFile != null
       && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (namedFile.text or "")
   );
@@ -6510,7 +6955,7 @@ in {
           inherit (mem) rules;
         };
       };
-      steerText = (result.config.ai.kiro.steeringFiles."kiro-auto-memory.md" or {}).text or "";
+      steerText = ((kiroSteeringFiles result)."kiro-auto-memory.md" or {}).text or "";
     in
       lib.hasInfix "inclusion: always" steerText
       && lib.hasInfix "Persistent project memory" steerText
@@ -6549,14 +6994,10 @@ in {
         (builtins.unsafeDiscardStringContext mem.hooks."kiro-memory");
       hmHookBody = matHeredocBody hmHook "kiro-memory.json";
       dvHookBody = matHeredocBody dvHook "kiro-memory.json";
-      hmSteerFiles = hm.config.ai.kiro.steeringFiles;
-      dvSteerFiles = dv.config.ai.kiro.steeringFiles;
+      hmSteerFiles = kiroSteeringFiles hm;
+      dvSteerFiles = kiroSteeringFiles dv;
       hmSteer = (hmSteerFiles."kiro-auto-memory.md" or {}).text or "";
       dvAgents = (dv.config.files."AGENTS.md" or {}).text or "";
-      # The heredoc re-appends exactly one trailing newline, so the
-      # embedded body is the entry text minus that newline.
-      expectedBody = matLib.stripTrailingNewline hmSteer;
-      hmBody = matHeredocBody (hmWriteScript hm) "kiro-auto-memory.md";
     in
       hmHook
       != ""
@@ -6569,7 +7010,7 @@ in {
       # the project root.
       && lib.hasInfix ''cd "$DEVENV_ROOT"'' dvHook
       && hmSteer != ""
-      && hmBody == expectedBody
+      && lib.hasInfix "Persistent project memory" (hm.config.home.file.".kiro/steering/kiro-auto-memory.md".text or "")
       && lib.hasInfix "Persistent project memory" dvAgents
       && !(lib.hasInfix "inclusion:" dvAgents)
       && !(dvSteerFiles ? "kiro-auto-memory.md")
@@ -7586,7 +8027,7 @@ in {
           };
         };
       };
-      steeringFile = result.config.ai.kiro.steeringFiles."my-steering.md" or null;
+      steeringFile = (kiroSteeringFiles result)."my-steering.md" or null;
     in
       steeringFile
       != null
@@ -7622,8 +8063,8 @@ in {
           };
         };
       };
-      hmSteering = (evalHm config).config.ai.kiro.steeringFiles;
-      devenvSteering = (evalDevenv config).config.ai.kiro.steeringFiles;
+      hmSteering = kiroSteeringFiles (evalHm config);
+      devenvSteering = kiroSteeringFiles (evalDevenv config);
       manual = (hmSteering."on-demand.md" or {}).text or "";
       auto = (hmSteering."semantic.md" or {}).text or "";
     in
@@ -7659,7 +8100,7 @@ in {
           };
         };
       };
-      kiro = (native.config.ai.kiro.steeringFiles."semantic.md" or {}).text or "";
+      kiro = ((kiroSteeringFiles native)."semantic.md" or {}).text or "";
     in
       !portableAttempt.success
       && lib.hasInfix "inclusion: auto" kiro
@@ -7682,8 +8123,7 @@ in {
   );
 
   # HM: per-CLI context → the `<contextFilename>` steering entry
-  # (default AGENTS.md), delivered by the copy writer — the legacy
-  # home.file symlink must be GONE under the default copy strategy.
+  # (default AGENTS.md), delivered by the ordinary runtime file sink.
   module-kiro-hm-writes-context = mkTest "kiro-hm-writes-context" (
     let
       result = evalHm {
@@ -7692,13 +8132,12 @@ in {
           context.text = "Project conventions go here.";
         };
       };
-      contextFile = result.config.ai.kiro.steeringFiles."AGENTS.md" or null;
+      contextFile = (kiroSteeringFiles result)."AGENTS.md" or null;
     in
       contextFile
       != null
       && lib.hasInfix "Project conventions" (contextFile.text or "")
-      && !(result.config.home.file ? ".kiro/steering/AGENTS.md")
-      && lib.hasInfix "AGENTS.md" (hmWriteScript result)
+      && (result.config.home.file.".kiro/steering/AGENTS.md" or {}).text == contextFile.text
   );
 
   # HM: top-level ai.context fans out to kiro when per-CLI unset.
@@ -7708,7 +8147,7 @@ in {
         ai.kiro.enable = true;
         ai.context.text = "Top-level context flows everywhere.";
       };
-      contextFile = result.config.ai.kiro.steeringFiles."AGENTS.md" or null;
+      contextFile = (kiroSteeringFiles result)."AGENTS.md" or null;
     in
       contextFile
       != null
@@ -7725,7 +8164,7 @@ in {
         };
         ai.context.text = "Top-level context.";
       };
-      contextFile = result.config.ai.kiro.steeringFiles."AGENTS.md" or null;
+      contextFile = (kiroSteeringFiles result)."AGENTS.md" or null;
     in
       contextFile
       != null
@@ -7744,8 +8183,8 @@ in {
           };
         };
       };
-      customFile = result.config.ai.kiro.steeringFiles."custom.md" or null;
-      agentsFile = result.config.ai.kiro.steeringFiles."AGENTS.md" or null;
+      customFile = (kiroSteeringFiles result)."custom.md" or null;
+      agentsFile = (kiroSteeringFiles result)."AGENTS.md" or null;
     in
       customFile != null && agentsFile == null
   );
@@ -8299,12 +8738,13 @@ in {
       && builtins.all (hasLiteral ".nat-tmp.") scripts
   );
 
-  # The hooks and steering tasks share one materializer state directory and
-  # devenv may run them concurrently. The lock is deliberately STATE-DIR-wide,
-  # not per slug: every stale-temp sweep must exclude every other writer's live
-  # manifest temp before it can delete the reserved `.nat-tmp.` namespace.
-  # Prove both real generated tasks block behind that same lock, then release it
-  # and run them concurrently to prove both surfaces and manifests survive.
+  # The hooks task and legacy steering-retirement task share one materializer
+  # state directory and devenv may run them concurrently. The lock is
+  # deliberately STATE-DIR-wide, not per slug: every stale-temp sweep must
+  # exclude every other writer's live manifest temp before it can delete the
+  # reserved `.nat-tmp.` namespace. Prove both generated tasks block behind
+  # that lock, then release it and run them concurrently. Hooks still
+  # materialize; steering must not, because the native files layer owns it.
   module-kiro-materializer-tasks-serialize-runtime = let
     ev = evalDevenv {
       ai.kiro = {
@@ -8331,7 +8771,11 @@ in {
       export DEVENV_ROOT="$TMPDIR/root"
       export DEVENV_STATE="$TMPDIR/state"
       state_dir="$DEVENV_STATE/nix-agentic-tools/materialize"
-      ${pkgs.coreutils}/bin/mkdir -p "$DEVENV_ROOT" "$state_dir"
+      steering_dir="$DEVENV_ROOT/.kiro/steering"
+      ${pkgs.coreutils}/bin/mkdir -p "$steering_dir" "$state_dir"
+      printf 'legacy steering\n' > "$steering_dir/legacy.md"
+      legacy_hash="$(${pkgs.coreutils}/bin/sha256sum "$steering_dir/legacy.md" | ${pkgs.coreutils}/bin/cut -d ' ' -f 1)"
+      printf 'legacy.md\t%s\n' "$legacy_hash" > "$state_dir/kiro-steering.manifest"
 
       exec 9> "$state_dir/lock"
       ${lib.getExe pkgs.flock} 9
@@ -8357,11 +8801,15 @@ in {
 
       [ -f "$DEVENV_ROOT/.kiro/hooks/demo.json" ] \
         || fail "hook task did not materialize demo.json"
-      [ -f "$DEVENV_ROOT/.kiro/steering/serialized.md" ] \
-        || fail "steering task did not materialize serialized.md"
+      [ ! -e "$DEVENV_ROOT/.kiro/steering/serialized.md" ] \
+        || fail "legacy retirement task materialized native steering"
+      [ ! -e "$steering_dir/legacy.md" ] \
+        || fail "legacy retirement task did not prune owned steering"
+      [ ! -e "$state_dir/kiro-steering.manifest" ] \
+        || fail "legacy retirement task did not remove its manifest"
       manifests=("$state_dir"/*.manifest)
-      [ "''${#manifests[@]}" -eq 2 ] \
-        || fail "concurrent tasks did not preserve both manifests"
+      [ "''${#manifests[@]}" -eq 1 ] \
+        || fail "concurrent hook task did not preserve its manifest"
 
       echo "PASS: kiro-materializer-tasks-serialize-runtime" > $out
     '';
@@ -8560,7 +9008,7 @@ in {
       contextFile
       != null
       && lib.hasInfix "Project conventions" (contextFile.text or "")
-      && !(result.config.ai.kiro.steeringFiles ? "AGENTS.md")
+      && !((kiroSteeringFiles result) ? "AGENTS.md")
   );
 
   # Devenv: top-level ai.context fans to kiro when per-CLI unset.
@@ -8706,19 +9154,11 @@ in {
       nameAsserts != [] && (builtins.head nameAsserts).assertion == false
   );
 
-  # ── Steering materializer (strategy-driven) ────────────────────────
-  # lib/ai/materialize.nix + the ai.kiro.steeringFiles derived attrset.
-  # Known gap (recorded): the dag stub discards before/after, so the
-  # entryBefore ["checkLinkTargets"] / entryAfter ["linkGeneration"]
-  # ordering cannot be asserted here — an nmt-based check (P4) covers
-  # it.
+  # ── Kiro steering through ai.kiro.files ─────────────────────────────
 
-  # [B1] Two emitters producing the SAME steering key with DIFFERENT
-  # content must be a hard eval error (steeringFiles.<n>.text is
-  # nullOr str → conflicting definition values). A rule named "AGENTS"
-  # and the default contextFilename both land on "AGENTS.md" with
-  # different bodies — this exact pair silently CONCATENATED under the
-  # old home.file `lines` merge.
+  # Two generators producing the same target with divergent whole entries at
+  # the same priority must fail. A rule named "AGENTS" and the default context
+  # filename deliberately collide here.
   module-kiro-steering-collision-errors = mkTest "kiro-steering-collision-errors" (
     let
       attempt = builtins.tryEval (
@@ -8731,70 +9171,116 @@ in {
             };
           };
         in
-          builtins.seq ev.config.ai.kiro.steeringFiles."AGENTS.md".text true
+          builtins.seq ev.config.ai.kiro.files.".kiro/steering/AGENTS.md".text true
       );
     in
       !attempt.success
   );
 
-  # [B6-partial] The copy writers exist whenever the module is enabled —
-  # even with an EMPTY steering set — so emptying the surface still
-  # prunes previously materialized files (N→0). Both backends.
-  module-kiro-steering-empty-set-still-prunes = mkTest "kiro-steering-empty-set-still-prunes" (
+  # One-shot legacy retirement sits outside the runtime enable gate so an
+  # upgrade+disable generation still drains old ownership manifests. It is a
+  # manifest-absent no-op and writes no steering content.
+  module-kiro-steering-legacy-copies-still-prune = mkTest "kiro-steering-legacy-copies-still-prune" (
     let
-      hm = evalHm {ai.kiro.enable = true;};
-      prune = hmPruneScript hm;
-      write = hmWriteScript hm;
-      dv = evalDevenv {ai.kiro.enable = true;};
-      task = (dv.config.tasks or {})."ai:kiro:materialize-steering" or null;
+      hm = evalHm {ai.kiro.enable = false;};
+      retirement = hmRetirementScript hm;
+      dv = evalDevenv {ai.kiro.enable = false;};
+      task = (dv.config.tasks or {})."ai:kiro:retire-steering-copies" or null;
     in
-      hm.config.ai.kiro.steeringFiles
+      hm.config.ai.kiro.files
       == {}
-      # prune pass present (walks the previous manifest and removes)…
-      && lib.hasInfix "$NAT_MAT_MANIFEST" prune
-      && lib.hasInfix "rm -f" prune
-      # …and the write phase still rewrites the manifest (to empty)
-      && lib.hasInfix "NAT_MAT_NEW_MANIFEST" write
+      && lib.hasInfix "NAT_MAT_RETIRE_MANIFEST" retirement
+      && lib.hasInfix "rm -f -- \"$NAT_MAT_MANIFEST\"" retirement
+      && !(lib.hasInfix "NAT_MAT_NEW_MANIFEST" retirement)
       && task != null
+      && lib.hasInfix "NAT_MAT_RETIRE_MANIFEST" (task.exec or "")
       && lib.hasInfix "$NAT_MAT_MANIFEST" (task.exec or "")
   );
 
-  # [B7] devenv copy entries ship an enterTest backstop asserting each
-  # target is a REAL file (not a symlink) — a failed materialize task
-  # only warns at shell entry; the fragment makes `devenv test`/CI
-  # fail. Ships WITH the module to every consumer.
-  module-kiro-steering-devenv-enter-test = mkTest "kiro-steering-devenv-enter-test" (
+  module-kiro-steering-legacy-retirement-runtime = let
+    hmScript = pkgs.writeShellScript "kiro-steering-hm-retirement" (
+      hmRetirementScript (evalHm {ai.kiro.enable = false;})
+    );
+    devenvScript = pkgs.writeShellScript "kiro-steering-devenv-retirement" (
+      dvTaskExec (evalDevenv {ai.kiro.enable = false;})
+    );
+  in
+    pkgs.runCommand "module-test-kiro-steering-legacy-retirement-runtime" {
+      inherit devenvScript hmScript;
+    } ''
+      fail() { echo "FAIL: kiro-steering-legacy-retirement-runtime: $1" >&2; exit 1; }
+
+      hm_home="$TMPDIR/hm-home"
+      hm_state="$TMPDIR/hm-state"
+      hm_target="$hm_home/.kiro/steering"
+      hm_ledger="$hm_state/nix-agentic-tools/materialize"
+      mkdir -p "$hm_target" "$hm_ledger"
+      printf 'managed hm\n' > "$hm_target/managed.md"
+      printf 'unmanaged hm\n' > "$hm_target/unmanaged.md"
+      hm_hash="$(sha256sum "$hm_target/managed.md" | cut -d ' ' -f 1)"
+      printf 'managed.md\t%s\n' "$hm_hash" > "$hm_ledger/kiro-steering.manifest"
+      HOME="$hm_home" XDG_STATE_HOME="$hm_state" "$hmScript"
+      [ ! -e "$hm_target/managed.md" ] || fail "HM kept the owned legacy copy"
+      [ -e "$hm_target/unmanaged.md" ] || fail "HM removed an unmanaged file"
+      [ ! -e "$hm_ledger/kiro-steering.manifest" ] || fail "HM kept the retired manifest"
+
+      dv_root="$TMPDIR/dv-root"
+      dv_state="$TMPDIR/dv-state"
+      dv_target="$dv_root/.kiro/steering"
+      dv_ledger="$dv_state/nix-agentic-tools/materialize"
+      mkdir -p "$dv_target" "$dv_ledger"
+      printf 'managed devenv\n' > "$dv_target/managed.md"
+      printf 'unmanaged devenv\n' > "$dv_target/unmanaged.md"
+      dv_hash="$(sha256sum "$dv_target/managed.md" | cut -d ' ' -f 1)"
+      printf 'managed.md\t%s\n' "$dv_hash" > "$dv_ledger/kiro-steering.manifest"
+      DEVENV_ROOT="$dv_root" DEVENV_STATE="$dv_state" "$devenvScript"
+      [ ! -e "$dv_target/managed.md" ] || fail "devenv kept the owned legacy copy"
+      [ -e "$dv_target/unmanaged.md" ] || fail "devenv removed an unmanaged file"
+      [ ! -e "$dv_ledger/kiro-steering.manifest" ] || fail "devenv kept the retired manifest"
+
+      echo "PASS: kiro-steering-legacy-retirement-runtime" > "$out"
+    '';
+
+  # The pinned Kiro follows steering symlinks. Both backends therefore lower
+  # conditional steering through their ordinary native file sink, while
+  # unscoped devenv content still goes to the shared AGENTS.md owner.
+  module-kiro-steering-uses-runtime-file-sinks = mkTest "kiro-steering-uses-runtime-file-sinks" (
     let
-      dv = evalDevenv {
+      config = {
         ai.kiro = {
           enable = true;
+          context.text = "CONTEXT-TOKEN.";
           rules.enter-test = {
             matcher = ["src/**"];
             text = "ENTER-TEST-TOKEN.";
           };
         };
       };
-      et = dv.config.enterTest or "";
+      hm = evalHm config;
+      dv = evalDevenv config;
     in
-      lib.hasInfix ".kiro/steering/enter-test.md" et
-      && lib.hasInfix "[ -L" et
-      && lib.hasInfix "not materialized as a real file" et
+      hm.config.home.file.".kiro/steering/enter-test.md".text
+      == hm.config.ai.kiro.files.".kiro/steering/enter-test.md".text
+      && hm.config.home.file.".kiro/steering/AGENTS.md".text
+      == hm.config.ai.kiro.files.".kiro/steering/AGENTS.md".text
+      && dv.config.files.".kiro/steering/enter-test.md".text
+      == dv.config.ai.kiro.files.".kiro/steering/enter-test.md".text
+      && lib.hasInfix "CONTEXT-TOKEN." dv.config.files."AGENTS.md".text
+      && !(lib.hasInfix "enter-test.md" (hmRetirementScript hm))
+      && !(lib.hasInfix "enter-test.md" (dvTaskExec dv))
   );
 
-  # [B4] devenv task ordering edges: cleanup-first is unconditional; the
-  # devenv:files edge exists ONLY when files.* entries exist — an
-  # unconditional edge would TasksNotFound on all-copy consumers, the
-  # design's own end-state (review follow-up: this regression previously
-  # passed the whole suite).
-  module-kiro-steering-task-edges = mkTest "kiro-steering-task-edges" (
+  # Legacy cleanup stays ordered before native file creation only when that
+  # task exists; the conditional edge avoids TasksNotFound.
+  module-kiro-steering-retire-task-edges = mkTest "kiro-steering-retire-task-edges" (
     let
       bare = evalDevenv {ai.kiro.enable = true;};
-      bareTask = (bare.config.tasks or {})."ai:kiro:materialize-steering" or {};
+      bareTask = (bare.config.tasks or {})."ai:kiro:retire-steering-copies" or {};
       withFiles = evalDevenv {
         ai.kiro.enable = true;
         files."probe.txt".text = "probe";
       };
-      filesTask = (withFiles.config.tasks or {})."ai:kiro:materialize-steering" or {};
+      filesTask = (withFiles.config.tasks or {})."ai:kiro:retire-steering-copies" or {};
     in
       (bareTask.after or [])
       == ["devenv:files:cleanup"]
@@ -8803,39 +9289,36 @@ in {
       && lib.elem "devenv:files" (filesTask.before or [])
   );
 
-  # `steeringStrategy = "symlink"` escape hatch: restores exactly the
-  # legacy declarative shapes on both backends, and the copy writer
-  # carries no entry for the symlinked name.
-  module-kiro-steering-symlink-strategy = mkTest "kiro-steering-symlink-strategy" (
+  # Consumer definitions replace generated defaults as whole entries; null is
+  # a tombstone removed before the backend sink.
+  module-kiro-steering-consumer-override-and-tombstone = mkTest "kiro-steering-consumer-override-and-tombstone" (
     let
       cfg = {
         ai.kiro = {
           enable = true;
-          steeringStrategy = "symlink";
           context.text = "SYMLINK-CTX-TOKEN.";
           rules.symlinked = {
             matcher = ["src/**"];
             text = "SYMLINK-RULE-TOKEN.";
+          };
+          files = {
+            ".kiro/steering/AGENTS.md".text = "CONSUMER-CONTEXT.";
+            ".kiro/steering/symlinked.md" = null;
           };
         };
       };
       hm = evalHm cfg;
       dv = evalDevenv cfg;
       hmEntry = hm.config.home.file.".kiro/steering/AGENTS.md" or null;
-      hmRule = hm.config.home.file.".kiro/steering/symlinked.md" or null;
       dvContext = dv.config.files."AGENTS.md" or null;
       dvRule = dv.config.files.".kiro/steering/symlinked.md" or null;
     in
       hmEntry
       != null
-      && lib.hasInfix "SYMLINK-CTX-TOKEN." (hmEntry.text or "")
-      && hmRule != null
+      && hmEntry.text == "CONSUMER-CONTEXT."
+      && !(hm.config.home.file ? ".kiro/steering/symlinked.md")
       && dvContext.text == "SYMLINK-CTX-TOKEN."
-      && dvRule != null
-      && (hm.config.ai.kiro.steeringFiles."AGENTS.md" or {}).strategy or null == "symlink"
-      && (dv.config.ai.kiro.steeringFiles."symlinked.md" or {}).strategy or null == "symlink"
-      && !(lib.hasInfix "symlinked.md" (hmWriteScript hm))
-      && !(lib.hasInfix "symlinked.md" (dvTaskExec dv))
+      && dvRule == null
   );
 
   # ── Stacked-workflows: skills + router, user-global (HM) + project (devenv) ──
@@ -9478,7 +9961,7 @@ in {
           text = "Write tests for all new features.";
         };
       };
-      ruleFile = result.config.ai.kiro.steeringFiles."testing.md" or null;
+      ruleFile = (kiroSteeringFiles result)."testing.md" or null;
     in
       ruleFile
       != null
@@ -9514,7 +9997,7 @@ in {
         };
         ai.rules.same-name.text = "Top-level loses.";
       };
-      rendered = result.config.ai.kiro.steeringFiles."same-name.md".text;
+      rendered = (kiroSteeringFiles result)."same-name.md".text;
     in
       lib.hasInfix "Per-CLI wins." rendered
       && !(lib.hasInfix "Top-level loses." rendered)
@@ -9542,7 +10025,7 @@ in {
           text = "Write tests.";
         };
       };
-      ruleFile = result.config.ai.kiro.steeringFiles."testing.md" or null;
+      ruleFile = (kiroSteeringFiles result)."testing.md" or null;
     in
       ruleFile
       != null
@@ -10483,8 +10966,7 @@ in {
   # Path-only form: `ai.kiro.rulesDir = ./fixtures/kiro-steering;`
   # expands to three steering entries (alpha, beta, gamma). notes.txt
   # is dropped by the default `.md` filter. Keys land at `<name>.md` —
-  # no `.md.md` (vacuous-scan negatives re-pointed at attrNames of
-  # steeringFiles).
+  # no `.md.md` (vacuous-scan negatives inspect the runtime file map).
   module-kiro-rulesdir-path-form = mkTest "kiro-rulesdir-path-form" (
     let
       result = evalHm {
@@ -10493,7 +10975,7 @@ in {
           rulesDir = ./fixtures/kiro-steering;
         };
       };
-      steering = result.config.ai.kiro.steeringFiles;
+      steering = kiroSteeringFiles result;
       hasAlpha = steering ? "alpha.md";
       hasBeta = steering ? "beta.md";
       hasGamma = steering ? "gamma.md";
@@ -10522,7 +11004,7 @@ in {
           };
         };
       };
-      steering = result.config.ai.kiro.steeringFiles;
+      steering = kiroSteeringFiles result;
     in
       steering
       ? "alpha.md"
@@ -10541,7 +11023,7 @@ in {
         };
       };
     in
-      result.config.ai.kiro.steeringFiles ? "alpha.md"
+      (kiroSteeringFiles result) ? "alpha.md"
   );
 
   # A per-runtime directory-generated entry replaces the same-key root entry.
@@ -10555,8 +11037,8 @@ in {
         };
       };
     in
-      lib.hasInfix "Alpha steering body." result.config.ai.kiro.steeringFiles."alpha.md".text
-      && !(lib.hasInfix "explicit top-level" result.config.ai.kiro.steeringFiles."alpha.md".text)
+      lib.hasInfix "Alpha steering body." (kiroSteeringFiles result)."alpha.md".text
+      && !(lib.hasInfix "explicit top-level" (kiroSteeringFiles result)."alpha.md".text)
   );
 
   # Devenv-side unscoped directory rules join the shared AGENTS.md.
@@ -11116,10 +11598,8 @@ in {
   # required again; rules always bake into the store with
   # transformer-injected frontmatter.
 
-  # HM: inline rule text still bakes and carries frontmatter. Shape pin
-  # on the steeringFiles entry: text set, source null (attr-absence
-  # checks are meaningless on a submodule — every entry has the attr),
-  # strategy = copy (the default).
+  # HM: inline rule text still bakes and carries frontmatter in the runtime file
+  # entry; the generic sink then preserves that exact entry.
   module-kiro-hm-rule-text-bakes = mkTest "kiro-hm-rule-text-bakes" (
     let
       result = evalHm {
@@ -11128,13 +11608,12 @@ in {
           rules.my-rule.text = "Inline content";
         };
       };
-      entry = result.config.ai.kiro.steeringFiles."my-rule.md" or null;
+      entry = (kiroSteeringFiles result)."my-rule.md" or null;
     in
       entry
       != null
       && entry.text != null
       && entry.source == null
-      && entry.strategy == "copy"
       && lib.hasInfix "Inline content" entry.text
   );
 
@@ -11147,13 +11626,12 @@ in {
           rules.rule-from-path.source = ./fixtures/kiro-steering/alpha.md;
         };
       };
-      entry = result.config.ai.kiro.steeringFiles."rule-from-path.md" or null;
+      entry = (kiroSteeringFiles result)."rule-from-path.md" or null;
     in
       entry
       != null
       && entry.text != null
       && entry.source == null
-      && entry.strategy == "copy"
       && lib.hasInfix "Alpha steering body" entry.text
   );
 
@@ -11439,7 +11917,7 @@ in {
       assertionsPass
       && builtins.length ev.config.packages == 1
       && builtins.attrNames ev.config.processes == ["beads-publisher" "beads-server"]
-      && builtins.attrNames ev.config.tasks
+      && builtins.filter (lib.hasPrefix "beads:") (builtins.attrNames ev.config.tasks)
       == ["beads:bootstrap" "beads:checkpoint" "beads:diagnostics" "beads:prepare" "beads:status"]
       && ev.config.tasks."beads:prepare".before == ["devenv:enterShell"]
       && lib.hasInfix " publisher" ev.config.processes.beads-publisher.exec

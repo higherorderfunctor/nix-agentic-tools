@@ -352,6 +352,7 @@ lib.ai.app.mkAiApp {
       moduleEnvironmentVariables,
       mergedAgents,
       mergedContext,
+      hasMergedContext,
       ...
     }: let
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
@@ -462,19 +463,19 @@ lib.ai.app.mkAiApp {
           fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
           inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
         in {
-          files = lib.mapAttrs' (name: rule:
-            lib.nameValuePair "${cfg.projectDir}/instructions/${name}.instructions.md" {
+          ai.copilot.files = lib.mapAttrs' (name: rule:
+            lib.nameValuePair "${cfg.projectDir}/instructions/${name}.instructions.md" (lib.mkDefault {
               text = fragmentsLib.mkRenderer copilotTransformer {} (rule
                 // {
                   paths = rule.matcher;
                   text = aiCommon.readContent rule;
                 });
-            })
+            }))
           mergedRules;
         })
         # Repository context consumed by github.com's Copilot reviewer.
-        (lib.mkIf (contextEntry != null) {
-          files."${cfg.projectDir}/${cfg.context.filename}" = contextEntry;
+        (lib.mkIf hasMergedContext {
+          ai.copilot.files."${cfg.projectDir}/${cfg.context.filename}" = lib.mkDefault contextEntry;
         })
         # settings.json — devenv does NOT support HM-style activation
         # scripts, so the runtime-merge story is different. Devenv

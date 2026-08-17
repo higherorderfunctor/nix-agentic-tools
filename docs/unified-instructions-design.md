@@ -317,16 +317,20 @@ This degrades gracefully — native ecosystems emit real frontmatter, non-native
 ones get readable prose the model will follow. Content isn't silently dropped;
 intent is preserved.
 
-The shared repo-root AGENTS.md admits only unscoped rule units. Kiro emits its
-scoped rules separately with native `fileMatch` metadata.
+The shared repo-root AGENTS.md admits Codex's unscoped rules and its scoped
+rules after the prose degradation above. Kiro contributes only unscoped
+always-on units there; its scoped rules emit separately with native `fileMatch`
+metadata.
 
 ## Codex size guard
 
-- At eval time, compute `sizeOf(context) + sizeOf(concat(rules))` for Codex's
-  effective output.
-- Compare against `ai.codex.projectDocMaxBytes` (32 KiB by default).
-- If over cap: **hard eval error** listing the rules that pushed it over and
-  suggesting either trimming or raising the cap.
+- After final-file arbitration, compare the surviving inline Codex AGENTS.md
+  against `ai.codex.projectDocMaxBytes` (32 KiB by default).
+- If over cap: **hard eval error** identifying the final file and suggesting a
+  replacement, trimming, or raising the cap.
+- Replacement and tombstones discard the lazy generated default before its
+  source bytes are read. A surviving store-backed final source remains lazy and
+  is not size-checked at eval.
 - Rationale: Codex silently truncates overflow. An eval error is the only way to
   surface the problem before a surprise in production.
 
@@ -359,9 +363,11 @@ override file.
    - **Codex:** shared/per-app context and rules lower into `~/.codex/AGENTS.md`
      for Home Manager and project-root `AGENTS.md` for devenv. Scoped content
      degrades to explicit prose.
-4. **Codex size guard** — shipped as an eval-time byte assertion against
-   `ai.codex.projectDocMaxBytes` (32 KiB by default), with rendered and
-   per-contribution size diagnostics.
+4. **Codex size guard** — shipped as an eval-time byte assertion against the
+   surviving inline AGENTS.md entry after final-file arbitration, using
+   `ai.codex.projectDocMaxBytes` (32 KiB by default). Tombstones and
+   replacements suppress discarded generated content before it is read;
+   store-backed final sources remain lazy and are not size-checked at eval.
 5. **Consumer migration (`nixos-config`)** — out of scope for this repo.
    Consumer can now use
    `ai.kiro.rules = builtins.mapAttrs (…) (builtins.readDir …)` on their own

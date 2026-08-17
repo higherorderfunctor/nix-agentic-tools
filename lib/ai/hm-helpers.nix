@@ -219,10 +219,11 @@ in rec {
 
   # NOTE: Kiro hook files used to be written here by `mkHooksActivationScript`.
   # They now ride the shared strategy-driven materializer
-  # (`lib/ai/materialize.nix`), like Kiro steering, because that helper's prune
+  # (`lib/ai/materialize.nix`) because that helper's prune
   # (`rm -f "$HOOKS_DIR"/*.json`) lived INSIDE the caller's
   # `mkIf (hooks != {})` gate: taking the hook surface from N to zero never
   # emitted the entry, so the prune never ran and every previously written hook
-  # kept firing forever. The materializer's per-file manifest prunes
-  # unconditionally and claims only the files it wrote.
+  # kept firing forever. The hook materializer's per-file manifest prunes
+  # unconditionally and claims only the files it wrote. Kiro steering now uses
+  # the ordinary runtime-files symlink sink.
 }

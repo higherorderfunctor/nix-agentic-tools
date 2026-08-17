@@ -446,9 +446,9 @@
     cfg.hooksJson
     // lib.mapAttrs (_fileKey: envelope: builtins.toJSON envelope) (kiroTypedHookFiles cfg.hooks);
 
-  # Shared strategy-driven materializer (lib/ai/materialize.nix) — the
-  # steering AND hook writers for both backends, plus the single source of
-  # the name-safety regex shared by both surfaces' copy-mode names.
+  # Shared strategy-driven materializer (lib/ai/materialize.nix) — the hook
+  # writer for both backends, the one-shot legacy steering-copy retirement,
+  # and the single source of the name-safety regex used by copy-mode names.
   materializeLib = import ../../../lib/ai/materialize.nix {inherit lib;};
 
   # Hook names are attrset keys interpolated straight into the generated
@@ -456,15 +456,14 @@
   # a `/`, `..`, whitespace, or quote would write outside the hooks dir or
   # break the emitted script. Require a leading alphanumeric then
   # `[A-Za-z0-9._-]` (covers kiro-memory, pre-commit, lint) — the same
-  # charset gating copy-mode steering names (materializeLib.nameSafe).
+  # charset used by materializeLib.nameSafe.
   # Shared assertion for both backends.
   hookNameSafe = materializeLib.nameSafe;
 
   # Where Kiro reads hooks from. BOTH hook surfaces land here.
   hookTargetDir = cfg: "${cfg.configDir}/hooks";
 
-  # `steeringFiles` gets `text`/`source` defaulted by its option submodule;
-  # hook entries are plain factory-internal values, so they must carry BOTH
+  # Hook entries are plain factory-internal values, so they must carry BOTH
   # fields explicitly — the materializer reads whichever is null to decide
   # shape, and a missing attribute is an eval error rather than a default.
   mkHookEntry = attrs:
@@ -503,7 +502,7 @@
   # (see `mkAssertions`), so the branch never has to merge them.
   #
   # `strategy` is always "copy" and there is deliberately NO symlink escape
-  # hatch here (unlike `steeringStrategy`): the v3 engine's hook scan keeps
+  # hatch here: the v3 engine's hook scan keeps
   # only `entry.isFile()` entries, so a symlinked hook silently never loads
   # (kirodotdev/Kiro#9787). A strategy option would only offer a way to break
   # hooks.
@@ -524,9 +523,9 @@
     message = "ai.kiro: hook names must match ${materializeLib.nameRegex} (no path separators, whitespace, or quotes); offending: ${lib.concatStringsSep ", " bad}";
   };
 
-  # Shared assertion set for both backends: mutually exclusive
-  # inline/dir pairs, hook-name charset, and the steering-entry
-  # shape/name guards (exactly-one-of text/source; copy-mode names).
+  # Shared assertion set for both backends: mutually exclusive inline/dir
+  # pairs, hook-name charset, package composition, and native option guards.
+  # Steering entry shape/path validation now belongs to runtime-files.nix.
   mkAssertions = cfg: let
     # Assertion evaluation must not call a missing custom-package rollout
     # function before the dedicated assertion below can report that shape.
@@ -641,12 +640,7 @@
         '';
       }
     ]
-    ++ materializeLib.mkEntryAssertions {
-      app = "kiro";
-      surface = "steering";
-      files = cfg.steeringFiles;
-    }
-    # Hook entries ride the same writers, so they need the same guards.
+    # Hook entries ride the real-file materializer, so they need its guards.
     # `hookNameAssertion` above covers only the INLINE surfaces' attr keys;
     # this is what catches a `hooksDir` whose filenames are unsafe to
     # interpolate into the generated shell.
@@ -656,24 +650,20 @@
       files = mkHookEntries cfg;
     };
 
-  # Steering emitters populate `ai.kiro.steeringFiles`
-  # instead of writing home.file/files.* directly; the per-backend
-  # strategy-driven writer element does the delivery. Every emitter
-  # stamps `strategy = cfg.steeringStrategy` explicitly — the shared
-  # options block is inert data with no `config` access, so the
-  # submodule cannot default it. The two elements keep their mkMerge
-  # boundaries + mkIf gates; `steeringFiles.<n>.text` is `nullOr str`,
-  # so two emitters producing the same key with DIFFERENT content is a
-  # hard eval error and equal content dedupes.
+  # Steering emitters route first, render second, and contribute the final
+  # native files to `ai.kiro.files` at default priority. The current pinned
+  # Kiro (2.18.1) follows steering symlinks in both project and Home
+  # Manager-like layouts, so ordinary backend file delivery is sufficient.
   mkSteeringEmitters = {
     cfg,
     mergedRules,
     mergedContext,
+    hasMergedContext,
     sharedAgentsMd,
   }: let
     fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
     inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
-    hasContext = mergedContext != null;
+    hasContext = hasMergedContext;
     isSharedRule = rule:
       rule.matcher
       == null
@@ -682,18 +672,15 @@
       if sharedAgentsMd
       then lib.filterAttrs (_name: rule: !(isSharedRule rule)) mergedRules
       else mergedRules;
-    mkEntry = text: {
-      inherit text;
-      strategy = cfg.steeringStrategy;
-    };
+    mkEntry = text: lib.mkDefault {inherit text;};
   in [
     # Attrs-shape ai.rules / ai.kiro.rules → `<name>.md` entries,
     # translated through kiroTransformer (inclusion: +
     # fileMatchPattern: frontmatter). Source-backed rules resolve to text at
     # eval through aiCommon.readContent.
     {
-      ai.kiro.steeringFiles = lib.mapAttrs' (name: rule:
-        lib.nameValuePair "${name}.md" (mkEntry (fragmentsLib.mkRenderer kiroTransformer {inherit name;} (rule
+      ai.kiro.files = lib.mapAttrs' (name: rule:
+        lib.nameValuePair "${cfg.configDir}/steering/${name}.md" (mkEntry (fragmentsLib.mkRenderer kiroTransformer {inherit name;} (rule
           // {
             paths = rule.matcher;
             text = aiCommon.readContent rule;
@@ -702,18 +689,10 @@
     }
     # Global context → `<contextFilename>` (default AGENTS.md — Kiro
     # reads it natively as always-included content). Written without
-    # frontmatter; root context precedes per-CLI context. Under copy strategy a
-    # path-valued context normalizes to `text` at eval via readFile
-    # (the writer heredoc-embeds content); `source` is kept only for
-    # symlink strategy.
+    # frontmatter; root context precedes per-CLI context.
     (lib.mkIf (hasContext && !sharedAgentsMd) {
-      ai.kiro.steeringFiles.${cfg.context.filename} =
-        if (mergedContext.source or null) != null && cfg.steeringStrategy == "symlink"
-        then {
-          inherit (mergedContext) source;
-          strategy = cfg.steeringStrategy;
-        }
-        else mkEntry (aiCommon.readContent mergedContext);
+      ai.kiro.files."${cfg.configDir}/steering/${cfg.context.filename}" =
+        lib.mkDefault (aiCommon.contentFileEntry mergedContext);
     })
   ];
 
@@ -1165,46 +1144,6 @@ in
         default = ".kiro";
         description = "Config directory relative to HOME / devenv root.";
       };
-      # Derived steering-file set — populated by the factory's rule and context
-      # steering emitters, consumed by the shared materializer
-      # (lib/ai/materialize.nix). Internal but readable by tests and
-      # consumers.
-      steeringFiles = lib.mkOption {
-        type = lib.types.attrsOf materializeLib.fileEntryType;
-        default = {};
-        internal = true;
-        description = ''
-          Derived steering-file set (`<name>` → `{ text | source,
-          strategy }`), keyed by filename under `<configDir>/steering/`.
-          Populated by the factory emitters (rules and HM context); delivered by
-          the shared materializer. `text`
-          is `nullOr str`, so two emitters producing the same key with
-          different content is a hard eval error (equal content
-          dedupes).
-        '';
-      };
-      # Per-surface delivery strategy — the escape hatch back to store
-      # symlinks (e.g. if upstream fixes kirodotdev/Kiro#9787).
-      steeringStrategy = lib.mkOption {
-        type = lib.types.enum ["copy" "symlink"];
-        default = "copy";
-        description = ''
-          How steering files are delivered. `copy` (default)
-          materializes REAL files via generated writers — required
-          because the Kiro v3 engine (selected by `--v3`, i.e.
-          `ai.kiro.v3`) silently drops symlinked steering files
-          (kirodotdev/Kiro#9787), while the v2/classic engine follows
-          them fine. `symlink` restores the legacy store-symlink
-          delivery.
-
-          Uninstall limitation: disabling `ai.kiro` removes the
-          materializer itself, so already-materialized copies are NOT
-          pruned and Kiro keeps loading them. To uninstall cleanly,
-          first empty the steering surface (or set
-          `steeringStrategy = "symlink"`) for one activation, THEN
-          disable.
-        '';
-      };
       # Kiro-specific freeform settings with typed subkeys for known
       # knobs. Consumed by the settings/cli.json activation merge in
       # `hm.config` (runtime-merge via `jq -s '.[0] * .[1]'` to
@@ -1534,6 +1473,18 @@ in
     };
     hm = {
       options = {};
+      migrationConfig = {cfg, ...}: let
+        steeringDir = "${cfg.configDir}/steering";
+      in {
+        # This one-shot manifest retirement intentionally lives outside the
+        # runtime enable gate: upgrade+disable must still remove only steering
+        # copies that an older generation recorded as owned.
+        home.activation = materializeLib.mkHmRetirement {
+          targetDir = steeringDir;
+          stateSlug = materializeLib.mkStateSlug steeringDir;
+          inherit (pkgs) coreutils flock;
+        };
+      };
       config = {
         cfg,
         mergedServers,
@@ -1544,13 +1495,13 @@ in
         moduleEnvironmentVariables,
         resolvedShell,
         mergedContext,
+        hasMergedContext,
         ...
       }: let
         helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
 
-        steeringDir = "${cfg.configDir}/steering";
         steeringEmitters = mkSteeringEmitters {
-          inherit cfg mergedContext mergedRules;
+          inherit cfg mergedContext hasMergedContext mergedRules;
           sharedAgentsMd = false;
         };
 
@@ -1598,8 +1549,8 @@ in
             # reading it via `mkAllHookFiles` is not circular: the record
             # depends only on `workflowReminder.*` and `unlockedRolloutFeatures`.
             {ai.kiro.hooks = workflowReminderHooks cfg;}
-            # Shared assertions (see mkAssertions): exclusive inline/dir
-            # pairs, hook-name charset, steering-entry guards.
+            # Shared assertions (see mkAssertions): exclusive inline/dir pairs
+            # and hook-name/materializer guards.
             {assertions = mkAssertions cfg;}
             # settings/permissions.yaml — V3 capability rules (explicit
             # `permissions` ++ translated `trustedMcpTools` under v3). Static
@@ -1688,26 +1639,6 @@ in
                 inherit (pkgs) coreutils diffutils flock gnugrep;
               };
             }
-            # Steering delivery — strategy-driven materializer (see
-            # lib/ai/materialize.nix). Symlink entries keep exactly the
-            # legacy home.file shape; copy entries are written as REAL
-            # files by a two-phase activation pair (prune entryBefore
-            # ["checkLinkTargets"]; write entryAfter ["linkGeneration"]).
-            # Emitted whenever the module is enabled — NOT gated on
-            # `steeringFiles != {}` — so emptying the surface still
-            # prunes (N→0); the mkIf gates live on the emitters only.
-            {
-              home.file = materializeLib.mkSymlinkEntries {
-                files = cfg.steeringFiles;
-                targetDir = steeringDir;
-              };
-              home.activation = materializeLib.mkHmActivation {
-                files = cfg.steeringFiles;
-                targetDir = steeringDir;
-                stateSlug = materializeLib.mkStateSlug steeringDir;
-                inherit (pkgs) coreutils diffutils flock gnugrep;
-              };
-            }
             # Skills fanout via mkSkillEntries, which uses
             # `recursive = true` to produce Layout B (a real directory with
             # per-file symlinks) and is path-type-agnostic.
@@ -1739,6 +1670,22 @@ in
     };
     devenv = {
       options = {};
+      migrationConfig = {
+        cfg,
+        config,
+        ...
+      }: let
+        steeringDir = "${cfg.configDir}/steering";
+      in {
+        # Same enable-independent one-shot retirement as Home Manager. The
+        # task is inert when no legacy manifest exists.
+        tasks."ai:kiro:retire-steering-copies" = materializeLib.mkDevenvRetirementTask {
+          targetDir = steeringDir;
+          stateSlug = materializeLib.mkStateSlug steeringDir;
+          hasFiles = config.files != {};
+          inherit (pkgs) coreutils flock;
+        };
+      };
       config = {
         cfg,
         config,
@@ -1750,13 +1697,13 @@ in
         moduleEnvironmentVariables,
         resolvedShell,
         mergedContext,
+        hasMergedContext,
         ...
       }: let
         helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
 
-        steeringDir = "${cfg.configDir}/steering";
         steeringEmitters = mkSteeringEmitters {
-          inherit cfg mergedContext mergedRules;
+          inherit cfg mergedContext hasMergedContext mergedRules;
           sharedAgentsMd = true;
         };
 
@@ -1785,9 +1732,8 @@ in
         # which under set -e contexts (direnv, devenv test) aborts the
         # enterShell load: deliberate fail-fast, safer than writing hook
         # files into whatever directory the caller happened to be in.
-        # Same anchoring precedent as the instruction sync task
-        # (dev/tasks/generate.nix) and the steering materializer task
-        # (lib/ai/materialize.nix), which both `cd "$DEVENV_ROOT"`.
+        # Same anchoring precedent as the instruction sync and legacy steering
+        # retirement tasks, which both anchor themselves at `$DEVENV_ROOT`.
         anchorToDevenvRoot = body: ''
           (
             cd "$DEVENV_ROOT" || exit 1
@@ -1823,15 +1769,16 @@ in
             # (config parity; the record itself is built by the shared
             # `workflowReminderHooks`).
             {ai.kiro.hooks = workflowReminderHooks cfg;}
-            # Shared assertions (see mkAssertions): exclusive inline/dir
-            # pairs, hook-name charset, steering-entry guards.
+            # Shared assertions (see mkAssertions): exclusive inline/dir pairs
+            # and hook-name/materializer guards.
             {assertions = mkAssertions cfg;}
-            (lib.mkIf (mergedContext != null || sharedRules != {}) {
+            (lib.mkIf (hasMergedContext || sharedRules != {}) {
               ai.internal.agentsMd.${cfg.context.filename} =
                 {
+                  hasContent = true;
                   rules = lib.mapAttrs (_name: aiCommon.readContent) sharedRules;
                 }
-                // lib.optionalAttrs (mergedContext != null) {
+                // lib.optionalAttrs hasMergedContext {
                   context = aiCommon.readContent mergedContext;
                 };
             })
@@ -1885,23 +1832,9 @@ in
               files = walkDir "${cfg.configDir}/agents" cfg.agentsDir;
             }))
             # Hook JSON files — written as REAL files, NOT devenv `files.*`
-            # (which symlinks into /nix/store). ENGINE-QUALIFIED:
-            # the Kiro v3 engine (Node; its directory scan keeps only
-            # `entry.isFile()` entries) silently DROPS symlinked leaf files —
-            # hooks and steering alike — while the v2/classic engine (Rust)
-            # follows leaf symlinks fine. The shipped default IS v3 (this
-            # factory's wrapper injects `--v3`), so symlinked delivery is
-            # dead on arrival for v3 users. Upstream: kirodotdev/Kiro#9787
-            # (confirmed live on 2.13.0). See the kiro-v3-hooks-workspace-local
-            # finding + docs/plans/kiro-cli-auto-memory.md.
-            #
-            # Steering therefore no longer ships symlinks by default: the
-            # emitters populate `ai.kiro.steeringFiles` and the shared
-            # materializer delivers per the entry's `strategy` field ("copy"
-            # default materializes real files; "symlink" restores the legacy
-            # shape). Hooks ride the SAME materializer (copy-only — see
-            # `mkHookEntries`), which is what gives them HM parity by
-            # construction.
+            # (which symlinks into /nix/store). The 2.18.1 spike changed only
+            # steering evidence; hooks retain their measured real-file
+            # lifecycle and ownership-safe materializer.
             #
             # Emitted whenever the module is enabled — NOT gated on a
             # non-empty hook set — so emptying the surface still prunes
@@ -1934,34 +1867,6 @@ in
                 app = "kiro";
                 files = hookEntries;
                 targetDir = hooksTargetDir;
-              };
-            }
-            # Steering delivery — strategy-driven materializer (parity
-            # with HM; see lib/ai/materialize.nix). Symlink entries keep
-            # exactly the legacy files.* shape; copy entries are written
-            # as REAL files by the `ai:kiro:materialize-steering` task
-            # (prune+write, ordered before devenv:enterShell and —
-            # conditionally, the runner hard-errors on dangling refs —
-            # before devenv:files). Emitted whenever the module is
-            # enabled so emptying the surface still prunes (N→0). The
-            # enterTest fragment is the consumer backstop: every copy
-            # entry must exist as a real file or `devenv test` fails.
-            {
-              files = materializeLib.mkSymlinkEntries {
-                files = cfg.steeringFiles;
-                targetDir = steeringDir;
-              };
-              tasks."ai:kiro:materialize-steering" = materializeLib.mkDevenvTask {
-                files = cfg.steeringFiles;
-                targetDir = steeringDir;
-                stateSlug = materializeLib.mkStateSlug steeringDir;
-                hasFiles = config.files != {};
-                inherit (pkgs) coreutils diffutils flock gnugrep;
-              };
-              enterTest = materializeLib.mkEnterTest {
-                app = "kiro";
-                files = cfg.steeringFiles;
-                targetDir = steeringDir;
               };
             }
             # Skills via the user-space walker. devenv's `files.*.source`

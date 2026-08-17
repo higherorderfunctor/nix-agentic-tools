@@ -1,14 +1,17 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-08-15 (commit pending — Kimchi's normalized
-> environment-variable pool now accepts null tombstones, so a runtime entry can
-> suppress a same-key portable root default). Prior: 2026-08-15 (commit pending
-> — Kimchi's typed context now composes root-first with runtime context into the
-> existing `harness/AGENTS.md`; the retired instructions pool is no longer part
-> of the capability census, and rules continue to degrade because Kimchi has no
-> rules pool). Prior: 2026-08-15 (commit pending — records Kimchi's normalized
-> pool capability census and deliberate absence of rules; native JSON
-> passthrough moved to `ai.kimchi.nativeSettings`, while the uniform closed
+> **Last verified:** 2026-08-16 (commit pending — normalized context now renders
+> into `ai.kimchi.files` before the generic backend sink, making the final
+> `harness/AGENTS.md` replaceable or suppressible as one whole entry). Prior:
+> 2026-08-15 (commit pending — Kimchi's normalized environment-variable pool now
+> accepts null tombstones, so a runtime entry can suppress a same-key portable
+> root default). Prior: 2026-08-15 (commit pending — Kimchi's typed context now
+> composes root-first with runtime context into the existing
+> `harness/AGENTS.md`; the retired instructions pool is no longer part of the
+> capability census, and rules continue to degrade because Kimchi has no rules
+> pool). Prior: 2026-08-15 (commit pending — records Kimchi's normalized pool
+> capability census and deliberate absence of rules; native JSON passthrough
+> moved to `ai.kimchi.nativeSettings`, while the uniform closed
 > `ai.kimchi.settings` surface does not change the two-file native lifecycle).
 > Prior: 2026-06-23 (commit pending). If you touch
 > `packages/kimchi/lib/mkKimchi.nix`, `packages/kimchi/modules/**`, or the
@@ -39,10 +42,12 @@ The `harness/` tree is **mutable at runtime** — Kimchi rewrites `settings.json
 (`/multi-model`, `kimchi resources`) and downloads vendor content into it. So
 `config.json` and `harness/settings.json` go through
 `helpers.mkSettingsActivationScript` (jq `.[0] * .[1]` merge) on HM and a static
-write on devenv — never a raw symlink-to-store. The immutable parts (`mcp.json`,
-`AGENTS.md`, `skills/`) are static `home.file` / `files.*`. `AGENTS.md` receives
-the typed normalized context record. When both root and Kimchi-specific context
-are configured, their bodies concatenate root-first;
+write on devenv — never a raw symlink-to-store. Immutable artifacts ultimately
+use static `home.file` / `files.*`, but normalized context first renders into
+the final `ai.kimchi.files` map and only then reaches that generic sink. This
+makes `harness/AGENTS.md` a whole-entry consumer replacement/tombstone point;
+`mcp.json` and skills retain their existing typed owners. When both root and
+Kimchi-specific context are configured, their bodies concatenate root-first;
 `ai.kimchi.context.filename` controls the artifact name.
 
 ## Normalized pool capability boundary

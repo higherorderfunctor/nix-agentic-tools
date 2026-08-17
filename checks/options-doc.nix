@@ -40,6 +40,7 @@
       "ai.codex.enable"
       "ai.codex.environmentVariables"
       "ai.codex.execpolicyRules"
+      "ai.codex.files"
       "ai.codex.hooks"
       "ai.codex.mcpServers"
       "ai.codex.nativeSettings"

@@ -221,6 +221,7 @@ in
         mergedEnvironmentVariables,
         moduleEnvironmentVariables,
         mergedContext,
+        hasMergedContext,
         ...
       }: let
         prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
@@ -259,8 +260,8 @@ in
           })
 
           # harness/AGENTS.md — orientation context.
-          (lib.mkIf (contextEntry != null) {
-            home.file."${cfg.configDir}/harness/${cfg.context.filename}" = contextEntry;
+          (lib.mkIf hasMergedContext {
+            ai.kimchi.files."${cfg.configDir}/harness/${cfg.context.filename}" = lib.mkDefault contextEntry;
           })
 
           # harness/skills/ — Layout B via mkSkillEntries.
@@ -279,6 +280,7 @@ in
         mergedEnvironmentVariables,
         moduleEnvironmentVariables,
         mergedContext,
+        hasMergedContext,
         ...
       }: let
         prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
@@ -307,8 +309,8 @@ in
           })
 
           # harness/AGENTS.md.
-          (lib.mkIf (contextEntry != null) {
-            files."${cfg.configDir}/harness/${cfg.context.filename}" = contextEntry;
+          (lib.mkIf hasMergedContext {
+            ai.kimchi.files."${cfg.configDir}/harness/${cfg.context.filename}" = lib.mkDefault contextEntry;
           })
 
           # harness/skills/ — devenv recursive walk.

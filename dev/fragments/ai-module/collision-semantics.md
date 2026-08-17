@@ -1,24 +1,30 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-08-16 (commit pending — this fragment now owns the
-> complete root/runtime boundary matrix formerly kept in the retired normalized
-> interface plan, including capability degradation, translation, file-level
-> native arbitration, and the same-commit maintenance gate). Prior: 2026-08-15
-> (commit pending — B4 now also governs every generated `ai.programs.*`
-> runtime-override leaf; null inherits and non-null wins without acquiring
-> keyed-pool tombstone semantics). Prior: 2026-08-15 (commit pending — proxied
-> MCP declarations now carry explicit managed-unit ownership: a used root
-> declaration owns one shared proxy, runtime declarations own directly, reused
-> ownership keys fail, and unused root proxies do not materialize). Prior:
-> 2026-08-15 (commit pending — all six normalized keyed pools now support
-> per-runtime replacement and null tombstones; the former root↔runtime collision
-> assertion is deleted, and definition provenance now rejects two packages
-> claiming one key at the same root or runtime scope, including claims hidden by
-> whole-option priority in a combined evaluation). Prior: 2026-08-15 (commit
-> pending — the list-shaped instructions exception retired in favor of keyed
-> rules). If you add a normalized pool or change its cross-level merge, null
-> behavior, or package ownership rule and this fragment is not updated in the
-> same commit, stop and fix it.
+> **Last verified:** 2026-08-16 (commit pending — B7 now terminates at the
+> atomic `ai.<runtime>.files` registry: generated whole entries use `mkDefault`,
+> ordinary entries replace, null suppresses, and divergent same-priority files
+> fail before backend lowering; shared AGENTS.md public entries arbitrate inside
+> the single owner only for enabled runtimes, discarded source-backed defaults
+> stay lazy, and size checks follow the surviving inline entry). Prior:
+> 2026-08-16 (commit pending — this fragment now owns the complete root/runtime
+> boundary matrix formerly kept in the retired normalized interface plan,
+> including capability degradation, translation, file-level native arbitration,
+> and the same-commit maintenance gate). Prior: 2026-08-15 (commit pending — B4
+> now also governs every generated `ai.programs.*` runtime-override leaf; null
+> inherits and non-null wins without acquiring keyed-pool tombstone semantics).
+> Prior: 2026-08-15 (commit pending — proxied MCP declarations now carry
+> explicit managed-unit ownership: a used root declaration owns one shared
+> proxy, runtime declarations own directly, reused ownership keys fail, and
+> unused root proxies do not materialize). Prior: 2026-08-15 (commit pending —
+> all six normalized keyed pools now support per-runtime replacement and null
+> tombstones; the former root↔runtime collision assertion is deleted, and
+> definition provenance now rejects two packages claiming one key at the same
+> root or runtime scope, including claims hidden by whole-option priority in a
+> combined evaluation). Prior: 2026-08-15 (commit pending — the list-shaped
+> instructions exception retired in favor of keyed rules). If you add a
+> normalized pool or change its cross-level merge, null behavior, or package
+> ownership rule and this fragment is not updated in the same commit, stop and
+> fix it.
 
 ### Root/runtime boundary contract
 
@@ -38,15 +44,15 @@ commit.
 | B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                       |
 | B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                       |
 | B6a | normalized rule matcher → native scope            | field   | Null is always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex routing prose.   |
-| B7  | module-derived native value ↔ user-authored value | file    | Use no custom guard: the module renders at `mkDefault`, and standard Nix option merging arbitrates at file granularity. |
+| B7  | generated native file ↔ runtime file entry        | file    | Generator uses whole-entry `mkDefault`; ordinary entry replaces, null suppresses, divergent same-priority entries fail. |
 | B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                          |
 | B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                  |
 | B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops the entry after the shallow merge.                                                                 |
 
 B3 is why `//` is correct and `recursiveUpdate` is wrong. B7's unit is the
-complete rendered native file, not a key inside it. Keyed-pool tombstones apply
-only to B10; they do not change the nullable-scalar inheritance contract in B4
-or B5.
+complete rendered native file, not a key inside it. Its null is a final-output
+tombstone, separate from keyed-pool B10. Neither changes the nullable-scalar
+inheritance contract in B4 or B5.
 
 ### Keyed-pool rule
 
@@ -172,6 +178,9 @@ and out of the package provenance guard.
   `ai.<runtime>.programs.<pkg>` leaves are nullable scalars. `resolveOverride`
   interprets runtime null as **inherit**, not delete; a non-null runtime scalar
   wins.
+- `ai.<runtime>.files` is a final per-runtime output registry, not a portable
+  root pool. Priority chooses one atomic nullable entry per backend-relative
+  path; repeated text never concatenates. There is no root `ai.files` fanout.
 
 Do not generalize keyed-pool tombstones to these surfaces without redesigning
 and testing their distinct composition contracts.
@@ -187,8 +196,31 @@ root/runtime merge. `lib/ai/sharedOptions.nix` separately aggregates explicit
 proxy owners, rejects reused keys before the module system can collide, and
 emits only unique active units.
 
+Context is the lazy exception: `mkBackendTransform.nix` derives
+`hasMergedContext` structurally from the two raw content records before calling
+`composeContent`. Package callbacks use that boolean to decide whether to
+contribute a generated default; they must not probe `mergedContext != null`,
+because two-part composition reads source bytes and would force a default that
+B7 later replaces or tombstones. The composed value stays inside the lazy
+default until priority arbitration selects it.
+
 `hmTransform.nix` and `devenvTransform.nix` are thin backend selectors; do not
 duplicate pool logic into them.
+
+`lib/ai/runtime-files.nix` owns B7's atomic entry type, path/content validation,
+null filtering, and backend lowering. Package callbacks may render entries into
+the runtime map but must not read that map to define normalized inputs; keeping
+the edge one-way is what makes the module fixed point evaluable.
+
+Repository-local Codex/Kiro `AGENTS.md` is the shared-target exception, not a B7
+exception. `sharedAgentsMd.nix` admits applicable public entries from enabled
+runtimes into its hidden final map before the one native sink; a disabled
+runtime's declared map remains inert. The generated composition is a lazy
+default there, so ordinary replacements and null tombstones arbitrate at B7
+without reading discarded source-backed generator content; equal runtime entries
+deduplicate and divergent ones fail. Size guards read only the surviving inline
+final entry. A surviving store-backed `source` remains lazy and is not
+size-checked at eval, avoiding IFD.
 
 ### Adding a normalized pool
 

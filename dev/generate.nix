@@ -394,13 +394,11 @@
     };
     ```
 
-    > **Note (Kiro steering uninstall):** Kiro steering files are
-    > materialized as read-only real files (the Kiro v3 engine ignores
-    > symlinks — kirodotdev/Kiro#9787). Disabling `ai.kiro` removes the
-    > materializer itself, so already-written steering files are NOT
-    > pruned. To uninstall cleanly, first empty the steering surface (or
-    > set `ai.kiro.steeringStrategy = "symlink"`) for one activation,
-    > then disable.
+    > **Static runtime files:** every runtime exposes
+    > `ai.<runtime>.files."<relative-path>" = { text = "…"; };` (or `source =
+    > ./file`). Generated context/rule outputs use the same final map at default
+    > priority, so an ordinary whole entry replaces them and `null` suppresses
+    > them. Paths are relative to HOME here and to the project under devenv.
 
     </details>
 
@@ -654,6 +652,15 @@
     until the layering can be made safe. Use
     `ai.codex.nativeSettings.sandbox_mode` /
     `ai.codex.nativeSettings.sandbox_workspace_write`.
+
+    > **Kiro steering-copy upgrade:** when upgrading from a release that
+    > materialized steering as real copies, keep the previous
+    > `ai.kiro.configDir` for one Home Manager activation or devenv shell entry.
+    > The manifest-guarded retirement runs even when `ai.kiro.enable = false`.
+    > If a custom `configDir` must change or be removed, perform that retirement
+    > generation first, then change the directory; the legacy manifest records
+    > owned filenames and hashes, but not an invertible target path, so a later
+    > generation cannot safely infer the old custom directory.
 
     </details>
 

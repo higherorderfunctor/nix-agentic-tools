@@ -33,8 +33,9 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
 - **`ai-module`**
   - Match: `checks/module-eval.nix`, `lib/ai/agent.nix`, `lib/ai/ai-common.nix`,
     `lib/ai/app/**`, `lib/ai/default.nix`, `lib/ai/hooks.nix`,
-    `lib/ai/mkSkillPackageModule.nix`, `lib/ai/program.nix`,
-    `lib/ai/runtimes.nix`, `lib/ai/sharedOptions.nix`, `packages/*/lib/mk*.nix`,
+    `lib/ai/materialize.nix`, `lib/ai/mkSkillPackageModule.nix`,
+    `lib/ai/program.nix`, `lib/ai/runtimes.nix`, `lib/ai/runtime-files.nix`,
+    `lib/ai/sharedOptions.nix`, `packages/*/lib/mk*.nix`,
     `packages/chatgpt-codex/modules/**`, `packages/claude-code/modules/**`,
     `packages/copilot-cli/modules/**`, `packages/kiro-cli/modules/**`
   - Read:

@@ -730,18 +730,12 @@ in
         moduleEnvironmentVariables,
         resolvedShell,
         mergedContext,
+        hasMergedContext,
         topHooks,
         resolvedSettings,
         ...
       }: let
         aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
-        effectiveContext =
-          if mergedContext == null
-          then ""
-          else if (mergedContext.source or null) != null
-          then mergedContext.source
-          else mergedContext.text;
-
         # Resolve rule body: path → readFile; string → passthrough.
         resolveRuleText = aiCommon.readContent;
         dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
@@ -814,11 +808,6 @@ in
               enable = lib.mkDefault true;
               package = lib.mkDefault cfg.package;
               skills = lib.mapAttrs (_: lib.mkDefault) mergedSkills;
-              context = lib.mkDefault (
-                if cfg.context.filename == "CLAUDE.md"
-                then effectiveContext
-                else ""
-              );
               # Per-ENTRY mkDefault, like `skills` above — not a whole-attrset
               # one. `filterOverrides` keeps only the highest-priority
               # definitions of an option, so a single normal-priority
@@ -867,9 +856,13 @@ in
               })
             );
           })
-          (lib.mkIf (cfg.context.filename != "CLAUDE.md" && mergedContext != null) {
-            home.file.".claude/${cfg.context.filename}" =
-              aiCommon.contentFileEntry mergedContext;
+          # Final always-on context enters the runtime file registry before the
+          # generic backend sink. This replaces upstream's direct CLAUDE.md
+          # writer so generated and consumer-authored files share one override
+          # and tombstone boundary.
+          (lib.mkIf hasMergedContext {
+            ai.claude.files.".claude/${cfg.context.filename}" =
+              lib.mkDefault (aiCommon.contentFileEntry mergedContext);
           })
           # Attrs-shape ai.rules / ai.claude.rules → .claude/rules/<name>.md.
           # Each entry becomes one file, translated through claudeTransformer
@@ -878,14 +871,14 @@ in
             fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
             inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
           in {
-            home.file = lib.mapAttrs' (name: rule:
-              lib.nameValuePair ".claude/rules/${name}.md" {
+            ai.claude.files = lib.mapAttrs' (name: rule:
+              lib.nameValuePair ".claude/rules/${name}.md" (lib.mkDefault {
                 text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
                   // {
                     text = resolveRuleText rule;
                     paths = rule.matcher;
                   });
-              })
+              }))
             mergedRules;
           })
           # Auto-set ENABLE_LSP_TOOL=1 when MCP servers are present.
@@ -910,6 +903,7 @@ in
         moduleEnvironmentVariables,
         resolvedShell,
         mergedContext,
+        hasMergedContext,
         topHooks,
         resolvedSettings,
         ...
@@ -1028,22 +1022,22 @@ in
           (lib.mkIf hasGapSettings {
             files.".claude/settings.json".json = gapSettings;
           })
-          (lib.mkIf (contextEntry != null) {
-            files.".claude/${cfg.context.filename}" = contextEntry;
+          (lib.mkIf hasMergedContext {
+            ai.claude.files.".claude/${cfg.context.filename}" = lib.mkDefault contextEntry;
           })
           # Attrs-shape ai.rules / ai.claude.rules → .claude/rules/<name>.md.
           (let
             fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
             inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
           in {
-            files = lib.mapAttrs' (name: rule:
-              lib.nameValuePair ".claude/rules/${name}.md" {
+            ai.claude.files = lib.mapAttrs' (name: rule:
+              lib.nameValuePair ".claude/rules/${name}.md" (lib.mkDefault {
                 text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
                   // {
                     text = resolveRuleText rule;
                     paths = rule.matcher;
                   });
-              })
+              }))
             mergedRules;
           })
           # Skills — devenv has no upstream skills option on

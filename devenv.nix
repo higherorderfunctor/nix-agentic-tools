@@ -755,20 +755,20 @@ in {
     test -f .kiro/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .kiro/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     test -L .claude/settings.json || { echo "FAIL: .claude/settings.json missing"; exit 1; }
 
-    # Generated instruction files must exist as REAL FILES, not symlinks.
-    # `test ! -L` is the load-bearing half: `test -f` follows symlinks, so a
-    # regression back to devenv files.* symlink mode would still pass a
-    # existence-only check while leaving .kiro/steering unreadable to Kiro
-    # (it discovers by scanning a directory, and the scan skips symlinks).
-    # Three of these groups are gitignored and invisible to every flake
-    # check, so this is the only gate on them.
+    # Repository-generated instruction projections must be REAL FILES, not
+    # absolute Nix-store symlinks, so they remain portable Git artifacts and
+    # can be committed when their projection is tracked. This is distinct
+    # from consumer `ai.<runtime>.files`, whose ordinary backend symlinks are
+    # supported by current Kiro. `test ! -L` is load-bearing because `test -f`
+    # follows symlinks. Three groups below are gitignored and invisible to
+    # every flake check, so this is the only runtime gate on their projection.
     for f in AGENTS.md CLAUDE.md .claude/rules/nix-standards.md \
              .github/copilot-instructions.md \
              .github/instructions/pipeline.instructions.md \
              .kiro/steering/pipeline.md; do
       test -f "$f" || { echo "FAIL: $f missing"; exit 1; }
       if [ -L "$f" ]; then
-        echo "FAIL: $f is a symlink (Kiro cannot follow store symlinks)"
+        echo "FAIL: $f is a symlink (repository projections must be portable real files)"
         exit 1
       fi
     done

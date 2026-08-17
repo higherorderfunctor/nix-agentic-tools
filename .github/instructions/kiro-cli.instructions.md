@@ -7,11 +7,18 @@ applyTo: "overlays/kiro-memory-distiller.nix,overlays/kiro-memory-distiller/**,o
 
 # Kiro-CLI auto-memory
 
-> **Last verified:** 2026-08-15 (commit pending — auto-memory's always-on
-> steering rule now uses the normalized keyed-rule shape: an absent matcher
-> lowers to `inclusion: always`; the retired `paths = null` field is gone).
-> Prior: 2026-08-05 (commit pending — every destructive materializer phase now
-> holds one backend state-directory advisory lock. Devenv holds it across
+> **Last verified:** 2026-08-16 (commit pending — live 2.18.1 `/context show`
+> spikes proved steering-symlink startup discovery and same-session replacement
+> reload in global and project layouts; steering now traverses `ai.kiro.files`
+> and ordinary backend symlink sinks, while a one-shot enable-independent
+> migration retires legacy owned copies and hooks retain their ownership-safe
+> real-file materializer; a changed custom `configDir` requires one retirement
+> generation under the old path because the manifest cannot recover it). Prior:
+> 2026-08-15 (commit pending — auto-memory's always-on steering rule now uses
+> the normalized keyed-rule shape: an absent matcher lowers to
+> `inclusion: always`; the retired `paths = null` field is gone). Prior:
+> 2026-08-05 (commit pending — every destructive materializer phase now holds
+> one backend state-directory advisory lock. Devenv holds it across
 > sweep→prune→write; HM reacquires it for its separated phases. Hooks and
 > steering run in parallel under devenv; without the lock, PR #794's hooks task
 > swept steering's live manifest temp between `mktemp` and `mv`. The lock is
@@ -171,11 +178,11 @@ recent tier from `now.md` + the best-effort archive query), while the steering
 anchor is a static Nix-managed file, not a hook read:
 
 - **Steering anchor (static, always-on).** `.kiro/steering/kiro-auto-memory.md`
-  (`inclusion: always`) — a **Nix-managed static file** (a read-only real-file
-  copy since the strategy-driven steering materializer; a store symlink before
-  that) framing HOW the memory works + the `project_id` convention. It holds NO
-  live content (F6: content is fixed at eval — this is why a SessionStart hook
-  can't "refresh" the steering file, only the buffer it reads).
+  (`inclusion: always`) — a **Nix-managed static file** delivered through
+  `ai.kiro.files` as an ordinary store symlink, framing HOW the memory works +
+  the `project_id` convention. It holds NO live content (F6: content is fixed at
+  eval — this is why a SessionStart hook can't "refresh" the steering file, only
+  the buffer it reads).
 - **Recent working context (live).** `mainRead` → `recall()` reads `now.md` and
   injects it every turn.
 - **Archive RAG (live, best-effort).** A semantic `openmemory` query.
@@ -332,21 +339,20 @@ or this hook.
   dropped — this (NOT global-ness) is why live-system auto-memory dies under v3,
   and a consumer repin + re-activation restores it. **(b)** the **devenv**
   backend writes hooks as REAL files too, NOT devenv `files.*` symlinks (which
-  v3 skips). Steering is real files too (see below). Agents and skills, by
-  contrast, LOAD when symlinked — the symlink drop is **per-surface** (hooks +
-  steering only; probed 2026-07-23) — so those emitters stay on symlinks.
+  v3 skips). Steering now uses ordinary symlinks after the newer 2.18.1 probe
+  described below; agents and skills remain symlinked as before.
 - **How hooks reach disk: the SHARED materializer** (`lib/ai/materialize.nix`),
-  the same writer steering uses. `mkHookEntries` lowers BOTH hook surfaces —
-  inline (`hooks`/`hooksJson`) and the external `hooksDir` — into one
-  `{ <file>.json → { text|source, strategy = "copy" } }` entry set, so the two
-  share a manifest and flipping a consumer between them prunes the previous
-  surface instead of orphaning it. HM gets the two-phase activation pair
-  (`materialize-kiro-hooks-{prune,write}`), devenv the
+  now owned only by lifecycle-managed real-file surfaces. `mkHookEntries` lowers
+  BOTH hook surfaces — inline (`hooks`/`hooksJson`) and the external `hooksDir`
+  — into one `{ <file>.json → { text|source, strategy = "copy" } }` entry set,
+  so the two share a manifest and flipping a consumer between them prunes the
+  previous surface instead of orphaning it. HM gets the two-phase activation
+  pair (`materialize-kiro-hooks-{prune,write}`), devenv the
   `ai:kiro:materialize-hooks` task (which `cd`s to `$DEVENV_ROOT` itself — the
   task runs in the CALLER's cwd because direnv activates in subdirectories) plus
-  an `enterTest` real-file backstop. Unlike steering there is deliberately **no
-  symlink escape hatch**: a symlinked hook cannot load at all, so a
-  `hooksStrategy` option would only offer a way to break hooks.
+  an `enterTest` real-file backstop. There is deliberately **no symlink escape
+  hatch**: the steering result does not establish hook support, and the measured
+  hook loader still requires real files.
   - **Both writers are emitted whenever the module is ENABLED**, never gated on
     a non-empty hook set. That gate was a real defect: the previous bespoke
     writers put their prune inside `mkIf (hooks != {} || hooksJson != {})` and
@@ -361,48 +367,39 @@ or this hook.
     `rm -f "$HOOKS_DIR"/*.json` deleted it, which is exactly why that prune
     could not simply be made unconditional. Managed copies land read-only
     (0444).
-  - **Concurrency: one lock across every surface sharing the materializer state
-    directory.** Devenv may dispatch hooks and steering in parallel, and both
-    sweep the reserved `.nat-tmp.` namespace before pruning and writing. The
-    complete devenv transaction holds an advisory `flock`, preventing either
-    task — or a duplicate concurrent shell entry — from deleting or rewriting
-    another live transaction's state. HM's separated prune and write phases
-    reacquire the same lock. Process-owned release keeps crash recovery
-    automatic.
+  - **Concurrency: one lock for the materializer state directory.** The complete
+    devenv transaction holds an advisory `flock`, preventing duplicate
+    concurrent shell entries from deleting or rewriting live transaction state.
+    HM's separated prune and write phases reacquire the same lock. Process-owned
+    release keeps crash recovery automatic.
   - `hooksDir` is enumerated at EVAL and carries only the directory's top-level
     `*.json` files. Subdirectories and non-`.json` siblings are ignored — Kiro
     loads neither, and the retired whole-dir prune never removed either.
-- `ai.kiro.rules` — attrs-shape ai-common ruleModule → an entry in the derived
-  `ai.kiro.steeringFiles` attrset (key `<name>.md`, rendered with
+- `ai.kiro.rules` — attrs-shape ai-common ruleModule → an entry in
+  `ai.kiro.files` (key `<configDir>/steering/<name>.md`, rendered with
   `inclusion:`/`fileMatchPattern:` frontmatter; no matcher →
-  `inclusion: always`), BOTH backends. The shared strategy-driven materializer
-  (`lib/ai/materialize.nix`) delivers it as a read-only REAL file under
-  `<configDir>/steering/` (copy strategy default;
-  `ai.kiro.steeringStrategy = "symlink"` restores the legacy store-symlink
-  shape).
+  `inclusion: always`), BOTH backends. Generated entries use whole-entry
+  `mkDefault`, so consumers can replace or null-suppress them before the common
+  Home Manager/devenv symlink sink.
 
-Because both surfaces ride the existing HM↔devenv fanout — and now the same
-writer as well — parity is **structural-by-construction**, with no new module
-axis. Proven by `module-kiro-auto-memory-hm-devenv-parity`: BOTH backends
-install hooks as REAL files carrying the generator output verbatim (asserted
-byte-for-byte out of each writer's heredoc body), and steering is identical on
-both (attrset equality over `ai.kiro.steeringFiles` plus a writer-output byte
-check per backend).
+Both surfaces retain HM↔devenv parity without sharing a physical writer.
+`module-kiro-auto-memory-hm-devenv-parity` proves both hook writers carry the
+generator bytes, Home Manager steering enters `ai.kiro.files`, and the unscoped
+devenv rule enters the single-owner repository AGENTS.md as pure Markdown.
 
-> **Correction (settled):** "only hooks need real files" was wrong — the v3 hook
-> AND steering loaders keep only `entry.isFile()` entries, dropping symlinked
-> steering as they drop symlinked hooks (`kirodotdev/Kiro#9787`,
-> maintainer-acknowledged; the v2/classic engine follows symlinks fine). The
-> drop is **per-surface, not engine-wide**: agents (`/agent`) and skills
-> (`/context show`) LOAD when symlinked (probed 2026-07-23). So the factory
-> delivers hooks + steering as real files (materializer copy strategy) while
-> agents/skills stay symlinks. The factory steering emitters populate
-> `ai.kiro.steeringFiles` and the shared materializer writes real files;
-> `checks/module-eval.nix` asserts on that attrset plus the writers' heredoc
-> bodies. (The steering symlink-drop was RE-VERIFIED directly 2026-07-23 via
-> `/context show` on both workspace and global scopes — a symlinked steering
-> file is absent from loaded context while the real one loads — independently of
-> the now-stale `run-probe.sh`; see `docs/plans/kiro-v3-scope-probes/`.)
+> **Correction superseded by current evidence:** the July 2.13.0 probe found
+> symlinked steering absent, but the required 2026-08-16 revalidation against
+> pinned Kiro 2.18.1 proved both startup discovery and same-session replacement
+> reload through `/context show` in BOTH isolated global and project layouts.
+> The factory now uses ordinary steering symlinks. Hooks remain real files
+> because these bounded steering spikes did not test hook execution and do not
+> erase its separate measured lifecycle contract. A manifest-guarded one-shot
+> migration runs even on upgrade+disable, prunes only legacy copies recorded as
+> owned, and removes the retired steering manifest afterward. It must run once
+> with the previous `configDir`: an upgrade that also changes or removes a
+> custom directory cannot safely infer the old target because the legacy
+> manifest records filenames and hashes, not an invertible target path. Retire
+> under the old directory first, then change it in the following generation.
 
 The distiller sync-vs-background choice: **synchronous** (D8/D27) — debounced +
 a file-buffer write + sub-second in the default (no backend). The sync path also
