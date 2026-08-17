@@ -60,6 +60,19 @@ in rec {
         (mkSourceEntry content))
     attrs;
 
+  # Codex discovers a skill when the skill directory itself is a symlink, but
+  # not when Home Manager/devenv create a real directory containing symlinked
+  # leaves. Keep this separate from mkSkillEntries: Claude, Copilot, Kimchi and
+  # Kiro still need the composable recursive layout that helper provides.
+  mkSkillDirectoryEntries = configDir: attrs:
+    lib.mapAttrs' (name: content:
+      assert lib.assertMsg ((builtins.readFileType content) == "directory")
+      "mkSkillDirectoryEntries: skill '${name}' must resolve to a directory";
+        lib.nameValuePair "${configDir}/skills/${name}" {
+          source = content;
+        })
+    attrs;
+
   # Recursively enumerate a skill source directory at eval time
   # and emit devenv-compatible
   # `files."<prefix>/<relpath>".source = <file>;` entries for

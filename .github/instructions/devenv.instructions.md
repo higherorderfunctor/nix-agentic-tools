@@ -175,28 +175,33 @@ this paragraph would rot the next time one is added.)
 
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-08-16 (commit pending — Kiro 2.18.1 now discovers and
-> live-reloads symlink replacement in both project and Home-Manager-like
-> layouts, so runtime steering moved to `ai.kiro.files` and ordinary `files.*`
-> delivery; generated tracked instruction projections remain copies because
-> store symlinks cannot be committed portably). Prior: 2026-08-15 (commit
-> pending — Codex, glab, and Semble writable-root fanout now travels through the
-> hidden `ai.codex.internal._integration_writable_roots` channel and is folded
-> into native config at emission; it still creates no `files.*` artifact).
-> Prior: 2026-08-14 (commit pending — Semble's shell-entry cache guard remains
-> an environment/settings lifecycle effect and creates no `files.*` artifact).
-> Prior: 2026-08-05 (commit pending — re-verifies that Codex's environment
-> resolver and sandbox-root fanout create no `files.*` artifact while its test
-> override moves out of the formal module argument set). Prior: 2026-08-05
-> (commit pending — Codex and glab sandbox-root fanout is settings/environment
-> integration and deliberately creates no `files.*` artifact). Prior: 2026-08-02
-> (commit pending — Semble's devenv facet keeps its sandbox-writable cache in
-> project state and exports the same path through `SEMBLE_CACHE_LOCATION`; this
-> is environment/settings fanout, not a `files.*` artifact). Prior: 2026-07-21
-> (commit pending — corrects the Kiro-symlink citation to kirodotdev/Kiro#9787
-> with the engine qualifier, and the `files.<name>.source` claim; earlier
-> revision added auto-regeneration via `gen` import). devenv internals are
-> pinned to whatever version is in flake.lock; if you touch `modules/devenv/**`,
+> **Last verified:** 2026-08-17 (commit pending — Codex deliberately uses
+> devenv's one-entry directory symlink behavior because 0.147.0 discovers that
+> layout but ignores a real skill directory containing symlinked leaves; a
+> pre-files migration validates ownership and moves the legacy directory intact
+> to a recoverable state backup). Prior: 2026-08-16 (commit pending — Kiro
+> 2.18.1 now discovers and live-reloads symlink replacement in both project and
+> Home-Manager-like layouts, so runtime steering moved to `ai.kiro.files` and
+> ordinary `files.*` delivery; generated tracked instruction projections remain
+> copies because store symlinks cannot be committed portably). Prior: 2026-08-15
+> (commit pending — Codex, glab, and Semble writable-root fanout now travels
+> through the hidden `ai.codex.internal._integration_writable_roots` channel and
+> is folded into native config at emission; it still creates no `files.*`
+> artifact). Prior: 2026-08-14 (commit pending — Semble's shell-entry cache
+> guard remains an environment/settings lifecycle effect and creates no
+> `files.*` artifact). Prior: 2026-08-05 (commit pending — re-verifies that
+> Codex's environment resolver and sandbox-root fanout create no `files.*`
+> artifact while its test override moves out of the formal module argument set).
+> Prior: 2026-08-05 (commit pending — Codex and glab sandbox-root fanout is
+> settings/environment integration and deliberately creates no `files.*`
+> artifact). Prior: 2026-08-02 (commit pending — Semble's devenv facet keeps its
+> sandbox-writable cache in project state and exports the same path through
+> `SEMBLE_CACHE_LOCATION`; this is environment/settings fanout, not a `files.*`
+> artifact). Prior: 2026-07-21 (commit pending — corrects the Kiro-symlink
+> citation to kirodotdev/Kiro#9787 with the engine qualifier, and the
+> `files.<name>.source` claim; earlier revision added auto-regeneration via
+> `gen` import). devenv internals are pinned to whatever version is in
+> flake.lock; if you touch `modules/devenv/**`,
 > `lib/hm-helpers.nix:mkDevenvSkillEntries`, `devenv.nix` `files` block, or
 > anywhere that uses `files.*.source` and this fragment isn't updated in the
 > same commit, stop and fix it.
@@ -271,11 +276,11 @@ or non-file at the target path) **log to stderr but do NOT exit non-zero**. The
 `ai.skills` config evaluates fine, the build succeeds, but on disk there's no
 symlink.
 
-**Consequence for Layout A → B transitions:** if a real directory exists at the
+**Consequence for Layout B → A transitions:** if a real directory exists at the
 target path (because an HM activation or a previous devenv run using a
 directory-walking helper laid it down), devenv will log a warning and silently
-skip creating the file entry. The user sees skills "missing" with no clear
-error.
+skip creating the new directory-link entry. The user sees skills "missing" with
+no clear error.
 
 **Detect silent failures in practice:**
 
@@ -318,18 +323,31 @@ Key behaviors:
   dirs.
 - Does NOT need IFD. It's pure `readDir` on paths the flake already tracks.
 
-The implementation lives in `lib/hm-helpers.nix:mkDevenvSkillEntries` (when Task
-2b lands) and is the recommended fix for the HM/devenv skills layout parity gap.
+The implementation lives in `lib/hm-helpers.nix:mkDevenvSkillEntries` and is the
+recommended fix when a runtime requires the HM-style recursive layout.
 
-### Why HM doesn't have this problem
+Codex is the exception. Its 0.147.0 scanner ignores a real skill directory
+containing symlinked leaves but discovers a symlinked skill directory. Codex
+therefore uses `mkSkillDirectoryEntries`, whose directory source maps directly
+onto devenv's identity behavior. The `ai:codex:migrate-skill-links` task runs
+after `devenv:files:cleanup` and before `devenv:files`. It validates the whole
+target set first, rejects unsafe names and non-store or non-directory content,
+and refuses symlinked `.agents` or `skills` parents before moving each legacy
+tree intact under the devenv state directory. Existing store-backed top-level
+links are unlinked so devenv cannot follow them while updating the target. The
+backup preserves even empty directories for recovery; unexpected content fails
+the migration loudly before anything changes.
+
+### How HM produces Layout B
 
 HM's `home.file.<name>` submodule has a `recursive` field
 (`home-manager/modules/files.nix`). When `source` is a directory and
 `recursive = true`, HM's activation script walks the directory and creates
 per-file symlinks inside a real subdirectory at `<name>`, with state tracking
 per file. Upstream `programs.claude-code.skills` uses this via `mkSkillEntry`.
-Our own `lib/hm-helpers.nix:mkSkillEntries` mirrors the pattern for
-`programs.copilot-cli.skills` and `programs.kiro-cli.skills`.
+Our own `lib/hm-helpers.nix:mkSkillEntries` mirrors the pattern for direct
+Layout B consumers. Codex deliberately uses a non-recursive Home Manager source
+instead, producing the same whole-directory link as devenv.
 
 devenv chose a simpler, flatter model without recursive support. Not a bug; a
 deliberate design difference. The user-space walker restores parity at the cost
@@ -393,11 +411,11 @@ it only takes a path, not formatted content.)
 pkgs, because the fragment composition reads
 `pkgs.coding-standards.passthru.fragments`.
 
-Skills, `settings.json` and MCP JSON still use `files.*` symlinks — they are
-unaffected by the Kiro scan defect and are not tracked.
+Skills, `settings.json` and MCP JSON still use `files.*` symlinks — they are not
+tracked. Most skill backends enumerate leaves; Codex intentionally contributes
+one directory entry per skill.
 
 ### Related
 
-- `dev/fragments/ai-skills/skills-fanout-pattern.md` — the uniform
-  `programs.<cli>.skills` delegation pattern that this walker enables on devenv
-  side
+- `dev/fragments/ai-skills/skills-fanout-pattern.md` — runtime-specific skill
+  delegation and the Codex Layout A exception
