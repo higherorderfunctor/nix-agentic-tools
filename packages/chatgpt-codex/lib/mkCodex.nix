@@ -47,6 +47,122 @@
   # normal pure Nix TOML generator because that file has one owner.
   tomlPython = pkgs.python3.withPackages (pythonPackages: [pythonPackages.tomlkit]);
 
+  # Codex 0.147.0 ignores Layout B (a real skill directory containing
+  # symlinked files), although it does discover a symlinked skill directory.
+  # This migration validates every target before changing any of them. Desired
+  # store links are unlinked for safe replacement; legacy real directories are
+  # moved intact to a recoverable state backup. User-owned or otherwise
+  # surprising content fails loudly.
+  skillLinkMigrator = pkgs.writeShellApplication {
+    name = "codex-migrate-skill-links";
+    bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+    runtimeInputs = [pkgs.coreutils pkgs.findutils];
+    text = ''
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      nat_skill_backup_root="$1"
+      shift
+      nat_skill_has_legacy=0
+
+      # Phase 1: validate the complete target set. Do not partially dismantle
+      # managed links and only then discover user-owned content in a later
+      # target or leaf.
+      for nat_skill_dir in "$@"; do
+        nat_skill_parent="$(${pkgs.coreutils}/bin/dirname "$nat_skill_dir")"
+        nat_agents_parent="$(${pkgs.coreutils}/bin/dirname "$nat_skill_parent")"
+        for nat_skill_ancestor in "$nat_agents_parent" "$nat_skill_parent"; do
+          if [ -L "$nat_skill_ancestor" ]; then
+            echo "ERROR: refusing to traverse symlinked Codex skill parent $nat_skill_ancestor" >&2
+            false
+          elif [ -e "$nat_skill_ancestor" ] && [ ! -d "$nat_skill_ancestor" ]; then
+            echo "ERROR: refusing to traverse non-directory Codex skill parent $nat_skill_ancestor" >&2
+            false
+          fi
+        done
+
+        if [ -L "$nat_skill_dir" ]; then
+          nat_skill_target="$(${pkgs.coreutils}/bin/readlink "$nat_skill_dir")"
+          case "$nat_skill_target" in
+            /nix/store/*) ;;
+            *)
+              echo "ERROR: refusing to replace non-store skill link $nat_skill_dir -> $nat_skill_target" >&2
+              false
+              ;;
+          esac
+        elif [ -d "$nat_skill_dir" ]; then
+          nat_skill_has_legacy=1
+          nat_skill_blocked=0
+          while IFS= read -r -d "" nat_skill_entry; do
+            if [ -L "$nat_skill_entry" ]; then
+              nat_skill_target="$(${pkgs.coreutils}/bin/readlink "$nat_skill_entry")"
+              case "$nat_skill_target" in
+                /nix/store/*) ;;
+                *)
+                  echo "ERROR: refusing to migrate non-store skill link $nat_skill_entry -> $nat_skill_target" >&2
+                  nat_skill_blocked=1
+                  ;;
+              esac
+            elif [ ! -d "$nat_skill_entry" ]; then
+              echo "ERROR: refusing to migrate user-owned skill entry $nat_skill_entry" >&2
+              nat_skill_blocked=1
+            fi
+          done < <(${pkgs.findutils}/bin/find "$nat_skill_dir" -print0)
+
+          if [ "$nat_skill_blocked" -ne 0 ]; then
+            false
+          fi
+
+          nat_skill_backup="$nat_skill_backup_root/$(${pkgs.coreutils}/bin/basename "$nat_skill_dir")"
+          if [ -e "$nat_skill_backup" ] || [ -L "$nat_skill_backup" ]; then
+            echo "ERROR: refusing to overwrite existing Codex skill migration backup $nat_skill_backup" >&2
+            false
+          fi
+        elif [ -e "$nat_skill_dir" ]; then
+          echo "ERROR: refusing to replace non-directory skill target $nat_skill_dir" >&2
+          false
+        fi
+      done
+
+      # Phase 2: every target is safe. Preserve the old directory wholesale so
+      # even intentionally empty subdirectories remain recoverable.
+      if [ "$nat_skill_has_legacy" -ne 0 ]; then
+        ${pkgs.coreutils}/bin/mkdir -p "$nat_skill_backup_root"
+      fi
+      for nat_skill_dir in "$@"; do
+        if [ -L "$nat_skill_dir" ]; then
+          ${pkgs.coreutils}/bin/rm -f -- "$nat_skill_dir"
+        elif [ -d "$nat_skill_dir" ]; then
+          nat_skill_backup="$nat_skill_backup_root/$(${pkgs.coreutils}/bin/basename "$nat_skill_dir")"
+          ${pkgs.coreutils}/bin/mv -- "$nat_skill_dir" "$nat_skill_backup"
+          echo "Backed up legacy Codex skill directory to $nat_skill_backup" >&2
+        fi
+      done
+    '';
+  };
+
+  skillTargets = root: skills:
+    map (name: "${root}/${name}") (builtins.attrNames skills);
+
+  skillNameSafe = name:
+    builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" name != null;
+
+  mkSkillNameAssertions = skills:
+    map (name: {
+      assertion = skillNameSafe name;
+      message = "Codex skill names must be single safe path components beginning with an alphanumeric character; invalid name: '${name}'";
+    }) (builtins.attrNames skills);
+
+  normalizeCodexSkills = skills:
+    lib.mapAttrs (name: content:
+      if (builtins.readFileType content) == "directory"
+      then content
+      else
+        pkgs.runCommand "codex-skill-${builtins.hashString "sha256" name}" {} ''
+          ${pkgs.coreutils}/bin/mkdir -p "$out"
+          ${pkgs.coreutils}/bin/cp "${content}" "$out/SKILL.md"
+        '')
+    skills;
+
   stableFeatureNames = map (feature: feature.name) (
     builtins.filter (feature: feature.maturity == "stable") codexExtracted.features
   );
@@ -939,6 +1055,9 @@ in
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
         });
       settingsStateName = "codex-config-${builtins.hashString "sha256" configFile}";
+      codexSkillNames = builtins.attrNames mergedSkills;
+      codexSkills = normalizeCodexSkills mergedSkills;
+      skillBackupRoot = "\${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/codex-skill-layout-b";
     in {
       # Codex has no named Markdown rule surface, so context and rules are
       # composed first and the resulting AGENTS.md enters the runtime file map
@@ -960,6 +1079,7 @@ in
         mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
         ++ mkProfileAssertions cfg.profiles
+        ++ mkSkillNameAssertions mergedSkills
         ++ [
           (mkSizeAssertion {
             inherit cfg;
@@ -982,6 +1102,17 @@ in
           }
         ];
       home = {
+        activation.codexMigrateSkillLinks = lib.mkIf (mergedSkills != {}) (
+          lib.hm.dag.entryBefore ["checkLinkTargets"] (aiCommon.scopedActivation ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            nat_codex_skill_targets=()
+            for nat_codex_skill_name in ${lib.escapeShellArgs codexSkillNames}; do
+              nat_codex_skill_targets+=("$HOME/.agents/skills/$nat_codex_skill_name")
+            done
+            ${lib.getExe skillLinkMigrator} "${skillBackupRoot}" "''${nat_codex_skill_targets[@]}"
+          '')
+        );
         # Unlike the trusted-project file below, the user config is not wholly
         # declarative: Codex's trust prompt persists ad-hoc project decisions
         # via config/batchWrite into this exact config.toml. A home.file symlink
@@ -1001,7 +1132,7 @@ in
           stateName = settingsStateName;
         });
         file = lib.mkMerge [
-          (helpers.mkSkillEntries ".agents" mergedSkills)
+          (helpers.mkSkillDirectoryEntries ".agents" codexSkills)
           (mkAgentEntries cfg.configDir mergedAgents)
           (mkExecpolicyEntries cfg.configDir cfg.execpolicyRules)
           # Profile files are declarative layers selected by an explicit CLI
@@ -1053,6 +1184,9 @@ in
         then "${environmentHome}/.cache/nix"
         else null;
       agentsMdRules = lib.mapAttrs mkRuleBody mergedRules;
+      codexSkillTargets = skillTargets "${config.devenv.root}/.agents/skills" mergedSkills;
+      codexSkills = normalizeCodexSkills mergedSkills;
+      skillBackupRoot = "${config.devenv.state}/nix-agentic-tools/codex-skill-layout-b";
     in {
       ai = {
         codex.internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter (
@@ -1075,6 +1209,7 @@ in
         mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
         ++ mkProfileAssertions cfg.profiles
+        ++ mkSkillNameAssertions mergedSkills
         ++ [
           {
             assertion = mergedServers == {} || !hasNativeMcpServers;
@@ -1097,7 +1232,7 @@ in
           }
         ];
       files = lib.mkMerge [
-        (helpers.mkDevenvSkillEntries ".agents" mergedSkills)
+        (helpers.mkSkillDirectoryEntries ".agents" codexSkills)
         (mkAgentEntries ".codex" mergedAgents)
         (mkExecpolicyEntries ".codex" cfg.execpolicyRules)
         (lib.mkIf (effectiveHooks != {}) {
@@ -1111,13 +1246,27 @@ in
         })
       ];
       packages = [(codexPackageFor cfg moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell)];
-      tasks."ai:codex:materialize-profiles" = {
-        exec = ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          exec ${lib.getExe profileMaterializer}
-        '';
-        before = ["devenv:enterShell"];
-      };
+      tasks =
+        {
+          "ai:codex:materialize-profiles" = {
+            exec = ''
+              set -euETo pipefail
+              shopt -s inherit_errexit 2>/dev/null || :
+              exec ${lib.getExe profileMaterializer}
+            '';
+            before = ["devenv:enterShell"];
+          };
+        }
+        // lib.optionalAttrs (mergedSkills != {}) {
+          "ai:codex:migrate-skill-links" = {
+            exec = ''
+              set -euETo pipefail
+              shopt -s inherit_errexit 2>/dev/null || :
+              exec ${lib.getExe skillLinkMigrator} ${lib.escapeShellArg skillBackupRoot} ${lib.escapeShellArgs codexSkillTargets}
+            '';
+            after = ["devenv:files:cleanup"];
+            before = ["devenv:enterShell"] ++ lib.optional (config.files != {}) "devenv:files";
+          };
+        };
     };
   }

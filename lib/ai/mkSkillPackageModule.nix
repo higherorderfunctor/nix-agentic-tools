@@ -31,9 +31,10 @@
 #                       fan out. Values may be `./` path literals (static skill
 #                       trees) OR generated store-path strings (skills baked at
 #                       eval, e.g. living-workflow's XDG state base) — the
-#                       ai.skills fanout helpers (upstream `mkSkillEntry`, our
-#                       `mkSkillEntries` / `mkDevenvSkillEntries`) materialize
-#                       both as recursive directories.
+#                       ai.skills fanout helpers materialize both forms. Most
+#                       runtimes use recursive per-file links; Codex uses a
+#                       whole-directory link because that is the layout its
+#                       discovery scanner recognizes.
 #   rules             : moduleArgs -> attrsOf rule. OPTIONAL router entries for
 #                       ai.rules. These are ALWAYS-LOADED in every
 #                       ecosystem, so they are a per-turn tax on every session

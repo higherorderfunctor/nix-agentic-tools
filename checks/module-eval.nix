@@ -1294,7 +1294,7 @@ in {
       devenv = evalDevenv config;
     in
       !(hm.config.home.file ? ".agents/skills/example")
-      && !(devenv.config.files ? ".agents/skills/example/SKILL.md")
+      && !(devenv.config.files ? ".agents/skills/example")
   );
 
   module-codex-skills-fanout = mkTest "codex-skills-fanout" (
@@ -1311,14 +1311,19 @@ in {
     in
       hm.config.home.file.".agents/skills/local".source
       == ./fixtures/claude-skills/skill-b
-      && hm.config.home.file.".agents/skills/local".recursive
+      && !(hm.config.home.file.".agents/skills/local" ? recursive)
       && hm.config.home.file.".agents/skills/shared".source
       == ./fixtures/claude-skills/skill-a
-      && hm.config.home.file.".agents/skills/shared".recursive
-      && devenv.config.files.".agents/skills/local/SKILL.md".source
-      == ./fixtures/claude-skills/skill-b/SKILL.md
-      && devenv.config.files.".agents/skills/shared/SKILL.md".source
-      == ./fixtures/claude-skills/skill-a/SKILL.md
+      && !(hm.config.home.file.".agents/skills/shared" ? recursive)
+      && devenv.config.files.".agents/skills/local".source
+      == ./fixtures/claude-skills/skill-b
+      && devenv.config.files.".agents/skills/shared".source
+      == ./fixtures/claude-skills/skill-a
+      && hm.config.home.activation ? codexMigrateSkillLinks
+      && devenv.config.tasks ? "ai:codex:migrate-skill-links"
+      && devenv.config.tasks."ai:codex:migrate-skill-links".after
+      == ["devenv:files:cleanup"]
+      && lib.elem "devenv:files" devenv.config.tasks."ai:codex:migrate-skill-links".before
   );
 
   module-codex-skillsdir-fanout = mkTest "codex-skillsdir-fanout" (
@@ -1332,8 +1337,40 @@ in {
     in
       hm.config.home.file ? ".agents/skills/skill-a"
       && hm.config.home.file ? ".agents/skills/skill-b"
-      && devenv.config.files ? ".agents/skills/skill-a/SKILL.md"
-      && devenv.config.files ? ".agents/skills/skill-b/SKILL.md"
+      && devenv.config.files ? ".agents/skills/skill-a"
+      && devenv.config.files ? ".agents/skills/skill-b"
+  );
+
+  module-codex-single-file-skill-wraps-directory = let
+    evaluated = evalHm {
+      ai.codex = {
+        enable = true;
+        skills.single = ./fixtures/claude-skills/skill-a/SKILL.md;
+      };
+    };
+    source = evaluated.config.home.file.".agents/skills/single".source;
+  in
+    pkgs.runCommand "module-test-codex-single-file-skill-wraps-directory" {} ''
+      test -d ${source}
+      test -f ${source}/SKILL.md
+      cmp ${./fixtures/claude-skills/skill-a/SKILL.md} ${source}/SKILL.md
+      touch "$out"
+    '';
+
+  module-codex-unsafe-skill-name-fails = mkTest "codex-unsafe-skill-name-fails" (
+    let
+      config.ai.codex = {
+        enable = true;
+        skills."../escape" = ./fixtures/claude-skills/skill-a;
+      };
+      failsSafely = evaluated:
+        builtins.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "single safe path components" assertion.message)
+        evaluated.config.assertions;
+    in
+      failsSafely (evalHm config)
+      && failsSafely (evalDevenv config)
   );
 
   module-codex-skill-runtime-replaces-root = mkTest "codex-skill-runtime-replaces-root" (
