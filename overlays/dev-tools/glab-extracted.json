@@ -22,6 +22,17 @@
     "fallback": true
   },
   {
+    "name": "artifact_registry_domains",
+    "scope": "per-host",
+    "type": "string",
+    "default": "",
+    "description": "The domains of associated Artifact Registries. These are used to configure the\nDocker credential helper. Only list a domain here if it is actually backed by\nGitLab Artifact Registry: the credential helper tries this key first, and a\nsuccessful token exchange is used as-is, with no fallback to\ncontainer_registry_domains. A container-registry domain listed here by mistake\ngets an artifact-registry token the registry rejects, and 'docker pull' hard-fails.",
+    "envVars": ["ARTIFACT_REGISTRY_DOMAINS"],
+    "userSettable": true,
+    "keyring": false,
+    "fallback": false
+  },
+  {
     "name": "branch_prefix",
     "scope": "global",
     "type": "string",
@@ -114,7 +125,7 @@
     "scope": "per-host",
     "type": "list",
     "default": "",
-    "description": "Custom HTTP headers to add to all HTTP requests made by glab. Supports both direct values and environment variable loading.\n- name: Proxy-Authorization\n  value: Bearer token123\n- name: Cf-Access-Client-Secret\n  valueFromEnv: MY_SECRET_VALUE",
+    "description": "Custom HTTP headers to add to all HTTP requests made by glab. Each header must use exactly one of value, valueFromEnv, or valueFromCommand. A command must print the complete header value on one line. glab runs it once for each process.\n- name: Proxy-Authorization\n  valueFromCommand: token-helper --audience example\n- name: Cf-Access-Client-Secret\n  valueFromEnv: MY_SECRET_VALUE",
     "envVars": ["CUSTOM_HEADERS"],
     "userSettable": true,
     "keyring": false,
