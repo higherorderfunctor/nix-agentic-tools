@@ -873,9 +873,16 @@ Worktrees live in `<repo>-worktrees/`, a **sibling of the primary checkout** —
 clone at `~/src/nix-agentic-tools` puts them in
 `~/src/nix-agentic-tools-worktrees/<slug>`. Keeping them beside the clone means
 a direnv whitelist (or any editor/tooling trust root) covering the checkout
-covers new worktrees too, so `cd` alone enters the devenv shell and materializes
-the gitignored `files.*` artifacts with no manual step — and it keeps work out
-of `~/.cache`, which cache-cleaning tools treat as disposable.
+covers new worktrees too, so editors and tooling treat them as the same trusted
+project — and it keeps work out of `~/.cache`, which cache-cleaning tools treat
+as disposable.
+
+This used to be justified by `cd` alone entering the devenv shell and
+materializing the gitignored `files.*` artifacts, which was how a worktree got
+bootstrapped. That is no longer a reason to want it: nothing needs a worktree
+shell entry now (step 2 below), and under the sandbox-stack topology devenv is
+deliberately entered in the primary checkout only. Do not read the sibling
+layout as an endorsement of direnv-driven devenv entry in worktrees.
 
 Derive that directory once per shell. This form is correct from **any**
 worktree, not just the primary checkout:

@@ -1036,9 +1036,13 @@ in {
             # Fail loudly rather than publish an unguarded hook: if prek ever
             # stops emitting a single-line `exec`, the block is stripped and
             # never re-injected, and every commit would silently validate
-            # against whatever config prek found on its own.
+            # against whatever config prek found on its own. An unterminated
+            # block (a hand edit — the atomic rename above cannot produce one)
+            # reaches here the same way, since the strip then swallows the
+            # `exec` line too, so name both causes rather than only the one
+            # this task can distinguish.
             ${pkgs.gnugrep}/bin/grep -qF -- "$guard_begin" "$tmp" || {
-              echo "hooks:isolate-config: no 'exec' line in $hook; refusing to install a hook without the bootstrap guard" >&2
+              echo "hooks:isolate-config: refusing to install $hook without the bootstrap guard; it has no single-line 'exec', or an unterminated guard block swallowed it" >&2
               exit 1
             }
             ${pkgs.coreutils}/bin/chmod --reference="$hook" "$tmp"

@@ -123,9 +123,11 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   # T7 primary checkout never bootstrapped -> advise, never block. Blocking here
   # would be unfixable from inside the turn, and the bare `prek run` it replaces
   # exits 2 with a config-not-found error the judgment loop reads as a finding.
-  bare="$PWD/bare"; mkdir -p "$bare"
-  ( cd "$bare"; git init -q; echo base > README; git add .; git commit -qm base; printf 'wibble\n' > b.txt )
-  out="$(printf '{"cwd":"%s","stop_hook_active":false,"hook_event_name":"Stop"}' "$bare" \
+  # An ordinary repo with no config, NOT a `git init --bare` one: a bare repo
+  # never reaches this code at all, it exits at the work-tree gate.
+  no_config="$PWD/no_config"; mkdir -p "$no_config"
+  ( cd "$no_config"; git init -q; echo base > README; git add .; git commit -qm base; printf 'wibble\n' > b.txt )
+  out="$(printf '{"cwd":"%s","stop_hook_active":false,"hook_event_name":"Stop"}' "$no_config" \
     | JUDGMENT_HOOKS_OVERRIDE=cspell-BAD bash validate.sh)"; rc=$?
   ok '[ "$rc" -eq 0 ]' "T7 rc"
   ok '! grep -q "\"decision\"" <<<"$out"' "T7 no block on missing config"
