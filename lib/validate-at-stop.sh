@@ -83,8 +83,36 @@ for f in "${files[@]}"; do [ -e "$f" ] && existing+=("$f"); done
 files=("${existing[@]}")
 [ "${#files[@]}" -eq 0 ] && exit 0
 
+# The prek config lives in the PRIMARY checkout: it is a devenv `files.*`
+# artifact materialized on shell entry, devenv is entered only there, and the
+# session cwd is normally a linked worktree that has none. Left implicit, prek
+# walks up from cwd, finds nothing, and exits 2 with "No `prek.toml` or
+# `.pre-commit-config.yaml` found" — output the judgment loop below would then
+# report as a lint finding and block the hand-back on. Same expression, and the
+# same PREK_HOME anchoring, as the commit hooks: devenv.nix
+# `hooks:isolate-config`. PREK_HOME stays on the WORKTREE because that is the
+# writable side under the agent sandbox; prek creates it when absent.
+primary_checkout="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+prek_config="$primary_checkout/.pre-commit-config.yaml"
+PREK_HOME="$(git rev-parse --show-toplevel)/.devenv/state/prek"
+export PREK_HOME
+
+if [ ! -f "$prek_config" ]; then
+  # Advise, never block: an un-bootstrapped primary checkout is a setup gap,
+  # not a finding about the changeset, and blocking here would be unfixable
+  # from inside the turn.
+  python3 - "$prek_config" <<'PY'
+import json, sys
+print(json.dumps({"systemMessage":
+                  "validate-at-stop: skipped, no prek config at " + sys.argv[1] +
+                  ". Run `devenv shell true` in the primary checkout once to "
+                  "materialize it; commit hooks need it too."}))
+PY
+  exit 0
+fi
+
 # (2) auto-fix formatting SILENTLY (reuse git-hooks treefmt config). Never blocks.
-prek run treefmt --files "${files[@]}" >/dev/null 2>&1 || true
+prek run treefmt --config "$prek_config" --files "${files[@]}" >/dev/null 2>&1 || true
 git add -u -- "${files[@]}" >/dev/null 2>&1 || true
 
 # (3) judgment lint over the same changeset, reusing git-hooks config/excludes.
@@ -93,7 +121,7 @@ git add -u -- "${files[@]}" >/dev/null 2>&1 || true
 read -r -a judgment <<<"${JUDGMENT_HOOKS_OVERRIDE:-cspell deadnix shellcheck statix}"
 report=""
 for id in "${judgment[@]}"; do
-  if ! out="$(prek run "$id" --files "${files[@]}" 2>&1)"; then
+  if ! out="$(prek run "$id" --config "$prek_config" --files "${files[@]}" 2>&1)"; then
     report="${report}### ${id}"$'\n'"${out}"$'\n\n'
   fi
 done

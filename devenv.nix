@@ -759,8 +759,12 @@ in {
         nat_hook_path="$nat_hooks_dir/$nat_hook"
         ${pkgs.gnugrep}/bin/grep -Fq 'PREK_HOME="$(git rev-parse --show-toplevel)/.devenv/state/prek"' "$nat_hook_path" \
           || { echo "FAIL: $nat_hook does not isolate PREK_HOME per worktree"; exit 1; }
-        ${pkgs.gnugrep}/bin/grep -Fq -- '--config="$(git rev-parse --show-toplevel)/.pre-commit-config.yaml"' "$nat_hook_path" \
-          || { echo "FAIL: $nat_hook does not isolate the prek config per worktree"; exit 1; }
+        ${pkgs.gnugrep}/bin/grep -Fq '_devenv_primary="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"' "$nat_hook_path" \
+          || { echo "FAIL: $nat_hook does not derive the primary checkout from the common git dir"; exit 1; }
+        ${pkgs.gnugrep}/bin/grep -Fq -- '--config="$_devenv_config"' "$nat_hook_path" \
+          || { echo "FAIL: $nat_hook does not resolve the prek config from the primary checkout"; exit 1; }
+        ! ${pkgs.gnugrep}/bin/grep -Fq -- '--config="$(git rev-parse --show-toplevel)/.pre-commit-config.yaml"' "$nat_hook_path" \
+          || { echo "FAIL: $nat_hook still resolves the prek config from the committing worktree"; exit 1; }
       done
     ''}
     test -f .claude/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .claude/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
@@ -859,10 +863,10 @@ in {
       };
     }
     // lib.optionalAttrs (!isCI) {
-      # ── Per-worktree commit-hook config isolation (no-cascade) ───────
+      # ── Commit-hook config resolution (no-cascade) ───────────────────
       # devenv's git-hooks install bakes an ABSOLUTE --config into the
       # prek-generated hooks (pre-commit, commit-msg), pointing at
-      # whichever worktree last entered the shell. The hooks dir is
+      # whichever checkout last entered the shell. The hooks dir is
       # SHARED across every worktree of a clone (one core.hooksPath into
       # the common .git), so it is last-writer-wins: entering worktree
       # B's shell rewrites the hook A commits through, and A then
@@ -870,10 +874,16 @@ in {
       # no-cascade gap.
       #
       # Fix: after install, rewrite that baked --config to resolve the
-      # config from the COMMITTING worktree's toplevel at hook-run time.
-      # Each worktree validates against its own devenv-generated
-      # .pre-commit-config.yaml, and entering one worktree's shell never
-      # changes another's commit-time validation.
+      # config from the PRIMARY CHECKOUT at hook-run time, derived from
+      # the shared common git dir. The primary checkout is the one that
+      # is entered (sessions launch there and the agent process then
+      # runs with cwd in a linked worktree), so its config always exists
+      # and always tracks regeneration — while the answer no longer
+      # depends on which checkout entered a shell last.
+      #
+      # This retires the per-worktree bootstrap: a linked worktree that
+      # has never seen `devenv shell` commits fine, which is what makes
+      # "devenv is never activated in a worktree" workable.
       #
       # Why not a per-worktree core.hooksPath (physical isolation)?
       # core.hooksPath REPLACES .git/hooks with no fallback, and the
@@ -899,7 +909,7 @@ in {
         '';
       };
       "hooks:isolate-config" = {
-        description = "Make prek hooks resolve their config per-worktree (no-cascade)";
+        description = "Make prek hooks resolve their config from the primary checkout (no-cascade)";
         after = ["devenv:git-hooks:install"];
         before = ["devenv:enterShell"];
         exec = ''
@@ -914,11 +924,10 @@ in {
 
           # Rewrite only prek-generated hooks (they carry a baked
           # --config="<abs>"); git-branchless hooks have neither marker
-          # and are left untouched. Idempotent: re-running matches the
-          # already-dynamic value and rewrites it to the same text.
+          # and are left untouched.
           #
           # GNU tools are pinned to store paths (the repo convention). The
-          # `$(git ...)` INSIDE the replacement is written verbatim into
+          # `$(git ...)` INSIDE the injected block is written verbatim into
           # the hook and runs at COMMIT time under git's own hook
           # environment (git is always on PATH there), so it stays bare —
           # pinning a store path there would break the hook if that path
@@ -931,37 +940,57 @@ in {
           # never a truncated mixture.
           #
           # The same hooks also get project-local runtime state and a bootstrap
-          # preflight injected ahead of their `exec`. PREK_HOME from a devenv
-          # shell is not inherited by commits launched from an editor or agent,
-          # so derive it from the committing worktree instead of falling back
-          # to the user-global XDG cache. A brand-new worktree has NO
-          # .pre-commit-config.yaml at all: it is a devenv `files.*`
-          # artifact materialized on shell entry, and `git worktree add`
-          # runs no devenv. Left to itself prek then volunteers three
-          # remedies (PREK_ALLOW_NO_CONFIG=1, --allow-missing-config,
-          # prek uninstall) that all SKIP every check instead of fixing
-          # the bootstrap, so the preflight replaces that advice with the
-          # correct action. `-f` follows symlinks, so a dangling one (its
-          # store path garbage-collected) trips the guard too — the same
-          # fix applies. The injected text is POSIX sh: the emitted hook
-          # is #!/bin/sh, not bash. Its `$(git ...)` is verbatim hook
-          # text for the same reason as the --config rewrite above.
-          guard_marker="devenv worktree bootstrap guard"
-          IFS= read -r -d "" guard <<'GUARD' || :
-          # --- devenv worktree bootstrap guard (hooks:isolate-config) ---
+          # preflight injected ahead of their `exec`, and the exec's --config is
+          # pointed at the block's `$_devenv_config`. Routing the path through a
+          # variable rather than inlining the expression twice keeps ONE source
+          # of truth in the hook and — load-bearing — keeps the `--config="…"`
+          # sed below idempotent: the primary-checkout expression contains
+          # nested double quotes, which `[^"]*` would only match a prefix of, so
+          # inlining it would corrupt the exec line on the second rewrite.
+          #
+          # PREK_HOME stays anchored to the COMMITTING worktree. A devenv
+          # shell's PREK_HOME is not inherited by commits launched from an
+          # editor or agent, so deriving it here beats falling back to the
+          # user-global XDG cache; and under the agent sandbox the primary
+          # checkout is a read-only bind while the worktree is the writable one.
+          # No `mkdir -p` is needed: prek creates PREK_HOME itself (measured
+          # against prek 0.4.12 — a commit into a fresh worktree populated
+          # config-tracking.json, hooks/, repos/ and .lock under an absent dir).
+          #
+          # The bootstrap preflight now names the PRIMARY CHECKOUT, since that
+          # is where the config it reads comes from. Left to itself prek
+          # volunteers three remedies (PREK_ALLOW_NO_CONFIG=1,
+          # --allow-missing-config, prek uninstall) that all SKIP every check
+          # instead of fixing the bootstrap, so the preflight replaces that
+          # advice with the correct action. `-f` follows symlinks, so a dangling
+          # one (its store path garbage-collected) trips the guard too — the
+          # same fix applies. The injected text is POSIX sh: the emitted hook is
+          # #!/bin/sh, not bash.
+          #
+          # Idempotent, and migration-safe against the PREVIOUS block shape: the
+          # rewrite STRIPS any existing marker-delimited block and re-injects
+          # the current one, rather than skipping when a marker is present. A
+          # marker check alone would have left worktree-anchored blocks from
+          # before this change in place while the exec line started reading
+          # their `$_devenv_config` — silently keeping the old semantics.
+          guard_begin="# --- devenv worktree bootstrap guard (hooks:isolate-config) ---"
+          guard_end="# --- end devenv worktree bootstrap guard ---"
+          IFS= read -r -d "" guard_body <<'GUARD' || :
           PREK_HOME="$(git rev-parse --show-toplevel)/.devenv/state/prek"
           export PREK_HOME
-          _devenv_config="$(git rev-parse --show-toplevel)/.pre-commit-config.yaml"
+          _devenv_primary="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+          _devenv_config="$_devenv_primary/.pre-commit-config.yaml"
           if [ ! -f "$_devenv_config" ]; then
-              echo 'prek: this worktree has not been bootstrapped.' >&2
+              echo 'prek: the primary checkout has not been bootstrapped.' >&2
               echo "  missing: $_devenv_config" >&2
               echo >&2
               echo '  .pre-commit-config.yaml is a devenv files.* artifact: it is' >&2
-              echo '  materialized on devenv shell entry, and "git worktree add"' >&2
-              echo '  does not run devenv.' >&2
+              echo '  materialized on devenv shell entry, and neither "git clone"' >&2
+              echo '  nor "git worktree add" runs devenv.' >&2
               echo >&2
-              echo '  Fix: run "devenv shell" in this worktree' >&2
-              echo '  once, then commit again.' >&2
+              echo "  Fix: run \"devenv shell true\" in $_devenv_primary once," >&2
+              echo '  then commit again. Linked worktrees need no bootstrap of' >&2
+              echo '  their own: they read the primary checkout config.' >&2
               echo >&2
               echo '  Do NOT silence this with PREK_ALLOW_NO_CONFIG=1,' >&2
               echo '  --allow-missing-config, or "prek uninstall". prek suggests' >&2
@@ -969,7 +998,6 @@ in {
               echo '  the bootstrap.' >&2
               exit 1
           fi
-          # --- end devenv worktree bootstrap guard ---
           GUARD
 
           for hook in "$hooks_dir"/*; do
@@ -977,28 +1005,42 @@ in {
             ${pkgs.gnugrep}/bin/grep -q 'prek' "$hook" || continue
             ${pkgs.gnugrep}/bin/grep -q -- '--config=' "$hook" || continue
 
-            # Idempotent: the marker gates re-injection, so running this
-            # task twice leaves the hooks byte-identical.
-            if ${pkgs.gnugrep}/bin/grep -qF -- "$guard_marker" "$hook"; then
-              need_guard=""
-            else
-              need_guard=1
-            fi
             tmp="$(${pkgs.coreutils}/bin/mktemp "$hooks_dir/.devenv-hook.XXXXXX")"
             trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
-            injected=""
-            ${pkgs.gnused}/bin/sed 's#--config="[^"]*"#--config="$(git rev-parse --show-toplevel)/.pre-commit-config.yaml"#' "$hook" \
-              | while IFS= read -r line || [ -n "$line" ]; do
-                case "$line" in
-                  'exec '*)
-                    if [ -n "$need_guard" ] && [ -z "$injected" ]; then
-                      printf '%s' "$guard"
-                      injected=1
+            ${pkgs.gnused}/bin/sed 's#--config="[^"]*"#--config="$_devenv_config"#' "$hook" \
+              | {
+                in_guard=""
+                injected=""
+                while IFS= read -r line || [ -n "$line" ]; do
+                  if [ -n "$in_guard" ]; then
+                    if [ "$line" = "$guard_end" ]; then
+                      in_guard=""
                     fi
-                    ;;
-                esac
-                printf '%s\n' "$line"
-              done >"$tmp"
+                    continue
+                  fi
+                  if [ "$line" = "$guard_begin" ]; then
+                    in_guard=1
+                    continue
+                  fi
+                  case "$line" in
+                    'exec '*)
+                      if [ -z "$injected" ]; then
+                        printf '%s\n%s%s\n' "$guard_begin" "$guard_body" "$guard_end"
+                        injected=1
+                      fi
+                      ;;
+                  esac
+                  printf '%s\n' "$line"
+                done
+              } >"$tmp"
+            # Fail loudly rather than publish an unguarded hook: if prek ever
+            # stops emitting a single-line `exec`, the block is stripped and
+            # never re-injected, and every commit would silently validate
+            # against whatever config prek found on its own.
+            ${pkgs.gnugrep}/bin/grep -qF -- "$guard_begin" "$tmp" || {
+              echo "hooks:isolate-config: no 'exec' line in $hook; refusing to install a hook without the bootstrap guard" >&2
+              exit 1
+            }
             ${pkgs.coreutils}/bin/chmod --reference="$hook" "$tmp"
             ${pkgs.coreutils}/bin/mv -f "$tmp" "$hook"
             trap - EXIT

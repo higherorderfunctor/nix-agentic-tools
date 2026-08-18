@@ -1,11 +1,20 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-17 (commit pending — shared prek hooks now derive
-> `PREK_HOME` from the committing worktree, so commits launched outside a devenv
-> shell retain isolated project-local state instead of falling back to the
-> user-global XDG cache; the bootstrap diagnostic now names shell entry as the
-> only materialization path, and shared-hook rewrites serialize and publish by
-> atomic rename). Prior: 2026-08-15 (commit pending — adds the adversarial
+> **Last verified:** 2026-08-18 (commit pending — the per-worktree bootstrap
+> requirement is GONE. The shared prek hooks now resolve
+> `.pre-commit-config.yaml` from the PRIMARY CHECKOUT, derived from the shared
+> common git dir, so a linked worktree that has never entered `devenv shell`
+> commits fine. `PREK_HOME` stays anchored to the committing worktree, because
+> under the agent sandbox the primary checkout is a read-only bind. Written for
+> the sandbox-stack pivot's "devenv is never activated in a worktree" topology
+> (#1106), under which the old model rejected every worktree commit by design.
+> Do NOT re-add a `devenv shell` step to the worktree recipe below.) Prior:
+> 2026-08-17 (commit pending — shared prek hooks now derive `PREK_HOME` from the
+> committing worktree, so commits launched outside a devenv shell retain
+> isolated project-local state instead of falling back to the user-global XDG
+> cache; the bootstrap diagnostic now names shell entry as the only
+> materialization path, and shared-hook rewrites serialize and publish by atomic
+> rename). Prior: 2026-08-15 (commit pending — adds the adversarial
 > subagent-review protocol that SUBSTITUTES for the Copilot loop while its quota
 > is exhausted, roughly two weeks from 2026-08-15. Written because an agent
 > cannot review its own output, and because the operator had been having to ask
@@ -517,34 +526,37 @@ silently resolves one level too deep, into
    `<type>` is a Conventional Commits type (`build`, `chore`, `ci`, `docs`,
    `feat`, `fix`, `perf`, `refactor`, `style`, `test`).
 
-2. Bootstrap the new worktree **once**, before its first commit:
+2. **There is no worktree bootstrap step.** `git worktree add` and commit — the
+   shared prek hooks resolve their config from the primary checkout, and
+   `PREK_HOME` from the committing worktree, so a worktree that has never
+   entered `devenv shell` validates exactly like one that has.
 
-   ```bash
-   cd "$worktrees/<slug>" && devenv shell true
-   ```
+   This changed on 2026-08-18 and the old shape is worth knowing, because every
+   doc and habit predating it says otherwise. The hooks used to resolve
+   `.pre-commit-config.yaml` from the COMMITTING worktree's toplevel — a devenv
+   `files.*` artifact materialized on SHELL ENTRY only, which `git worktree add`
+   never runs — so a fresh worktree's first commit was rejected until you ran
+   `devenv shell true` in it. Worse, `devenv tasks run` did not materialize it
+   either — measured 2026-07-31 in two fresh worktrees (`generate:all` succeeded
+   in each and the next commit was still rejected) and re-confirmed 2026-08-18 —
+   so bootstrapping via the task you needed anyway looked like it worked and
+   failed later, attributed to the commit. That asymmetry is still live for
+   anything else that wants a `files.*` artifact in a worktree; it just no
+   longer gates commits.
 
-   `.pre-commit-config.yaml` is a devenv `files.*` artifact materialized on
-   SHELL ENTRY, and `git worktree add` runs no devenv — until you do this the
-   shared prek hooks have no config to validate against and the commit is
-   rejected. With direnv allowed for the parent directory the `cd` is enough on
-   its own; that is what the sibling location buys.
+   The primary checkout is the one that is entered — sessions launch there and
+   the agent process runs with cwd in a linked worktree — so its config always
+   exists and always tracks regeneration. **Only the primary checkout needs
+   `devenv shell true`, and only after a fresh clone or a `devenv.nix` change.**
+   If a commit is ever rejected for a missing config, the hook names that path
+   and that fix; do not silence it with `PREK_ALLOW_NO_CONFIG=1`,
+   `--allow-missing-config`, or `prek uninstall` — all three skip every check
+   rather than fixing the bootstrap.
 
-   **It has to be a shell entry — `devenv tasks run` does NOT materialize it.**
-   Measured 2026-07-31 in two fresh worktrees: a full
-   `devenv tasks run --mode before generate:all` completed successfully in each,
-   and the very next commit was still rejected for a missing config. Running a
-   task is not the shell-entry path, whatever else it does.
-
-   That combination is worth naming because it is the natural way to get this
-   wrong. Bootstrapping via a task is exactly what you reach for when the
-   worktree needs generated output anyway, the task succeeds, and the failure
-   surfaces later attributed to the commit rather than to the bootstrap. This
-   step previously read `devenv shell   # or any devenv task`; the comment was
-   wrong and is now removed.
-
-   `devenv shell true` is the cheapest spelling — it enters, runs `true`, and
-   exits, instead of dropping you into an interactive shell you then have to
-   leave.
+   Enter `devenv shell` in a **worktree** only when you specifically need its
+   generated artifacts there (regenerating instruction projections, say). It is
+   no longer a prerequisite for anything, and under the sandbox-stack topology
+   it is not the intended shape.
 
 3. **Push at the first commit** — not at the end — so the branch is a continuous
    off-machine backup. Open the PR **ready (non-draft) as soon as the work is
@@ -620,15 +632,28 @@ Linked worktrees of one clone share the common `.git` directory, so these are
   Serialize stack-skill operations across concurrent worktrees; they are not
   session-isolated.
 
-The prek **config and runtime state** are the things made per-worktree: the
-`hooks:isolate-config` devenv task rewrites the installed hooks so they resolve
-`.pre-commit-config.yaml` from the _committing_ worktree's toplevel at hook-run
-time, and exports `PREK_HOME` beneath that same worktree's `.devenv/state`. That
-is what stops a shell entry in one worktree from changing what another worktree
-validates against, and keeps commits launched from editors or agents from
-falling back to a shared user-global cache. A new worktree must enter
-`devenv shell` once to materialize its config; running an arbitrary devenv task
-does not create the `files.*` artifact.
+The prek **config and runtime state** resolve from different places, and the
+split is deliberate. The `hooks:isolate-config` devenv task rewrites the
+installed hooks so that at hook-run time they resolve:
+
+- **`.pre-commit-config.yaml` from the PRIMARY CHECKOUT**, via
+  `$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")` — the
+  same derivation the worktree recipe above uses. The primary checkout is the
+  one that is entered, so its config always exists and always tracks
+  regeneration, and the answer no longer depends on which checkout entered a
+  shell last. That is what stops a shell entry in one worktree from changing
+  what another validates against.
+- **`PREK_HOME` beneath the COMMITTING worktree's `.devenv/state`.** A devenv
+  shell's `PREK_HOME` is not inherited by commits launched from an editor or
+  agent, so deriving it beats falling back to the user-global XDG cache; and
+  under the agent sandbox the primary checkout is a read-only bind while the
+  worktree is the writable one, so primary-anchored state would fail there. No
+  `mkdir` is needed — prek creates `PREK_HOME` itself.
+
+`lib/validate-at-stop.sh` mirrors both, for the same reasons: its session cwd is
+normally a linked worktree, and a bare `prek run` there walks up from cwd, finds
+no config, and exits 2 — output the judgment loop would report as a lint finding
+and block the hand-back on.
 
 The rewrite task takes a lock in the shared hooks directory and publishes each
 complete hook with a same-filesystem rename after preserving its mode. Two shell
