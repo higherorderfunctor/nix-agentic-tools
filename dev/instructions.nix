@@ -49,6 +49,30 @@
       chmod -R u+w $out
       treefmt --no-cache --walk filesystem --tree-root $out
     '';
+  # ── Working-tree file sets ───────────────────────────────────────────
+  # Keyed by the path INSIDE the derivation's $out; the value is the file
+  # content. Hoisted out of the `claude` / `copilot` derivations below so
+  # `destinations` can be derived from the very same attrsets the
+  # derivations are built from, rather than from a parallel hand-kept list
+  # that would silently rot when a fragment category is added or renamed.
+  claudeFiles =
+    {"CLAUDE.md" = gen.claudeMd;}
+    // lib.mapAttrs' (
+      name: content: lib.nameValuePair "rules/${name}" content
+    )
+    gen.claudeFiles;
+
+  copilotFiles =
+    lib.mapAttrs' (
+      name: content:
+        lib.nameValuePair (
+          if name == "copilot-instructions.md"
+          then name
+          else "instructions/${name}"
+        )
+        content
+    )
+    gen.copilotFiles;
 in {
   # runFmt builds the instruction derivations below (treefmt runs inside
   # the runCommand). Re-exported alongside gen/fmtDrv for external callers.
@@ -60,12 +84,7 @@ in {
   '';
 
   claude = let
-    files =
-      {"CLAUDE.md" = gen.claudeMd;}
-      // lib.mapAttrs' (
-        name: content: lib.nameValuePair "rules/${name}" content
-      )
-      gen.claudeFiles;
+    files = claudeFiles;
   in
     runFmt "instructions-claude" {} (
       "mkdir -p $out/rules\n"
@@ -78,17 +97,7 @@ in {
     );
 
   copilot = let
-    files =
-      lib.mapAttrs' (
-        name: content:
-          lib.nameValuePair (
-            if name == "copilot-instructions.md"
-            then name
-            else "instructions/${name}"
-          )
-          content
-      )
-      gen.copilotFiles;
+    files = copilotFiles;
   in
     runFmt "instructions-copilot" {} (
       "mkdir -p $out/instructions\n"
@@ -128,4 +137,38 @@ in {
     mkdir -p $out
     cp ${pkgs.writeText "README.md" gen.readmeMd} $out/README.md
   '';
+
+  # ── Working-tree destinations ────────────────────────────────────────
+  # Every path, relative to the repository root, that the `generate:*`
+  # devenv tasks materialize from the derivations above. Sorted, deduped.
+  #
+  # Derived from the SAME attrsets the derivations are built from
+  # (`claudeFiles`, `copilotFiles`, `gen.kiroFiles`), so adding or renaming
+  # a fragment category updates producer and destination list together —
+  # there is no second list to forget.
+  #
+  # Consumer: lib/worktree-session.nix, which copies the gitignored subset
+  # of this list into a freshly created worktree so an agent launched there
+  # sees the same project config a devenv shell entry would have produced.
+  # It filters by `git check-ignore` rather than by a hardcoded partition,
+  # so the TRACKED members here (AGENTS.md, .github/copilot-instructions.md,
+  # .github/instructions/*, CONTRIBUTING.md, README.md) are skipped
+  # automatically — they arrive with the checkout — and a projection that
+  # later changes tracked/ignored status needs no edit here.
+  #
+  # `sync_dir` in dev/tasks/generate.nix mirrors whole directories rather
+  # than reading this list; it additionally PRUNES orphans, which a path
+  # list cannot express. The two agree because both derive from the same
+  # derivations.
+  destinations = lib.naturalSort (lib.unique (
+    ["AGENTS.md" "CONTRIBUTING.md" "README.md"]
+    ++ map (
+      name:
+        if name == "CLAUDE.md"
+        then name
+        else ".claude/${name}"
+    ) (builtins.attrNames claudeFiles)
+    ++ map (name: ".github/${name}") (builtins.attrNames copilotFiles)
+    ++ map (name: ".kiro/steering/${name}") (builtins.attrNames gen.kiroFiles)
+  ));
 }

@@ -289,6 +289,15 @@
         inherit lib pkgs;
         inherit (inputs) treefmt-nix;
       };
+
+      # Worktree-session runner + launch guard (epic #1100's launch model:
+      # devenv shell in the primary checkout, agent cwd in a linked worktree).
+      # Takes the projection destinations from `instr` so its prep contract
+      # tracks the fragment registry instead of a parallel hardcoded list.
+      worktreeSession = import ./lib/worktree-session.nix {
+        inherit lib pkgs;
+        projections = instr.destinations;
+      };
     in
       # Grouped namespaces under pkgs.ai are flattened here for CLI ergonomics so
       # `nix build .#context7-mcp` works without knowing the group.
@@ -327,6 +336,14 @@
         # "attribute missing" and both files fall back to hand-editing.
         repo-contributing = instr.repoContributing;
         repo-readme = instr.repoReadme;
+
+        # Worktree-session runner and its launch guard. Two packages rather
+        # than one join because consumers need them separately: a zellij `wt`
+        # command wraps the runner, while #1103's sandbox profile wrappers
+        # call the guard as their first act without wanting the runner in
+        # their closure.
+        ai-workspace-guard = worktreeSession.guard;
+        ai-worktree-session = worktreeSession.runner;
       });
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
