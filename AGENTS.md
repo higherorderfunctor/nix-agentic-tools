@@ -562,29 +562,41 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-18 (commit pending — the per-worktree bootstrap
-> requirement is GONE. The shared prek hooks now resolve
-> `.pre-commit-config.yaml` from the PRIMARY CHECKOUT, derived from the shared
-> common git dir, so a linked worktree that has never entered `devenv shell`
-> commits fine. `PREK_HOME` stays anchored to the committing worktree, because
-> under the agent sandbox the primary checkout is a read-only bind. Written for
-> the sandbox-stack pivot's "devenv is never activated in a worktree" topology
-> (#1106), under which the old model rejected every worktree commit by design.
-> Do NOT re-add a `devenv shell` step to the worktree recipe below.) Prior:
-> 2026-08-17 (commit pending — shared prek hooks now derive `PREK_HOME` from the
-> committing worktree, so commits launched outside a devenv shell retain
-> isolated project-local state instead of falling back to the user-global XDG
-> cache; the bootstrap diagnostic now names shell entry as the only
-> materialization path, and shared-hook rewrites serialize and publish by atomic
-> rename). Prior: 2026-08-15 (commit pending — adds the adversarial
-> subagent-review protocol that SUBSTITUTES for the Copilot loop while its quota
-> is exhausted, roughly two weeks from 2026-08-15. Written because an agent
-> cannot review its own output, and because the operator had been having to ask
-> for an independent reviewer by hand each time. Includes the refuter+defender
-> pairing and the never-self-adjudicate rule, both of which exist because
-> refute-by-default on your own work is a second discard filter rather than a
-> check). Prior: 2026-08-14 (commit pending — TWO corrections. (1) The
-> required-status-check list said FOUR; there are SIX, both `kiro-patched`
+> **Last verified:** 2026-08-19 (commit pending — the rebase backup advice
+> recommended a local TAG, reasoning that `--update-refs` moves branches but not
+> tags. True, but incomplete: tags are refs in the COMMON git dir, so a fetch
+> from ANY worktree can prune them all in one shot when `fetch.pruneTags` is
+> set, which is a global (not per-repo) git config setting — measured twice on
+> 2026-08-15, the second time by the same session's own fetch. Neither a local
+> tag nor a local branch survives both hazards; only a ref actually pushed to
+> `origin` does. Backup guidance now says
+> `git push origin refs/heads/archive/<slug>`, created and pushed in the same
+> sequence as the rebase rather than verified afterward, since verifying is
+> itself a fetch that can destroy the thing being verified. Also adds local tags
+> to the shared-across-worktrees list, since the root cause is that tags are
+> common-dir refs, not anything about rebasing specifically.) Prior: 2026-08-18
+> (commit pending — the per-worktree bootstrap requirement is GONE. The shared
+> prek hooks now resolve `.pre-commit-config.yaml` from the PRIMARY CHECKOUT,
+> derived from the shared common git dir, so a linked worktree that has never
+> entered `devenv shell` commits fine. `PREK_HOME` stays anchored to the
+> committing worktree, because under the agent sandbox the primary checkout is a
+> read-only bind. Written for the sandbox-stack pivot's "devenv is never
+> activated in a worktree" topology (#1106), under which the old model rejected
+> every worktree commit by design. Do NOT re-add a `devenv shell` step to the
+> worktree recipe below.) Prior: 2026-08-17 (commit pending — shared prek hooks
+> now derive `PREK_HOME` from the committing worktree, so commits launched
+> outside a devenv shell retain isolated project-local state instead of falling
+> back to the user-global XDG cache; the bootstrap diagnostic now names shell
+> entry as the only materialization path, and shared-hook rewrites serialize and
+> publish by atomic rename). Prior: 2026-08-15 (commit pending — adds the
+> adversarial subagent-review protocol that SUBSTITUTES for the Copilot loop
+> while its quota is exhausted, roughly two weeks from 2026-08-15. Written
+> because an agent cannot review its own output, and because the operator had
+> been having to ask for an independent reviewer by hand each time. Includes the
+> refuter+defender pairing and the never-self-adjudicate rule, both of which
+> exist because refute-by-default on your own work is a second discard filter
+> rather than a check). Prior: 2026-08-14 (commit pending — TWO corrections. (1)
+> The required-status-check list said FOUR; there are SIX, both `kiro-patched`
 > contexts having been promoted 2026-08-13 with PR #895. This file was wrong in
 > two places, `ci-update-workflow.md` was wrong in two more, and
 > `.github/workflows/update.yml` was wrong a third way — "five", including the
@@ -1200,6 +1212,12 @@ Linked worktrees of one clone share the common `.git` directory, so these are
 - **The git-branchless event database** (`.git/branchless/db.sqlite3`).
   Serialize stack-skill operations across concurrent worktrees; they are not
   session-isolated.
+- **Local tags.** Tags are refs in the common git dir, so a tag created in one
+  worktree is visible — and deletable — from every other. A fetch run from ANY
+  worktree can wipe them all at once if the author's global git config sets
+  `fetch.pruneTags`, which prunes local tags with no remote-tracking
+  counterpart. See "Rebasing: back up with a pushed ref" below — this is the
+  root cause the tag-backup advice used to miss.
 
 The prek **config and runtime state** resolve from different places, and the
 split is deliberate. The `hooks:isolate-config` devenv task rewrites the
@@ -1255,15 +1273,29 @@ This is a general cross-harness rule, not a Claude Code one: any two agent
 sessions sharing a memory store have it, and the failure is silent in all of
 them.
 
-### Rebasing: back up with a TAG, not a branch
+### Rebasing: back up with a PUSHED ref, not a tag or a local branch
 
 `git rebase --update-refs` (and git-branchless) moves any **branch** that points
 into the rebased range — including a backup branch created moments earlier,
-silently defeating it. Tags are not moved:
+silently defeating it. A local **tag** dodges that, but is not safe either: tags
+are refs in the COMMON git dir, shared across every worktree of the clone, and
+`fetch.pruneTags` — a common global git config setting — prunes any local tag
+with no matching remote-tracking ref on the next fetch, from ANY worktree.
+Measured twice on 2026-08-15, the second time when the same session ran its own
+fetch moments later to check whether an unrelated push had landed, and it
+deleted the backup tag along with it. Neither primitive alone survives both
+hazards, and there is no way to tell from the tag alone whether the local config
+has `pruneTags` set, so write backup guidance that holds regardless:
 
 ```bash
-git tag backup-<slug>-pre-rebase <tip>   # durable across the rebase
+git push origin HEAD:refs/heads/archive/<slug>   # create + push in one step
 ```
+
+Push the backup **in the same command sequence as the rebase**, before running
+it — not after, and not as a "verify it's there" step, because the fetch that
+verifies it is exactly the kind of operation that can delete a local-only tag.
+Only a ref that has actually reached `origin` survives both a rebase with
+`--update-refs` and a prune-on-fetch.
 
 Lockfile conflicts (`flake.lock`, `devenv.lock`) during a rebase are
 **regenerated, never hand-merged**: take the base's copy, then re-run
