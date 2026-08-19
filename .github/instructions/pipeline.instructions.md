@@ -920,10 +920,13 @@ aggregate but skips its dependency leaves.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-08-15 (commit pending — registers the sidecar-owned
-> stable Beads release as a binary update target without introducing a second
-> source tracker). Prior: 2026-08-03 (commit pending — adds reverse
-> package-to-target completeness coverage using derivation, source,
+> **Last verified:** 2026-08-18 (commit pending — records how a flake input is
+> held OUT of the automatic sweep: a rev in the input URL, not a registry
+> opt-out, since the ninja DAG derives its Inputs targets from `flake.lock` and
+> has no exclusion list). Prior: 2026-08-15 (commit pending — registers the
+> sidecar-owned stable Beads release as a binary update target without
+> introducing a second source tracker). Prior: 2026-08-03 (commit pending — adds
+> reverse package-to-target completeness coverage using derivation, source,
 > update-script, flake-input, package-exemption, and registry-exemption
 > properties). Prior: 2026-08-03 (commit pending — limits package DAG edges to
 > initialization plus explicit target-specific constraints and removes
@@ -1080,6 +1083,17 @@ registry every package contributes a row to. It replaced the flat, top-level
   all pass `--use-update-script`, optionally with `--override-filename <path>`;
   that second flag is what lets several attributes of one upstream (`pnpm_10`,
   `pnpm_11`) each own a file and a sidecar.
+
+  **Every root input is swept and there is no opt-out list.** The Inputs targets
+  come straight from `flake.lock`'s `nodes.root.inputs`, filtered only for
+  `treefmt-nix` (which is ordered last, not excluded). To hold an input still —
+  because a silent bump would change security-relevant behavior, or because
+  upstream publishes no releases and every move deserves a read — put the REV IN
+  THE URL. `nix flake update <name>` then re-resolves to the same rev, the sweep
+  produces no diff and therefore no auto-merging PR, and bumping becomes an edit
+  to `flake.nix` reviewed like any other change. `jail-nix` is the worked
+  example: it is the sandbox layer's combinator library, it has a single
+  maintainer, and upstream publishes neither tags nor releases.
 
 - **`overlays/mcp-servers/effect-mcp.update.nix`** — effect-mcp's own row,
   co-located with the overlay it bumps:

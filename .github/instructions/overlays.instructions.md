@@ -7,55 +7,58 @@ applyTo: "overlays/*.nix,overlays/**/*.nix"
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-16 (commit pending — corrects the current Go-floor
-> count to eight after Beads joined the covered set; Kiro's `withFhsPayload`
-> passthru and FHS opt-out leave the default derivation byte-identical, and only
-> configurations requesting an inner chat wrapper or the explicit unwrapped
-> selection fork from it). Prior: 2026-08-15 (commit pending — adds the
-> stable-release Beads overlay under `pkgs.ai.devTools`, built from this
-> repository's nixpkgs pin rather than the independently pinned Numtide
-> derivation). Prior: 2026-08-16 (commit pending — nixpkgs 9ddfd8a consolidated
-> Kiro's three FHS derivations into one shared environment. The overlay still
-> recomposes exclusively through `ourPkgs`, so the topology change preserves the
-> same consumer/standalone cache identity contract). Prior: 2026-08-10 (commit
-> pending — `overlays/kiro-cli.nix` is no longer a plain `overrideAttrs`, so the
-> "pure binary-fetch" example below is re-pointed. nixpkgs f13ff45a split the
-> package, and the overlay now overrides `kiro-cli-unwrapped` and re-composes
-> upstream's wrapper with `.override`. Parity is UNAFFECTED and the reason is
-> worth stating: both sides of the parity check import `inputs.nixpkgs`, so the
-> `ourPkgs ? kiro-cli-unwrapped` feature-detection resolves the same way on both
-> and cannot itself drift — see the overlay-pattern fragment for the seam).
-> Prior: 2026-08-05 (commit pending — records that a consumer's
-> `inputs.nixpkgs.follows` defeats `ourPkgs` BY CONSTRUCTION, since it rewrites
-> the input rather than the overlay argument, and that its cost is not merely
-> the documented cache miss: measured on a real consumer, a followed April 2026
-> nixpkgs FAILED the `glab` build outright on the Go floor. Do not "fix"
-> `ourPkgs` for this — `checks/cache-hit-parity.nix` already asserts the drift).
-> Prior: 2026-08-03 (commit pending — annotates Semble's unchanged upstream
-> derivation and git-branchless's passthru with their flake-input update owners
-> without moving either derivation). Prior: 2026-08-03 (commit pending — patches
-> Oxlint's `@napi-rs/cli` dependency in its pnpm-fetched source rather than
-> admitting Darwin's `/bin/ps` into the sandbox; both fetch and build use pnpm
-> 11 from pinned `ourPkgs`, matching upstream's major). Prior: 2026-08-03
-> (commit pending — nests every binary-package group under `pkgs.ai`, moves `gh`
-> and `glab` into `ai.devTools`, and updates the consumer-path registry without
-> changing any derivation). Prior: 2026-08-03 (commit pending — relocates the
-> two repo-local auto-memory source trees beside their overlay derivations
-> without changing package inputs or cache-hit semantics). Prior: 2026-08-03
-> (commit pending — adds a positive control that substitutes the overlay's own
-> `inputs.nixpkgs` the way a consumer's `follows` directive does, proving that
-> unsupported configuration drifts from the cache-published `fblog` path).
-> Prior: 2026-08-02 (commit pending — adds the pinned external Semble exception:
-> direct upstream selection preserves Numtide's derivation, while a plain meta
-> overlay exposes the MCP role without forking the build). Prior: 2026-07-25
-> (commit pending — the worked example moved off `git-branchless`, which had not
-> carried this shape for a long time, onto `git-absorb`, which does; also
-> corrects the new-package signature, the namespacing in the manual verification
-> snippet, and the pure-binary-fetch package list). If you touch any
-> `overlays/<name>.nix` overlay file or the overlay composition machinery and
-> this fragment isn't updated in the same commit, stop and fix it. Regressions
-> are gated by the `checks.cache-hit-parity` flake check (see "Verification"
-> below).
+> **Last verified:** 2026-08-18 (commit pending — records the first parity
+> target the `config.checks.cacheHitParity` registry structurally CANNOT hold:
+> `pkgs.ai.jail` is a library, absent from `packages` by construction, so its
+> parity is asserted by a dedicated check instead). Prior: 2026-08-16 (commit
+> pending — corrects the current Go-floor count to eight after Beads joined the
+> covered set; Kiro's `withFhsPayload` passthru and FHS opt-out leave the
+> default derivation byte-identical, and only configurations requesting an inner
+> chat wrapper or the explicit unwrapped selection fork from it). Prior:
+> 2026-08-15 (commit pending — adds the stable-release Beads overlay under
+> `pkgs.ai.devTools`, built from this repository's nixpkgs pin rather than the
+> independently pinned Numtide derivation). Prior: 2026-08-16 (commit pending —
+> nixpkgs 9ddfd8a consolidated Kiro's three FHS derivations into one shared
+> environment. The overlay still recomposes exclusively through `ourPkgs`, so
+> the topology change preserves the same consumer/standalone cache identity
+> contract). Prior: 2026-08-10 (commit pending — `overlays/kiro-cli.nix` is no
+> longer a plain `overrideAttrs`, so the "pure binary-fetch" example below is
+> re-pointed. nixpkgs f13ff45a split the package, and the overlay now overrides
+> `kiro-cli-unwrapped` and re-composes upstream's wrapper with `.override`.
+> Parity is UNAFFECTED and the reason is worth stating: both sides of the parity
+> check import `inputs.nixpkgs`, so the `ourPkgs ? kiro-cli-unwrapped`
+> feature-detection resolves the same way on both and cannot itself drift — see
+> the overlay-pattern fragment for the seam). Prior: 2026-08-05 (commit pending
+> — records that a consumer's `inputs.nixpkgs.follows` defeats `ourPkgs` BY
+> CONSTRUCTION, since it rewrites the input rather than the overlay argument,
+> and that its cost is not merely the documented cache miss: measured on a real
+> consumer, a followed April 2026 nixpkgs FAILED the `glab` build outright on
+> the Go floor. Do not "fix" `ourPkgs` for this — `checks/cache-hit-parity.nix`
+> already asserts the drift). Prior: 2026-08-03 (commit pending — annotates
+> Semble's unchanged upstream derivation and git-branchless's passthru with
+> their flake-input update owners without moving either derivation). Prior:
+> 2026-08-03 (commit pending — patches Oxlint's `@napi-rs/cli` dependency in its
+> pnpm-fetched source rather than admitting Darwin's `/bin/ps` into the sandbox;
+> both fetch and build use pnpm 11 from pinned `ourPkgs`, matching upstream's
+> major). Prior: 2026-08-03 (commit pending — nests every binary-package group
+> under `pkgs.ai`, moves `gh` and `glab` into `ai.devTools`, and updates the
+> consumer-path registry without changing any derivation). Prior: 2026-08-03
+> (commit pending — relocates the two repo-local auto-memory source trees beside
+> their overlay derivations without changing package inputs or cache-hit
+> semantics). Prior: 2026-08-03 (commit pending — adds a positive control that
+> substitutes the overlay's own `inputs.nixpkgs` the way a consumer's `follows`
+> directive does, proving that unsupported configuration drifts from the
+> cache-published `fblog` path). Prior: 2026-08-02 (commit pending — adds the
+> pinned external Semble exception: direct upstream selection preserves
+> Numtide's derivation, while a plain meta overlay exposes the MCP role without
+> forking the build). Prior: 2026-07-25 (commit pending — the worked example
+> moved off `git-branchless`, which had not carried this shape for a long time,
+> onto `git-absorb`, which does; also corrects the new-package signature, the
+> namespacing in the manual verification snippet, and the pure-binary-fetch
+> package list). If you touch any `overlays/<name>.nix` overlay file or the
+> overlay composition machinery and this fragment isn't updated in the same
+> commit, stop and fix it. Regressions are gated by the
+> `checks.cache-hit-parity` flake check (see "Verification" below).
 
 ### The rule
 
@@ -341,6 +344,20 @@ bind to whichever pkgs set supplies them. They are registered in
 package installs but whether it needs a `pkgs` set to evaluate; if it does, it
 needs `ourPkgs`.
 
+**A library export cannot be registered at all.** `pkgs.ai.jail` needs the full
+`ourPkgs` pattern for the strongest possible reason — every sandbox profile in
+the repo is built THROUGH it, so a consumer-pin leak cache-misses all of them at
+once — but it cannot be a `config.checks.cacheHitParity` row. The registry
+compares `self.packages.<system>.<name>` against a consumer attr path, and the
+attribute is deliberately absent from `packages` because it is not a derivation.
+`checks/jail-nix.nix` carries `jail-nix-parity` instead: it builds the same
+trivial jail through our pin and through `nixpkgs-test`, holding the jailed exe
+constant so the comparison is not a tautology, and diffs the store paths. It
+carries its own positive control in the same shape `followedPkgs` gives this
+check: the overlay is re-imported with `inputs.nixpkgs` rewritten to
+`nixpkgs-test`, and that wrapper MUST differ — if it does not, the equality
+proved nothing and the check fails as a tautology rather than passing as one.
+
 **Pure binary-fetch packages** (no build, just an `overrideAttrs` that swaps
 `src`/`version`) still route through `ourPkgs` to keep the starting derivation
 tied to this repo's nixpkgs pin. `copilot-cli` and `kiro-gateway` also ship
@@ -386,23 +403,27 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-16 (commit pending — corrects the current Go-floor
-> enumeration to include all eight packages; Kiro's recomposition seam also
-> exposes `withFhsPayload`, so configured chat-only wrappers can enter the
-> upstream FHS root without reimplementing it while the public default stays
-> byte-identical and `useFhsSandbox = false` is an explicit module-level
-> selection of `passthru.unwrapped`). Prior: 2026-08-15 (commit pending — adds
-> Beads as the eighth Go package and as a stable-release, sidecar-pinned thin
-> override in the `devTools` group). Prior: 2026-08-16 (commit pending —
-> documents Beads' distinct builder override plus anchored wrapper-extension
-> seam). Prior: 2026-08-16 (commit pending — nixpkgs 9ddfd8a consolidated Kiro's
-> three per-command FHS environments into one shared environment behind thin
-> command wrappers. Re-pointing the unwrapped base and recomposing through
-> upstream's `.override` remains the correct seam and inherited the topology
-> change without implementation edits). Prior: 2026-08-10 (commit pending — adds
-> the third override-seam failure mode, measured on `kiro-cli`: the attribute
-> you are overriding stops being a derivation at all. nixpkgs f13ff45a split it
-> into `kiro-cli-unwrapped` plus a `symlinkJoin` of `buildFHSEnv` sandboxes, and
+> **Last verified:** 2026-08-18 (commit pending — `pkgs.ai` is no longer
+> derivations-only: `pkgs.ai.jail` is the initialized jail.nix combinator
+> LIBRARY, so the "every group is built the same way" claim below now has one
+> documented exception — see "One group is a library, not packages"). Prior:
+> 2026-08-16 (commit pending — corrects the current Go-floor enumeration to
+> include all eight packages; Kiro's recomposition seam also exposes
+> `withFhsPayload`, so configured chat-only wrappers can enter the upstream FHS
+> root without reimplementing it while the public default stays byte-identical
+> and `useFhsSandbox = false` is an explicit module-level selection of
+> `passthru.unwrapped`). Prior: 2026-08-15 (commit pending — adds Beads as the
+> eighth Go package and as a stable-release, sidecar-pinned thin override in the
+> `devTools` group). Prior: 2026-08-16 (commit pending — documents Beads'
+> distinct builder override plus anchored wrapper-extension seam). Prior:
+> 2026-08-16 (commit pending — nixpkgs 9ddfd8a consolidated Kiro's three
+> per-command FHS environments into one shared environment behind thin command
+> wrappers. Re-pointing the unwrapped base and recomposing through upstream's
+> `.override` remains the correct seam and inherited the topology change without
+> implementation edits). Prior: 2026-08-10 (commit pending — adds the third
+> override-seam failure mode, measured on `kiro-cli`: the attribute you are
+> overriding stops being a derivation at all. nixpkgs f13ff45a split it into
+> `kiro-cli-unwrapped` plus a `symlinkJoin` of `buildFHSEnv` sandboxes, and
 > `overrideAttrs` on that join silently dropped our `src`, `version` AND
 > `postFixup` while the build stayed green. Unlike the `extendMkDerivation`
 > cases below, NO seam on the public attribute can fix it — the base has to be
@@ -457,10 +478,10 @@ changes mechanism away from the universal-node layout we forked against.
 > original, and this section isn't updated in the same commit, stop and fix it.
 
 `overlays/default.nix` aggregates every binary package under the single
-`pkgs.ai` namespace. Flat AI CLIs live directly below it; supporting categories
-are `devTools`, `generic`, `gitTools`, `lspServers`, and `mcpServers`. Every
-group is built the same way — an attrset of
-`import ./<dir>/<name>.nix {inherit inputs final;}` entries, passed through
+`pkgs.ai` namespace (plus exactly one library — see below). Flat AI CLIs live
+directly below it; supporting categories are `devTools`, `generic`, `gitTools`,
+`lspServers`, and `mcpServers`. Every group is built the same way — an attrset
+of `import ./<dir>/<name>.nix {inherit inputs final;}` entries, passed through
 `guard` (the unfree wrapper) in the output set, and flattened into
 `packages.<system>` in `flake.nix` for CLI ergonomics. The overlay never writes
 a bare `pkgs.<name>` attribute.
@@ -485,6 +506,43 @@ only runtime consumer. An overlay must not import build sources from
 `packages/`: that outbound edge prevents lifting the overlay tree as a clean
 directory move. The auto-memory sources are the worked examples:
 `overlays/kiro-memory-distiller/` and `overlays/mcp-servers/openmemory-mem/`.
+
+### One group is a library, not packages
+
+`pkgs.ai.jail` is the single exception to everything above, and it is nested
+rather than flat for a mechanical reason: it holds no derivation to flatten.
+`overlays/jail-nix.nix` exports `{ extend, lib, src }` — the initialized
+[jail.nix](https://sr.ht/~alexdavid/jail.nix/) bubblewrap combinator library the
+`ai.sandbox` layer composes profiles from — where only `src` (the `applyPatches`
+output carrying the GPL-3.0 `meta.license`) is a derivation at all.
+
+Three consequences worth knowing before adding a second one:
+
+- **It must stay nested.** `flake.nix`'s `packages` flattening strips the nested
+  groups BY NAME, so `jail` is listed in that `removeAttrs` alongside `devTools`
+  and friends. Move it flat and `nix flake check` fails on a `packages` entry
+  that is not a derivation.
+- **`guard` is not applied.** The unfree wrapper maps `symlinkJoin` over an
+  attrset of derivations; there is nothing here for it to wrap, and `src` is
+  free anyway.
+- **`checks.cache-hit-parity` cannot see it.** That registry compares
+  `self.packages.<system>.<name>` against a consumer attr path, and this is
+  absent from `packages` by construction. Parity is asserted instead by
+  `checks/jail-nix.nix` (`jail-nix-parity`), which builds the same trivial jail
+  through our pin and through `nixpkgs-test` and compares store paths. Every
+  sandbox profile is built THROUGH this library, so a consumer-pin leak here
+  would cache-miss all of them at once.
+
+Note also that `applyPatches` **does not always return a derivation**, and
+`pkgs.ai.jail` is the first place in this repo that depends on the answer. On
+nixpkgs 25.05 it short-circuits to its bare `src` when `patches == []` — the
+shipped configuration there — while the current master rework always builds one.
+Measured while writing `jail-nix-parity`'s negative control: the consumer-pin
+side threw `attribute 'overrideAttrs' missing`, four levels away from anything
+naming a patch, and the obvious reading ("the overlay got a stub `final`") is
+wrong. So do not stamp `meta` onto an `applyPatches` result with
+`overrideAttrs`; wrap it in a derivation that exists either way, or the next
+routine nixpkgs bump arms a latent eval break.
 
 ### Direct external-flake derivations
 
@@ -984,15 +1042,23 @@ constant — `oh-my-posh` keeps its module under `src/`.
 
 ### A genuinely platform-specific package is gated at the ATTRIBUTE
 
-`gluetun` is the only one so far: `internal/routing` uses `unix.RT_TABLE_MAIN` /
-`RT_TABLE_LOCAL`, Linux-only constants (measured by cross-compiling
-`GOOS=darwin GOARCH=arm64`). A restrictive `meta.platforms` is NOT sufficient —
-the attribute still exists on darwin and forcing its `drvPath` throws "not
-available on the requested hostPlatform", which both `nix flake check` (it
-evaluates every system) and the required darwin CI leg do. So
-`overlays/default.nix` wraps the entry in
+Two entries so far, gated the same way for different reasons.
+
+`gluetun`: `internal/routing` uses `unix.RT_TABLE_MAIN` / `RT_TABLE_LOCAL`,
+Linux-only constants (measured by cross-compiling `GOOS=darwin GOARCH=arm64`). A
+restrictive `meta.platforms` is NOT sufficient — the attribute still exists on
+darwin and forcing its `drvPath` throws "not available on the requested
+hostPlatform", which both `nix flake check` (it evaluates every system) and the
+required darwin CI leg do. So `overlays/default.nix` wraps the entry in
 `lib.optionalAttrs final.stdenv.hostPlatform.isLinux`, and the package is simply
 absent elsewhere.
+
+`pkgs.ai.jail` (see "One group is a library, not packages"): bubblewrap is
+Linux-only, so the whole combinator library is absent on darwin. The forcing
+argument above does not apply — it is not in `packages` and nothing evaluates
+its `drvPath` on darwin — but the epic's rule that a sandbox exclusion is
+explicit and never a silent no-op does. Present-but-unbuildable reads as
+support; "attribute missing" does not.
 
 Two registries have to agree with that:
 `config.checks.cacheHitParity.<name>.platforms` (or the check aborts on darwin
