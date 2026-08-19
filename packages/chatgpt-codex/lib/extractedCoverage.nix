@@ -4,6 +4,7 @@
 # Nix should own a new upstream surface. checks/chatgpt-codex-coverage.nix keeps
 # every categorical union exact, so an upstream command, flag, field, or
 # maturity cannot slip through merely because extraction itself stayed green.
+# cspell:words rollouts
 {
   cli = {
     commandFields = {
@@ -76,6 +77,7 @@
         "codex logout"
         "codex mcp login"
         "codex mcp logout"
+        "codex migrate-rollouts"
         "codex plugin"
         "codex plugin add"
         "codex plugin list"
@@ -100,6 +102,7 @@
         "codex apply"
         "codex doctor"
         "codex exec"
+        "codex exec fork"
         "codex exec resume"
         "codex exec review"
         "codex features"
@@ -219,6 +222,7 @@
         "--available"
         "--device-auth"
         "--marketplace"
+        "--oauth-client-registration"
         "--ref"
         "--sparse"
         "--with-access-token"
@@ -232,6 +236,7 @@
       sessionOnly = [
         "--add-dir"
         "--all"
+        "--apply"
         "--ascii"
         "--attempt"
         "--attempts"
@@ -256,6 +261,7 @@
         "--json"
         "--last"
         "--limit"
+        "--max-mib-per-second"
         "--no-alt-screen"
         "--no-color"
         "--output-last-message"
@@ -265,8 +271,10 @@
         "--skip-git-repo-check"
         "--strict-config"
         "--summary"
+        "--thread"
         "--title"
         "--uncommitted"
+        "--verbose"
         "--version"
       ];
     };

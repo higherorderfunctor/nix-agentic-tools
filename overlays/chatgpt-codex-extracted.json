@@ -221,7 +221,7 @@
             "default": null,
             "help": "Connect to a remote code-mode host instead of starting a local host",
             "names": ["--code-mode-host"],
-            "valueName": "WS_URL"
+            "valueName": "URL"
           },
           {
             "acceptedValues": [],
@@ -369,17 +369,17 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Launch the managed app-server with remote control enabled",
-            "names": ["--remote-control"],
-            "valueName": null
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Launch the managed app-server with remote control enabled",
+            "names": ["--remote-control"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -650,14 +650,6 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Output directory where the schema bundle will be written",
-            "names": ["--out", "-o"],
-            "valueName": "DIR"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
             "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
             "names": ["--config", "-c"],
             "valueName": "key=value"
@@ -666,9 +658,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Include experimental methods and fields in the generated output",
-            "names": ["--experimental"],
-            "valueName": null
+            "help": "Output directory where the schema bundle will be written",
+            "names": ["--out", "-o"],
+            "valueName": "DIR"
           },
           {
             "acceptedValues": [],
@@ -677,6 +669,14 @@
             "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
             "names": ["--enable"],
             "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Include experimental methods and fields in the generated output",
+            "names": ["--experimental"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -705,14 +705,6 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Output directory where .ts files will be written",
-            "names": ["--out", "-o"],
-            "valueName": "DIR"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
             "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
             "names": ["--config", "-c"],
             "valueName": "key=value"
@@ -721,9 +713,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Optional path to the Prettier executable to format generated files",
-            "names": ["--prettier", "-p"],
-            "valueName": "PRETTIER_BIN"
+            "help": "Output directory where .ts files will be written",
+            "names": ["--out", "-o"],
+            "valueName": "DIR"
           },
           {
             "acceptedValues": [],
@@ -737,9 +729,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Include experimental methods and fields in the generated output",
-            "names": ["--experimental"],
-            "valueName": null
+            "help": "Optional path to the Prettier executable to format generated files",
+            "names": ["--prettier", "-p"],
+            "valueName": "PRETTIER_BIN"
           },
           {
             "acceptedValues": [],
@@ -748,6 +740,14 @@
             "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
             "names": ["--disable"],
             "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Include experimental methods and fields in the generated output",
+            "names": ["--experimental"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -768,17 +768,17 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Path to the app-server Unix domain socket to connect to",
-            "names": ["--sock"],
-            "valueName": "SOCKET_PATH"
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Path to the app-server Unix domain socket to connect to",
+            "names": ["--sock"],
+            "valueName": "SOCKET_PATH"
           },
           {
             "acceptedValues": [],
@@ -862,6 +862,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Name of the environment variable containing the bearer token to send to a remote app server websocket",
             "names": ["--remote-auth-token-env"],
             "valueName": "ENV_VAR"
@@ -870,8 +878,8 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
             "valueName": "FEATURE"
           },
           {
@@ -881,14 +889,6 @@
             "help": "Optional image(s) to attach to the initial prompt",
             "names": ["--image", "-i"],
             "valueName": "FILE"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
-            "names": ["--disable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -1150,6 +1150,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Target environment identifier (see `codex cloud` to browse)",
             "names": ["--env"],
             "valueName": "ENV_ID"
@@ -1166,9 +1174,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -1177,14 +1185,6 @@
             "help": "Git branch to run in Codex Cloud (defaults to current branch)",
             "names": ["--branch"],
             "valueName": "BRANCH"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -1213,6 +1213,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Filter tasks by environment identifier",
             "names": ["--env"],
             "valueName": "ENV_ID"
@@ -1221,9 +1229,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -1240,14 +1248,6 @@
             "help": "Pagination cursor returned by a previous call",
             "names": ["--cursor"],
             "valueName": "CURSOR"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -1526,17 +1526,17 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Optional image(s) to attach to the user prompt",
-            "names": ["--image", "-i"],
-            "valueName": "FILE"
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Optional image(s) to attach to the user prompt",
+            "names": ["--image", "-i"],
+            "valueName": "FILE"
           },
           {
             "acceptedValues": [],
@@ -1581,6 +1581,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Name of the environment variable containing the bearer token to send to a remote app server websocket",
             "names": ["--remote-auth-token-env"],
             "valueName": "ENV_VAR"
@@ -1589,8 +1597,8 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
             "valueName": "FEATURE"
           },
           {
@@ -1600,14 +1608,6 @@
             "help": "Optional image(s) to attach to the initial prompt",
             "names": ["--image", "-i"],
             "valueName": "FILE"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
-            "names": ["--disable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -1736,6 +1736,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Emit a redacted machine-readable report",
             "names": ["--json"],
             "valueName": null
@@ -1744,9 +1752,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -1763,14 +1771,6 @@
             "help": "Expand long lists in detailed human output",
             "names": ["--all"],
             "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -1831,17 +1831,17 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Error out when config.toml contains fields that are not recognized by this version of Codex",
-            "names": ["--strict-config"],
-            "valueName": null
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
+            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
-            "names": ["--disable"],
-            "valueName": "FEATURE"
+            "help": "Error out when config.toml contains fields that are not recognized by this version of Codex",
+            "names": ["--strict-config"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -2019,9 +2019,152 @@
         "help": "Run Codex non-interactively",
         "path": ["codex", "exec"]
       },
+      "codex exec fork": {
+        "aliases": [],
+        "flags": [
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Optional image(s) to attach to the prompt sent after forking",
+            "names": ["--image", "-i"],
+            "valueName": "FILE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Error out when config.toml contains fields that are not recognized by this version of Codex",
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Model the agent should use",
+            "names": ["--model", "-m"],
+            "valueName": "MODEL"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Skip all confirmation prompts and execute commands without sandboxing. EXTREMELY DANGEROUS. Intended solely for running in environments that are externally sandboxed",
+            "names": ["--dangerously-bypass-approvals-and-sandbox"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Run enabled hooks without requiring persisted hook trust for this invocation. DANGEROUS. Intended only for automation that already vets hook sources",
+            "names": ["--dangerously-bypass-hook-trust"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Allow running Codex outside a Git repository",
+            "names": ["--skip-git-repo-check"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Run without persisting session files to disk",
+            "names": ["--ephemeral"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Do not load `$CODEX_HOME/config.toml`; auth still uses `CODEX_HOME`",
+            "names": ["--ignore-user-config"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Do not load user or project execpolicy `.rules` files",
+            "names": ["--ignore-rules"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Path to a JSON Schema file describing the model's final response shape",
+            "names": ["--output-schema"],
+            "valueName": "FILE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Print events to stdout as JSONL",
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Specifies file where the last message from the agent should be written",
+            "names": ["--output-last-message", "-o"],
+            "valueName": "FILE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Print help (see a summary with '-h')",
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ],
+        "help": "Fork a previous session by id into a new session",
+        "path": ["codex", "exec", "fork"]
+      },
       "codex exec resume": {
         "aliases": [],
         "flags": [
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
           {
             "acceptedValues": [],
             "conflicts": [],
@@ -2042,16 +2185,16 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
             "valueName": "FEATURE"
           },
           {
@@ -2069,14 +2212,6 @@
             "help": "Error out when config.toml contains fields that are not recognized by this version of Codex",
             "names": ["--strict-config"],
             "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
-            "names": ["--disable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -2177,6 +2312,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Review staged, unstaged, and untracked changes",
             "names": ["--uncommitted"],
             "valueName": null
@@ -2193,9 +2336,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -2209,8 +2352,8 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
             "valueName": "FEATURE"
           },
           {
@@ -2220,14 +2363,6 @@
             "help": "Error out when config.toml contains fields that are not recognized by this version of Codex",
             "names": ["--strict-config"],
             "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
-            "names": ["--disable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -2336,17 +2471,17 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Error out when config.toml contains fields that are not recognized by this version of Codex",
-            "names": ["--strict-config"],
-            "valueName": null
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Error out when config.toml contains fields that are not recognized by this version of Codex",
+            "names": ["--strict-config"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -2368,17 +2503,17 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Transport endpoint URL. Supported values: `ws://IP:PORT` (default), `stdio`, `stdio://`",
-            "names": ["--listen"],
-            "valueName": "URL"
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
+            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
-            "names": ["--disable"],
-            "valueName": "FEATURE"
+            "help": "Transport endpoint URL. Supported values: `ws://IP:PORT` (default), `stdio`, `stdio://`",
+            "names": ["--listen"],
+            "valueName": "URL"
           },
           {
             "acceptedValues": [],
@@ -2595,6 +2730,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Fork the most recent session without showing the picker",
             "names": ["--last"],
             "valueName": null
@@ -2611,16 +2754,16 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
             "valueName": "FEATURE"
           },
           {
@@ -2630,14 +2773,6 @@
             "help": "Connect the TUI to a remote app server endpoint. Accepted forms: `ws://host:port`, `wss://host:port`, `unix://`, or `unix://PATH`.",
             "names": ["--remote"],
             "valueName": "ADDR"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
-            "names": ["--disable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -2798,14 +2933,6 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Read the API key from stdin (e.g. `printenv OPENAI_API_KEY | codex login --with-api-key`)",
-            "names": ["--with-api-key"],
-            "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
             "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
             "names": ["--config", "-c"],
             "valueName": "key=value"
@@ -2814,8 +2941,8 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Read the access token from stdin (e.g. `printenv CODEX_ACCESS_TOKEN | codex login --with-access-token`)",
-            "names": ["--with-access-token"],
+            "help": "Read the API key from stdin (e.g. `printenv OPENAI_API_KEY | codex login --with-api-key`)",
+            "names": ["--with-api-key"],
             "valueName": null
           },
           {
@@ -2830,8 +2957,8 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "",
-            "names": ["--device-auth"],
+            "help": "Read the access token from stdin (e.g. `printenv CODEX_ACCESS_TOKEN | codex login --with-access-token`)",
+            "names": ["--with-access-token"],
             "valueName": null
           },
           {
@@ -2841,6 +2968,14 @@
             "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
             "names": ["--disable"],
             "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "",
+            "names": ["--device-auth"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -2994,6 +3129,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "URL for a streamable HTTP MCP server",
             "names": ["--url"],
             "valueName": "URL"
@@ -3010,14 +3153,6 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
-            "valueName": "FEATURE"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
             "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
             "names": ["--disable"],
             "valueName": "FEATURE"
@@ -3029,6 +3164,14 @@
             "help": "Optional OAuth client identifier to use for this MCP server",
             "names": ["--oauth-client-id"],
             "valueName": "CLIENT_ID"
+          },
+          {
+            "acceptedValues": ["auto", "cimd", "dcr"],
+            "conflicts": [],
+            "default": null,
+            "help": "OAuth client-registration strategy for the immediate login only",
+            "names": ["--oauth-client-registration"],
+            "valueName": "AUTO|CIMD|DCR"
           },
           {
             "acceptedValues": [],
@@ -3172,6 +3315,14 @@
             "valueName": "FEATURE"
           },
           {
+            "acceptedValues": ["auto", "cimd", "dcr"],
+            "conflicts": [],
+            "default": null,
+            "help": "OAuth client-registration strategy for this login only",
+            "names": ["--oauth-client-registration"],
+            "valueName": "AUTO|CIMD|DCR"
+          },
+          {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
@@ -3276,17 +3427,17 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Error out when config.toml contains fields that are not recognized by this version of Codex",
-            "names": ["--strict-config"],
-            "valueName": null
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Error out when config.toml contains fields that are not recognized by this version of Codex",
+            "names": ["--strict-config"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3315,6 +3466,85 @@
         ],
         "help": "Start Codex as an MCP server (stdio)",
         "path": ["codex", "mcp-server"]
+      },
+      "codex migrate-rollouts": {
+        "aliases": [],
+        "flags": [
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Publish the migration. Without this flag the command only reports eligible sessions",
+            "names": ["--apply"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Restrict inspection or migration to one or more thread IDs",
+            "names": ["--thread"],
+            "valueName": "THREAD_ID"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Limit aggregate rollout read and write throughput, in MiB per second",
+            "names": ["--max-mib-per-second"],
+            "valueName": "MIB"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Emit the complete per-thread report as JSON",
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Print one line for every inspected rollout",
+            "names": ["--verbose"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Print help (see a summary with '-h')",
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ],
+        "help": "Inspect or migrate legacy local sessions to paginated thread history",
+        "path": ["codex", "migrate-rollouts"]
       },
       "codex plugin": {
         "aliases": [],
@@ -3378,17 +3608,17 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Output install result as JSON",
-            "names": ["--json"],
-            "valueName": null
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
-            "valueName": "FEATURE"
+            "help": "Output install result as JSON",
+            "names": ["--json"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3433,6 +3663,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Output plugin list as JSON",
             "names": ["--json"],
             "valueName": null
@@ -3444,14 +3682,6 @@
             "help": "Include uninstalled marketplace plugins in the JSON output",
             "names": ["--available"],
             "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -3535,6 +3765,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Sparse checkout path for Git marketplace sources. Can be repeated",
             "names": ["--sparse"],
             "valueName": "PATH"
@@ -3543,8 +3781,8 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
             "valueName": "FEATURE"
           },
           {
@@ -3554,14 +3792,6 @@
             "help": "Output add result as JSON",
             "names": ["--json"],
             "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
-            "names": ["--disable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -3739,17 +3969,17 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Output remove result as JSON",
-            "names": ["--json"],
-            "valueName": null
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
-            "valueName": "FEATURE"
+            "help": "Output remove result as JSON",
+            "names": ["--json"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3778,17 +4008,17 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Emit machine-readable JSON",
-            "names": ["--json"],
-            "valueName": null
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Emit machine-readable JSON",
+            "names": ["--json"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3825,17 +4055,17 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Emit machine-readable JSON",
-            "names": ["--json"],
-            "valueName": null
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Emit machine-readable JSON",
+            "names": ["--json"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3872,17 +4102,17 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Emit machine-readable JSON",
-            "names": ["--json"],
-            "valueName": null
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Emit machine-readable JSON",
+            "names": ["--json"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3919,17 +4149,17 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Emit machine-readable JSON",
-            "names": ["--json"],
-            "valueName": null
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Emit machine-readable JSON",
+            "names": ["--json"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3966,6 +4196,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Continue the most recent session without showing the picker",
             "names": ["--last"],
             "valueName": null
@@ -3982,16 +4220,16 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
             "valueName": "FEATURE"
           },
           {
@@ -4001,14 +4239,6 @@
             "help": "Include non-interactive sessions in the resume picker and --last selection",
             "names": ["--include-non-interactive"],
             "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
-            "names": ["--disable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -4177,6 +4407,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Error out when config.toml contains fields that are not recognized by this version of Codex",
             "names": ["--strict-config"],
             "valueName": null
@@ -4185,9 +4423,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
-            "names": ["--config", "-c"],
-            "valueName": "key=value"
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -4209,8 +4447,8 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
             "valueName": "FEATURE"
           },
           {
@@ -4220,14 +4458,6 @@
             "help": "Review the changes introduced by a commit",
             "names": ["--commit"],
             "valueName": "SHA"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
-            "names": ["--disable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -4256,14 +4486,6 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "JSON value from `codex/sandbox-state-meta` to apply directly",
-            "names": ["--sandbox-state-json"],
-            "valueName": "JSON"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
             "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
             "names": ["--config", "-c"],
             "valueName": "key=value"
@@ -4272,9 +4494,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Add a readable root to the supplied sandbox state. Repeat for multiple roots",
-            "names": ["--sandbox-state-readable-root"],
-            "valueName": "SANDBOX_STATE_READABLE_ROOT"
+            "help": "JSON value from `codex/sandbox-state-meta` to apply directly",
+            "names": ["--sandbox-state-json"],
+            "valueName": "JSON"
           },
           {
             "acceptedValues": [],
@@ -4288,9 +4510,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Disable direct network access in the supplied sandbox state",
-            "names": ["--sandbox-state-disable-network"],
-            "valueName": null
+            "help": "Add a readable root to the supplied sandbox state. Repeat for multiple roots",
+            "names": ["--sandbox-state-readable-root"],
+            "valueName": "SANDBOX_STATE_READABLE_ROOT"
           },
           {
             "acceptedValues": [],
@@ -4299,6 +4521,14 @@
             "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
             "names": ["--disable"],
             "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Disable direct network access in the supplied sandbox state",
+            "names": ["--sandbox-state-disable-network"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -4359,6 +4589,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Name of the environment variable containing the bearer token to send to a remote app server websocket",
             "names": ["--remote-auth-token-env"],
             "valueName": "ENV_VAR"
@@ -4367,8 +4605,8 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
             "valueName": "FEATURE"
           },
           {
@@ -4378,14 +4616,6 @@
             "help": "Optional image(s) to attach to the initial prompt",
             "names": ["--image", "-i"],
             "valueName": "FILE"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
-            "names": ["--disable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -4735,6 +4965,11 @@
     {
       "default": false,
       "maturity": "under development",
+      "name": "apply_patch_preserve_line_endings"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
       "name": "apply_patch_streaming_events"
     },
     {
@@ -4756,6 +4991,11 @@
       "default": true,
       "maturity": "stable",
       "name": "auth_elicitation"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "background_paginated_rollout_migration"
     },
     {
       "default": true,
@@ -4784,13 +5024,18 @@
     },
     {
       "default": false,
-      "maturity": "under development",
+      "maturity": "removed",
       "name": "code_mode_buffered_exec"
     },
     {
       "default": true,
       "maturity": "stable",
       "name": "code_mode_host"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "code_mode_interrupt"
     },
     {
       "default": false,
@@ -4901,6 +5146,21 @@
       "default": true,
       "maturity": "stable",
       "name": "guardian_approval"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "guardian_enhanced_node_repl_transcripts"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "guardian_node_repl_transcript_images"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "guardian_reuse_parent_compaction"
     },
     {
       "default": false,
@@ -5025,6 +5285,11 @@
     {
       "default": false,
       "maturity": "under development",
+      "name": "psp"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
       "name": "realtime_conversation"
     },
     {
@@ -5081,6 +5346,11 @@
       "default": false,
       "maturity": "removed",
       "name": "responses_websockets_v2"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "retain_client_developer_messages"
     },
     {
       "default": false,
@@ -5193,6 +5463,11 @@
       "name": "unavailable_dummy_tools"
     },
     {
+      "default": true,
+      "maturity": "stable",
+      "name": "unbounded_connection_retries"
+    },
+    {
       "default": false,
       "maturity": "removed",
       "name": "undo"
@@ -5206,6 +5481,11 @@
       "default": false,
       "maturity": "under development",
       "name": "unified_exec_zsh_fork"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "unified_image_budget"
     },
     {
       "default": false,
@@ -5299,7 +5579,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.147.0",
+    "codexVersion": "0.148.0",
     "extractorSchema": 1
   }
 }
