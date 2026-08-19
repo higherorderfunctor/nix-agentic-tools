@@ -3,7 +3,7 @@
 # git-hooks tools — the real linters are covered by git-hooks + CI, so this
 # check stays fast and sandbox-safe. See
 # docs/plans/prek-posttooluse-hook-feedback-channel.md.
-# cspell:ignore addgone missingfails wibble  (test-scaffold tokens, not project vocabulary)
+# cspell:ignore addgone missingfails prekhome wibble  (test-scaffold tokens, not project vocabulary)
 {pkgs, ...}:
 pkgs.runCommandLocal "validate-at-stop-check" {
   nativeBuildInputs = [pkgs.coreutils pkgs.git pkgs.python3 pkgs.shellcheck];
@@ -17,22 +17,30 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   git config --global user.email a@b.c; git config --global user.name a
   git config --global init.defaultBranch main
 
-  # --- stub prek: `prek run <id> --files ...` ---
-  #   id == treefmt        -> strip trailing WS on the given files, exit 0
+  # --- stub prek: `prek run <id> [--config <cfg>] --files ...` ---
+  #   id == treefmt         -> strip trailing WS on the given files, exit 0
   #   id == cspell-BAD      -> print a finding, exit 1
   #   id == missingfails    -> fail if any given file does not exist on disk
+  #   id == echo-env        -> print the resolved config + PREK_HOME, exit 1
   #   anything else         -> exit 0
+  # The stub asserts the argv SHAPE by construction: `--config` is parsed
+  # positionally, so dropping the flag from validate-at-stop would leave `cfg`
+  # empty and fail the echo-env probe.
   mkdir -p stub
   cat > stub/prek <<'STUB'
   #!${pkgs.bash}/bin/bash
   set -euETo pipefail
   shopt -s inherit_errexit 2>/dev/null || :
   [ "$1" = run ] || exit 0
-  id="$2"; shift 2; [ "$1" = --files ] && shift
+  id="$2"; shift 2
+  cfg=""
+  if [ "''${1:-}" = --config ]; then cfg="$2"; shift 2; fi
+  [ "''${1:-}" = --files ] && shift
   case "$id" in
     treefmt) for f in "$@"; do sed -i 's/[[:space:]]\{1,\}$//' "$f"; done; exit 0 ;;
     cspell-BAD) echo "cspell: unknown word 'wibble' in $*"; exit 1 ;;
     missingfails) for f in "$@"; do [ -e "$f" ] || { echo "no such file: $f"; exit 1; }; done; exit 0 ;;
+    echo-env) echo "CFG=$cfg"; echo "PREKHOME=''${PREK_HOME:-}"; exit 1 ;;
     *) exit 0 ;;
   esac
   STUB
@@ -41,9 +49,18 @@ pkgs.runCommandLocal "validate-at-stop-check" {
 
   cp "$src" validate.sh; chmod +x validate.sh
   shellcheck -x validate.sh   # lint gate (matches the -x pre-commit standard)
-  repo="$PWD/r"; mkdir -p "$repo"; ( cd "$repo"; git init -q; echo base > README; git add .; git commit -qm base )
+  repo="$PWD/r"; mkdir -p "$repo"
+  ( cd "$repo"; git init -q; echo base > README; git add .; git commit -qm base
+    echo '.pre-commit-config.yaml' >> .git/info/exclude )
+  # Model the real config faithfully: a gitignored devenv `files.*` artifact,
+  # UNTRACKED in the primary checkout. Tracking it in the fixture would make
+  # `git worktree add` check a copy out into the linked worktree and quietly
+  # defeat T6. `git clean -fdx` deletes it, so re-materialize after each reset —
+  # which is exactly what a devenv shell entry does for real.
+  make_config() { echo 'repos: []' > "$repo/.pre-commit-config.yaml"; }
+  make_config
   payload() { printf '{"cwd":"%s","stop_hook_active":%s,"hook_event_name":"Stop"}' "$repo" "$1"; }
-  reset() { ( cd "$repo"; git reset -q --hard; git clean -qfdx ); }
+  reset() { ( cd "$repo"; git reset -q --hard; git clean -qfdx ); make_config; }
 
   pass=0; fail=0
   ok() { if eval "$1"; then pass=$((pass+1)); else echo "FAIL: $2"; fail=$((fail+1)); fi; }
@@ -88,6 +105,34 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   out="$(payload false | JUDGMENT_HOOKS_OVERRIDE=missingfails bash validate.sh)"; rc=$?
   ok '[ "$rc" -eq 0 ]' "T5 rc"
   ok '! grep -q "\"decision\"" <<<"$out"' "T5 deleted file excluded"
+
+  # T6 session cwd is a LINKED WORKTREE that has no config of its own -> the
+  # config resolves from the primary checkout (shared common git dir) while
+  # PREK_HOME stays under the committing worktree. This is the launch-from-main
+  # topology: devenv is entered in the primary checkout only.
+  reset
+  wt="$PWD/wt"; ( cd "$repo"; git worktree add -q -b feature "$wt" )
+  ok '[ ! -e "$wt/.pre-commit-config.yaml" ]' "T6 fixture worktree has no config of its own"
+  printf 'wibble\n' > "$wt/w.txt"
+  wt_payload='{"cwd":"'"$wt"'","stop_hook_active":false,"hook_event_name":"Stop"}'
+  out="$(printf '%s' "$wt_payload" | JUDGMENT_HOOKS_OVERRIDE=echo-env bash validate.sh)"; rc=$?
+  ok '[ "$rc" -eq 0 ]' "T6 rc"
+  ok 'grep -q "CFG=$repo/.pre-commit-config.yaml" <<<"$out"' "T6 config from primary checkout"
+  ok 'grep -q "PREKHOME=$wt/.devenv/state/prek" <<<"$out"' "T6 PREK_HOME under committing worktree"
+
+  # T7 primary checkout never bootstrapped -> advise, never block. Blocking here
+  # would be unfixable from inside the turn, and the bare `prek run` it replaces
+  # exits 2 with a config-not-found error the judgment loop reads as a finding.
+  # An ordinary repo with no config, NOT a `git init --bare` one: a bare repo
+  # never reaches this code at all, it exits at the work-tree gate.
+  no_config="$PWD/no_config"; mkdir -p "$no_config"
+  ( cd "$no_config"; git init -q; echo base > README; git add .; git commit -qm base; printf 'wibble\n' > b.txt )
+  out="$(printf '{"cwd":"%s","stop_hook_active":false,"hook_event_name":"Stop"}' "$no_config" \
+    | JUDGMENT_HOOKS_OVERRIDE=cspell-BAD bash validate.sh)"; rc=$?
+  ok '[ "$rc" -eq 0 ]' "T7 rc"
+  ok '! grep -q "\"decision\"" <<<"$out"' "T7 no block on missing config"
+  ok 'grep -q systemMessage <<<"$out"' "T7 advisory"
+  ok 'grep -q "devenv shell true" <<<"$out"' "T7 advisory names the fix"
 
   echo "validate-at-stop: $pass passed, $fail failed"
   [ "$fail" -eq 0 ]
