@@ -1,0 +1,27 @@
+{
+  "description": "Iterative agent loop working toward a user-defined goal until verified complete or iteration budget exhausted. Suits a single verifiable outcome (e.g. 'make the test suite pass') where the agent self-declares success backed by concrete evidence; there is no external progress state, so each iteration re-derives progress from the repo itself.",
+  "inputs": {
+    "max_iterations": "string",
+    "prompt": "prompt"
+  },
+  "name": "goal",
+  "steps": [
+    {
+      "id": "goal-loop",
+      "maxIterations": 200,
+      "onMaxIterations": "pause",
+      "steps": [
+        {
+          "agent": "wf-coder",
+          "id": "work",
+          "prompt": "## Objective\n\nWork autonomously toward this goal using all available tools:\n\n<goal>\n{{prompt}}\n</goal>\n\n## Work Ethic\n\n- Make maximum progress each iteration regardless of how much work remains.\n- Partial progress is ALWAYS better than no progress. Bias for action.\n- Start the hardest remaining sub-task NOW, even if you can't finish it this iteration.\n\n## Guardrails\n\nThe ONLY valid reasons to stop without completing are:\n- A hard environmental blocker you cannot work around (missing credentials, unavailable service, permission denied)\n- A required irreversible action awaiting human approval\n\nDifficulty, scope, or time estimates are not valid reasons to stop.\n\n## Completion Standard\n\nYou may ONLY call send_message with severity 'success' when:\n1. Each success criterion has been individually verified by concrete tool output (tests, file reads, command results)\n2. Your summary cites the specific evidence satisfying each criterion\n3. No criterion relies on assumption, belief, or narrative confidence alone\n4. If a verification path is blocked after exhausting alternatives, you MAY complete documenting: what was accomplished, what is blocked, and evidence of the blocker\n\nIf ANY criterion lacks verifiable evidence, do NOT signal completion. Continue working.\n\nWhen all criteria are verified, call send_message with severity 'success' and an evidence-based summary. If blocked, call send_message with severity 'error' explaining the blocker.\n\nBegin working now.",
+          "type": "step"
+        }
+      ],
+      "stopCondition": {
+        "completionSignal": "success"
+      },
+      "type": "repeat"
+    }
+  ]
+}

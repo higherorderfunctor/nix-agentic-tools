@@ -1,0 +1,38 @@
+{
+  "description": "Opens a pull request from a branch, then watches it and responds to incoming feedback until the PR reaches a terminal state.",
+  "inputs": {
+    "branch": "string"
+  },
+  "name": "publish-pr",
+  "steps": [
+    {
+      "agent": "wf-pr-submitter",
+      "id": "submit",
+      "prompt": "Open a PR from {{branch}}. Write the URL to pr.json.",
+      "type": "step"
+    },
+    {
+      "id": "pr-loop",
+      "maxIterations": 200,
+      "onMaxIterations": "pause",
+      "steps": [
+        {
+          "config": {
+            "prRef": "pr.json"
+          },
+          "handler": "github-pr",
+          "id": "wait",
+          "type": "watch"
+        },
+        {
+          "agent": "wf-pr-responder",
+          "id": "respond",
+          "prompt": "Respond to the PR feedback shown below. Write your status to respond.json. If the watch output shows state MERGED or CLOSED, the PR is done: do any final wrap-up and finish with send_message severity success.\n\nPR watch output:\n{{wait.output}}",
+          "type": "step"
+        }
+      ],
+      "stopWhen": "wait.terminal",
+      "type": "repeat"
+    }
+  ]
+}
