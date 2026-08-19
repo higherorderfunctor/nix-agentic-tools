@@ -1,7 +1,7 @@
 # bd (beads) — tool reference
 
-> **Last verified:** 2026-08-16 against the repository package pin at stable
-> Beads v1.2.2, nixpkgs Beads 1.0.3 and Dolt 2.2.4, plus the upstream and
+> **Last verified:** 2026-08-18 against the repository package pin at stable
+> Beads v1.2.2, nixpkgs Beads 1.0.3 and Dolt 2.3.0, plus the upstream and
 > `numtide/llm-agents.nix` derivations. Companion documents:
 > `dolt-git-remotes.md` (remote/sync mechanics) and `ecosystem.md` (integrations
 > and prior art). GitHub issue
@@ -11,15 +11,15 @@
 > **Provenance tags.** `[measured @1.1.0]` — observed by running the real `bd`
 > v1.1.0 binary during a hands-on evaluation (2026-07).
 > `[measured package @1.2.2]` — asserted by the Nix package's build or install
-> checks. `[measured package session @1.2.2/2.2.4]` — observed directly against
+> checks. `[measured package session @1.2.2/2.3.0]` — observed directly against
 > the exact packaged binary outside its install check.
-> `[measured contract @1.2.2/2.2.4]` — asserted by the disposable black-box
-> `beads-contracts` flake check. `[measured server probe @1.2.2/2.2.4]` —
+> `[measured contract @1.2.2/2.3.0]` — asserted by the disposable black-box
+> `beads-contracts` flake check. `[measured server probe @1.2.2/2.3.0]` —
 > asserted by `checks/beads-server-contracts.sh`, a dynamic-port disposable
 > probe run outside the Nix build sandbox.
-> `[measured recovery probe @1.2.2/2.2.4]` — asserted by
+> `[measured recovery probe @1.2.2/2.3.0]` — asserted by
 > `checks/beads-recovery-contracts.sh`, the repeated serialized
-> write/publish/cold-restore probe. `[measured lifecycle check @1.2.2/2.2.4]` —
+> write/publish/cold-restore probe. `[measured lifecycle check @1.2.2/2.3.0]` —
 > asserted by the isolated `beads-lifecycle` flake check against the generated
 > devenv lifecycle. `[measured session @1.2.2/2.2.3]` — retained in #991's
 > timestamped investigation record, but not asserted by either durable probe.
@@ -30,7 +30,7 @@
 > re-verify against the pinned version before building on a load-bearing one.
 > Claim-local durable-probe tags naming 2.2.3 preserve the first measurement;
 > the current contract, server, and recovery probes requalified those surfaces
-> against 2.2.4. Session and transaction-spike tags remain 2.2.3-only evidence.
+> against 2.3.0. Session and transaction-spike tags remain 2.2.3-only evidence.
 
 ## What beads is
 
@@ -89,7 +89,7 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
 - **dolt**: a separate binary, required for the server modes.
   `bd dolt push/pull` may use the CLI or Dolt SQL procedures; an external server
   whose data directory is not visible to Beads uses `CALL DOLT_PUSH` /
-  `CALL DOLT_PULL`. nixpkgs carries Dolt 2.2.4 at this repo's 2026-08 pin
+  `CALL DOLT_PULL`. nixpkgs carries Dolt 2.3.0 at this repo's 2026-08 pin
   (Apache-2.0). Dolt's `metrics.disabled` default is false.
   `DOLT_DISABLE_EVENT_FLUSH=1` prevents queued events from being sent but still
   permits local event files; complete collection disablement is the stateful
@@ -156,7 +156,7 @@ covers equal and different source/ledger URLs, linked-worktree lock contention,
 foreign-port refusal, safe re-entry, cold existing-ledger bootstrap, startup and
 interval publication contents, remote divergence, dirty and committed invalid
 refusal, public entry points, and unchanged source/global configuration.
-`[measured lifecycle check @1.2.2/2.2.4]`
+`[measured lifecycle check @1.2.2/2.3.0]`
 
 **Unattended bump risk.** The update target proves that a new stable release
 builds and preserves the package contract, but it does not open or migrate an
@@ -274,7 +274,7 @@ The remaining disable surface is:
   prerelease briefly included Kiro, but v1.2.2 is a recovery release based on
   the tested 1.1 line and omits that 1.2.x-only recipe. The exact packaged
   binary's `bd setup --list` output is the contract; version-scope any claim
-  about setup targets. `[measured package session @1.2.2/2.2.4]`
+  about setup targets. `[measured package session @1.2.2/2.3.0]`
 - Git hooks, when wanted at all, are thin shims calling `bd hooks run <name>`; a
   declarative hook manager can invoke that directly and skip bd's installer.
   `[upstream]`
@@ -342,7 +342,7 @@ post-restore write, forward republish, and third cold restore. A terminal
 negative control proved that dirty incoming state refuses the next mutation
 without executing it or changing HEAD/history. Pull, merge, rebase, conflict
 resolution, repair, and force-push are outside the qualified protocol.
-`[measured recovery probe @1.2.2/2.2.3; requalified recovery probe @1.2.2/2.2.4; upstream source @Beads 1.2.2]`
+`[measured recovery probe @1.2.2/2.2.3; requalified recovery probe @1.2.2/2.3.0; upstream source @Beads 1.2.2]`
 
 A bounded transaction-native experiment does not replace that policy. Global
 `behavior.dolt_transaction_commit=true` broke fresh migration 0040 and changed

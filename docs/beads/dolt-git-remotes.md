@@ -1,6 +1,6 @@
 # Dolt remotes, git-backed sync, and encrypted-remote options
 
-> **Last verified:** 2026-08-16 against packaged Beads 1.2.2 and Dolt 2.2.4,
+> **Last verified:** 2026-08-18 against packaged Beads 1.2.2 and Dolt 2.3.0,
 > plus the upstream sources listed at the end. The disposable black-box contract
 > is `checks/beads-contracts.nix`; the lifecycle and recovery probes are
 > `checks/beads-server-contracts.sh` and `checks/beads-recovery-contracts.sh`.
@@ -8,7 +8,7 @@
 > `bd-reference.md` (the tool itself) and `ecosystem.md` (integrations).
 > Remote-provider and encryption qualification remains #997. Claim-local 2.2.3
 > tags preserve the first measurement; the durable contract, server, and
-> recovery surfaces were requalified against 2.2.4. Session and transaction
+> recovery surfaces were requalified against 2.3.0. Session and transaction
 > spike evidence remains scoped to 2.2.3.
 
 ## Problem framing — threat model before tooling
@@ -254,17 +254,17 @@ published recovery artifact is the Dolt HEAD, not another session's live working
 set.
 `[upstream source @Beads 1.2.2; measured recovery probe @Beads 1.2.2 / Dolt 2.2.3]`
 
-Pinned Dolt 2.2.3 and 2.2.4 have one deterministic process-state defect in the
-initial publication window. Initialization against a Git remote with an ordinary
-seed branch but no `refs/dolt/data` attempts `DOLT_CLONE`; the clone registers a
-process-global Git-remote chunk-store entry, then fails because the remote has
-no Dolt data. Clone cleanup deletes the database directory and its cache repo
-without evicting that entry. The same server's first `CALL DOLT_PUSH` reuses the
-stale entry and fails with `fatal: not a git repository` while leaving the
-ledger unchanged. This is Dolt cache invalidation, not a Beads routing defect;
-external-server Beads correctly selects SQL because it cannot see a CLI database
-directory. The file-and-line diagnosis and hermetic reproduction are retained in
-issue #1025.
+Pinned Dolt 2.2.3, 2.2.4, and 2.3.0 have one deterministic process-state defect
+in the initial publication window. Initialization against a Git remote with an
+ordinary seed branch but no `refs/dolt/data` attempts `DOLT_CLONE`; the clone
+registers a process-global Git-remote chunk-store entry, then fails because the
+remote has no Dolt data. Clone cleanup deletes the database directory and its
+cache repo without evicting that entry. The same server's first `CALL DOLT_PUSH`
+reuses the stale entry and fails with `fatal: not a git repository` while
+leaving the ledger unchanged. This is Dolt cache invalidation, not a Beads
+routing defect; external-server Beads correctly selects SQL because it cannot
+see a CLI database directory. The file-and-line diagnosis and hermetic
+reproduction are retained in issue #1025.
 
 The settled module pusher derives the database name from `.beads/metadata.json`,
 acquires the same repository lock used by mutations, requires a clean valid
@@ -277,7 +277,7 @@ SQL daemon from opening the same database concurrently; the fresh child also
 starts without the failed-clone cache entry. No version override, Dolt patch,
 cache-path glue, or manual operator/agent push is required. A future upstream
 fix changes the discrimination result, not the module-pusher ownership decision.
-`[measured server probe @Beads 1.2.2 / Dolt 2.2.3; requalified @Beads 1.2.2 / Dolt 2.2.4]`
+`[measured server probe @Beads 1.2.2 / Dolt 2.2.3; requalified @Beads 1.2.2 / Dolt 2.3.0]`
 
 Publication is module-explicit. Beads-side auto-push and export stay inert, so
 agents and operators never publish imperatively. Remote divergence, dirty state,
@@ -300,7 +300,7 @@ bootstrap, startup and interval drain contents, equal and different
 source-origin topology, lock contention, dirty and committed-invalid refusal,
 foreign-port ownership, and divergence refusal. #993 may add agent-runtime
 wiring but may not weaken this boundary.
-`[measured recovery probe @Beads 1.2.2 / Dolt 2.2.3; measured lifecycle check @Beads 1.2.2 / Dolt 2.2.4]`
+`[measured recovery probe @Beads 1.2.2 / Dolt 2.2.3; requalified recovery probe and measured lifecycle check @Beads 1.2.2 / Dolt 2.3.0]`
 
 ## Encrypted-remote options
 

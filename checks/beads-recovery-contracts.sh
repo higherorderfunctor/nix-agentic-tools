@@ -730,7 +730,7 @@ dolt_version="$(
     timeout --kill-after=5 --signal=TERM 120 "$dolt_bin" version | sed -n '1p'
 )"
 [[ $bd_version == "bd version 1.2.2 (dev)" ]] || fail "unexpected bd: $bd_version"
-[[ $dolt_version == "dolt version 2.2.4" ]] || fail "unexpected Dolt: $dolt_version"
+[[ $dolt_version == "dolt version 2.3.0" ]] || fail "unexpected Dolt: $dolt_version"
 
 printf 'bd=%s\n' "$bd_version"
 printf 'dolt=%s\n' "$dolt_version"
