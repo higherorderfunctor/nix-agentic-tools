@@ -7,7 +7,7 @@ applyTo: "dev/instructions.nix,lib/worktree-session.nix"
 
 ## Worktree-session runner
 
-> **Last verified:** 2026-08-19 (commit pending — first version, landing with
+> **Last verified:** 2026-08-18 (commit pending — first version, landing with
 > `lib/worktree-session.nix` and the `destinations` contract in
 > `dev/instructions.nix`. Written for the sandbox-stack pivot's launch model
 > (#1100/#1105): devenv shell in the primary checkout, agent cwd in a linked
@@ -45,11 +45,22 @@ candidates = <primary>/.devenv/state/files.json .managedFiles      (devenv)
 copied     = the candidates `git check-ignore` reports as ignored
 ```
 
-Both halves propagate on their own: a new `files.*` entry appears in
-`files.json` on the next shell entry, and a new fragment category flows into
-`destinations` because that list is derived from the same `claudeFiles` /
-`copilotFiles` / `gen.kiroFiles` attrsets the instruction derivations are built
-from. There is no third list to keep in sync.
+Both halves propagate without a hand-kept list, but **not on the same clock, and
+the difference is the caveat worth knowing.** A new `files.*` entry appears in
+`files.json` on the primary's next shell entry, so the runner picks it up at
+RUNTIME. `destinations` is derived from the same `claudeFiles` / `copilotFiles`
+/ `gen.kiroFiles` attrsets the instruction derivations are built from — there is
+no third list to keep in sync — but it is **baked into the runner at build
+time**. An installed runner older than the fragment registry therefore silently
+omits every projection added since, which is exactly the silent-missing-config
+failure this tool exists to close.
+
+That is why `prep` and `run` scan for it: any gitignored file sitting in a
+directory a projection lands in, but absent from the baked list, produces a
+WARNING naming the strays and telling you to rebuild. The directories scanned
+are derived from the baked list itself (the repository root excepted, which
+holds unrelated ignored files), never hardcoded. It warns rather than fails — a
+stale runner still works for everything it does know about.
 
 **The `check-ignore` filter is load-bearing, not an optimization.** Some
 generated projections are TRACKED — `AGENTS.md`,
@@ -61,12 +72,22 @@ spontaneous dirt in `git status` that the session did not create. Filtering by
 ignore-status also means a projection that later flips tracked↔ignored needs no
 edit anywhere.
 
-Measured on 2026-08-19: all 123 `managedFiles` entries are gitignored symlinks
-into the store (some to DIRECTORIES — the materialized skill trees), and of the
-75 projection destinations exactly 48 are gitignored, for 171 copied paths.
-Entries are copied with `cp -PR` after unlinking the destination: `-P` copies
-the link rather than dereferencing a read-only store tree into the worktree, and
-the unlink stops a re-prep from writing THROUGH a symlink into the store.
+Measured on 2026-08-18 at the commit that introduced this file: all 123
+`managedFiles` entries are gitignored symlinks into the store, 9 of them to
+DIRECTORIES (the materialized skill trees), and of the 78 projection
+destinations exactly 50 are gitignored — 173 copied paths. Re-derive rather than
+trust these; `prep-list --json` reports all three. Entries are copied with
+`cp -PR` after unlinking the destination: `-P` copies the link rather than
+dereferencing a read-only store tree into the worktree, and the unlink stops a
+re-prep from writing THROUGH a symlink into the store.
+
+**Re-prep prunes.** The previous run's contract is recorded in the worktree's
+private git admin dir (`<common>/worktrees/<slug>/`), so it is removed with the
+worktree and never visible to `git status`; anything in it that has left the
+contract is deleted. Without that, a fragment category removed upstream leaves
+its `.claude/rules/<x>.md` behind in every reused worktree and the agent goes on
+loading a rule the repository retired — worse than a missing one, by this repo's
+own doctrine. Pruning only ever touches paths this tool previously wrote.
 
 `ai-worktree-session prep-list` prints the resolved contract (one
 repository-relative path per line; `--json` adds per-source provenance). That
@@ -103,12 +124,18 @@ at. The runner invokes the guard too, so a mis-wired wrapper is still caught.
 ### Cleanup only when it is provably lossless
 
 `git worktree remove` is the safety mechanism rather than a formality: it
-deletes ignored files — so the 171 prepped artifacts never block it — and
-REFUSES a tree holding modified or untracked files. On top of that the runner
-holds on to a worktree whose command exited non-zero, or whose HEAD carries
-commits reachable from no remote (`rev-list --count HEAD --not --remotes`).
-Anything held is named on stderr with the exact command to remove it.
+deletes ignored files — so the prepped artifacts never block it — and REFUSES a
+tree holding modified or untracked files. On top of that the runner holds on to
+a worktree whose command exited non-zero, or whose HEAD carries commits
+reachable from no remote (`rev-list --count HEAD --not --remotes`). Anything
+held is named on stderr with the exact command to remove it.
 
 The branch is never deleted. Teardown of the branch stays where the git-workflow
 doctrine puts it — after the PR merges — because a squash-merged branch needs
 `git branch -D`, and guessing that from a session exit would destroy work.
+
+**These holds are sized for long interactive sessions and are a known gap for
+short high-churn ones** — under a bounded non-interactive model, holding every
+failed run accumulates worktrees and branches that nothing sweeps. Retention
+policy is issue #1125; do not quietly change the holds here without settling it
+there.

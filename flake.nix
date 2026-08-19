@@ -342,8 +342,8 @@
         # command wraps the runner, while #1103's sandbox profile wrappers
         # call the guard as their first act without wanting the runner in
         # their closure.
-        ai-worktree-session = worktreeSession.runner;
         ai-workspace-guard = worktreeSession.guard;
+        ai-worktree-session = worktreeSession.runner;
       });
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)

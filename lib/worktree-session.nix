@@ -19,9 +19,11 @@
 #              u dev/instructions.nix `destinations`                (projections)
 #   copied     = the candidates `git check-ignore` reports as ignored
 #
-# Both sources propagate on their own — a new `files.*` entry or a new fragment
-# category shows up without editing anything here. The check-ignore filter is
-# what makes copying safe: TRACKED projections (AGENTS.md,
+# Both sources propagate without a hand-kept list, but on different clocks: a
+# new `files.*` entry is picked up at RUNTIME from files.json, while a new
+# fragment category reaches `projections` only through a REBUILD of this
+# derivation. warn_if_stale exists because of that asymmetry. The check-ignore
+# filter is what makes copying safe: TRACKED projections (AGENTS.md,
 # `.github/copilot-instructions.md`, `.github/instructions/*`, CONTRIBUTING.md,
 # README.md) arrive with the checkout and must NOT be overwritten from the
 # primary, or a dirty primary would leak uncommitted edits into every worktree.
@@ -41,14 +43,27 @@
   shellStrict = import ../config/shell-strict.nix;
 
   # Absolute store paths rather than `runtimeInputs`. writeShellApplication
-  # renders runtimeInputs as `export PATH="…:$PATH"`, and the runner launches
-  # an interactive agent session that would inherit it — pinning a git
-  # different from the one the operator's shell provides, under a tool whose
-  # whole job is running git workflows. An empty runtimeInputs emits no PATH
-  # line at all, so the child sees the environment the operator launched with.
-  git = "${pkgs.git}/bin/git";
-  jq = "${pkgs.jq}/bin/jq";
+  # renders a non-empty runtimeInputs as `export PATH="<store paths>:$PATH"`,
+  # and the runner launches an interactive agent session that would inherit it
+  # — pinning a git different from the one the operator's shell provides, under
+  # a tool whose whole job is running git workflows. With runtimeInputs empty
+  # it emits `export PATH="$PATH"` instead: a no-op for the child's PATH, which
+  # is the point, though under `nounset` it does mean a PATH-less invocation
+  # dies on that line rather than proceeding. Failing there is the correct
+  # outcome — every tool this script needs is referenced by absolute store
+  # path, but the profile binary it launches is resolved from PATH.
   cu = "${pkgs.coreutils}/bin";
+  jq = "${pkgs.jq}/bin/jq";
+
+  # git, with the three environment variables that would otherwise decide the
+  # answer stripped. This is load-bearing for the guard, not hygiene:
+  # `rev-parse --git-dir` reports whatever `$GIT_DIR` names rather than what
+  # `-C <dir>` names, so with `GIT_DIR=<primary>/.git/worktrees/<slug>` exported
+  # the guard answered "linked worktree" while cwd was the PRIMARY CHECKOUT and
+  # exited 0 — measured 2026-08-18. Git hooks run with GIT_DIR exported, so a
+  # launch chain passing through one is a real vector, and the same override
+  # would skew the runner's worktrees_root onto the wrong repository.
+  git = "${cu}/env -u GIT_DIR -u GIT_COMMON_DIR -u GIT_WORK_TREE ${pkgs.git}/bin/git";
 
   mkApp = name: text:
     pkgs.writeShellApplication {
@@ -98,10 +113,8 @@
         'checkout, inside a bare repository, or not in a git working tree at all.' \
         "" \
         'Intended as the first line of a sandbox profile wrapper whose bind' \
-        "policy makes \$PWD writable." >&2
+        "policy makes \$PWD writable."
     }
-
-    [ "$#" -le 1 ] || die "expected at most one DIR argument"
 
     dir="$PWD"
     case "''${1-}" in
@@ -109,10 +122,16 @@
         usage
         exit 0
         ;;
+      # `--` ends option parsing, so a directory whose name starts with `-`
+      # stays reachable.
+      --)
+        shift
+        ;;
       -*) die "unknown option: $1" ;;
-      ?*) dir="$1" ;;
       *) ;;
     esac
+    [ "$#" -le 1 ] || die "expected at most one DIR argument"
+    [ "$#" -eq 0 ] || dir="$1"
 
     if ! git_dir="$(${git} -C "$dir" rev-parse --path-format=absolute --git-dir 2>/dev/null)"; then
       die "refusing to launch: '$dir' is not inside a git working tree. A workspace profile rw-binds \$PWD; it must be a linked worktree."
@@ -232,6 +251,13 @@
       [ -f "$files_json" ] ||
         die "$files_json is missing. It is written by a devenv shell entry in the primary checkout, which is the only thing that materializes the files.* artifact set. Run 'devenv shell true' in $primary and retry."
 
+      # Three separate checks so each diagnostic names the actual defect. One
+      # combined `jq -e` would report every malformed-JSON failure as the
+      # newline case, which is the rarest of the three.
+      ${jq} -e . "$files_json" > /dev/null 2>&1 ||
+        die "$files_json is not valid JSON."
+      ${jq} -e 'has("managedFiles") and (.managedFiles | type == "array")' "$files_json" > /dev/null ||
+        die "$files_json has no .managedFiles array."
       # Paths are handed to git one per line, so an embedded newline would
       # silently split into two bogus paths. Reject rather than mis-copy. (No
       # current entry contains one; the baked PROJECTIONS cannot.)
@@ -248,8 +274,11 @@
       # `check-ignore --stdin` prints only the ignored inputs and exits 1 when
       # none matched — an ordinary outcome, not a failure — so exit 1 is
       # accepted and anything above it is not.
+      # -c core.quotePath=false: with the default on, git C-quotes any path
+      # holding a non-ASCII byte, and the quoted form would round-trip as a
+      # path that does not exist.
       set +e
-      out="$(printf '%s\n' "$candidates" | ${git} -C "$primary" check-ignore --stdin)"
+      out="$(printf '%s\n' "$candidates" | ${git} -C "$primary" -c core.quotePath=false check-ignore --stdin)"
       rc=$?
       set -e
       [ "$rc" -le 1 ] || die "git check-ignore failed (exit $rc) in $primary"
@@ -274,6 +303,67 @@
         die "$target IS the primary checkout — prep targets linked worktrees only."
     }
 
+    # Every prep source must exist in the primary checkout. Split out of
+    # do_prep and called BEFORE a worktree is created, because `die` bypasses
+    # cleanup: failing after `git worktree add` would strand the worktree and
+    # the branch, and the obvious retry then fails with "already exists".
+    assert_sources_present() {
+      local rel
+      local -a missing=()
+      while IFS= read -r rel; do
+        [ -e "$primary/$rel" ] || [ -L "$primary/$rel" ] || missing+=("$rel")
+      done <<< "$prep_paths"
+
+      [ "''${#missing[@]}" -gt 0 ] || return 0
+
+      note "the following prep sources are missing from $primary:"
+      printf '  %s\n' "''${missing[@]}" >&2
+      if [ "$allow_missing" -eq 0 ]; then
+        die "refusing to prep an incomplete worktree — an agent launched there would silently lose that config. Regenerate in the primary checkout ('devenv shell true', then 'devenv tasks run --mode before generate:all'), or pass --allow-missing."
+      fi
+      note "continuing anyway (--allow-missing)"
+    }
+
+    # Warn when the primary holds generated projections this binary does not
+    # know about. PROJECTIONS is baked at build time, so an installed runner
+    # older than the fragment registry would silently omit every rule added
+    # since — the exact silent-missing-config failure this tool exists to
+    # close, and invisible without a check.
+    #
+    # The directories to scan are derived from PROJECTIONS itself, never
+    # hardcoded: any directory a projection lands in (the repository root
+    # excepted, which holds unrelated ignored files) is wholly generator-owned.
+    # Only IGNORED strays are reported; a tracked extra is not this tool's
+    # business. A warning, not an error — a stale runner still works for
+    # everything it does know about.
+    warn_if_stale() {
+      local rel dir entry
+      local -A known=() dirs=()
+      local -a strays=()
+
+      for rel in "''${PROJECTIONS[@]}"; do
+        known["$rel"]=1
+        dir="$(${cu}/dirname "$rel")"
+        [ "$dir" = "." ] || dirs["$dir"]=1
+      done
+
+      for dir in "''${!dirs[@]}"; do
+        [ -d "$primary/$dir" ] || continue
+        for entry in "$primary/$dir"/*; do
+          [ -e "$entry" ] || continue
+          rel="$dir/$(${cu}/basename "$entry")"
+          [ -z "''${known[$rel]-}" ] || continue
+          ${git} -C "$primary" check-ignore -q "$rel" || continue
+          strays+=("$rel")
+        done
+      done
+
+      [ "''${#strays[@]}" -gt 0 ] || return 0
+      note "WARNING: $primary holds generated projections this ai-worktree-session does not know about:"
+      printf '  %s\n' "''${strays[@]}" >&2
+      note "they will NOT be prepped. Rebuild the runner (nix build .#ai-worktree-session) so its baked projection list matches the fragment registry."
+    }
+
     # Copy the resolved contract from the primary checkout into $1.
     #
     # Entries are copied one at a time with `cp -PR`: today every files.json
@@ -282,22 +372,37 @@
     # dereferencing a read-only store tree into the worktree. -R covers a real
     # directory should one ever appear. The destination is unlinked first so a
     # re-prep replaces a symlink instead of writing THROUGH it into the store.
+    #
+    # Re-prep PRUNES. The previous run's contract is recorded in the worktree's
+    # private git admin directory (so it is removed with the worktree and never
+    # visible to git status), and anything in it that has left the contract is
+    # deleted. Without this, a fragment category removed upstream leaves its
+    # `.claude/rules/<x>.md` behind in every reused worktree and the agent goes
+    # on loading a rule the repository retired — worse than a missing one.
+    # Pruning only ever touches paths this tool previously wrote.
     do_prep() {
-      local target="$1" rel src dst
-      local -a missing=()
+      local target="$1" rel src dst manifest
+      manifest="$(${git} -C "$target" rev-parse --path-format=absolute --git-dir)/ai-worktree-session-prep.list"
 
-      while IFS= read -r rel; do
-        src="$primary/$rel"
-        [ -e "$src" ] || [ -L "$src" ] || missing+=("$rel")
-      done <<< "$prep_paths"
+      local -A wanted=()
+      while IFS= read -r rel; do wanted["$rel"]=1; done <<< "$prep_paths"
 
-      if [ "''${#missing[@]}" -gt 0 ]; then
-        note "the following prep sources are missing from $primary:"
-        printf '  %s\n' "''${missing[@]}" >&2
-        if [ "$allow_missing" -eq 0 ]; then
-          die "refusing to prep an incomplete worktree — an agent launched there would silently lose that config. Regenerate in the primary checkout ('devenv shell true', then 'devenv tasks run --mode before generate:all'), or pass --allow-missing."
-        fi
-        note "continuing anyway (--allow-missing)"
+      local pruned=0
+      if [ -f "$manifest" ]; then
+        while IFS= read -r rel; do
+          [ -n "$rel" ] || continue
+          [ -z "''${wanted[$rel]-}" ] || continue
+          # Defensive: a manifest is written by this tool, but never let one
+          # reach outside the worktree.
+          case "$rel" in
+            /* | *..*) continue ;;
+            *) ;;
+          esac
+          [ -e "$target/$rel" ] || [ -L "$target/$rel" ] || continue
+          # ''${x:?} so an empty target or rel can never expand to `/`.
+          ${cu}/rm -rf -- "''${target:?}/''${rel:?}"
+          pruned=$((pruned + 1))
+        done < "$manifest"
       fi
 
       local copied=0
@@ -311,7 +416,13 @@
         copied=$((copied + 1))
       done <<< "$prep_paths"
 
-      note "prepped $copied paths into $target"
+      printf '%s\n' "$prep_paths" > "$manifest"
+
+      if [ "$pruned" -gt 0 ]; then
+        note "prepped $copied paths into $target ($pruned stale path(s) pruned)"
+      else
+        note "prepped $copied paths into $target"
+      fi
     }
 
     cmd_prep_list() {
@@ -359,6 +470,8 @@
       target="$(${cu}/realpath "$1")"
       assert_linked_worktree "$target"
       resolve_paths
+      warn_if_stale
+      assert_sources_present
       do_prep "$target"
     }
 
@@ -413,12 +526,17 @@
         note "push the branch, then: $prog remove $slug"
         return 0
       fi
-      if ${git} -C "$primary" worktree remove "$target" 2> /dev/null; then
+      local err
+      if err="$(${git} -C "$primary" worktree remove "$target" 2>&1)"; then
         ${git} -C "$primary" worktree prune
         note "removed $target (the branch was left in place)"
       else
-        note "keeping $target — it holds modified or untracked files"
-        note "remove it with: $prog remove --force $slug"
+        # Report what git actually said. The usual cause is modified or
+        # untracked files, but a lock or a permission problem lands here too
+        # and a hardcoded diagnosis would send the operator after the wrong
+        # thing — and recommend --force, which would not help.
+        note "keeping $target — git worktree remove refused: $err"
+        note "if the tree holds only work you do not want, remove it with: $prog remove --force $slug"
       fi
     }
 
@@ -487,6 +605,15 @@
         die "''${cmdline[0]} is not on PATH. Point --profile at an installed profile binary, or set \$AI_WORKTREE_PROFILE."
 
       resolve_repo
+
+      # Resolve and validate the contract BEFORE creating anything. Both steps
+      # are independent of the target, and `die` bypasses cleanup — failing
+      # after `git worktree add` would strand a worktree and a branch that the
+      # obvious retry then refuses to reuse.
+      resolve_paths
+      warn_if_stale
+      assert_sources_present
+
       [ -n "$branch" ] || branch="$type/$slug"
       local target="$worktrees_root/$slug"
 
@@ -505,7 +632,6 @@
         ${git} -C "$primary" worktree add -b "$branch" "$target" "$base"
       fi
 
-      resolve_paths
       do_prep "$target"
 
       # Defense in depth. #1103's profile wrapper runs the same guard; running

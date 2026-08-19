@@ -373,7 +373,7 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-19 (commit pending — the sibling `-worktrees/`
+> **Last verified:** 2026-08-18 (commit pending — the sibling `-worktrees/`
 > layout's DIRENV rationale has INVERTED. It used to be a benefit that a direnv
 > whitelist over the checkout covered every new worktree, because that automatic
 > `cd`-entry WAS the bootstrap; under the sandbox-stack topology, where the
@@ -930,8 +930,10 @@ silently resolves one level too deep, into
    `feat`, `fix`, `perf`, `refactor`, `style`, `test`), defaulting to `feat`;
    the branch becomes `<type>/<slug>`. `--profile <bin>` (or
    `$AI_WORKTREE_PROFILE`) picks which binary to launch, `--keep` suppresses
-   cleanup, and `--reuse` re-attaches to an existing slug.
-   `nix build .#ai-worktree-session` if it is not already on PATH.
+   cleanup, and `--reuse` re-attaches to an existing slug. If the command is not
+   installed, `nix run .#ai-worktree-session -- run --type <type> <slug>` is the
+   no-install form — `nix build` only drops a `./result` symlink and puts
+   nothing on PATH.
 
    The bare git form still works and is the right thing when you are not
    launching an agent at all:
