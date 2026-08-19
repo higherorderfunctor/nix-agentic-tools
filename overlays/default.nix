@@ -237,6 +237,23 @@
       };
     };
 
+  # ── Sandbox combinator library ─────────────────────────────────────
+  # NOT a derivation and NOT a package group: `pkgs.ai.jail` is
+  # `{ extend, lib, src }`, the initialized jail.nix combinator library the
+  # `ai.sandbox` layer composes profiles from. It is nested (rather than
+  # flat) precisely so flake.nix's `packages` flattening — which strips the
+  # nested groups by name — never tries to treat `lib` or `extend` as a
+  # buildable attribute. `guard` is deliberately not applied for the same
+  # reason; `src` carries the GPL-3.0 `meta.license` and is free, so there is
+  # nothing for the unfree wrapper to do.
+  #
+  # LINUX ONLY. bubblewrap is Linux-only, so the whole attribute is absent
+  # elsewhere — the same explicit-exclusion shape `genericDrvs.gluetun` uses
+  # below, and the same reason: a present-but-unbuildable attribute reads as
+  # support. Consumers on darwin get "attribute missing", not a library that
+  # throws at build time.
+  jailLib = import ./jail-nix.nix {inherit inputs final;};
+
   # ── Git tools ──────────────────────────────────────────────────────
   gitToolDrvs = {
     git-absorb = import ./git-tools/git-absorb.nix {
@@ -277,6 +294,9 @@
 in {
   ai =
     guard flatDrvs
+    // final.lib.optionalAttrs final.stdenv.hostPlatform.isLinux {
+      jail = jailLib;
+    }
     // {
       devTools = guard devToolDrvs;
       generic = guard genericDrvs;

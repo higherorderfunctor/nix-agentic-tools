@@ -1,22 +1,26 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-16 (commit pending — corrects the current Go-floor
-> enumeration to include all eight packages; Kiro's recomposition seam also
-> exposes `withFhsPayload`, so configured chat-only wrappers can enter the
-> upstream FHS root without reimplementing it while the public default stays
-> byte-identical and `useFhsSandbox = false` is an explicit module-level
-> selection of `passthru.unwrapped`). Prior: 2026-08-15 (commit pending — adds
-> Beads as the eighth Go package and as a stable-release, sidecar-pinned thin
-> override in the `devTools` group). Prior: 2026-08-16 (commit pending —
-> documents Beads' distinct builder override plus anchored wrapper-extension
-> seam). Prior: 2026-08-16 (commit pending — nixpkgs 9ddfd8a consolidated Kiro's
-> three per-command FHS environments into one shared environment behind thin
-> command wrappers. Re-pointing the unwrapped base and recomposing through
-> upstream's `.override` remains the correct seam and inherited the topology
-> change without implementation edits). Prior: 2026-08-10 (commit pending — adds
-> the third override-seam failure mode, measured on `kiro-cli`: the attribute
-> you are overriding stops being a derivation at all. nixpkgs f13ff45a split it
-> into `kiro-cli-unwrapped` plus a `symlinkJoin` of `buildFHSEnv` sandboxes, and
+> **Last verified:** 2026-08-18 (commit pending — `pkgs.ai` is no longer
+> derivations-only: `pkgs.ai.jail` is the initialized jail.nix combinator
+> LIBRARY, so the "every group is built the same way" claim below now has one
+> documented exception — see "One group is a library, not packages"). Prior:
+> 2026-08-16 (commit pending — corrects the current Go-floor enumeration to
+> include all eight packages; Kiro's recomposition seam also exposes
+> `withFhsPayload`, so configured chat-only wrappers can enter the upstream FHS
+> root without reimplementing it while the public default stays byte-identical
+> and `useFhsSandbox = false` is an explicit module-level selection of
+> `passthru.unwrapped`). Prior: 2026-08-15 (commit pending — adds Beads as the
+> eighth Go package and as a stable-release, sidecar-pinned thin override in the
+> `devTools` group). Prior: 2026-08-16 (commit pending — documents Beads'
+> distinct builder override plus anchored wrapper-extension seam). Prior:
+> 2026-08-16 (commit pending — nixpkgs 9ddfd8a consolidated Kiro's three
+> per-command FHS environments into one shared environment behind thin command
+> wrappers. Re-pointing the unwrapped base and recomposing through upstream's
+> `.override` remains the correct seam and inherited the topology change without
+> implementation edits). Prior: 2026-08-10 (commit pending — adds the third
+> override-seam failure mode, measured on `kiro-cli`: the attribute you are
+> overriding stops being a derivation at all. nixpkgs f13ff45a split it into
+> `kiro-cli-unwrapped` plus a `symlinkJoin` of `buildFHSEnv` sandboxes, and
 > `overrideAttrs` on that join silently dropped our `src`, `version` AND
 > `postFixup` while the build stayed green. Unlike the `extendMkDerivation`
 > cases below, NO seam on the public attribute can fix it — the base has to be
@@ -71,10 +75,10 @@
 > original, and this section isn't updated in the same commit, stop and fix it.
 
 `overlays/default.nix` aggregates every binary package under the single
-`pkgs.ai` namespace. Flat AI CLIs live directly below it; supporting categories
-are `devTools`, `generic`, `gitTools`, `lspServers`, and `mcpServers`. Every
-group is built the same way — an attrset of
-`import ./<dir>/<name>.nix {inherit inputs final;}` entries, passed through
+`pkgs.ai` namespace (plus exactly one library — see below). Flat AI CLIs live
+directly below it; supporting categories are `devTools`, `generic`, `gitTools`,
+`lspServers`, and `mcpServers`. Every group is built the same way — an attrset
+of `import ./<dir>/<name>.nix {inherit inputs final;}` entries, passed through
 `guard` (the unfree wrapper) in the output set, and flattened into
 `packages.<system>` in `flake.nix` for CLI ergonomics. The overlay never writes
 a bare `pkgs.<name>` attribute.
@@ -99,6 +103,39 @@ only runtime consumer. An overlay must not import build sources from
 `packages/`: that outbound edge prevents lifting the overlay tree as a clean
 directory move. The auto-memory sources are the worked examples:
 `overlays/kiro-memory-distiller/` and `overlays/mcp-servers/openmemory-mem/`.
+
+### One group is a library, not packages
+
+`pkgs.ai.jail` is the single exception to everything above, and it is nested
+rather than flat for a mechanical reason: it holds no derivation to flatten.
+`overlays/jail-nix.nix` exports `{ extend, lib, src }` — the initialized
+[jail.nix](https://sr.ht/~alexdavid/jail.nix/) bubblewrap combinator library the
+`ai.sandbox` layer composes profiles from — where only `src` (the `applyPatches`
+output carrying the GPL-3.0 `meta.license`) is a derivation at all.
+
+Three consequences worth knowing before adding a second one:
+
+- **It must stay nested.** `flake.nix`'s `packages` flattening strips the nested
+  groups BY NAME, so `jail` is listed in that `removeAttrs` alongside `devTools`
+  and friends. Move it flat and `nix flake check` fails on a `packages` entry
+  that is not a derivation.
+- **`guard` is not applied.** The unfree wrapper maps `symlinkJoin` over an
+  attrset of derivations; there is nothing here for it to wrap, and `src` is
+  free anyway.
+- **`checks.cache-hit-parity` cannot see it.** That registry compares
+  `self.packages.<system>.<name>` against a consumer attr path, and this is
+  absent from `packages` by construction. Parity is asserted instead by
+  `checks/jail-nix.nix` (`jail-nix-parity`), which builds the same trivial jail
+  through our pin and through `nixpkgs-test` and compares store paths. Every
+  sandbox profile is built THROUGH this library, so a consumer-pin leak here
+  would cache-miss all of them at once.
+
+Note also that `final` is NOT always a full nixpkgs on every evaluation path
+that applies this overlay: some apply it with a stub carrying little more than
+`lib`. Binding `applyPatches` off `final` throws
+`attribute 'overrideAttrs' missing` on those paths — measured while writing
+`jail-nix-parity`'s negative control. `ourPkgs` avoids it for free, which is one
+more reason the cache-hit-parity rule is not merely about caching.
 
 ### Direct external-flake derivations
 
@@ -598,15 +635,23 @@ constant — `oh-my-posh` keeps its module under `src/`.
 
 ### A genuinely platform-specific package is gated at the ATTRIBUTE
 
-`gluetun` is the only one so far: `internal/routing` uses `unix.RT_TABLE_MAIN` /
-`RT_TABLE_LOCAL`, Linux-only constants (measured by cross-compiling
-`GOOS=darwin GOARCH=arm64`). A restrictive `meta.platforms` is NOT sufficient —
-the attribute still exists on darwin and forcing its `drvPath` throws "not
-available on the requested hostPlatform", which both `nix flake check` (it
-evaluates every system) and the required darwin CI leg do. So
-`overlays/default.nix` wraps the entry in
+Two entries so far, gated the same way for different reasons.
+
+`gluetun`: `internal/routing` uses `unix.RT_TABLE_MAIN` / `RT_TABLE_LOCAL`,
+Linux-only constants (measured by cross-compiling `GOOS=darwin GOARCH=arm64`). A
+restrictive `meta.platforms` is NOT sufficient — the attribute still exists on
+darwin and forcing its `drvPath` throws "not available on the requested
+hostPlatform", which both `nix flake check` (it evaluates every system) and the
+required darwin CI leg do. So `overlays/default.nix` wraps the entry in
 `lib.optionalAttrs final.stdenv.hostPlatform.isLinux`, and the package is simply
 absent elsewhere.
+
+`pkgs.ai.jail` (see "One group is a library, not packages"): bubblewrap is
+Linux-only, so the whole combinator library is absent on darwin. The forcing
+argument above does not apply — it is not in `packages` and nothing evaluates
+its `drvPath` on darwin — but the epic's rule that a sandbox exclusion is
+explicit and never a silent no-op does. Present-but-unbuildable reads as
+support; "attribute missing" does not.
 
 Two registries have to agree with that:
 `config.checks.cacheHitParity.<name>.platforms` (or the check aborts on darwin

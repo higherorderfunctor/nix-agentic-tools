@@ -9,6 +9,7 @@ agentskills
 agentsmd
 agnix
 aihubmix
+alexdavid
 anthropics
 APFS
 applyto
@@ -60,6 +61,7 @@ codemod
 codepaths
 codesign
 codewhisperer
+combinators
 commondir
 completionist
 configdir
@@ -361,6 +363,7 @@ skillname
 skillsdir
 slurpfile
 smartlog
+sourcehut
 sourcepath
 sourcepos
 sparfenyuk

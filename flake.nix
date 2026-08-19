@@ -35,6 +35,21 @@
         nixpkgs.follows = "nixpkgs";
       };
     };
+    # jail.nix — pure bubblewrap combinator library consumed by the
+    # `ai.sandbox` layer. Its root flake has ZERO inputs (see the upstream
+    # flake.nix: `outputs = _: { lib = import ./lib; }`), so there is nothing
+    # to `follows` — this repo supplies the pkgs through
+    # `pkgs.ai.jail.extend`.
+    #
+    # PINNED TO A REV ON PURPOSE. Upstream publishes no tags and no releases,
+    # has one maintainer, and this input is a SANDBOX POLICY dependency: a
+    # silent bump could widen what an agent can reach. A rev in the URL makes
+    # `nix flake update jail-nix` a no-op, so the 4x/day auto-merging sweep
+    # cannot move it — bumping is an edit to this line, reviewed like any
+    # other change. Community patches arrive on sourcehut mailing lists (which
+    # block AI crawlers, so the operator is the conduit); they land in the
+    # `patches` list of overlays/jail-nix.nix, not in a fork.
+    jail-nix.url = "sourcehut:~alexdavid/jail.nix/404e7da9da5ab9aa643666682b2ba1312fa5fbe8";
     llm-agents.url = "github:numtide/llm-agents.nix";
     mcp-nixos = {
       url = "github:utensils/mcp-nixos";
@@ -259,6 +274,7 @@
       goFloorDriftChecks = import ./checks/go-floor-drift.nix {inherit lib pkgs self;};
       goToolchainFloorChecks = import ./checks/go-toolchain-floor.nix {inherit inputs lib pkgs;};
       instructionsDriftCheck = import ./checks/instructions-drift.nix {inherit pkgs self;};
+      jailNixChecks = import ./checks/jail-nix.nix {inherit inputs lib pkgs self;};
       kiroExtractedCheck = import ./checks/kiro-cli-extracted.nix {inherit pkgs self;};
       kiroFhsContractCheck = {kiro-fhs-contract = import ./checks/kiro-fhs-contract.nix {inherit pkgs;};};
       kiroWrapperArgvCheck = {kiro-wrapper-argv = import ./checks/kiro-wrapper-argv.nix {inherit lib pkgs;};};
@@ -270,7 +286,7 @@
       updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit inputs lib pkgs self updateRegistry;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // beadsContractsCheck // beadsLifecycleCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // claudeMemoryCollisionGuardCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // doubledWordsCheck // doubledWordsFixturesCheck // facetMockChecks // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goFloorDriftChecks // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroFhsContractCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // sembleTemplatesCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);
+      bareCommandsCheck // beadsContractsCheck // beadsLifecycleCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // claudeMemoryCollisionGuardCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // doubledWordsCheck // doubledWordsFixturesCheck // facetMockChecks // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goFloorDriftChecks // goToolchainFloorChecks // instructionsDriftCheck // jailNixChecks // kiroExtractedCheck // kiroFhsContractCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // sembleTemplatesCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.
@@ -301,7 +317,11 @@
       # - github-copilot-cli renamed to copilot-cli in Milestone 4
       # - pkgs.ai.* grouped into mcpServers/lspServers/gitTools (factory arch)
       # Flat AI CLIs (strip nested groups which aren't derivations)
-      builtins.removeAttrs pkgs.ai ["devTools" "generic" "gitTools" "lspServers" "mcpServers"]
+      # `jail` is stripped for a different reason than its neighbours: it is
+      # not a package group at all but the jail.nix combinator LIBRARY
+      # (`{ extend, lib, src }`), so flattening it would put non-derivations
+      # in `packages`. See the header of overlays/jail-nix.nix.
+      builtins.removeAttrs pkgs.ai ["devTools" "generic" "gitTools" "jail" "lspServers" "mcpServers"]
       // pkgs.ai.devTools
       // pkgs.ai.generic
       // pkgs.ai.gitTools
