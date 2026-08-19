@@ -1,20 +1,32 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-18 (commit pending — the per-worktree bootstrap
-> requirement is GONE. The shared prek hooks now resolve
-> `.pre-commit-config.yaml` from the PRIMARY CHECKOUT, derived from the shared
-> common git dir, so a linked worktree that has never entered `devenv shell`
-> commits fine. `PREK_HOME` stays anchored to the committing worktree, because
-> under the agent sandbox the primary checkout is a read-only bind. Written for
-> the sandbox-stack pivot's "devenv is never activated in a worktree" topology
-> (#1106), under which the old model rejected every worktree commit by design.
-> Do NOT re-add a `devenv shell` step to the worktree recipe below.) Prior:
-> 2026-08-17 (commit pending — shared prek hooks now derive `PREK_HOME` from the
-> committing worktree, so commits launched outside a devenv shell retain
-> isolated project-local state instead of falling back to the user-global XDG
-> cache; the bootstrap diagnostic now names shell entry as the only
-> materialization path, and shared-hook rewrites serialize and publish by atomic
-> rename). Prior: 2026-08-15 (commit pending — adds the adversarial
+> **Last verified:** 2026-08-19 (commit pending — the sibling `-worktrees/`
+> layout's DIRENV rationale has INVERTED. It used to be a benefit that a direnv
+> whitelist over the checkout covered every new worktree, because that automatic
+> `cd`-entry WAS the bootstrap; under the sandbox-stack topology, where the
+> devenv shell is entered in the primary checkout only, the same whitelist is
+> the failure — it silently activates devenv exactly where the topology says it
+> must not be. The layout survives on its other reasons. Carrying the primary's
+> environment into a worktree is now the `ai-worktree-session` runner's job
+> (#1105), which COPIES the artifacts a shell entry would have made; step 1
+> leads with it, and the bare `git worktree add` is documented as leaving the
+> worktree unprepped in a way that fails SILENTLY — an agent started there just
+> runs with no settings, no MCP, no skills and no CLAUDE.md. The operator owns
+> the direnv-whitelist side outside this repo.) Prior: 2026-08-18 (commit
+> pending — the per-worktree bootstrap requirement is GONE. The shared prek
+> hooks now resolve `.pre-commit-config.yaml` from the PRIMARY CHECKOUT, derived
+> from the shared common git dir, so a linked worktree that has never entered
+> `devenv shell` commits fine. `PREK_HOME` stays anchored to the committing
+> worktree, because under the agent sandbox the primary checkout is a read-only
+> bind. Written for the sandbox-stack pivot's "devenv is never activated in a
+> worktree" topology (#1106), under which the old model rejected every worktree
+> commit by design. Do NOT re-add a `devenv shell` step to the worktree recipe
+> below.) Prior: 2026-08-17 (commit pending — shared prek hooks now derive
+> `PREK_HOME` from the committing worktree, so commits launched outside a devenv
+> shell retain isolated project-local state instead of falling back to the
+> user-global XDG cache; the bootstrap diagnostic now names shell entry as the
+> only materialization path, and shared-hook rewrites serialize and publish by
+> atomic rename). Prior: 2026-08-15 (commit pending — adds the adversarial
 > subagent-review protocol that SUBSTITUTES for the Copilot loop while its quota
 > is exhausted, roughly two weeks from 2026-08-15. Written because an agent
 > cannot review its own output, and because the operator had been having to ask
@@ -498,18 +510,27 @@ exemption, and no "it's gitignored-adjacent" exemption.
 
 Worktrees live in `<repo>-worktrees/`, a **sibling of the primary checkout** — a
 clone at `~/src/nix-agentic-tools` puts them in
-`~/src/nix-agentic-tools-worktrees/<slug>`. Keeping them beside the clone means
-a direnv whitelist (or any editor/tooling trust root) covering the checkout
-covers new worktrees too, so editors and tooling treat them as the same trusted
-project — and it keeps work out of `~/.cache`, which cache-cleaning tools treat
-as disposable.
+`~/src/nix-agentic-tools-worktrees/<slug>`. Keeping them beside the clone keeps
+work out of `~/.cache`, which cache-cleaning tools treat as disposable, and
+keeps one editor/tooling trust root over the whole collection.
 
-This used to be justified by `cd` alone entering the devenv shell and
-materializing the gitignored `files.*` artifacts, which was how a worktree got
-bootstrapped. That is no longer a reason to want it: nothing needs a worktree
-shell entry now (step 2 below), and under the sandbox-stack topology devenv is
-deliberately entered in the primary checkout only. Do not read the sibling
-layout as an endorsement of direnv-driven devenv entry in worktrees.
+**The direnv half of that rationale has INVERTED, and it is now the reason to
+keep direnv OUT of worktrees.** The sibling layout used to be justified by `cd`
+alone entering the devenv shell and materializing the gitignored `files.*`
+artifacts — a direnv whitelist covering the checkout covered every new worktree
+too, and that automatic entry WAS the bootstrap. Under the sandbox-stack
+topology it is the failure: the devenv shell is entered in the primary checkout
+ONLY, so a direnv that fires in a worktree activates the very environment the
+topology says must not exist there, and it does so silently, on `cd`. A direnv
+whitelist that spans `<repo>-worktrees/` is therefore something to REMOVE, not
+something the layout buys you. The operator owns that whitelist outside this
+repository; nothing in here can enforce it.
+
+What carries the primary checkout's environment into a worktree instead is the
+**worktree-session runner** (`ai-worktree-session`, step 1 below), which copies
+the artifacts a shell entry would have produced rather than running one. Do not
+substitute a `devenv shell` in a worktree for it, and do not read the sibling
+layout as an endorsement of direnv-driven devenv entry there.
 
 Derive that directory once per shell. This form is correct from **any**
 worktree, not just the primary checkout:
@@ -524,14 +545,36 @@ substitute a bare `../<repo>-worktrees/<slug>`: from a linked worktree that
 silently resolves one level too deep, into
 `<repo>-worktrees/<repo>-worktrees/<slug>`.
 
-1. Branch off `main` into its own worktree:
+1. Branch off `main` into its own worktree. **The runner is the intended path**
+   — it creates the worktree, prepares it, launches the agent with cwd there,
+   and cleans up on exit:
+
+   ```bash
+   ai-worktree-session run --type <type> <slug>     # from the primary checkout
+   ```
+
+   `<type>` is a Conventional Commits type (`build`, `chore`, `ci`, `docs`,
+   `feat`, `fix`, `perf`, `refactor`, `style`, `test`), defaulting to `feat`;
+   the branch becomes `<type>/<slug>`. `--profile <bin>` (or
+   `$AI_WORKTREE_PROFILE`) picks which binary to launch, `--keep` suppresses
+   cleanup, and `--reuse` re-attaches to an existing slug.
+   `nix build .#ai-worktree-session` if it is not already on PATH.
+
+   The bare git form still works and is the right thing when you are not
+   launching an agent at all:
 
    ```bash
    git worktree add -b <type>/<slug> "$worktrees/<slug>" origin/main
    ```
 
-   `<type>` is a Conventional Commits type (`build`, `chore`, `ci`, `docs`,
-   `feat`, `fix`, `perf`, `refactor`, `style`, `test`).
+   It leaves the worktree **unprepped**, though, and that failure is silent
+   rather than loud: an agent started in an unprepped worktree finds no
+   `.claude/settings.json`, no `.mcp.json`, no skills and no `CLAUDE.md`, and
+   simply runs without them. Run `ai-worktree-session prep <path>` afterwards if
+   an agent is going to work there. `ai-worktree-session prep-list` prints
+   exactly what that copies — the contract is derived from the primary
+   checkout's `.devenv/state/files.json` plus the generated projections, never
+   from a hardcoded list.
 
 2. **There is no worktree bootstrap step.** `git worktree add` and commit — the
    shared prek hooks resolve their config from the primary checkout, and

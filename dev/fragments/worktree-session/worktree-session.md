@@ -1,0 +1,107 @@
+## Worktree-session runner
+
+> **Last verified:** 2026-08-19 (commit pending — first version, landing with
+> `lib/worktree-session.nix` and the `destinations` contract in
+> `dev/instructions.nix`. Written for the sandbox-stack pivot's launch model
+> (#1100/#1105): devenv shell in the primary checkout, agent cwd in a linked
+> worktree, devenv NEVER activated in the worktree. If the prep contract, the
+> guard's discriminator, or the cleanup holds change and this file does not
+> change with them, stop and fix it.)
+
+`ai-worktree-session` (runner) and `ai-workspace-guard` (launch guard) are two
+flake packages built from `lib/worktree-session.nix`. Two packages, not one
+join, because their consumers differ: a `wt`-style shell command wraps the
+runner, while a sandbox profile wrapper wants only the guard in its closure.
+
+### The problem the runner exists to solve
+
+Every supported CLI anchors project-config discovery at **cwd**. Under this
+launch model a worktree is created by `git worktree add` and never enters a
+devenv shell, so it has the tracked files and nothing else — while the things a
+session actually needs are precisely the ones a shell entry writes:
+
+- the devenv `files.*` set — `.claude/settings.json`, `.mcp.json`, `.codex/*`,
+  `.kiro/*`, `.pre-commit-config.yaml`, the materialized skill trees;
+- the gitignored generated projections — `CLAUDE.md`, `.claude/rules/`,
+  `.kiro/steering/`.
+
+**The failure is silent.** An agent launched in an unprepped worktree does not
+error; it runs with no settings, no MCP, no skills and no rules, and looks
+normal doing it. That is the whole reason prep is loud when a source is missing
+(hard error, `--allow-missing` to override) rather than best-effort.
+
+### The prep contract — derived, never hardcoded
+
+```
+candidates = <primary>/.devenv/state/files.json .managedFiles      (devenv)
+           ∪ dev/instructions.nix `destinations`                (projections)
+copied     = the candidates `git check-ignore` reports as ignored
+```
+
+Both halves propagate on their own: a new `files.*` entry appears in
+`files.json` on the next shell entry, and a new fragment category flows into
+`destinations` because that list is derived from the same `claudeFiles` /
+`copilotFiles` / `gen.kiroFiles` attrsets the instruction derivations are built
+from. There is no third list to keep in sync.
+
+**The `check-ignore` filter is load-bearing, not an optimization.** Some
+generated projections are TRACKED — `AGENTS.md`,
+`.github/copilot-instructions.md`, `.github/instructions/*`, `CONTRIBUTING.md`,
+`README.md` — because Copilot reads them from the repository. Those arrive with
+the checkout. Copying them from the primary anyway would push whatever
+uncommitted state the primary happens to hold into every worktree, showing up as
+spontaneous dirt in `git status` that the session did not create. Filtering by
+ignore-status also means a projection that later flips tracked↔ignored needs no
+edit anywhere.
+
+Measured on 2026-08-19: all 123 `managedFiles` entries are gitignored symlinks
+into the store (some to DIRECTORIES — the materialized skill trees), and of the
+75 projection destinations exactly 48 are gitignored, for 171 copied paths.
+Entries are copied with `cp -PR` after unlinking the destination: `-P` copies
+the link rather than dereferencing a read-only store tree into the worktree, and
+the unlink stops a re-prep from writing THROUGH a symlink into the store.
+
+`ai-worktree-session prep-list` prints the resolved contract (one
+repository-relative path per line; `--json` adds per-source provenance). That
+output is the documented consumer surface — build on it rather than re-deriving
+the list.
+
+### The guard's discriminator
+
+`ai-workspace-guard` refuses to start a workspace profile whose `git-worktree`
+combinator rw-binds `$PWD` anywhere that bind would expose the primary checkout.
+The test is:
+
+```bash
+git rev-parse --path-format=absolute --git-dir
+git rev-parse --path-format=absolute --git-common-dir
+```
+
+They are **equal in the primary checkout and differ in every linked worktree**
+(`<common>/worktrees/<name>`), from any subdirectory of either.
+`--path-format=absolute` is mandatory on both: a bare `rev-parse --git-dir`
+answers a path relative to cwd when it can, so at the top of the primary
+checkout it prints the bare string `.git` while the linked case prints an
+absolute path — the two arms stop being comparable exactly where the check
+matters. The guard fails CLOSED: no repository, or a bare one, is a refusal.
+
+### The `ai.sandbox` seam
+
+`--profile` is deliberately just an executable name, resolved from
+`$AI_WORKTREE_PROFILE` and defaulting to `claude`. This file must not encode the
+`ai.sandbox` option schema; a sandbox profile wrapper calls the guard as its
+first act, and the runner is merely a caller of whatever binary it is pointed
+at. The runner invokes the guard too, so a mis-wired wrapper is still caught.
+
+### Cleanup only when it is provably lossless
+
+`git worktree remove` is the safety mechanism rather than a formality: it
+deletes ignored files — so the 171 prepped artifacts never block it — and
+REFUSES a tree holding modified or untracked files. On top of that the runner
+holds on to a worktree whose command exited non-zero, or whose HEAD carries
+commits reachable from no remote (`rev-list --count HEAD --not --remotes`).
+Anything held is named on stderr with the exact command to remove it.
+
+The branch is never deleted. Teardown of the branch stays where the git-workflow
+doctrine puts it — after the PR merges — because a squash-merged branch needs
+`git branch -D`, and guessing that from a session exit would destroy work.

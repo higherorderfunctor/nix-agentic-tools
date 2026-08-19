@@ -433,6 +433,7 @@ _: {
         "config/generate-update-ninja.nix"
         "config/update-targets.nix"
         "dev/generate.nix"
+        "dev/instructions.nix"
         "dev/scripts/update-*.sh"
         "dev/tasks/generate.nix"
         "lib/ai/transformers/**"
@@ -469,6 +470,17 @@ _: {
           dir = "stacked-workflows";
         }
       ];
+    };
+    # worktree-session: the launch model's prep contract (files.json +
+    # generated projections, filtered by check-ignore), the guard's
+    # primary-vs-linked discriminator, and the cleanup holds. Scoped to the
+    # runner and to the file that owns the projection destinations it bakes.
+    worktree-session = {
+      scopes = [
+        "dev/instructions.nix"
+        "lib/worktree-session.nix"
+      ];
+      sources = ["worktree-session"];
     };
   };
 }
