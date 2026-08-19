@@ -352,9 +352,11 @@ compares `self.packages.<system>.<name>` against a consumer attr path, and the
 attribute is deliberately absent from `packages` because it is not a derivation.
 `checks/jail-nix.nix` carries `jail-nix-parity` instead: it builds the same
 trivial jail through our pin and through `nixpkgs-test`, holding the jailed exe
-constant so the comparison is not a tautology, and diffs the store paths. The
-negative control was run — flipping `extend` to `final` produces two different
-paths and the check goes red.
+constant so the comparison is not a tautology, and diffs the store paths. It
+carries its own positive control in the same shape `followedPkgs` gives this
+check: the overlay is re-imported with `inputs.nixpkgs` rewritten to
+`nixpkgs-test`, and that wrapper MUST differ — if it does not, the equality
+proved nothing and the check fails as a tautology rather than passing as one.
 
 **Pure binary-fetch packages** (no build, just an `overrideAttrs` that swaps
 `src`/`version`) still route through `ourPkgs` to keep the starting derivation
@@ -531,12 +533,16 @@ Three consequences worth knowing before adding a second one:
   sandbox profile is built THROUGH this library, so a consumer-pin leak here
   would cache-miss all of them at once.
 
-Note also that `final` is NOT always a full nixpkgs on every evaluation path
-that applies this overlay: some apply it with a stub carrying little more than
-`lib`. Binding `applyPatches` off `final` throws
-`attribute 'overrideAttrs' missing` on those paths — measured while writing
-`jail-nix-parity`'s negative control. `ourPkgs` avoids it for free, which is one
-more reason the cache-hit-parity rule is not merely about caching.
+Note also that `applyPatches` **does not always return a derivation**, and
+`pkgs.ai.jail` is the first place in this repo that depends on the answer. On
+nixpkgs 25.05 it short-circuits to its bare `src` when `patches == []` — the
+shipped configuration there — while the current master rework always builds one.
+Measured while writing `jail-nix-parity`'s negative control: the consumer-pin
+side threw `attribute 'overrideAttrs' missing`, four levels away from anything
+naming a patch, and the obvious reading ("the overlay got a stub `final`") is
+wrong. So do not stamp `meta` onto an `applyPatches` result with
+`overrideAttrs`; wrap it in a derivation that exists either way, or the next
+routine nixpkgs bump arms a latent eval break.
 
 ### Direct external-flake derivations
 

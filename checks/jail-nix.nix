@@ -6,6 +6,23 @@
 #     runs `true` inside the sandbox. Catches a broken pin, a patch that does
 #     not apply, and a library that composes argv but cannot actually enter a
 #     namespace.
+#
+#     The RUNTIME half is deliberately best-effort, and that is a trade-off
+#     rather than an oversight. Unprivileged user namespaces are a host
+#     policy (Ubuntu 24.04's AppArmor default, unusual container runtimes),
+#     so on a host that denies them this check would be permanently red for a
+#     reason that has nothing to do with the package. It therefore gates the
+#     execution on an INDEPENDENT `bwrap --unshare-all` positive control and
+#     skips only when plain bubblewrap cannot run either. What survives the
+#     skip is the structural half, which runs everywhere: a library that
+#     stopped emitting a bubblewrap invocation is still caught.
+#
+#     Be honest about the residual: on such a host this goes green with the
+#     runtime claim unproven, and the skip prints `JAIL-NIX-SKIPPED-EXEC` to
+#     the build log — which a cached output never re-prints. Measured on the
+#     development host, bubblewrap DOES nest inside the nix build sandbox and
+#     the execution probe ran for real. If a runner is ever found where it
+#     does not, grep that token rather than trusting the check mark.
 #   jail-nix-extend  — `extend` with an additional combinator evaluates and
 #     the combinator is reachable from a jail. This is the exact seam the
 #     `ai.sandbox` layer registers `git-worktree` / `nix-daemon` /
@@ -58,12 +75,30 @@
   };
   consumerJail = consumerPkgs.ai.jail.lib "jail-nix-probe-true" exe [];
 
-  # `LANG` and `TERM` are not decoration. jail.nix's `base` permission
-  # forwards both with `fwd-env`, which expands to a bare `"$LANG"` inside a
-  # `writeShellApplication` running under `set -u` — unset, the wrapper dies
-  # on an unbound variable before bubblewrap is ever reached. `HOME` is
-  # needed because `base` mounts a tmpfs over it and the build environment's
-  # `/homeless-shelter` is not creatable.
+  # Positive control for the comparison above, mirroring `followedPkgs` in
+  # checks/cache-hit-parity.nix. Here the OVERLAY's own `inputs.nixpkgs` is
+  # rewritten, which is what a consumer using `inputs.nixpkgs.follows` does —
+  # so `ourPkgs` genuinely moves and the wrapper MUST land on a different
+  # store path. Without this the equality above could go green by becoming a
+  # tautology (both sides reading one pkgs set, or a wrapper that stopped
+  # embedding pin-dependent paths at all) and nothing would notice.
+  followedOverlay = import ../overlays {
+    inputs = inputs // {nixpkgs = inputs.nixpkgs-test;};
+  };
+  followedPkgs = import inputs.nixpkgs-test {
+    inherit system;
+    config.allowUnfree = true;
+    overlays = [followedOverlay];
+  };
+  followedJail = followedPkgs.ai.jail.lib "jail-nix-probe-true" exe [];
+
+  # None of these three is decoration. jail.nix's `base` permission forwards
+  # LANG, HOME and TERM with `fwd-env` (upstream lib/combinators/base.nix),
+  # each of which expands to a bare `"$VAR"` inside a `writeShellApplication`
+  # running under `set -u` — so ANY of the three being unset kills the
+  # wrapper on an unbound variable before bubblewrap is ever reached. `HOME`
+  # additionally has to point somewhere creatable, because `base` mounts a
+  # tmpfs over it and the build environment's `/homeless-shelter` is not.
   jailRunEnv = {
     LANG = "C";
     TERM = "dumb";
@@ -102,13 +137,20 @@ in
         "$script"
         echo "ok — trivial jail built and ran 'true' inside the sandbox" > "$out"
       else
-        echo "::notice::unprivileged user namespaces unavailable here; ran the structural assertions only" >&2
+        # A plain line, NOT a `::notice::` workflow command: nix prefixes
+        # every build-log line with the derivation name, so GitHub never
+        # parses one from in here, and a cached output never prints at all.
+        echo "JAIL-NIX-SKIPPED-EXEC: unprivileged user namespaces unavailable on this host;" >&2
+        echo "  ran the structural assertions only. Runtime coverage is BEST-EFFORT by" >&2
+        echo "  design — see this check's header for why it is not a hard failure." >&2
         cat "$TMPDIR/bwrap.log" >&2
         echo "skipped-exec — bubblewrap positive control failed; structural assertions passed" > "$out"
       fi
     '';
 
-    jail-nix-extend = pkgs.runCommand "jail-nix-extend" jailRunEnv ''
+    # No `jailRunEnv`: nothing is executed here, so `LANG`/`TERM`/`HOME` would
+    # be dead configuration that reads as if a jail were about to run.
+    jail-nix-extend = pkgs.runCommand "jail-nix-extend" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
 
@@ -127,9 +169,9 @@ in
 
       ours="${trivialJail}"
       theirs="${consumerJail}"
-      if [ "$ours" = "$theirs" ]; then
-        echo "ok — jail wrappers are pin-independent ($ours)" > "$out"
-      else
+      followed="${followedJail}"
+
+      if [ "$ours" != "$theirs" ]; then
         echo "FAIL: jail.nix is initialized against the CONSUMER's nixpkgs." >&2
         echo "  ours:   $ours" >&2
         echo "  theirs: $theirs" >&2
@@ -138,5 +180,18 @@ in
         echo "never \`final\`. See dev/fragments/overlays/cache-hit-parity.md." >&2
         exit 1
       fi
+
+      # The control. A `follows` rewrite moves the overlay's OWN pin, so this
+      # path must differ; if it does not, the equality above proved nothing.
+      if [ "$ours" = "$followed" ]; then
+        echo "FAIL: the parity comparison is a tautology." >&2
+        echo "  Rewriting the overlay's own nixpkgs to nixpkgs-test produced the" >&2
+        echo "  SAME wrapper ($ours), so this check cannot detect a consumer-pin" >&2
+        echo "  leak and its green result is meaningless." >&2
+        exit 1
+      fi
+
+      echo "ok — jail wrappers are pin-independent ($ours)" > "$out"
+      echo "control — a follows rewrite moves them ($followed)" >> "$out"
     '';
   }

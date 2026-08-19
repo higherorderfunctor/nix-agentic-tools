@@ -55,34 +55,72 @@
   # failure mode `.github/actions/warm-ifd` exists to absorb cannot occur
   # here — that composite warms `.#packages.<system>`, which by design does
   # not reach this attribute.
+  patched = ourPkgs.applyPatches {
+    name = "jail.nix-patched";
+    src = inputs.jail-nix;
+    inherit patches;
+  };
+
+  # `meta` is stamped by a WRAPPER rather than passed to `applyPatches` or
+  # bolted on with `overrideAttrs`, and both rejected shapes fail for a
+  # reason worth keeping written down:
   #
-  # `meta` is attached with `overrideAttrs` rather than passed in: passing it
-  # to `applyPatches` is a hard eval error ("applyPatches will not merge
-  # 'meta', change it in 'src' instead"), and the `src` it points you at is a
-  # bare flake-input path with no `meta` to change.
+  #   - passing `meta` in is a hard eval error ("applyPatches will not merge
+  #     'meta', change it in 'src' instead"), and the `src` it points you at
+  #     is a bare flake-input path with no `meta` to change;
+  #   - `patched.overrideAttrs` is not safe across nixpkgs revisions, because
+  #     `applyPatches` DOES NOT ALWAYS RETURN A DERIVATION. On 25.05 it
+  #     short-circuits to its bare `src` when `patches == []` — which is the
+  #     shipped configuration here — and a store path has no `overrideAttrs`.
+  #     The pinned master rework happens to always build one, so this would
+  #     be a latent break armed by a routine nixpkgs bump: eval would start
+  #     failing with `attribute 'overrideAttrs' missing`, four levels away
+  #     from anything naming a patch.
+  #
+  # The wrapper is unconditional rather than an `isDerivation` branch so that
+  # both shapes take the SAME code path — a branch whose second arm never
+  # runs here is a branch nobody would notice rotting. It costs one local
+  # copy of a small tree.
   src =
-    (ourPkgs.applyPatches {
-      name = "jail.nix-source";
-      src = inputs.jail-nix;
-      inherit patches;
-    })
-    .overrideAttrs (_: {
+    ourPkgs.runCommandLocal "jail.nix-source" {
       meta = {
         description = "Bubblewrap sandbox combinator library for Nix";
         homepage = "https://sr.ht/~alexdavid/jail.nix/";
         license = lib.licenses.gpl3Only;
         platforms = lib.platforms.linux;
       };
-    });
+    } ''
+      cp -R ${patched} "$out"
+      chmod -R u+w "$out"
+    '';
 
   upstream = import "${src}/lib";
 
   # The seam the `ai.sandbox` layer builds on: forwards
   # `additionalCombinators` (repo-owned `git-worktree`, `nix-daemon`,
   # `agent-base`), `basePermissions`, and `bubblewrapPackage` to upstream
-  # while holding `pkgs` at this repo's pin. Callers must never reach
-  # `${src}/lib` themselves — that is how the pin leaks.
-  extend = opts: upstream.extend ({pkgs = ourPkgs;} // opts);
+  # while holding `pkgs` at this repo's pin.
+  #
+  # `pkgs` is REFUSED rather than merged over, because both quieter spellings
+  # are worse. `{pkgs = ourPkgs;} // opts` lets a caller substitute its own
+  # pkgs and lose cache-hit parity for every profile in the repo, and
+  # `jail-nix-parity` cannot see that — it tests THIS file, not its callers.
+  # `opts // {pkgs = ourPkgs;}` would silently discard what the caller asked
+  # for. A throw is the only spelling that cannot be gotten wrong by
+  # accident. Callers must not reach `${src}/lib` themselves either; that is
+  # the same leak by another route.
+  extend = opts:
+    if opts ? pkgs
+    then
+      throw ''
+        pkgs.ai.jail.extend: `pkgs` is fixed to this repo's nixpkgs pin and
+        cannot be overridden — every sandbox profile is built through this
+        library, so a consumer-pin leak here cache-misses all of them at
+        once (see checks/jail-nix.nix:jail-nix-parity). Pass
+        `additionalCombinators`, `basePermissions` or `bubblewrapPackage`
+        instead.
+      ''
+    else upstream.extend (opts // {pkgs = ourPkgs;});
 in {
   inherit extend src;
 

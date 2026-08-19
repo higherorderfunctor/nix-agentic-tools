@@ -345,9 +345,11 @@ compares `self.packages.<system>.<name>` against a consumer attr path, and the
 attribute is deliberately absent from `packages` because it is not a derivation.
 `checks/jail-nix.nix` carries `jail-nix-parity` instead: it builds the same
 trivial jail through our pin and through `nixpkgs-test`, holding the jailed exe
-constant so the comparison is not a tautology, and diffs the store paths. The
-negative control was run — flipping `extend` to `final` produces two different
-paths and the check goes red.
+constant so the comparison is not a tautology, and diffs the store paths. It
+carries its own positive control in the same shape `followedPkgs` gives this
+check: the overlay is re-imported with `inputs.nixpkgs` rewritten to
+`nixpkgs-test`, and that wrapper MUST differ — if it does not, the equality
+proved nothing and the check fails as a tautology rather than passing as one.
 
 **Pure binary-fetch packages** (no build, just an `overrideAttrs` that swaps
 `src`/`version`) still route through `ourPkgs` to keep the starting derivation

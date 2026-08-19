@@ -1,6 +1,10 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-16 (commit pending — `devenv-test.yml` now
+> **Last verified:** 2026-08-18 (commit pending — records the first IFD in
+> `overlays/` that is NOT fetch-backed: `jail-nix` imports Nix code out of an
+> `applyPatches` output, which is local and network-free, and which the warm
+> composite does not reach because the attribute is absent from `packages` by
+> construction). Prior: 2026-08-16 (commit pending — `devenv-test.yml` now
 > attributes real repository instruction projections to Git portability rather
 > than the retired claim that current Kiro skips steering symlinks; its IFD warm
 > step and closure behavior were rechecked unchanged). Prior: 2026-08-14 (commit
@@ -92,6 +96,23 @@ version = vu.mkVersion {
 This is Import From Derivation (IFD): nix must realize (fetch) the
 `fetchFromGitHub` derivation before evaluation can continue. The source tarball
 must exist in the local nix store for eval to succeed.
+
+### Not every IFD here is fetch-backed
+
+`overlays/jail-nix.nix` is the exception to the paragraph above, and it is worth
+knowing before reaching for the warm step. It imports Nix code out of an
+`applyPatches` output (`import "${src}/lib"`), so evaluation must REALIZE that
+derivation — but the thing being realized is a local unpack-patch-copy over a
+source that flake input resolution has already fetched, and `applyPatches` sets
+`preferLocalBuild` with `allowSubstitutes = false`. There is no network in the
+critical path, so the transient-fetch failure mode `.github/actions/warm-ifd`
+exists to absorb cannot occur, and the composite would not reach it anyway: it
+warms `.#packages.<system>`, and `pkgs.ai.jail` is deliberately absent from
+`packages` because it is a library rather than a derivation.
+
+The rule this generalizes to: warm coverage follows `packages`, so an IFD on an
+attribute outside `packages` is uncovered by construction. That is only
+acceptable when the realization is local and network-free, as it is here.
 
 ### Why this matters
 
