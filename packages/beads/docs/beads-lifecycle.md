@@ -1,7 +1,9 @@
 # Beads devenv lifecycle
 
-> **Last verified:** 2026-08-16 (commit pending — initial `services.beads`
-> lifecycle implementation for #992).
+> **Last verified:** 2026-08-18 (commit pending — records successful validation
+> of the generated lifecycle against Dolt 2.3.0; no lifecycle shape changed).
+> Prior: 2026-08-16 (commit pending — initial `services.beads` lifecycle
+> implementation for #992).
 
 `services.beads` is intentionally devenv-only. It owns repository-local
 operational state and does not create an `ai.programs.beads` distribution tree;
