@@ -131,8 +131,8 @@
         default = {};
       };
       # Home-manager provides these XDG paths in a real eval. Semble uses
-      # cacheHome for its Codex sandbox grant; living-workflow uses stateHome
-      # for its generated skill.
+      # cacheHome for its Codex sandbox grant, while glab uses stateHome for its
+      # keyring synchronization marker.
       xdg = {
         cacheHome = lib.mkOption {
           type = lib.types.str;
@@ -271,7 +271,6 @@
         ./../packages/glab/modules/homeManager
         ./../packages/kimchi/modules/homeManager
         ./../packages/kiro-cli/modules/homeManager
-        ./../packages/living-workflow/modules/homeManager
         ./../packages/mcp-services/modules/homeManager
         ./../packages/semble/modules/homeManager
         ./../packages/stacked-workflows/modules/homeManager
@@ -298,7 +297,6 @@
         ./../packages/glab/modules/devenv
         ./../packages/kimchi/modules/devenv
         ./../packages/kiro-cli/modules/devenv
-        ./../packages/living-workflow/modules/devenv
         ./../packages/semble/modules/devenv
         ./../packages/stacked-workflows/modules/devenv
         devenvStubs
@@ -596,7 +594,6 @@
     };
 
   rootPoolProbeConfig = withEnabledProgramProbes [
-    "living-workflow"
     "semble"
     "stacked-workflows"
   ];
@@ -609,7 +606,6 @@
   # every first-party integration that writes a normalized pool.
   packagePoolProbeConfigs = [
     runtimePoolProbeConfig
-    (withEnabledProgramProbes ["living-workflow"])
     (withEnabledProgramProbes ["semble"])
     (withEnabledProgramProbes ["stacked-workflows"])
     rootPoolProbeConfig
@@ -938,7 +934,7 @@ in {
     lib.all (runtime: rootPoolProbeConfig.ai.${runtime}.enable) harnessNames
     && lib.all
     (program: rootPoolProbeConfig.ai.programs.${program}.enable)
-    ["living-workflow" "semble" "stacked-workflows"]
+    ["semble" "stacked-workflows"]
   );
 
   # Package ownership is checked independently per scope. These production
@@ -9648,8 +9644,7 @@ in {
   );
 
   # ── Stacked-workflows: skills + router, user-global (HM) + project (devenv) ──
-  # Scope-revert (docs/plans/stacked-workflows-scope-revert-plan.md): the HM
-  # module now installs the (unprefixed) stack-* skills + skill-routing rule
+  # The HM module installs the unprefixed stack-* skills + skill-routing rule
   # user-global; the devenv module mirrors them project-local. References are
   # bundled as REAL files inside each skill dir (deref'd at build).
 
@@ -9662,11 +9657,11 @@ in {
       && !(result.options.stacked-workflows ? enable)
   );
 
-  # Both skill packages consume the generic program factory. One shared
-  # declaration therefore produces identical HM/devenv root and runtime
-  # option trees, and the package capability set covers every registered
-  # runtime. `gitPreset` deliberately stays out of this tree as an HM-only
-  # top-level companion because it configures machine-wide Git, not a runtime.
+  # Stacked Workflows consumes the generic program factory. One shared
+  # declaration therefore produces identical HM/devenv root and runtime option
+  # trees, and the package capability set covers every registered runtime.
+  # `gitPreset` deliberately stays out of this tree as an HM-only top-level
+  # companion because it configures machine-wide Git, not a runtime.
   module-skill-packages-program-option-parity = mkTest "skill-packages-program-option-parity" (
     let
       optionShape = evaluated: path:
@@ -9687,7 +9682,7 @@ in {
           == optionShape devenv ["ai" runtime "programs" package])
         harnessNames;
     in
-      lib.all programParity ["living-workflow" "stacked-workflows"]
+      programParity "stacked-workflows"
       && hm.options.stacked-workflows ? gitPreset
       && !(devenv.options ? stacked-workflows)
   );
@@ -9866,92 +9861,6 @@ in {
       builtins.pathExists "${skillPath}/SKILL.md"
       && builtins.pathExists "${skillPath}/references/git-absorb.md"
       && builtins.pathExists "${skillPath}/references/git-branchless.md"
-  );
-
-  # ── living-workflow module (skill packaging + XDG state) ─────────
-  #
-  # HM is the PRIMARY scope (user-global), while the devenv module is its
-  # project-local parity mirror, matching stacked-workflows' two-backend shape.
-  # The skill is Nix-GENERATED (bakes the XDG state base into SKILL.md) and fed
-  # to each runtime skills pool as its store-path STRING — the value shape every
-  # consumer (upstream claude mkSkillEntry, our mkSkillEntries, the devenv
-  # walker) materializes as a recursive DIRECTORY.
-
-  # Default: the portable living-workflow program enable defaults to false.
-  module-living-workflow-default-disabled = mkTest "living-workflow-default-disabled" (
-    let
-      result = evalHm {};
-    in
-      !result.config.ai.programs.living-workflow.enable
-      && !(result.options ? living-workflow)
-  );
-
-  # HM (primary): enable -> ai.<runtime>.skills.living-workflow -> upstream
-  # programs.claude-code.skills.living-workflow (end-to-end fanout). This is the
-  # test that proves the per-runtime write still REACHES emission; the pool
-  # assertions above only prove where the value landed.
-  module-living-workflow-hm-enable-sets-skill = mkTest "living-workflow-hm-enable-sets-skill" (
-    let
-      result = evalHm {
-        ai.claude.enable = true;
-        ai.programs.living-workflow.enable = true;
-      };
-    in
-      result.config.programs.claude-code.skills ? living-workflow
-  );
-
-  # Kiro HM: the generated store-path string must materialize as a recursive
-  # DIRECTORY (home.file.".kiro/skills/living-workflow"), NOT trip the
-  # isPath/isString trap that would write it as a single SKILL.md file. Asserts
-  # the directory key present AND the single-file trap key absent. (Forces IFD:
-  # readFileType builds the tiny skill derivation.)
-  module-living-workflow-kiro-hm-writes-skill-dir = mkTest "living-workflow-kiro-hm-writes-skill-dir" (
-    let
-      result = evalHm {
-        ai.kiro.enable = true;
-        ai.programs.living-workflow.enable = true;
-      };
-      files = result.config.home.file;
-    in
-      (files ? ".kiro/skills/living-workflow")
-      && !(files ? ".kiro/skills/living-workflow/SKILL.md")
-  );
-
-  # Devenv parity: enable in the devenv module contributes the skill to every
-  # runtime's pool too (config-parity rule; separate eval from HM), and leaves
-  # the root pool alone.
-  module-living-workflow-devenv-enable-sets-skill = mkTest "living-workflow-devenv-enable-sets-skill" (
-    let
-      result = evalDevenv {ai.programs.living-workflow.enable = true;};
-    in
-      lib.all (runtime: result.config.ai.${runtime}.skills ? living-workflow) harnessNames
-      && !(result.config.ai.skills ? living-workflow)
-  );
-
-  # A non-null runtime enable wins over the false portable default. Only that
-  # runtime receives the package contribution; siblings keep inheriting false.
-  module-living-workflow-runtime-program-enable = mkTest "living-workflow-runtime-program-enable" (
-    let
-      result = evalDevenv {ai.claude.programs.living-workflow.enable = true;};
-    in
-      result.config.ai.claude.skills ? living-workflow
-      && lib.all
-      (runtime: !(result.config.ai.${runtime}.skills ? living-workflow))
-      (builtins.filter (runtime: runtime != "claude") harnessNames)
-  );
-
-  # Disabled -> absent: with living-workflow off, no living-workflow skill is
-  # contributed even when an ecosystem is enabled.
-  #
-  # This asserts the PER-RUNTIME pools specifically. Pointing it at the root
-  # pool would make it vacuous now that nothing writes there — it would pass
-  # for a module that was deleted outright as readily as for one that is
-  # correctly gated on `enable`.
-  module-living-workflow-disabled-no-skill = mkTest "living-workflow-disabled-no-skill" (
-    let
-      result = evalHm {ai.kiro.enable = true;};
-    in
-      lib.all (runtime: !(result.config.ai.${runtime}.skills ? living-workflow)) harnessNames
   );
 
   # ── services.mcp-servers module ──────────────────────────────────

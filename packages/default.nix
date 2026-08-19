@@ -23,7 +23,6 @@
   kimchi = import ./kimchi;
   kiro-cli = import ./kiro-cli;
   kiro-gateway = import ./kiro-gateway;
-  living-workflow = import ./living-workflow;
   mcp-services = import ./mcp-services;
   mcp-language-server = import ./mcp-language-server;
   mcp-proxy = import ./mcp-proxy;

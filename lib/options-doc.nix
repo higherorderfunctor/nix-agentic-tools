@@ -265,7 +265,6 @@
   hmPrefixes = [
     "ai."
     "glab."
-    "living-workflow."
     "programs.copilot-cli."
     "programs.kiro-cli."
     "services.mcp-servers."
@@ -301,7 +300,6 @@
     "copilot."
     "glab."
     "kiro."
-    "living-workflow."
     "services.beads."
     "stacked-workflows."
   ];

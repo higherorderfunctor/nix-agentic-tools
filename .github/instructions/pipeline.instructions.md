@@ -619,21 +619,22 @@ The directory is gitignored.
 
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-08-16 (commit pending — generated README guidance now
-> documents the per-runtime literal-file seam and removes the superseded Kiro
-> steering-copy uninstall sequence). Prior: 2026-08-16 (commit pending — the
-> `kiro-wrapper` category now scopes `checks/kiro-fhs-contract.nix`, so an
-> editor changing the upstream sandbox tripwire receives the FHS and launcher
-> architecture sources it enforces). Prior: 2026-08-16 (commit pending — Living
-> Workflow now has a package-sourced routed architecture category, and the
-> Stacked Workflows guide moved from `dev/fragments/` to its package `docs/`
-> directory; both resolve through the existing location discriminator). Prior:
-> 2026-08-16 (commit pending — generated README guidance now uses
-> `ai.programs.stacked-workflows.enable`, documents B4 runtime negation, and
-> keeps the HM-only `stacked-workflows.gitPreset` companion visibly separate).
-> Prior: 2026-08-15 (commit pending — Semble's co-located architecture document
-> is now a registered package-sourced category scoped to `packages/semble/**`).
-> Prior: 2026-08-15 (commit pending — the `mcp-secrets` category now follows
+> **Last verified:** 2026-08-19 (commit pending — removes a retired
+> package-sourced category and its generated consumer documentation). Prior:
+> 2026-08-16 (commit pending — generated README guidance now documents the
+> per-runtime literal-file seam and removes the superseded Kiro steering-copy
+> uninstall sequence). Prior: 2026-08-16 (commit pending — the `kiro-wrapper`
+> category now scopes `checks/kiro-fhs-contract.nix`, so an editor changing the
+> upstream sandbox tripwire receives the FHS and launcher architecture sources
+> it enforces). Prior: 2026-08-16 (commit pending — the Stacked Workflows guide
+> moved from `dev/fragments/` to its package `docs/` directory through the
+> existing location discriminator). Prior: 2026-08-16 (commit pending —
+> generated README guidance now uses `ai.programs.stacked-workflows.enable`,
+> documents B4 runtime negation, and keeps the HM-only
+> `stacked-workflows.gitPreset` companion visibly separate). Prior: 2026-08-15
+> (commit pending — Semble's co-located architecture document is now a
+> registered package-sourced category scoped to `packages/semble/**`). Prior:
+> 2026-08-15 (commit pending — the `mcp-secrets` category now follows
 > managed-proxy ownership through its shared option aggregator,
 > declaration-scope lowering transform, proxy helper, and module/factory
 > behavioral checks). Prior: 2026-08-15 (commit pending — the ai-module routing
@@ -792,8 +793,8 @@ validation.
   - `location = "devshell"` → `devshell/<dir>/docs/<name>.md` The `dir` field
     defaults to null, falling back to the category key, and is explicit when
     they differ (e.g., a category name that does not match its directory).
-    Package-specific architecture such as Living Workflow, Semble, and Stacked
-    Workflows uses the package location rather than a parallel dev-only tree.
+    Package-specific architecture such as Semble and Stacked Workflows uses the
+    package location rather than a parallel dev-only tree.
 - **Path scoping is a list, not a string.** The `scopes` field must hold Nix
   lists; pre-quoted comma-joined strings produced broken YAML for Claude and
   Kiro before commit 5a97f09.

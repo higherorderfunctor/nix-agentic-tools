@@ -12,8 +12,7 @@ future systems are built on, purely in Nix, with no later code changes**:
    `packages/kiro-cli/lib/autoMemory.nix` proves one hook envelope drives
    Stop/SessionStart/UserPromptSubmit/Manual and injects recall.
 3. **Workflow optimization** — cut wasted turns/tool-calls via PreToolUse gating
-   and additionalContext injection (two concrete in-flight cases:
-   `docs/plans/skill-bootstrap-context-injection.md`,
+   and additionalContext injection (concrete in-flight case:
    `docs/plans/prek-stop-hook-validator.md`).
 
 Every one of these is a _hook consumer_. The typed option must expose enough of
@@ -160,8 +159,7 @@ builder must emit **both output conventions** from one declaration.
 | Kiro   | any trigger, **`action:{type:"agent",prompt}`**                            | Native no-subprocess steering — a turn-min primitive with no shell hook                                                                        |
 
 **Stdin depended on:** `tool_name`, `tool_input` (esp. `tool_input.skill` —
-**field name UNVERIFIED**, must dump a live payload, per
-`skill-bootstrap-context-injection.md:50-59`), `prompt` (Claude),
+**field name UNVERIFIED**, must dump a live payload), `prompt` (Claude),
 `stop_hook_active` (loop guard).
 
 **Output depended on:** `hookSpecificOutput.additionalContext`,

@@ -63,10 +63,5 @@ docs/src/
 .update.ninja
 .update-report.txt
 
-# Belt-and-suspenders: living-workflow working state now lives OUT-OF-REPO under XDG
-# (see the master's STATE SUBSTRATE — <xdg-state-base>/<clone-name>/<workflow-name>/). Kept as
-# cheap safety against any stray in-repo .living-workflows/ write, which should no longer happen.
-.living-workflows/
-
 # Local private working area (untracked journals, assessments, scratch)
 /private/

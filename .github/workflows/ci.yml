@@ -623,9 +623,8 @@ jobs:
       # +43s and a ~7.8 GB RSS ceiling, against a 36s / 6.2 GB linux
       # baseline. But instantiating the darwin checks on a linux host
       # currently FAILS outright, for two separate reasons:
-      #   - IFD on derivations that must be BUILT for aarch64-darwin
-      #     (living-workflow-skill.drv, stacked-workflows-skills.drv) —
-      #     a linux runner cannot build those at all.
+      #   - IFD on stacked-workflows-skills.drv, which must be BUILT for
+      #     aarch64-darwin; a linux runner cannot build it at all.
       #   - at least one real darwin assertion failure,
       #     module-mcp-services-rotation-restart-entry.
       # So `--all-systems` would turn this required check red today. Fix

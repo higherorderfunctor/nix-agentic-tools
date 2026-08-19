@@ -247,9 +247,9 @@ custom plumbing.
 **HM and devenv are two independent `evalModules` passes.** Option
 _declarations_ are shared (`lib/ai/sharedOptions.nix`), but **values are
 per-eval** — a value set in the HM eval is invisible to the devenv eval. This is
-why plain modules (stacked-workflows, living-workflow) must contribute from
-_both_ backend modules; getting it wrong silently drops content in one backend.
-Preserve this honestly; do not paper over it.
+why plain modules such as stacked-workflows must contribute from _both_ backend
+modules; getting it wrong silently drops content in one backend. Preserve this
+honestly; do not paper over it.
 
 ### 4.3 Thin, structural walker
 

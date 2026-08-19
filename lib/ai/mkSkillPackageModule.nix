@@ -17,7 +17,7 @@
 # backend's `modules/<backend>/default.nix` can be:
 #
 #   - exactly this module — `import .../mkSkillPackageModule.nix spec`
-#     (living-workflow HM + devenv, stacked-workflows devenv); or
+#     (stacked-workflows devenv); or
 #   - `imports = [ (import .../mkSkillPackageModule.nix spec) ]` alongside extra
 #     options — stacked-workflows HM, which adds its `gitPreset` on top.
 #
@@ -29,9 +29,8 @@
 #                       registered runtime.
 #   skills            : moduleArgs -> attrsOf (path | str). The skill dirs to
 #                       fan out. Values may be `./` path literals (static skill
-#                       trees) OR generated store-path strings (skills baked at
-#                       eval, e.g. living-workflow's XDG state base) — the
-#                       ai.skills fanout helpers materialize both forms. Most
+#                       trees) OR generated store-path strings — the ai.skills
+#                       fanout helpers materialize both forms. Most
 #                       runtimes use recursive per-file links; Codex uses a
 #                       whole-directory link because that is the layout its
 #                       discovery scanner recognizes.
@@ -43,11 +42,9 @@
 #                       since that is the one thing skill-description matching
 #                       cannot express. Sibling disambiguation is NOT such a
 #                       reason — the descriptions already do that.
-#                       living-workflow omits it (one skill, nothing a stray
-#                       command reaches). stacked-workflows provides one because
-#                       its skills wrap git commands a model can equally well
-#                       run by hand, so "check for a skill first" has to be
-#                       unconditional.
+#                       stacked-workflows provides one because its skills wrap
+#                       git commands a model can equally well run by hand, so
+#                       "check for a skill first" has to be unconditional.
 #
 # ── Contributions land PER RUNTIME, never on the root pool ──
 #

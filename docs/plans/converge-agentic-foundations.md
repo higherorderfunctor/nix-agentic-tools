@@ -1,4 +1,4 @@
-# Converge agentic foundations — living plan
+# Converge agentic foundations
 
 Unifies three paused workstreams — (a) materialization (symlink vs real file),
 (b) typed hook surface, (c) agent-primitive labs — into one worktree- and
@@ -6,20 +6,10 @@ subagent-driven plan. End state: repo mechanics (materialization class) fixed,
 hooks working end-to-end, labs/fixtures operational — so harness-engineer test
 prototyping can begin on top of them.
 
-**Protocol:** this is a LIVING PLAN under
-`.claude/skills/dev-living-workflow/references/living-plan-bootstrap.md`
-(master, `v8-onyx-moor-rowan`) + `state.schema.json` beside it (referenced,
-never re-embedded). Machine state (authoritative):
-`${XDG_STATE_HOME:-~/.local/state}/living-workflows/nix-agentic-tools/converge-agentic-foundations/`
-(`state.json` + `journal.ndjson`). This doc is the durable/human snapshot;
-state.json wins on disagreement. Tier: FULL. Mode: cli (confirmed by operator's
-convergence directive — worktree + subagent driven, this machine).
-
 ## CURRENT POSITION
 
-Mirrors `state.json.current_position` — read that first. At plan creation:
-`P1 / hitl_opening` — batched P1 agenda awaiting operator; intake + verification
-complete.
+At plan creation: `P1 / hitl_opening` — batched P1 agenda awaiting operator;
+intake + verification complete.
 
 ## Session bootstrap (every session)
 

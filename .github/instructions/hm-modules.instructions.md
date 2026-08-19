@@ -7,66 +7,69 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-08-16 (commit pending — Semble's shared declaration
-> now models canonical multi-category MCP defaults, explicit CLI/agent opt-ins,
-> and testable cross-runtime isolation assertions identically in HM and devenv).
-> Prior: 2026-08-16 (commit pending — stacked-workflows and living-workflow now
-> share `ai.programs.*` enable declarations across HM and devenv through
-> `mkSkillPackageModule`; stacked-workflows' machine-wide `gitPreset` remains an
-> explicitly HM-only top-level companion; runtime submodule and enable-gate
-> examples cover all five ecosystems). Prior: 2026-08-15 (commit pending —
-> Semble's program-factory relocation preserves one HM/devenv declaration and
-> lowering path; identical runtime package variants share one wrapper/cache
-> while divergent variants use a collision-free aggregate and isolated caches).
-> Prior: 2026-08-15 (commit pending — normalized guidance is now a typed context
-> record plus keyed rules; the list-shaped instructions option and shared
-> instruction type are gone). Prior: 2026-08-15 (commit pending — runtime-shaped
-> config moved from `ai.<runtime>.settings` to `nativeSettings`, the new closed
-> `settings` submodule is normalized across all runtimes, and Codex integration
-> roots use a hidden internal contribution channel). Prior: 2026-08-14 (commit
-> pending — Semble's shared module now lowers grammar and path mappings
-> identically through both facets, with one package-identity cache guard and
-> cache-location wrapper per backend; HM's XDG cache remains authoritative on
-> Darwin too). Prior: 2026-08-05 (commit pending — the Codex named-profile
-> delivery-path example is retained but `ai.codex.profiles` is now LOCKED OUT
-> and fails evaluation; the asymmetry it teaches is still correct, the option is
-> not usable). Prior: 2026-08-05 (commit pending — glab's Linux Home Manager
-> facet can queue one OS-keyring synchronization per activation through a
-> graphical-session path unit; the shared option is an explicit devenv
-> exclusion, and the ordinary wrapper stops exporting the synchronized token).
-> Prior: 2026-08-05 (commit pending — enabled glab facets contribute their
-> effective config directory to Codex's legacy workspace-write sandbox; this
-> follows backend defaults and explicit overrides without coupling the
-> standalone glab module to the AI module). Prior: 2026-08-05 (commit pending —
-> re-verifies these conventions while the managed MCP module's bridge-host
-> comment is generalized so adding Context7 to the bridge set cannot stale a
-> hardcoded server count). Prior: 2026-08-03 (commit pending — glab's shared
-> package default now follows its `pkgs.ai.devTools.glab` namespace in both HM
-> and devenv). Prior: 2026-08-02 (commit pending — Semble's shared activation
-> condition delegates its Codex cache grant to backend-native sinks; Home
-> Manager appends the user XDG cache path without enabling Codex or choosing its
-> sandbox mode). Prior: 2026-08-02 (commit pending — Semble adds one shared HM
-> and devenv option declaration plus shared runtime-fanout logic; only the
-> package installation sink differs). Prior: 2026-08-02 (commit pending — Codex
-> named profiles now use one typed declaration across HM and devenv while each
-> backend delivers the artifact at its native scope: HM links user files and
-> devenv materializes repo declarations into the user-only profile lookup
-> location with explicit ownership). Prior: 2026-08-02 (commit pending —
-> generated option references now enforce exact flattened `ai.*` name/type
-> parity across HM and devenv; backend-only behavior stays discoverable and
-> fails explicitly, as with Home Manager rejecting project-only
-> `ai.copilot.projectDir` overrides). Prior: 2026-08-02 (commit 589fa37c —
-> distinguishes ordinary JSON merge activation from Codex's leaf-owned TOML
-> reconciliation, whose manifest supplies removal semantics while preserving
-> native project-trust state). Prior: 2026-07-28 (commit pending — records the
-> ONE-SHARED-DECLARATION form of the config-parity rule, landed by
-> `packages/glab` and asserted by `module-glab-hm-devenv-option-parity`; prior
-> 2026-07-21 was the repo-wide activation reordering
-> `entryAfter ["writeBoundary"]` → `["linkGeneration"]`; earlier revisions added
-> the activation script `exit` warning + Nix path type strictness section). If
-> you touch any `modules/<subdir>/default.nix` file, add a new option, or change
-> an assertion/activation pattern and this fragment isn't updated in the same
-> commit, stop and fix it.
+> **Last verified:** 2026-08-19 (commit pending — the retired generated skill
+> and its two module facets are removed; Stacked Workflows remains the
+> skill-package program example, and generated store-path strings remain a
+> supported helper input without a current first-party producer). Prior:
+> 2026-08-16 (commit pending — Semble's shared declaration now models canonical
+> multi-category MCP defaults, explicit CLI/agent opt-ins, and testable
+> cross-runtime isolation assertions identically in HM and devenv). Prior:
+> 2026-08-16 (commit pending — stacked-workflows uses a shared `ai.programs.*`
+> enable declaration across HM and devenv through `mkSkillPackageModule`; its
+> machine-wide `gitPreset` remains an explicitly HM-only top-level companion;
+> runtime submodule and enable-gate examples cover all five ecosystems). Prior:
+> 2026-08-15 (commit pending — Semble's program-factory relocation preserves one
+> HM/devenv declaration and lowering path; identical runtime package variants
+> share one wrapper/cache while divergent variants use a collision-free
+> aggregate and isolated caches). Prior: 2026-08-15 (commit pending — normalized
+> guidance is now a typed context record plus keyed rules; the list-shaped
+> instructions option and shared instruction type are gone). Prior: 2026-08-15
+> (commit pending — runtime-shaped config moved from `ai.<runtime>.settings` to
+> `nativeSettings`, the new closed `settings` submodule is normalized across all
+> runtimes, and Codex integration roots use a hidden internal contribution
+> channel). Prior: 2026-08-14 (commit pending — Semble's shared module now
+> lowers grammar and path mappings identically through both facets, with one
+> package-identity cache guard and cache-location wrapper per backend; HM's XDG
+> cache remains authoritative on Darwin too). Prior: 2026-08-05 (commit pending
+> — the Codex named-profile delivery-path example is retained but
+> `ai.codex.profiles` is now LOCKED OUT and fails evaluation; the asymmetry it
+> teaches is still correct, the option is not usable). Prior: 2026-08-05 (commit
+> pending — glab's Linux Home Manager facet can queue one OS-keyring
+> synchronization per activation through a graphical-session path unit; the
+> shared option is an explicit devenv exclusion, and the ordinary wrapper stops
+> exporting the synchronized token). Prior: 2026-08-05 (commit pending — enabled
+> glab facets contribute their effective config directory to Codex's legacy
+> workspace-write sandbox; this follows backend defaults and explicit overrides
+> without coupling the standalone glab module to the AI module). Prior:
+> 2026-08-05 (commit pending — re-verifies these conventions while the managed
+> MCP module's bridge-host comment is generalized so adding Context7 to the
+> bridge set cannot stale a hardcoded server count). Prior: 2026-08-03 (commit
+> pending — glab's shared package default now follows its
+> `pkgs.ai.devTools.glab` namespace in both HM and devenv). Prior: 2026-08-02
+> (commit pending — Semble's shared activation condition delegates its Codex
+> cache grant to backend-native sinks; Home Manager appends the user XDG cache
+> path without enabling Codex or choosing its sandbox mode). Prior: 2026-08-02
+> (commit pending — Semble adds one shared HM and devenv option declaration plus
+> shared runtime-fanout logic; only the package installation sink differs).
+> Prior: 2026-08-02 (commit pending — Codex named profiles now use one typed
+> declaration across HM and devenv while each backend delivers the artifact at
+> its native scope: HM links user files and devenv materializes repo
+> declarations into the user-only profile lookup location with explicit
+> ownership). Prior: 2026-08-02 (commit pending — generated option references
+> now enforce exact flattened `ai.*` name/type parity across HM and devenv;
+> backend-only behavior stays discoverable and fails explicitly, as with Home
+> Manager rejecting project-only `ai.copilot.projectDir` overrides). Prior:
+> 2026-08-02 (commit 589fa37c — distinguishes ordinary JSON merge activation
+> from Codex's leaf-owned TOML reconciliation, whose manifest supplies removal
+> semantics while preserving native project-trust state). Prior: 2026-07-28
+> (commit pending — records the ONE-SHARED-DECLARATION form of the config-parity
+> rule, landed by `packages/glab` and asserted by
+> `module-glab-hm-devenv-option-parity`; prior 2026-07-21 was the repo-wide
+> activation reordering `entryAfter ["writeBoundary"]` → `["linkGeneration"]`;
+> earlier revisions added the activation script `exit` warning + Nix path type
+> strictness section). If you touch any `modules/<subdir>/default.nix` file, add
+> a new option, or change an assertion/activation pattern and this fragment
+> isn't updated in the same commit, stop and fix it.
 
 These conventions are enforced by code review and the `checks/module-eval.nix`
 evaluation tests, not by the module system itself. Follow them when adding or
@@ -400,11 +403,11 @@ is likewise an explicit assertion; unsupported runtimes never degrade to a
 root-visible server.
 
 `lib/ai/mkSkillPackageModule` applies the same shared-declaration rule to
-stacked-workflows and living-workflow. Both facets expose
-`ai.programs.<name>.enable` and every registered per-runtime override from one
-enable-only program specification, then write the resolved package content into
-that backend evaluation's per-runtime pools. A runtime false therefore removes
-only that runtime's skill/rule contribution.
+stacked-workflows. Both facets expose `ai.programs.<name>.enable` and every
+registered per-runtime override from one enable-only program specification, then
+write the resolved package content into that backend evaluation's per-runtime
+pools. A runtime false therefore removes only that runtime's skill/rule
+contribution.
 
 `stacked-workflows.gitPreset` is the deliberate companion exception. It stays
 outside `ai.*` and exists only in Home Manager because it configures
@@ -492,14 +495,13 @@ This matters when passing values to options that gate on `lib.isPath` or
   `isPathLike` accepts store-path STRINGS, so a string that resolves (via IFD)
   to a directory takes the recursive-directory branch and materializes
   correctly; its fall-through also uses `isPathLike` (`{ source = content; }`),
-  never writing a store path as text. This is why the current stacked-workflows
-  / living-workflow skill packages can feed store-path strings
-  (`packages/*/overlay.nix`, `lib/mkSkill.nix`,
-  `lib/ai/mkSkillPackageModule.nix`) — verified against the pinned home-manager
-  source (2026-07). It requires an HM pin recent enough to carry `isPathLike` in
-  `mkSkillEntry`. **Historically (pre-`isPathLike`)** it checked the strict
-  `lib.isPath`, and a string input silently fell through to writing the value as
-  **TEXT CONTENT** to `.claude/skills/<name>/SKILL.md` — a single line like
+  never writing a store path as text. This is why skill packages can feed
+  store-path strings through `lib/ai/mkSkillPackageModule.nix` — verified
+  against the pinned home-manager source (2026-07). It requires an HM pin recent
+  enough to carry `isPathLike` in `mkSkillEntry`. **Historically
+  (pre-`isPathLike`)** it checked the strict `lib.isPath`, and a string input
+  silently fell through to writing the value as **TEXT CONTENT** to
+  `.claude/skills/<name>/SKILL.md` — a single line like
   `/nix/store/abc-skills/stack-fix` instead of real YAML frontmatter, so Claude
   couldn't load the skill.
 
@@ -546,6 +548,6 @@ upstream `mkSkillEntry` uses `isPathLike` (above).
 **Both our helpers and modern upstream are string-tolerant.** Our
 `mkSkillEntries` / `mkDevenvSkillEntries` and modern upstream `mkSkillEntry` all
 accept path-typed values AND store-path strings. A generated store-path string
-is now a supported, deliberate pattern (living-workflow bakes its XDG state base
-into a generated skill dir and feeds the outPath string). Reserve the
-`./`-literal discipline for the strict-`isPath` sinks noted above.
+remains a supported, deliberate pattern even though this repository no longer
+ships a first-party producer. Reserve the `./`-literal discipline for the
+strict-`isPath` sinks noted above.

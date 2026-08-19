@@ -53,7 +53,6 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
     `packages/copilot-cli/lib/mkCopilot.nix`, `packages/copilot-cli/modules/**`,
     `packages/kimchi/lib/mkKimchi.nix`, `packages/kimchi/modules/**`,
     `packages/kiro-cli/lib/mkKiro.nix`, `packages/kiro-cli/modules/**`,
-    `packages/living-workflow/modules/**`,
     `packages/stacked-workflows/modules/**`
   - Read:
     [`dev/fragments/ai-skills/skills-fanout-pattern.md`](dev/fragments/ai-skills/skills-fanout-pattern.md)
@@ -114,11 +113,6 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
   - Read:
     [`packages/kiro-cli/docs/fhs-sandbox.md`](packages/kiro-cli/docs/fhs-sandbox.md),
     [`packages/kiro-cli/docs/launcher-argv.md`](packages/kiro-cli/docs/launcher-argv.md)
-
-- **`living-workflow`**
-  - Match: `packages/living-workflow/**`
-  - Read:
-    [`packages/living-workflow/docs/living-workflow.md`](packages/living-workflow/docs/living-workflow.md)
 
 - **`markdown-formatting`**
   - Match: `**/*.md`, `checks/doubled-words-fixtures.nix`,
