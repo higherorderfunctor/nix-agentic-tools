@@ -20,12 +20,12 @@
   };
   vu = import ../lib.nix;
 
-  rev = "8ec62491c61715e190bf9a01aa66eed8f5bc0240";
+  rev = "bf47e3eca9aeda1e3826916a57c0f9fb0f9d2bc7";
   src = ourPkgs.fetchFromGitHub {
     owner = "github";
     repo = "github-mcp-server";
     inherit rev;
-    hash = "sha256-in97zO+4hW+kKh69P4HC9fCi8ovVlM42TKFbSwysFIQ=";
+    hash = "sha256-FGeb14AXutn6ehP/a+pf0+q4rqVC3BY4TaeHLGDzTaY=";
   };
 
   # TRUNK-TRACKED, so the floor is a LITERAL here rather than a sidecar
