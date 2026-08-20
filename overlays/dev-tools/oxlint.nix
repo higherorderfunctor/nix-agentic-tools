@@ -15,12 +15,12 @@
   vu = import ../lib.nix;
   tsgolint = import ./tsgolint.nix {inherit inputs final;};
 
-  rev = "f7be7cc5d3011203da2d824be18d6980adc786ba";
+  rev = "e1e7af627c8843ab64044ed466b128fcc21a035b";
   unpatchedSrc = ourPkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-DyK3OnSiipebBg6PaKQLlvaDGfw38GF8cHiOtNs9KFs=";
+    hash = "sha256-Gc+DSRIbUIkwIFzpruTLq3hQgSd5lYiDL7m19pfNPk8=";
   };
   # @napi-rs/cli's filesystem reconciliation probes a process incarnation with
   # execFile(/bin/ps) on Darwin. Node can reject that spawn synchronously under
@@ -87,7 +87,7 @@ in
       inherit (finalAttrs) pname version src;
       pnpm = ourPkgs.pnpm_11;
       fetcherVersion = 4;
-      hash = "sha256-Joc2cKRP+jwu0g1TlCV50LTtgDZS/ei9YAr9v68v2so=";
+      hash = "sha256-8Wp2hTsF2rXsi7LMTAo5AYiwhVJD1uka0JD0jr4Quos=";
     };
     # Oxc declares pnpm 11.17.0. Replace nixpkgs Oxlint's pnpm 10 build input
     # as well as its dependency fetcher so both phases use the upstream major.
