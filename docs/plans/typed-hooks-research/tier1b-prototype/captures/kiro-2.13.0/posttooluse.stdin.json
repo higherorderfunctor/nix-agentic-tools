@@ -9,5 +9,5 @@
     "run_in_background": false,
     "timeout": null
   },
-  "tool_response": "Output:\nrefactor/ai-factory-architecture\n---STATUS---\n?? docs/plans/agent-primitive-labs-design.md\n?? docs/plans/typed-hooks-phase1-build-plan.md\n---LAST 5 COMMITS---\n010dbe15 docs(living-workflow): fold co-occupied vehicle + continue-past + coverage-check (v8) (#419)\necf38faa feat(devtools): HEAD-tracked oxlint + tsgolint overlay group (#417)\n06da1e47 feat(kiro-cli): typed hooks \u2014 trigger sidecar, per-record option, both-backend lowering (#418)\ne6b8cb3d docs(living-workflow): fold version-bump + park-expiry + routing tunings (v7) (#416)\n9fd5b2c4 docs(typed-hooks): record the completed Claude typed-hooks slice + Kiro handoff\n\n\nExit Code: 0"
+  "tool_response": "Output:\nrefactor/ai-factory-architecture\n---STATUS---\n?? docs/plans/agent-primitive-labs-design.md\n?? docs/plans/typed-hooks-phase1-build-plan.md\n---LAST 3 COMMITS---\necf38faa feat(devtools): HEAD-tracked oxlint + tsgolint overlay group (#417)\n06da1e47 feat(kiro-cli): typed hooks \u2014 trigger sidecar, per-record option, both-backend lowering (#418)\n9fd5b2c4 docs(typed-hooks): record the completed Claude typed-hooks slice + Kiro handoff\n\n\nExit Code: 0"
 }

@@ -41,10 +41,10 @@
 ⚠ PLAN CLOSED (end of session 17, 2026-07-14). The kiro-cli auto-memory
 workstream is DONE — the in-repo code + the nixos-config consumer are complete
 and the loop is proven end-to-end in a nix/devenv workspace. Do NOT reopen or
-"resume" this plan. The remaining memory work is a NEW living plan the USER
-drafts via the living workflow (see STATE(17) + "Backlog — next rolling plan" +
-memory `automemory-rolling-plan`). This file is kept as the closed design +
-decision + session record; read STATE(17) first for the close-out + next steps.
+"resume" this plan. The remaining memory work belongs in a separate follow-on
+plan (see STATE(17) + "Backlog — next rolling plan" + memory
+`automemory-rolling-plan`). This file is kept as the closed design + decision +
+session record; read STATE(17) first for the close-out + next steps.
 
 (Historical resume instructions, retained for provenance:)
 Resume the kiro-cli auto-memory work. FIRST read
@@ -101,10 +101,9 @@ the same commit — future sessions inherit it by reading the doc.
 
 ── STATE (end of session 17) — PLAN CLOSED ──
 Session 17 (2026-07-13/14) executed the consumer flip (item A) AND uncovered + fixed the delivery reality for
-kiro v3. **This living plan is now CLOSED.** The in-repo code + the nixos-config consumer are done and the
-auto-memory loop is proven end-to-end in a nix/devenv workspace. Do NOT reopen this plan — remaining work is a
-SEPARATE, NEW memory living plan the USER drafts via the living workflow (see "Backlog — next rolling plan"
-below + memory `automemory-rolling-plan`).
+kiro v3. **This plan is now CLOSED.** The in-repo code + the nixos-config consumer are done and the auto-memory
+loop is proven end-to-end in a nix/devenv workspace. Do NOT reopen this plan — remaining work belongs in a
+SEPARATE, NEW memory plan (see "Backlog — next rolling plan" below + memory `automemory-rolling-plan`).
 - **Consumer flip (A) — DONE (nixos-config).** Fresh `automemory` Postgres DB running in PARALLEL with the
   legacy `openmemory` (the MODEL keeps legacy for now); native-HTTP `openmemory-mcp` fleet daemon → automemory
   (dev-no-auth, tier=deep, vecDim=768, ollama). kiro `ai.kiro.hooks`/`.rules` spliced; `omEnv` derived from the
@@ -135,7 +134,7 @@ below + memory `automemory-rolling-plan`).
 - **Process lesson recorded:** never hand-patch runtime/DB state to mask a broken declarative activation — fix
   in nix (reusable module), then re-activate from the FRESH/broken state to prove reproducibility (memory
   `no-manual-masking-activation`; the pgvector race was first mis-fixed by a manual DROP+recreate).
-NEXT (a NEW memory living plan — USER drafts it via the living workflow; do NOT reopen this plan):
+NEXT (a NEW memory plan; do NOT reopen this plan):
 1. Per-workspace hook delivery for NON-NIX repos (e.g. `~/Documents/work/gdp`) — a direnv/manual symlink→COPY
    into each repo's `.kiro/hooks/`; the devenv real-file fix only covers nix/devenv projects.
 2. Live firing test in this repo (take turns → verify `~/.kiro-memory/<repo>/now.md` + the automemory archive
@@ -844,13 +843,10 @@ activation with a manual runtime/DB fix — fix it in nix (reusable module), the
 re-activate from the fresh/broken state to prove reproducibility. (Memory
 `no-manual-masking-activation`.)
 
-**Final (S17):** this plan is DONE after this session and is not rerun. The next
-memory living plan is drafted FRESH from the _tuned_ living workflow — i.e.
-after the `living-workflow-backlog` (`B01…B24`, including this session's
-captures) is groomed and its adopted tunings fold into
-`docs/plans/living-workflow/` — pulling in the items above (session isolation,
-non-nix hook delivery, module ergonomics, retire legacy, louder/observable,
-Graphiti, `/dream`). Do NOT reopen this doc.
+**Final (S17):** this plan is DONE after this session and is not rerun. A fresh
+follow-on plan should pull in the items above (session isolation, non-nix hook
+delivery, module ergonomics, retire legacy, louder/observable, Graphiti,
+`/dream`). Do NOT reopen this doc.
 
 ## Status
 
@@ -2294,7 +2290,7 @@ hook format.
   by-construction — HM emits the JSON verbatim, devenv installs the same content
   as a real file). Fragment + tracked router updated. Hooks LOAD live in-repo
   (user-confirmed). Committed local `e73972a5`. Delivery for NON-nix repos
-  (per-workspace symlink→copy) → next memory living plan.
+  (per-workspace symlink→copy) → next memory plan.
 
 ## Session log (append-only)
 
@@ -2733,8 +2729,7 @@ hook format.
   Fixed the devenv path to write real files via `enterShell` (D36, `e73972a5`);
   hooks now load live in-repo (test-wired via a gitignored `devenv.local.nix`).
   Fragment + router updated; module-eval GREEN. See STATE(17) for the full
-  close-out + next steps (a NEW memory living plan the user drafts via the
-  living workflow). **Plan CLOSED.**
+  close-out + next steps (a separate new memory plan). **Plan CLOSED.**
 
 ## Sources
 

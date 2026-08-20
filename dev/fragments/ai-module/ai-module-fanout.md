@@ -1,49 +1,52 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-17 (commit pending — devenv Codex now resolves the
-> canonical Git common directory from its automatically populated `git.root`,
-> including directory-form or linked-worktree metadata with absolute or relative
-> `gitdir` and `commondir` values, validates the Git directory and common object
-> database before granting it directly to a selected custom permission profile,
-> and emits no Git grant for non-Git projects; the legacy workspace-root
-> behavior remains unchanged for compatibility). Prior: 2026-08-17 (commit
-> pending — devenv Codex now contributes the effective treefmt cache only when
-> treefmt is enabled, lowering it through the permission-model-aware
-> integration-root pool; the locked whole-file profile materializer exits before
-> creating empty state, avoiding a grant over every repository's profile-state
-> parent, while processes without an enabled owner receive no grant). Prior:
-> 2026-08-17 (commit pending — Codex named permission tables are enabled now
-> that upstream documents their same-name cross-layer merge; the hidden
-> integration-root pool lowers into either legacy workspace-write or the
-> selected custom permission profile, with explicit consumer rules winning at
-> the same path. Whole-file `codex --profile` layers remain a separate locked
-> surface). Prior: 2026-08-16 (commit pending — every runtime now exposes the
-> one-way `ai.<runtime>.files` static-output seam; normalized context/rules and
-> the single-owner repository AGENTS.md traverse it before native backend sinks,
-> including enabled-only public shared-target arbitration and lazy discarded
-> defaults, while Kiro uses verified symlink reload and enable-independent
-> one-shot legacy retirement with an explicit old-custom-directory transition).
-> Prior: 2026-08-16 (commit pending — Semble distinguishes its program-inherited
-> MCP integration from explicit CLI-rule and named-agent opt-ins; MCP agents use
-> a committed tool-specific prompt, and only Kiro may retain an agent-scoped
-> server while suppressing root exposure). Prior: 2026-08-16 (commit pending —
-> Kiro's shared factory now exposes a default-on `useFhsSandbox`
-> package-selection option in both backends, and places `trustedMcpTools` on the
-> inner FHS payload so devenv launcher dispatch cannot bypass it). Prior:
-> 2026-08-16 (commit pending — `mkSkillPackageModule` now consumes the
-> `ai.programs.*` factory, moving stacked-workflows and living-workflow
-> enablement into portable plus per-runtime B4 option trees while preserving
-> their per-runtime pool writes; runtime inventories now cover all five
-> registered ecosystems; stacked-workflows' machine-wide `gitPreset` remains an
-> HM-only top-level companion). Prior: 2026-08-15 (commit pending — the
-> `ai.programs.*` factory generates portable defaults and capability-gated
-> runtime override trees from one program specification; Semble is its first
-> consumer and uses program-level enable negation instead of runtime selectors;
-> divergent runtime package customizations use collision-free command aliases
-> and isolated caches). Prior: 2026-08-15 (commit pending — top-level proxied
-> MCP declarations now own one shared managed daemon and fan out only lowered
-> client entries; runtime declarations own directly, duplicate ownership keys
-> fail explicitly, and unused top-level owners are never materialized). Prior:
+> **Last verified:** 2026-08-19 (commit pending — the retired skill-package
+> program and its module tree are removed, leaving Stacked Workflows as the
+> skill-package factory consumer while preserving the per-runtime pool and
+> program contracts). Prior: 2026-08-17 (commit pending — devenv Codex now
+> resolves the canonical Git common directory from its automatically populated
+> `git.root`, including directory-form or linked-worktree metadata with absolute
+> or relative `gitdir` and `commondir` values, validates the Git directory and
+> common object database before granting it directly to a selected custom
+> permission profile, and emits no Git grant for non-Git projects; the legacy
+> workspace-root behavior remains unchanged for compatibility). Prior:
+> 2026-08-17 (commit pending — devenv Codex now contributes the effective
+> treefmt cache only when treefmt is enabled, lowering it through the
+> permission-model-aware integration-root pool; the locked whole-file profile
+> materializer exits before creating empty state, avoiding a grant over every
+> repository's profile-state parent, while processes without an enabled owner
+> receive no grant). Prior: 2026-08-17 (commit pending — Codex named permission
+> tables are enabled now that upstream documents their same-name cross-layer
+> merge; the hidden integration-root pool lowers into either legacy
+> workspace-write or the selected custom permission profile, with explicit
+> consumer rules winning at the same path. Whole-file `codex --profile` layers
+> remain a separate locked surface). Prior: 2026-08-16 (commit pending — every
+> runtime now exposes the one-way `ai.<runtime>.files` static-output seam;
+> normalized context/rules and the single-owner repository AGENTS.md traverse it
+> before native backend sinks, including enabled-only public shared-target
+> arbitration and lazy discarded defaults, while Kiro uses verified symlink
+> reload and enable-independent one-shot legacy retirement with an explicit
+> old-custom-directory transition). Prior: 2026-08-16 (commit pending — Semble
+> distinguishes its program-inherited MCP integration from explicit CLI-rule and
+> named-agent opt-ins; MCP agents use a committed tool-specific prompt, and only
+> Kiro may retain an agent-scoped server while suppressing root exposure).
+> Prior: 2026-08-16 (commit pending — Kiro's shared factory now exposes a
+> default-on `useFhsSandbox` package-selection option in both backends, and
+> places `trustedMcpTools` on the inner FHS payload so devenv launcher dispatch
+> cannot bypass it). Prior: 2026-08-16 (commit pending — `mkSkillPackageModule`
+> now consumes the `ai.programs.*` factory, moving stacked-workflows enablement
+> into portable plus per-runtime B4 option trees while preserving its
+> per-runtime pool writes; runtime inventories now cover all five registered
+> ecosystems; stacked-workflows' machine-wide `gitPreset` remains an HM-only
+> top-level companion). Prior: 2026-08-15 (commit pending — the `ai.programs.*`
+> factory generates portable defaults and capability-gated runtime override
+> trees from one program specification; Semble is its first consumer and uses
+> program-level enable negation instead of runtime selectors; divergent runtime
+> package customizations use collision-free command aliases and isolated
+> caches). Prior: 2026-08-15 (commit pending — top-level proxied MCP
+> declarations now own one shared managed daemon and fan out only lowered client
+> entries; runtime declarations own directly, duplicate ownership keys fail
+> explicitly, and unused top-level owners are never materialized). Prior:
 > 2026-08-15 (commit pending — normalized keyed pools use atomic per-runtime
 > replacement and null tombstones, with same-scope package ownership checked
 > from definition provenance). Prior: 2026-08-15 (commit pending — context is a
@@ -632,10 +635,9 @@ backend evaluations. The MCP agent and CLI rule use separate committed prompts.
 Kiro alone can carry `mcpServers.semble` inside its named agent, so
 `mcp.rootExposure = false` is rejected for other runtimes and without a matching
 MCP-backed Kiro agent. The skill-package factory now consumes the same primitive
-for stacked-workflows and living-workflow, with an enable-only program spec that
-supports every registered runtime. The rule composes into Claude and Codex's
-single always-loaded files and lets Kiro's directory-native renderer write
-`semble.md`.
+for stacked-workflows, with an enable-only program spec that supports every
+registered runtime. The rule composes into Claude and Codex's single
+always-loaded files and lets Kiro's directory-native renderer write `semble.md`.
 
 Semble also treats Codex's selected permission model as an integration boundary.
 A selected Codex feature appends that runtime's effective Semble cache to the
@@ -701,17 +703,17 @@ was first scoped to the devenv module (commit `940ec54c`); the current design
 re-adds the HM contribution as its own explicit, user-global emission, so both
 backends now contribute (each via `lib/ai/mkSkillPackageModule`).
 
-That helper now declares `ai.programs.stacked-workflows.enable` and
-`ai.programs.living-workflow.enable` through `lib.ai.program.mkProgram`. A root
-true enables every supported runtime whose pool exists in the current
-evaluation; `ai.<runtime>.programs.<name>.enable = false` retracts that
-runtime's package contribution without affecting siblings. The removed top-level
-package enable options have no aliases. `stacked-workflows.gitPreset` is
-deliberately not part of the program tree: it configures Home Manager's
-machine-wide `programs.git.settings`, has no runtime meaning, and remains an
-HM-only companion instead of creating misleading runtime overrides.
+That helper declares `ai.programs.stacked-workflows.enable` through
+`lib.ai.program.mkProgram`. A root true enables every supported runtime whose
+pool exists in the current evaluation;
+`ai.<runtime>.programs.stacked-workflows.enable = false` retracts that runtime's
+package contribution without affecting siblings. The removed top-level package
+enable option has no alias. `stacked-workflows.gitPreset` is deliberately not
+part of the program tree: it configures Home Manager's machine-wide
+`programs.git.settings`, has no runtime meaning, and remains an HM-only
+companion instead of creating misleading runtime overrides.
 
-**Both contributions land PER RUNTIME, not on the root pool** — since 2026-08-14
+**The contributions land PER RUNTIME, not on the root pool** — since 2026-08-14
 the factory writes `ai.<runtime>.skills` and `ai.<runtime>.rules` for every
 runtime whose module is present in the evaluation, filtered by
 `lib.hasAttrByPath ["ai" name "skills"] options`. Root `ai.skills` belongs to

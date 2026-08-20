@@ -21,9 +21,9 @@ local implementation where the two harnesses diverge.
 
 Testing whether a skill triggers is meaningless against the developer's real
 user-global config, which carries the `superpowers` family, the `stack-*`
-skills, `living-workflow`, ~20 MCP servers, and a large `CLAUDE.md`. A lab is a
-**clean room**: the primitive under test is the only thing present. The Nix
-modules are the delivery mechanism, not the subject.
+skills, ~20 MCP servers, and a large `CLAUDE.md`. A lab is a **clean room**: the
+primitive under test is the only thing present. The Nix modules are the delivery
+mechanism, not the subject.
 
 ### Non-goals
 

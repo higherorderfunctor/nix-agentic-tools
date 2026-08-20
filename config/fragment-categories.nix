@@ -119,7 +119,6 @@ _: {
         "packages/kimchi/modules/**"
         "packages/kiro-cli/lib/mkKiro.nix"
         "packages/kiro-cli/modules/**"
-        "packages/living-workflow/modules/**"
         "packages/stacked-workflows/modules/**"
       ];
       sources = ["skills-fanout-pattern"];
@@ -283,19 +282,6 @@ _: {
           location = "package";
           name = "launcher-argv";
           dir = "kiro-cli";
-        }
-      ];
-    };
-    # living-workflow: generated-skill ownership, state-root substitution, and
-    # independent HM/devenv program fanout. The architecture is package-specific
-    # and therefore co-located with the package.
-    living-workflow = {
-      scopes = ["packages/living-workflow/**"];
-      sources = [
-        {
-          location = "package";
-          name = "living-workflow";
-          dir = "living-workflow";
         }
       ];
     };

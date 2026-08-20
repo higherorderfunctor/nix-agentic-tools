@@ -963,9 +963,8 @@ tracked docs.
 
 ## Parked items
 
-**This is a plain design/execute plan, not a living plan.** It has no
-`living-workflow` register, no `park_clock`, no expiry, and no grooming ritual.
-This section is a **temporary staging area**, not a permanent tracker.
+**This is a plain design/execute plan.** This section is a **temporary staging
+area**, not a permanent tracker.
 
 The working rule during execution:
 
@@ -980,13 +979,10 @@ The working rule during execution:
 >   Never stall the main body of work for either.
 
 > **Exit gate — FIRED 2026-07-21.** Every parked item (P1–P14) was drained into
-> the converged living plan `docs/plans/converge-agentic-foundations.md`
-> (open-items register; machine state under
-> `living-workflows/nix-agentic-tools/converge-agentic-foundations/`), and the
-> item bodies were deleted from this section per its own must-not-outlive rule.
-> Full bodies remain in git history (commit `53526699`, this file pre-drain).
-> New parkings during remaining labs work go straight to that register, never
-> back here.
+> `docs/plans/converge-agentic-foundations.md`, and the item bodies were deleted
+> from this section per its own must-not-outlive rule. Full bodies remain in git
+> history (commit `53526699`, this file pre-drain). New parkings must not use
+> the retired register.
 
 ---
 

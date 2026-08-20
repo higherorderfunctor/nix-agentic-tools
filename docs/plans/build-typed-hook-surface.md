@@ -1,14 +1,5 @@
 # Build the done-right typed hook option surface (B2)
 
-> **Living plan** (dev-living-workflow, FULL tier, CLI mode). This doc is the
-> human-readable face; the **authoritative machine state is out-of-repo** at
-> `${XDG_STATE_HOME:-~/.local/state}/living-workflows/nix-agentic-tools/typed-hook-surface/`
-> (`state.json` + `journal.ndjson`). The out-of-repo `state.json` is
-> authoritative; this doc is a synced snapshot for humans + cross-session merge.
->
-> **living_doc_baseline:** `v8-onyx-moor-rowan` (master:
-> `.claude/skills/dev-living-workflow/references/living-plan-bootstrap.md`).
->
 > **⏸ PAUSED 2026-07-21 for a 3-session unify** (see CROSS-SESSION MERGE
 > CONTEXT). This doc was flushed to disk at operator request so a merge session
 > can consume it.

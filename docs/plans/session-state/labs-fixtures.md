@@ -17,10 +17,10 @@ selection, subagent orchestration, tool-intercepting hooks) against the real
 Claude and Kiro CLIs.
 
 **Why it exists:** testing "does my skill trigger?" is meaningless against the
-real user-global config, which carries the `superpowers` family, `stack-*`,
-`living-workflow`, ~20 MCP servers and a large `CLAUDE.md`. The lab is a clean
-room where the primitive under test is the only thing present. **The Nix modules
-are the delivery mechanism, not the subject.**
+real user-global config, which carries the `superpowers` family, `stack-*`, ~20
+MCP servers and a large `CLAUDE.md`. The lab is a clean room where the primitive
+under test is the only thing present. **The Nix modules are the delivery
+mechanism, not the subject.**
 
 **Explicit non-goal:** a regression/assertion layer. No `checks/` entries, no
 golden files. Deferred until the labs produce something worth locking down.
@@ -195,8 +195,8 @@ Kiro/Claude config that is silently not applied.**
   → **delivery mechanism** (symlink vs real file).
 - **Their session (b)** —
   `af53cf63 feat(kiro-cli): real-file HM hook delivery + shared tui/v3 wrapper`,
-  `cb223061 docs(typed-hooks): add build-typed-hook-surface living plan`. →
-  **hook wiring**.
+  `cb223061 docs(typed-hooks): add build-typed-hook-surface plan`. → **hook
+  wiring**.
 - **This session (c)** — `KIRO_HOME` does not deliver global hooks _at all_,
   with real files on both sides. → **scope**, orthogonal to delivery.
 

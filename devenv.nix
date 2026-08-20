@@ -217,14 +217,12 @@ in {
     ./packages/copilot-cli/modules/devenv
     ./packages/kiro-cli/modules/devenv
     ./packages/semble/modules/devenv
-    # NOTE: the stacked-workflows and living-workflow devenv modules are NOT
-    # imported here. Enabling them would fan their skills into `ai.skills`
-    # UNPREFIXED (stack-*, living-workflow) — which, once those packages are
-    # installed user-global via nixos-config, the personal-scope copies would
-    # silently shadow (Claude precedence: Personal > Project). This dev repo
-    # instead wires the same skills directly under a `dev-` prefix (see the
-    # `ai.skills` block below) so the in-repo copies are distinctly invocable
-    # and not shadowed while developing them.
+    # NOTE: the stacked-workflows devenv module is NOT imported here. Enabling
+    # it would fan its skills into `ai.skills` UNPREFIXED (stack-*), which, once
+    # installed user-global via nixos-config, would silently shadow the
+    # project-scope copies (Claude precedence: Personal > Project). This dev
+    # repo instead wires the same skills directly under a `dev-` prefix (see the
+    # `ai.skills` block below) so the in-repo copies remain distinctly invocable.
   ];
 
   # ── Overlays ──────────────────────────────────────────────────────────
@@ -437,12 +435,11 @@ in {
     };
 
     skills = let
-      # Dev-repo self-consumption. Both the stacked-workflows and
-      # living-workflow skills are installed here under a `dev-` prefix so the
-      # in-repo copies never collide with — or get shadowed by — the
-      # user-global installs of the same skills (Claude precedence: Personal >
-      # Project, silent). Consumers and the global installs stay unprefixed
-      # (stack-*, living-workflow); only this dev shell prefixes.
+      # Dev-repo self-consumption. The stacked-workflows skills are installed
+      # here under a `dev-` prefix so the in-repo copies never collide with — or
+      # get shadowed by — user-global installs (Claude precedence: Personal >
+      # Project, silent). Consumers and global installs stay unprefixed; only
+      # this dev shell prefixes.
       prefixSkill = name: value: let
         devName = "dev-${name}";
       in
@@ -456,20 +453,12 @@ in {
         devName = "dev-${name}";
       in
         lib.nameValuePair devName (prefixSkill name value));
-      lwSkill = import ./packages/living-workflow/lib/mkSkill.nix {inherit pkgs;};
       traceSource = import ./lib/traceSource.nix {inherit lib;};
     in
       # stacked-workflows: re-key the deref'd, self-contained stack-* skill
       # dirs (real reference files bundled inside each) as dev-stack-*.
       prefixDev pkgs.stacked-workflows-content.passthru.skills
       // {
-        # living-workflow: generated with the devenv XDG shell-default state
-        # base (devenv has no config.xdg.stateHome), keyed dev-living-workflow.
-        dev-living-workflow = prefixSkill "living-workflow" (lwSkill {
-          stateBase = "\${XDG_STATE_HOME:-$HOME/.local/state}/living-workflows";
-          src = ./packages/living-workflow/skills/living-workflow;
-        });
-
         # Dev skills (repo-local tooling, not published packages). Wrapped in
         # traceSource.tracedPath so devenv/direnv track their source CONTENTS
         # (a bare `./dir` handed to ai.skills is copied, never read inside, so
@@ -771,13 +760,10 @@ in {
     # Deref'd references must resolve on disk (guards the dangling-symlink
     # regression end-to-end, not just at the store-path level).
     test -f .claude/skills/dev-stack-fix/references/git-branchless.md || { echo "FAIL: dev-stack-fix reference git-branchless.md does not resolve"; exit 1; }
-    test -f .claude/skills/dev-living-workflow/SKILL.md || { echo "FAIL: .claude/skills/dev-living-workflow/SKILL.md missing"; exit 1; }
     test -f .claude/skills/repo-review/SKILL.md || { echo "FAIL: .claude/skills/repo-review/SKILL.md missing"; exit 1; }
     test -L .agents/skills/dev-stack-fix || { echo "FAIL: .agents/skills/dev-stack-fix is not a skill-directory symlink"; exit 1; }
     test -f .agents/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .agents/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     ${pkgs.gnugrep}/bin/grep -Fq 'name: dev-stack-fix' .agents/skills/dev-stack-fix/SKILL.md || { echo "FAIL: Codex dev-stack-fix metadata is not dev-prefixed"; exit 1; }
-    test -L .agents/skills/dev-living-workflow || { echo "FAIL: .agents/skills/dev-living-workflow is not a skill-directory symlink"; exit 1; }
-    ${pkgs.gnugrep}/bin/grep -Fq 'name: dev-living-workflow' .agents/skills/dev-living-workflow/SKILL.md || { echo "FAIL: Codex dev-living-workflow metadata is not dev-prefixed"; exit 1; }
     (
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
@@ -785,7 +771,6 @@ in {
       trap '${pkgs.coreutils}/bin/rm -rf -- "$nat_codex_probe_home"' EXIT
       CODEX_HOME="$nat_codex_probe_home" "$nat_codex_bin" debug prompt-input probe > "$nat_codex_probe_home/prompt.json"
       ${pkgs.gnugrep}/bin/grep -Fq -- '- dev-stack-fix:' "$nat_codex_probe_home/prompt.json" || { echo "FAIL: Codex did not discover dev-stack-fix"; exit 1; }
-      ${pkgs.gnugrep}/bin/grep -Fq -- '- dev-living-workflow:' "$nat_codex_probe_home/prompt.json" || { echo "FAIL: Codex did not discover dev-living-workflow"; exit 1; }
     )
     test -f .github/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .github/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     test -f .kiro/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .kiro/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
