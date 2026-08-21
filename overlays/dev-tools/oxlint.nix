@@ -15,12 +15,12 @@
   vu = import ../lib.nix;
   tsgolint = import ./tsgolint.nix {inherit inputs final;};
 
-  rev = "1bb5c236f755fc2057d44f1d7ef630c5e8dd43a6";
+  rev = "b016fd41101de5038a77484c11c0a19c1aa965a9";
   unpatchedSrc = ourPkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-wg7u0qz/7ro2YHnNl9GGfgdX6GlK4OsFZcDuefczSyo=";
+    hash = "sha256-1HD9HVJj0VW5sjB+dLyZ42SxlM2zOLy61q+jT3oEXgQ=";
   };
   # @napi-rs/cli's filesystem reconciliation probes a process incarnation with
   # execFile(/bin/ps) on Darwin. Node can reject that spawn synchronously under
@@ -81,7 +81,7 @@ in
     inherit version src;
     cargoDeps = ourPkgs.rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
-      hash = "sha256-huMyPeKTY543122/AB5A0P1Xtd7I45fpWVsT1EPG6IM=";
+      hash = "sha256-GzPqJLGA0Uq6JuXMU58+0ToM5zin8wbwSeSQI+JdUd8=";
     };
     pnpmDeps = ourPkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
