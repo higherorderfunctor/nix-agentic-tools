@@ -96,6 +96,12 @@ rec {
       binary, version, destination = sys.argv[1:]
 
 
+      version_match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
+      if not version_match:
+          raise SystemExit(f"codex-extract: malformed Codex version: {version!r}")
+      version_tuple = tuple(int(part) for part in version_match.groups())
+
+
       def invoke(arguments, root):
           environment = os.environ.copy()
           environment.update({"CODEX_HOME": root + "/codex-home", "HOME": root + "/home"})
@@ -225,8 +231,12 @@ rec {
           for flag in root_flags
           for name in flag["names"]
       }
+      # Codex 0.149.0 removed `untrusted` and rejects configs that still use it.
+      approval_values = {"never", "on-request"}
+      if version_tuple < (0, 149, 0):
+          approval_values.add("untrusted")
       required_values = {
-          "--ask-for-approval": {"never", "on-request", "untrusted"},
+          "--ask-for-approval": approval_values,
           "--sandbox": {"danger-full-access", "read-only", "workspace-write"},
       }
       if "codex" not in records or len(records) < 20:
