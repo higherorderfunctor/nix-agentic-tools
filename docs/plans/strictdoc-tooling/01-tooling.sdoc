@@ -91,7 +91,7 @@ RELATIONS:
 [MECHANISM]
 UID: MECH-CYCLE-CHECK
 TITLE: Cycle detection over the JSON export
-DEPTH: needs-design
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
 Detect relation cycles in the exported graph independently of StrictDoc.
@@ -299,3 +299,60 @@ the node's RELATIONS, so a second pass over the same data would just be the
 first one run twice. Its first real run over this repo's own graph found 5
 pre-existing violations; see SLICE-FP-DETECTOR's NOTES.
 <<<
+
+[MECHANISM]
+UID: MECH-SDOC-CI-CHECK
+TITLE: Gate the design graph in nix flake check
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Add a flake check that exports the graph to JSON and fails on non-zero exit, so
+a broken relation or an invalid enum value cannot merge.
+<<<
+RATIONALE: >>>
+Validation currently runs only when someone remembers to run it. The export is
+a few seconds on a corpus this size.
+<<<
+NOTES: >>>
+The check must use a clean output directory. Incremental generation produces a
+false green: the same broken input exits 1, then 0 on re-run against a warm
+output directory.
+
+checks/strictdoc-fp-check.nix (SLICE-FP-DETECTOR) already exports the whole
+graph into a clean runCommand $TMPDIR and fails the build on a non-zero
+`strictdoc export` -- validation runs at parse time, so this may already
+satisfy this mechanism's STATEMENT as a byproduct rather than needing a
+separate check. Left at sketch rather than closed here: that is a judgment
+call for whoever grooms this item, not something to decide implementing an
+unrelated slice.
+<<<
+
+[SLICE]
+UID: SLICE-GRAPH-CHECKS
+TITLE: Make the graph fail loud on cycles and on an unvalidated export
+DEPTH: interface-settled
+AUTHORED_BY: human
+STATEMENT: >>>
+Two checks over the JSON export, in the harness fp-check already established.
+
+Cycle detection, because StrictDoc's own is blind to relations that carry a
+role and every relation here carries one -- a cycle currently surfaces as a
+recursion crash during render rather than an error.
+
+An export gate, so a malformed document cannot reach the branch. Determine
+first whether checks/strictdoc-fp-check.nix already provides this as a
+byproduct of its clean-directory export; if it does, say so and close
+MECH-SDOC-CI-CHECK rather than adding a second binary.
+<<<
+RATIONALE: >>>
+Both are small and both close holes that have already been hit. A broken graph
+was committed to this branch and the hooks passed it. Cycles have never been
+tested because nothing detects them.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-CYCLE-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SDOC-CI-CHECK
+  ROLE: Crosses
