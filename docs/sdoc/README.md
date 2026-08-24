@@ -64,8 +64,11 @@ is the manual stand-in; `MECH-READY-QUERY` is the node that replaces it.
 
 > Implementing `<SLICE-UID>` from the strictdoc design graph, branch
 > `feat/strictdoc-trial`, worktree at `<path>`. Invoke the `sdoc` skill. Read
-> that slice and everything it `Crosses` before starting. Log incidental
-> findings to the plan backlog rather than telling me.
+> that slice and everything it `Crosses` before starting. **Never run
+> `fp-accept`** — signing a contract is the operator's key, and an agent commits
+> under the operator's name, so an agent signature is indistinguishable from a
+> real one afterwards. Use a fixture to exercise it. Log incidental findings to
+> the plan backlog rather than telling me.
 
 Give it a slice UID, not a description. The slice's own closure is the brief,
 and the graph already says whether it is ready.
