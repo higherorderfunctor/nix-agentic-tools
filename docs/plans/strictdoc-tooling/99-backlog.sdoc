@@ -492,3 +492,68 @@ NOTES: >>>
 Probably belongs to the beads work rather than here, and is likely to get lost
 there. Tracked in this plan so it survives, not because this is its home.
 <<<
+
+[DECISION]
+UID: DEC-NO-DELETES-YET
+TITLE: Do not delete nodes until the immutability mechanics are settled
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+The retention and immutability question settles: whether a node is deleted with
+Git history as the record, or is immutable outside explicit state changes.
+<<<
+STATEMENT: >>>
+Supersede, do not delete. Until the record model is chosen, a removed node is
+an unrecoverable choice made by whoever happened to be editing.
+
+Known violation, logged rather than reverted: SLICE-SEMBLE-SDOC was deleted
+during deduplication, having been written twice in two places. Restoring it
+would recreate the duplicate it was removed to fix, so grooming should rule on
+whether to reinstate it as superseded or accept the deletion.
+<<<
+RATIONALE: >>>
+The two candidate models -- delete with Git history as the record, versus
+immutable outside state changes -- differ in what a deletion costs. Deleting
+under the first is routine; under the second it destroys the record. Choosing
+by accident, one edit at a time, is how the answer gets made without anyone
+deciding it.
+<<<
+
+[MECHANISM]
+UID: MECH-GROOM-CONTRADICTION-CHECK
+TITLE: Grooming must surface contradictions, not just missing edges
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+When a node is groomed, check whether an edge is missing that should exist, and
+whether an existing edge now contradicts what the node says. Surface the
+collision rather than silently resolving it.
+
+A live example to test against: DEC-FP-ACCEPT-AUTHORITY holds that human-only
+signing is too blunt and should key on grade. At least three places currently
+assert human-only outright -- the authoring skill's hard rule, the acceptance
+language in DEC-LONG-LIVED-BRANCH, and the two-keys split recorded around
+DEPTH verified. None of them cite DEC-FP-ACCEPT-AUTHORITY and none is edged to
+it, so nothing connects the open question to the assertions it contradicts.
+<<<
+RATIONALE: >>>
+This is the failure the whole system exists to catch, and it is currently
+uncaught in its own graph. The author's stated reason for building this is
+returning to a conclusion having forgotten the reasoning; a contradiction with
+no edge between its two halves is exactly that, made durable.
+<<<
+
+[MECHANISM]
+UID: MECH-TESTS-AS-CONTRACT
+TITLE: Flows get tests as a contract once they settle
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+Once a flow's mechanics are settled, it gets tests that stand as its contract.
+No regression is acceptable in this area afterwards.
+<<<
+RATIONALE: >>>
+Deliberately after settling, not before. Writing tests against mechanics still
+being played with pins the wrong thing and makes changing it feel like
+breakage.
+<<<
