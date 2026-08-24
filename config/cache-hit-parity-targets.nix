@@ -73,6 +73,7 @@ _: {
     otel-tui = {consumerPath = ["ai" "generic" "otel-tui"];};
     pnpm_10 = {consumerPath = ["ai" "generic" "pnpm_10"];};
     pnpm_11 = {consumerPath = ["ai" "generic" "pnpm_11"];};
+    tree-sitter-strictdoc = {consumerPath = ["ai" "generic" "tree-sitter-strictdoc"];};
 
     # ── agnix + its mainProgram-override siblings ──
     # agnix itself is a flatDrvs entry at `consumerPkgs.ai.agnix`; the

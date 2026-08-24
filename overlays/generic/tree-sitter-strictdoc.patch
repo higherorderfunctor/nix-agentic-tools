@@ -1,0 +1,94 @@
+--- a/grammar/grammar.js
++++ b/grammar/grammar.js
+@@ -27,24 +27,30 @@
+
+   rules: {
+     source_file: ($) =>
+-      seq(
+-        "[DOCUMENT]",
+-        "\n",
+-        optional(
+-          seq("MID", ":", " ", field("mid", $.single_line_string), "\n"),
++      choice(
++        seq(
++          "[DOCUMENT]",
++          "\n",
++          optional(
++            seq("MID", ":", " ", field("mid", $.single_line_string), "\n"),
++          ),
++          "TITLE",
++          ":",
++          " ",
++          field("title", $.single_line_string),
++          "\n",
++          optional(field("config", $.document_config)),
++          optional(field("view", $.document_view)),
++          optional(field("grammar", $.document_grammar)),
++          optional(
++            field(
++              "section_and_requirement_list",
++              $.section_or_requirement_list,
++            ),
++          ),
++          optional($._eof),
+         ),
+-        "TITLE",
+-        ":",
+-        " ",
+-        field("title", $.single_line_string),
+-        "\n",
+-        optional(field("config", $.document_config)),
+-        optional(field("view", $.document_view)),
+-        optional(field("grammar", $.document_grammar)),
+-        optional(
+-          field("section_and_requirement_list", $.section_or_requirement_list),
+-        ),
+-        optional($._eof),
++        seq(field("grammar", $.standalone_grammar), optional($._eof)),
+       ),
+
+     ...document_config_rules,
+--- a/grammar/rules/document_grammar.js
++++ b/grammar/rules/document_grammar.js
+@@ -1,4 +1,7 @@
+ module.exports = {
++  standalone_grammar: ($) =>
++    seq("[GRAMMAR]", "\n", choice($.grammar_elements, $.import_from_file)),
++
+   document_grammar: ($) =>
+     seq(
+       "\n",
+@@ -144,6 +147,16 @@
+           " ",
+           field("relation_role", $.single_line_string),
+           "\n",
++          optional(
++            seq(
++              "    ",
++              "REVERSE_ROLE",
++              ":",
++              " ",
++              field("reverse_relation_role", $.single_line_string),
++              "\n",
++            ),
++          ),
+         ),
+       ),
+     ),
+@@ -166,6 +179,16 @@
+           " ",
+           field("relation_role", $.single_line_string),
+           "\n",
++          optional(
++            seq(
++              "    ",
++              "REVERSE_ROLE",
++              ":",
++              " ",
++              field("reverse_relation_role", $.single_line_string),
++              "\n",
++            ),
++          ),
+         ),
+       ),
+     ),

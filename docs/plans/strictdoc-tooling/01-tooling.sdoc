@@ -120,6 +120,15 @@ Report the blocking frontier and the open-decision count otherwise. The same
 traversal produces the bounded prompt handed to an implementing model.
 <<<
 PARENT_FP: DEC-LOCAL-IMPLEMENTABILITY:0000000
+NOTES: >>>
+A real gap surfaced implementing SLICE-SDOC-IN-SEMBLE: its closure crosses
+MECH-SEMBLE-EXTRA-GRAMMARS and MECH-SEMBLE-PATH-MAPPINGS, both carrying
+PARENT_FP: DEC-ARCH-COLOCATION, and that decision's STATUS is still open. By
+this mechanism's own definition the slice was not implementable, yet the
+operator directed implementation anyway and it shipped clean. Until this query
+exists, nothing catches that gap except a human (or a model) noticing --
+exactly the case this mechanism is meant to replace.
+<<<
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-LOCAL-IMPLEMENTABILITY
@@ -128,9 +137,9 @@ RELATIONS:
 [SPIKE]
 UID: SPIKE-SGRA-PARSE
 TITLE: Make the tree-sitter grammar parse standalone .sgra files
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
-STATUS: unrun
+STATUS: run
 RETIRES_ON: >>>
 A three-rule patch is applied and the two .sgra files parse with no regression
 across the sdoc corpus.
@@ -139,11 +148,27 @@ STATEMENT: >>>
 The upstream tree-sitter grammar parses all sdoc documents but fails every
 standalone .sgra grammar file, because its root rule requires a DOCUMENT header.
 <<<
+NOTES: >>>
+Run. The DOCUMENT-header fix alone was not sufficient: our own grammar.sgra
+also uses REVERSE_ROLE on every non-File Parent relation, and upstream's
+grammar_relation_parent/child rules had no field for it at all, so it still
+errored after the root-rule fix. The applied patch is therefore three rule
+changes across two files (source_file's root choice, a new standalone_grammar
+rule, and REVERSE_ROLE added to both relation rules) rather than one.
+
+Measured against this repo's own corpus (6 .sdoc + grammar.sgra): 6/7 clean
+before the patch, 7/7 after. Measured against strictdoc-project/strictdoc's
+own docs/ (15 files, pinned rev 215cda2e): 5/15 clean both before and after —
+the other 10 fail on pre-existing document-body/FREETEXT coverage gaps this
+patch never targeted (out of DEC-GRAMMAR-PATCH-NOT-FORK's scope; logged as
+MECH-SGRA-BODY-COVERAGE in the plan backlog). checks/strictdoc-grammar-corpus.nix
+is the standing regression gate against both corpora.
+<<<
 
 [SLICE]
 UID: SLICE-SDOC-IN-SEMBLE
 TITLE: Index sdoc documents in semble
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Package a tree-sitter grammar for the sdoc format as a flake output, add it to
@@ -155,6 +180,15 @@ RATIONALE: >>>
 The repository's flake instructions already require that a custom grammar absent
 from nixpkgs be exposed as a flake package so the authenticated matrix publishes
 it. Every mechanism this slice crosses is already implemented.
+<<<
+NOTES: >>>
+Implemented: overlays/generic/tree-sitter-strictdoc.nix (flake package
+tree-sitter-strictdoc, flattened via pkgs.ai.generic), wired into
+ai.codex.programs.semble.grammars and mcp.pathMappings in devenv.nix (patterns
+*.sdoc and *.sgra, content docs). Load check:
+checks/module-eval.nix:module-semble-strictdoc-grammar-load. Regression/corpus
+suite: checks/strictdoc-grammar-corpus.nix (see SPIKE-SGRA-PARSE for measured
+counts). update-targets and cache-hit-parity rows added; both checks pass.
 <<<
 RELATIONS:
 - TYPE: Parent

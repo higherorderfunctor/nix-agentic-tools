@@ -221,6 +221,9 @@
       pnpm_11 = import ./generic/pnpm_11.nix {
         inherit inputs final;
       };
+      tree-sitter-strictdoc = import ./generic/tree-sitter-strictdoc.nix {
+        inherit inputs final;
+      };
     }
     # gluetun is the one genuinely LINUX-ONLY package here: `internal/routing`
     # uses `unix.RT_TABLE_MAIN`/`RT_TABLE_LOCAL`, which x/sys/unix defines on
