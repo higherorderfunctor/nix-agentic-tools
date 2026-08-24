@@ -7,15 +7,24 @@ applyTo: "checks/beads-lifecycle.nix,checks/module-eval.nix,docs/beads/bd-refere
 
 # Beads devenv lifecycle
 
-> **Last verified:** 2026-08-18 (commit pending — records successful validation
-> of the generated lifecycle against Dolt 2.3.0; no lifecycle shape changed).
-> Prior: 2026-08-16 (commit pending — initial `services.beads` lifecycle
-> implementation for #992).
+> **Last verified:** 2026-08-24 (commit pending — the Beads overlay now owns and
+> updates the exact nested Dolt derivation exposed as `passthru.dolt`, removing
+> the lifecycle's accidental dependence on when nixpkgs updates Dolt). Prior:
+> 2026-08-18 (commit pending — records successful validation of the generated
+> lifecycle against Dolt 2.3.0; no lifecycle shape changed). Prior: 2026-08-16
+> (commit pending — initial `services.beads` lifecycle implementation for #992).
 
 `services.beads` is intentionally devenv-only. It owns repository-local
 operational state and does not create an `ai.programs.beads` distribution tree;
 agent-runtime delivery remains #993. The repository itself does not enable the
 module. #994 owns the first real-ledger exercise.
+
+The package boundary is a release pair. `pkgs.ai.devTools.beads` pins Beads and
+the exact Dolt runtime its inherited wrapper puts on `PATH`; the lifecycle reads
+that same runtime from `passthru.dolt`. The existing `beads` update target runs
+both upstream release checks independently and carries either change through one
+branch, package build, Cachix session, and PR. Dolt is deliberately not a second
+top-level package or update target.
 
 ## Ownership boundary
 

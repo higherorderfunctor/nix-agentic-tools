@@ -74,7 +74,9 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
   repository's `ourPkgs` and derived-Go-floor machinery. The sidecar owns the
   source hash, vendor hash, and `go.mod` floor (**1.26.2**); the stable-release
   update script follows GitHub's `releases/latest` redirect and excludes
-  prereleases. `[measured package @1.2.2]`
+  prereleases. A sibling sidecar pins the exact Dolt exposed as `passthru.dolt`;
+  two independent child updaters run behind the one Beads update target, so
+  either release moves on the same branch and PR. `[measured package @1.2.2]`
 - **Upstream flake**: pins `nixos-25.11`, requires `buildGo126Module`, exposes
   `beads-unwrapped` via `overlays.default` with a documented `vendorHash`
   override recipe. Its wrapper adds shell completions and sets
@@ -89,15 +91,17 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
 - **dolt**: a separate binary, required for the server modes.
   `bd dolt push/pull` may use the CLI or Dolt SQL procedures; an external server
   whose data directory is not visible to Beads uses `CALL DOLT_PUSH` /
-  `CALL DOLT_PULL`. nixpkgs carries Dolt 2.3.0 at this repo's 2026-08 pin
-  (Apache-2.0). Dolt's `metrics.disabled` default is false.
-  `DOLT_DISABLE_EVENT_FLUSH=1` prevents queued events from being sent but still
-  permits local event files; complete collection disablement is the stateful
-  user-global `metrics.disabled = true` setting. The repository's `bd` wrapper
-  sets the no-flush variable for every Dolt child process. A clean-home `init` +
-  `status` probe with `DOLT_DISABLE_EVENT_FLUSH=1` created local event payloads,
-  confirming that the wrapper control prevents network flushing but is not the
-  collection kill switch. `DOLT_ROOT_PATH=<contained-root>` relocates both
+  `CALL DOLT_PULL`. The repository-owned Beads pair was bootstrapped from
+  nixpkgs' Dolt 2.3.0 recipe at this repo's 2026-08 pin (Apache-2.0), then
+  decoupled onto its own automated release sidecar. Dolt's `metrics.disabled`
+  default is false. `DOLT_DISABLE_EVENT_FLUSH=1` prevents queued events from
+  being sent but still permits local event files; complete collection
+  disablement is the stateful user-global `metrics.disabled = true` setting. The
+  repository's `bd` wrapper sets the no-flush variable for every Dolt child
+  process. A clean-home `init` + `status` probe with
+  `DOLT_DISABLE_EVENT_FLUSH=1` created local event payloads, confirming that the
+  wrapper control prevents network flushing but is not the collection kill
+  switch. `DOLT_ROOT_PATH=<contained-root>` relocates both
   `.dolt/config_global.json` and `.dolt/eventsData`; setting
   `metrics.disabled=true` there before init leaves exactly the contained global
   config, events directory, and event lock, with no `.devts` payload; a distinct

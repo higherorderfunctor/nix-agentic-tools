@@ -921,20 +921,24 @@ aggregate but skips its dependency leaves.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-08-15 (commit pending — registers the sidecar-owned
-> stable Beads release as a binary update target without introducing a second
-> source tracker). Prior: 2026-08-03 (commit pending — adds reverse
-> package-to-target completeness coverage using derivation, source,
-> update-script, flake-input, package-exemption, and registry-exemption
-> properties). Prior: 2026-08-03 (commit pending — limits package DAG edges to
-> initialization plus explicit target-specific constraints and removes
-> base-checkout finalizers that could not observe isolated update branches).
-> Prior: 2026-08-03 (commit pending — repairs the always-uploaded hidden
-> update-report artifact and makes its absence fail loudly). Prior: 2026-08-03
-> (commit pending — records the fifth required `devenv-test` context in the
-> update workflow's auto-merge contract). Prior: 2026-08-03 (commit pending —
-> moves the `gh` and `glab` update targets with their overlay files from
-> `generic/` to `dev-tools/`). Prior: 2026-08-02 (commit pending — the
+> **Last verified:** 2026-08-24 (commit pending — makes the existing Beads
+> binary target a grouped owner: its compound update script independently checks
+> the Beads and paired Dolt release sidecars, then commits either or both onto
+> the one `update/beads` branch without changing Ninja, Cachix warming, build
+> verification, or PR publication). Prior: 2026-08-15 (commit pending —
+> registers the sidecar-owned stable Beads release as a binary update target
+> without introducing a second source tracker). Prior: 2026-08-03 (commit
+> pending — adds reverse package-to-target completeness coverage using
+> derivation, source, update-script, flake-input, package-exemption, and
+> registry-exemption properties). Prior: 2026-08-03 (commit pending — limits
+> package DAG edges to initialization plus explicit target-specific constraints
+> and removes base-checkout finalizers that could not observe isolated update
+> branches). Prior: 2026-08-03 (commit pending — repairs the always-uploaded
+> hidden update-report artifact and makes its absence fail loudly). Prior:
+> 2026-08-03 (commit pending — records the fifth required `devenv-test` context
+> in the update workflow's auto-merge contract). Prior: 2026-08-03 (commit
+> pending — moves the `gh` and `glab` update targets with their overlay files
+> from `generic/` to `dev-tools/`). Prior: 2026-08-02 (commit pending — the
 > `llm-agents` input update regenerates Semble's upstream-template snapshot
 > through its separate extraction derivation, while human-reviewed content
 > hashes intentionally remain manual and make CI stop on unreviewed drift).
@@ -974,10 +978,15 @@ Targets fall into three categories:
   the local derivative is reviewed.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
   a worktree, optionally preceded by a rev bump for main-tracking packages. The
-  `treefmt-nix` input target waits for the other isolated targets, then the
-  final `update-report` target runs `update-report.sh` to print a summary
-  grouped by status. There is no base-checkout format/build finalizer because it
-  cannot observe changes committed only on target branches.
+  Beads binary target is the one grouped package: its `passthru.updateScript`
+  runs independent Beads and Dolt release updaters in sequence, so either
+  upstream can move while the target still produces one branch, one build of
+  `.#beads`, and one PR. The paired Dolt remains a nested package dependency,
+  not a second registry row or Ninja edge. The `treefmt-nix` input target waits
+  for the other isolated targets, then the final `update-report` target runs
+  `update-report.sh` to print a summary grouped by status. There is no
+  base-checkout format/build finalizer because it cannot observe changes
+  committed only on target branches.
 
 ### Worktree isolation
 

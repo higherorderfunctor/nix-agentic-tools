@@ -4,8 +4,10 @@
 # module must defend against. If a future package fixes one, this check should
 # fail so the lifecycle and reference can be simplified from fresh evidence.
 {pkgs, ...}: let
-  inherit (pkgs) beads dolt;
+  inherit (pkgs) beads;
   qualifiedBeads = pkgs.ai.devTools.beads;
+  inherit (qualifiedBeads) dolt;
+  vu = import ../overlays/lib.nix;
 in
   pkgs.runCommandLocal "beads-contracts-check" {
     nativeBuildInputs = [
@@ -118,11 +120,17 @@ in
     probe="$TMPDIR/beads-contracts"
     mkdir -p "$probe/version-home"
 
-    expect_eq "packaged bd version" "bd version 1.2.2 (dev)" "$(${qualifiedBeads}/bin/bd --version)"
+    ${vu.goModFloorFn {inherit pkgs;}}
+
+    expect_eq "packaged bd version" "bd version ${qualifiedBeads.version} (dev)" "$(${qualifiedBeads}/bin/bd --version)"
     expect_eq \
       "packaged Dolt version" \
-      "dolt version 2.3.0" \
+      "dolt version ${dolt.version}" \
       "$(HOME="$probe/version-home" ${dolt}/bin/dolt version | head -n 1)"
+    expect_eq \
+      "paired Dolt Go floor" \
+      "${dolt.goFloor}" \
+      "$(go_floor_of "${dolt.src}/go/go.mod")"
     expect_eq "comparison bd version" "bd version 1.0.3 (dev)" "$(${beads}/bin/bd --version)"
 
     # The contained init primitive: a neutral, non-Git cwd plus an explicit

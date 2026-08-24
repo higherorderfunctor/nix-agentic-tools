@@ -1,21 +1,25 @@
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-16 (commit pending — corrects the current Go-floor
-> count to eight after Beads joined the covered set; Kiro's `withFhsPayload`
-> passthru and FHS opt-out leave the default derivation byte-identical, and only
-> configurations requesting an inner chat wrapper or the explicit unwrapped
-> selection fork from it). Prior: 2026-08-15 (commit pending — adds the
-> stable-release Beads overlay under `pkgs.ai.devTools`, built from this
-> repository's nixpkgs pin rather than the independently pinned Numtide
-> derivation). Prior: 2026-08-16 (commit pending — nixpkgs 9ddfd8a consolidated
-> Kiro's three FHS derivations into one shared environment. The overlay still
-> recomposes exclusively through `ourPkgs`, so the topology change preserves the
-> same consumer/standalone cache identity contract). Prior: 2026-08-10 (commit
-> pending — `overlays/kiro-cli.nix` is no longer a plain `overrideAttrs`, so the
-> "pure binary-fetch" example below is re-pointed. nixpkgs f13ff45a split the
-> package, and the overlay now overrides `kiro-cli-unwrapped` and re-composes
-> upstream's wrapper with `.override`. Parity is UNAFFECTED and the reason is
-> worth stating: both sides of the parity check import `inputs.nixpkgs`, so the
+> **Last verified:** 2026-08-24 (commit pending — Beads now pins its nested Dolt
+> runtime from the same `ourPkgs` instance and passes that exact derivation into
+> nixpkgs' Beads wrapper, so the grouped release cadence adds no consumer-pinned
+> build input and remains covered by Beads' existing parity row). Prior:
+> 2026-08-16 (commit pending — corrects the current Go-floor count to eight
+> after Beads joined the covered set; Kiro's `withFhsPayload` passthru and FHS
+> opt-out leave the default derivation byte-identical, and only configurations
+> requesting an inner chat wrapper or the explicit unwrapped selection fork from
+> it). Prior: 2026-08-15 (commit pending — adds the stable-release Beads overlay
+> under `pkgs.ai.devTools`, built from this repository's nixpkgs pin rather than
+> the independently pinned Numtide derivation). Prior: 2026-08-16 (commit
+> pending — nixpkgs 9ddfd8a consolidated Kiro's three FHS derivations into one
+> shared environment. The overlay still recomposes exclusively through
+> `ourPkgs`, so the topology change preserves the same consumer/standalone cache
+> identity contract). Prior: 2026-08-10 (commit pending —
+> `overlays/kiro-cli.nix` is no longer a plain `overrideAttrs`, so the "pure
+> binary-fetch" example below is re-pointed. nixpkgs f13ff45a split the package,
+> and the overlay now overrides `kiro-cli-unwrapped` and re-composes upstream's
+> wrapper with `.override`. Parity is UNAFFECTED and the reason is worth
+> stating: both sides of the parity check import `inputs.nixpkgs`, so the
 > `ourPkgs ? kiro-cli-unwrapped` feature-detection resolves the same way on both
 > and cannot itself drift — see the overlay-pattern fragment for the seam).
 > Prior: 2026-08-05 (commit pending — records that a consumer's
@@ -162,12 +166,13 @@ outright with `go.mod requires go >= 1.26.5 (running go 1.26.2)`. A package with
 no toolchain-floor seam inherits whatever `go` the followed nixpkgs ships, and
 `gh` was silently one bump behind the same fate.
 
-The Go floor seam (overlay-pattern fragment) now covers all eight Go packages,
-so that specific class is handled — a followed older nixpkgs gets a `go-bin`
-toolchain instead of a failure. It does NOT make `follows` supported: the
-consumer still gets zero cache hits, and the next toolchain-shaped dependency
-that lacks a floor seam will break the same way. The README carries the
-consumer-facing version of this warning.
+The Go floor seam (overlay-pattern fragment) now covers all eight exported Go
+packages plus Beads' nested paired Dolt runtime, so that specific class is
+handled — a followed older nixpkgs gets a `go-bin` toolchain instead of a
+failure. It does NOT make `follows` supported: the consumer still gets zero
+cache hits, and the next toolchain-shaped dependency that lacks a floor seam
+will break the same way. The README carries the consumer-facing version of this
+warning.
 
 ### The trade-off (accepted in commit e5406977)
 
