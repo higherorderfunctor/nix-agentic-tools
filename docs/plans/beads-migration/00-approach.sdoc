@@ -1,0 +1,148 @@
+[DOCUMENT]
+TITLE: Converting the fleet design corpus to sdoc
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-CONVERT-IS-ADJUDICATION
+TITLE: Converting the fleet corpus is adjudication, not migration
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: >>>
+The corpus is fully converted, at which point there is nothing left to adjudicate.
+<<<
+STATEMENT: >>>
+The source corpus is not trusted input. Its author could not manage it and does
+not know what is stale, what is dirty, or which requirements survive from
+superseded designs. Therefore no bulk conversion is planned. A cluster is
+converted at the moment someone is about to work on it, and the act of
+converting it is the act of deciding what is still true.
+<<<
+RATIONALE: >>>
+A migration project would import the mess wholesale and produce a validated
+graph of assertions nobody has checked. The parser proves an edge resolves; it
+cannot prove the two ends agree.
+<<<
+
+[DECISION]
+UID: DEC-VIEWER-BEFORE-BULK
+TITLE: The viewer ships before any bulk conversion
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: >>>
+A derived human-readable view exists and someone reads a converted slice from
+it without opening a raw sdoc file.
+<<<
+STATEMENT: >>>
+Until a derived view exists, converting prose to sdoc makes the reading surface
+worse, not better. Source that was narrative becomes UID and STATEMENT blocks,
+and StrictDoc's own renders are out of scope by choice.
+<<<
+RATIONALE: >>>
+The corpus was graded F for human digestion after reading ten percent of it.
+Conversion contributes nothing to that grade on its own. Converting the whole
+corpus before building the viewer spends weeks and leaves the grade standing.
+<<<
+NOTES: >>>
+This is the strongest argument against the whole approach and is recorded as an
+open decision rather than buried, so it has to be answered rather than forgotten.
+<<<
+
+[SLICE]
+UID: SLICE-FIRST-CONVERSION
+TITLE: First conversion target is the lane-iteration cluster
+DEPTH: needs-design
+AUTHORED_BY: llm
+STATEMENT: >>>
+Convert 12-flow-iterate, 13-flow-settle and 14-flow-kill. 426 lines, roughly 60
+nodes: one SLICE, ~26 MECHANISM, 13 INVARIANT from the grain rules, ~15
+DECISION, ~4 SPIKE.
+<<<
+RATIONALE: >>>
+Measured as the only multi-file design cluster carrying zero references to the
+fleet-shape hinge, which is the corpus's largest instability with 22
+localizations across 20 files. 14-flow-kill states outright that the hinge does
+not reopen the flow. Eight dead out-edges against eighteen for the nearest
+alternative, and six of the eight become live once register rows are nodes.
+Two of its own open items dissolve rather than transfer if it is built host-side
+first, which the corpus already offers as an escape hatch.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-VIEWER-BEFORE-BULK
+  ROLE: Assumes
+
+[MECHANISM]
+UID: MECH-DROPPED-SECTION-TOMBSTONES
+TITLE: Tombstone the nine dropped sections before converting past the first slice
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Create nine DECISION nodes with STATUS superseded, one per dropped section, each
+recording its pending citation count and retiring on the first slice that needs
+the content restored.
+<<<
+RATIONALE: >>>
+123 references across 9 dropped sections would otherwise become 123 hard export
+errors at once, and resolving them means deciding whether four subsystems are
+restored or their citations rewritten. That is a design decision on four
+subsystems gated behind a tooling migration, and it is where the conversion
+would stall. Tombstones convert a hard block into nine tracked debts. The first
+slice needs only two of them.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By
+
+[MECHANISM]
+UID: MECH-DERIVE-CACHED-LAYERS
+TITLE: Delete the hand-maintained summary layers and derive them from JSON
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Delete the index table, the grain index, and the per-file frontmatter counters.
+Regenerate each from the JSON export.
+<<<
+RATIONALE: >>>
+These are the duplicated cache layer that motivated the move. They are already
+drifting: four of forty-one files disagree with their own bodies, and the grain
+index covers 16 of 127 rules while reading as complete. This is the one part of
+the reading problem that conversion fixes mechanically on day one.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By
+
+[SPIKE]
+UID: SPIKE-CONVERSION-SIGNAL
+TITLE: Does converting 426 lines surface an unknown contradiction
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATUS: unrun
+RETIRES_ON: >>>
+The first slice is converted and either surfaces at least one contradiction the
+author did not know about, or does not.
+<<<
+STATEMENT: >>>
+Convert the lane-iteration cluster and count contradictions discovered that were
+not known beforehand. A null result falsifies the approach for the cost of one
+day.
+<<<
+RATIONALE: >>>
+A fresh reader found several in an afternoon without looking hard, so a null
+result would be surprising and therefore informative.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: SLICE-FIRST-CONVERSION
+  ROLE: Governed_By
