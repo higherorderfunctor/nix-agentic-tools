@@ -109,22 +109,6 @@ false green: the same broken input exits 1, then 0 on re-run against a warm
 output directory.
 <<<
 
-[MECHANISM]
-UID: MECH-FP-RELATION-LINT
-TITLE: Every PARENT_FP entry should have a matching relation
-DEPTH: sketch
-AUTHORED_BY: llm
-STATEMENT: >>>
-A node recording a fingerprint for a parent asserts a dependency on that
-parent's contract, so it should also carry an edge to it. Nothing enforces
-that today, and several nodes in this graph already have a fingerprint with no
-corresponding relation.
-<<<
-RATIONALE: >>>
-Without the lint the two can disagree silently, and the edge is what the
-traversal follows. A fingerprint the traversal cannot reach is invisible to both
-the drift check and the render cache.
-<<<
 
 [MECHANISM]
 UID: MECH-SGRA-BODY-COVERAGE
