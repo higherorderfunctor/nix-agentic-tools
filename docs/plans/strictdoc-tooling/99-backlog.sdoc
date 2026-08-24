@@ -414,3 +414,81 @@ RELATIONS:
 - TYPE: Parent
   VALUE: DEC-FP-FIELDS-CONFIGURABLE
   ROLE: Governed_By
+
+[DECISION]
+UID: DEC-FP-ACCEPT-AUTHORITY
+TITLE: Who may sign a fingerprint should depend on the grade, not be human-only
+AUTHORED_BY: human
+STATUS: open
+RETIRES_ON: >>>
+A real drift event produces enough edges to make the current rule painful,
+which is the first evidence of where the line actually belongs.
+<<<
+STATEMENT: >>>
+Human-only signing is the current rule and is too blunt. If a couple of nodes
+change in a way that touches a hundred edges without meaning anything, and both
+ends are llm-authored and llm-graded, an agent should be able to re-sign those
+without raising them.
+
+The line is authority, not effort. A contract the operator authored or accepted
+escalates to the operator. One that has only ever been llm-graded does not.
+<<<
+RATIONALE: >>>
+The failure mode of human-only is not that it is unsafe, it is that it floods.
+A queue of a hundred no-impact acceptances trains the operator to approve
+without reading, which is the same rubber stamp the rule exists to prevent,
+arrived at from the other direction.
+<<<
+NOTES: >>>
+Unsettled: whether the deciding field is the PARENT's authority, the CHILD's,
+or either end being human. The parent owns the contract that moved; the child
+owns the assumption that may no longer hold. Both readings are defensible and
+the answer probably wants a real drift event to look at.
+
+AUTHORED_BY already carries the distinction, so this likely needs no new field.
+<<<
+
+[MECHANISM]
+UID: MECH-RUNTIME-WRITE-GUARD
+TITLE: Enforce field ownership at the runtime rather than in a document
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+Guard operator-owned fields where the model actually acts, not in guidance it
+has to have read. A tool-call hook that inspects an edit for a change to a
+guarded field and fails loudly back to the model is the cheap version, and it
+works whether the model edits directly or through a script it wrote.
+
+Not exhaustive, and heavier options are probably bad ideas: a filesystem layer
+that makes guarded fields unwritable was considered and is recorded only so it
+is not reinvented enthusiastically later.
+<<<
+RATIONALE: >>>
+Demonstrated rather than hypothetical. A hard rule in the authoring skill did
+not prevent an agent from signing five contracts, because a rule in a document
+is guidance and nothing checks it. The same gap covers AUTHORED_BY, which
+MECH-AUTHORED-BY-GUARD already tracks from the static side; this is the runtime
+side of the same problem.
+<<<
+
+[MECHANISM]
+UID: MECH-AGENT-IDENTITY-KEYS
+TITLE: Give agents their own signing identity
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+Per-agent SSH keys, so a commit made by a model is attributable to that model
+rather than to the operator whose machine it ran on.
+<<<
+RATIONALE: >>>
+Identity is the one thing that must not go fuzzy, and today it is: an agent
+commits under the operator's name, which is what made five agent-written
+signatures forensically indistinguishable from real ones. Every guard
+downstream of this -- fingerprint acceptance, AUTHORED_BY, any future audit --
+rests on being able to tell who acted, and none of them can while the answer is
+always the operator.
+<<<
+NOTES: >>>
+Probably belongs to the beads work rather than here, and is likely to get lost
+there. Tracked in this plan so it survives, not because this is its home.
+<<<
