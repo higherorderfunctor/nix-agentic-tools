@@ -5,57 +5,8 @@ TITLE: What a plan is for, and how long it lives
 IMPORT_FROM_FILE: @repo
 
 [DECISION]
-UID: DEC-SYSTEM-PURPOSE
-TITLE: This exists to keep an implementing model on target, not to manage requirements
-AUTHORED_BY: human
-STATUS: accepted
-RETIRES_ON: >>>
-A second consumer appears whose needs are not served by that purpose --
-compliance, audit, or a human readership that is not the plan's own author.
-<<<
-STATEMENT: >>>
-The system's purpose is context management and edge mechanics during
-implementation: keeping a model on target, and catching what it would otherwise
-miss -- contradictions, stale areas, orphans, conflicts nobody noticed.
-
-It is not a requirements management system, not a documentation system, and not
-a deliverable. Any feature that serves those and not the purpose above is out of
-scope by default.
-<<<
-RATIONALE: >>>
-Stated because nearly every alternative design in this space optimizes for a
-human readership or an audit trail, and inheriting those goals silently is how
-this becomes heavy. The reader being optimized for is a model with a bounded
-context and no memory of yesterday.
-<<<
-
-[DECISION]
-UID: DEC-PLAN-SINGLE-OWNER
-TITLE: A plan has one owner and concurrent human editing is not a design concern
-AUTHORED_BY: human
-STATUS: accepted
-RETIRES_ON: >>>
-Two people need to edit one plan, which would mean plans had become a shared
-artifact rather than an individual one.
-<<<
-STATEMENT: >>>
-Plans are individual. One person owns a plan and directs a model through it. The
-multi-contributor surface is the WORK, not the plan, and at that scale the
-shared artifact is an external tracker rather than anything here.
-<<<
-RATIONALE: >>>
-This removes a whole class of design work. Locking, merge semantics for a plan
-node, and concurrent-edit conflict resolution are all unnecessary. Two people
-editing the same plan node is rare enough to handle by hand if it ever happens.
-<<<
-NOTES: >>>
-Does not extend to the settled architecture nodes, which are shared by
-construction and outlive any one plan.
-<<<
-
-[DECISION]
 UID: DEC-PLAN-LIFECYCLE-OPEN
-TITLE: Whether plans are committed at all is unsettled
+TITLE: What a plan node's retention is, and what collects it
 AUTHORED_BY: human
 STATUS: open
 RETIRES_ON: >>>
@@ -75,6 +26,13 @@ immutable snapshot taken at ingest.
 An intermediate position, also unsettled: commit only the snapshot that led to
 the work, for lineage, and never an in-progress plan. Then no plan changes
 underneath anyone.
+
+NARROWED. Plans are not structurally different from specifications -- same
+nodes, same edges, same fingerprints, same machinery. The only open question is
+RETENTION: how long a plan node lives, and what collects it. That is answerable
+from one observation rather than from argument, and it is the same shape as the
+question MECH-FP-PREMERGE-GC asks about what survives between commits on a
+feature branch. One mechanism may serve both.
 <<<
 RATIONALE: >>>
 Recorded as open rather than decided because the author does not yet have a
@@ -117,7 +75,7 @@ TITLE: Ingest to beads freezes the plan
 DEPTH: sketch
 AUTHORED_BY: human
 STATEMENT: >>>
-At ingest the plan is snapshotted immutably and execution state moves to beads.
+SUPERSEDED by MECH-PLAN-CHANGE-KINDS: too strong. At ingest the plan is snapshotted immutably and execution state moves to beads.
 The plan does not track progress after that point, and beads is the only thing
 whose state changes.
 <<<
