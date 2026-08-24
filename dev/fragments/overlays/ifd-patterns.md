@@ -1,6 +1,11 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-19 (commit pending — removes a retired
+> **Last verified:** 2026-08-24 (commit pending — Codex's exact approval-policy
+> guard now follows the pinned binary's version boundary: pre-0.149.0 releases
+> must retain `untrusted`, while 0.149.0 and newer must expose only `never` and
+> `on-request`. This admits upstream's intentional removal without accepting
+> either vocabulary indefinitely, so the normal version-bump path can regenerate
+> the sidecar). Prior: 2026-08-19 (commit pending — removes a retired
 > generated-skill IFD check; Stacked Workflows remains the cross-platform
 > generated-skill constraint). Prior: 2026-08-16 (commit pending —
 > `devenv-test.yml` now attributes real repository instruction projections to
@@ -311,9 +316,12 @@ captured something — a non-empty guard is worthless here, because a dead ancho
 still matched one token. Concretely: the effort enum requires exactly one
 distinct match; the model catalog requires an id from each of the opus / sonnet
 / haiku families. Codex requires its recursive tree to retain the root and at
-least 20 commands, asserts the exact sandbox and non-deprecated approval enums,
-and rejects empty feature/model results. When you add a key or category, add its
-shape assertion in the same commit.
+least 20 commands, asserts the exact sandbox enum and the exact approval enum
+for the pinned version, and rejects empty feature/model results. The version
+qualification is narrow rather than an either-set allowance: releases before
+0.149.0 require `untrusted`, while 0.149.0 and newer reject it, matching
+upstream's explicit removal. When you add a key or category, add its shape
+assertion in the same commit.
 
 #### An anchor can lose its TYPE information without losing its match
 
