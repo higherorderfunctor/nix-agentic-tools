@@ -1,3 +1,10 @@
+APFS
+EEXIST
+GOARCH
+GOOS
+GOTOOLCHAIN
+GOWORK
+Patchelf
 aclose
 addy
 adoc
@@ -10,7 +17,6 @@ agentsmd
 agnix
 aihubmix
 anthropics
-APFS
 applyto
 argjson
 argstr
@@ -79,6 +85,7 @@ cpaczek
 createdb
 creds
 crystallise
+ctypes
 cuda
 customisation
 dataurl
@@ -106,7 +113,6 @@ drainedness
 drvs
 dsolve
 dunder
-EEXIST
 elicitations
 emnapi
 endgroup
@@ -154,17 +160,13 @@ gluetun
 gnugrep
 gnused
 gnutar
-GOARCH
 gocache
 godebug
 goflags
 gofont
 gomono
-GOOS
 gopls
 goproxy
-GOTOOLCHAIN
-GOWORK
 gpgsign
 headlessly
 heredocs
@@ -296,7 +298,6 @@ passthroughs
 passthru
 passwordless
 pasteable
-Patchelf
 pathlib
 pathspec
 pdsolve
@@ -362,6 +363,7 @@ sandboxed
 sarif
 scriptable
 sdiehl
+sdoc
 segs
 semble
 sequentialthinking
@@ -370,6 +372,7 @@ serialised
 serialising
 sess
 setext
+sgra
 shellharden
 shortrev
 sigmask
@@ -391,6 +394,7 @@ statix
 stdenv
 stopword
 streamable
+strictdoc
 strs
 subdirs
 subkeys
@@ -458,6 +462,7 @@ vendorhash
 watchlist
 webp
 wikilink
+worklist
 worktree
 worktrees
 wyhash

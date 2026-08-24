@@ -380,6 +380,7 @@ in {
         # an edit would otherwise be served from a stale eval cache).
         index-repo-docs = traceSource.tracedPath ./dev/skills/index-repo-docs;
         repo-review = traceSource.tracedPath ./dev/skills/repo-review;
+        sdoc = traceSource.tracedPath ./dev/skills/sdoc;
       };
   };
 
