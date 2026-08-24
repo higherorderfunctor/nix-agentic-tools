@@ -191,6 +191,12 @@ in {
       jq
       python3
     ]
+    # strictdoc CLI for the sdoc skill's required format/export loop and for
+    # dev/scripts/fp-check.py, fp-accept.py (SLICE-FP-DETECTOR). Interactive
+    # only -- checks/strictdoc-fp-check.nix and
+    # checks/strictdoc-grammar-corpus.nix pull it via nativeBuildInputs, not
+    # devShell PATH.
+    ++ lib.optionals (!isCI) [strictdoc]
     # LSP servers (in PATH for ENABLE_LSP_TOOL and MCP bridging) —
     # interactive-only, dropped from the diagnostic closure (~1GB: nixd pulls
     # llvm, marksman pulls dotnet). See the isCI note above.

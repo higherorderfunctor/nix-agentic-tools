@@ -107,6 +107,14 @@ NOTES: >>>
 The check must use a clean output directory. Incremental generation produces a
 false green: the same broken input exits 1, then 0 on re-run against a warm
 output directory.
+
+checks/strictdoc-fp-check.nix (SLICE-FP-DETECTOR) already exports the whole
+graph into a clean runCommand $TMPDIR and fails the build on a non-zero
+`strictdoc export` -- validation runs at parse time, so this may already
+satisfy this mechanism's STATEMENT as a byproduct rather than needing a
+separate check. Left at sketch rather than closed here: that is a judgment
+call for whoever grooms this item, not something to decide implementing an
+unrelated slice.
 <<<
 
 [MECHANISM]
@@ -321,7 +329,7 @@ RELATIONS:
 [MECHANISM]
 UID: MECH-FP-ACCEPT-READINESS
 TITLE: Refuse to sign a fingerprint against a parent that is still moving
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: human
 STATEMENT: >>>
 fp-accept refuses to record a hash for a parent that is not yet stable:
@@ -335,6 +343,14 @@ RATIONALE: >>>
 Accepting a contract asserts that no further change is expected. A hash taken
 against a node someone is still editing is meaningless: it goes stale the next
 day, and the resulting suspect report trains the reader to dismiss suspects.
+<<<
+PARENT_FP: MECH-FP-CHECK:5360cbe
+NOTES: >>>
+Implemented as sdoc_fp.is_ready() (dev/scripts/sdoc_fp.py), the single
+readiness predicate dev/scripts/fp-accept.py calls before signing any entry.
+Verified against a synthetic fixture covering both refusal branches: a
+DECISION with STATUS open and a MECHANISM at DEPTH sketch. Both were
+refused with the reason stated; neither was silently skipped.
 <<<
 RELATIONS:
 - TYPE: Parent
