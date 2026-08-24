@@ -82,7 +82,7 @@ RATIONALE: >>>
 StrictDoc has no suspect-link feature. It is on the upstream backlog as
 SDOC-SRS-117 and described unbuilt in their DO-178 notes.
 <<<
-PARENT_FP: DEC-FINGERPRINT-IN-NODE:b2c00b4
+PARENT_FP: DEC-FINGERPRINT-IN-NODE:0000000
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-FINGERPRINT-IN-NODE
@@ -231,9 +231,9 @@ see MECH-FP-FIELD-TUNING. Git-flow handling is deliberately absent: nothing
 bites before a branch reaches main, and that merge is the forcing function.
 <<<
 PARENT_FP: >>>
-MECH-FP-ACCEPT-READINESS:ff63967
-MECH-FP-CHECK:5360cbe
-MECH-FP-RELATION-LINT:704b6d9
+MECH-FP-ACCEPT-READINESS:0000000
+MECH-FP-CHECK:0000000
+MECH-FP-RELATION-LINT:0000000
 <<<
 NOTES: >>>
 Implemented: dev/scripts/fp-check.py and fp-accept.py, sharing dev/scripts/
