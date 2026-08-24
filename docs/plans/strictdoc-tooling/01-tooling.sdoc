@@ -125,22 +125,6 @@ RELATIONS:
   VALUE: DEC-LOCAL-IMPLEMENTABILITY
   ROLE: Governed_By
 
-[SLICE]
-UID: SLICE-SEMBLE-SDOC
-TITLE: Index sdoc documents in semble via a tree-sitter grammar
-DEPTH: interface-settled
-AUTHORED_BY: llm
-STATEMENT: >>>
-Package a tree-sitter grammar for the sdoc format as a flake output and register
-it with semble, so sdoc documents are chunked on node boundaries rather than by
-line count.
-<<<
-RATIONALE: >>>
-The semble integration already accepts arbitrary tree-sitter grammar packages.
-This slice crosses no mechanism in this document and has zero open decisions in
-its closure.
-<<<
-
 [SPIKE]
 UID: SPIKE-SGRA-PARSE
 TITLE: Make the tree-sitter grammar parse standalone .sgra files
@@ -155,3 +139,30 @@ STATEMENT: >>>
 The upstream tree-sitter grammar parses all sdoc documents but fails every
 standalone .sgra grammar file, because its root rule requires a DOCUMENT header.
 <<<
+
+[SLICE]
+UID: SLICE-SDOC-IN-SEMBLE
+TITLE: Index sdoc documents in semble
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Package a tree-sitter grammar for the sdoc format as a flake output, add it to
+ai.programs.semble.grammars, and register a path mapping assigning *.sdoc to
+that language in the docs index. Add a load check modelled on the existing
+extra-grammars check, parsing a real sdoc sample.
+<<<
+RATIONALE: >>>
+The repository's flake instructions already require that a custom grammar absent
+from nixpkgs be exposed as a flake package so the authenticated matrix publishes
+it. Every mechanism this slice crosses is already implemented.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SEMBLE-EXTRA-GRAMMARS
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SEMBLE-PATH-MAPPINGS
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: SPIKE-SGRA-PARSE
+  ROLE: Proven_By
