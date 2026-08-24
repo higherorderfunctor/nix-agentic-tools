@@ -263,8 +263,9 @@ in {
       python3
     ]
     # strictdoc CLI for the sdoc skill's required format/export loop and for
-    # dev/scripts/fp-check.py, fp-accept.py (SLICE-FP-DETECTOR). Interactive
-    # only -- checks/strictdoc-fp-check.nix and
+    # dev/scripts/fp-check.py, fp-accept.py (SLICE-FP-DETECTOR) and
+    # cycle-check.py (MECH-CYCLE-CHECK). Interactive only --
+    # checks/strictdoc-fp-check.nix, checks/strictdoc-cycle-check.nix, and
     # checks/strictdoc-grammar-corpus.nix pull it via nativeBuildInputs, not
     # devShell PATH.
     ++ lib.optionals (!isCI) [strictdoc]
