@@ -334,3 +334,84 @@ RELATIONS:
 - TYPE: Parent
   VALUE: MECH-FP-MAIN-LINEAGE
   ROLE: Assumes
+
+[MECHANISM]
+UID: MECH-FP-ACCEPT-READINESS
+TITLE: Refuse to sign a fingerprint against a parent that is still moving
+DEPTH: interface-settled
+AUTHORED_BY: human
+STATEMENT: >>>
+fp-accept refuses to record a hash for a parent that is not yet stable:
+a MECHANISM, SLICE, INVARIANT or SPIKE below interface-settled, or a DECISION
+whose STATUS is open.
+
+No new field is needed. DEPTH already distinguishes still-moving from stable,
+and STATUS does the same for decisions.
+<<<
+RATIONALE: >>>
+Accepting a contract asserts that no further change is expected. A hash taken
+against a node someone is still editing is meaningless: it goes stale the next
+day, and the resulting suspect report trains the reader to dismiss suspects.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Governed_By
+
+[MECHANISM]
+UID: MECH-FP-GIT-FLOW-HAZARDS
+TITLE: Git operations that change node content before it reaches main
+DEPTH: needs-design
+AUTHORED_BY: human
+STATEMENT: >>>
+Squash is SAFE. It preserves the final tree, so a content hash is byte
+identical before and after and matches the branch tip. Only the intermediate
+commits are lost, which costs diagnostics rather than correctness.
+
+Rebase is the hazard, in two ways:
+
+- Rebasing onto a main that changed a node you depend on makes the parent's
+  content genuinely different, so a recorded hash goes stale. This is correct
+  behavior arriving at the wrong moment: during a mechanical operation, where
+  the reader is not thinking about design and learns to dismiss the report.
+- Conflict resolution can produce node content that neither side authored. The
+  result is a contract nobody accepted, created silently by a merge.
+
+Restacking is a series of rebases and therefore the second hazard repeatedly.
+<<<
+RATIONALE: >>>
+None of this bites until a branch reaches main; before that it is local churn
+and a re-accept costs nothing. Merging to main is the forcing function, so the
+handling is deliberately deferred until the first merge -- by which point the
+approach may have changed enough that a solution designed now would be wasted.
+<<<
+NOTES: >>>
+What is NOT yet designed: whether a rebase should re-accept automatically when
+the parent's change is confined to fields outside the fingerprint, and how to
+detect content produced by conflict resolution rather than by an author. Both
+want a real merge to look at rather than speculation.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Assumes
+
+[MECHANISM]
+UID: MECH-FP-FIELD-TUNING
+TITLE: Tune the contract field selection once the option surface exists
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+Revisit which fields a fingerprint covers, through the Nix option surface,
+after the prototype has been in use. The prototype's hardcoded selection is a
+starting point chosen to exercise the logic, not a settled answer.
+<<<
+RATIONALE: >>>
+The option surface is not load bearing for building the detector, so waiting on
+it would block work for no gain. But the selection does need the operator's
+review eventually, and reviewing it as prose was already rejected.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-FP-FIELDS-CONFIGURABLE
+  ROLE: Governed_By
