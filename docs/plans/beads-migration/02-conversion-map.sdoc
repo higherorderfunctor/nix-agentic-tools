@@ -1,0 +1,140 @@
+[DOCUMENT]
+TITLE: Fleet corpus conversion map
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-CORPUS-SHAPE-MAP
+TITLE: Which content shape becomes which node type
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured across 42 files and 4252 lines. Counts are instances found, not
+estimates. Realistic node total for a full conversion is 360 to 420, against
+the prior bundle's 990 nodes over 99 documents.
+
+| shape | instances | becomes | citation |
+| --- | --- | --- | --- |
+| section body | 41 | SLICE or MECHANISM | one h2 per file |
+| GRAIN rules | 127 over 90 labels | INVARIANT | 01-how-to-read.md:48 |
+| OPEN cards | 132 to 47 distinct ids | DECISION for the 47; 85 fold into their host node | 04-register.md:74 |
+| register green-blockers | 16 rows | fold into the 47 DECISIONs | 04-register.md:96 |
+| register deferred T-rows | 16 rows | fold into DECISION or SPIKE | 04-register.md:127 |
+| cast-table rows | 223 in 25 tables | MECHANISM, deduped to 61-90 | 12-flow-iterate.md:28 |
+| slices B1 to B4 | 4 rows | SLICE | 05-phases-and-gate.md:34 |
+| acceptance bars EX1 to EX5 | 5 | INVARIANT, or fold into SLICE | 05-phases-and-gate.md:61 |
+| probes | 9 rows | SPIKE | 34-appendix-probes.md:36 |
+| measured facts | ~25 bullets | SPIKE with STATUS run | 35-appendix-measured.md:28 |
+| rejected paths | 19 rows + 2 prior-art | DECISION with STATUS rejected | 37-appendix-rejected.md:28 |
+| provenance corrections | 4 rows | Superseded_By edges | 41-appendix-provenance.md:32 |
+| provenance drops | 10 rows | 9 tombstone DECISIONs | 41-appendix-provenance.md:45 |
+| glossary | 21 terms | free text; 7 open ones attach to the hinge | 40-glossary.md:26 |
+| argument/matrix tables | 47 tables, 328 rows | free text inside STATEMENT | 21-isolation-promise.md:51 |
+| pseudocode | 18 blocks, 446 lines | free text plus a symbol-reference lint | 12-flow-iterate.md:77 |
+| mermaid figures | 7 | free text plus a participant lint | 12-flow-iterate.md:52 |
+| HTML presentation markup | 378 lines | DROPPED | every file, lines 14-18 |
+| index table | 29 rows | DELETED, regenerate from JSON | 00-index.md:13 |
+| grain index | 16 rows | DELETED, regenerate from JSON | 39-appendix-grain-index.md:26 |
+| frontmatter counters | 41 x 3 | DELETED, derived | already drifting in 4 of 41 |
+
+Node budget by type: ~41 section nodes, 61-90 MECHANISM from casts, 127
+INVARIANT, ~66 DECISION, ~34 SPIKE, ~5 LAYER.
+<<<
+RATIONALE: >>>
+Do not nodify the argument and matrix tables. They are arguments, not entities,
+and decomposing them is the over-specification trap. The same applies to the
+option tree in the config document: one MECHANISM statement, not a node per
+option.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By
+
+[MECHANISM]
+UID: MECH-CORPUS-EDGE-MAP
+TITLE: Which dependencies become which relation roles
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Six roles, derived from real dependencies rather than a taxonomy.
+
+| role | from to | forced by | count |
+| --- | --- | --- | --- |
+| Crosses | SLICE to MECHANISM | the cast tables' "defined in" column | ~223 |
+| Governed_By | MECHANISM to DECISION | the register's "blocks" column | ~130 |
+| Guarantees | MECHANISM to INVARIANT | grain rules sit beside their mechanism | 127 |
+| Assumes | MECHANISM to DECISION | 108 blast-radius statements | ~108 |
+| Proven_By | MECHANISM or INVARIANT to SPIKE | the grain index's rule-to-evidence table | ~34 |
+| Superseded_By | DECISION to DECISION | provenance corrections and one reopened rejection | ~8 |
+
+Horizontal, meaning architectural-layer neighbours, is Crosses plus
+Serialized_By. Vertical, meaning execution and gating, is Governed_By plus
+Assumes. The split falls out of the cast table and the register respectively.
+
+Serialized_By is deferred: it is forced only by the locks document. Add it when
+that slice converts.
+<<<
+RATIONALE: >>>
+Constrain Assumes to MECHANISM to DECISION rather than any to any. All 108
+blast-radius statements already fit that shape, and any-to-any is a cycle
+generator. Keeping MECHANISM and INVARIANT leaf-ward makes the graph acyclic by
+construction, which matters because cycles among role-carrying relations are not
+detected by the parser.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-CYCLE-CHECK
+  ROLE: Assumes
+
+[SPIKE]
+UID: SPIKE-CORPUS-STALE-INVENTORY
+TITLE: What looks stale on a first reading
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATUS: run
+RETIRES_ON: >>>
+Each item is confirmed or dismissed by the operator, or the section holding it
+is converted and the question resolved in the process.
+<<<
+STATEMENT: >>>
+Ordered by how much each would mislead an implementing model. This is a reading
+pass by a fresh reader, NOT an audit, and no item is confirmed.
+
+1. The register is not the source of truth it claims to be. Seven open-card ids
+   appear in section bodies with no register row. One states a hard blocker
+   cited by four sections and therefore carries no retirement condition. Two
+   rows named pointer-only appear as no card anywhere.
+2. The phases document contradicts itself within 30 lines: the four slices need
+   nothing open resolved, versus no slice owns fleet-instance lifecycle.
+3. The grain label vocabulary is a declared, unfixed blocker: 127 rules, 90
+   distinct labels, one placeholder appearing 22 times, case-variant duplicates.
+4. The same defect undeclared in the cast kind column: ten values declared, 43
+   observed, including multi-word phrases. Nothing notices this one.
+5. Probes are documented twice, differently, in the probes appendix and the
+   register, which the register's own rule forbids.
+6. The measured record contains non-measurements: two entries recorded as
+   unprobed inside a document whose stated purpose is what was actually run.
+7. The grain index is an 87 percent incomplete projection that reads as
+   complete: 16 of 127 rules.
+8. Two layers describe the same cost model twice with different vocabularies.
+   They agree today and nothing checks that they continue to.
+9. Dead scaffolding still cited as live: the three largest holes are referenced
+   as if they were the authoritative home for their mechanism.
+<<<
+RATIONALE: >>>
+Recorded so a conversion session starts from suspicion rather than rediscovering
+these one at a time. Items 1 and 4 are the dangerous ones, because both present
+as complete and neither is flagged anywhere in the corpus.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By
