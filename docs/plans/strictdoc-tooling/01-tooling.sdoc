@@ -120,6 +120,8 @@ positive; and an acyclic diamond (two paths converging on one node) plus a
 File relation whose VALUE equals its own owning node's UID, to prove that
 is not mistaken for a self-loop. Real graph: 61 nodes, 36 role-carrying
 edges, 0 cycles found.
+
+Positive control re-run independently at review, against the real graph rather than a fixture: a role-carrying two-cycle was injected by closing a loop back against an existing Governed_By edge. strictdoc export exited 0 and reported nothing; cycle-check exited 1 and named the path. The role-blind premise is therefore measured here, not inherited.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -349,7 +351,7 @@ third time.
 [SLICE]
 UID: SLICE-GRAPH-CHECKS
 TITLE: Make the graph fail loud on cycles and on an unvalidated export
-DEPTH: implemented
+DEPTH: verified
 AUTHORED_BY: human
 STATEMENT: >>>
 Two checks over the JSON export, in the harness fp-check already established.
