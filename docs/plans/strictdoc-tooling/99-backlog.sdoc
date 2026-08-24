@@ -146,3 +146,82 @@ repository's own corpus hit. Worth a dedicated SPIKE to characterize the
 FREETEXT gap before deciding whether it is a small follow-up patch or a
 reason to look upstream harder.
 <<<
+
+[DECISION]
+UID: DEC-LONG-LIVED-BRANCH
+TITLE: Work accumulates on one long-lived branch, restacked into pull requests later
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+The first restack completes and the branch merges, at which point the next unit
+of work chooses its own shape.
+<<<
+STATEMENT: >>>
+No pull request is opened during development and none is offered. Work
+accumulates on one branch until the operator calls a milestone, then it is
+restacked into a series of reviewable pull requests.
+
+Two reviews, with different subjects. The stack is reviewed as a whole for
+usability, design and flow. The pull requests are reviewed for implementation
+choices. Operator acceptance is turned at the second of these, never before.
+<<<
+RATIONALE: >>>
+Commit boundaries are what make the restack legible, which is why worker
+sessions commit per unit of work rather than once at the end. And there is no
+signature to turn yet: the fingerprints are placeholders until the suspect-link
+check exists, so acceptance has nothing to attach to before then.
+<<<
+
+[SLICE]
+UID: SLICE-RESTACK-TO-PRS
+TITLE: Restack the long-lived branch into reviewable pull requests
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+Cut the accumulated branch into a series of pull requests ordered so each is
+independently reviewable, and land them.
+<<<
+RATIONALE: >>>
+Slotted as future work so the strategy is tracked rather than remembered. Not
+groomed: the cut points depend on what has accumulated by the milestone.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LONG-LIVED-BRANCH
+  ROLE: Governed_By
+
+[MECHANISM]
+UID: MECH-AUTHORED-BY-GUARD
+TITLE: Reject an AUTHORED_BY flip on a node already merged to main
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+A static check that fails when AUTHORED_BY changes from llm to human on a node
+whose current value in main is llm. Operator override available, since the
+operator is the only party entitled to make that flip.
+
+Could run as a commit hook rather than only in the merge gate, if being
+pedantic is worth the friction.
+<<<
+RATIONALE: >>>
+AUTHORED_BY is the operator's key and nothing currently stops an agent turning
+it. A skill rule forbids it, which is guidance rather than enforcement.
+<<<
+
+[MECHANISM]
+UID: MECH-SEMBLE-TEST-RECIPE
+TITLE: Make a customized semble testable without a devenv shell
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Expose a documented way to build and exercise a grammar-customized semble.
+Today it takes a hand-written impure expression against the flake, and the
+invocation must scrub PYTHONPATH and redirect the cache.
+<<<
+RATIONALE: >>>
+Measured while verifying SLICE-SDOC-IN-SEMBLE. An installed semble exports
+PYTHONPATH, and that shadows any other build: pointing at a freshly built
+binary silently runs the installed one with the installed mappings. The failure
+presents as the new grammar not working, which is a false defect report waiting
+to happen. It already caused one.
+<<<
