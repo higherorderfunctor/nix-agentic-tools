@@ -267,10 +267,11 @@
       pnpmFetcherParityCheck = import ./checks/pnpm-fetcher-parity.nix {inherit lib pkgs self;};
       sembleTemplatesCheck = import ./checks/semble-templates.nix {inherit lib pkgs self;};
       splitCodeSpansCheck = {split-code-spans = import ./checks/split-code-spans.nix {inherit pkgs;};};
+      strictdocGrammarCorpusCheck = {strictdoc-grammar-corpus = import ./checks/strictdoc-grammar-corpus.nix {inherit lib pkgs self;};};
       updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit inputs lib pkgs self updateRegistry;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // beadsContractsCheck // beadsLifecycleCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // claudeMemoryCollisionGuardCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // doubledWordsCheck // doubledWordsFixturesCheck // facetMockChecks // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goFloorDriftChecks // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroFhsContractCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // sembleTemplatesCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);
+      bareCommandsCheck // beadsContractsCheck // beadsLifecycleCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // claudeMemoryCollisionGuardCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // doubledWordsCheck // doubledWordsFixturesCheck // facetMockChecks // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goFloorDriftChecks // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroFhsContractCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // sembleTemplatesCheck // splitCodeSpansCheck // strictdocGrammarCorpusCheck // updateTargetsParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.
@@ -311,10 +312,12 @@
         # mono-repo combined package (nix-update target)
         modelcontextprotocol-all-mcps = pkgs.ai.mcpServers.modelContextProtocol.all-mcps;
         modelcontextprotocol-filesystem-mcp = pkgs.ai.mcpServers.modelContextProtocol.filesystem-mcp;
-        # Future custom Semble grammars that are not already in nixpkgs must be
-        # exposed here so the authenticated package sweep publishes them to
-        # Cachix. Do not expose nixpkgs grammars again; the nixpkgs follow
-        # already supplies those store paths. Keep patched Semble check-only.
+        # Custom Semble grammars absent from nixpkgs (tree-sitter-strictdoc)
+        # ride the ordinary `pkgs.ai.generic.*` flattening above, so the
+        # authenticated package sweep publishes them to Cachix without a
+        # special-cased line here. Do not expose nixpkgs grammars again; the
+        # nixpkgs follow already supplies those store paths. Keep patched
+        # Semble check-only.
         # Instruction file derivations (from dev/generate.nix).
         # Each ecosystem produces a content directory consumed by the
         # `generate:instructions:*` devenv tasks.

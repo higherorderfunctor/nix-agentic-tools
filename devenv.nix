@@ -310,13 +310,16 @@ in {
       programs.semble = {
         enable = !isCI;
         # Use this flake's pinned nixpkgs grammars directly; the Cachix nixpkgs
-        # follow already supplies their store paths. If a future grammar needs a
-        # custom derivation, also expose that grammar alone in flake packages so
-        # the authenticated package sweep publishes it. Do not expose the
-        # grammar-patched Semble derivation.
+        # follow already supplies their store paths. tree-sitter-strictdoc is
+        # the one custom derivation this covers today — absent from nixpkgs,
+        # so it is exposed alone in flake packages
+        # (pkgs.ai.generic.tree-sitter-strictdoc) so the authenticated package
+        # sweep publishes it. Do not expose the grammar-patched Semble
+        # derivation.
         grammars = with pkgs.tree-sitter-grammars; [
           tree-sitter-awk
           tree-sitter-jq
+          pkgs.ai.generic.tree-sitter-strictdoc
         ];
         mcp.pathMappings = [
           {
@@ -349,6 +352,11 @@ in {
             content = "docs";
             language = "markdown";
             patterns = ["*.md.fixture"];
+          }
+          {
+            content = "docs";
+            language = "strictdoc";
+            patterns = ["*.sdoc" "*.sgra"];
           }
         ];
         # AGENTS.md already carries the repository's Semble search workflow from
