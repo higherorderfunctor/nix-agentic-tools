@@ -91,33 +91,6 @@ which is a content change treefmt would report as a reformat.
 <<<
 
 [MECHANISM]
-UID: MECH-SDOC-CI-CHECK
-TITLE: Gate the design graph in nix flake check
-DEPTH: sketch
-AUTHORED_BY: llm
-STATEMENT: >>>
-Add a flake check that exports the graph to JSON and fails on non-zero exit, so
-a broken relation or an invalid enum value cannot merge.
-<<<
-RATIONALE: >>>
-Validation currently runs only when someone remembers to run it. The export is
-a few seconds on a corpus this size.
-<<<
-NOTES: >>>
-The check must use a clean output directory. Incremental generation produces a
-false green: the same broken input exits 1, then 0 on re-run against a warm
-output directory.
-
-checks/strictdoc-fp-check.nix (SLICE-FP-DETECTOR) already exports the whole
-graph into a clean runCommand $TMPDIR and fails the build on a non-zero
-`strictdoc export` -- validation runs at parse time, so this may already
-satisfy this mechanism's STATEMENT as a byproduct rather than needing a
-separate check. Left at sketch rather than closed here: that is a judgment
-call for whoever grooms this item, not something to decide implementing an
-unrelated slice.
-<<<
-
-[MECHANISM]
 UID: MECH-SGRA-BODY-COVERAGE
 TITLE: Extend the sdoc tree-sitter grammar to cover document-body content
 DEPTH: sketch
