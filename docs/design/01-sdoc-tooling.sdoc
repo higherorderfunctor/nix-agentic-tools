@@ -7,29 +7,38 @@ IMPORT_FROM_FILE: grammar.sgra
 [DECISION]
 UID: DEC-FINGERPRINT-IN-NODE
 TITLE: Store the parent contract fingerprint in the node
-DEPTH: interface-settled
-AUTHORITY: llm
+AUTHORED_BY: llm
 STATUS: accepted
+RETIRES_ON: >>>
+A second consumer needs per-edge state that a node field cannot carry, such as
+a reviewer identity or a waiver with its own expiry.
+<<<
 STATEMENT: >>>
 A node records the contract hash of each parent it depends on, in a PARENT_FP
 field on the node itself, rather than in a sidecar file keyed by node identity.
+Fingerprints point strictly downward: DECISION to MECHANISM to SLICE.
 <<<
 RATIONALE: >>>
-Accepting a change becomes a reviewable git diff. The hash transition is
-attributable to a commit, revertable, and visible in review. A sidecar makes
-sign-off invisible and needs a key-matching scheme that in-node storage avoids.
+Accepting a change becomes a reviewable git diff, attributable to a commit and
+revertable. A sidecar makes sign-off invisible and needs a key-matching scheme.
+The downward-only rule means a garbage-collectable node has no inbound
+fingerprint, so deleting it can never strand one.
 <<<
 
 [DECISION]
 UID: DEC-LOCAL-IMPLEMENTABILITY
 TITLE: Implementability is a property of a closure, not of the project
-DEPTH: interface-settled
-AUTHORITY: llm
+AUTHORED_BY: llm
 STATUS: accepted
+RETIRES_ON: >>>
+A release needs a single project-wide readiness answer, which no per-slice
+query can supply.
+<<<
 STATEMENT: >>>
 A slice is implementable when its own transitive contract-dependency closure is
-settled and carries no suspect edges. There is no global readiness gate over the
-whole graph.
+settled and carries no suspect edges. There is no global readiness gate. The
+count of open decisions in that closure is the slice's degrees of freedom, and
+handoff is that count reaching zero.
 <<<
 RATIONALE: >>>
 A global fail-closed gate is waterfall by construction: nothing is implementable
@@ -37,15 +46,37 @@ until everything is designed. A closure-local predicate lets a mature slice ship
 while the rest of the graph stays deliberately fuzzy.
 <<<
 
+[DECISION]
+UID: DEC-DEFER-LAYER
+TITLE: Omit the LAYER node type until a corpus with layers arrives
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: >>>
+The first document whose mechanisms sit in distinct architectural layers, at
+which point the cast tables' locus column becomes the LAYER assignment.
+<<<
+STATEMENT: >>>
+The grammar ships without LAYER. Horizontal position is therefore unmodelled;
+only the vertical axis, a SLICE and the mechanisms it Crosses, is expressible.
+<<<
+RATIONALE: >>>
+No content in this document sits in a layer. Adding LAYER now would make every
+MECHANISM carry a field with one possible value.
+<<<
+NOTES: >>>
+This is a real gap, not a cost-free deferral: half the horizontal-and-vertical
+tracking the operator asked for is absent until it is closed.
+<<<
+
 [MECHANISM]
 UID: MECH-FP-CHECK
 TITLE: Suspect-link detection over the JSON export
 DEPTH: needs-spike
-AUTHORITY: llm
+AUTHORED_BY: llm
 STATEMENT: >>>
 Hash each node's contract-bearing fields from the JSON export. A node is suspect
 when a parent it records a fingerprint for no longer hashes to the recorded
-value, or when that parent has been deleted.
+value, or when that parent has been deleted. Excludes RATIONALE and NOTES.
 <<<
 RATIONALE: >>>
 StrictDoc has no suspect-link feature. It is on the upstream backlog as
@@ -58,14 +89,35 @@ RELATIONS:
   ROLE: Governed_By
 
 [MECHANISM]
+UID: MECH-CYCLE-CHECK
+TITLE: Cycle detection over the JSON export
+DEPTH: needs-design
+AUTHORED_BY: llm
+STATEMENT: >>>
+Detect relation cycles in the exported graph independently of StrictDoc.
+<<<
+RATIONALE: >>>
+StrictDoc's own cycle detection queries the graph without specifying an edge
+role, and the graph database returns only the bucket of role-less edges. Every
+relation in this grammar carries a role, so no cycle in this corpus is detected;
+the failure surfaces as a recursion-depth crash during render.
+<<<
+PARENT_FP: DEC-LOCAL-IMPLEMENTABILITY:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LOCAL-IMPLEMENTABILITY
+  ROLE: Governed_By
+
+[MECHANISM]
 UID: MECH-READY-QUERY
 TITLE: Ready-slice query over the contract closure
 DEPTH: needs-design
-AUTHORITY: llm
+AUTHORED_BY: llm
 STATEMENT: >>>
-Walk a slice's contract-dependency closure and report whether every node in it
-is at interface-settled or better with no suspect edges. Report the blocking
-frontier otherwise.
+Walk a slice's contract-dependency closure and report whether every mechanism in
+it is interface-settled or better, every decision accepted, and no edge suspect.
+Report the blocking frontier and the open-decision count otherwise. The same
+traversal produces the bounded prompt handed to an implementing model.
 <<<
 PARENT_FP: DEC-LOCAL-IMPLEMENTABILITY:0000000
 RELATIONS:
@@ -77,7 +129,7 @@ RELATIONS:
 UID: SLICE-SEMBLE-SDOC
 TITLE: Index sdoc documents in semble via a tree-sitter grammar
 DEPTH: interface-settled
-AUTHORITY: llm
+AUTHORED_BY: llm
 STATEMENT: >>>
 Package a tree-sitter grammar for the sdoc format as a flake output and register
 it with semble, so sdoc documents are chunked on node boundaries rather than by
@@ -85,16 +137,21 @@ line count.
 <<<
 RATIONALE: >>>
 The semble integration already accepts arbitrary tree-sitter grammar packages.
-This slice depends on no other design work in this document.
+This slice crosses no mechanism in this document and has zero open decisions in
+its closure.
 <<<
 
 [SPIKE]
 UID: SPIKE-SGRA-PARSE
 TITLE: Make the tree-sitter grammar parse standalone .sgra files
-DEPTH: needs-spike
-AUTHORITY: llm
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATUS: unrun
+RETIRES_ON: >>>
+A three-rule patch is applied and the two .sgra files parse with no regression
+across the sdoc corpus.
+<<<
 STATEMENT: >>>
 The upstream tree-sitter grammar parses all sdoc documents but fails every
 standalone .sgra grammar file, because its root rule requires a DOCUMENT header.
-Establish whether a three-rule change fixes it without regressions.
 <<<
