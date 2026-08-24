@@ -71,7 +71,7 @@ tracking the operator asked for is absent until it is closed.
 [MECHANISM]
 UID: MECH-FP-CHECK
 TITLE: Suspect-link detection over the JSON export
-DEPTH: needs-spike
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
 Hash each node's contract-bearing fields from the JSON export. A node is suspect
