@@ -1,0 +1,86 @@
+[DOCUMENT]
+TITLE: The plan model
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SYSTEM-PURPOSE
+TITLE: This exists to keep an implementing model on target, not to manage requirements
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+A second consumer appears whose needs are not served by that purpose --
+compliance, audit, or a human readership that is not the plan's own author.
+<<<
+STATEMENT: >>>
+The system's purpose is context management and edge mechanics during
+implementation: keeping a model on target, and catching what it would otherwise
+miss -- contradictions, stale areas, orphans, conflicts nobody noticed.
+
+It is not a requirements management system, not a documentation system, and not
+a deliverable. Any feature that serves those and not the purpose above is out of
+scope by default.
+<<<
+RATIONALE: >>>
+Stated because nearly every alternative design in this space optimizes for a
+human readership or an audit trail, and inheriting those goals silently is how
+this becomes heavy. The reader being optimized for is a model with a bounded
+context and no memory of yesterday.
+<<<
+
+[DECISION]
+UID: DEC-PLAN-SINGLE-OWNER
+TITLE: A plan has one owner and concurrent human editing is not a design concern
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+Two people need to edit one plan, which would mean plans had become a shared
+artifact rather than an individual one.
+<<<
+STATEMENT: >>>
+Plans are individual. One person owns a plan and directs a model through it. The
+multi-contributor surface is the WORK, not the plan, and at that scale the
+shared artifact is an external tracker rather than anything here.
+<<<
+RATIONALE: >>>
+This removes a whole class of design work. Locking, merge semantics for a plan
+node, and concurrent-edit conflict resolution are all unnecessary. Two people
+editing the same plan node is rare enough to handle by hand if it ever happens.
+<<<
+NOTES: >>>
+Does not extend to the settled architecture nodes, which are shared by
+construction and outlive any one plan.
+<<<
+
+[MECHANISM]
+UID: MECH-PLAN-CHANGE-KINDS
+TITLE: Two kinds of change to a plan, only one of which ingest freezes
+DEPTH: interface-settled
+AUTHORED_BY: human
+STATEMENT: >>>
+Execution state -- is this done, who holds it, what blocks it -- belongs to the
+execution engine from the moment a piece of the plan is handed over. The plan
+never tracks it.
+
+Design content -- the contract, the reasoning, what turned out to be true --
+belongs to the plan always, including after a partial handover. When
+implementation shows the design was wrong, the plan is corrected.
+
+Ingest therefore freezes the execution scope handed over, not the plan.
+<<<
+RATIONALE: >>>
+Conflating these two is what made the plan lifecycle feel unresolvable. "The
+plan is immutable after ingest" is right about execution state and wrong about
+design content, and holding both intuitions at once reads as indecision when it
+is actually two correct beliefs about different things.
+
+Partial handover makes the distinction unavoidable: send part of a plan to the
+engine, learn something while building it, and the plan must be correctable
+while the handed-over scope stays frozen.
+<<<
+NOTES: >>>
+Supersedes the earlier framing in MECH-PLAN-BEADS-SNAPSHOT, which said ingest
+freezes the plan outright. That would have caused friction at the first partial
+handover.
+<<<
