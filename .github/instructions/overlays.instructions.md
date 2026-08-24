@@ -7,22 +7,26 @@ applyTo: "overlays/*.nix,overlays/**/*.nix"
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-16 (commit pending — corrects the current Go-floor
-> count to eight after Beads joined the covered set; Kiro's `withFhsPayload`
-> passthru and FHS opt-out leave the default derivation byte-identical, and only
-> configurations requesting an inner chat wrapper or the explicit unwrapped
-> selection fork from it). Prior: 2026-08-15 (commit pending — adds the
-> stable-release Beads overlay under `pkgs.ai.devTools`, built from this
-> repository's nixpkgs pin rather than the independently pinned Numtide
-> derivation). Prior: 2026-08-16 (commit pending — nixpkgs 9ddfd8a consolidated
-> Kiro's three FHS derivations into one shared environment. The overlay still
-> recomposes exclusively through `ourPkgs`, so the topology change preserves the
-> same consumer/standalone cache identity contract). Prior: 2026-08-10 (commit
-> pending — `overlays/kiro-cli.nix` is no longer a plain `overrideAttrs`, so the
-> "pure binary-fetch" example below is re-pointed. nixpkgs f13ff45a split the
-> package, and the overlay now overrides `kiro-cli-unwrapped` and re-composes
-> upstream's wrapper with `.override`. Parity is UNAFFECTED and the reason is
-> worth stating: both sides of the parity check import `inputs.nixpkgs`, so the
+> **Last verified:** 2026-08-24 (commit pending — Beads now pins its nested Dolt
+> runtime from the same `ourPkgs` instance and passes that exact derivation into
+> nixpkgs' Beads wrapper, so the grouped release cadence adds no consumer-pinned
+> build input and remains covered by Beads' existing parity row). Prior:
+> 2026-08-16 (commit pending — corrects the current Go-floor count to eight
+> after Beads joined the covered set; Kiro's `withFhsPayload` passthru and FHS
+> opt-out leave the default derivation byte-identical, and only configurations
+> requesting an inner chat wrapper or the explicit unwrapped selection fork from
+> it). Prior: 2026-08-15 (commit pending — adds the stable-release Beads overlay
+> under `pkgs.ai.devTools`, built from this repository's nixpkgs pin rather than
+> the independently pinned Numtide derivation). Prior: 2026-08-16 (commit
+> pending — nixpkgs 9ddfd8a consolidated Kiro's three FHS derivations into one
+> shared environment. The overlay still recomposes exclusively through
+> `ourPkgs`, so the topology change preserves the same consumer/standalone cache
+> identity contract). Prior: 2026-08-10 (commit pending —
+> `overlays/kiro-cli.nix` is no longer a plain `overrideAttrs`, so the "pure
+> binary-fetch" example below is re-pointed. nixpkgs f13ff45a split the package,
+> and the overlay now overrides `kiro-cli-unwrapped` and re-composes upstream's
+> wrapper with `.override`. Parity is UNAFFECTED and the reason is worth
+> stating: both sides of the parity check import `inputs.nixpkgs`, so the
 > `ourPkgs ? kiro-cli-unwrapped` feature-detection resolves the same way on both
 > and cannot itself drift — see the overlay-pattern fragment for the seam).
 > Prior: 2026-08-05 (commit pending — records that a consumer's
@@ -169,12 +173,13 @@ outright with `go.mod requires go >= 1.26.5 (running go 1.26.2)`. A package with
 no toolchain-floor seam inherits whatever `go` the followed nixpkgs ships, and
 `gh` was silently one bump behind the same fate.
 
-The Go floor seam (overlay-pattern fragment) now covers all eight Go packages,
-so that specific class is handled — a followed older nixpkgs gets a `go-bin`
-toolchain instead of a failure. It does NOT make `follows` supported: the
-consumer still gets zero cache hits, and the next toolchain-shaped dependency
-that lacks a floor seam will break the same way. The README carries the
-consumer-facing version of this warning.
+The Go floor seam (overlay-pattern fragment) now covers all eight exported Go
+packages plus Beads' nested paired Dolt runtime, so that specific class is
+handled — a followed older nixpkgs gets a `go-bin` toolchain instead of a
+failure. It does NOT make `follows` supported: the consumer still gets zero
+cache hits, and the next toolchain-shaped dependency that lacks a floor seam
+will break the same way. The README carries the consumer-facing version of this
+warning.
 
 ### The trade-off (accepted in commit e5406977)
 
@@ -386,23 +391,27 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-16 (commit pending — corrects the current Go-floor
-> enumeration to include all eight packages; Kiro's recomposition seam also
-> exposes `withFhsPayload`, so configured chat-only wrappers can enter the
-> upstream FHS root without reimplementing it while the public default stays
-> byte-identical and `useFhsSandbox = false` is an explicit module-level
-> selection of `passthru.unwrapped`). Prior: 2026-08-15 (commit pending — adds
-> Beads as the eighth Go package and as a stable-release, sidecar-pinned thin
-> override in the `devTools` group). Prior: 2026-08-16 (commit pending —
-> documents Beads' distinct builder override plus anchored wrapper-extension
-> seam). Prior: 2026-08-16 (commit pending — nixpkgs 9ddfd8a consolidated Kiro's
-> three per-command FHS environments into one shared environment behind thin
-> command wrappers. Re-pointing the unwrapped base and recomposing through
-> upstream's `.override` remains the correct seam and inherited the topology
-> change without implementation edits). Prior: 2026-08-10 (commit pending — adds
-> the third override-seam failure mode, measured on `kiro-cli`: the attribute
-> you are overriding stops being a derivation at all. nixpkgs f13ff45a split it
-> into `kiro-cli-unwrapped` plus a `symlinkJoin` of `buildFHSEnv` sandboxes, and
+> **Last verified:** 2026-08-24 (commit pending — Beads now owns a second
+> sidecar-pinned Go derivation for its exact Dolt runtime; both child release
+> scripts retain the standard source/vendor/floor mechanics and one compound
+> Beads update script groups them into one target and PR). Prior: 2026-08-16
+> (commit pending — corrects the current Go-floor enumeration to include all
+> eight packages; Kiro's recomposition seam also exposes `withFhsPayload`, so
+> configured chat-only wrappers can enter the upstream FHS root without
+> reimplementing it while the public default stays byte-identical and
+> `useFhsSandbox = false` is an explicit module-level selection of
+> `passthru.unwrapped`). Prior: 2026-08-15 (commit pending — adds Beads as the
+> eighth Go package and as a stable-release, sidecar-pinned thin override in the
+> `devTools` group). Prior: 2026-08-16 (commit pending — documents Beads'
+> distinct builder override plus anchored wrapper-extension seam). Prior:
+> 2026-08-16 (commit pending — nixpkgs 9ddfd8a consolidated Kiro's three
+> per-command FHS environments into one shared environment behind thin command
+> wrappers. Re-pointing the unwrapped base and recomposing through upstream's
+> `.override` remains the correct seam and inherited the topology change without
+> implementation edits). Prior: 2026-08-10 (commit pending — adds the third
+> override-seam failure mode, measured on `kiro-cli`: the attribute you are
+> overriding stops being a derivation at all. nixpkgs f13ff45a split it into
+> `kiro-cli-unwrapped` plus a `symlinkJoin` of `buildFHSEnv` sandboxes, and
 > `overrideAttrs` on that join silently dropped our `src`, `version` AND
 > `postFixup` while the build stayed green. Unlike the `extendMkDerivation`
 > cases below, NO seam on the public attribute can fix it — the base has to be
@@ -821,9 +830,9 @@ PINNED src instead, so one hash covers both and the vendor set self-updates.
 
 Go has the same transitive-hash problem and no `importCargoLock` equivalent —
 `go.sum` records module hashes, not a Nix-fetchable vendor tree — so
-`vendorHash` must be recorded somewhere. It goes in the sidecar (`gh`, `glab`,
-`gluetun`, `oh-my-posh`, `otel-tui`), never inline, and the mechanism is worth
-understanding before touching it:
+`vendorHash` must be recorded somewhere. It goes in the sidecar (`beads`, its
+nested paired Dolt, `gh`, `glab`, `gluetun`, `oh-my-posh`, `otel-tui`), never
+inline, and the mechanism is worth understanding before touching it:
 
 - `mkUpdateScript` rebuilds the sidecar FROM SCRATCH on every write
   (`jq -n --arg v "$latest" '{version: $v}'`), so any key it does not itself
@@ -847,6 +856,15 @@ understanding before touching it:
   `overrideModAttrs` there, `build-support/go/module.nix` warns loudly when an
   overlay drops them, and the fixer resolves `.goModules` through that very
   attrset.
+
+Beads is the one grouped owner. Its public `fixVendorHash` runs the normal Beads
+and nested Dolt fixers in sequence, so an input bump repairs both sidecars
+before retrying the package build. Its public `updateScript` likewise runs two
+ordinary `ghArchiveUpdateScript` children. Each child performs its own
+latest-version check, so a Dolt-only release does not wait for a Beads release;
+the grouping is at the target/branch/PR boundary, not at upstream change
+detection. The Dolt helper paths use `beads.dolt` through the flake package,
+which is the exact dependency nixpkgs' inherited Beads wrapper puts on `PATH`.
 
 `glab` is the one Go package where the SRC hash goes in the sidecar too, and it
 is `vu.mkGoSrcVendorFix` rather than `mkGoVendorFix` for exactly the reason
@@ -920,11 +938,14 @@ sorts `1.27rc1` ABOVE `1.27.0`. `checks/go-toolchain-floor.nix` exercises all
 three branches plus two positive controls, which is also what keeps the input
 from shipping dormant.
 
-**ALL EIGHT Go packages carry the seam**, not just the two that once needed it —
-`beads`, `gh`, `glab`, `github-mcp`, `gluetun`, `mcp-language-server`,
-`oh-my-posh`, `otel-tui`. Scoping it to "whatever broke most recently" is how
-the same defect gets rediscovered per package: when `glab` broke, `gh` had
-ALREADY silently required Go >= 1.26.5 and would have been next.
+**ALL EIGHT exported Go packages carry the seam**, not just the two that once
+needed it — `beads`, `gh`, `glab`, `github-mcp`, `gluetun`,
+`mcp-language-server`, `oh-my-posh`, `otel-tui`. Beads' nested paired Dolt
+derivation carries it too; its floor is checked by the Beads contract because
+the top-level discovery check intentionally enumerates exported packages.
+Scoping it to "whatever broke most recently" is how the same defect gets
+rediscovered per package: when `glab` broke, `gh` had ALREADY silently required
+Go >= 1.26.5 and would have been next.
 
 Reach it through **`vu.mkGoBuilder`**, which composes floor -> toolchain ->
 `buildGoModule.override` in one call. Do not re-expand that chain per package;

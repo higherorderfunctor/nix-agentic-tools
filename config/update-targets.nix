@@ -136,9 +136,11 @@ _: {
     # ghArchiveUpdateScript contract but carry a SECOND hash: `vendorHash`,
     # which a Go package cannot derive from a lockfile the way importCargoLock
     # derives one from Cargo.lock. mkUpdateScript rebuilds the sidecar from
-    # scratch on every write, so each of them threads
-    # `extraExtract = "${fixVendorHash}"` to put the vendor hash back immediately
-    # afterwards. Nothing extra is needed here.
+    # scratch on every write, so each of them threads a vendor fixer through
+    # extraExtract. Beads' one target owns TWO independent child scripts — its
+    # own release and the paired Dolt release — so either upstream can move
+    # while the result remains one update/beads branch and PR. Nothing extra is
+    # needed in this registry.
     #
     # bruno and glab are the same --use-update-script contract with a THIRD
     # variation: their src hash cannot come from a prefetch at all, because

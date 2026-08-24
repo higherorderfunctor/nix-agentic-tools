@@ -1,9 +1,9 @@
-# beads — stable `bd` releases on this repository's update cadence. The base
-# is nixpkgs' beads recipe, so its ICU linkage, completion installation,
-# platform workarounds, tests, and single Dolt PATH wrapper remain upstream-
-# owned. This overlay changes the pin and extends that ONE wrapper with
-# telemetry controls; it never wraps the already-wrapped result again.
-# cspell:ignore gastownhall
+# beads — stable `bd` releases and their paired Dolt runtime on one repository
+# update cadence. The bases are nixpkgs' beads and Dolt recipes, so their build
+# inputs and package mechanics remain upstream-owned. This overlay changes both
+# pins atomically and extends Beads' ONE inherited wrapper with telemetry
+# controls; it never wraps the already-wrapped result again.
+# cspell:ignore dolthub gastownhall
 {
   inputs,
   final,
@@ -16,31 +16,111 @@
   inherit (ourPkgs) fetchzip lib;
   vu = import ../lib.nix;
 
-  sources = builtins.fromJSON (builtins.readFile ./beads-sources.json);
-  sourcesFile = "overlays/dev-tools/beads-sources.json";
+  beadsSources = builtins.fromJSON (builtins.readFile ./beads-sources.json);
+  beadsSourcesFile = "overlays/dev-tools/beads-sources.json";
+  doltSources = builtins.fromJSON (builtins.readFile ./beads-dolt-sources.json);
+  doltSourcesFile = "overlays/dev-tools/beads-dolt-sources.json";
 
-  fixVendorHash = vu.mkGoVendorFix {
+  beadsFixVendorHash = vu.mkGoVendorFix {
     attr = "beads";
     pkgs = ourPkgs;
     pname = "beads";
-    inherit sourcesFile;
+    sourcesFile = beadsSourcesFile;
   };
 
-  fixGoFloor = vu.mkGoFloorFix {
+  beadsFixGoFloor = vu.mkGoFloorFix {
     attr = "beads";
     pkgs = ourPkgs;
     pname = "beads";
-    inherit sourcesFile;
+    sourcesFile = beadsSourcesFile;
   };
 
-  goFloor = sources.goFloor or vu.goFloorUnknown;
+  beadsGoFloor = beadsSources.goFloor or vu.goFloorUnknown;
+
+  doltFixVendorHash = vu.mkGoVendorFix {
+    attr = "beads.dolt";
+    pkgs = ourPkgs;
+    pname = "beads-dolt";
+    sourcesFile = doltSourcesFile;
+  };
+
+  doltFixGoFloor = vu.mkGoFloorFix {
+    attr = "beads.dolt";
+    goModPath = "go/go.mod";
+    pkgs = ourPkgs;
+    pname = "beads-dolt";
+    sourcesFile = doltSourcesFile;
+  };
+
+  doltGoFloor = doltSources.goFloor or vu.goFloorUnknown;
+
+  doltUpdateScript = vu.ghArchiveUpdateScript {
+    extraExtract = ''
+      ${doltFixVendorHash}
+      ${doltFixGoFloor}
+    '';
+    pkgs = ourPkgs;
+    pname = "beads-dolt";
+    repo = "dolthub/dolt";
+    sourcesFile = doltSourcesFile;
+  };
+
+  dolt =
+    (ourPkgs.dolt.override {
+      buildGoModule = vu.mkGoBuilder {
+        floor = doltGoFloor;
+        pkgs = ourPkgs;
+        pname = "beads-dolt";
+      };
+    })
+    .overrideAttrs (prev: {
+      inherit (doltSources) version;
+      src = fetchzip {inherit (doltSources.src) url hash;};
+      vendorHash = doltSources.vendorHash or lib.fakeHash;
+      passthru =
+        (prev.passthru or {})
+        // {
+          fixGoFloor = doltFixGoFloor;
+          fixVendorHash = doltFixVendorHash;
+          goFloor = doltGoFloor;
+          updateScript = doltUpdateScript;
+        };
+    });
+
+  beadsUpdateScript = vu.ghArchiveUpdateScript {
+    extraExtract = ''
+      ${beadsFixVendorHash}
+      ${beadsFixGoFloor}
+    '';
+    pkgs = ourPkgs;
+    pname = "beads";
+    repo = "gastownhall/beads";
+    sourcesFile = beadsSourcesFile;
+  };
+
+  fixVendorHash = ourPkgs.writeShellScript "fix-vendor-beads-pair" ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+
+    ${beadsFixVendorHash}
+    ${doltFixVendorHash}
+  '';
+
+  updateScript = ourPkgs.writeShellScript "update-beads-pair" ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+
+    ${beadsUpdateScript}
+    ${doltUpdateScript}
+  '';
 in
   (ourPkgs.beads.override {
     buildGoModule = vu.mkGoBuilder {
-      floor = goFloor;
+      floor = beadsGoFloor;
       pkgs = ourPkgs;
       pname = "beads";
     };
+    inherit dolt;
   })
   .overrideAttrs (prev: let
     wrapperAnchor = "wrapProgram $out/bin/bd";
@@ -50,9 +130,9 @@ in
         --set BD_DISABLE_METRICS 1 \
         --set DOLT_DISABLE_EVENT_FLUSH 1'';
   in {
-    inherit (sources) version;
-    src = fetchzip {inherit (sources.src) url hash;};
-    vendorHash = sources.vendorHash or lib.fakeHash;
+    inherit (beadsSources) version;
+    src = fetchzip {inherit (beadsSources.src) url hash;};
+    vendorHash = beadsSources.vendorHash or lib.fakeHash;
 
     # This test installs `#!/usr/bin/env sh` hooks and then asks git to execute
     # them while creating a worktree. The Nix build sandbox intentionally has
@@ -88,8 +168,8 @@ in
       ${ourPkgs.gnugrep}/bin/grep -aF 'BD_DISABLE_EVENT_FLUSH=1' "$out/bin/bd"
       ${ourPkgs.gnugrep}/bin/grep -aF 'BD_DISABLE_METRICS=1' "$out/bin/bd"
       ${ourPkgs.gnugrep}/bin/grep -aF 'DOLT_DISABLE_EVENT_FLUSH=1' "$out/bin/bd"
-      ${ourPkgs.gnugrep}/bin/grep -aF '${lib.makeBinPath [ourPkgs.dolt]}' "$out/bin/bd"
-      ${ourPkgs.coreutils}/bin/env -i HOME="$TMPDIR" "$out/bin/bd" --version | ${ourPkgs.gnugrep}/bin/grep -F "${sources.version}"
+      ${ourPkgs.gnugrep}/bin/grep -aF '${lib.makeBinPath [dolt]}' "$out/bin/bd"
+      ${ourPkgs.coreutils}/bin/env -i HOME="$TMPDIR" "$out/bin/bd" --version | ${ourPkgs.gnugrep}/bin/grep -F "${beadsSources.version}"
       ${ourPkgs.coreutils}/bin/env -i HOME="$TMPDIR" "$out/bin/bd" metrics | ${ourPkgs.gnugrep}/bin/grep -F 'Anonymous usage metrics: OFF'
       ${ourPkgs.coreutils}/bin/env -i HOME="$TMPDIR" "$out/bin/bd" dolt --help > /dev/null
 
@@ -99,20 +179,12 @@ in
     passthru =
       (prev.passthru or {})
       // {
-        inherit fixGoFloor fixVendorHash goFloor;
+        fixGoFloor = beadsFixGoFloor;
+        goFloor = beadsGoFloor;
+        inherit fixVendorHash updateScript;
         # The lifecycle module must launch the exact Dolt paired with this
         # Beads build. Exposing that already-used dependency as metadata avoids
         # a second, independently drifting package choice in the module.
-        inherit (ourPkgs) dolt;
-        updateScript = vu.ghArchiveUpdateScript {
-          extraExtract = ''
-            ${fixVendorHash}
-            ${fixGoFloor}
-          '';
-          pkgs = ourPkgs;
-          pname = "beads";
-          repo = "gastownhall/beads";
-          inherit sourcesFile;
-        };
+        inherit dolt;
       };
   })
