@@ -189,6 +189,12 @@ ai.codex.programs.semble.grammars and mcp.pathMappings in devenv.nix (patterns
 checks/module-eval.nix:module-semble-strictdoc-grammar-load. Regression/corpus
 suite: checks/strictdoc-grammar-corpus.nix (see SPIKE-SGRA-PARSE for measured
 counts). update-targets and cache-hit-parity rows added; both checks pass.
+
+Chunking verified independently, not assumed: on a 8762-byte document the AST
+chunker returns 17 chunks against line chunking's 12, and the boundaries land
+on node headers and on field starts, so a node larger than the 750-character
+target splits into its own fields. chunk() returning a list rather than None is
+the proof the parser loaded; a fallback would have been a log warning only.
 <<<
 RELATIONS:
 - TYPE: Parent

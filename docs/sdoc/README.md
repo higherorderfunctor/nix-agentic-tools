@@ -94,38 +94,35 @@ fingerprints are still placeholders. Filtering happens in that script rather
 than on the strictdoc command line, because `--filter-nodes` is silently ignored
 by the JSON exporter.
 
-## Testing a grammar-customized semble
+## Testing semble with the sdoc grammar
 
-`PYTHONPATH` is the trap. An installed semble exports it, and it **shadows any
-other semble build** — so pointing at a freshly built binary silently runs the
-installed one with the installed mappings, and the new grammar appears not to
-work. Scrub it, and redirect the cache so a test does not invalidate the real
-index.
+`cd` into the worktree and use devenv. That is the real integration test — it
+exercises the wiring that ships, and devenv sets `PYTHONPATH` correctly by
+construction.
 
 ```bash
-S=$(nix build --impure --no-link --print-out-paths --expr '
-let
-  flake = builtins.getFlake (toString /path/to/worktree);
-  pkgs = import flake.inputs.nixpkgs {
-    system = "x86_64-linux";
-    overlays = [flake.overlays.default];
-  };
-in
-  flake.lib.ai.semble.customizePackage {inherit (pkgs) lib; inherit pkgs;}
-    pkgs.ai.semble
-    [pkgs.ai.generic.tree-sitter-strictdoc]
-    [{content = "docs"; language = "strictdoc"; patterns = ["*.sdoc" "*.sgra"];}]
-')
-
-env -u PYTHONPATH SEMBLE_CACHE_LOCATION=/tmp/semble-sdoc \
-  "$S/bin/semble" search "your query" /path/to/worktree --content docs
+semble search "your query" --content docs --max-snippet-lines 10
 ```
 
-The automated equivalents need none of that care:
+`--max-snippet-lines` matters: a raw chunk of a large node will flood a terminal
+or an editor.
+
+Automated equivalents:
 
 ```bash
 nix build .#checks.x86_64-linux.module-semble-strictdoc-grammar-load
 nix build .#checks.x86_64-linux.strictdoc-grammar-corpus
+```
+
+**Only if you need to test a customization that is NOT the one devenv installs**
+do you have to build it by hand — and then `PYTHONPATH` becomes a trap. An
+installed semble exports it, and it shadows any other build, so pointing at a
+freshly built binary silently runs the installed one with the installed
+mappings. Scrub it, and redirect the cache so the test does not invalidate the
+real index:
+
+```bash
+env -u PYTHONPATH SEMBLE_CACHE_LOCATION=/tmp/semble-scratch "$S/bin/semble" search ...
 ```
 
 ## Standing gotchas
