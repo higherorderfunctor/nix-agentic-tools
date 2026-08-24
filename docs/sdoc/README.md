@@ -75,14 +75,15 @@ and the graph already says whether it is ready.
 
 ## Layout
 
-| path                                | holds                                                |
-| ----------------------------------- | ---------------------------------------------------- |
-| `strictdoc_config.py`               | the `@repo` grammar alias and the markdown exclusion |
-| `docs/sdoc/grammar.sgra`            | the one grammar, shared by every document            |
-| `docs/plans/<plan>/`                | a named plan, many files. Decays.                    |
-| `docs/plans/<plan>/99-backlog.sdoc` | that plan's ungroomed items, at `DEPTH: sketch`      |
-| `**/.sdoc/`                         | settled architecture beside the code it describes    |
-| `dev/skills/sdoc/SKILL.md`          | authoring mechanics and the parser gotchas           |
+| path                                | holds                                                   |
+| ----------------------------------- | ------------------------------------------------------- |
+| `strictdoc_config.py`               | the `@repo` grammar alias and the markdown exclusion    |
+| `docs/sdoc/grammar.sgra`            | the one grammar, shared by every document               |
+| `docs/plans/<plan>/`                | a named plan, many files. Decays.                       |
+| `docs/plans/<plan>/99-backlog.sdoc` | that plan's ungroomed items, at `DEPTH: sketch`         |
+| `**/.sdoc/`                         | settled architecture beside the code it describes       |
+| `docs/spec/`                        | settled design with no single code home; outlives plans |
+| `dev/skills/sdoc/SKILL.md`          | authoring mechanics and the parser gotchas              |
 
 ## Where things stand
 
