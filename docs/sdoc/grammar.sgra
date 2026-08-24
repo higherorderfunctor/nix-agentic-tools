@@ -77,7 +77,6 @@ ELEMENTS:
     ROLE: Assumes
     REVERSE_ROLE: Assumed_By
   - TYPE: File
-    ROLE: ImplementedIn
 - TAG: SLICE
   PROPERTIES:
     PREFIX: SLICE-
@@ -108,13 +107,18 @@ ELEMENTS:
     REQUIRED: False
   RELATIONS:
   - TYPE: Parent
+    ROLE: Governed_By
+    REVERSE_ROLE: Governs
+  - TYPE: Parent
     ROLE: Crosses
     REVERSE_ROLE: Crossed_By
   - TYPE: Parent
     ROLE: Assumes
     REVERSE_ROLE: Assumed_By
+  - TYPE: Parent
+    ROLE: Proven_By
+    REVERSE_ROLE: Proves
   - TYPE: File
-    ROLE: ImplementedIn
 - TAG: INVARIANT
   PROPERTIES:
     PREFIX: INV-
@@ -143,6 +147,13 @@ ELEMENTS:
   - TITLE: NOTES
     TYPE: String
     REQUIRED: False
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: Governed_By
+    REVERSE_ROLE: Governs
+  - TYPE: Parent
+    ROLE: Proven_By
+    REVERSE_ROLE: Proves
 - TAG: SPIKE
   PROPERTIES:
     PREFIX: SPIKE-
@@ -178,5 +189,7 @@ ELEMENTS:
     TYPE: String
     REQUIRED: False
   RELATIONS:
+  - TYPE: Parent
+    ROLE: Governed_By
+    REVERSE_ROLE: Governs
   - TYPE: File
-    ROLE: ImplementedIn

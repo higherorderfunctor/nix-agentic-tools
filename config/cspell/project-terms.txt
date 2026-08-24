@@ -71,6 +71,7 @@ cpaczek
 createdb
 creds
 crystallise
+ctypes
 cuda
 customisation
 deadnix
@@ -344,6 +345,7 @@ sandboxed
 sarif
 scriptable
 sdiehl
+sdoc
 semble
 sequentialthinking
 serena
@@ -351,6 +353,7 @@ serialised
 serialising
 sess
 setext
+sgra
 shellharden
 shortrev
 sigmask
@@ -372,6 +375,7 @@ statix
 stdenv
 stopword
 streamable
+strictdoc
 subdirs
 subkeys
 subshell
@@ -436,6 +440,7 @@ vendorhash
 watchlist
 webp
 wikilink
+worklist
 worktree
 worktrees
 wyhash

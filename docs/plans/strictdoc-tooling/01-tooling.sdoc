@@ -2,7 +2,7 @@
 TITLE: StrictDoc tooling for this repository
 
 [GRAMMAR]
-IMPORT_FROM_FILE: grammar.sgra
+IMPORT_FROM_FILE: @repo
 
 [DECISION]
 UID: DEC-FINGERPRINT-IN-NODE
