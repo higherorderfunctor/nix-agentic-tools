@@ -391,15 +391,18 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-24 (commit pending — Beads now owns a second
-> sidecar-pinned Go derivation for its exact Dolt runtime; both child release
-> scripts retain the standard source/vendor/floor mechanics and one compound
-> Beads update script groups them into one target and PR). Prior: 2026-08-16
-> (commit pending — corrects the current Go-floor enumeration to include all
-> eight packages; Kiro's recomposition seam also exposes `withFhsPayload`, so
-> configured chat-only wrappers can enter the upstream FHS root without
-> reimplementing it while the public default stays byte-identical and
-> `useFhsSandbox = false` is an explicit module-level selection of
+> **Last verified:** 2026-08-24 (commit pending — Bruno's 4.1+ SQLite shim now
+> covers only the interval where its sidecar leads nixpkgs, and sidecar hash
+> drift distinguishes the package updater's early exit from CI's automatic
+> repair and an out-of-band fixer). Prior: 2026-08-24 (commit pending — Beads
+> now owns a second sidecar-pinned Go derivation for its exact Dolt runtime;
+> both child release scripts retain the standard source/vendor/floor mechanics
+> and one compound Beads update script groups them into one target and PR).
+> Prior: 2026-08-16 (commit pending — corrects the current Go-floor enumeration
+> to include all eight packages; Kiro's recomposition seam also exposes
+> `withFhsPayload`, so configured chat-only wrappers can enter the upstream FHS
+> root without reimplementing it while the public default stays byte-identical
+> and `useFhsSandbox = false` is an explicit module-level selection of
 > `passthru.unwrapped`). Prior: 2026-08-15 (commit pending — adds Beads as the
 > eighth Go package and as a stable-release, sidecar-pinned thin override in the
 > `devTools` group). Prior: 2026-08-16 (commit pending — documents Beads'
@@ -645,6 +648,24 @@ Two worked examples in this tree, both moving an INPUT hash — cite either:
 - `overlays/generic/bruno.nix` — `npmDepsHash`, via
   `ourPkgs.bruno.override (_: { buildNpmPackage = … })`.
 
+Bruno 4.1.0 adds a second builder-ordering constraint to that same wrapper. Its
+new `packages/bruno-sqlite` workspace declares `prepare = "npm run generate"`;
+npm invokes it during `npmConfigHook`'s dependency installation, before the hook
+patches the freshly installed `node_modules/.bin/tsx` shebang. The sandbox then
+fails on tsx's `/usr/bin/env node`. The overlay version-gates two coupled
+changes at 4.1.0: `postPatch` replaces only that early `prepare` with a no-op,
+and `preBuild` invokes the workspace's normal build after the npm hooks have
+patched shebangs. Its upstream `prebuild` regenerates the artifacts before
+Rollup. Do not keep only half: suppressing `prepare` without the later build
+ships a workspace without build artifacts, while moving the build before shebang
+patching restores the failure. The shim is active only while the desired version
+is 4.1.0+ and the nixpkgs base is older than 4.1.0. Once the base crosses that
+boundary, the overlay delegates lifecycle handling to it and full build
+verification remains authoritative; the version is a retirement boundary, not
+proof that the base adaptation works. The threshold also keeps 4.0.0's builder
+inputs unchanged; the update script, not this compatibility shim, continues to
+derive both hashes.
+
 `overlays/git-tools/git-branchless.nix` is a plain `overrideAttrs` and is
 CORRECT as one: it sets `cargoDeps` — an `ourPkgs.rustPlatform.importCargoLock`
 over the pinned src, i.e. the derived OUTPUT — and never `cargoHash`. Do not
@@ -772,13 +793,16 @@ choice usually gets read as a question about the source shape. It mostly is not.
   information, which is what tipped it. A package whose only hash is a small
   `src` is fine inline and costs less code — the inline rows here are not an
   oversight.
-- **State the counter-cost honestly.** A sidecar does NOT self-heal a hash
-  invalidated WITHOUT a version bump — a nixpkgs-side fetcher or builder change,
-  say. It early-exits on version equality and never re-derives, so the build
-  fails LOUDLY on a hash mismatch until someone runs the standalone fixer by
-  hand (`passthru.fixVendorHash`, `passthru.fixNpmDepsHash` — which exist for
-  exactly this). Inline re-derives every sweep and therefore self-heals that
-  case. **Neither shape fails silently**; do not write that one does.
+- **State the counter-cost honestly.** A sidecar's package update script alone
+  does NOT self-heal a hash invalidated WITHOUT a version bump: it early-exits
+  on version equality and never re-derives. An input update follows a separate
+  repair path: failed verification discovers `fix_sidecar_hashes`, derives the
+  hashes through the package's passthru fixers, and retries once. An out-of-band
+  same-version change still needs the standalone fixer
+  (`passthru.fixVendorHash`, `passthru.fixNpmDepsHash`) as an explicit escape
+  hatch. Hashes are derived by those fixers, never edited by hand. Inline
+  re-derives every sweep and therefore self-heals without that repair path.
+  **Neither shape fails silently**; do not write that one does.
 - **Record the inversion.** It corrects a belief this repo held: the rows still
   on plain `nix-update` are paying that uncacheable per-sweep cost TODAY, so
   "sidecars are legacy overhead from an older design" is close to backwards.
