@@ -109,7 +109,6 @@ false green: the same broken input exits 1, then 0 on re-run against a warm
 output directory.
 <<<
 
-
 [MECHANISM]
 UID: MECH-SGRA-BODY-COVERAGE
 TITLE: Extend the sdoc tree-sitter grammar to cover document-body content
