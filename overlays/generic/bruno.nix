@@ -1,6 +1,5 @@
 # bruno — the open-source API client, re-pinned onto this repo's update
-# cadence. Our pin sits at 4.0.0; the nixpkgs pin ships 3.5.2. Built from
-# source, never from the prebuilt .deb.
+# cadence. Built from source, never from the prebuilt .deb.
 #
 # `.override`, NOT `overrideAttrs`, AND THAT IS NOT A STYLE CHOICE.
 # `buildNpmPackage` is a `lib.extendMkDerivation`, and its `extendDrvArgs`
@@ -74,6 +73,23 @@
 # The `env` merge is a merge and not a replacement on purpose — bruno already
 # carries `env.ELECTRON_SKIP_BINARY_DOWNLOAD = 1`.
 #
+# BRUNO-SQLITE'S PREPARE MUST WAIT UNTIL AFTER SHEBANG PATCHING. 4.1.0 adds the
+# workspace with `prepare = "npm run generate"`. npm invokes that prepare while
+# `npmConfigHook` is still installing dependencies, before the hook patches the
+# new `node_modules/.bin/tsx`; its `/usr/bin/env node` shebang therefore fails in
+# the sandbox. The version-gated `postPatch` turns only that early prepare into
+# a no-op, then `preBuild` runs the workspace's normal build after the npm hooks
+# have patched shebangs. Its own `prebuild` regenerates the artifacts before
+# Rollup. Keep the two changes coupled: suppressing prepare alone would leave the
+# workspace without build artifacts, while building it earlier recreates the
+# original failure.
+# The shim covers only the interval where our pin is 4.1.0+ but nixpkgs' base is
+# older. Once the base crosses 4.1.0, full build verification delegates this
+# lifecycle handling to nixpkgs; the version boundary retires our intervention
+# rather than claiming the base fix is correct. The threshold leaves the current
+# 4.0.0 builder inputs byte-identical, so the normal sidecar fixer remains solely
+# responsible for hashes on the 4.1.0 bump.
+#
 # No platform gating: the source build supports darwin. A `--replace-fail`
 # whose anchor moved is a HARD failure and this host cannot build darwin, so
 # both darwin-only anchors in
@@ -122,6 +138,9 @@ in
     buildNpmPackage = args:
       ourPkgs.buildNpmPackage (finalAttrs: let
         upstream = (lib.toFunction args) finalAttrs;
+        needsBrunoSqliteLifecycleShim =
+          lib.versionAtLeast version "4.1.0"
+          && lib.versionOlder upstream.version "4.1.0";
       in
         upstream
         // {
@@ -138,7 +157,17 @@ in
             builtins.replaceStrings
             [upstream.version]
             [version]
-            upstream.postPatch;
+            upstream.postPatch
+            + lib.optionalString needsBrunoSqliteLifecycleShim ''
+              substituteInPlace packages/bruno-sqlite/package.json \
+                --replace-fail '"prepare": "npm run generate",' '"prepare": ":",'
+            '';
+
+          preBuild =
+            (upstream.preBuild or "")
+            + lib.optionalString needsBrunoSqliteLifecycleShim ''
+              npm run build --workspace=packages/bruno-sqlite
+            '';
 
           env =
             (upstream.env or {})
