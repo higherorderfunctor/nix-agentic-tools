@@ -269,12 +269,13 @@
       sembleTemplatesCheck = import ./checks/semble-templates.nix {inherit lib pkgs self;};
       shellcheckCorpusCheck = {shellcheck-corpus = import ./checks/shellcheck-corpus.nix {inherit lib pkgs;};};
       splitCodeSpansCheck = {split-code-spans = import ./checks/split-code-spans.nix {inherit pkgs;};};
+      strictdocCycleCheck = {strictdoc-cycle-check = import ./checks/strictdoc-cycle-check.nix {inherit pkgs self;};};
       strictdocFpCheck = {strictdoc-fp-check = import ./checks/strictdoc-fp-check.nix {inherit pkgs self;};};
       strictdocGrammarCorpusCheck = {strictdoc-grammar-corpus = import ./checks/strictdoc-grammar-corpus.nix {inherit lib pkgs self;};};
       updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit inputs lib pkgs self updateRegistry;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // beadsContractsCheck // beadsLifecycleCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // claudeMemoryCollisionGuardCheck // claudeSettingsSchemaCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // doubledWordsCheck // doubledWordsFixturesCheck // facetMockChecks // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goFloorDriftChecks // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroFhsContractCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // sembleTemplatesCheck // shellcheckCorpusCheck // splitCodeSpansCheck // strictdocFpCheck // strictdocGrammarCorpusCheck // updateTargetsParityCheck // validateAtStopCheck);
+      bareCommandsCheck // beadsContractsCheck // beadsLifecycleCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // claudeMemoryCollisionGuardCheck // claudeSettingsSchemaCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // doubledWordsCheck // doubledWordsFixturesCheck // facetMockChecks // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goFloorDriftChecks // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroFhsContractCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // sembleTemplatesCheck // shellcheckCorpusCheck // splitCodeSpansCheck // strictdocCycleCheck // strictdocFpCheck // strictdocGrammarCorpusCheck // updateTargetsParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.

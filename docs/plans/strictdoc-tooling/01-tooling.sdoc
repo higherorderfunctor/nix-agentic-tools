@@ -91,7 +91,7 @@ RELATIONS:
 [MECHANISM]
 UID: MECH-CYCLE-CHECK
 TITLE: Cycle detection over the JSON export
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Detect relation cycles in the exported graph independently of StrictDoc.
@@ -103,6 +103,24 @@ relation in this grammar carries a role, so no cycle in this corpus is detected;
 the failure surfaces as a recursion-depth crash during render.
 <<<
 PARENT_FP: DEC-LOCAL-IMPLEMENTABILITY:0000000
+NOTES: >>>
+Implemented: dev/scripts/cycle-check.py, an iterative (non-recursive, so it
+cannot hit the exact recursion-depth failure it replaces) DFS over every
+Parent-type RELATIONS entry regardless of ROLE -- File relations excluded,
+since their VALUE names a filesystem path, not a node. CI gate:
+checks/strictdoc-cycle-check.nix, mirroring strictdoc-fp-check.nix's clean
+$TMPDIR export harness (SLICE-FP-DETECTOR) rather than sharing its
+derivation, so the two checks stay independently attributable on failure.
+
+Verified past the happy path with two synthetic fixtures, not just the real
+graph: a 3-node cycle where every edge carries a role (A --Assumes--> B
+--Assumes--> C --Assumes--> A) is caught and reported with its role chain,
+plus a disjoint acyclic pair in the same export to prove no cross-node false
+positive; and an acyclic diamond (two paths converging on one node) plus a
+File relation whose VALUE equals its own owning node's UID, to prove that
+is not mistaken for a self-loop. Real graph: 61 nodes, 36 role-carrying
+edges, 0 cycles found.
+<<<
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-LOCAL-IMPLEMENTABILITY
@@ -303,7 +321,7 @@ pre-existing violations; see SLICE-FP-DETECTOR's NOTES.
 [MECHANISM]
 UID: MECH-SDOC-CI-CHECK
 TITLE: Gate the design graph in nix flake check
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Add a flake check that exports the graph to JSON and fails on non-zero exit, so
@@ -318,19 +336,20 @@ The check must use a clean output directory. Incremental generation produces a
 false green: the same broken input exits 1, then 0 on re-run against a warm
 output directory.
 
-checks/strictdoc-fp-check.nix (SLICE-FP-DETECTOR) already exports the whole
-graph into a clean runCommand $TMPDIR and fails the build on a non-zero
-`strictdoc export` -- validation runs at parse time, so this may already
-satisfy this mechanism's STATEMENT as a byproduct rather than needing a
-separate check. Left at sketch rather than closed here: that is a judgment
-call for whoever grooms this item, not something to decide implementing an
-unrelated slice.
+Determined by SLICE-GRAPH-CHECKS: satisfied as a byproduct, no separate check
+added. checks/strictdoc-fp-check.nix (SLICE-FP-DETECTOR) runs `strictdoc
+export` under `set -euETo pipefail` inside a clean runCommand $TMPDIR --
+validation runs at parse time, so a non-zero export exit already fails that
+build. checks/strictdoc-cycle-check.nix (MECH-CYCLE-CHECK) does the same
+independently. Two checks now provide this gate; adding a third binary whose
+only job was the export step itself would just be the same export run a
+third time.
 <<<
 
 [SLICE]
 UID: SLICE-GRAPH-CHECKS
 TITLE: Make the graph fail loud on cycles and on an unvalidated export
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: human
 STATEMENT: >>>
 Two checks over the JSON export, in the harness fp-check already established.
@@ -348,6 +367,12 @@ RATIONALE: >>>
 Both are small and both close holes that have already been hit. A broken graph
 was committed to this branch and the hooks passed it. Cycles have never been
 tested because nothing detects them.
+<<<
+NOTES: >>>
+Cycle detection: MECH-CYCLE-CHECK. Export gate: determined already satisfied
+as a byproduct of checks/strictdoc-fp-check.nix and, now, also of
+checks/strictdoc-cycle-check.nix -- see MECH-SDOC-CI-CHECK's NOTES for the
+determination. No second export-only binary added.
 <<<
 RELATIONS:
 - TYPE: Parent
