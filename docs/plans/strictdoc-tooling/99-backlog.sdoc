@@ -247,3 +247,90 @@ grammar change that stops emitting whitespace as a sibling, and neither is
 worth it for the observed cost. A good candidate to hand to an execution engine
 later rather than to spend design attention on now.
 <<<
+
+[DECISION]
+UID: DEC-FP-FIELDS-CONFIGURABLE
+TITLE: Which fields are contract-bearing is configuration, not a constant
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+The Nix option surface for custom fields and workflow mechanics exists and the
+operator has reviewed the field selection through it.
+<<<
+STATEMENT: >>>
+The set of fields a fingerprint covers is a per-project option, not a hardcoded
+list in a script. A prototype may hardcode any reasonable selection to exercise
+the logic, but that selection is not settled by having been prototyped.
+<<<
+RATIONALE: >>>
+The selection is the whole mechanism: too broad and every wording change
+re-suspects everything until sign-off becomes a rubber stamp, too narrow and a
+decision going superseded fails to stale its dependents. That trade is the
+operator's to make, and it cannot be reviewed sensibly as an argument in prose
+-- it needs the typed option surface the rest of this repository's integrations
+are reviewed through.
+<<<
+
+[MECHANISM]
+UID: MECH-FP-MAIN-LINEAGE
+TITLE: Fail safes for fingerprints that reference a state main cannot reconstruct
+DEPTH: needs-design
+AUTHORED_BY: human
+STATEMENT: >>>
+A fingerprint is a content hash of a parent's contract fields, not a Git
+object, so squashing does not invalidate it. What squashing destroys is the
+ability to RECONSTRUCT the accepted state: if a parent hashed to X only on an
+intermediate commit that the squash erased, a later suspect report can say the
+edge is stale but not what changed.
+
+Two checks:
+
+- Every recorded hash corresponds to a parent state reachable in main.
+- No recorded hash is ahead of the branch's common base with main; if one is,
+  rebase before accepting, so acceptances are taken against states that will
+  survive the squash.
+<<<
+RATIONALE: >>>
+Without these, an acceptance taken mid-branch against a parent that changed
+again before merge leaves a dangling reference the moment the branch squashes.
+The mechanism still reports the edge as suspect, which is correct, but it loses
+the diff that makes the report actionable -- and a report that only says
+"something changed" is the one people learn to ignore.
+<<<
+NOTES: >>>
+Merge-time discipline may subsume both. If acceptance is taken as the last step
+before merge, the recorded hash is by construction the state that becomes main.
+Worth checking whether the two checks are then redundant or still needed as a
+backstop against acceptances taken earlier in the branch.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Assumes
+
+[MECHANISM]
+UID: MECH-FP-PREMERGE-GC
+TITLE: Keep fingerprint lineage during development, collapse it before merge
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+Permit fingerprints referencing states between the branch head and its common
+base with main while the branch is in development, then run a specialized
+garbage collection before merge that erases the ones the squash is about to
+make unreachable.
+<<<
+RATIONALE: >>>
+Full lineage across a multi-commit pull request is genuinely useful while
+working -- it is the trace of how a design was reasoned through. It becomes
+dangling references the instant the branch squashes. Collecting at the boundary
+keeps the value and pays the cost once.
+<<<
+NOTES: >>>
+Needs grooming, and possibly a plan revision rather than a mechanism: it may
+change how MECH-FP-CHECK reports rather than being a separate step. Not settled
+that a garbage collection is the right shape.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-FP-MAIN-LINEAGE
+  ROLE: Assumes
