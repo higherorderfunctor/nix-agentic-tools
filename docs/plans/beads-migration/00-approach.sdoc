@@ -29,7 +29,7 @@ cannot prove the two ends agree.
 UID: DEC-VIEWER-BEFORE-BULK
 TITLE: The viewer ships before any bulk conversion
 AUTHORED_BY: llm
-STATUS: open
+STATUS: superseded
 RETIRES_ON: >>>
 A derived human-readable view exists and someone reads a converted slice from
 it without opening a raw sdoc file.
@@ -48,6 +48,10 @@ NOTES: >>>
 This is the strongest argument against the whole approach and is recorded as an
 open decision rather than buried, so it has to be answered rather than forgotten.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-HITL-IS-THE-VIEWER
+  ROLE: Superseded_By
 
 [SLICE]
 UID: SLICE-FIRST-CONVERSION
@@ -146,3 +150,73 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SLICE-FIRST-CONVERSION
   ROLE: Governed_By
+
+[DECISION]
+UID: DEC-HITL-IS-THE-VIEWER
+TITLE: An LLM renders for human reading until a viewer exists
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+A working beads sandbox exists and the viewer that follows it is in use.
+<<<
+STATEMENT: >>>
+Human reading is served by on-the-fly LLM expansion during a working session,
+not by a rendered artifact. The operator makes decisions in conversation, and
+the model pulls in whatever neighbouring content the decision needs.
+
+Conversion is therefore not gated on a viewer. Order of work is the sdoc plan,
+then early beads implementation, then the viewer.
+<<<
+RATIONALE: >>>
+Readability is not the near-term bottleneck. Deciding what is safe to build is.
+The single-source-of-truth property and well-defined edges to that truth are
+what matter in the early hours; the render is downstream of both and can wait.
+<<<
+
+[DECISION]
+UID: DEC-VIEWER-FORM-UNDECIDED
+TITLE: The viewer's form is not chosen
+AUTHORED_BY: human
+STATUS: open
+RETIRES_ON: >>>
+The kanban TUI prototype spike concludes, which is expected around the time the
+sdoc work lands.
+<<<
+STATEMENT: >>>
+Whether the eventual viewer is a terminal client or a web view is open. A kanban
+TUI prototype with a generic backend is in progress on the side and its outcome
+is the deciding input.
+<<<
+RATIONALE: >>>
+Recorded so the choice is made on the prototype's evidence rather than by
+whichever surface gets built first.
+<<<
+
+[MECHANISM]
+UID: MECH-RENDER-CACHE
+TITLE: Human-readable renders are cached on the fingerprint of their inputs
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+A rendered chunk is produced by a model, not deterministically: it expands one
+node and pulls in neighbouring content that adds value to the reader. Because
+generation costs tokens, each rendered chunk records the set of nodes that fed
+it and a fingerprint over their contract fields. The chunk is regenerated only
+when one of those inputs changes.
+<<<
+RATIONALE: >>>
+This is the same primitive as the suspect-link check, pointed at a different
+question. Suspect detection asks whether a node's parent contract moved since it
+was accepted; render caching asks whether any input to a chunk moved since it
+was drawn. Both hash the contract fields of a node set and compare. Building the
+fingerprint machinery therefore serves the viewer as well as drift detection,
+which is an argument for doing it before either consumer needs it.
+<<<
+PARENT_FP: DEC-HITL-IS-THE-VIEWER:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-HITL-IS-THE-VIEWER
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Assumes
