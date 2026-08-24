@@ -530,3 +530,56 @@ Deliberately after settling, not before. Writing tests against mechanics still
 being played with pins the wrong thing and makes changing it feel like
 breakage.
 <<<
+
+[MECHANISM]
+UID: MECH-READY-QUERY-GRAPH-REUSE
+TITLE: MECH-READY-QUERY's closure walk can reuse cycle-check's graph builder
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+dev/scripts/cycle-check.py builds a UID -> [(target_uid, role)] adjacency map
+over every Parent-type relation via sdoc_fp.build_uid_index and a small
+RELATIONS walk. MECH-READY-QUERY needs the same shape of graph to walk a
+slice's transitive contract-dependency closure and test each node's DEPTH /
+STATUS against readiness. Building it should be factored into sdoc_fp.py (or
+a shared graph module) once MECH-READY-QUERY is implemented, rather than
+reimplemented.
+<<<
+RATIONALE: >>>
+Noticed while implementing SLICE-GRAPH-CHECKS: MECH-CYCLE-CHECK and
+MECH-READY-QUERY both start from "walk the relation graph from a node," and
+cycle-check.py already has a tested version of that walk (verified against
+synthetic fixtures, see MECH-CYCLE-CHECK's NOTES). Not acted on now --
+MECH-READY-QUERY is still needs-design and this is an implementation detail
+for whoever designs it, not a reason to touch it while implementing an
+unrelated slice.
+<<<
+
+[DECISION]
+UID: DEC-TUI-BOARD-SUBJECT
+TITLE: Whether the board renders plans or work
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: >>>
+The TUI's backend is specified against a real data layer rather than fixtures.
+<<<
+STATEMENT: >>>
+The kanban prototype's data model is the earlier overlay's -- TASK, PLAN,
+MILESTONE, a work STATUS spanning open through done, and blocking edges. The
+grammar in use has none of those: no work-status field anywhere, no milestone,
+and node types that describe design rather than work.
+
+A board over the PLAN would reintroduce the work store the plan deliberately
+does not keep. A board over the execution engine, fed by the plan at ingest, is
+the shape that survives MECH-PLAN-CHANGE-KINDS.
+<<<
+RATIONALE: >>>
+Recorded now because the divergence is invisible while the backend is fixtures
+and expensive once it is not. The prototype labels itself honestly -- fixture
+backend, no SDoc writes -- so nothing is wrong yet; this is only the fork that
+gets chosen when the fixtures are replaced.
+<<<
+NOTES: >>>
+Not a criticism of the prototype, which is deliberately unspecced at this
+layer. The operator raised the same gap independently.
+<<<
