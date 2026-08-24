@@ -1,0 +1,179 @@
+[GRAMMAR]
+ELEMENTS:
+- TAG: DECISION
+  PROPERTIES:
+    PREFIX: DEC-
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: TITLE
+    TYPE: String
+    REQUIRED: True
+  - TITLE: DEPTH
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented)
+    REQUIRED: True
+  - TITLE: AUTHORITY
+    TYPE: SingleChoice(llm, human-accepted, human-pinned)
+    REQUIRED: True
+  - TITLE: STATUS
+    TYPE: SingleChoice(accepted, superseded)
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: RATIONALE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: NOTES
+    TYPE: String
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: Superseded_By
+    REVERSE_ROLE: Supersedes
+- TAG: MECHANISM
+  PROPERTIES:
+    PREFIX: MECH-
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: TITLE
+    TYPE: String
+    REQUIRED: True
+  - TITLE: DEPTH
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented)
+    REQUIRED: True
+  - TITLE: AUTHORITY
+    TYPE: SingleChoice(llm, human-accepted, human-pinned)
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: RATIONALE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: NOTES
+    TYPE: String
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: Governed_By
+    REVERSE_ROLE: Governs
+  - TYPE: Parent
+    ROLE: Guarantees
+    REVERSE_ROLE: Guaranteed_By
+  - TYPE: Parent
+    ROLE: Serialized_By
+    REVERSE_ROLE: Serializes
+  - TYPE: Parent
+    ROLE: Proven_By
+    REVERSE_ROLE: Proves
+  - TYPE: Parent
+    ROLE: Assumes
+    REVERSE_ROLE: Assumed_By
+  - TYPE: File
+    ROLE: ImplementedIn
+- TAG: SLICE
+  PROPERTIES:
+    PREFIX: SLICE-
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: TITLE
+    TYPE: String
+    REQUIRED: True
+  - TITLE: DEPTH
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented)
+    REQUIRED: True
+  - TITLE: AUTHORITY
+    TYPE: SingleChoice(llm, human-accepted, human-pinned)
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: RATIONALE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: NOTES
+    TYPE: String
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: Crosses
+    REVERSE_ROLE: Crossed_By
+  - TYPE: Parent
+    ROLE: Assumes
+    REVERSE_ROLE: Assumed_By
+  - TYPE: File
+    ROLE: ImplementedIn
+- TAG: INVARIANT
+  PROPERTIES:
+    PREFIX: INV-
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: TITLE
+    TYPE: String
+    REQUIRED: True
+  - TITLE: DEPTH
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented)
+    REQUIRED: True
+  - TITLE: AUTHORITY
+    TYPE: SingleChoice(llm, human-accepted, human-pinned)
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: RATIONALE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: NOTES
+    TYPE: String
+    REQUIRED: False
+- TAG: SPIKE
+  PROPERTIES:
+    PREFIX: SPIKE-
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: TITLE
+    TYPE: String
+    REQUIRED: True
+  - TITLE: DEPTH
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented)
+    REQUIRED: True
+  - TITLE: AUTHORITY
+    TYPE: SingleChoice(llm, human-accepted, human-pinned)
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: RATIONALE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: NOTES
+    TYPE: String
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: File
+    ROLE: ImplementedIn
