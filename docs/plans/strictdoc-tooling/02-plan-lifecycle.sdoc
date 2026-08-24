@@ -1,0 +1,138 @@
+[DOCUMENT]
+TITLE: What a plan is for, and how long it lives
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SYSTEM-PURPOSE
+TITLE: This exists to keep an implementing model on target, not to manage requirements
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+A second consumer appears whose needs are not served by that purpose --
+compliance, audit, or a human readership that is not the plan's own author.
+<<<
+STATEMENT: >>>
+The system's purpose is context management and edge mechanics during
+implementation: keeping a model on target, and catching what it would otherwise
+miss -- contradictions, stale areas, orphans, conflicts nobody noticed.
+
+It is not a requirements management system, not a documentation system, and not
+a deliverable. Any feature that serves those and not the purpose above is out of
+scope by default.
+<<<
+RATIONALE: >>>
+Stated because nearly every alternative design in this space optimizes for a
+human readership or an audit trail, and inheriting those goals silently is how
+this becomes heavy. The reader being optimized for is a model with a bounded
+context and no memory of yesterday.
+<<<
+
+[DECISION]
+UID: DEC-PLAN-SINGLE-OWNER
+TITLE: A plan has one owner and concurrent human editing is not a design concern
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+Two people need to edit one plan, which would mean plans had become a shared
+artifact rather than an individual one.
+<<<
+STATEMENT: >>>
+Plans are individual. One person owns a plan and directs a model through it. The
+multi-contributor surface is the WORK, not the plan, and at that scale the
+shared artifact is an external tracker rather than anything here.
+<<<
+RATIONALE: >>>
+This removes a whole class of design work. Locking, merge semantics for a plan
+node, and concurrent-edit conflict resolution are all unnecessary. Two people
+editing the same plan node is rare enough to handle by hand if it ever happens.
+<<<
+NOTES: >>>
+Does not extend to the settled architecture nodes, which are shared by
+construction and outlive any one plan.
+<<<
+
+[DECISION]
+UID: DEC-PLAN-LIFECYCLE-OPEN
+TITLE: Whether plans are committed at all is unsettled
+AUTHORED_BY: human
+STATUS: open
+RETIRES_ON: >>>
+Beads is running and one plan has reached the point where it would either
+settle into durable specification or be collected -- the first real observation
+of what a finished plan leaves behind.
+<<<
+STATEMENT: >>>
+The current lean, held loosely: plans may not belong in main at all. They may be
+working artifacts, or examples a model generates from, with only the durable
+specification -- what was actually done -- committed.
+
+Once beads exists a plan is a launch point, not a record. No plan survives
+reality. Execution state lives in beads, which is not shared, and the plan is an
+immutable snapshot taken at ingest.
+
+An intermediate position, also unsettled: commit only the snapshot that led to
+the work, for lineage, and never an in-progress plan. Then no plan changes
+underneath anyone.
+<<<
+RATIONALE: >>>
+Recorded as open rather than decided because the author does not yet have a
+sharp opinion, and the observation that would settle it does not exist yet. It
+is the kind of decision that gets made badly if forced early and cheaply if
+left until the evidence arrives.
+<<<
+
+[INVARIANT]
+UID: INV-NO-EXTERNAL-PLAN-REFS
+TITLE: Nothing outside a plan may depend on a plan node
+DEPTH: needs-design
+AUTHORED_BY: human
+STATEMENT: >>>
+Settled architecture, source annotations, and other plans must not hold
+relations into a plan's nodes. A plan may depend outward; nothing may depend
+inward.
+<<<
+RATIONALE: >>>
+Follows directly from plans being collectable. If a plan can be deleted or never
+committed, an inbound reference is a dangling relation waiting to happen -- and
+because a dangling relation is a hard export error, one collected plan would
+break the build for everything that cited it.
+<<<
+NOTES: >>>
+Needs design because it is currently unenforced and this graph may already
+violate it. A check is cheap: any relation whose source is outside
+docs/plans/<plan>/ and whose target is inside it. Its necessity is contingent on
+DEC-PLAN-LIFECYCLE-OPEN, but the direction holds under every option considered
+so far, so building the check does not depend on settling that.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-PLAN-LIFECYCLE-OPEN
+  ROLE: Governed_By
+
+[MECHANISM]
+UID: MECH-PLAN-BEADS-SNAPSHOT
+TITLE: Ingest to beads freezes the plan
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+At ingest the plan is snapshotted immutably and execution state moves to beads.
+The plan does not track progress after that point, and beads is the only thing
+whose state changes.
+<<<
+RATIONALE: >>>
+Keeps one work state rather than two, which is the sync problem that would
+otherwise appear the moment both a plan and an execution engine model an
+in-progress item.
+<<<
+NOTES: >>>
+Supporting the with-beads and without-beads shapes simultaneously is explicitly
+out of the author's scope. The current awkward state, where the plan carries
+some execution-adjacent state because beads does not exist yet, is temporary and
+should not be designed around.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-PLAN-LIFECYCLE-OPEN
+  ROLE: Governed_By
