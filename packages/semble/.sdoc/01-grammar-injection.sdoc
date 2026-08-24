@@ -50,6 +50,9 @@ This keeps the upstream bundle intact and avoids its mutable extraction cache.
 <<<
 PARENT_FP: DEC-ARCH-COLOCATION:0000000
 RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-ARCH-COLOCATION
+  ROLE: Governed_By
 - TYPE: File
   VALUE: packages/semble/lib/withGrammars.nix
 - TYPE: File
@@ -71,6 +74,9 @@ extension-driven and .sdoc is in no default extension set.
 <<<
 PARENT_FP: DEC-ARCH-COLOCATION:0000000
 RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-ARCH-COLOCATION
+  ROLE: Governed_By
 - TYPE: File
   VALUE: packages/semble/lib/withGrammars.nix
 
