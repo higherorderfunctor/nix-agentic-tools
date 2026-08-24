@@ -27,8 +27,12 @@
 in
   ourPkgs.tree-sitter.buildGrammar {
     language = "strictdoc";
-    # tree-sitter.json declares 0.1.0; upstream ships no tags, so this rides
-    # the main-tracking update path (config.update.targets, "git" tracking).
+    # tree-sitter.json declares 0.1.0. Upstream DOES ship tags (v0.1.0,
+    # v0.2.0) -- main-tracking is chosen because it ships no PUBLISHED
+    # release: `releases/latest` 404s, so ghLatestVersionCmd cannot resolve a
+    # version at all. Do not "correct" this to tag tracking on seeing the
+    # tags; that breaks the update script. The pin is main HEAD, which is
+    # ahead of v0.2.0 (40dfc545).
     version = vu.mkVersion {
       upstream = "0.1.0";
       inherit rev;
