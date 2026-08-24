@@ -43,7 +43,7 @@ ELEMENTS:
     TYPE: String
     REQUIRED: True
   - TITLE: DEPTH
-    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented)
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented, verified)
     REQUIRED: True
   - TITLE: AUTHORED_BY
     TYPE: SingleChoice(llm, human)
@@ -88,7 +88,7 @@ ELEMENTS:
     TYPE: String
     REQUIRED: True
   - TITLE: DEPTH
-    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented)
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented, verified)
     REQUIRED: True
   - TITLE: AUTHORED_BY
     TYPE: SingleChoice(llm, human)
@@ -130,7 +130,7 @@ ELEMENTS:
     TYPE: String
     REQUIRED: True
   - TITLE: DEPTH
-    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented)
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented, verified)
     REQUIRED: True
   - TITLE: AUTHORED_BY
     TYPE: SingleChoice(llm, human)
@@ -165,7 +165,7 @@ ELEMENTS:
     TYPE: String
     REQUIRED: True
   - TITLE: DEPTH
-    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented)
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented, verified)
     REQUIRED: True
   - TITLE: AUTHORED_BY
     TYPE: SingleChoice(llm, human)
