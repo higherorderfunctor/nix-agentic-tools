@@ -10,12 +10,12 @@
   inherit (ourPkgs) buildNpmPackage bun fetchFromGitHub makeWrapper;
   vu = import ../lib.nix;
 
-  rev = "7a5e7c8215138ab158895250acbcbef3e4c62a95";
+  rev = "e50f89517d7427224bf478247469ceb58a84ba9a";
   src = fetchFromGitHub {
     owner = "CaviraOSS";
     repo = "OpenMemory";
     inherit rev;
-    hash = "sha256-i+MePPgK3sVMo5w/COE4dvXWf4Qz/5DBMKZ+XTANaIM=";
+    hash = "sha256-za28DrVKXQ3PHUPzlXBRxH0QCb6gOQOBiEm8Gu0iwIc=";
   };
 
   # The auto-memory backend helper (STAGE 5, D19/D20): a thin CLI over the
@@ -98,7 +98,7 @@ in
           'Running on http://''${env.host}:''${env.port}'
     '';
 
-    npmDepsHash = "sha256-jYvuAPpU53V44FdNmcvxQRJu7cGQBJ+7MCZPspWQwMA=";
+    npmDepsHash = "sha256-dpdeyTtYzNGRHa+nn8R65c3SWTJ000d15nebawMKxfo=";
     # Source needs building (tsc). npm tarball had pre-built dist/.
     nativeBuildInputs = [makeWrapper];
 
