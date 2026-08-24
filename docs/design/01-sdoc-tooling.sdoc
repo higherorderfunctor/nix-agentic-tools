@@ -1,0 +1,100 @@
+[DOCUMENT]
+TITLE: StrictDoc tooling for this repository
+
+[GRAMMAR]
+IMPORT_FROM_FILE: grammar.sgra
+
+[DECISION]
+UID: DEC-FINGERPRINT-IN-NODE
+TITLE: Store the parent contract fingerprint in the node
+DEPTH: interface-settled
+AUTHORITY: llm
+STATUS: accepted
+STATEMENT: >>>
+A node records the contract hash of each parent it depends on, in a PARENT_FP
+field on the node itself, rather than in a sidecar file keyed by node identity.
+<<<
+RATIONALE: >>>
+Accepting a change becomes a reviewable git diff. The hash transition is
+attributable to a commit, revertable, and visible in review. A sidecar makes
+sign-off invisible and needs a key-matching scheme that in-node storage avoids.
+<<<
+
+[DECISION]
+UID: DEC-LOCAL-IMPLEMENTABILITY
+TITLE: Implementability is a property of a closure, not of the project
+DEPTH: interface-settled
+AUTHORITY: llm
+STATUS: accepted
+STATEMENT: >>>
+A slice is implementable when its own transitive contract-dependency closure is
+settled and carries no suspect edges. There is no global readiness gate over the
+whole graph.
+<<<
+RATIONALE: >>>
+A global fail-closed gate is waterfall by construction: nothing is implementable
+until everything is designed. A closure-local predicate lets a mature slice ship
+while the rest of the graph stays deliberately fuzzy.
+<<<
+
+[MECHANISM]
+UID: MECH-FP-CHECK
+TITLE: Suspect-link detection over the JSON export
+DEPTH: needs-spike
+AUTHORITY: llm
+STATEMENT: >>>
+Hash each node's contract-bearing fields from the JSON export. A node is suspect
+when a parent it records a fingerprint for no longer hashes to the recorded
+value, or when that parent has been deleted.
+<<<
+RATIONALE: >>>
+StrictDoc has no suspect-link feature. It is on the upstream backlog as
+SDOC-SRS-117 and described unbuilt in their DO-178 notes.
+<<<
+PARENT_FP: DEC-FINGERPRINT-IN-NODE:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-FINGERPRINT-IN-NODE
+  ROLE: Governed_By
+
+[MECHANISM]
+UID: MECH-READY-QUERY
+TITLE: Ready-slice query over the contract closure
+DEPTH: needs-design
+AUTHORITY: llm
+STATEMENT: >>>
+Walk a slice's contract-dependency closure and report whether every node in it
+is at interface-settled or better with no suspect edges. Report the blocking
+frontier otherwise.
+<<<
+PARENT_FP: DEC-LOCAL-IMPLEMENTABILITY:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LOCAL-IMPLEMENTABILITY
+  ROLE: Governed_By
+
+[SLICE]
+UID: SLICE-SEMBLE-SDOC
+TITLE: Index sdoc documents in semble via a tree-sitter grammar
+DEPTH: interface-settled
+AUTHORITY: llm
+STATEMENT: >>>
+Package a tree-sitter grammar for the sdoc format as a flake output and register
+it with semble, so sdoc documents are chunked on node boundaries rather than by
+line count.
+<<<
+RATIONALE: >>>
+The semble integration already accepts arbitrary tree-sitter grammar packages.
+This slice depends on no other design work in this document.
+<<<
+
+[SPIKE]
+UID: SPIKE-SGRA-PARSE
+TITLE: Make the tree-sitter grammar parse standalone .sgra files
+DEPTH: needs-spike
+AUTHORITY: llm
+STATEMENT: >>>
+The upstream tree-sitter grammar parses all sdoc documents but fails every
+standalone .sgra grammar file, because its root rule requires a DOCUMENT header.
+Establish whether a three-rule change fixes it without regressions.
+<<<
