@@ -1,0 +1,127 @@
+[DOCUMENT]
+TITLE: StrictDoc tooling plan backlog
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-PLAN-SCOPED-BACKLOG
+TITLE: Each plan carries its own backlog document, and no new node type
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+An item needs to be tracked while living outside its plan's backlog document,
+at which point an explicit register node and a Backlogged_In role become the
+cheaper answer.
+<<<
+STATEMENT: >>>
+Every plan directory may hold a 99-backlog document. Anything noticed but not
+groomed goes there as an ordinary node at DEPTH sketch. Grooming means moving
+the node into a numbered document in the same plan and raising its DEPTH; the
+UID never changes, so nothing that cites it breaks.
+
+The plan's ungroomed set is therefore the query DEPTH == sketch scoped to that
+plan's directory. Debt remaining when a plan closes is whatever is still at
+sketch, and what to do with it is not decided here.
+<<<
+RATIONALE: >>>
+A dedicated BACKLOG node type was considered and rejected. The existing types
+already say what kind of work an item is -- a MECHANISM to build, a DECISION to
+make, a SPIKE to run -- and a separate type would throw that away and need
+mapping back on grooming. Containment by document needs no grammar change at
+all, and DEPTH sketch already means exactly ungroomed.
+<<<
+NOTES: >>>
+Deliberately not solved here: a repo-level backlog above plans. That decision
+waits for a plan to actually close with debt on it.
+<<<
+
+[DECISION]
+UID: DEC-LOG-DONT-SURFACE
+TITLE: Incidental findings go to the backlog, not to session output
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+The backlog grows faster than it is groomed, which would mean the filter is
+letting too much through and the threshold needs restating.
+<<<
+STATEMENT: >>>
+A model working in this repository may add backlog nodes on its own initiative,
+without asking. It should.
+
+Session output raises a finding only when it matters SOON -- it changes the
+decision in front of the operator, or it blocks the work in hand. Everything
+else, the whole class of "one more thing you should know", is written to the
+plan's backlog document and not spoken. A finding that is logged is not lost, so
+mentioning it costs attention while logging it costs nothing.
+
+This applies to planning and implementation sessions alike.
+<<<
+RATIONALE: >>>
+The operator's judgment budget is the scarce resource, not disk or tokens.
+Surfacing everything spends that budget on things that are not urgent, and the
+predictable result is that genuinely urgent findings get skimmed along with the
+rest.
+<<<
+
+[MECHANISM]
+UID: MECH-TREEFMT-SDOC
+TITLE: Register strictdoc format as the treefmt formatter for sdoc and sgra
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+treefmt currently formats nothing with an sdoc or sgra extension: there is no
+catch-all and unmatched files only warn. The canonical formatter for both is
+strictdoc format, which is idempotent over this corpus and currently a no-op
+because the files were written in canonical form by hand.
+
+Wire it in treefmt.nix so formatting is enforced rather than incidental.
+<<<
+RATIONALE: >>>
+Two things depend on canonical form. Fingerprints are taken over field text, so
+an unformatted file hashes differently from the same content formatted. And the
+commit gate runs treefmt with fail-on-change, so anything treefmt does not know
+about cannot be enforced there.
+<<<
+NOTES: >>>
+Watch for two things when doing it. strictdoc format takes a project directory,
+not a file list, which is an awkward fit for treefmt's per-file invocation
+model. And it mints a document MID on first run for any document lacking one,
+which is a content change treefmt would report as a reformat.
+<<<
+
+[MECHANISM]
+UID: MECH-SDOC-CI-CHECK
+TITLE: Gate the design graph in nix flake check
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Add a flake check that exports the graph to JSON and fails on non-zero exit, so
+a broken relation or an invalid enum value cannot merge.
+<<<
+RATIONALE: >>>
+Validation currently runs only when someone remembers to run it. The export is
+a few seconds on a corpus this size.
+<<<
+NOTES: >>>
+The check must use a clean output directory. Incremental generation produces a
+false green: the same broken input exits 1, then 0 on re-run against a warm
+output directory.
+<<<
+
+[MECHANISM]
+UID: MECH-FP-RELATION-LINT
+TITLE: Every PARENT_FP entry should have a matching relation
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A node recording a fingerprint for a parent asserts a dependency on that
+parent's contract, so it should also carry an edge to it. Nothing enforces
+that today, and several nodes in this graph already have a fingerprint with no
+corresponding relation.
+<<<
+RATIONALE: >>>
+Without the lint the two can disagree silently, and the edge is what the
+traversal follows. A fingerprint the traversal cannot reach is invisible to both
+the drift check and the render cache.
+<<<

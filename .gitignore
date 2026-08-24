@@ -65,3 +65,6 @@ docs/src/
 
 # Local private working area (untracked journals, assessments, scratch)
 /private/
+
+# strictdoc: `format` and `export` default their output/cache here
+output/
