@@ -71,7 +71,7 @@ tracking the operator asked for is absent until it is closed.
 [MECHANISM]
 UID: MECH-FP-CHECK
 TITLE: Suspect-link detection over the JSON export
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Hash each node's contract-bearing fields from the JSON export. A node is suspect
@@ -82,7 +82,7 @@ RATIONALE: >>>
 StrictDoc has no suspect-link feature. It is on the upstream backlog as
 SDOC-SRS-117 and described unbuilt in their DO-178 notes.
 <<<
-PARENT_FP: DEC-FINGERPRINT-IN-NODE:0000000
+PARENT_FP: DEC-FINGERPRINT-IN-NODE:b2c00b4
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-FINGERPRINT-IN-NODE
@@ -210,7 +210,7 @@ RELATIONS:
 [SLICE]
 UID: SLICE-FP-DETECTOR
 TITLE: Suspect-link detection and acceptance over the design graph
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: human
 STATEMENT: >>>
 Ship fp-check and fp-accept over the JSON export, plus a flake check that gates
@@ -230,6 +230,41 @@ The contract field selection is a prototype choice, deliberately not settled --
 see MECH-FP-FIELD-TUNING. Git-flow handling is deliberately absent: nothing
 bites before a branch reaches main, and that merge is the forcing function.
 <<<
+PARENT_FP: >>>
+MECH-FP-ACCEPT-READINESS:ff63967
+MECH-FP-CHECK:5360cbe
+MECH-FP-RELATION-LINT:704b6d9
+<<<
+NOTES: >>>
+Implemented: dev/scripts/fp-check.py and fp-accept.py, sharing dev/scripts/
+sdoc_fp.py (contract-field hashing, PARENT_FP parsing, the readiness
+predicate) and sdoc_edit.py (structural PARENT_FP field editor -- finds a
+node's line-range by UID and field-range by name rather than splitting on
+blank lines, because a multiline field's own prose can contain blank
+paragraph breaks). CI gate: checks/strictdoc-fp-check.nix, exporting the
+whole graph into a fresh runCommand $TMPDIR on every build. strictdoc added
+to the interactive devShell (devenv.nix) for the skill's format/export loop
+and for running these scripts by hand.
+
+fp-check's first real run over this repo's existing graph found 5 nodes
+across docs/plans/beads-migration and packages/semble/.sdoc with a PARENT_FP
+entry and no matching relation -- exactly MECH-FP-RELATION-LINT's predicted
+defect class, not a tooling bug. Fixed as their own commit (the missing
+Governed_By edge each PARENT_FP already implied; nothing else about those
+nodes changed) before wiring the check into flake.nix, so the gate starts
+green rather than red on day one.
+
+Verified past the happy path: a synthetic export exercises all four
+fp-check cases (signed-and-current, never-signed, drifted, unbacked) plus a
+deleted-parent case in one run, and a synthetic readiness fixture confirms
+fp-accept actually refuses a DECISION parent with STATUS open and a
+MECHANISM parent below interface-settled rather than silently skipping the
+check. fp-accept was then run for real on SLICE-FP-DETECTOR itself (this
+node) and on MECH-FP-CHECK and MECH-FP-ACCEPT-READINESS, producing the
+PARENT_FP entries above and below -- the multi-entry block form is this
+node's own three-parent write, exercised for real rather than only in the
+synthetic fixture.
+<<<
 RELATIONS:
 - TYPE: Parent
   VALUE: MECH-FP-CHECK
@@ -244,7 +279,7 @@ RELATIONS:
 [MECHANISM]
 UID: MECH-FP-RELATION-LINT
 TITLE: Every PARENT_FP entry should have a matching relation
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 A node recording a fingerprint for a parent asserts a dependency on that
@@ -256,4 +291,11 @@ RATIONALE: >>>
 Without the lint the two can disagree silently, and the edge is what the
 traversal follows. A fingerprint the traversal cannot reach is invisible to both
 the drift check and the render cache.
+<<<
+NOTES: >>>
+Realized as fp-check's "unbacked" case (dev/scripts/fp-check.py) rather than
+a separate binary -- the check already walks every PARENT_FP entry against
+the node's RELATIONS, so a second pass over the same data would just be the
+first one run twice. Its first real run over this repo's own graph found 5
+pre-existing violations; see SLICE-FP-DETECTOR's NOTES.
 <<<
