@@ -10,22 +10,19 @@ ELEMENTS:
   - TITLE: TITLE
     TYPE: String
     REQUIRED: True
-  - TITLE: DEPTH
-    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented)
-    REQUIRED: True
-  - TITLE: AUTHORITY
-    TYPE: SingleChoice(llm, human-accepted, human-pinned)
+  - TITLE: AUTHORED_BY
+    TYPE: SingleChoice(llm, human)
     REQUIRED: True
   - TITLE: STATUS
-    TYPE: SingleChoice(accepted, superseded)
+    TYPE: SingleChoice(open, accepted, rejected, superseded)
+    REQUIRED: True
+  - TITLE: RETIRES_ON
+    TYPE: String
     REQUIRED: True
   - TITLE: STATEMENT
     TYPE: String
     REQUIRED: True
   - TITLE: RATIONALE
-    TYPE: String
-    REQUIRED: False
-  - TITLE: PARENT_FP
     TYPE: String
     REQUIRED: False
   - TITLE: NOTES
@@ -48,8 +45,8 @@ ELEMENTS:
   - TITLE: DEPTH
     TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented)
     REQUIRED: True
-  - TITLE: AUTHORITY
-    TYPE: SingleChoice(llm, human-accepted, human-pinned)
+  - TITLE: AUTHORED_BY
+    TYPE: SingleChoice(llm, human)
     REQUIRED: True
   - TITLE: STATEMENT
     TYPE: String
@@ -94,8 +91,8 @@ ELEMENTS:
   - TITLE: DEPTH
     TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented)
     REQUIRED: True
-  - TITLE: AUTHORITY
-    TYPE: SingleChoice(llm, human-accepted, human-pinned)
+  - TITLE: AUTHORED_BY
+    TYPE: SingleChoice(llm, human)
     REQUIRED: True
   - TITLE: STATEMENT
     TYPE: String
@@ -131,8 +128,8 @@ ELEMENTS:
   - TITLE: DEPTH
     TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented)
     REQUIRED: True
-  - TITLE: AUTHORITY
-    TYPE: SingleChoice(llm, human-accepted, human-pinned)
+  - TITLE: AUTHORED_BY
+    TYPE: SingleChoice(llm, human)
     REQUIRED: True
   - TITLE: STATEMENT
     TYPE: String
@@ -159,8 +156,14 @@ ELEMENTS:
   - TITLE: DEPTH
     TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented)
     REQUIRED: True
-  - TITLE: AUTHORITY
-    TYPE: SingleChoice(llm, human-accepted, human-pinned)
+  - TITLE: AUTHORED_BY
+    TYPE: SingleChoice(llm, human)
+    REQUIRED: True
+  - TITLE: STATUS
+    TYPE: SingleChoice(unrun, run, blocked)
+    REQUIRED: True
+  - TITLE: RETIRES_ON
+    TYPE: String
     REQUIRED: True
   - TITLE: STATEMENT
     TYPE: String
