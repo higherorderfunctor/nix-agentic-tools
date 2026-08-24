@@ -103,6 +103,10 @@ validates. Non-zero exit means the graph is broken. Do not proceed.
   built-in `[SECTION]`. Treat `SECTION*` as reserved.
 - **`File` relations take `VALUE` only** — no `ROLE`, no `REVERSE_ROLE`. A
   `REVERSE_ROLE` under `TYPE: File` is a hard grammar syntax error.
+- **`format` and `export` write a cache into `./output/` by default.** Always
+  pass `--output-dir`, and never `git add -A` after running either from the repo
+  root — the cache is gitignored now, but it will still bloat a staging area if
+  the ignore is missed.
 - **One error per run.** A hundred identically-broken documents report one
   error. Script the fix loop rather than iterating by hand.
 
@@ -119,6 +123,28 @@ validates. Non-zero exit means the graph is broken. Do not proceed.
   output dir.
 - **`manage new` pre-fills required choice fields with `TBD`**, which parses
   clean. Treat a `TBD` as unfilled.
+
+## Backlog protocol — applies to planning AND implementation sessions
+
+**Log incidental findings; do not narrate them.** Raise something in session
+output only when it matters **soon** — it changes the decision in front of the
+operator, or it blocks the work in hand. Everything else, the whole class of
+"one more thing you should know", goes into the plan's backlog and stays
+unspoken.
+
+You may add backlog nodes **on your own initiative, without asking.** You
+should.
+
+- Each plan directory may hold a `99-backlog.sdoc`.
+- An ungroomed item is an ordinary node at `DEPTH: sketch` — a `MECHANISM` to
+  build, a `DECISION` to make, a `SPIKE` to run. **There is no `BACKLOG` node
+  type**, deliberately: the existing types already say what kind of work it is.
+- Grooming means moving the node into a numbered document in the same plan and
+  raising its `DEPTH`. The UID never changes, so nothing citing it breaks.
+- A plan's ungroomed set is the query `DEPTH == sketch` scoped to its directory.
+
+The operator's judgment budget is the scarce resource. A logged finding is not
+lost; mentioning it costs attention, logging it costs nothing.
 
 ## What does not exist yet
 
