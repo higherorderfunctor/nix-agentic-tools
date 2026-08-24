@@ -206,3 +206,37 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SPIKE-SGRA-PARSE
   ROLE: Proven_By
+
+[SLICE]
+UID: SLICE-FP-DETECTOR
+TITLE: Suspect-link detection and acceptance over the design graph
+DEPTH: interface-settled
+AUTHORED_BY: human
+STATEMENT: >>>
+Ship fp-check and fp-accept over the JSON export, plus a flake check that gates
+on fp-check with a clean output directory.
+
+fp-check hashes each node's contract-bearing fields and compares every
+PARENT_FP entry against the current hash of the parent it names. It reports
+three cases distinctly: never signed, where the recorded hash is the
+placeholder; drifted, where a real recorded hash no longer matches; and
+unbacked, where a fingerprint names a parent the node has no relation to.
+
+fp-accept rewrites the named nodes' entries to current hashes and is the only
+thing that writes them. It refuses a parent that is still moving.
+<<<
+RATIONALE: >>>
+The contract field selection is a prototype choice, deliberately not settled --
+see MECH-FP-FIELD-TUNING. Git-flow handling is deliberately absent: nothing
+bites before a branch reaches main, and that merge is the forcing function.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-FP-ACCEPT-READINESS
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-FP-RELATION-LINT
+  ROLE: Crosses
