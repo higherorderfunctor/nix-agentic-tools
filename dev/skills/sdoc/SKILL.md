@@ -51,8 +51,11 @@ Relation roles: `Governed_By` (→ a `DECISION`), `Crosses` (`SLICE` →
 ## The three governance fields
 
 - **`DEPTH`** — `sketch` / `needs-design` / `needs-spike` / `interface-settled`
-  / `implemented`. Declares intent. The `needs-*` values are the design
-  worklist.
+  / `implemented` / `verified`. Declares intent. The `needs-*` values are the
+  design worklist. `implemented` means code landed and is **unreviewed**;
+  `verified` means an independent session checked the code against the node.
+  **The gap between them is the review queue** — `DEPTH == implemented` is the
+  query.
 - **`AUTHORED_BY`** — `llm` / `human`. Who wrote the statement. Starts mostly
   `llm` by design; the point is that it grows.
 - **`PARENT_FP`** — `<PARENT-UID>:<hash>` per parent whose contract this node
@@ -91,6 +94,13 @@ validates. Non-zero exit means the graph is broken. Do not proceed.
    `superseded`, add `Superseded_By`, and write a new decision.
 5. **Always `format` before hashing.** `format` rewraps prose, so a fingerprint
    taken over unformatted text churns on its own.
+6. **Never set `AUTHORED_BY: human`.** It records who wrote the statement, and
+   only the operator turns that key — at pull-request review, not here.
+7. **Commit as you go, unprompted.** One commit per unit of work, not one at the
+   end and not only when asked. The branch is long-lived and gets restacked into
+   pull requests later, so commit boundaries are what make that restack legible.
+   Update the node you are working on in the same commit: raise its `DEPTH`, set
+   a `SPIKE`'s `STATUS`, and record measured numbers in `NOTES`.
 
 ## Gotchas that fail closed
 

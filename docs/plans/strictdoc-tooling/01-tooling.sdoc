@@ -168,7 +168,7 @@ is the standing regression gate against both corpora.
 [SLICE]
 UID: SLICE-SDOC-IN-SEMBLE
 TITLE: Index sdoc documents in semble
-DEPTH: implemented
+DEPTH: verified
 AUTHORED_BY: llm
 STATEMENT: >>>
 Package a tree-sitter grammar for the sdoc format as a flake output, add it to
