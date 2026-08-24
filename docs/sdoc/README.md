@@ -98,6 +98,27 @@ fingerprints are still placeholders. Filtering happens in that script rather
 than on the strictdoc command line, because `--filter-nodes` is silently ignored
 by the JSON exporter.
 
+## Reading the graph
+
+```bash
+strictdoc export . --formats=json --output-dir /tmp/sdoc-out
+J=/tmp/sdoc-out/json/index.json
+
+python3 docs/sdoc/render.py $J                    # the grooming queue
+python3 docs/sdoc/render.py $J --all              # everything
+python3 docs/sdoc/render.py $J --uid <UID>        # one node plus its neighbours
+python3 docs/sdoc/render.py $J --depth needs-design --depth needs-spike
+```
+
+Markdown on stdout — pipe it to a pager or open it in an editor. Every relation
+and fingerprint prints with the **target's title**, not a bare UID, so reading a
+node does not send you hunting for what it depends on. That resolution is the
+only real work the renderer does, and it is most of what makes raw sdoc hard to
+read.
+
+`--uid` is also the bounded context packet in embryo: a node plus everything it
+depends on and everything depending on it.
+
 ## Testing semble with the sdoc grammar
 
 `cd` into the worktree and use devenv. That is the real integration test — it
