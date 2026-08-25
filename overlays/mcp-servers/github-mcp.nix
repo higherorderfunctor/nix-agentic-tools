@@ -20,12 +20,12 @@
   };
   vu = import ../lib.nix;
 
-  rev = "884c791d000c6ad27bbd76b3d0e3307e3988d0b3";
+  rev = "822c87761f8587395b3e1a04b5386b2611252cd1";
   src = ourPkgs.fetchFromGitHub {
     owner = "github";
     repo = "github-mcp-server";
     inherit rev;
-    hash = "sha256-PjkF0ebfLWotjOaAYFvR17UNZT05Lv0iBT3+7Xijmhc=";
+    hash = "sha256-omRwUoVmbG+BNe5JJXYNE3csa4vMXBP+LOL2PMIGOEA=";
   };
 
   # TRUNK-TRACKED, so the floor is a LITERAL here rather than a sidecar
@@ -55,7 +55,7 @@ in
       inherit rev;
     };
     inherit src;
-    vendorHash = "sha256-tNAC2tSmfTuT4OZmq7vrG2j5njJaL1NyN+/IjYegp60=";
+    vendorHash = "sha256-6a5zjwTfEjGx23lG1ZTnUewm97FNacQY/y92TzAATXg=";
     installCheckPhase = vu.mkMcpSmokeTest {bin = "github-mcp-server";};
     passthru =
       (old.passthru or {})
