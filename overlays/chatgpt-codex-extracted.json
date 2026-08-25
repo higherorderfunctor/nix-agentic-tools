@@ -145,10 +145,10 @@
             "valueName": "DIR"
           },
           {
-            "acceptedValues": ["never", "on-request", "untrusted"],
+            "acceptedValues": ["never", "on-request"],
             "conflicts": [],
             "default": null,
-            "help": "Configure when the model requires human approval before executing a command Possible values: - untrusted:  Only run \"trusted\" commands (e.g. ls, cat, sed) without asking for user approval. Will escalate to the user if the model proposes a command that is not in the \"trusted\" set - on-request: The model decides when to ask the user for approval - never:      Never ask for user approval Execution failures are immediately returned to the model",
+            "help": "Configure when the model requires human approval before executing a command Possible values: - on-request: The model decides when to ask the user for approval - never:      Never ask for user approval Execution failures are immediately returned to the model",
             "names": ["--ask-for-approval", "-a"],
             "valueName": "APPROVAL_POLICY"
           },
@@ -187,6 +187,77 @@
         ],
         "help": "Codex CLI",
         "path": ["codex"]
+      },
+      "codex agents": {
+        "aliases": [],
+        "flags": [
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Connect the TUI to a remote app server endpoint. Accepted forms: `ws://host:port`, `wss://host:port`, `unix://`, or `unix://PATH`.",
+            "names": ["--remote"],
+            "valueName": "ADDR"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Name of the environment variable containing the bearer token to send to a remote app server websocket",
+            "names": ["--remote-auth-token-env"],
+            "valueName": "ENV_VAR"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Use this directory for new tasks on a remote server",
+            "names": ["--cd", "-C"],
+            "valueName": "DIR"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Disable alternate screen mode",
+            "names": ["--no-alt-screen"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Print help (see a summary with '-h')",
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ],
+        "help": "Browse all agent sessions on the shared local app-server daemon",
+        "path": ["codex", "agents"]
       },
       "codex app-server": {
         "aliases": [],
@@ -1939,6 +2010,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Source classification for newly created or forked threads",
+            "names": ["--thread-source"],
+            "valueName": "SOURCE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Allow running Codex outside a Git repository",
             "names": ["--skip-git-repo-check"],
             "valueName": null
@@ -2090,6 +2169,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Source classification for newly created or forked threads",
+            "names": ["--thread-source"],
+            "valueName": "SOURCE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Allow running Codex outside a Git repository",
             "names": ["--skip-git-repo-check"],
             "valueName": null
@@ -2236,6 +2323,14 @@
             "help": "Run enabled hooks without requiring persisted hook trust for this invocation. DANGEROUS. Intended only for automation that already vets hook sources",
             "names": ["--dangerously-bypass-hook-trust"],
             "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Source classification for newly created or forked threads",
+            "names": ["--thread-source"],
+            "valueName": "SOURCE"
           },
           {
             "acceptedValues": [],
@@ -2400,6 +2495,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Source classification for newly created or forked threads",
+            "names": ["--thread-source"],
+            "valueName": "SOURCE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Allow running Codex outside a Git repository",
             "names": ["--skip-git-repo-check"],
             "valueName": null
@@ -2479,6 +2582,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Error out when config.toml contains fields that are not recognized by this version of Codex",
             "names": ["--strict-config"],
             "valueName": null
@@ -2490,14 +2601,6 @@
             "help": "Maximum number of requests to process concurrently on each connection",
             "names": ["--concurrent-requests"],
             "valueName": "COUNT"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -2566,6 +2669,101 @@
         ],
         "help": "[EXPERIMENTAL] Run the standalone exec-server service",
         "path": ["codex", "exec-server"]
+      },
+      "codex exec-server forward": {
+        "aliases": [],
+        "flags": [
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Destination exec-server WebSocket URL",
+            "names": ["--connect"],
+            "valueName": "URL"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Error out when config.toml contains fields that are not recognized by this version of Codex",
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Register this exec-server as a remote environment using the given base URL",
+            "names": ["--remote"],
+            "valueName": "URL"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Environment id to attach to when registering remotely",
+            "names": ["--environment-id"],
+            "valueName": "ID"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Human-readable environment name",
+            "names": ["--name"],
+            "valueName": "NAME"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Use Agent Identity auth from CODEX_ACCESS_TOKEN for remote registration",
+            "names": ["--use-agent-identity-auth"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Exit when the parent-owned standard-input pipe closes [env: CODEX_EXEC_SERVER_EXIT_ON_STDIN_CLOSE=]",
+            "names": ["--exit-on-stdin-close"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Print help (see a summary with '-h')",
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ],
+        "help": "Register an existing WebSocket exec-server as a remote environment",
+        "path": ["codex", "exec-server", "forward"]
       },
       "codex features": {
         "aliases": [],
@@ -2883,10 +3081,10 @@
             "valueName": "DIR"
           },
           {
-            "acceptedValues": ["never", "on-request", "untrusted"],
+            "acceptedValues": ["never", "on-request"],
             "conflicts": [],
             "default": null,
-            "help": "Configure when the model requires human approval before executing a command Possible values: - untrusted:  Only run \"trusted\" commands (e.g. ls, cat, sed) without asking for user approval. Will escalate to the user if the model proposes a command that is not in the \"trusted\" set - on-request: The model decides when to ask the user for approval - never:      Never ask for user approval Execution failures are immediately returned to the model",
+            "help": "Configure when the model requires human approval before executing a command Possible values: - on-request: The model decides when to ask the user for approval - never:      Never ask for user approval Execution failures are immediately returned to the model",
             "names": ["--ask-for-approval", "-a"],
             "valueName": "APPROVAL_POLICY"
           },
@@ -4001,6 +4199,177 @@
         "help": "Remove an installed plugin from local config and cache.",
         "path": ["codex", "plugin", "remove"]
       },
+      "codex queue": {
+        "aliases": [],
+        "flags": [
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Session UUID or exact session name",
+            "names": ["--thread"],
+            "valueName": "THREAD"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Message text to queue",
+            "names": ["--message"],
+            "valueName": "TEXT"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Connect the TUI to a remote app server endpoint. Accepted forms: `ws://host:port`, `wss://host:port`, `unix://`, or `unix://PATH`.",
+            "names": ["--remote"],
+            "valueName": "ADDR"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Name of the environment variable containing the bearer token to send to a remote app server websocket",
+            "names": ["--remote-auth-token-env"],
+            "valueName": "ENV_VAR"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Optional image(s) to attach to the initial prompt",
+            "names": ["--image", "-i"],
+            "valueName": "FILE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Model the agent should use",
+            "names": ["--model", "-m"],
+            "valueName": "MODEL"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Use open-source provider",
+            "names": ["--oss"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Specify which local provider to use (lmstudio or ollama). If not specified with --oss, will use config default or show selection",
+            "names": ["--local-provider"],
+            "valueName": "OSS_PROVIDER"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Layer $CODEX_HOME/<name>.config.toml on top of the base user config",
+            "names": ["--profile", "-p"],
+            "valueName": "CONFIG_PROFILE_V2"
+          },
+          {
+            "acceptedValues": [
+              "danger-full-access",
+              "read-only",
+              "workspace-write"
+            ],
+            "conflicts": [],
+            "default": null,
+            "help": "Select the sandbox policy to use when executing model-generated shell commands",
+            "names": ["--sandbox", "-s"],
+            "valueName": "SANDBOX_MODE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Route approval requests through automatic review using the workspace-write sandbox",
+            "names": ["--approve-for-me"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Skip all confirmation prompts and execute commands without sandboxing. EXTREMELY DANGEROUS. Intended solely for running in environments that are externally sandboxed",
+            "names": ["--dangerously-bypass-approvals-and-sandbox"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Run enabled hooks without requiring persisted hook trust for this invocation. DANGEROUS. Intended only for automation that already vets hook sources",
+            "names": ["--dangerously-bypass-hook-trust"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Tell the agent to use the specified directory as its working root",
+            "names": ["--cd", "-C"],
+            "valueName": "DIR"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Additional directories that should be writable alongside the primary workspace",
+            "names": ["--add-dir"],
+            "valueName": "DIR"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Error out when config.toml contains fields that are not recognized by this version of Codex",
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Print help (see a summary with '-h')",
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ],
+        "help": "Queue a message for an existing session",
+        "path": ["codex", "queue"]
+      },
       "codex remote-control": {
         "aliases": [],
         "flags": [
@@ -4357,10 +4726,10 @@
             "valueName": "DIR"
           },
           {
-            "acceptedValues": ["never", "on-request", "untrusted"],
+            "acceptedValues": ["never", "on-request"],
             "conflicts": [],
             "default": null,
-            "help": "Configure when the model requires human approval before executing a command Possible values: - untrusted:  Only run \"trusted\" commands (e.g. ls, cat, sed) without asking for user approval. Will escalate to the user if the model proposes a command that is not in the \"trusted\" set - on-request: The model decides when to ask the user for approval - never:      Never ask for user approval Execution failures are immediately returned to the model",
+            "help": "Configure when the model requires human approval before executing a command Possible values: - on-request: The model decides when to ask the user for approval - never:      Never ask for user approval Execution failures are immediately returned to the model",
             "names": ["--ask-for-approval", "-a"],
             "valueName": "APPROVAL_POLICY"
           },
@@ -4911,10 +5280,10 @@
         "valueName": "DIR"
       },
       {
-        "acceptedValues": ["never", "on-request", "untrusted"],
+        "acceptedValues": ["never", "on-request"],
         "conflicts": [],
         "default": null,
-        "help": "Configure when the model requires human approval before executing a command Possible values: - untrusted:  Only run \"trusted\" commands (e.g. ls, cat, sed) without asking for user approval. Will escalate to the user if the model proposes a command that is not in the \"trusted\" set - on-request: The model decides when to ask the user for approval - never:      Never ask for user approval Execution failures are immediately returned to the model",
+        "help": "Configure when the model requires human approval before executing a command Possible values: - on-request: The model decides when to ask the user for approval - never:      Never ask for user approval Execution failures are immediately returned to the model",
         "names": ["--ask-for-approval", "-a"],
         "valueName": "APPROVAL_POLICY"
       },
@@ -5053,6 +5422,11 @@
       "name": "collaboration_modes"
     },
     {
+      "default": false,
+      "maturity": "under development",
+      "name": "compaction_image_budget"
+    },
+    {
       "default": true,
       "maturity": "stable",
       "name": "computer_use"
@@ -5066,6 +5440,11 @@
       "default": false,
       "maturity": "under development",
       "name": "current_time_reminder"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "cwd_relative_turn_diffs"
     },
     {
       "default": false,
@@ -5191,6 +5570,16 @@
       "default": true,
       "maturity": "stable",
       "name": "in_app_browser"
+    },
+    {
+      "default": true,
+      "maturity": "stable",
+      "name": "in_app_chat"
+    },
+    {
+      "default": true,
+      "maturity": "stable",
+      "name": "in_app_dictation"
     },
     {
       "default": true,
@@ -5371,6 +5760,11 @@
       "default": false,
       "maturity": "stable",
       "name": "secret_auth_storage"
+    },
+    {
+      "default": false,
+      "maturity": "removed",
+      "name": "send_async_message"
     },
     {
       "default": true,
@@ -5579,7 +5973,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.148.0",
+    "codexVersion": "0.149.1",
     "extractorSchema": 1
   }
 }
