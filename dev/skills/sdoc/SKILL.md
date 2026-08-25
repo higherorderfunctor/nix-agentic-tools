@@ -134,6 +134,23 @@ validates. Non-zero exit means the graph is broken. Do not proceed.
 - **`manage new` pre-fills required choice fields with `TBD`**, which parses
   clean. Treat a `TBD` as unfilled.
 
+## Verifying — prove the test tested what you think
+
+Running a command is not evidence until you know it exercised the thing you
+meant. Two failures of this happened while building the current tooling:
+
+- A search returned no `.sdoc` results and was reported as a confirmed defect.
+  The cause was `PYTHONPATH` in the calling shell shadowing the binary under
+  test — the working code was never run. See `MECH-SEMBLE-TEST-RECIPE`.
+- A cycle was injected to test cycle detection, and the injection broke the
+  file's syntax instead. The export failed for an unrelated reason and the grep
+  matched the word "cycle" in prose.
+
+So: **a negative result needs a positive control as much as a positive one
+does.** Before reporting that something does not happen, show the same harness
+detecting it when it should. Before reporting that a check passes, break the
+thing it checks and watch it fail.
+
 ## Backlog protocol — applies to planning AND implementation sessions
 
 **Log incidental findings; do not narrate them.** Raise something in session
