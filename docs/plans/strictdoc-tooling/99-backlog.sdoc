@@ -583,3 +583,257 @@ NOTES: >>>
 Not a criticism of the prototype, which is deliberately unspecced at this
 layer. The operator raised the same gap independently.
 <<<
+
+[MECHANISM]
+UID: MECH-SDOC-CONFIG-HOOK-IMPORTABILITY
+TITLE: strictdoc_config.py must put itself on sys.path before defining a hook class
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+On nixpkgs strictdoc 0.27.1, any Format or StrictDocPlugin subclass defined in
+strictdoc_config.py crashes every parallelised command -- export with the
+default parallelizer, format, manage new, manage auto-uid -- with
+ModuleNotFoundError: strictdoc_config in the forkserver workers.
+helpers/module.py loads the config by file path without touching sys.path, and
+the workers unpickle a ProjectConfig that carries the hook instance. Only
+export --no-parallelization survives.
+
+Measured fix: sys.path.insert(0, dirname(abspath(__file__))) as the config's
+first statement. All four commands then work, for inline hook classes and for
+sibling modules alike. Put the line in the config and in the skill's gotcha
+list; drop it once nixpkgs lands >= 0.28.1, whose helpers/module.py does it.
+<<<
+RATIONALE: >>>
+Measured by SPIKE-EXECUTABLE-RULES. Any plugin or Format-seam guard is dead on
+arrival without it, and the failure presents as a crash in a worker rather than
+as a config error. The upstream fix is the same line moved into the tool, so a
+version bump is a convenience here, not a capability.
+<<<
+
+[MECHANISM]
+UID: MECH-SDOC-LEAN-FORMATS
+TITLE: Pin formats to SDoc and JSON in strictdoc_config.py
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+ProjectConfig.default_formats() imports the HTML, Excel, PDF and tree-map
+stack and costs about 0.7 s of every CLI invocation; the forkserver
+parallelizer adds about 1.4 s more. Passing formats=[SDocFormat(),
+JSONFormat()] cuts export from 3.2 to 1.24 s, export --no-parallelization
+from 1.79 to 0.85 s, format from 3.3 to 1.15 s and manage new from 3.2 to
+1.15 s, with the JSON export byte-identical for all 65 nodes.
+
+Two consequences to handle in the same change. Markdown ingestion stops, so
+exclude_doc_paths and the config docstring saying both globs are required go
+stale. And export --formats=html then exits 0 while writing nothing, because
+argparse still accepts the handle and no registered Format claims it -- a
+false green. Pin the formats only in a config the wrapper and CI read, or keep
+HTMLFormat and pay the 0.6 s.
+<<<
+RATIONALE: >>>
+The traceability index build is 3 ms; the cost of every strictdoc command is
+startup, config construction and the parallelizer. This is the single largest
+lever on the skill loop and on every validation tier, and it needs no package
+change.
+<<<
+
+[MECHANISM]
+UID: MECH-READINESS-PREDICATE-RECONCILE
+TITLE: One readiness predicate, consumed by every script that asks
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Five definitions of ready exist and no two agree on rejected, superseded and
+suspect. sdoc_fp.is_ready refuses only STATUS open, so fp-accept signs against
+a rejected or superseded parent. status.py closure_verdict blocks superseded
+and passes rejected, and never calls fp-check, so no-suspect-edge is not
+applied. The skill, MECH-READY-QUERY and DEC-LOCAL-IMPLEMENTABILITY each word
+it a third way. SLICE-SDOC-IN-SEMBLE is verified while status.py reports it
+blocked on DEC-ARCH-COLOCATION being open.
+
+Latent today: zero rejected decisions and one superseded decision with no
+dependents. Decide the rule, then one predicate in sdoc_fp consumed by both
+scripts and by MECH-READY-QUERY when it lands.
+<<<
+RATIONALE: >>>
+Two executables implementing two readings of one rule is exactly the
+document-borne drift INV-GUARDS-MUST-EXECUTE names; the disagreement is
+invisible until the first rejected decision acquires a dependent.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LOCAL-IMPLEMENTABILITY
+  ROLE: Governed_By
+
+[MECHANISM]
+UID: MECH-RELATION-TARGET-TYPE-LINT
+TITLE: Lint relation target types, which the parser never checks
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+strictdoc validates a relation's ROLE against the source element's grammar
+only; the target's element type is never checked. Measured: a MECHANISM
+Governed_By a SPIKE exports clean. The skill's role table is prose.
+
+The live graph already carries two Governed_By edges whose target is not a
+DECISION -- MECH-FP-ACCEPT-READINESS to MECH-FP-CHECK, and
+SPIKE-CONVERSION-SIGNAL to SLICE-FIRST-CONVERSION -- plus five MECHANISM
+Assumes MECHANISM edges the skill's table gives no target for, and
+Serialized_By has no stated target at all. Decide the Assumes and
+Serialized_By rules, fix or accept the two edges, then wire the lint. A lint
+wired first goes red on day one.
+<<<
+RATIONALE: >>>
+The parser proves an edge resolves, never that it points at the kind of node
+the role promises. Corpus first, gate second is this repo's own practice from
+SLICE-FP-DETECTOR.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-CYCLE-CHECK
+  ROLE: Assumes
+
+[MECHANISM]
+UID: MECH-PLAN-REFS-CHECK
+TITLE: Check INV-NO-EXTERNAL-PLAN-REFS over the export
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The invariant is violated twice today: MECH-RENDER-CACHE and
+MECH-CORPUS-EDGE-MAP, both in the beads-migration plan, depend into the
+strictdoc-tooling plan. The JSON export carries no document path -- a
+document is TITLE, GRAMMAR and NODES -- so the check needs a UID-to-file map,
+the same gap fp-accept works around by grepping UID lines in the source tree.
+<<<
+RATIONALE: >>>
+Predicted by the invariant's own NOTES and now measured. Cheap once the map
+exists, and the map is needed by the wrapper anyway.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: INV-NO-EXTERNAL-PLAN-REFS
+  ROLE: Guarantees
+
+[MECHANISM]
+UID: MECH-SIGNATURE-REVOCATION
+TITLE: Make a revoked fingerprint distinguishable from one never signed
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Commit 387cdaec reverted five agent-written signatures to the placeholder.
+All four distinct reverted hashes equal today's hashes, and a hand-restored
+line reads as signed and current -- measured on a copy, fp-check exit 0.
+strictdoc format does not normalise a PARENT_FP block, and fp-accept keeps
+deleted and unbacked entries forever, so nothing executable distinguishes
+revoked from never-signed, or restored from signed. Decide whether revocation
+is a marker value distinct from the placeholder, or a history check in CI
+against main.
+<<<
+RATIONALE: >>>
+The revert was the right call and left no trace the checker can see. A
+signature that can be silently restored is the rubber stamp the mechanism
+exists to prevent, arrived at through git.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-FINGERPRINT-IN-NODE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Assumes
+
+[MECHANISM]
+UID: MECH-SDOC-SKILL-CORRECTIONS
+TITLE: Correct the sdoc skill and README where they are now false
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured while running SPIKE-EXECUTABLE-RULES. The Layout table omits
+docs/spec, which holds four nodes. The closing section says there is no
+suspect-link detection and no readiness query; fp-check and status.py exist.
+File relations accept ROLE at the grammar level -- only REVERSE_ROLE is a
+syntax error -- so VALUE only is this corpus's rule, not the parser's. format
+and manage take no --output-dir and write ./output in the project. STATUS is
+polymorphic: DECISION and SPIKE carry different choices. And the
+strictdoc_config.py sys.path line from MECH-SDOC-CONFIG-HOOK-IMPORTABILITY
+belongs in the gotcha list.
+<<<
+RATIONALE: >>>
+A document that is wrong is worse than one that is silent, which is the
+invariant's own argument turned on the document that states it.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: INV-GUARDS-MUST-EXECUTE
+  ROLE: Guarantees
+
+[MECHANISM]
+UID: MECH-SDOC-EDIT-VIA-MODEL
+TITLE: Replace sdoc_edit.py's hand-copied field order with strictdoc's node model
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+sdoc_edit.py carries a copy of the grammar's field order for four element
+types. SDocNode.set_field_value inserts or replaces a field at its grammar
+index and SDWriter serialises in grammar order -- measured: NOTES set before
+RATIONALE serialises RATIONALE first, with single-line versus block form
+chosen automatically. The copy matches the grammar today and is a drift
+hazard the model API removes. It requires loading the graph rather than one
+document, because elements_by_type is populated only after the index builder
+resolves the @repo import.
+<<<
+RATIONALE: >>>
+A wrapper will need field writes for every field, not one; generalising a
+hand-copied order list is the wrong direction when the tool already owns the
+order.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-FINGERPRINT-IN-NODE
+  ROLE: Governed_By
+
+[MECHANISM]
+UID: MECH-FILE-RELATION-EXISTENCE
+TITLE: File relations to nonexistent paths export clean
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured: a File relation whose VALUE names a path that does not exist exports
+with exit 0. MECH-SEMBLE-EXTRA-GRAMMARS and MECH-SEMBLE-PATH-MAPPINGS carry
+File relations today, so the gap is latent rather than theoretical. The check
+belongs in the wrapper or in a user_plugin over the built index; the parser
+will not do it.
+<<<
+RATIONALE: >>>
+The original assessment claimed strictdoc fails closed on a broken File
+relation. It does not, and a design that claims code which no longer exists
+is the v1-ghost problem the File role was adopted to catch.
+<<<
+
+[SPIKE]
+UID: SPIKE-DECISION-ACCEPTANCE-PATH
+TITLE: Who moves a DECISION from open to accepted, and how
+DEPTH: sketch
+AUTHORED_BY: llm
+STATUS: unrun
+RETIRES_ON: >>>
+The first open-to-accepted transition is made on this branch with its actor
+and its trigger recorded, or the README states the path outright.
+<<<
+STATEMENT: >>>
+No open-to-accepted transition has ever occurred on this branch: every
+accepted decision was born accepted, and the one exit from open was
+open-to-superseded. The README says a planning session grooms, decides and
+slots, and also that decisions come to the operator as plain-language cards;
+the skill does not say who turns STATUS. DEC-LONG-LIVED-BRANCH's acceptance
+language is about signing, not STATUS. The transition drawn in every state
+machine is inferred from the enum, not observed.
+<<<
+RATIONALE: >>>
+A transition that exists only in the enum is the kind of gate that gets
+guessed at. Observing it once settles who owns it.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LONG-LIVED-BRANCH
+  ROLE: Governed_By
