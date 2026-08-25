@@ -65,3 +65,16 @@ docs/src/
 
 # Local private working area (untracked journals, assessments, scratch)
 /private/
+
+# Node deps for packages/kiro-cli/schema, installed on demand by the manual
+# check documented in that package's README. Nothing in the flake builds them.
+# The rule lives here at the base of the stack rather than beside the package:
+# the directory exists in the worktree whichever branch is checked out, so a
+# sibling branch that does not carry the package would otherwise stage it.
+#
+# No trailing slash, deliberately. `node_modules/` matches DIRECTORIES ONLY, so
+# it does not cover a SYMLINK named node_modules — the normal way to share one
+# install across several worktrees, and how a stray symlink came within one
+# `git add -A` of being committed here. Without the slash the rule matches a
+# file, a directory and a symlink alike.
+node_modules

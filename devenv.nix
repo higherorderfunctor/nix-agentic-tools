@@ -538,6 +538,7 @@ in {
         # must filter these itself, because a batch whose every file is
         # ignored leaves `cspell lint` with no files to check and it exits
         # non-zero on that. Authored prose in the same tree stays checked.
+        "^checks/fixtures/kiro-workflows/"
         "^fixtures/kiro-primitives/evidence/"
         "^fixtures/kiro-primitives/records/"
         # `\\.` and not `\.`: these are Nix double-quoted strings, where a

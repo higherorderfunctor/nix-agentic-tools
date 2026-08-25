@@ -1,0 +1,24 @@
+{
+  "description": "Repeatedly proposes and applies one experiment at a time, runs the benchmark, and keeps changes only when they beat the current best result.",
+  "inputs": {
+    "benchmark_path": "string",
+    "research_directions": "string"
+  },
+  "name": "autoresearch",
+  "steps": [
+    {
+      "id": "experiments",
+      "maxIterations": 1000,
+      "onMaxIterations": "pause",
+      "steps": [
+        {
+          "agent": "wf-auto-researcher",
+          "id": "experiment",
+          "prompt": "Read {{research_directions}} and the latest result in {{benchmark_path}}. Propose and apply one change. Run the benchmark. If the result beats the current best, commit and update {{benchmark_path}}. Otherwise revert and log the failed attempt. Leave the workspace clean before returning.",
+          "type": "step"
+        }
+      ],
+      "type": "repeat"
+    }
+  ]
+}

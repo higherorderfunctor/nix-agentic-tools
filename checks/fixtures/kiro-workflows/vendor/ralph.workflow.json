@@ -1,0 +1,31 @@
+{
+  "description": "Loops a single coding agent against a goal, working through a JSON checklist one item at a time until every item is done. Suits decomposable work driven by a JSON checklist file: progress is durable and human-inspectable mid-run. For a single non-decomposable outcome, use the goal recipe instead.",
+  "inputs": {
+    "goal": "prompt",
+    "prd_path": "file"
+  },
+  "name": "ralph",
+  "steps": [
+    {
+      "id": "ralph-loop",
+      "maxIterations": 200,
+      "onMaxIterations": "pause",
+      "steps": [
+        {
+          "agent": "wf-coder",
+          "id": "iterate",
+          "prompt": "Goal: {{goal}}\n\nRead {{prd_path}}. If the file does not exist, create it as a JSON checklist that breaks down the goal into implementable items (each with a \"done\" field) and a top-level \"complete\": false. If it already exists, pick the first unchecked item, implement it, run tests, commit. Update {{prd_path}} to mark it done. Set complete: true when nothing remains.",
+          "type": "step"
+        }
+      ],
+      "stopCondition": {
+        "fileCheck": {
+          "jsonPath": "complete",
+          "path": "{{prd_path}}",
+          "value": true
+        }
+      },
+      "type": "repeat"
+    }
+  ]
+}

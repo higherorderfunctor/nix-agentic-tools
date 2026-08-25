@@ -1,0 +1,152 @@
+{
+  "description": "Full feature pipeline following the Roki multi-phase pattern: single-pass requirements, a design loop with a dedicated design reviewer, an implementation plan, a code loop with two-model semantic review plus aggregation, and a requirements-based validation gate. The loops and the validation gate are fail-closed: exhausting a review loop without an APPROVED verdict, or a FAIL/missing validation verdict, aborts the run instead of completing it. Does not use Kiro spec sessions — plain workflow steps. Every referenced agent is bundled (wf-design, wf-design-reviewer, wf-planner, wf-coder, semantic_reviewer, wf-review-aggregator), so this recipe is runnable in any workspace. Inputs: 'task' (the feature request) and 'workdir' (absolute path of the repo to work in; if empty the setup step falls back to the current workspace root). A leading setup step creates a fresh timestamped run folder, so artifacts are written under <workdir>/.agents/pipeline/<yyyy-mm-dd_HH-MM-SS>/ — one isolated folder per run, so no stale files from a previous run bias a reviewer or make the first draft look like a revision.",
+  "inputs": {
+    "task": "prompt",
+    "workdir": "string"
+  },
+  "name": "feature-pipeline",
+  "steps": [
+    {
+      "agent": "wf-coder",
+      "captureOutput": true,
+      "effortLevel": "low",
+      "id": "setup",
+      "prompt": "You are the setup step for a feature pipeline run. Do ONLY this, nothing else:\n1. Determine the base directory: if {{workdir}} is a non-empty absolute path, use it; otherwise use the current workspace root (an absolute path).\n2. Compute a run timestamp string in the format YYYY-MM-DD_HH-MM-SS (e.g. `date +%Y-%m-%d_%H-%M-%S`).\n3. Create the directory <base>/.agents/pipeline/<timestamp>/ with `mkdir -p`.\n\nYour ENTIRE final response MUST be exactly that absolute directory path and NOTHING else - no prose, no quotes, no backticks, no trailing slash, no trailing punctuation or newline commentary. Later steps consume this exact string as the run directory.",
+      "type": "step"
+    },
+    {
+      "agent": "wf-design",
+      "artifacts": {
+        "requirements": "{{setup.output}}/01-requirements.md"
+      },
+      "id": "requirements",
+      "prompt": "Feature request: {{task}}\n\nRepo: {{workdir}}. Analyze this request and author the REQUIREMENTS document. Write it to {{setup.output}}/01-requirements.md. Scale the output to the task's complexity. If the request is ambiguous, infer reasonable requirements and note your assumptions explicitly — the design review will catch anything that doesn't hold up. Do not design or implement.",
+      "type": "step"
+    },
+    {
+      "id": "design-loop",
+      "maxIterations": 3,
+      "onMaxIterations": "abort",
+      "steps": [
+        {
+          "agent": "wf-design",
+          "artifacts": {
+            "design": "{{setup.output}}/02-design.md"
+          },
+          "id": "design-draft",
+          "prompt": "Feature request: {{task}}\n\nRepo: {{workdir}}. Based on the requirements at {{artifacts.requirements}}, author the TECHNICAL DESIGN. First explore the codebase at {{workdir}} (relevant sources, build configs, similar features) so the design fits existing patterns. Write the design to {{setup.output}}/02-design.md.\n\nIf a review exists at {{setup.output}}/design-review.json, this is a revision — the run directory is fresh for this run, so a review file present there always means a genuine loop-back within THIS run, never a stale file from an earlier one. Read it and the full review at {{setup.output}}/03-design-review.md, and for each finding either address it, backlog it (with a reason), or justify ignoring it — aligned with the original requirements. Note your responses to the findings at the end of the document.",
+          "type": "step"
+        },
+        {
+          "agent": "wf-design-reviewer",
+          "artifacts": {
+            "design_review": "{{setup.output}}/design-review.json"
+          },
+          "id": "design-review",
+          "prompt": "Repo: {{workdir}}. Review the design at {{artifacts.design}} against the requirements at {{artifacts.requirements}}. Verify the design's claims about existing code against the actual source in {{workdir}} — do not take its word. Write the full review (numbered findings with HIGH/MEDIUM/NIT severities and concrete fixes, plus Verified Assumptions and Unverified/Wrong Assumptions sections) to {{setup.output}}/03-design-review.md, and the machine verdict to {{setup.output}}/design-review.json as { \"verdict\": \"APPROVED\" | \"CHANGES_REQUESTED\", \"findings\": [...] }. The verdict is mechanical: any HIGH or MEDIUM finding means CHANGES_REQUESTED; zero means APPROVED.",
+          "type": "step"
+        }
+      ],
+      "stopCondition": {
+        "fileCheck": {
+          "jsonPath": "verdict",
+          "path": "{{setup.output}}/design-review.json",
+          "value": "APPROVED"
+        }
+      },
+      "type": "repeat"
+    },
+    {
+      "agent": "wf-planner",
+      "artifacts": {
+        "plan": "{{setup.output}}/04-plan.md"
+      },
+      "id": "plan",
+      "prompt": "Repo: {{workdir}}. From the approved design at {{artifacts.design}}, write an ordered implementation plan to {{setup.output}}/04-plan.md. Break the work into small, independently verifiable items, each with a \"done\" checkbox, the files it touches, and how to verify it.",
+      "type": "step"
+    },
+    {
+      "id": "code-loop",
+      "maxIterations": 3,
+      "onMaxIterations": "abort",
+      "steps": [
+        {
+          "agent": "wf-coder",
+          "artifacts": {
+            "code_summary": "{{setup.output}}/05-code-summary.md"
+          },
+          "id": "implement",
+          "prompt": "Repo: {{workdir}}. Implement the ENTIRE plan at {{artifacts.plan}}: every unchecked item, checking each off in the plan file as you complete it. Follow the design at {{artifacts.design}} — do not substitute technologies the design locked. If a review exists at {{setup.output}}/code-review.json with verdict CHANGES_REQUESTED, first address every finding in it — the run directory is fresh for this run, so a review file present there always means a genuine loop-back within THIS run, never a stale file from an earlier one. Build and run the relevant tests after each item.\n\nBefore finishing, write or update {{setup.output}}/05-code-summary.md: what was implemented, any deviations from the design (with reasons), and a \"Tests Run\" section listing every verification command with its actual output. Commit the work.",
+          "type": "step"
+        },
+        {
+          "branches": [
+            {
+              "agent": "semantic_reviewer",
+              "artifacts": {
+                "review_fable": "{{setup.output}}/code-review-fable.md"
+              },
+              "effortLevel": "xhigh",
+              "id": "review-fable",
+              "modelId": "claude-fable-5",
+              "prompt": "Repo: {{workdir}}. Review the changes made for this feature ({{task}}) on the current branch. Obtain the diff yourself: `git -C {{workdir}} diff` for uncommitted work plus the branch's commits against the repo's main/mainline. Perform the full semantic review with every standard section: Summary, High-level view (narrative organized by concern, not by file), and Details. Write your complete review to {{setup.output}}/code-review-fable.md.\n\nANTI-BIAS: Do NOT read, open, or reference the other reviewer's file. Specifically do NOT read {{setup.output}}/code-review-gpt.md. Only write your own file.",
+              "type": "step"
+            },
+            {
+              "agent": "semantic_reviewer",
+              "artifacts": {
+                "review_gpt": "{{setup.output}}/code-review-gpt.md"
+              },
+              "effortLevel": "xhigh",
+              "id": "review-gpt",
+              "modelId": "gpt-5.6-sol",
+              "prompt": "Repo: {{workdir}}. Review the changes made for this feature ({{task}}) on the current branch. Obtain the diff yourself: `git -C {{workdir}} diff` for uncommitted work plus the branch's commits against the repo's main/mainline. Perform the full semantic review with every standard section: Summary, High-level view (narrative organized by concern, not by file), and Details. Write your complete review to {{setup.output}}/code-review-gpt.md.\n\nANTI-BIAS: Do NOT read, open, or reference the other reviewer's file. Specifically do NOT read {{setup.output}}/code-review-fable.md. Only write your own file.",
+              "type": "step"
+            }
+          ],
+          "id": "code-reviews",
+          "joinPolicy": "all",
+          "type": "parallel"
+        },
+        {
+          "agent": "wf-review-aggregator",
+          "artifacts": {
+            "code_review": "{{setup.output}}/code-review.json"
+          },
+          "id": "code-aggregate",
+          "prompt": "Read the two independent reviews at {{artifacts.review_fable}} and {{artifacts.review_gpt}}. Dedupe overlapping findings — both reviewers raising the same issue means higher confidence. Then check the plan at {{artifacts.plan}}. Write {{setup.output}}/code-review.json: verdict \"APPROVED\" only when there are no blocking findings AND every plan item is checked done; otherwise \"CHANGES_REQUESTED\" with the merged findings and the unchecked items.",
+          "type": "step"
+        }
+      ],
+      "stopCondition": {
+        "fileCheck": {
+          "jsonPath": "verdict",
+          "path": "{{setup.output}}/code-review.json",
+          "value": "APPROVED"
+        }
+      },
+      "type": "repeat"
+    },
+    {
+      "id": "validate-gate",
+      "maxIterations": 1,
+      "onMaxIterations": "abort",
+      "steps": [
+        {
+          "agent": "wf-coder",
+          "id": "validate",
+          "prompt": "Repo: {{workdir}}. Final validation gate for the feature ({{task}}). Read the requirements at {{artifacts.requirements}} and the code summary at {{artifacts.code_summary}} — NOT the design. For each acceptance criterion: if the code summary's \"Tests Run\" section directly covers it with a command and its output, you may accept that as evidence (note it); otherwise verify it yourself. Always run at least one end-to-end check yourself as a smoke test, plus the project's full build and test suite. Drift check: does the result match what the user asked for; were requirements dropped or scope added without justification? Write {{setup.output}}/06-validation.md and {{setup.output}}/validation.json as { \"verdict\": \"PASS\" | \"FAIL\", \"criteria\": [...], \"drift\": [...] }. Do not fix code in this step — report honestly. Always write validation.json — the workflow gate reads its verdict; a missing file or a FAIL verdict aborts the run.",
+          "type": "step"
+        }
+      ],
+      "stopCondition": {
+        "fileCheck": {
+          "jsonPath": "verdict",
+          "path": "{{setup.output}}/validation.json",
+          "value": "PASS"
+        }
+      },
+      "type": "repeat"
+    }
+  ]
+}
