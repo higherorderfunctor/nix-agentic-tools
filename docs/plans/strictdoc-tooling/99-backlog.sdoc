@@ -871,3 +871,25 @@ RELATIONS:
 - TYPE: Parent
   VALUE: DEC-SYSTEM-PURPOSE
   ROLE: Governed_By
+
+[MECHANISM]
+UID: MECH-SDOC-CACHE-DIR-FOR-WORKTREES
+TITLE: Put strictdoc's cache directory where a worktree hook does not scan it
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Set dir_for_sdoc_cache in strictdoc_config.py to a location outside the
+checkout for worktrees. Today strictdoc writes its cache under ./output in the
+cwd; that directory appeared in a worktree (since deleted) and cspell, run from
+a hook, produced so many findings over it that the hook failed.
+
+STRICTDOC_CACHE_DIR is not a lever: the code asserts the value equals exactly
+output/_cache and aborts otherwise, so the environment cannot relocate it. The
+config option is the only path.
+<<<
+RATIONALE: >>>
+Recorded as an LLM diagnosis on 2026-08-25, not litigated: track it, verify
+the assertion and the config option when the work is picked up. Related
+symptom already logged elsewhere: format and manage take no --output-dir and
+write ./output into the project.
+<<<
