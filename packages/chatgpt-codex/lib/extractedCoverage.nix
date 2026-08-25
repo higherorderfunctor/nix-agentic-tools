@@ -29,6 +29,19 @@
       # output are tools the installed package exposes to callers. They do not
       # describe persistent module state, so the factory installs the binary
       # without inventing one Nix option per operation.
+      #
+      # `codex exec-server forward` reads as the one candidate here with a
+      # plausible declarative counterpart — it REGISTERS a WebSocket
+      # exec-server as a named remote environment, which sounds like durable
+      # configuration. It is not, for a reason that is about this factory
+      # rather than about the command: the Nix option surface owns no codex
+      # server-process concept at all. Grep the module and lib trees for
+      # `exec-server`, `app-server`, `remote-control` or `environment-id` and
+      # the only hits are in THIS file. Registration therefore has nothing to
+      # be declared against, and inventing an option for it would mean
+      # modelling a daemon lifecycle the factory does not otherwise manage.
+      # If codex server processes ever gain a Nix surface, this entry — and
+      # its `--connect` flag below — are the first two to reclassify.
       developerTooling = [
         "codex app-server"
         "codex app-server daemon"
@@ -49,6 +62,7 @@
         "codex debug models"
         "codex debug prompt-input"
         "codex exec-server"
+        "codex exec-server forward"
         "codex mcp-server"
       ];
 
@@ -99,6 +113,7 @@
       # precedence and turn ephemeral inputs into surprising defaults.
       sessionOperations = [
         "codex"
+        "codex agents"
         "codex apply"
         "codex doctor"
         "codex exec"
@@ -111,6 +126,7 @@
         "codex mcp"
         "codex mcp get"
         "codex mcp list"
+        "codex queue"
         "codex resume"
         "codex review"
         "codex sandbox"
@@ -192,6 +208,7 @@
         "--analytics-default-enabled"
         "--code-mode-host"
         "--concurrent-requests"
+        "--connect"
         "--environment-id"
         "--exit-on-stdin-close"
         "--experimental"
@@ -262,6 +279,7 @@
         "--last"
         "--limit"
         "--max-mib-per-second"
+        "--message"
         "--no-alt-screen"
         "--no-color"
         "--output-last-message"
@@ -272,6 +290,7 @@
         "--strict-config"
         "--summary"
         "--thread"
+        "--thread-source"
         "--title"
         "--uncommitted"
         "--verbose"
