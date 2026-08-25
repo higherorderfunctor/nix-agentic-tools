@@ -43,60 +43,55 @@ the worktree; hand the agent its path and it edits there by absolute path.
 
 ### A planning / grooming session
 
-> Working on the strictdoc design graph, branch `feat/strictdoc-trial`, worktree
-> at `<path>`. Invoke the `sdoc` skill. Read the `project_strictdoc_trial`
-> memory for measured ground truth, then export the graph to JSON and walk it. I
-> want to decide what to design next versus what is good enough to implement —
-> weigh what is undesigned that could still change things, and whether each is
-> cheap to reverse. Log incidental findings to the plan backlog rather than
-> telling me.
+> Planning session on the strictdoc design graph — **planning, not
+> implementing.** Branch `feat/strictdoc-trial`, worktree at `<worktree path>`.
+> Draft PR #1240 shows the diff from main.
+>
+> Invoke the `sdoc` skill. Read the `project_strictdoc_trial` memory for
+> measured ground truth. Then export the graph and read it:
+>
+>     strictdoc export . --formats=json --output-dir /tmp/sdoc-out
+>     python3 docs/sdoc/status.py /tmp/sdoc-out/json/index.json
+>     python3 dev/scripts/fp-check.py /tmp/sdoc-out/json/index.json
+>
+> **I do not read raw sdoc.** Render what I need to weigh —
+> `docs/sdoc/render.py --uid X` resolves edges to titles, which is the part I
+> cannot see otherwise. Bring me decisions as plain-language cards, a few at a
+> time.
+>
+> You own writes to the branch; no other session is running. Do not implement —
+> if something wants building, slot it as a slice and hand it to a separate
+> session. **Never run `fp-accept`.** Log incidental findings to the plan
+> backlog rather than telling me.
 
-What a fresh session loads **automatically**: `CLAUDE.md`, `AGENTS.md`, the
-`MEMORY.md` index, and every skill's one-line description. What it does **not**
-load until told: the body of `project_strictdoc_trial.md`, the graph contents,
-and the `sdoc` skill body. The prompt above is what closes that gap — the memory
-index carries a pointer, not the content.
-
-There is no automatic context-following by relation yet. Naming a plan directory
-is the manual stand-in; `MECH-READY-QUERY` is the node that replaces it.
+The distinction that matters: a planning session **grooms, decides, and slots**.
+It writes nodes and edges. It does not write code, and it does not sign.
 
 ### An implementation session
 
-> Implementing `<SLICE-UID>` from the strictdoc design graph, branch
-> `feat/strictdoc-trial`, worktree at `<path>`. Invoke the `sdoc` skill. Read
-> that slice and everything it `Crosses` before starting. **Never run
-> `fp-accept`** — signing a contract is the operator's key, and an agent commits
-> under the operator's name, so an agent signature is indistinguishable from a
-> real one afterwards. Use a fixture to exercise it. Log incidental findings to
-> the plan backlog rather than telling me.
+> Implementing `<SLICE-UID>` from the strictdoc design graph. Branch
+> `feat/strictdoc-trial`, worktree at `<worktree path>`. Invoke the `sdoc`
+> skill. Read that slice and everything it `Crosses` before starting. **Never
+> run `fp-accept`** — signing a contract is the operator's key, and an agent
+> commits under the operator's name, so an agent signature is indistinguishable
+> from a real one afterwards. Use a fixture to exercise it. Commit as you go and
+> update the nodes in the same commit. Log incidental findings to the plan
+> backlog rather than telling me.
 
-Give it a slice UID, not a description. The slice's own closure is the brief,
-and the graph already says whether it is ready.
+Give it a slice UID, not a description. The slice's closure is the brief, and
+the graph already says whether it is ready.
 
-## Layout
+### What a fresh session loads, and what it does not
 
-| path                                | holds                                                   |
-| ----------------------------------- | ------------------------------------------------------- |
-| `strictdoc_config.py`               | the `@repo` grammar alias and the markdown exclusion    |
-| `docs/sdoc/grammar.sgra`            | the one grammar, shared by every document               |
-| `docs/plans/<plan>/`                | a named plan, many files. Decays.                       |
-| `docs/plans/<plan>/99-backlog.sdoc` | that plan's ungroomed items, at `DEPTH: sketch`         |
-| `**/.sdoc/`                         | settled architecture beside the code it describes       |
-| `docs/spec/`                        | settled design with no single code home; outlives plans |
-| `dev/skills/sdoc/SKILL.md`          | authoring mechanics and the parser gotchas              |
+**Automatic:** `CLAUDE.md`, `AGENTS.md`, the `MEMORY.md` index, and every
+skill's one-line description.
 
-## Where things stand
+**Not until told:** the body of `project_strictdoc_trial.md`, the graph
+contents, and the `sdoc` skill body. The memory index carries a pointer, not the
+content — which is what both prompts above are closing.
 
-```bash
-strictdoc export . --formats=json --output-dir /tmp/sdoc-out
-python3 docs/sdoc/status.py /tmp/sdoc-out/json/index.json
-```
-
-Prints the node counts, the open decisions, what needs design or a spike, the
-ungroomed backlog, which slices are ready to implement, and how many
-fingerprints are still placeholders. Filtering happens in that script rather
-than on the strictdoc command line, because `--filter-nodes` is silently ignored
-by the JSON exporter.
+There is no automatic context-following by relation. Naming a plan or a slice is
+the manual stand-in; `MECH-READY-QUERY` is the node that replaces it.
 
 ## Reading the graph
 
