@@ -10,12 +10,12 @@
   inherit (ourPkgs) buildNpmPackage bun fetchFromGitHub makeWrapper;
   vu = import ../lib.nix;
 
-  rev = "e50f89517d7427224bf478247469ceb58a84ba9a";
+  rev = "44b38e7531f25f71ce5e24b0540c20ea5ec5d82b";
   src = fetchFromGitHub {
     owner = "CaviraOSS";
     repo = "OpenMemory";
     inherit rev;
-    hash = "sha256-za28DrVKXQ3PHUPzlXBRxH0QCb6gOQOBiEm8Gu0iwIc=";
+    hash = "sha256-SIKj6K3zzao2H/wNY+xFfJ1BombdINE9Q6afvySgOH4=";
   };
 
   # The auto-memory backend helper (STAGE 5, D19/D20): a thin CLI over the
