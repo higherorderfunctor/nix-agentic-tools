@@ -389,7 +389,7 @@ UID: SPIKE-EXECUTABLE-RULES
 TITLE: How much of the design system's rules can run rather than be read
 DEPTH: interface-settled
 AUTHORED_BY: llm
-STATUS: unrun
+STATUS: run
 RETIRES_ON: >>>
 An assessment the operator has reviewed answers all four questions -- a grammar
 generated from a typed Nix option surface, the state machine and flows that
@@ -424,6 +424,51 @@ reviewable decisions.
 PARENT_FP: >>>
 DEC-FP-FIELDS-CONFIGURABLE:0000000
 DEC-SYSTEM-PURPOSE:0000000
+<<<
+NOTES: >>>
+Run 2026-08-25. Assessment: private/strict-doc/executable-rules-assessment.md
+(untracked), with the four finder reports, eight contest files, critic pass,
+logs and the Q1 prototype beside it under private/strict-doc/executable-rules/.
+Thirteen agents: one finder per question, a refuter and a defender per report,
+one cross-question critic; nine refuter-defender splits are surfaced for the
+operator, none adjudicated. RETIRES_ON is not yet met: the operator has not
+reviewed it.
+
+Measured, on this corpus with nixpkgs strictdoc 0.27.1. The traceability
+index build is 3 ms and the plugin hook body is under 1 ms; the cost of every
+command is interpreter and imports 0.4 s, ProjectConfig.default_formats() 0.7
+to 1.0 s, and the forkserver parallelizer 1.4 s. Pinning
+formats=[SDocFormat(), JSONFormat()] takes export from 3.2 to 1.24 s, manage
+new from 3.2 to 1.15 s and format from 3.3 to 1.15 s with a byte-identical
+JSON export. The user_plugin hook fires on export, format, manage auto-uid and
+server, never on manage new; a Format subclass in formats intercepts every
+document read on every command, including manage new, inside the workers. A
+hook class defined in strictdoc_config.py crashes every parallelised command
+on 0.27.1 until the config inserts its own directory on sys.path.
+
+A typed evalModules surface with no untyped option regenerates grammar.sgra
+byte for byte (4085 bytes, 0.03 s): an ordered field catalogue plus per-element
+typed subset selection, STATUS the one polymorphic slot. Thirteen of thirteen
+bad declarations are rejected only once apply forces the merged value with
+deepSeq -- two passed lazily and emitted a plausible grammar before that --
+and addCheck's predicate is never called for a submodule in the pinned lib.
+strictdoc rejects six of six injected grammar defects, two of them only
+through the documents, so the gate exports the corpus and needs no first-party
+package.
+
+Of four levels -- node, edge, document, branch -- only the parser and the fp
+and cycle checks execute, and only in CI. The parser accepts DEPTH TBD, a
+Governed_By pointing at a MECHANISM, and an edit to an accepted decision's
+statement. All four hashes reverted in 387cdaec equal today's, so a restored
+signature reads as signed and current. Two live violations each of
+INV-NO-EXTERNAL-PLAN-REFS and of the role-target table; five definitions of
+ready that no two agree on. Ten incidentals logged to 99-backlog.
+
+The package does not need owning for anything questions one or three need.
+Seed facts held except: the version delta needs a reqif override plus a
+pygments relax; of the six unused nixpkgs-only dependencies only graphviz,
+pybtex and setuptools cost closure, the other three return through
+html2pdf4doc; the three-derivation claim was found nowhere.
 <<<
 RELATIONS:
 - TYPE: Parent
