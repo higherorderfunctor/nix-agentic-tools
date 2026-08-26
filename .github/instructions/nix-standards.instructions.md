@@ -16,16 +16,20 @@ Per-platform binary packages store versions and hashes in a
 
 ### Shell Wrappers: Absolute Paths Required
 
-> **Last verified:** 2026-07-30 (commit pending — re-runs the `/bin/`-filter
-> enumeration: five subtracted lines now, not four, after glab's `symlinkJoin`
-> landed and the kiro `rm -f` pair moved from `mkKiro.nix` into the extracted
-> `wrapPackage.nix`. Prior 2026-07-25: records that measured enumeration behind
-> the whole-line scan's surviving `/bin/` filter, on top of the
-> `versionCheck.cmd` scan across all of `overlays/`, its wider `WRAPPER_CMDS`
-> list, the path-prefix-aware comment filter, and the reason that scan carries
-> no `/bin/` filter). If you add a new `writeShellScript`,
-> `writeShellScriptBin`, `versionCheck.cmd`, or inline shell snippet in any
-> `.nix` file and this section isn't consulted, stop and read it.
+> **Last verified:** 2026-08-25 (commit pending — `mkClaudeExtract` grew bare
+> `python3` and `node` invocations, carrying `# bare-commands: ok` markers.
+> Neither name is in `BARE_CMDS` or `WRAPPER_CMDS` today, so the markers are
+> documentation rather than suppression — recorded here so a later widening of
+> those lists does not read them as stale). Prior: 2026-07-30 (commit pending —
+> re-runs the `/bin/`-filter enumeration: five subtracted lines now, not four,
+> after glab's `symlinkJoin` landed and the kiro `rm -f` pair moved from
+> `mkKiro.nix` into the extracted `wrapPackage.nix`. Prior 2026-07-25: records
+> that measured enumeration behind the whole-line scan's surviving `/bin/`
+> filter, on top of the `versionCheck.cmd` scan across all of `overlays/`, its
+> wider `WRAPPER_CMDS` list, the path-prefix-aware comment filter, and the
+> reason that scan carries no `/bin/` filter). If you add a new
+> `writeShellScript`, `writeShellScriptBin`, `versionCheck.cmd`, or inline shell
+> snippet in any `.nix` file and this section isn't consulted, stop and read it.
 
 **Every command in generated shell wrapper scripts MUST use an absolute Nix
 store path.** Never use bare command names like `cat`, `mkdir`, `cp`, `mv`,
@@ -110,7 +114,12 @@ property of the CALLER, a legitimately bare command in build-context code inside
 a scanned file is suppressed with a `# bare-commands: ok` comment **on that same
 line** — never by rewriting correct code. `overlays/lib.nix` is the mixed case:
 `mkUpdateScript` / `mkGitRevUpdateScript` emit real wrappers, while
-`mkClaudeExtract` / `mkKiroExtract` / `mkMcpSmokeTest` emit build-script bodies.
+`mkClaudeExtract` / `mkKiroExtract` / `mkMcpSmokeTest` emit build-script bodies,
+which run inside stdenv with a full PATH from the derivation's own
+`nativeBuildInputs`. That is why `mkClaudeExtract`'s bare `python3` and `node`
+are correct: the marker documents the intent even though neither name is in the
+check's word lists today, so widening those lists later cannot turn a correct
+line into a failure.
 
 Being per-line also means comments are scanned, so the filters strip rg's
 `path:lineno:` prefix before testing for a leading `#`. An anchored `^\s*#`

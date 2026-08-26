@@ -17,7 +17,61 @@
   # § IFD Patterns and memory project_claude_effort_pin_state.
   extracted =
     builtins.fromJSON (builtins.readFile ../../../overlays/claude-code-extracted.json);
-  knownClaudeModels = extracted.models;
+  aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
+  unrecognizedSettings = import ./unrecognizedSettings.nix {inherit lib;};
+
+  # The `nativeSettings` option surface: one option per path in the packaged
+  # binary's own settings schema, merged with the hand-authored exceptions.
+  # `.report` is what checks/claude-settings-schema.nix asserts on, so an
+  # exception aimed at a key the binary no longer declares fails CI rather than
+  # sitting here unnoticed.
+  nativeSettingsSurface = import ./nativeSettingsOptions.nix {
+    inherit extracted lib pkgs;
+  };
+
+  # Guard for the freeform `nativeSettings` tail: every key the packaged
+  # binary's own extracted settings schema does not declare is a hard failure
+  # unless `allowUnrecognizedSettings` names it. Claude ignores an unknown
+  # settings key SILENTLY, so without this a misspelling looks applied and does
+  # nothing.
+  #
+  # Built once and consumed by BOTH projections' mkMerge lists — the check is a
+  # property of the option, not of a backend, and the two backends write the
+  # same settings tree. Same shape as mkKiro's `mkAssertions cfg`.
+  #
+  # `extracted.settings or null` degrades a sidecar that predates settings
+  # extraction to "check off" rather than "eval throws" — but only while the
+  # allowlist is empty; see the first assertion in unrecognizedSettings.nix.
+  #
+  # `cfg.package.version` is read ONLY inside message strings, so a passing
+  # assertion never forces the package (and never triggers overlay IFD).
+  nativeSettingsAssertions = cfg:
+    unrecognizedSettings.mkAssertions {
+      declared = extracted.settings or null;
+      # The tree actually written — identical to the HM
+      # `settings = aiCommon.filterNulls cfg.nativeSettings` write below.
+      # Filtering FIRST is load-bearing: a typed sub-option sitting at its
+      # `null` default would otherwise report itself the day upstream renames
+      # that key, for every consumer, including ones who never set it.
+      settings = aiCommon.filterNulls cfg.nativeSettings;
+      allowed = cfg.allowUnrecognizedSettings;
+      optionPath = "ai.claude.nativeSettings";
+      allowOptionPath = "ai.claude.allowUnrecognizedSettings";
+      version = cfg.package.version or null;
+      # Keys THIS MODULE writes are reported against the option that writes
+      # them, so a binary that drops one does not read as consumer error.
+      # Deliberately not an exemption — an exemption would suppress exactly the
+      # drift signal worth having.
+      notes = let
+        ownWrite = opt: "this module writes this key itself, from `${opt}` — the\n      packaged binary no longer declares it. Clear that option, or bump\n      the package and its extracted sidecar together.";
+      in {
+        effortLevel = ownWrite "ai.settings.reasoningEffort";
+        enableWorkflows = ownWrite "ai.claude.ultracodeOnLaunch";
+        env = ownWrite "ai.shell / ai.environmentVariables";
+        ultracode = ownWrite "ai.claude.ultracodeOnLaunch";
+        mcpServers = "MCP servers do not belong in settings.json — declare them\n      under `ai.mcpServers` or `ai.claude.mcpServers`, which render into\n      .mcp.json. The devenv projection already drops this key from its gap\n      write; the HM projection hands it to upstream verbatim.";
+      };
+    };
 
   # Typed hook wiring (northbound). S1: a handler `command` accepts a package,
   # coerced to its executable path so its supporting files ride the /nix/store
@@ -243,142 +297,66 @@ in
       nativeSettings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
-          options = {
-            attribution = lib.mkOption {
-              type = lib.types.submodule {
-                freeformType = (pkgs.formats.json {}).type;
-                options = {
-                  commit = lib.mkOption {
-                    type =
-                      lib.types.coercedTo lib.types.bool
-                      (b:
-                        if b
-                        then null
-                        else "")
-                      (lib.types.nullOr lib.types.str);
-                    default = null;
-                    example = false;
-                    description = ''
-                      Attribution line Claude appends to commit messages
-                      it authors (settings.json `attribution.commit`).
-                      `true` (or null, the default) leaves Claude's own
-                      default text ("Generated with Claude Code"); `false`
-                      disables it (writes ""), dropping the generated /
-                      co-author trailer; a string sets custom text. Coerced
-                      to a nullOr-str at the type layer so it rides the
-                      shared filterNulls lowering unchanged.
-                    '';
-                  };
-                  pr = lib.mkOption {
-                    type =
-                      lib.types.coercedTo lib.types.bool
-                      (b:
-                        if b
-                        then null
-                        else "")
-                      (lib.types.nullOr lib.types.str);
-                    default = null;
-                    example = false;
-                    description = ''
-                      Attribution footer Claude appends to pull-request
-                      bodies (settings.json `attribution.pr`). Unlike
-                      `commit`, Claude's own upstream default for `pr` is
-                      already "" (pull-request attribution off), so here
-                      `true`/null (keep Claude's default) and `false`
-                      (write "" explicitly) coincide - both leave it
-                      disabled; a string enables it with custom footer
-                      text.
-                    '';
-                  };
-                };
-              };
-              default = {};
-              description = ''
-                Commit / PR attribution (settings.json `attribution`).
-                Each field accepts `true` (Claude's default), `false`
-                (disabled - writes ""), or a literal string. Set
-                `commit = false` to drop the co-author / "Generated with
-                Claude Code" trailer.
-              '';
-            };
-            effortLevel = lib.mkOption {
-              type = lib.types.nullOr (lib.types.enum extracted.effortLevels);
-              default = null;
-              description = ''
-                Persisted Claude effort level. The valid set
-                (low/medium/high/xhigh) is extracted from the packaged binary
-                into overlays/claude-code-extracted.json. 'max' is session-only
-                via /effort and cannot be persisted.
-              '';
-            };
-            enableWorkflows = lib.mkOption {
-              type = lib.types.nullOr lib.types.bool;
-              default = null;
-              description = ''
-                Master Workflows feature toggle — the /config "Dynamic
-                workflows" setting. Enables the Workflow tool at all.
-                null leaves Claude's own default (true). Mirrors a stable
-                /config toggle; the key name is not in the official settings
-                reference but has been stable across releases (verified on
-                claude-code 2.1.202).
-              '';
-            };
-            model = lib.mkOption {
-              type =
-                lib.types.nullOr
-                (lib.types.either (lib.types.enum knownClaudeModels) lib.types.str);
-              default = null;
-              description = ''
-                Claude model id. The ${toString (builtins.length knownClaudeModels)}
-                non-retired ids in the packaged binary's model catalog
-                (extracted into the drift-checked
-                overlays/claude-code-extracted.json — never hand-curated) are
-                ${lib.concatStringsSep ", " knownClaudeModels}. Any string is
-                accepted (non-enforcing soft enum) — the binary's runtime model
-                set is not a safe closed enum.
-              '';
-            };
-            tui = lib.mkOption {
-              type = lib.types.nullOr (lib.types.enum ["default" "fullscreen"]);
-              default = null;
-              description = ''
-                Terminal UI renderer — the persisted `/tui` setting.
-                "fullscreen" is the flicker-free alt-screen renderer with
-                virtualized scrollback (equivalent to env
-                CLAUDE_CODE_NO_FLICKER=1); "default" is the classic
-                main-screen renderer. null leaves Claude's own default.
-                MUST be set here rather than via the interactive `/tui`
-                command, which read-modify-writes settings.json and so fails
-                against a read-only Nix store path. Verified on
-                claude-code 2.1.206.
-              '';
-            };
-            workflowKeywordTriggerEnabled = lib.mkOption {
-              type = lib.types.nullOr lib.types.bool;
-              default = null;
-              description = ''
-                Whether the "ultracode" keyword in a prompt opts THAT TURN
-                into the Workflow tool (per-turn) — the /config "Ultracode
-                keyword trigger" row. Orthogonal to the ultracode session
-                mode. null leaves Claude's own default (true). Mirrors a
-                stable /config toggle; the key name is not in the official
-                settings reference but has been stable across releases
-                (verified on claude-code 2.1.202). NOTE: the persisted key is
-                `workflowKeywordTriggerEnabled`, not `ultracodeKeywordTrigger`
-                (that string is only an in-memory UI alias).
-              '';
-            };
-          };
+          # Generated from the packaged binary's own settings schema, merged
+          # with the hand-authored exceptions — see nativeSettingsOptions.nix.
+          inherit (nativeSettingsSurface) options;
         };
         default = {};
         description = ''
-          Typed Claude settings (attribution, effortLevel, enableWorkflows,
-          model, tui, workflowKeywordTriggerEnabled) plus freeform passthrough,
-          written to ~/.claude/settings.json by upstream. Null typed keys are
-          filtered out before reaching upstream. The undocumented `ultracode`
-          session key is intentionally NOT a typed option (see
-          ultracodeOnLaunch) but remains reachable here via freeform
-          passthrough.
+          Claude's settings.json, as typed options plus a freeform
+          passthrough. Every key the packaged binary's own settings schema
+          declares (extracted into the drift-checked
+          overlays/claude-code-extracted.json) gets a typed option
+          automatically; a short hand-authored list overrides the generated
+          type where the schema is not the surface we want (`attribution.*`
+          accepts a bool, `model` is a soft enum, `tui` carries a
+          read-only-store caveat). Null typed keys are filtered out before
+          reaching upstream, so an option left at its default writes nothing.
+
+          The freeform tail still accepts a key newer than this package's
+          schema — see `allowUnrecognizedSettings`, which is what keeps that
+          tail from also accepting typos. The undocumented `ultracode` session
+          key is intentionally NOT a hand-authored option (see
+          ultracodeOnLaunch) but is declared by the binary and so is typed
+          like any other.
+        '';
+      };
+      allowUnrecognizedSettings = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        example = ["someBrandNewKey"];
+        description = ''
+          Dotted paths under `nativeSettings` that may be written even though
+          the packaged claude-code binary does not declare them.
+
+          The freeform tail of `nativeSettings` exists so a key upstream ships
+          today is settable today. Its cost is that a TYPO is shaped exactly
+          like a brand-new key — and Claude ignores an unknown settings key
+          silently, so a misspelling looks applied and does nothing. Every key
+          the binary's own extracted schema
+          (overlays/claude-code-extracted.json) does not declare is therefore a
+          HARD FAILURE unless it is listed here:
+
+          ```nix
+          ai.claude.nativeSettings.someBrandNewKey = true;
+          ai.claude.allowUnrecognizedSettings = ["someBrandNewKey"];
+          ```
+
+          An entry is a full dotted path, so a nested key works too
+          (`"permissions.somethingNew"`). A `*` segment stands in for a key you
+          chose yourself, so one entry covers every instance
+          (`"modelPricing.overrides.*.newField"`).
+
+          This is a per-key opt-out that lasts until you delete it, not a home
+          for the key. Once the sidecar catches up and the binary declares it,
+          the entry is REPORTED AS AN ERROR rather than ignored — left in place
+          it would silently re-open the typo hole for that one key at the next
+          upstream rename.
+
+          Keys under a container the binary declares freeform — `hooks`, `env`,
+          `skillOverrides`, `enabledPlugins`, `pluginConfigs`, `modelOverrides`,
+          `vimInsertModeRemaps` and the rest — are never checked, so they never
+          need an entry.
         '';
       };
       unpinLaunchEffort = lib.mkOption {
@@ -735,7 +713,6 @@ in
         resolvedSettings,
         ...
       }: let
-        aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
         # Resolve rule body: path → readFile; string → passthrough.
         resolveRuleText = aiCommon.readContent;
         dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
@@ -743,6 +720,9 @@ in
         effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       in
         lib.mkMerge [
+          # Unrecognized-key guard for the freeform nativeSettings tail. One
+          # builder, both backends — see nativeSettingsAssertions.
+          {assertions = nativeSettingsAssertions cfg;}
           (lib.mkIf (resolvedSettings.reasoningEffort != null) {
             ai.claude.nativeSettings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
           })
@@ -908,7 +888,6 @@ in
         resolvedSettings,
         ...
       }: let
-        aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
         dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
         resolveRuleText = aiCommon.readContent;
 
@@ -938,6 +917,9 @@ in
         effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       in
         lib.mkMerge [
+          # Unrecognized-key guard for the freeform nativeSettings tail. One
+          # builder, both backends — see nativeSettingsAssertions.
+          {assertions = nativeSettingsAssertions cfg;}
           (lib.mkIf (resolvedSettings.reasoningEffort != null) {
             ai.claude.nativeSettings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
           })

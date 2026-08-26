@@ -40,11 +40,18 @@ boehm
 brocode
 btop
 bubblewrap
+bunfs
+bunmap
+bunsh
+bununpack
 burndown
 bwrap
 cachix
 caddy
 caddyfile
+calen
+cands
+caoff
 catchable
 catppuccin
 caubut
@@ -73,6 +80,7 @@ creds
 crystallise
 cuda
 customisation
+dataurl
 deadnix
 dedented
 dedents
@@ -104,6 +112,7 @@ endgroup
 endswith
 envrc
 envsubst
+epid
 epistemics
 esbuild
 etime
@@ -222,11 +231,15 @@ mcps
 mcpservers
 mdbook
 mdformat
+memoizer
 mergetool
 metacharacter
 misattributes
 miscited
+mlen
 modelcontextprotocol
+modfmt
+moff
 mojibake
 mountpoint
 mtimes
@@ -259,6 +272,7 @@ numtide
 nuscht
 nuschtos
 nvfetcher
+objectish
 ohmyposh
 oled
 ollama
@@ -292,6 +306,7 @@ pkgs
 pname
 posh
 posttooluse
+prefilter
 prek
 prepatched
 prestart
@@ -304,6 +319,7 @@ pythonnousersite
 pythonpath
 qdm
 qfdx
+qiiiiii
 queuelib
 quickstarts
 qwen
@@ -344,6 +360,7 @@ sandboxed
 sarif
 scriptable
 sdiehl
+segs
 semble
 sequentialthinking
 serena
@@ -372,6 +389,7 @@ statix
 stdenv
 stopword
 streamable
+strs
 subdirs
 subkeys
 subshell
@@ -413,10 +431,12 @@ ungated
 ungroomed
 unheld
 unhide
+unmappable
 unparameterized
 unparseable
 unrebased
 unredacted
+unrepresentable
 unresumable
 unreviewed
 unscanned
