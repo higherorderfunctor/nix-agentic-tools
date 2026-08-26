@@ -1529,10 +1529,144 @@ Fix shape: one of the two moves. Either the emitter and DSL adopt the generated
 shape, or normalize.py grows a converter pair that rewrites the union into
 title-plus-kind and encodes back -- which is exactly what a converter pair is
 for, and would make the hoist a recorded decision rather than a divergence.
+
+RESOLVED by the integration step of the same milestone, by the FIRST move.
+lib/dsl.nix and lib/emit.nix now speak the generated shape, `kind` is gone, and
+lib/check.nix runs every value through types.DocumentGrammar before emit sees
+it. The vocabulary is spelled `choices` on both sides because the extractor
+renames it: `options` is unusable as a submodule CONFIG key -- the module system
+reads it as an option declaration. Left in place rather than deleted because
+removing a backlog node is the operator's call.
 <<<
 RATIONALE: >>>
 Noticed while checking that emit.nix consumes normalized.encoders: it does, but
 it reads `body.choices` off a value the normalized types would reject. Two
 shapes that both work in isolation are the kind of thing that only surfaces
 when someone finally wires the check that compares them.
+<<<
+
+[MECHANISM]
+UID: MECH-CHOICE-ENCODER-PAIR-SPLIT
+TITLE: The choice-option converter pair is split across two files with nothing checking they agree
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+ChoiceOption is now the one converter whose two halves live in different files.
+The type rewrite is `decodedOption` in extract/normalize.py, which turns the
+faithful token pattern into the DECODED option value; the encode half is
+`choiceOption` in lib/emit.nix, which puts the quotes back.
+
+The split is deliberate -- when to quote is decided by
+GrammarElementFieldSingleChoice.get_unprocessed_options, which lives in
+strictdoc's WRITER and not in the grammar the surface is derived from, so
+normalize.py has no business deriving it. Every other pair ships both halves
+from normalize.py, and emit.nix merges `defaultEncoders // normalized.encoders`
+so a name shipped there wins.
+
+The cost is that nothing checks the two halves agree. If upstream widened the
+unquoted branch, or started quoting on a different condition, the type would
+accept a value the encoder spells in a way the grammar no longer parses -- and
+the only thing that would notice is the round-trip fixture happening to contain
+such an option.
+
+Fix shape: have normalize.py record the DECODE half's inverse as an assertion
+the check task can run, or move the quoting rule in by extracting it from the
+writer the same way the grammar is extracted from the builder.
+<<<
+RATIONALE: >>>
+Found by rendering fixtures/foreign.nix: `MIT (Expat)` failed the faithful
+ChoiceOption pattern, because the faithful type describes the TOKEN as written
+(quoted, for a parenthesised option) while the value in Nix is the option
+itself. Adding the decode converter fixed it, and made the pair's split
+explicit for the first time.
+<<<
+
+[MECHANISM]
+UID: MECH-LINE-ANCHORED-DENIAL-UNENFORCED
+TITLE: A caret-anchored lookahead is recorded as positional and enforced by nothing
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+extract.py now splits negative lookaheads in two. An unanchored one, like
+SingleLineString's `(?!>>>\r?\n)`, stays a value-level `deny`. A `^`-anchored
+one lands in `denyAtLineStart` and is enforced by nothing at all.
+
+That is correct today. arpeggio compiles every RegExMatch with re.MULTILINE and
+applies it with `regex.match(input, pos)`, so `^` holds only where `pos` is a
+line start, and FieldName -- `/(?!^UID)(?!^RELATIONS).../` -- is only ever
+entered immediately after the literal '  - TITLE: '. Enforcing it as a value
+constraint rejected a field named UID, which docs/sdoc/grammar.sgra declares
+five times.
+
+What is unenforced is the CONDITION. Nothing checks that the rules carrying a
+denyAtLineStart entry are in fact unreachable at a line start. If upstream
+moved FieldName into a production that starts a line, or added a rule that is
+reachable both ways, the surface would silently accept a value strictdoc
+rejects -- the same class of error as before, in the other direction.
+
+Fix shape: derive reachability-at-line-start from the parser tree, since the
+literal immediately preceding each rule reference is already extracted, and
+fail when a rule with a positional denial is reachable at a line start.
+<<<
+RATIONALE: >>>
+The first spelling of this rewrite was `strip-start-anchor`, which dropped the
+caret and enforced the rest, and it produced a FieldName type that rejected UID
+-- caught only when values.nix was first checked against the surface. Getting
+it right in one direction should not be mistaken for having a check.
+<<<
+
+[MECHANISM]
+UID: MECH-GRAMMAR-SGRA-NOT-GENERATED
+TITLE: docs/sdoc/grammar.sgra renders byte-identically but is still hand-maintained
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+packages/strictdoc-grammar/values.nix renders docs/sdoc/grammar.sgra byte for
+byte, and the semantic comparison agrees, but nothing writes that file. The
+generation task deliberately stops at the two generated surfaces, and
+check:sdoc-grammar renders to a temporary file and diffs.
+
+So there are two sources for one artefact. Editing grammar.sgra by hand is
+still possible and reddens only a task nobody has to run; editing values.nix
+without running it changes nothing. Neither drift is caught anywhere near where
+it happens, and neither is caught in CI at all -- both tasks depend on
+interactive-only packages.
+
+Fix shape: the operator decides whether grammar.sgra becomes generated. If yes,
+generate:sdoc-grammar writes it and the drift check moves into `nix flake
+check`, which needs the strictdoc closure available to a check derivation --
+checks/strictdoc-fp-check.nix already pulls it via nativeBuildInputs, so the
+precedent exists.
+<<<
+RATIONALE: >>>
+Left as a deliberate stop rather than an oversight: making a hand-maintained
+contract file generated changes who owns it, and this milestone was told not to
+edit that file at all. Recorded so the half-wired state is legible as a
+decision rather than read as a missing task.
+<<<
+
+[MECHANISM]
+UID: MECH-MID-IS-PER-PARSE-RANDOM
+TITLE: StrictDoc mints a fresh MID on every parse, so two reads of one file disagree
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured on 0.28.3 while writing extract/compare.py. Every node StrictDoc
+builds carries a `mid`, and for a .sgra it is generated fresh on each parse --
+a .sgra has no syntax to declare one. Reading the SAME BYTES twice therefore
+produces two models that disagree on every `mid` in the file.
+
+Any structural comparison of two models has to skip it. Keeping it is not a
+stricter comparison, it is one that can never pass, and because the difference
+is per-parse rather than per-file it does not look like a bug in whatever
+produced the second file.
+
+The consequence beyond comparison: a MID is not an identity that survives a
+re-read, so nothing may key on one across parses.
+<<<
+RATIONALE: >>>
+The first run of compare.py against two byte-identical files reported them
+different, with a mid mismatch on every node. Worth knowing before anything
+else -- a diff tool, a cache key, a cross-file reference -- treats a MID as
+stable.
 <<<
