@@ -1756,3 +1756,95 @@ The warning is the right call for a write, where an unformatted file is fixed by
 the next treefmt. It is the wrong call for a comparison, where the formatter is
 part of what "current" means.
 <<<
+
+[MECHANISM]
+UID: MECH-TREE-SITTER-CHOICE-OPTION-CANNOT-LEX-A-DOT
+TITLE: The patched tree-sitter grammar cannot lex a dot in an unquoted choice option
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+overlays/generic/tree-sitter-strictdoc.patch now adds the QUOTED arm to
+choice_option, which is the only way to write an option containing a
+parenthesis and which costs ZERO regressions on strictdoc's own docs. The
+UNQUOTED arm is still upstream's `[\w/-]+`, so an option containing a `.` --
+`GPL-3.0-or-later`, any SPDX identifier with a version -- does not parse, even
+though strictdoc itself accepts it (`(["])[^,]+\1|[^,()"]+`).
+
+Widening the charset was measured three ways and every one lost, all on
+strictdoc_04_release_notes.sdoc against a 9-error-node baseline:
+
+  transcribing strictdoc's own classes  -> 89 nodes, 76795 -> 98406 error bytes
+  upstream's charset plus a bare `.`    -> 89 nodes
+  a dot only BETWEEN word runs          -> 108 nodes
+
+The error BYTES rise with the node count, so this is a real loss of coverage,
+not error-recovery reshaping. Cause: tree-sitter lexes by longest match over
+every token valid in the current state -- and in an error-recovery state every
+token is valid -- so a wider choice_option out-competes the narrow tokens
+wherever recovery is running.
+
+Fix shape: restrict WHERE the token can be lexed rather than widening WHAT it
+matches -- an external scanner, or restructuring grammar_field_single_choice /
+_multiple_choice so the option list is lexed in a state of its own. Belongs to
+SLICE-SDOC-IN-SEMBLE, which owns the grammar patch.
+
+Until then packages/strictdoc-grammar/fixtures/foreign.sgra carries
+`GPL-3-only`, not `GPL-3.0-or-later`; the dot was incidental to what that
+fixture exercises and its README says so.
+<<<
+RATIONALE: >>>
+Found by checks/strictdoc-grammar-corpus.nix the moment foreign.sgra entered the
+repository's own corpus -- the check did exactly its job. Recorded rather than
+fixed because a charset is the wrong lever and the right one is a grammar
+restructure in another slice.
+<<<
+
+[MECHANISM]
+UID: MECH-CORPUS-CHECK-COUNTS-ERROR-NODES-NOT-SPAN
+TITLE: The corpus check's no-regression arm counts ERROR nodes, which recovery reshapes
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+checks/strictdoc-grammar-corpus.nix gates a grammar change on the number of
+ERROR/MISSING NODES per already-failing file. That number is a property of how
+tree-sitter's error recovery segmented the unparsed text, not of how much text
+went unparsed: one candidate patch took strictdoc_01_user_guide.sdoc from 42
+nodes to 19 while its error BYTES fell 1921 -> 501 (a genuine improvement), and
+another took strictdoc_04_release_notes.sdoc from 9 nodes to 89 with error bytes
+rising 76795 -> 98406 (a genuine loss). Both directions happened to agree here,
+so the check's verdict was right -- but only by luck, since a change that merely
+fragments one big ERROR into many reads as a large regression.
+
+Fix shape: report both, and gate on the byte span. The node count stays useful
+as a diagnostic.
+<<<
+RATIONALE: >>>
+Noticed while iterating on the choice_option widening above, where the node
+count was the only signal available and had to be cross-checked by hand against
+the spans before the verdict could be trusted.
+<<<
+
+[MECHANISM]
+UID: MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE
+TITLE: dev/tasks/check.nix restates the flake checks instead of running them
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+`check:sdoc-grammar` and checks/strictdoc-grammar-*.nix implement the same
+acceptance list twice, in bash and in Nix, against the same fixtures. They agree
+today. Nothing makes them agree tomorrow: the flake checks read committed bytes
+through the flake's `self` while the task reads the working tree, and only the
+flake side reads the layer expectation out of fixtures/README.md, so the task's
+negative arm accepts a fixture failing for the wrong reason.
+
+Acceptance item 3 is already handled the other way -- the task shells out to
+`nix build .#checks.<system>.strictdoc-grammar-surface-live` rather than
+restating its case table -- and that is the shape the rest should converge on:
+the task becomes a working-tree render plus a deferral, and the assertions live
+in one place.
+<<<
+RATIONALE: >>>
+Written when item 3 was added and the choice had to be made once. Deferring is
+cheap for a new arm and a rewrite for the existing five, so the existing five
+were left alone and the divergence recorded instead of half-fixed.
+<<<

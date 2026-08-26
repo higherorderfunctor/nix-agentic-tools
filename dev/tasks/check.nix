@@ -15,6 +15,14 @@
     if pkgs == null
     then "<nixpkgs>"
     else pkgs.path;
+
+  # `checks` is a per-system flake output, so an arm deferring to one has to
+  # name the system. Baked in when `pkgs` is available; otherwise left as a
+  # command substitution the task resolves at run time, rather than guessing.
+  systemAttr =
+    if pkgs == null
+    then "$(nix eval --impure --raw --expr builtins.currentSystem)"
+    else pkgs.stdenv.hostPlatform.system;
 in {
   tasks = {
     "check:model-staleness" = {
@@ -69,15 +77,28 @@ in {
     # The acceptance list of SLICE-GRAMMAR-FROM-NIX, in one command.
     # (packages/strictdoc-grammar/docs/implementation-brief.md, "Acceptance".)
     #
-    # Local-only, like the generation tasks it gates: `strictdoc` and
-    # `strictdoc-grammar-extract` are both interactive-only packages in
-    # devenv.nix, so nothing here can run in CI. Milestone 1 wires no CI on
-    # purpose — Nix evaluation and these checks ARE the review.
+    # THIS TASK IS THE CONVENIENCE COPY, NOT THE GATE. The same acceptance list
+    # is wired into `nix flake check` as `checks/strictdoc-grammar-*.nix`, which
+    # is this repository's validation entrypoint; the arms below are the local
+    # fast path over the working tree, where the flake checks read `${self}` and
+    # so only ever see committed bytes. Do not read the two as alternatives —
+    # when they disagree, the flake check is right and this one is stale. (An
+    # earlier revision of this comment claimed "nothing here can run in CI" and
+    # "milestone 1 wires no CI on purpose". Both were true when it was written
+    # and neither is now.)
     #
     # Every step below is a gate, and the two that could pass vacuously carry a
     # POSITIVE CONTROL beside them: the model comparator is shown to report a
     # difference between two grammars that really differ, and each negative
     # fixture must fail. A gate that cannot fail is not a gate.
+    #
+    # Acceptance item 3 — "the DSL cannot weaken the types" — is deliberately
+    # NOT reimplemented here. It is a differential (a weakening must be rejected
+    # WITH the type check and accepted by the emitter alone, or the rejection
+    # proves nothing), its case table lives in
+    # `checks/strictdoc-grammar-surface-live.nix`, and a second copy of that
+    # table is exactly the drift this comment is warning about. The arm below
+    # defers to that check instead.
     "check:sdoc-grammar" = {
       description = "Gate the typed .sgra grammar surface: surfaces current, models equal, fixtures fail";
       exec = ''
@@ -150,6 +171,25 @@ in {
           fail "compare.py called two DIFFERENT grammars equal — the semantic gate is inert"
         else
           log "positive control: compare.py separates two different grammars"
+        fi
+
+        # ── 3. The generated surface is live ────────────────────────────
+        # Deferred, not duplicated — see the header. Without this arm the whole
+        # task passes with `lib/check.nix` gutted to the identity function:
+        # MEASURED, both files above still render byte-identically, because the
+        # emitter reads named keys with `or` defaults and is blind to every
+        # weakening the types catch.
+        # The flake check reads the flake's own `self`, so it sees COMMITTED
+        # bytes rather than the working tree this task otherwise checks. An
+        # uncommitted weakening of lib/check.nix will not be caught here until
+        # it is staged — which is the one way this arm is weaker than the rest
+        # of the task, and the reason it names the command to run by hand.
+        live=".#checks.${systemAttr}.strictdoc-grammar-surface-live"
+        log "acceptance item 3: deferring to $live"
+        if nix build --no-link "$live"; then
+          log "surface live: a weakened value is rejected by the types, not by the emitter"
+        else
+          fail "the generated option surface is INERT — see: nix build -L $live"
         fi
 
         # ── 6a. Ours, at Nix evaluation ─────────────────────────────────
