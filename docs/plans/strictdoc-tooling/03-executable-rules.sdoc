@@ -147,44 +147,122 @@ TITLE: Generate the grammar from a typed Nix option surface, and gate it
 DEPTH: needs-design
 AUTHORED_BY: llm
 STATEMENT: >>>
-Define the grammar as a typed Nix option tree, with every shared field
-declared once and each node type selecting the fields it carries (STATUS
-differs between DECISION and SPIKE, so a type may specialise a field).
-Relations and prefixes per type; no untyped option anywhere. Generate
-docs/sdoc/grammar.sgra from it, byte-identical to today's, together with a
-committed record of which fields count as a node's contract; keep the @repo
-alias resolving. Commit the generated files and add a drift check, so a stale
-grammar is a red check. Add the validation gate: a clean-directory strictdoc
-export over the whole corpus at commit time and in CI, because some grammar
-defects only surface through documents.
+Generate a typed Nix option surface from strictdoc's own grammar definition,
+and generate docs/sdoc/grammar.sgra from that surface. The surface is derived,
+not hand-written: nothing about what a grammar may contain is typed by a
+person.
 
-Consumer surface the operator reviews before implementation: the option tree
-for node types and fields, with one question decided there first -- whether
-field order is one global list or per node type (strictdoc accepts both).
-Reviewed after: the regenerated grammar as an empty diff, and the gate firing
-on a deliberately broken fixture.
+Two layers. The first is faithful -- it expresses exactly what a .sgra file can
+express, with no opinion of ours in it. The second is normalized: named
+converters turn faithful shapes into better Nix types, so a regex that is a
+pure literal alternation becomes an enum, a two-value alternation becomes a
+boolean, an optional group becomes a nullable with a null default. A shape no
+converter recognises is an error rather than a fallback to free text, so an
+upstream grammar change fails during the update sweep instead of reaching
+anyone. Declaring a value unconstrained is itself a converter, keeping "we
+decided this is free text" distinguishable from "we did not recognise this".
 
-Not included: behaviour, transitions, ownership rules, and which fields count
-as contract -- this delivers the surface, not the values.
+The extractor runs at generation time, outside Nix, and emits Nix source that
+is committed; Nix never parses strictdoc during evaluation. A drift check
+regenerates and diffs, so a stale surface is a red check.
+
+How the conversion is expressed is open. Two shapes, both viable, and the
+choice decides whether the faithful layer is a committed file. Converters can
+live inside the extractor, which keeps one toolchain and preserves why each
+shape was classified as it was. Or the extractor emits the faithful surface and
+a declarative rewrite pass transforms it -- measured working with ast-grep,
+whose Nix support parses our shapes and whose rule files turn a literal
+alternation into an enum in about fifteen lines, with the fail-closed condition
+expressible as one more catch-all rule at error severity rather than a special
+case in code. That second shape trades provenance for reviewability: it matches
+the generated text rather than the grammar it came from, so a boolean
+alternation is indistinguishable from something that merely looks like one.
+
+Our own grammar values -- the five node types with their fields and relations
+-- are data filling the generated surface, not part of it.
+
+Add the validation gate: a clean-directory strictdoc export over the whole
+corpus at commit time and in CI. This is not a second opinion. None of
+strictdoc's grammar checks run on a bare parse, so the corpus export is the
+only validation that ever happens to a generated grammar.
+
+What belongs at evaluation is only what strictdoc has no rule for anywhere: two
+fields with the same title, and two relations with the same type and role.
+Both are made unrepresentable by keying on name rather than asserted against.
+Everything strictdoc does enforce is left to strictdoc and becomes a negative
+fixture proving the gate fires.
+
+Consumer surface the operator reviews before implementation: the normalized
+option tree and the converter list. Reviewed after: the regenerated grammar as
+an empty diff, the gate firing on a deliberately broken fixture, and an
+unrecognised grammar shape failing the extractor.
+
+Not included: behaviour, transitions, ownership rules, which fields count as
+contract, which node types a relation may point at, and any ordering policy of
+ours. Those are the semantic layer, defined by a consumer of this surface
+rather than by it.
 <<<
 RATIONALE: >>>
-Proven in the spike: a typed surface regenerates the grammar byte-for-byte in
-0.03 s and rejects thirteen of thirteen bad declarations once the merged value
-is forced, and strictdoc rejects six of six injected grammar defects. The gate
-needs nothing but the strictdoc package. Two rules carried from the
-measurement: cross-field checks live in one place that forces evaluation of
-the whole value, because Nix's addCheck never runs on a nested option; and the
-corpus export is the second gate.
+Generating rather than hand-writing is the operator's call, and the reason is
+drift: the overlay now tracks a project shipping roughly three releases a
+month, and a hand-written surface does not notice a knob being added. It keeps
+generating a valid grammar that cannot express the new thing, with nothing
+going red.
+
+Measured, and it is derivable: strictdoc assembles its own grammar into a
+string that is byte-identical across the last two releases; a metamodel built
+from it reaches 25 of 43 rules from the root, and its abstract rules yield the
+four field types and three relation types without a list being typed by hand --
+including that file relations have no reverse role at all. The metamodel alone
+is not sufficient, reporting every attribute as mandatory and flattening value
+vocabularies, so optionality and literal sets come from the parser tree beneath
+it. Both are reachable from the same object.
+
+Also measured, and the reason two checks stay at evaluation: a grammar
+declaring one field twice and one relation twice exports clean with exit zero,
+and the duplicates resolve in opposite directions -- fields keep the last
+declaration, relations keep the first. No rule against either exists anywhere
+in strictdoc.
+
+Carried from the spike: a typed surface regenerates the grammar byte-for-byte
+in 0.03 s and rejects thirteen of thirteen bad declarations once the merged
+value is forced; strictdoc rejects six of six injected grammar defects; the
+gate needs nothing but the strictdoc package; and cross-field checks must live
+in one place that forces evaluation of the whole value, because Nix's addCheck
+never runs on a nested option.
 <<<
 PARENT_FP: >>>
 DEC-EXECUTABLE-RULES-ROADMAP:0000000
 DEC-FP-FIELDS-CONFIGURABLE:0000000
 <<<
 NOTES: >>>
-Carry the rest of strictdoc's native grammar features rather than excluding
-them as design choices: human-readable field titles, composite nodes, view
-styles, child relations, file roles, and an explicit no-prefix option. Update
-the sdoc skill wherever the generated grammar changes its instructions.
+The faithful layer carries every native grammar feature by construction, so
+nothing needs listing as a deliberate inclusion. What the NORMALIZED layer
+exposes is a scoping decision and is open below.
+
+Open for the operator, none of it blocking a start:
+
+Element order in the generated grammar file. Today's five elements sit in a
+conceptual order -- decisions, mechanisms, slices, invariants, spikes -- that an
+attribute set will not reproduce. Either the values carry an explicit element
+order or the first commit accepts a one-time reshuffle and byte-identity is
+measured from there. Asked twice, not yet answered.
+
+Whether both layers are materialised as committed files or only the normalized
+one. Whether this is shaped as a general strictdoc-and-Nix component or stays
+repo-local. Whether the normalized layer exposes features we do not use --
+child relations, human titles, view styles, composite nodes.
+
+This slice still carries a Governed_By edge to DEC-FP-FIELDS-CONFIGURABLE and a
+matching PARENT_FP entry, from when contract fields were in scope here. They
+are not any more. That edge belongs on the milestone that delivers contract
+fields. Left in place because PARENT_FP is the operator's to change.
+
+The detailed evaluation-versus-build classification -- every item with its
+category, measured behaviour and source location -- is held in the operator's
+working area outside the repository.
+
+Update the sdoc skill wherever the generated grammar changes its instructions.
 <<<
 RELATIONS:
 - TYPE: Parent

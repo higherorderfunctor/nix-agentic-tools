@@ -1057,3 +1057,30 @@ RELATIONS:
 - TYPE: Parent
   VALUE: DEC-LOCAL-IMPLEMENTABILITY
   ROLE: Governed_By
+
+[MECHANISM]
+UID: MECH-GRAMMAR-TEXT-ELEMENT-INJECTION
+TITLE: Our grammar declares no TEXT element, so strictdoc silently adds one
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+When an imported grammar declares no TEXT element, strictdoc inserts a default
+one at position zero rather than reporting anything. Our grammar declares five
+elements and none of them is TEXT, so the in-memory grammar has six.
+
+Benign today because the file is hand-written and nothing round-trips it. It
+stops being benign at SLICE-GRAMMAR-FROM-NIX, whose acceptance is a
+byte-identical regenerated grammar: anything that reads the grammar and writes
+it back -- strictdoc's own writer, a format pass, a round-trip test -- emits the
+injected element too, so a naive round-trip comparison fails against a file
+that was never wrong.
+
+Decide whether the generated grammar declares TEXT explicitly, which makes the
+in-memory and on-disk forms agree, or whether the byte-identity check compares
+generator output against the file and never round-trips through strictdoc.
+<<<
+RATIONALE: >>>
+An injected element is invisible in every artefact a person reads, so the first
+encounter is a byte-identity check failing for a reason the diff does not
+explain.
+<<<
