@@ -299,13 +299,28 @@ working area outside the repository.
 
 Update the sdoc skill wherever the generated grammar changes its instructions.
 
-Local invocation only, as the milestone allowed. `devenv tasks run --mode before
-generate:sdoc-grammar` regenerates the two surfaces; `devenv tasks run
-check:sdoc-grammar` runs the acceptance list -- both surfaces current, the model
-strictdoc builds from the rendered grammar equal to the one it builds from the
-committed file, an empty byte diff against both that file and the foreign
-fixture, and all eight negative fixtures failing. No CI is wired, and both tasks
-depend on interactive-only packages, so neither can run there yet.
+Generation is local only, as the milestone allowed: `devenv tasks run --mode
+before generate:sdoc-grammar` regenerates the two surfaces, and `devenv tasks
+run check:sdoc-grammar` runs the acceptance list in one command. Both depend on
+interactive-only packages, so neither can run in CI.
+
+The acceptance list also exists as four flake checks, which do not.
+checks/strictdoc-grammar-surface-current.nix regenerates both surfaces and
+diffs; -model-equal.nix asserts the model strictdoc builds from the rendered
+grammar equals the one it builds from the committed file, plus an empty byte
+diff; -negative-fixtures.nix asserts all eight negatives fail, each AT THE LAYER
+fixtures/README.md names -- two at Nix evaluation, three at the textx parse,
+three at SDocValidator during the export -- reading the expectation out of that
+table rather than restating it; -foreign-roundtrip.nix exports the emitted
+foreign grammar. Each carries a positive control, because every assertion in
+them is of the form "this failed" or "these matched", and each strictdoc export
+runs over a throwaway project with its own fresh output directory.
+
+They reach strictdoc through nativeBuildInputs rather than the devShell, so
+`nix build .#checks.<system>.<name>` runs them with nothing installed. `nix
+flake check` builds everything in checks, so as a consequence they are in the CI
+gate; whether that is wanted is the operator's call and is logged as
+MECH-GRAMMAR-CHECKS-ARE-IN-FLAKE-CHECK.
 <<<
 RELATIONS:
 - TYPE: Parent

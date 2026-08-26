@@ -1670,3 +1670,89 @@ different, with a mid mismatch on every node. Worth knowing before anything
 else -- a diff tool, a cache key, a cross-file reference -- treats a MID as
 stable.
 <<<
+
+[MECHANISM]
+UID: MECH-EXPORT-FRAMES-VALIDATION-AS-PARSE-ERROR
+TITLE: strictdoc export reports a semantic rejection as "could not parse file"
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured on 0.28.3 while wiring checks/strictdoc-grammar-negative-fixtures.nix.
+A grammar that violates an SDocValidator rule -- REVERSE_ROLE without ROLE,
+SECTION not composite, TEXT composite -- is rejected during the step strictdoc
+prints as `Build traceability graph`, well after `Reading SDOC` reports the
+same file read successfully. The first line of the diagnostic is nevertheless:
+
+  error: could not parse file: g.sgra.
+  Semantic error: Grammar element 'NOTE' defines REVERSE_ROLE without ROLE ...
+
+So the headline names the wrong layer, and the line that names the right one is
+below it. Anything classifying a rejection by matching the error TEXT will read
+every semantic failure as a parse failure -- and a fixture asserting "rejected
+at the parse" would pass while proving nothing about the parser.
+
+The layer is still distinguishable, just not from the message: a bare
+SDocGrammarReader.read of the .sgra accepts all three, and only the whole-corpus
+export rejects them. That is what the check discriminates on.
+<<<
+RATIONALE: >>>
+Worth recording because the misleading half is the part a reader sees first, and
+because it makes the obvious implementation of a layer assertion silently wrong
+rather than loudly wrong.
+<<<
+
+[MECHANISM]
+UID: MECH-GRAMMAR-CHECKS-ARE-IN-FLAKE-CHECK
+TITLE: The four grammar gates are flake checks, so they are in the CI gate too
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+checks/strictdoc-grammar-{surface-current,model-equal,negative-fixtures,
+foreign-roundtrip}.nix are registered in flake.nix's `checks` output, because
+that output is what makes `nix build .#checks.<system>.<name>` addressable.
+There is no third state: `nix flake check` builds everything in `checks`, so
+these now run in CI as well, on both x86_64-linux and aarch64-darwin.
+
+The cost is a closure, not a runtime: `pkgs.ai.devTools.strictdoc` was already
+pulled in by strictdoc-fp-check and strictdoc-cycle-check, but
+`strictdoc-grammar-extract` (a python env carrying strictdoc's dependency
+closure plus ast-grep) is new to CI, and so is alejandra as a check input.
+Every one of the four builds in under a second once its inputs exist.
+
+If the milestone's "wires no CI" is to hold literally, the four move out of
+`checks` into a separate flake output and lose the addressable name. That is
+the operator's call, not this session's.
+<<<
+RATIONALE: >>>
+Recorded because the milestone brief says CI wiring is not required, and this is
+the one place where "buildable locally by name" and "not in CI" cannot both be
+true. Better legible as a consequence than discovered from a CI bill.
+<<<
+
+[MECHANISM]
+UID: MECH-FORMAT-NIX-DOWNGRADES-A-MISSING-FORMATTER
+TITLE: emit_nix.format_nix warns on a missing alejandra, which makes --check lie
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+extract/emit_nix.py's format_nix() shells out to alejandra when it is on PATH
+and otherwise prints a warning and returns the source unformatted. The
+generator's own wrapper package deliberately carries only what extraction needs,
+so alejandra is NOT on the PATH a bare `strictdoc-grammar-extract` sees.
+
+Consequence: `extract.py --check` run without alejandra diffs UNFORMATTED output
+against the committed (formatted) file and reports drift that does not exist.
+It fails red rather than green, so nothing is silently accepted -- but the
+failure names the wrong problem, and the diff it prints is pure formatting.
+checks/strictdoc-grammar-surface-current.nix works around it by naming alejandra
+in nativeBuildInputs.
+
+Fix shape: make a missing formatter FATAL under --check while leaving it a
+warning when writing, or put alejandra on the wrapper's PATH and drop the
+conditional entirely.
+<<<
+RATIONALE: >>>
+The warning is the right call for a write, where an unformatted file is fixed by
+the next treefmt. It is the wrong call for a comparison, where the formatter is
+part of what "current" means.
+<<<
