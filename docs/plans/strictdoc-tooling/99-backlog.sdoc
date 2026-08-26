@@ -757,6 +757,15 @@ and manage take no --output-dir and write ./output in the project. STATUS is
 polymorphic: DECISION and SPIKE carry different choices. And the
 strictdoc_config.py sys.path line from MECH-SDOC-CONFIG-HOOK-IMPORTABILITY
 belongs in the gotcha list.
+
+Two more, both now actionable. The restore block hands a fresh session a bare
+strictdoc export while the same file says no devenv shell is needed in the
+worktree; that is true of commits only, and a session outside the shell gets
+command not found. SLICE-STRICTDOC-OVERLAY put pkgs.ai.devTools.strictdoc in
+the devShell, so say the shell is required for strictdoc and not for
+committing. And the skill's never invent a UID, run manage auto-uid is
+contradicted by every node here: all UIDs are semantic and hand-chosen, and
+manage new mints a prefix-plus-counter UID that nobody keeps.
 <<<
 RATIONALE: >>>
 A document that is wrong is worse than one that is silent, which is the
@@ -1017,3 +1026,34 @@ Filed as issue #1266, self-contained, on 2026-08-25 -- the parking lot the
 rationale above asks for. That issue is the user-visible tracker; this node is
 the design-graph record of which slice found it. Close both together.
 <<<
+
+[MECHANISM]
+UID: MECH-READINESS-REPORT-FRONTIER
+TITLE: Report the readiness frontier, not the whole closure
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+status.py seeds its closure walk with the slice itself, so a slice below
+interface-settled reports itself as its own blocker: SLICE-FIRST-CONVERSION
+prints "blocked by SLICE-FIRST-CONVERSION" and nothing else. Not designed yet
+and blocked on a dependency call for different actions and should not read the
+same.
+
+The walk then appends every unsettled node in the transitive closure, so
+SLICE-INSTANCE-SEMANTICS-MIGRATION lists twenty-three blockers, most reachable
+only through another blocker. What a reader can act on is the frontier: the
+unsettled nodes whose own dependencies are all settled. The rest follow.
+
+Fix shape: separate the slice's own DEPTH from its dependency blockers in the
+output, and print the frontier with a count of what sits behind it.
+<<<
+RATIONALE: >>>
+The readiness query is the only view that says what to work on next, and at
+twenty-three undifferentiated lines it says nothing. Distinct from
+MECH-READINESS-PREDICATE-RECONCILE, which is about five definitions of ready
+disagreeing; this is one predicate reported unusably.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LOCAL-IMPLEMENTABILITY
+  ROLE: Governed_By
