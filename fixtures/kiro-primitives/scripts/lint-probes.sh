@@ -233,11 +233,13 @@ for path in ${agent_files[@]+"${agent_files[@]}"}; do
     fail agent-doc-file-in-agents-dir "$rel" \
       "the loader keeps ANY .md or .json entry, so a documentation file here is parsed as a profile and throws; keep docs outside the installable tree"
     ;;
+  *) ;;
   esac
 
   case "$path" in
   *.md) lint_agent_frontmatter "$path" "$rel" ;;
   *.json) lint_agent_json "$path" "$rel" ;;
+  *) ;;
   esac
 
   # `effectiveId = frontMatter.name ?? agentId`, so an explicit `name` overrides

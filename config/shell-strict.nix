@@ -1,11 +1,12 @@
-# Shared shell-hardening settings for `pkgs.writeShellApplication` call sites
-# and the prek `shellcheck` hook.
+# Shared shell-hardening settings for `pkgs.writeShellApplication` call sites,
+# the prek `shellcheck` hook, and checks/shellcheck-corpus.nix.
 #
-# Six consumers across five importing files: devenv.nix wires BOTH the
-# reject-default-branch-commit wrapper and the prek `shellcheck` hook, plus
-# flake.nix, lib/validate-at-stop.nix, packages/claude-code/lib/delegationClamp.nix
-# and packages/mcp-services/modules/homeManager/default.nix. Single source of
-# truth rather than six copies (DRY) — when adding a call site, add it here.
+# Single source of truth rather than a copy per call site (DRY) — when adding
+# one, read the flags from here. `grep -rn 'shell-strict.nix' --include='*.nix'`
+# enumerates the importers. A COUNT deliberately is not stated: this header
+# used to say "six consumers across five importing files" and was wrong by
+# three files before anyone noticed, because nothing recomputes a number in a
+# comment.
 {
   # Everything the repo's strict-mode header expresses that `set -o` can name.
   # writeShellApplication renders one `set -o <name>` line per entry, ABOVE its
@@ -34,6 +35,16 @@
   # tracked `*.sh` files and every rendered writeShellApplication wrapper. This
   # is a regression gate, not a cleanup task — a new entry must be clean on the
   # whole corpus before it lands.
+  #
+  # That sentence was ASPIRATIONAL until 2026-08-26. Nothing enforced it, and
+  # it was falsified the very next day: #618 landed four fixture scripts with
+  # seven SC2249 (`add-default-case`) findings on 2026-07-31, and they sat on
+  # main for four weeks. The prek hook could not catch it — it is
+  # `lib.optionalAttrs (!isCI)` so it never runs in CI, and even locally it
+  # only sees STAGED files, so a dirty script that nobody re-lints stays
+  # invisible. checks/shellcheck-corpus.nix is what makes the claim true: it
+  # runs these flags over the whole tracked corpus under `nix flake check`.
+  # Adding an entry here without running that check is how this rots again.
   #
   # Deliberately NOT enabled:
   #   --enable=all               nixpkgs' OWN generated `export PATH="…:$PATH"`

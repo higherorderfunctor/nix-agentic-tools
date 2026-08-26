@@ -223,6 +223,7 @@ for rep in $(seq 1 "$control_reps"); do
   for detector in $detectors; do
     case " $fired " in
     *" $detector "*) hit=yes ;;
+    *) ;;
     esac
   done
   if [ "$hit" = yes ]; then
