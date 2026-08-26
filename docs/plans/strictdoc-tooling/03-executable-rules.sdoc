@@ -48,7 +48,61 @@ NOTES: >>>
 The evidence behind every milestone is the SPIKE-EXECUTABLE-RULES assessment
 and the fold-in review of two outside research documents that followed it,
 both held in the operator's working area outside the repository.
+
+A step zero precedes milestone one: SLICE-STRICTDOC-OVERLAY, the overlay that
+keeps strictdoc on the latest release. Not a milestone -- it has no consumer
+surface to review -- but every milestone runs on it.
 <<<
+
+[SLICE]
+UID: SLICE-STRICTDOC-OVERLAY
+TITLE: Step zero -- an overlay that keeps strictdoc on the latest release
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Add a first-party overlay for strictdoc that tracks upstream's latest GitHub
+release, so every session, check and devShell in this repository runs the
+current version and the nixpkgs version stops being a topic. Shape: a thin
+override of the nixpkgs derivation carrying our version and source from a
+sidecar, with the two dependency adjustments the current release needs -- a
+newer reqif and a relaxed pygments pin -- registered like the other tracked
+packages: an update-targets row on the release-tracking contract, a
+cache-hit-parity row, and the strictdoc-using flake checks and the devShell
+switched to the overlay package. No patches; if one is ever needed it applies
+with fuzz disabled.
+
+No operator review before implementation: this is plumbing, not a consumer
+surface. Reviewed after: `strictdoc version` in the devShell and in the checks
+reports the latest release, and the update sweep bumps it on its own.
+
+Tracking main instead of releases is the operator's call per package, made on
+release cadence and how stable main is; strictdoc ships roughly three releases
+a month, so release tracking is the default here.
+<<<
+RATIONALE: >>>
+Standing rule from the operator: any package used seriously gets an overlay
+that tracks the latest release or main -- update cadence is never a
+consideration, and the version in nixpkgs is never an input. Several sessions
+noted the version gap and none built the overlay; this node exists so the next
+session builds it rather than noting it again. Everything after it -- the
+grammar gate, the CLI, the behaviour model -- is measured against the latest
+release and should run on it.
+<<<
+PARENT_FP: DEC-EXECUTABLE-RULES-ROADMAP:0000000
+NOTES: >>>
+Precedents to follow: the thin Python override in overlays/git-tools/
+git-revise.nix, the release-tracking update-targets row for beads, the
+cache-hit-parity registry, and overlays/generic/tree-sitter-strictdoc.nix for
+the fuzz-free patch flags should a patch ever appear. Group: dev-tools, the
+same class as beads.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-EXECUTABLE-RULES-ROADMAP
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: SPIKE-EXECUTABLE-RULES
+  ROLE: Proven_By
 
 [SLICE]
 UID: SLICE-GRAMMAR-FROM-NIX
@@ -111,6 +165,9 @@ RELATIONS:
 - TYPE: Parent
   VALUE: MECH-SDOC-LEAN-FORMATS
   ROLE: Crosses
+- TYPE: Parent
+  VALUE: SLICE-STRICTDOC-OVERLAY
+  ROLE: Assumes
 - TYPE: Parent
   VALUE: SPIKE-EXECUTABLE-RULES
   ROLE: Proven_By
