@@ -144,7 +144,7 @@ RELATIONS:
 [SLICE]
 UID: SLICE-GRAMMAR-FROM-NIX
 TITLE: Generate the grammar from a typed Nix option surface, and gate it
-DEPTH: needs-design
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Generate a typed Nix option surface from strictdoc's own grammar definition,
@@ -250,18 +250,43 @@ The faithful layer carries every native grammar feature by construction, so
 nothing needs listing as a deliberate inclusion. What the NORMALIZED layer
 exposes is a scoping decision and is open below.
 
-Open for the operator, none of it blocking a start:
+What the implementation settled, each of which had been left open here:
 
-Element order in the generated grammar file. Today's five elements sit in a
-conceptual order -- decisions, mechanisms, slices, invariants, spikes -- that an
-attribute set will not reproduce. Either the values carry an explicit element
-order or the first commit accepts a one-time reshuffle and byte-identity is
-measured from there. Asked twice, not yet answered.
+Element order is carried by the VALUES. Elements, fields and relations are all
+lists, never attribute sets, because Nix sorts attribute-set keys and strictdoc
+enforces order -- so the conceptual order survives and no reshuffle was needed.
+The consequence is that duplicate detection is an explicit assertion rather than
+a structural side effect, which is why the two duplicate checks exist at all.
 
-Whether both layers are materialised as committed files or only the normalized
-one. Whether this is shaped as a general strictdoc-and-Nix component or stays
-repo-local. Whether the normalized layer exposes features we do not use --
-child relations, human titles, view styles, composite nodes.
+Both layers are materialised as committed files, and the component is general
+purpose: the normalized layer carries every native grammar feature, including
+the composite nodes, view styles, human titles, child relations and file roles
+this repository never uses. Those are exercised by
+packages/strictdoc-grammar/fixtures/foreign.nix, which round-trips
+byte-identically, and the five node types are one consumer in
+packages/strictdoc-grammar/values.nix rather than part of the surface.
+
+Two corrections the extraction needed, both found by running the chain:
+
+A '^'-anchored negative lookahead is POSITIONAL, not a value constraint.
+FieldName is /(?!^UID)(?!^RELATIONS).../ and arpeggio matches with re.MULTILINE
+at the current position, so the lookahead can only fire at a line start -- which
+a field title, sitting after the literal '  - TITLE: ', never is. Hoisting those
+two into a value-level denial produced a type that rejected a field named UID,
+which this repository's own grammar declares five times. They are now recorded
+under denyAtLineStart and not enforced.
+
+The choice vocabulary could not keep its upstream name. textx calls it options,
+and a submodule whose CONFIG carries a key named options is read by the Nix
+module system as an option DECLARATION, so every sibling key errors out. The
+extractor now renames reserved module-system attribute names, and a collision
+with no rename is fatal rather than silent.
+
+Not settled here, and left where it was: whether docs/sdoc/grammar.sgra becomes
+a generated file. values.nix renders it byte-identically today, but the
+generation task deliberately does not write it -- check:sdoc-grammar renders to
+a temporary file and diffs instead. Making a hand-maintained contract file
+generated is the operator's call.
 
 This slice still carries a Governed_By edge to DEC-FP-FIELDS-CONFIGURABLE and a
 matching PARENT_FP entry, from when contract fields were in scope here. They
@@ -273,6 +298,14 @@ category, measured behaviour and source location -- is held in the operator's
 working area outside the repository.
 
 Update the sdoc skill wherever the generated grammar changes its instructions.
+
+Local invocation only, as the milestone allowed. `devenv tasks run --mode before
+generate:sdoc-grammar` regenerates the two surfaces; `devenv tasks run
+check:sdoc-grammar` runs the acceptance list -- both surfaces current, the model
+strictdoc builds from the rendered grammar equal to the one it builds from the
+committed file, an empty byte diff against both that file and the foreign
+fixture, and all eight negative fixtures failing. No CI is wired, and both tasks
+depend on interactive-only packages, so neither can run there yet.
 <<<
 RELATIONS:
 - TYPE: Parent
