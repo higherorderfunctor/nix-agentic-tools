@@ -67,7 +67,7 @@ surface to review -- but every milestone runs on it.
 [SLICE]
 UID: SLICE-STRICTDOC-OVERLAY
 TITLE: Step zero -- an overlay that keeps strictdoc on the latest release
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Add a first-party overlay for strictdoc that tracks upstream's latest GitHub
@@ -105,6 +105,33 @@ git-revise.nix, the release-tracking update-targets row for beads, the
 cache-hit-parity registry, and overlays/generic/tree-sitter-strictdoc.nix for
 the fuzz-free patch flags should a patch ever appear. Group: dev-tools, the
 same class as beads.
+
+Implemented 2026-08-25: overlays/dev-tools/strictdoc.nix plus its
+strictdoc-sources.json sidecar, registered in overlays/default.nix
+(pkgs.ai.devTools.strictdoc, flattened to the .#strictdoc flake package), with
+an update-targets row and a cache-hit-parity row. The two strictdoc-using
+checks (strictdoc-fp-check, strictdoc-cycle-check) and the devShell now take
+pkgs.ai.devTools.strictdoc instead of the nixpkgs attribute. No patches, so
+the fuzz-free flags did not come up.
+
+Measured: the pin moves 0.27.1 (nixpkgs) to 0.28.3 (upstream latest), and the
+built binary reports 0.28.3. Upstream tags releases BARE -- 0.28.3, not
+v0.28.3 -- so both the archive URL and the version check pass tagPrefix = "";
+that is the one place this row differs from beads. Two dependency adjustments
+were needed and no more: reqif, which nixpkgs carries at 0.0.54 against the
+release's `reqif >= 0.1.0, == 0.1.*`, pinned inline at 0.1.0 because
+mkUpdateScript rebuilds the sidecar from scratch and would erase a second
+package's pin; and pygments, added to pythonRelaxDeps rather than overridden,
+because the release pins it exactly at 2.21.0 against the pin's 2.20.0 and
+overriding it would fork the closure of the whole Python set for one
+patch-level move. The version claim is asserted in the derivation's
+installCheckPhase rather than left to a session to notice, and that assertion
+was positive-controlled: pointed at a version the binary does not report, the
+build fails in installCheckPhase.
+
+The whole design corpus formats and exports clean under 0.28.3, so the bump is
+not a migration: nothing in the grammar or the existing nodes needed changing
+to move off the nixpkgs version.
 <<<
 RELATIONS:
 - TYPE: Parent

@@ -8,12 +8,17 @@
 # exit 0 on re-run against a warm one -- see the sdoc skill's gotcha list.
 # `runCommand` gives every build its own fresh $TMPDIR, so there is no warm
 # cache to produce that false green with.
+#
+# `pkgs.ai.devTools.strictdoc`, not `pkgs.strictdoc`: the overlay tracks the
+# latest upstream release, and the design system is measured against that
+# rather than against whichever version the nixpkgs pin carries
+# (SLICE-STRICTDOC-OVERLAY).
 {
   pkgs,
   self,
 }:
 pkgs.runCommand "strictdoc-fp-check" {
-  nativeBuildInputs = [pkgs.strictdoc pkgs.python3];
+  nativeBuildInputs = [pkgs.ai.devTools.strictdoc pkgs.python3];
 } ''
   set -euETo pipefail
   shopt -s inherit_errexit 2>/dev/null || :
