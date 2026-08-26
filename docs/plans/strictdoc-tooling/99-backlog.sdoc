@@ -1084,3 +1084,30 @@ An injected element is invisible in every artefact a person reads, so the first
 encounter is a byte-identity check failing for a reason the diff does not
 explain.
 <<<
+
+[MECHANISM]
+UID: MECH-ASTGREP-OVER-SDOC
+TITLE: ast-grep could match sdoc files directly using the grammar we already package
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+ast-grep is tree-sitter based and takes custom languages through a dynamic
+tree-sitter library. This repository already packages a patched
+tree-sitter-strictdoc for semble, so the grammar half of that already exists
+and is already maintained.
+
+That makes structural matching over sdoc documents available without writing a
+parser: find every node carrying a given field value, rewrite a field across a
+corpus, lint for a shape the strictdoc grammar cannot express. Relevant to the
+milestone that makes a tool the only writer of sdoc files, where the
+alternative is driving strictdoc's own node model for every edit.
+
+Unproven. Registering a custom language with ast-grep needs the grammar built
+as a shared library with the right entry point, which the semble packaging may
+or may not already produce.
+<<<
+RATIONALE: >>>
+Noted while measuring ast-grep for the grammar milestone's conversion pass.
+Two capabilities this repository already carries separately turn out to
+compose, and nothing records that they might.
+<<<
