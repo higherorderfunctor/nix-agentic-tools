@@ -310,39 +310,60 @@ rec {
       echo "Updated rev: ${rev} -> $new_rev"
     '';
 
-  # Grep claude's binary for its launch-effort pin keys, the effort enum,
-  # the workflow/ultracode boolean settings keys we depend on, the hook-event
-  # vocabulary, and the model catalog, emitting `{launchEffortPins,
-  # effortLevels, settingsBooleanKeys, hookEvents, models}` to `dest`
-  # (default stdout). Single source of the grep logic — used by
-  # claude-code.nix's passthru.extracted (and, transitively, by
-  # mkUpdateScript). Fails loud (exit 1) if any anchor comes up empty (or,
-  # for the effort enum, != exactly one match) — so an upstream change
-  # breaks the build instead of silently extracting nothing.
+  # Extract the claude-code facts that mkClaude.nix's option surface is built
+  # from, emitting `{effortLevels, hookEvents, launchEffortPins, models,
+  # settings, settingsBooleanKeys}` to `dest` (default stdout). Single source of
+  # the extraction logic — used by claude-code.nix's passthru.extracted (and,
+  # transitively, by mkUpdateScript's extraExtract).
   #
-  # EVERY key here becomes an option surface in mkClaude.nix, so a dead
-  # anchor does not merely lose data: it puts the HM/devenv module options
-  # out of sync with the binary they are supposed to describe. That is the
-  # whole reason the guards below are hard failures rather than warnings,
-  # and why the emitted sidecar is committed and drift-checked.
+  # TWO mechanisms, and the split is the whole design:
   #
-  # The `settingsBooleanKeys` guard covers `ultracode` (UNDOCUMENTED,
-  # officially session-only — persisted via ai.claude.ultracodeOnLaunch),
-  # `enableWorkflows`, and `workflowKeywordTriggerEnabled`. These are
-  # off-label / /config-only keys with no compatibility promise; asserting
-  # they still parse as boolean-schema settings keys on each claude-code
-  # bump converts a future silent drop into a loud update-pipeline (and
-  # `nix flake check` drift-check) failure. See mkClaude.nix for the option
-  # surface and docs/plans/ultracode-typed-options-and-meta-option.md § 3.
+  #   1. The SETTINGS SCHEMA comes from the binary describing ITSELF.
+  #      `bununpack.py` unpacks the Bun single-exec's module graph; `census.mjs`
+  #      imports the settings chunk out of that graph and calls the binary's OWN
+  #      schema builder, its OWN zod -> JSON-Schema converter and its OWN
+  #      `@internal` filter. Nothing about the settings surface is grepped,
+  #      guessed or curated, so a key upstream adds arrives with the package
+  #      bump instead of waiting for a human to notice it. `effortLevels`,
+  #      `hookEvents` and `settingsBooleanKeys` are read out of that same schema
+  #      — all three used to be greps against the minified bundle, and the
+  #      `settingsBooleanKeys` grep is precisely what broke at 2.1.245 when
+  #      upstream code-split the bundle out from under its anchor.
   #
-  # Note that this guard alone is the reason those three keys are named
-  # here at all: the emitted `settingsBooleanKeys` array is the input list
-  # echoed back, never a discovery. It exists so the sidecar records WHICH
-  # keys the build asserted, not to tell a consumer anything new.
+  #   2. `launchEffortPins` and `models` are STILL greps, because neither is in
+  #      the settings schema: the pins are local-config keys and the model
+  #      catalog is a separate module. Their anchors carry a lot of scar tissue;
+  #      it is documented inline below and must not be trimmed.
+  #
+  # Every guard is a hard failure, never a warning. EVERY key here becomes an
+  # option surface in mkClaude.nix, so a dead anchor does not merely lose data:
+  # it puts the HM/devenv module options out of sync with the binary they are
+  # supposed to describe. That is also why the emitted sidecar is committed and
+  # drift-checked.
+  #
+  # The `settingsBooleanKeys` guard covers `ultracode` (UNDOCUMENTED, officially
+  # session-only — persisted via ai.claude.ultracodeOnLaunch), `enableWorkflows`
+  # and `workflowKeywordTriggerEnabled`. These are off-label / /config-only keys
+  # with no compatibility promise; asserting that the binary's own schema still
+  # types all three as booleans on each bump converts a future silent drop into
+  # a loud update-pipeline (and `nix flake check` drift-check) failure. Unlike
+  # the grep it replaces, the array is now a DISCOVERY rather than the input
+  # list echoed back: census.mjs filters those three names by the type the
+  # schema actually gives them, so a retype shortens the array.
+  #
+  #   assets: the overlays/claude-code/ directory — bununpack.py, census.mjs
+  #           and locate.mjs. Passed as a path so the scripts ride the
+  #           derivation's inputs rather than being interpolated into this
+  #           string.
   #   bin:  absolute path to the claude binary.
   #   pkgs: nixpkgs set (gnugrep, gnused, coreutils, jq).
   #   dest: output path (default "/dev/stdout"; pass "$out" in runCommand).
+  #
+  # The BUILD must also supply `python3`, `nodejs_24` and `jq` on PATH — see
+  # overlays/claude-code.nix's nativeBuildInputs. nodejs_24 specifically:
+  # census.mjs drives `node:module`'s `registerHooks`, which needs Node >= 22.15.
   mkClaudeExtract = {
+    assets,
     bin,
     pkgs,
     dest ? "/dev/stdout",
@@ -375,139 +396,53 @@ rec {
       exit 1
     fi
 
-    # The persisted-settings effort validator. The minifier variable
-    # before `.enum` is rebuilt every release (2.1.159 emitted `y`,
-    # 2.1.181 emitted `H`), so match ANY identifier and key on the
-    # `effortLevel:` prefix + the enum literal instead of a fixed token.
-    # Extract the level array; require exactly one DISTINCT match so an
-    # upstream shape change still fails loud.
+    # ── The settings schema, from the binary's own emitter ─────────────────
     #
-    # 2.1.232 changed the SHAPE as well as the spelling: the settings
-    # schema moved off namespaced method constructors onto bare
-    # standalone factories, so `effortLevel:w.enum([…])` became
-    # `effortLevel:Or([…])` (and `at()` for number, `B()` for string,
-    # `jt()` for boolean — the zod-mini calling convention). The
-    # `.enum` segment is therefore OPTIONAL. Both forms carry the same
-    # `[…]` payload, which is what is actually extracted, so the array
-    # literal keeps doing the validating regardless of which form
-    # matched.
+    # Unpack the Bun module graph, then let census.mjs import the settings
+    # chunk and run the binary's own schema pipeline over it. Both steps are
+    # CONTENT-located: nothing here names a chunk file, a minified identifier or
+    # a byte offset, because macOS and Linux builds of one version agree on none
+    # of those. (Measured at 2.1.245: the two platforms' censuses are
+    # byte-identical, which is the only reason ONE sidecar can be committed for
+    # both.)
     #
-    # The trailing `|| true` is load-bearing and was MISSING here, which is
-    # why 2.1.232 failed with a bare `builder failed with exit code 1` and no
-    # claude-extract line at all: a zero-match pipeline exits 1, pipefail
-    # promotes it, and errexit killed the script AT THE ASSIGNMENT — so the
-    # matchCount branch below, and its diagnostic, were unreachable in exactly
-    # the case they exist for. Every other guard here already had it.
-    levels=$("$grep" -aoE 'effortLevel:[A-Za-z_$][A-Za-z0-9_$]*(\.enum)?\(\[[^]]*\]\)' "${bin}" \
-      | "$grep" -oE '\[[^]]*\]' | "$sort" -u || true)
-    matchCount=$(printf '%s\n' "$levels" | "$grep" -c . || true)
-    if [ "$matchCount" -ne 1 ]; then
-      echo "claude-extract: effort enum matched $matchCount distinct level arrays (expected 1; upstream changed the validator)" >&2
+    # bununpack.py prints its graph summary on stdout; send it to stderr so it
+    # cannot contaminate a `dest` of /dev/stdout.
+    python3 "${assets}/bununpack.py" "${bin}" ./unpacked >&2 # bare-commands: ok
+    node "${assets}/census.mjs" ./unpacked --legacy --out ./census.json # bare-commands: ok
+
+    # Non-empty guard. The census can only fail loud OR return a schema; what it
+    # must never do is return a nearly-empty one that gets committed as the new
+    # truth. The update pipeline regenerates this sidecar in the SAME PR as the
+    # bump, so the drift check would go green over a collapsed extraction — the
+    # same blind spot the model-catalog shape assertion below exists for. 160
+    # public keys at 2.1.245; the floor is a deliberate fraction of that.
+    publicKeyCount=$("$jq" '.settings.publicKeys | length' ./census.json)
+    if [ "$publicKeyCount" -lt 100 ]; then
+      echo "claude-extract: the settings census produced only $publicKeyCount public keys (expected >= 100) — the schema builder ran but returned almost nothing" >&2
       exit 1
     fi
 
-    # Guard the workflow/ultracode boolean settings keys. Each is registered
-    # in the settings schema as `<key>:<ctor>().optional()`.
-    #
-    # TWO constructor spellings are live, and the second one is why this guard
-    # can no longer be a presence check. Through 2.1.222 it was a namespaced
-    # METHOD naming its own type — `ultracode:w.boolean()` — so the anchor
-    # validated the type for free. 2.1.232 moved the whole settings schema onto
-    # bare standalone factories, and `ultracode:jt()` names nothing: `jt()` is
-    # indistinguishable at the call site from `B()` (string) or `at()` (number).
-    # The minified identifier is also rebuilt every release (2.1.202 emitted
-    # `A`), so it cannot be pinned either. Match ANY identifier with an
-    # OPTIONAL `.boolean` segment, and recover the type assertion by SHAPE.
-    #
-    # Presence alone would be worthless here — a dead anchor that still matches
-    # SOMETHING is exactly how the model-catalog grep rotted for 12 releases
-    # (see the comment on catalogIds below). Two assertions restore it without
-    # depending on any OTHER key's name, which would just move the fragility:
-    #
-    #   * each key must resolve to exactly ONE distinct constructor token, and
-    #     all three must resolve to the SAME token. Retyping a single key
-    #     breaks this. Deduping on the CONSTRUCTOR rather than on the whole
-    #     ident-bearing match is also what makes repeated registrations
-    #     harmless — 2.1.202 emitted `ultracode:<ident>.boolean()` twice.
-    #   * that shared token must register at least 50 settings keys, proving it
-    #     is the schema's boolean workhorse and not an ad-hoc call that happens
-    #     to sit after one of these names. Measured: 235 distinct keys at
-    #     2.1.222 (`w.boolean`), 265 at 2.1.232 (`jt`) — the floor is a fifth
-    #     of that, so a re-minification that splits booleans across a couple of
-    #     aliases still passes.
-    #
-    # Anchoring on the trailing `.optional()` is what makes the bare form
-    # specific enough to key on at all: every settings-schema entry carries it,
-    # and requiring it excludes the many unrelated `<ident>:<ident>()` sites in
-    # minified code. The leading character class stops a longer key that merely
-    # ENDS in one of these three names from matching.
-    #
-    # Every `|| true` below keeps a zero-match case from aborting at the
-    # assignment (pipefail + inherit_errexit) so the not-found branch stays
-    # reachable and fails loud with its own message.
-    boolKeys=(ultracode enableWorkflows workflowKeywordTriggerEnabled)
-    boolCtor=""
-    boolCtorKey=""
-    for key in "''${boolKeys[@]}"; do
-      keyCtors=$("$grep" -aoE '(^|[^A-Za-z0-9_$])'"$key"':[A-Za-z_$][A-Za-z0-9_$]*(\.boolean)?\(\)\.optional\(\)' "${bin}" \
-        | "$sed" -E 's/^.*'"$key"'://; s/\(\)\.optional\(\)$//' | "$sort" -u || true)
-      ctorCount=$(printf '%s\n' "$keyCtors" | "$grep" -c . || true)
-      if [ "$ctorCount" -ne 1 ]; then
-        echo "claude-extract: settings key '$key' matched $ctorCount distinct schema constructors (expected 1; upstream renamed/removed the key or reshaped the settings schema)" >&2
-        exit 1
-      fi
-      if [ -z "$boolCtor" ]; then
-        boolCtor="$keyCtors"
-        boolCtorKey="$key"
-      elif [ "$keyCtors" != "$boolCtor" ]; then
-        echo "claude-extract: settings key '$key' is registered with constructor '$keyCtors' but '$boolCtorKey' uses '$boolCtor' — one of them was retyped" >&2
-        exit 1
-      fi
-    done
-
-    # The captured token is used as an ERE below, so every character in it
-    # that the regex engine treats specially has to be neutralized. The
-    # capture above admits exactly TWO such characters — `$`, from the
-    # identifier class `[A-Za-z_$][A-Za-z0-9_$]*` that a minifier really does
-    # use, and `.`, from the old `<ns>.boolean` form. Keep this set in sync
-    # with that class; anything it starts admitting has to be added here.
-    #
-    # `$` is the dangerous one and it fails SILENTLY in the wrong direction:
-    # left bare it is an end-of-line anchor, so a ctor minified to something
-    # like `A$` matches nothing, `ctorKeys` comes out 0, and the build blames
-    # the schema for not having a shared boolean factory — a held-back package
-    # with a confidently wrong diagnosis, which is the exact failure mode this
-    # extractor exists to avoid.
-    #
-    # Bracket them rather than backslash-escaping: the escape would have to
-    # survive Nix -> bash -> sed's REPLACEMENT text -> ERE, and each layer
-    # treats backslashes differently, while `[x]` means the same thing to the
-    # regex engine and nothing to any layer above it. (Literal `\.` written
-    # directly in a pattern, as the anchors above do, is unaffected — that
-    # goes through no substitution.)
-    boolCtorRe=$(printf '%s' "$boolCtor" | "$sed" -e 's/[.$]/[&]/g')
-    ctorKeys=$("$grep" -aoE '[A-Za-z_$][A-Za-z0-9_$]*:'"$boolCtorRe"'\(\)\.optional\(\)' "${bin}" \
-      | "$sed" -E 's/:.*$//' | "$sort" -u | "$grep" -c . || true)
-    if [ "$ctorKeys" -lt 50 ]; then
-      echo "claude-extract: constructor '$boolCtor' registers only $ctorKeys settings keys (expected >= 50) — it is not the schema's shared boolean factory, so the guarded keys are not provably booleans" >&2
+    # census.mjs emits `null` rather than a guess for a legacy key whose anchor
+    # in the schema is gone, so a type test is the guard.
+    if [ "$("$jq" -r '.legacy.effortLevels | type' ./census.json)" != "array" ]; then
+      echo "claude-extract: the settings schema carries $("$jq" -r '.legacy.effortLevelEnumsSeen' ./census.json) distinct effortLevel enums (expected exactly 1; upstream changed the validator)" >&2
+      exit 1
+    fi
+    if [ "$("$jq" -r '.legacy.hookEvents | type' ./census.json)" != "array" ]; then
+      echo "claude-extract: the settings schema no longer pins the hooks record's key vocabulary (upstream changed the hook schema shape)" >&2
       exit 1
     fi
 
-    # Hook events — the northbound soft-enum `knownEvents`. Grep every flat array
-    # literal containing the "PreToolUse" token (the canonical first hook event),
-    # union the CamelCase string tokens, sort -u. The binary carries the master
-    # enum plus context-specific subsets; the union is the full recognized-event
-    # vocabulary (30 at 2.1.215). Reorder-robust (token match, not position).
-    # Fail loud on zero matches (anchor gone = hook schema shape change), mirroring
-    # the effort/bool guards above. Tokens are grepped WITH their quotes so each
-    # line is already a JSON string literal — jq -s slurps them, no tr needed.
-    hookEvents=$("$grep" -aoE '\[[^][]*"PreToolUse"[^][]*\]' "${bin}" \
-      | "$grep" -aoE '"[A-Za-z][A-Za-z0-9]*"' | "$sort" -u || true)
-    if [ "$(printf '%s\n' "$hookEvents" | "$grep" -c . || true)" -lt 1 ]; then
-      echo "claude-extract: no hook-event enum array found (upstream changed the hook schema shape)" >&2
+    # A SHORT array means one of the three off-label boolean keys was renamed,
+    # dropped, or retyped — census.mjs filters its three names by the type the
+    # emitted schema gives them. The names live there, once, and are
+    # deliberately not restated here.
+    boolKeysJson=$("$jq" -c '.legacy.settingsBooleanKeys' ./census.json)
+    if [ "$("$jq" '.legacy.settingsBooleanKeys | length' ./census.json)" -ne 3 ]; then
+      echo "claude-extract: the workflow/ultracode boolean settings keys no longer all parse as booleans in the binary's own settings schema — got $boolKeysJson (expected 3)" >&2
       exit 1
     fi
-    hookEventsJson=$(printf '%s\n' "$hookEvents" | "$jq" -s .)
 
     # Model catalog — the soft enum behind mkClaude.nix's `model` option.
     # Each catalog entry opens `{id:"claude-…",family:"…",display_name:…}`.
@@ -585,22 +520,34 @@ rec {
         *"$family"*) ;;
         *)
           echo "claude-extract: no '$family' id among the extracted models (anchor is matching the wrong structure, or upstream dropped the family)" >&2
-          # The bare `tr` below is correct: this body is a runCommandLocal
-          # build script, so stdenv supplies a full PATH. The marker has to
-          # sit ON the offending line — the check filters by line.
+          # The bare `tr` below is correct: this body is a runCommand build
+          # script, so stdenv supplies a full PATH. The marker has to sit ON
+          # the offending line — the check filters by line.
           echo "claude-extract: extracted set was: $(printf '%s\n' "$models" | "$sort" | tr '\n' ' ')" >&2 # bare-commands: ok
           exit 1
           ;;
       esac
     done
     modelsJson=$(printf '%s\n' "$models" | "$jq" -R . | "$jq" -s .)
-
     pinsJson=$(printf '%s\n' "$pins" | "$jq" -R . | "$jq" -s .)
-    boolKeysJson=$(printf '%s\n' "''${boolKeys[@]}" | "$sort" -u | "$jq" -R . | "$jq" -s .)
-    "$jq" -n --argjson pins "$pinsJson" --argjson levels "$levels" \
-      --argjson boolKeys "$boolKeysJson" --argjson hookEvents "$hookEventsJson" \
+
+    # `-S` (sort keys, recursively) so the committed file has one canonical
+    # shape regardless of the order the census walked the schema in. Safe for
+    # the drift check either way: it compares with `$a == $b`, which ignores
+    # object key order and honours array order — and every array here is
+    # already byte-sorted by the census or by `sort`.
+    "$jq" -S -n \
       --argjson models "$modelsJson" \
-      '{launchEffortPins: $pins, effortLevels: $levels, settingsBooleanKeys: $boolKeys, hookEvents: $hookEvents, models: $models}' > "${dest}"
+      --argjson pins "$pinsJson" \
+      --slurpfile census ./census.json \
+      '{
+         effortLevels: $census[0].legacy.effortLevels,
+         hookEvents: $census[0].legacy.hookEvents,
+         launchEffortPins: $pins,
+         models: $models,
+         settings: $census[0].settings,
+         settingsBooleanKeys: $census[0].legacy.settingsBooleanKeys,
+       }' > "${dest}"
   '';
 
   # SINGLE definition of "which file is the kiro chat binary", shared by the

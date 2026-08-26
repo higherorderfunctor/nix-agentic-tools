@@ -1,48 +1,57 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-24 (commit pending — Codex's exact approval-policy
-> guard now follows the pinned binary's version boundary: pre-0.149.0 releases
-> must retain `untrusted`, while 0.149.0 and newer must expose only `never` and
-> `on-request`. This admits upstream's intentional removal without accepting
-> either vocabulary indefinitely, so the normal version-bump path can regenerate
-> the sidecar). Prior: 2026-08-19 (commit pending — removes a retired
-> generated-skill IFD check; Stacked Workflows remains the cross-platform
-> generated-skill constraint). Prior: 2026-08-16 (commit pending —
-> `devenv-test.yml` now attributes real repository instruction projections to
-> Git portability rather than the retired claim that current Kiro skips steering
-> symlinks; its IFD warm step and closure behavior were rechecked unchanged).
-> Prior: 2026-08-14 (commit pending — this fragment now has its OWN registry
-> category, `ifd`, scoped to the paths it actually claims below:
-> `.github/actions/warm-ifd/**` and the warm steps in ci.yml / update.yml, on
-> top of `overlays/**`. It previously rode under `overlays`, whose two globs
-> never matched any of them — so the same-commit duty asserted at the end of
-> this block was unreachable from every CI path it governs, and PR #946 edited
-> `warm-ifd/action.yml` without loading a word of it. A fragment that claims
-> authority over a path it does not scope is worse than silent, because the
-> claim reads as enforced. Splitting rather than widening `overlays` keeps a
-> ci.yml editor from also being handed unfree-guard and cache-hit-parity).
-> Prior: 2026-08-14 (commit pending — records that an anchor can lose its TYPE
-> information without losing its match. claude-code 2.1.232 moved its settings
-> schema onto bare zod-mini factories, so `ultracode:w.boolean()` became
-> `ultracode:jt()` and the guard's whole type assertion lived in the `.boolean`
-> token it no longer has. Relaxing the regex would have kept the match and
-> silently demoted the guard to a presence check, so the type is now re-derived
-> by constructor quorum. The effort enum needed only an optional `.enum` segment
-> because it validates through its extracted payload. Also records why that
-> failure was diagnostically silent: the effort enum was the one assignment
-> without a trailing `|| true`, so errexit killed the script before its own
-> guard could speak — a guard's message is worthless if the guard is
-> unreachable). Prior: 2026-08-14 (commit d8a72e1b — records the blocker that
-> kept oxlint held back on EVERY sweep for ten days and was invisible because it
-> spells itself exactly like a patch conflict: an `applyPatches` src cannot be
-> re-hashed by nix-update at all, since `outputHash = ""` forces flat hashing
-> over a directory, so its update row needs `--no-src`. Measured on the
-> 2026-08-08 sweep, where the patch applied cleanly and the run still died. Also
-> records how to regenerate the pnpm patch file when upstream repins the
-> dependency, that `patchHash` is a plain sha256 of that file, and that
-> `pnpm patch-commit` emits content-free stanzas needing removal). Prior:
-> 2026-08-10 (commit pending — adds the LOCATE-vs-PROBE split every
-> binary-probing extractor now owes its reader. `mkKiroExtract` hardcoded
+> **Last verified:** 2026-08-25 (commit pending — claude-code's settings
+> extraction is NO LONGER A GREP. `mkClaudeExtract` now unpacks the Bun
+> single-exec's module graph and calls the binary's own schema builder,
+> zod→JSON-Schema converter and `@internal` filter, so `effortLevels`,
+> `hookEvents` and `settingsBooleanKeys` are read out of upstream's own schema
+> and a whole `settings` block joins them. Two greps survive on purpose — the
+> launch pins and the model catalog are not in that schema. The boolean-key
+> QUORUM guard documented below is RETIRED, having gone to zero matches when
+> 2.1.245 code-split the bundle; the section is kept because the arms-race
+> lesson is the reason the extraction moved). Prior: 2026-08-24 (commit pending
+> — Codex's exact approval-policy guard now follows the pinned binary's version
+> boundary: pre-0.149.0 releases must retain `untrusted`, while 0.149.0 and
+> newer must expose only `never` and `on-request`. This admits upstream's
+> intentional removal without accepting either vocabulary indefinitely, so the
+> normal version-bump path can regenerate the sidecar). Prior: 2026-08-19
+> (commit pending — removes a retired generated-skill IFD check; Stacked
+> Workflows remains the cross-platform generated-skill constraint). Prior:
+> 2026-08-16 (commit pending — `devenv-test.yml` now attributes real repository
+> instruction projections to Git portability rather than the retired claim that
+> current Kiro skips steering symlinks; its IFD warm step and closure behavior
+> were rechecked unchanged). Prior: 2026-08-14 (commit pending — this fragment
+> now has its OWN registry category, `ifd`, scoped to the paths it actually
+> claims below: `.github/actions/warm-ifd/**` and the warm steps in ci.yml /
+> update.yml, on top of `overlays/**`. It previously rode under `overlays`,
+> whose two globs never matched any of them — so the same-commit duty asserted
+> at the end of this block was unreachable from every CI path it governs, and PR
+> #946 edited `warm-ifd/action.yml` without loading a word of it. A fragment
+> that claims authority over a path it does not scope is worse than silent,
+> because the claim reads as enforced. Splitting rather than widening `overlays`
+> keeps a ci.yml editor from also being handed unfree-guard and
+> cache-hit-parity). Prior: 2026-08-14 (commit pending — records that an anchor
+> can lose its TYPE information without losing its match. claude-code 2.1.232
+> moved its settings schema onto bare zod-mini factories, so
+> `ultracode:w.boolean()` became `ultracode:jt()` and the guard's whole type
+> assertion lived in the `.boolean` token it no longer has. Relaxing the regex
+> would have kept the match and silently demoted the guard to a presence check,
+> so the type is now re-derived by constructor quorum. The effort enum needed
+> only an optional `.enum` segment because it validates through its extracted
+> payload. Also records why that failure was diagnostically silent: the effort
+> enum was the one assignment without a trailing `|| true`, so errexit killed
+> the script before its own guard could speak — a guard's message is worthless
+> if the guard is unreachable). Prior: 2026-08-14 (commit d8a72e1b — records the
+> blocker that kept oxlint held back on EVERY sweep for ten days and was
+> invisible because it spells itself exactly like a patch conflict: an
+> `applyPatches` src cannot be re-hashed by nix-update at all, since
+> `outputHash = ""` forces flat hashing over a directory, so its update row
+> needs `--no-src`. Measured on the 2026-08-08 sweep, where the patch applied
+> cleanly and the run still died. Also records how to regenerate the pnpm patch
+> file when upstream repins the dependency, that `patchHash` is a plain sha256
+> of that file, and that `pnpm patch-commit` emits content-free stanzas needing
+> removal). Prior: 2026-08-10 (commit pending — adds the LOCATE-vs-PROBE split
+> every binary-probing extractor now owes its reader. `mkKiroExtract` hardcoded
 > `bin/.kiro-cli-chat-wrapped`; when nixpkgs f13ff45a dissolved that name,
 > twelve greps failed with "No such file or directory" and the build announced
 > "upstream changed the hook-trigger vocabulary". The target is now resolved by
@@ -227,13 +236,28 @@ minutes later inside `nix-update`.
 
 `mkClaudeExtract`, `mkCodexExtract`, and `mkKiroExtract` in `overlays/lib.nix`
 probe a packaged binary at BUILD time (`passthru.extracted`) and emit a JSON
-sidecar that is COMMITTED (`overlays/<pkg>-extracted.json`). `glab` is the
-fourth such package and the odd one out: its extract is a Go program compiled
-against upstream's own `internal/config.KeySchema` rather than a binary grep,
-and it lives inline in `overlays/dev-tools/glab.nix`. Modules
+sidecar that is COMMITTED (`overlays/<pkg>-extracted.json`). Modules
 `builtins.readFile` the committed file, never the derivation, so option surfaces
 derived from a binary cost no IFD. `checks/<pkg>-extracted.nix` then compares
 committed against freshly-built to catch a stale sidecar.
+
+**Two of the four are no longer greps, and that is the direction of travel.**
+`glab`'s extract is a Go program compiled against upstream's own
+`internal/config.KeySchema`, inline in `overlays/dev-tools/glab.nix`.
+`mkClaudeExtract` unpacks the Bun single-exec's module graph
+(`overlays/claude-code/bununpack.py`), imports the settings chunk out of it and
+calls the binary's OWN schema builder, its OWN zod→JSON-Schema converter and its
+OWN `@internal` filter (`overlays/claude-code/census.mjs`), so the sidecar's
+`settings` block is upstream's own description of itself rather than anything
+this repo recognizes by eye. Everything located by that path is located by
+CONTENT — never a chunk filename, a minified identifier or a byte offset, none
+of which the macOS and Linux builds of one version agree on. That is what lets
+ONE sidecar be committed for both platforms; the darwin `build` job is the only
+place that claim is ever tested by a build.
+
+Reach for a grep only for facts that are genuinely outside the artifact's own
+schema. Two survive in `mkClaudeExtract` for exactly that reason: the launch-pin
+keys are local-config keys, and the model catalog is a separate module.
 
 #### The sidecar SELF-HEAL loop, and how to debug it when it does not fire
 
@@ -264,10 +288,10 @@ spliced into `mkUpdateScript`'s `commitCandidate`, immediately after the sidecar
 `mv`. That is on the VERSION-BUMP path only. Consequences:
 
 - **An extract that changes with no version bump does NOT self-heal.** Editing
-  the grep anchors in `mkClaudeExtract`, or glab's Go dump, moves the extracted
-  output while the version stands still, so nothing regenerates and the drift
-  check is the only signal. That case IS the hand-regeneration case — the
-  command is in each check's failure message.
+  `mkClaudeExtract`'s remaining grep anchors or its census walker, or glab's Go
+  dump, moves the extracted output while the version stands still, so nothing
+  regenerates and the drift check is the only signal. That case IS the
+  hand-regeneration case — the command is in each check's failure message.
 - Do not confuse this with the OTHER self-heal in this repo.
   `fix_sidecar_hashes` (`dev/scripts/update-common.sh`) re-derives a
   `vendorHash` / `npmDepsHash` invalidated by a nixpkgs or toolchain bump at an
@@ -314,14 +338,17 @@ without a single red build.
 So every extractor asserts the SHAPE of what it captured, not merely that it
 captured something — a non-empty guard is worthless here, because a dead anchor
 still matched one token. Concretely: the effort enum requires exactly one
-distinct match; the model catalog requires an id from each of the opus / sonnet
-/ haiku families. Codex requires its recursive tree to retain the root and at
-least 20 commands, asserts the exact sandbox enum and the exact approval enum
-for the pinned version, and rejects empty feature/model results. The version
-qualification is narrow rather than an either-set allowance: releases before
-0.149.0 require `untrusted`, while 0.149.0 and newer reject it, matching
-upstream's explicit removal. When you add a key or category, add its shape
-assertion in the same commit.
+distinct match (now `census.mjs`'s `effortLevelEnumsSeen`, asserted in the
+extract body rather than by a grep's match count); the model catalog requires an
+id from each of the opus / sonnet / haiku families; the settings census requires
+at least 100 public keys, because a schema builder that runs and returns almost
+nothing is the same defect as a dead anchor. Codex requires its recursive tree
+to retain the root and at least 20 commands, asserts the exact sandbox enum and
+the exact approval enum for the pinned version, and rejects empty feature/model
+results. The version qualification is narrow rather than an either-set
+allowance: releases before 0.149.0 require `untrusted`, while 0.149.0 and newer
+reject it, matching upstream's explicit removal. When you add a key or category,
+add its shape assertion in the same commit.
 
 #### An anchor can lose its TYPE information without losing its match
 
@@ -354,19 +381,28 @@ two halves need DIFFERENT repairs, and only one of them is a regex edit:
   arriving by a different road: the anchor keeps matching, and what it PROVES
   quietly drops to nothing.
 
-The type is recovered by QUORUM instead, which needs no other key's name and no
-minified identifier: capture the constructor token per guarded key, require all
-of them to resolve to exactly one and the SAME one, then require that token to
-register at least 50 settings keys — measured 235 at 2.1.222 (`w.boolean`) and
-265 at 2.1.232 (`jt`), so the floor is a fifth of observed. A shared factory
-used by hundreds of settings keys IS the boolean one; an ad-hoc call that
-happens to follow one of these names is not.
+The type was recovered by QUORUM instead — capture the constructor token per
+guarded key, require all of them to resolve to exactly one and the SAME one,
+then require that token to register at least 50 settings keys. It held for
+thirteen releases and is now RETIRED: 2.1.245 code-split the bundle into
+`chunk-*.js` modules and the quorum grep went to zero, which is where the whole
+settings extraction moved off greps and onto the binary's own schema emitter.
 
-The generalizable rule: **when an anchor stops matching, ask what it was
-PROVING, not just what it was matching.** Restoring the match is the easy half
-and can look complete while the assertion underneath is gone. Prefer anchors
-that validate through an extracted payload; where the only evidence was a name
-upstream chose, re-derive it from a property of the corpus.
+That is the ending worth taking from this section. **Each repair bought roughly
+one release cycle, and the next reshape invalidated it.** Payload-validating
+anchors bought a bit more than name-validating ones, but the arms race only
+actually ends when the extraction stops recognizing upstream's code and starts
+CALLING it — at which point a refactor that would have broken an anchor is just
+a refactor, and a genuine schema change is the only thing that can move the
+sidecar.
+
+The generalizable rule, for the anchors that must remain: **when an anchor stops
+matching, ask what it was PROVING, not just what it was matching.** Restoring
+the match is the easy half and can look complete while the assertion underneath
+is gone. Prefer anchors that validate through an extracted payload; where the
+only evidence was a name upstream chose, re-derive it from a property of the
+corpus — and where the artifact can be made to describe itself, prefer that to
+any anchor at all.
 
 **A guard's diagnostic is only useful if the guard is REACHABLE.** The effort
 enum's assignment was the one in `mkClaudeExtract` without a trailing `|| true`,
@@ -374,10 +410,12 @@ so a zero-match pipeline exited 1, `pipefail` promoted it, and `errexit` killed
 the script at the assignment — the `matchCount` branch and its message were
 unreachable in precisely the case they exist for. That is why 2.1.232 surfaced
 as a bare `builder failed with exit code 1` with no `claude-extract:` line
-anywhere, and it is worth checking on every extractor: under
-`set -euETo pipefail` + `inherit_errexit`, `var=$(cmd | cmd)` is FATAL, not
-falsy. Pair each `|| true` with a single up-front readability check on the
-probed path, so "no match" stays the only thing it can hide.
+anywhere. That particular assignment is gone with the effort grep, but the
+hazard is a property of the shell, not of that anchor, so it applies to every
+`$(...)` capture in every extractor: under `set -euETo pipefail` +
+`inherit_errexit`, `var=$(cmd | cmd)` is FATAL, not falsy. Pair each `|| true`
+with a single up-front readability check on the probed path, so "no match" stays
+the only thing it can hide.
 
 #### Separate LOCATING the artifact from PROBING it — they are different bugs
 

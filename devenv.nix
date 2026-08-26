@@ -548,6 +548,10 @@ in {
         # `-package-lock.json` rows above already double it; the codex row did
         # not, and is corrected here.
         "^overlays/chatgpt-codex-extracted\\.json$"
+        # Same story: the claude sidecar is now the binary's own settings
+        # schema verbatim — ~160 upstream setting names and every enum value
+        # they carry, none of them authored here.
+        "^overlays/claude-code-extracted\\.json$"
         # Patch files are verbatim third-party code plus git blob hashes; no
         # token in one is authored here. They were never deliberately checked
         # — oxlint's napi-rs patch merely happened to carry an index hash

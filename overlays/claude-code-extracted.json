@@ -1,15 +1,5 @@
 {
-  "launchEffortPins": [
-    "unpinFable5LaunchEffort",
-    "unpinOpus47LaunchEffort",
-    "unpinOpus48LaunchEffort"
-  ],
   "effortLevels": ["low", "medium", "high", "xhigh"],
-  "settingsBooleanKeys": [
-    "enableWorkflows",
-    "ultracode",
-    "workflowKeywordTriggerEnabled"
-  ],
   "hookEvents": [
     "ConfigChange",
     "CwdChanged",
@@ -43,6 +33,11 @@
     "WorktreeCreate",
     "WorktreeRemove"
   ],
+  "launchEffortPins": [
+    "unpinFable5LaunchEffort",
+    "unpinOpus47LaunchEffort",
+    "unpinOpus48LaunchEffort"
+  ],
   "models": [
     "claude-3-5-sonnet",
     "claude-fable-5",
@@ -56,5 +51,3215 @@
     "claude-sonnet-4-5",
     "claude-sonnet-4-6",
     "claude-sonnet-5"
+  ],
+  "settings": {
+    "internalKeys": [
+      "awaySummaryEnabled",
+      "breakReminder",
+      "doneMeansMerged",
+      "modelProposedGoals",
+      "policyHelpers",
+      "quietHours",
+      "skipWorkflowUsageWarning",
+      "totalTokensReminder",
+      "totalTokensReminderAfterUserTurn",
+      "totalTokensReminderBudget"
+    ],
+    "paths": {
+      "$schema": {
+        "type": "string"
+      },
+      "additionalMarketplaces": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.autoUpdate": {
+        "type": "boolean"
+      },
+      "additionalMarketplaces.*.installLocation": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source": {
+        "type": "anyOf"
+      },
+      "additionalMarketplaces.*.source|0": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|0.headers": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|0.headers.*": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|0.headersHelper": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|0.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|0.url": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|1": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|1.path": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|1.ref": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|1.repo": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|1.skipLfs": {
+        "type": "boolean"
+      },
+      "additionalMarketplaces.*.source|1.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|1.sparsePaths": {
+        "type": "array"
+      },
+      "additionalMarketplaces.*.source|1.sparsePaths[]": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|2": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|2.path": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|2.ref": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|2.skipLfs": {
+        "type": "boolean"
+      },
+      "additionalMarketplaces.*.source|2.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|2.sparsePaths": {
+        "type": "array"
+      },
+      "additionalMarketplaces.*.source|2.sparsePaths[]": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|2.url": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|3": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|3.package": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|3.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|4": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|4.path": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|4.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|5": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|5.path": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|5.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|6": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|6.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|7": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|7.hostPattern": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|7.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|8": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|8.pathPattern": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|8.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|9.name": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.owner": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|9.owner.email": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.owner.name": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.owner.url": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins": {
+        "type": "array"
+      },
+      "additionalMarketplaces.*.source|9.plugins[]": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].description": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].headers": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].headers.*": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].headersHelper": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].name": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source": {
+        "type": "anyOf"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|0": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|1": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|1.package": {
+        "type": "anyOf"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|1.package|0": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|1.package|1": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|1.registry": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|1.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|1.version": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|2": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|2.ref": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|2.sha": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|2.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|2.url": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|3": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|3.ref": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|3.repo": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|3.sha": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|3.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|4": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|4.path": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|4.ref": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|4.sha": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|4.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|4.url": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|5": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|5.sha256": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|5.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|5.url": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|6": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|6.command": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|6.mode": {
+        "enum": ["copy", "link"],
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|6.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|6.timeout": {
+        "type": "integer"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|7": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|7.error": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].source|7.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].strict": {
+        "type": "boolean"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].version": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.source": {
+        "type": "string"
+      },
+      "advisorModel": {
+        "type": "string"
+      },
+      "agent": {
+        "type": "string"
+      },
+      "agentPushNotifEnabled": {
+        "type": "boolean"
+      },
+      "allowAllClaudeAiMcps": {
+        "type": "boolean"
+      },
+      "allowManagedHooksOnly": {
+        "type": "boolean"
+      },
+      "allowManagedMcpServersOnly": {
+        "type": "boolean"
+      },
+      "allowManagedPermissionRulesOnly": {
+        "type": "boolean"
+      },
+      "allowedChannelPlugins": {
+        "type": "array"
+      },
+      "allowedChannelPlugins[]": {
+        "type": "object"
+      },
+      "allowedChannelPlugins[].marketplace": {
+        "type": "string"
+      },
+      "allowedChannelPlugins[].plugin": {
+        "type": "string"
+      },
+      "allowedHttpHookUrls": {
+        "type": "array"
+      },
+      "allowedHttpHookUrls[]": {
+        "type": "string"
+      },
+      "allowedMarketplaces": {
+        "type": "array"
+      },
+      "allowedMarketplaces[]": {
+        "type": "anyOf"
+      },
+      "allowedMarketplaces[]|0": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|0.headers": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|0.headers.*": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|0.headersHelper": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|0.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|0.url": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|1": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|1.path": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|1.ref": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|1.repo": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|1.skipLfs": {
+        "type": "boolean"
+      },
+      "allowedMarketplaces[]|1.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|1.sparsePaths": {
+        "type": "array"
+      },
+      "allowedMarketplaces[]|1.sparsePaths[]": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|2": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|2.path": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|2.ref": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|2.skipLfs": {
+        "type": "boolean"
+      },
+      "allowedMarketplaces[]|2.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|2.sparsePaths": {
+        "type": "array"
+      },
+      "allowedMarketplaces[]|2.sparsePaths[]": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|2.url": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|3": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|3.package": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|3.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|4": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|4.path": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|4.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|5": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|5.path": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|5.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|6": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|6.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|7": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|7.hostPattern": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|7.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|8": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|8.pathPattern": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|8.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|9.name": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.owner": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|9.owner.email": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.owner.name": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.owner.url": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins": {
+        "type": "array"
+      },
+      "allowedMarketplaces[]|9.plugins[]": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|9.plugins[].description": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].headers": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|9.plugins[].headers.*": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].headersHelper": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].name": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source": {
+        "type": "anyOf"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|0": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|1": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|1.package": {
+        "type": "anyOf"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|1.package|0": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|1.package|1": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|1.registry": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|1.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|1.version": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|2": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|2.ref": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|2.sha": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|2.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|2.url": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|3": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|3.ref": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|3.repo": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|3.sha": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|3.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|4": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|4.path": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|4.ref": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|4.sha": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|4.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|4.url": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|5": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|5.sha256": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|5.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|5.url": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|6": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|6.command": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|6.mode": {
+        "enum": ["copy", "link"],
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|6.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|6.timeout": {
+        "type": "integer"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|7": {
+        "type": "object"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|7.error": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].source|7.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.plugins[].strict": {
+        "type": "boolean"
+      },
+      "allowedMarketplaces[]|9.plugins[].version": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|9.source": {
+        "type": "string"
+      },
+      "allowedMcpServers": {
+        "type": "array"
+      },
+      "allowedMcpServers[]": {
+        "type": "object"
+      },
+      "allowedMcpServers[].serverCommand": {
+        "type": "array"
+      },
+      "allowedMcpServers[].serverCommand[]": {
+        "type": "string"
+      },
+      "allowedMcpServers[].serverName": {
+        "type": "string"
+      },
+      "allowedMcpServers[].serverUrl": {
+        "type": "string"
+      },
+      "alwaysThinkingEnabled": {
+        "type": "boolean"
+      },
+      "apiKeyHelper": {
+        "type": "string"
+      },
+      "askUserQuestionTimeout": {
+        "enum": ["10m", "5m", "60s", "never"],
+        "type": "string"
+      },
+      "attribution": {
+        "type": "object"
+      },
+      "attribution.commit": {
+        "type": "string"
+      },
+      "attribution.pr": {
+        "type": "string"
+      },
+      "attribution.sessionUrl": {
+        "type": "boolean"
+      },
+      "autoCompactEnabled": {
+        "type": "boolean"
+      },
+      "autoCompactWindow": {
+        "type": "integer"
+      },
+      "autoContinueAtUsageLimit": {
+        "type": "boolean"
+      },
+      "autoDreamEnabled": {
+        "type": "boolean"
+      },
+      "autoMemoryDirectory": {
+        "type": "string"
+      },
+      "autoMemoryEnabled": {
+        "type": "boolean"
+      },
+      "autoMode": {
+        "type": "object"
+      },
+      "autoMode.allow": {
+        "type": "array"
+      },
+      "autoMode.allow[]": {
+        "type": "string"
+      },
+      "autoMode.classifyAllShell": {
+        "type": "boolean"
+      },
+      "autoMode.environment": {
+        "type": "array"
+      },
+      "autoMode.environment[]": {
+        "type": "string"
+      },
+      "autoMode.hard_deny": {
+        "type": "array"
+      },
+      "autoMode.hard_deny[]": {
+        "type": "string"
+      },
+      "autoMode.soft_deny": {
+        "type": "array"
+      },
+      "autoMode.soft_deny[]": {
+        "type": "string"
+      },
+      "autoScrollEnabled": {
+        "type": "boolean"
+      },
+      "autoUpdatesChannel": {
+        "enum": ["latest", "rc", "stable"],
+        "type": "string"
+      },
+      "autoUploadSessions": {
+        "type": "boolean"
+      },
+      "availableModels": {
+        "type": "array"
+      },
+      "availableModels[]": {
+        "type": "string"
+      },
+      "awaySummaryEnabled": {
+        "type": "boolean"
+      },
+      "awsAuthRefresh": {
+        "type": "string"
+      },
+      "awsCredentialExport": {
+        "type": "string"
+      },
+      "axScreenReader": {
+        "type": "boolean"
+      },
+      "blockedMarketplaces": {
+        "type": "array"
+      },
+      "blockedMarketplaces[]": {
+        "type": "anyOf"
+      },
+      "blockedMarketplaces[]|0": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|0.headers": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|0.headers.*": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|0.headersHelper": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|0.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|0.url": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|1": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|1.path": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|1.ref": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|1.repo": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|1.skipLfs": {
+        "type": "boolean"
+      },
+      "blockedMarketplaces[]|1.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|1.sparsePaths": {
+        "type": "array"
+      },
+      "blockedMarketplaces[]|1.sparsePaths[]": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|2": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|2.path": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|2.ref": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|2.skipLfs": {
+        "type": "boolean"
+      },
+      "blockedMarketplaces[]|2.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|2.sparsePaths": {
+        "type": "array"
+      },
+      "blockedMarketplaces[]|2.sparsePaths[]": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|2.url": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|3": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|3.package": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|3.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|4": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|4.path": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|4.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|5": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|5.path": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|5.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|6": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|6.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|7": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|7.hostPattern": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|7.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|8": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|8.pathPattern": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|8.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|9.name": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.owner": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|9.owner.email": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.owner.name": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.owner.url": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins": {
+        "type": "array"
+      },
+      "blockedMarketplaces[]|9.plugins[]": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|9.plugins[].description": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].headers": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|9.plugins[].headers.*": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].headersHelper": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].name": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source": {
+        "type": "anyOf"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|0": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|1": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|1.package": {
+        "type": "anyOf"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|1.package|0": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|1.package|1": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|1.registry": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|1.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|1.version": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|2": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|2.ref": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|2.sha": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|2.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|2.url": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|3": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|3.ref": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|3.repo": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|3.sha": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|3.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|4": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|4.path": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|4.ref": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|4.sha": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|4.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|4.url": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|5": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|5.sha256": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|5.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|5.url": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|6": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|6.command": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|6.mode": {
+        "enum": ["copy", "link"],
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|6.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|6.timeout": {
+        "type": "integer"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|7": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|7.error": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].source|7.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.plugins[].strict": {
+        "type": "boolean"
+      },
+      "blockedMarketplaces[]|9.plugins[].version": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|9.source": {
+        "type": "string"
+      },
+      "breakReminder": {
+        "type": "object"
+      },
+      "breakReminder.breakThresholdMinutes": {
+        "type": "integer"
+      },
+      "breakReminder.enabled": {
+        "type": "boolean"
+      },
+      "breakReminder.intervalMinutes": {
+        "type": "integer"
+      },
+      "breakReminder.message": {
+        "type": "string"
+      },
+      "channelsEnabled": {
+        "type": "boolean"
+      },
+      "claudeMd": {
+        "type": "string"
+      },
+      "claudeMdExcludes": {
+        "type": "array"
+      },
+      "claudeMdExcludes[]": {
+        "type": "string"
+      },
+      "cleanupPeriodDays": {
+        "type": "integer"
+      },
+      "companyAnnouncements": {
+        "type": "array"
+      },
+      "companyAnnouncements[]": {
+        "type": "string"
+      },
+      "crossSessionInbound": {
+        "enum": ["accept", "hold", "refuse"],
+        "type": "string"
+      },
+      "daemonColdStart": {
+        "enum": ["ask", "transient"],
+        "type": "string"
+      },
+      "defaultShell": {
+        "enum": ["bash", "powershell"],
+        "type": "string"
+      },
+      "defaultView": {
+        "enum": ["chat", "transcript"],
+        "type": "string"
+      },
+      "deniedMcpServers": {
+        "type": "array"
+      },
+      "deniedMcpServers[]": {
+        "type": "object"
+      },
+      "deniedMcpServers[].serverCommand": {
+        "type": "array"
+      },
+      "deniedMcpServers[].serverCommand[]": {
+        "type": "string"
+      },
+      "deniedMcpServers[].serverName": {
+        "type": "string"
+      },
+      "deniedMcpServers[].serverUrl": {
+        "type": "string"
+      },
+      "dialogExpiry": {
+        "enum": ["10m", "5m", "60s", "never"],
+        "type": "string"
+      },
+      "disableAgentView": {
+        "type": "boolean"
+      },
+      "disableAllHooks": {
+        "type": "boolean"
+      },
+      "disableArtifact": {
+        "type": "boolean"
+      },
+      "disableAutoMode": {
+        "enum": ["disable"],
+        "type": "string"
+      },
+      "disableBundledSkills": {
+        "type": "boolean"
+      },
+      "disableClaudeAiConnectors": {
+        "type": "boolean"
+      },
+      "disableCommandPluginSources": {
+        "type": "boolean"
+      },
+      "disableDeepLinkRegistration": {
+        "enum": ["disable"],
+        "type": "string"
+      },
+      "disableRemoteControl": {
+        "type": "boolean"
+      },
+      "disableSideloadFlags": {
+        "type": "boolean"
+      },
+      "disableSkillShellExecution": {
+        "type": "boolean"
+      },
+      "disableWorkflows": {
+        "type": "boolean"
+      },
+      "disabledMcpjsonServers": {
+        "type": "array"
+      },
+      "disabledMcpjsonServers[]": {
+        "type": "string"
+      },
+      "doneMeansMerged": {
+        "type": "boolean"
+      },
+      "editorMode": {
+        "enum": ["normal", "vim"],
+        "type": "string"
+      },
+      "effortLevel": {
+        "enum": ["high", "low", "medium", "xhigh"],
+        "type": "string"
+      },
+      "emojiCompletionEnabled": {
+        "type": "boolean"
+      },
+      "enableAllProjectMcpServers": {
+        "type": "boolean"
+      },
+      "enableArtifact": {
+        "type": "boolean"
+      },
+      "enableWorkflows": {
+        "type": "boolean"
+      },
+      "enabledMcpjsonServers": {
+        "type": "array"
+      },
+      "enabledMcpjsonServers[]": {
+        "type": "string"
+      },
+      "enabledPlugins": {
+        "type": "object"
+      },
+      "enabledPlugins.*": {
+        "type": "anyOf"
+      },
+      "enabledPlugins.*|0": {
+        "type": "array"
+      },
+      "enabledPlugins.*|0[]": {
+        "type": "string"
+      },
+      "enabledPlugins.*|1": {
+        "type": "boolean"
+      },
+      "enabledPlugins.*|2": {
+        "type": "never"
+      },
+      "enforceAvailableModels": {
+        "type": "boolean"
+      },
+      "env": {
+        "type": "object"
+      },
+      "env.*": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.autoUpdate": {
+        "type": "boolean"
+      },
+      "extraKnownMarketplaces.*.installLocation": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source": {
+        "type": "anyOf"
+      },
+      "extraKnownMarketplaces.*.source|0": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|0.headers": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|0.headers.*": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|0.headersHelper": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|0.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|0.url": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|1": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|1.path": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|1.ref": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|1.repo": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|1.skipLfs": {
+        "type": "boolean"
+      },
+      "extraKnownMarketplaces.*.source|1.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|1.sparsePaths": {
+        "type": "array"
+      },
+      "extraKnownMarketplaces.*.source|1.sparsePaths[]": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|2": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|2.path": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|2.ref": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|2.skipLfs": {
+        "type": "boolean"
+      },
+      "extraKnownMarketplaces.*.source|2.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|2.sparsePaths": {
+        "type": "array"
+      },
+      "extraKnownMarketplaces.*.source|2.sparsePaths[]": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|2.url": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|3": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|3.package": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|3.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|4": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|4.path": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|4.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|5": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|5.path": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|5.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|6": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|6.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|7": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|7.hostPattern": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|7.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|8": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|8.pathPattern": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|8.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|9.name": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.owner": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|9.owner.email": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.owner.name": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.owner.url": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins": {
+        "type": "array"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[]": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].description": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].headers": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].headers.*": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].headersHelper": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].name": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source": {
+        "type": "anyOf"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|0": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|1": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|1.package": {
+        "type": "anyOf"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|1.package|0": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|1.package|1": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|1.registry": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|1.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|1.version": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|2": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|2.ref": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|2.sha": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|2.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|2.url": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|3": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|3.ref": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|3.repo": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|3.sha": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|3.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|4": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|4.path": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|4.ref": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|4.sha": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|4.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|4.url": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|5": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|5.sha256": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|5.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|5.url": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|6": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|6.command": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|6.mode": {
+        "enum": ["copy", "link"],
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|6.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|6.timeout": {
+        "type": "integer"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|7": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|7.error": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].source|7.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].strict": {
+        "type": "boolean"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].version": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.source": {
+        "type": "string"
+      },
+      "fallbackModel": {
+        "type": "array"
+      },
+      "fallbackModel[]": {
+        "type": "string"
+      },
+      "fastMode": {
+        "type": "boolean"
+      },
+      "fastModePerSessionOptIn": {
+        "type": "boolean"
+      },
+      "feedbackDrafts": {
+        "enum": ["notify", "off", "quiet"],
+        "type": "string"
+      },
+      "feedbackSurveyRate": {
+        "type": "number"
+      },
+      "fileCheckpointingEnabled": {
+        "type": "boolean"
+      },
+      "fileSuggestion": {
+        "type": "object"
+      },
+      "fileSuggestion.command": {
+        "type": "string"
+      },
+      "fileSuggestion.type": {
+        "type": "string"
+      },
+      "footerLinksRegexes": {
+        "type": "any"
+      },
+      "forceLoginGatewayUrl": {
+        "type": "string"
+      },
+      "forceLoginMethod": {
+        "enum": ["claudeai", "console", "gateway"],
+        "type": "string"
+      },
+      "forceLoginOrgUUID": {
+        "type": "anyOf"
+      },
+      "forceLoginOrgUUID|0": {
+        "type": "string"
+      },
+      "forceLoginOrgUUID|1": {
+        "type": "array"
+      },
+      "forceLoginOrgUUID|1[]": {
+        "type": "string"
+      },
+      "forceRemoteSettingsRefresh": {
+        "type": "boolean"
+      },
+      "gcpAuthRefresh": {
+        "type": "string"
+      },
+      "hooks": {
+        "enum": [
+          "ConfigChange",
+          "CwdChanged",
+          "DirectoryAdded",
+          "Elicitation",
+          "ElicitationResult",
+          "FileChanged",
+          "InstructionsLoaded",
+          "MessageDisplay",
+          "Notification",
+          "PermissionDenied",
+          "PermissionRequest",
+          "PostCompact",
+          "PostToolBatch",
+          "PostToolUse",
+          "PostToolUseFailure",
+          "PreCompact",
+          "PreToolUse",
+          "SessionEnd",
+          "SessionStart",
+          "Setup",
+          "Stop",
+          "StopFailure",
+          "SubagentStart",
+          "SubagentStop",
+          "TaskCompleted",
+          "TaskCreated",
+          "TeammateIdle",
+          "UserPromptExpansion",
+          "UserPromptSubmit",
+          "WorktreeCreate",
+          "WorktreeRemove"
+        ],
+        "type": "object"
+      },
+      "hooks.*": {
+        "type": "array"
+      },
+      "hooks.*[]": {
+        "type": "object"
+      },
+      "hooks.*[].hooks": {
+        "type": "array"
+      },
+      "hooks.*[].hooks[]": {
+        "type": "anyOf"
+      },
+      "hooks.*[].hooks[]|0": {
+        "type": "object"
+      },
+      "hooks.*[].hooks[]|0.args": {
+        "type": "array"
+      },
+      "hooks.*[].hooks[]|0.args[]": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|0.async": {
+        "type": "boolean"
+      },
+      "hooks.*[].hooks[]|0.asyncRewake": {
+        "type": "boolean"
+      },
+      "hooks.*[].hooks[]|0.cloud": {
+        "enum": ["device", "skip"],
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|0.command": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|0.if": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|0.once": {
+        "type": "boolean"
+      },
+      "hooks.*[].hooks[]|0.rewakeMessage": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|0.rewakeSummary": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|0.shell": {
+        "enum": ["bash", "powershell"],
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|0.statusMessage": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|0.timeout": {
+        "type": "number"
+      },
+      "hooks.*[].hooks[]|0.type": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|1": {
+        "type": "object"
+      },
+      "hooks.*[].hooks[]|1.continueOnBlock": {
+        "type": "boolean"
+      },
+      "hooks.*[].hooks[]|1.if": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|1.model": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|1.once": {
+        "type": "boolean"
+      },
+      "hooks.*[].hooks[]|1.prompt": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|1.statusMessage": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|1.timeout": {
+        "type": "number"
+      },
+      "hooks.*[].hooks[]|1.type": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|2": {
+        "type": "object"
+      },
+      "hooks.*[].hooks[]|2.if": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|2.model": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|2.once": {
+        "type": "boolean"
+      },
+      "hooks.*[].hooks[]|2.prompt": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|2.statusMessage": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|2.timeout": {
+        "type": "number"
+      },
+      "hooks.*[].hooks[]|2.type": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|3": {
+        "type": "object"
+      },
+      "hooks.*[].hooks[]|3.allowedEnvVars": {
+        "type": "array"
+      },
+      "hooks.*[].hooks[]|3.allowedEnvVars[]": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|3.cloud": {
+        "enum": ["device", "skip"],
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|3.headers": {
+        "type": "object"
+      },
+      "hooks.*[].hooks[]|3.headers.*": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|3.if": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|3.once": {
+        "type": "boolean"
+      },
+      "hooks.*[].hooks[]|3.statusMessage": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|3.timeout": {
+        "type": "number"
+      },
+      "hooks.*[].hooks[]|3.type": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|3.url": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|4": {
+        "type": "object"
+      },
+      "hooks.*[].hooks[]|4.if": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|4.input": {
+        "type": "object"
+      },
+      "hooks.*[].hooks[]|4.input.*": {
+        "type": "any"
+      },
+      "hooks.*[].hooks[]|4.once": {
+        "type": "boolean"
+      },
+      "hooks.*[].hooks[]|4.server": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|4.statusMessage": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|4.timeout": {
+        "type": "number"
+      },
+      "hooks.*[].hooks[]|4.tool": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|4.type": {
+        "type": "string"
+      },
+      "hooks.*[].matcher": {
+        "type": "string"
+      },
+      "httpHookAllowedEnvVars": {
+        "type": "array"
+      },
+      "httpHookAllowedEnvVars[]": {
+        "type": "string"
+      },
+      "includeCoAuthoredBy": {
+        "type": "boolean"
+      },
+      "includeGitInstructions": {
+        "type": "boolean"
+      },
+      "inputNeededNotifEnabled": {
+        "type": "boolean"
+      },
+      "isolatePeerMachines": {
+        "type": "boolean"
+      },
+      "keybindingFlavor": {
+        "enum": ["classic", "readline"],
+        "type": "string"
+      },
+      "language": {
+        "type": "string"
+      },
+      "managedSourcesBehavior": {
+        "enum": ["first-wins", "merge"],
+        "type": "string"
+      },
+      "minimumVersion": {
+        "type": "string"
+      },
+      "model": {
+        "type": "string"
+      },
+      "modelOverrides": {
+        "type": "object"
+      },
+      "modelOverrides.*": {
+        "type": "string"
+      },
+      "modelPicker": {
+        "type": "object"
+      },
+      "modelPicker.options": {
+        "type": "array"
+      },
+      "modelPicker.options[]": {
+        "type": "object"
+      },
+      "modelPicker.options[].description": {
+        "type": "string"
+      },
+      "modelPicker.options[].label": {
+        "type": "string"
+      },
+      "modelPicker.options[].model": {
+        "type": "string"
+      },
+      "modelPicker.replaceBuiltInOptions": {
+        "type": "boolean"
+      },
+      "modelPricing": {
+        "type": "object"
+      },
+      "modelPricing.multiplier": {
+        "type": "number"
+      },
+      "modelPricing.overrides": {
+        "type": "object"
+      },
+      "modelPricing.overrides.*": {
+        "type": "object"
+      },
+      "modelPricing.overrides.*.cacheRead": {
+        "type": "number"
+      },
+      "modelPricing.overrides.*.cacheWrite": {
+        "type": "number"
+      },
+      "modelPricing.overrides.*.input": {
+        "type": "number"
+      },
+      "modelPricing.overrides.*.output": {
+        "type": "number"
+      },
+      "modelProposedGoals": {
+        "enum": ["alwaysAsk", "auto", "disabled"],
+        "type": "string"
+      },
+      "modelSettings": {
+        "type": "object"
+      },
+      "modelSettings.*": {
+        "type": "object"
+      },
+      "modelSettings.*.effortLevel": {
+        "enum": ["high", "low", "medium", "xhigh"],
+        "type": "string"
+      },
+      "otelHeadersHelper": {
+        "type": "string"
+      },
+      "outputStyle": {
+        "type": "string"
+      },
+      "parentSettingsBehavior": {
+        "enum": ["first-wins", "merge"],
+        "type": "string"
+      },
+      "permissions": {
+        "type": "object"
+      },
+      "permissions.additionalDirectories": {
+        "type": "array"
+      },
+      "permissions.additionalDirectories[]": {
+        "type": "string"
+      },
+      "permissions.allow": {
+        "type": "array"
+      },
+      "permissions.allow[]": {
+        "type": "string"
+      },
+      "permissions.ask": {
+        "type": "array"
+      },
+      "permissions.ask[]": {
+        "type": "string"
+      },
+      "permissions.defaultMode": {
+        "enum": [
+          "acceptEdits",
+          "auto",
+          "bypassPermissions",
+          "default",
+          "dontAsk",
+          "manual",
+          "plan"
+        ],
+        "type": "string"
+      },
+      "permissions.deny": {
+        "type": "array"
+      },
+      "permissions.deny[]": {
+        "type": "string"
+      },
+      "permissions.disableAutoMode": {
+        "enum": ["disable"],
+        "type": "string"
+      },
+      "permissions.disableBypassPermissionsMode": {
+        "enum": ["disable"],
+        "type": "string"
+      },
+      "plansDirectory": {
+        "type": "string"
+      },
+      "pluginConfigs": {
+        "type": "object"
+      },
+      "pluginConfigs.*": {
+        "type": "anyOf"
+      },
+      "pluginConfigs.*|0": {
+        "type": "object"
+      },
+      "pluginConfigs.*|0.mcpServers": {
+        "type": "object"
+      },
+      "pluginConfigs.*|0.mcpServers.*": {
+        "type": "object"
+      },
+      "pluginConfigs.*|0.mcpServers.*.*": {
+        "type": "anyOf"
+      },
+      "pluginConfigs.*|0.mcpServers.*.*|0": {
+        "type": "string"
+      },
+      "pluginConfigs.*|0.mcpServers.*.*|1": {
+        "type": "number"
+      },
+      "pluginConfigs.*|0.mcpServers.*.*|2": {
+        "type": "boolean"
+      },
+      "pluginConfigs.*|0.mcpServers.*.*|3": {
+        "type": "array"
+      },
+      "pluginConfigs.*|0.mcpServers.*.*|3[]": {
+        "type": "string"
+      },
+      "pluginConfigs.*|0.options": {
+        "type": "object"
+      },
+      "pluginConfigs.*|0.options.*": {
+        "type": "anyOf"
+      },
+      "pluginConfigs.*|0.options.*|0": {
+        "type": "string"
+      },
+      "pluginConfigs.*|0.options.*|1": {
+        "type": "number"
+      },
+      "pluginConfigs.*|0.options.*|2": {
+        "type": "boolean"
+      },
+      "pluginConfigs.*|0.options.*|3": {
+        "type": "array"
+      },
+      "pluginConfigs.*|0.options.*|3[]": {
+        "type": "string"
+      },
+      "pluginConfigs.*|1": {
+        "type": "never"
+      },
+      "pluginSuggestionMarketplaces": {
+        "type": "array"
+      },
+      "pluginSuggestionMarketplaces[]": {
+        "type": "string"
+      },
+      "pluginTrustMessage": {
+        "type": "string"
+      },
+      "policyHelper": {
+        "type": "object"
+      },
+      "policyHelper.path": {
+        "type": "string"
+      },
+      "policyHelper.refreshIntervalMs": {
+        "type": "anyOf"
+      },
+      "policyHelper.refreshIntervalMs|0": {
+        "type": "number"
+      },
+      "policyHelper.refreshIntervalMs|1": {
+        "type": "integer"
+      },
+      "policyHelper.timeoutMs": {
+        "type": "integer"
+      },
+      "policyHelpers": {
+        "type": "object"
+      },
+      "policyHelpers.default": {
+        "type": "object"
+      },
+      "policyHelpers.default.*": {
+        "type": "any"
+      },
+      "policyHelpers.linux": {
+        "type": "object"
+      },
+      "policyHelpers.linux.defaultSettings": {
+        "type": "object"
+      },
+      "policyHelpers.linux.defaultSettings.*": {
+        "type": "any"
+      },
+      "policyHelpers.linux.interpreter": {
+        "type": "string"
+      },
+      "policyHelpers.linux.outputBehavior": {
+        "enum": ["merge", "replace"],
+        "type": "string"
+      },
+      "policyHelpers.linux.path": {
+        "type": "string"
+      },
+      "policyHelpers.linux.refreshIntervalMs": {
+        "type": "anyOf"
+      },
+      "policyHelpers.linux.refreshIntervalMs|0": {
+        "type": "number"
+      },
+      "policyHelpers.linux.refreshIntervalMs|1": {
+        "type": "integer"
+      },
+      "policyHelpers.linux.script": {
+        "type": "string"
+      },
+      "policyHelpers.linux.timeoutMs": {
+        "type": "integer"
+      },
+      "policyHelpers.macos": {
+        "type": "object"
+      },
+      "policyHelpers.macos.defaultSettings": {
+        "type": "object"
+      },
+      "policyHelpers.macos.defaultSettings.*": {
+        "type": "any"
+      },
+      "policyHelpers.macos.interpreter": {
+        "type": "string"
+      },
+      "policyHelpers.macos.outputBehavior": {
+        "enum": ["merge", "replace"],
+        "type": "string"
+      },
+      "policyHelpers.macos.path": {
+        "type": "string"
+      },
+      "policyHelpers.macos.refreshIntervalMs": {
+        "type": "anyOf"
+      },
+      "policyHelpers.macos.refreshIntervalMs|0": {
+        "type": "number"
+      },
+      "policyHelpers.macos.refreshIntervalMs|1": {
+        "type": "integer"
+      },
+      "policyHelpers.macos.script": {
+        "type": "string"
+      },
+      "policyHelpers.macos.timeoutMs": {
+        "type": "integer"
+      },
+      "policyHelpers.windows": {
+        "type": "object"
+      },
+      "policyHelpers.windows.defaultSettings": {
+        "type": "object"
+      },
+      "policyHelpers.windows.defaultSettings.*": {
+        "type": "any"
+      },
+      "policyHelpers.windows.interpreter": {
+        "type": "string"
+      },
+      "policyHelpers.windows.outputBehavior": {
+        "enum": ["merge", "replace"],
+        "type": "string"
+      },
+      "policyHelpers.windows.path": {
+        "type": "string"
+      },
+      "policyHelpers.windows.refreshIntervalMs": {
+        "type": "anyOf"
+      },
+      "policyHelpers.windows.refreshIntervalMs|0": {
+        "type": "number"
+      },
+      "policyHelpers.windows.refreshIntervalMs|1": {
+        "type": "integer"
+      },
+      "policyHelpers.windows.script": {
+        "type": "string"
+      },
+      "policyHelpers.windows.timeoutMs": {
+        "type": "integer"
+      },
+      "policyHelpers.wsl": {
+        "type": "object"
+      },
+      "policyHelpers.wsl.defaultSettings": {
+        "type": "object"
+      },
+      "policyHelpers.wsl.defaultSettings.*": {
+        "type": "any"
+      },
+      "policyHelpers.wsl.interpreter": {
+        "type": "string"
+      },
+      "policyHelpers.wsl.outputBehavior": {
+        "enum": ["merge", "replace"],
+        "type": "string"
+      },
+      "policyHelpers.wsl.path": {
+        "type": "string"
+      },
+      "policyHelpers.wsl.refreshIntervalMs": {
+        "type": "anyOf"
+      },
+      "policyHelpers.wsl.refreshIntervalMs|0": {
+        "type": "number"
+      },
+      "policyHelpers.wsl.refreshIntervalMs|1": {
+        "type": "integer"
+      },
+      "policyHelpers.wsl.script": {
+        "type": "string"
+      },
+      "policyHelpers.wsl.timeoutMs": {
+        "type": "integer"
+      },
+      "prUrlTemplate": {
+        "type": "string"
+      },
+      "precomputeCompactionEnabled": {
+        "type": "boolean"
+      },
+      "preferredNotifChannel": {
+        "enum": [
+          "auto",
+          "ghostty",
+          "iterm2",
+          "iterm2_with_bell",
+          "kitty",
+          "notifications_disabled",
+          "terminal_bell"
+        ],
+        "type": "string"
+      },
+      "prefersReducedMotion": {
+        "type": "boolean"
+      },
+      "processWrapper": {
+        "type": "string"
+      },
+      "promptCacheTtl": {
+        "enum": ["1h", "5m"],
+        "type": "string"
+      },
+      "promptSuggestionEnabled": {
+        "type": "boolean"
+      },
+      "proxyAuthHelper": {
+        "type": "string"
+      },
+      "quietHours": {
+        "type": "object"
+      },
+      "quietHours.enabled": {
+        "type": "boolean"
+      },
+      "quietHours.end": {
+        "type": "string"
+      },
+      "quietHours.start": {
+        "type": "string"
+      },
+      "remote": {
+        "type": "object"
+      },
+      "remote.defaultEnvironmentId": {
+        "type": "string"
+      },
+      "remoteControlAtStartup": {
+        "type": "boolean"
+      },
+      "requiredMaximumVersion": {
+        "type": "string"
+      },
+      "requiredMinimumVersion": {
+        "type": "string"
+      },
+      "respectGitignore": {
+        "type": "boolean"
+      },
+      "respondToBashCommands": {
+        "type": "boolean"
+      },
+      "sandbox": {
+        "type": "object"
+      },
+      "sandbox.allowAppleEvents": {
+        "type": "boolean"
+      },
+      "sandbox.allowUnsandboxedCommands": {
+        "type": "boolean"
+      },
+      "sandbox.autoAllowBashIfSandboxed": {
+        "type": "boolean"
+      },
+      "sandbox.bwrapPath": {
+        "type": "string"
+      },
+      "sandbox.credentials": {
+        "type": "object"
+      },
+      "sandbox.credentials.allowPlaintextInject": {
+        "type": "boolean"
+      },
+      "sandbox.credentials.awsPairs": {
+        "type": "array"
+      },
+      "sandbox.credentials.awsPairs[]": {
+        "type": "object"
+      },
+      "sandbox.credentials.awsPairs[].accessKeyIdVar": {
+        "type": "string"
+      },
+      "sandbox.credentials.awsPairs[].secretAccessKeyVar": {
+        "type": "string"
+      },
+      "sandbox.credentials.awsPairs[].sessionTokenVar": {
+        "type": "string"
+      },
+      "sandbox.credentials.envVars": {
+        "type": "array"
+      },
+      "sandbox.credentials.envVars[]": {
+        "type": "object"
+      },
+      "sandbox.credentials.envVars[].decode": {
+        "enum": ["jwt"],
+        "type": "string"
+      },
+      "sandbox.credentials.envVars[].extract": {
+        "type": "string"
+      },
+      "sandbox.credentials.envVars[].injectHosts": {
+        "type": "array"
+      },
+      "sandbox.credentials.envVars[].injectHosts[]": {
+        "type": "string"
+      },
+      "sandbox.credentials.envVars[].maskClaims": {
+        "type": "array"
+      },
+      "sandbox.credentials.envVars[].maskClaims[]": {
+        "type": "string"
+      },
+      "sandbox.credentials.envVars[].mode": {
+        "enum": ["deny", "mask"],
+        "type": "string"
+      },
+      "sandbox.credentials.envVars[].name": {
+        "type": "string"
+      },
+      "sandbox.credentials.envVars[].onExtractNoMatch": {
+        "enum": ["deny", "error", "warn"],
+        "type": "string"
+      },
+      "sandbox.credentials.files": {
+        "type": "array"
+      },
+      "sandbox.credentials.files[]": {
+        "type": "object"
+      },
+      "sandbox.credentials.files[].decode": {
+        "enum": ["jwt"],
+        "type": "string"
+      },
+      "sandbox.credentials.files[].extract": {
+        "type": "string"
+      },
+      "sandbox.credentials.files[].injectHosts": {
+        "type": "array"
+      },
+      "sandbox.credentials.files[].injectHosts[]": {
+        "type": "string"
+      },
+      "sandbox.credentials.files[].maskClaims": {
+        "type": "array"
+      },
+      "sandbox.credentials.files[].maskClaims[]": {
+        "type": "string"
+      },
+      "sandbox.credentials.files[].maskDuplicates": {
+        "type": "boolean"
+      },
+      "sandbox.credentials.files[].mode": {
+        "enum": ["deny", "mask"],
+        "type": "string"
+      },
+      "sandbox.credentials.files[].onExtractNoMatch": {
+        "enum": ["deny", "error", "warn"],
+        "type": "string"
+      },
+      "sandbox.credentials.files[].path": {
+        "type": "string"
+      },
+      "sandbox.credentials.sigv4": {
+        "type": "object"
+      },
+      "sandbox.credentials.sigv4.presigned": {
+        "enum": ["deny", "passthrough"],
+        "type": "string"
+      },
+      "sandbox.credentials.sigv4.sigv4a": {
+        "enum": ["deny", "passthrough"],
+        "type": "string"
+      },
+      "sandbox.credentials.sigv4.streaming": {
+        "enum": ["deny", "passthrough"],
+        "type": "string"
+      },
+      "sandbox.enableWeakerNestedSandbox": {
+        "type": "boolean"
+      },
+      "sandbox.enableWeakerNetworkIsolation": {
+        "type": "boolean"
+      },
+      "sandbox.enabled": {
+        "type": "boolean"
+      },
+      "sandbox.excludedCommands": {
+        "type": "array"
+      },
+      "sandbox.excludedCommands[]": {
+        "type": "string"
+      },
+      "sandbox.failIfUnavailable": {
+        "type": "boolean"
+      },
+      "sandbox.filesystem": {
+        "type": "object"
+      },
+      "sandbox.filesystem.allowManagedReadPathsOnly": {
+        "type": "boolean"
+      },
+      "sandbox.filesystem.allowRead": {
+        "type": "array"
+      },
+      "sandbox.filesystem.allowRead[]": {
+        "type": "string"
+      },
+      "sandbox.filesystem.allowWrite": {
+        "type": "array"
+      },
+      "sandbox.filesystem.allowWrite[]": {
+        "type": "string"
+      },
+      "sandbox.filesystem.denyRead": {
+        "type": "array"
+      },
+      "sandbox.filesystem.denyRead[]": {
+        "type": "string"
+      },
+      "sandbox.filesystem.denyWrite": {
+        "type": "array"
+      },
+      "sandbox.filesystem.denyWrite[]": {
+        "type": "string"
+      },
+      "sandbox.filesystem.disabled": {
+        "type": "boolean"
+      },
+      "sandbox.ignoreViolations": {
+        "type": "object"
+      },
+      "sandbox.ignoreViolations.*": {
+        "type": "array"
+      },
+      "sandbox.ignoreViolations.*[]": {
+        "type": "string"
+      },
+      "sandbox.network": {
+        "type": "object"
+      },
+      "sandbox.network.allowAllUnixSockets": {
+        "type": "boolean"
+      },
+      "sandbox.network.allowLocalBinding": {
+        "type": "boolean"
+      },
+      "sandbox.network.allowMachLookup": {
+        "type": "array"
+      },
+      "sandbox.network.allowMachLookup[]": {
+        "type": "string"
+      },
+      "sandbox.network.allowManagedDomainsOnly": {
+        "type": "boolean"
+      },
+      "sandbox.network.allowUnixSockets": {
+        "type": "array"
+      },
+      "sandbox.network.allowUnixSockets[]": {
+        "type": "string"
+      },
+      "sandbox.network.allowedDomains": {
+        "type": "array"
+      },
+      "sandbox.network.allowedDomains[]": {
+        "type": "string"
+      },
+      "sandbox.network.deniedDomains": {
+        "type": "array"
+      },
+      "sandbox.network.deniedDomains[]": {
+        "type": "string"
+      },
+      "sandbox.network.httpProxyPort": {
+        "type": "number"
+      },
+      "sandbox.network.socksProxyPort": {
+        "type": "number"
+      },
+      "sandbox.network.strictAllowlist": {
+        "type": "boolean"
+      },
+      "sandbox.network.tlsTerminate": {
+        "type": "object"
+      },
+      "sandbox.network.tlsTerminate.caCertPath": {
+        "type": "string"
+      },
+      "sandbox.network.tlsTerminate.caKeyPath": {
+        "type": "string"
+      },
+      "sandbox.ripgrep": {
+        "type": "object"
+      },
+      "sandbox.ripgrep.args": {
+        "type": "array"
+      },
+      "sandbox.ripgrep.args[]": {
+        "type": "string"
+      },
+      "sandbox.ripgrep.command": {
+        "type": "string"
+      },
+      "sandbox.socatPath": {
+        "type": "string"
+      },
+      "showClearContextOnPlanAccept": {
+        "type": "boolean"
+      },
+      "showMessageTimestamps": {
+        "type": "boolean"
+      },
+      "showThinkingSummaries": {
+        "type": "boolean"
+      },
+      "showTurnDuration": {
+        "type": "boolean"
+      },
+      "skillListingBudgetFraction": {
+        "type": "number"
+      },
+      "skillListingMaxDescChars": {
+        "type": "integer"
+      },
+      "skillOverrides": {
+        "type": "object"
+      },
+      "skillOverrides.*": {
+        "enum": ["name-only", "off", "on", "user-invocable-only"],
+        "type": "string"
+      },
+      "skipAutoPermissionPrompt": {
+        "type": "boolean"
+      },
+      "skipDangerousModePermissionPrompt": {
+        "type": "boolean"
+      },
+      "skipWebFetchPreflight": {
+        "type": "boolean"
+      },
+      "skipWorkflowUsageWarning": {
+        "type": "boolean"
+      },
+      "spellcheck": {
+        "type": "object"
+      },
+      "spellcheck.checker": {
+        "type": "string"
+      },
+      "spellcheck.color": {
+        "type": "string"
+      },
+      "spellcheck.enabled": {
+        "type": "boolean"
+      },
+      "spellcheck.language": {
+        "type": "string"
+      },
+      "spinnerTipsEnabled": {
+        "type": "boolean"
+      },
+      "spinnerTipsOverride": {
+        "type": "object"
+      },
+      "spinnerTipsOverride.excludeDefault": {
+        "type": "boolean"
+      },
+      "spinnerTipsOverride.tips": {
+        "type": "array"
+      },
+      "spinnerTipsOverride.tips[]": {
+        "type": "string"
+      },
+      "spinnerVerbs": {
+        "type": "object"
+      },
+      "spinnerVerbs.mode": {
+        "enum": ["append", "replace"],
+        "type": "string"
+      },
+      "spinnerVerbs.verbs": {
+        "type": "array"
+      },
+      "spinnerVerbs.verbs[]": {
+        "type": "string"
+      },
+      "sshConfigs": {
+        "type": "array"
+      },
+      "sshConfigs[]": {
+        "type": "object"
+      },
+      "sshConfigs[].id": {
+        "type": "string"
+      },
+      "sshConfigs[].name": {
+        "type": "string"
+      },
+      "sshConfigs[].sshHost": {
+        "type": "string"
+      },
+      "sshConfigs[].sshIdentityFile": {
+        "type": "string"
+      },
+      "sshConfigs[].sshPort": {
+        "type": "integer"
+      },
+      "sshConfigs[].startDirectory": {
+        "type": "string"
+      },
+      "statusLine": {
+        "type": "object"
+      },
+      "statusLine.command": {
+        "type": "string"
+      },
+      "statusLine.hideVimModeIndicator": {
+        "type": "boolean"
+      },
+      "statusLine.padding": {
+        "type": "number"
+      },
+      "statusLine.refreshInterval": {
+        "type": "number"
+      },
+      "statusLine.type": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces": {
+        "type": "array"
+      },
+      "strictKnownMarketplaces[]": {
+        "type": "anyOf"
+      },
+      "strictKnownMarketplaces[]|0": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|0.headers": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|0.headers.*": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|0.headersHelper": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|0.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|0.url": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|1": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|1.path": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|1.ref": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|1.repo": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|1.skipLfs": {
+        "type": "boolean"
+      },
+      "strictKnownMarketplaces[]|1.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|1.sparsePaths": {
+        "type": "array"
+      },
+      "strictKnownMarketplaces[]|1.sparsePaths[]": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|2": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|2.path": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|2.ref": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|2.skipLfs": {
+        "type": "boolean"
+      },
+      "strictKnownMarketplaces[]|2.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|2.sparsePaths": {
+        "type": "array"
+      },
+      "strictKnownMarketplaces[]|2.sparsePaths[]": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|2.url": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|3": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|3.package": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|3.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|4": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|4.path": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|4.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|5": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|5.path": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|5.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|6": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|6.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|7": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|7.hostPattern": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|7.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|8": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|8.pathPattern": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|8.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|9.name": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.owner": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|9.owner.email": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.owner.name": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.owner.url": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins": {
+        "type": "array"
+      },
+      "strictKnownMarketplaces[]|9.plugins[]": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].description": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].headers": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].headers.*": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].headersHelper": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].name": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source": {
+        "type": "anyOf"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|0": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|1": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|1.package": {
+        "type": "anyOf"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|1.package|0": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|1.package|1": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|1.registry": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|1.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|1.version": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|2": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|2.ref": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|2.sha": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|2.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|2.url": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|3": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|3.ref": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|3.repo": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|3.sha": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|3.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|4": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|4.path": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|4.ref": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|4.sha": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|4.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|4.url": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|5": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|5.sha256": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|5.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|5.url": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|6": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|6.command": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|6.mode": {
+        "enum": ["copy", "link"],
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|6.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|6.timeout": {
+        "type": "integer"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|7": {
+        "type": "object"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|7.error": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].source|7.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].strict": {
+        "type": "boolean"
+      },
+      "strictKnownMarketplaces[]|9.plugins[].version": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|9.source": {
+        "type": "string"
+      },
+      "strictPluginOnlyCustomization": {
+        "type": "anyOf"
+      },
+      "strictPluginOnlyCustomization|0": {
+        "type": "boolean"
+      },
+      "strictPluginOnlyCustomization|1": {
+        "type": "array"
+      },
+      "strictPluginOnlyCustomization|1[]": {
+        "enum": ["agents", "hooks", "mcp", "skills"],
+        "type": "string"
+      },
+      "subagentPromptCacheTtl": {
+        "enum": ["1h", "5m"],
+        "type": "string"
+      },
+      "subagentStatusLine": {
+        "type": "object"
+      },
+      "subagentStatusLine.command": {
+        "type": "string"
+      },
+      "subagentStatusLine.type": {
+        "type": "string"
+      },
+      "switchModelsOnFlag": {
+        "type": "boolean"
+      },
+      "syncClaudeAiSkills": {
+        "type": "boolean"
+      },
+      "syntaxHighlightingDisabled": {
+        "type": "boolean"
+      },
+      "teammateMode": {
+        "enum": ["auto", "in-process", "iterm2", "tmux"],
+        "type": "string"
+      },
+      "terminalProgressBarEnabled": {
+        "type": "boolean"
+      },
+      "terminalTitleFromRename": {
+        "type": "boolean"
+      },
+      "theme": {
+        "type": "anyOf"
+      },
+      "theme|0": {
+        "enum": [
+          "auto",
+          "dark",
+          "dark-ansi",
+          "dark-daltonized",
+          "light",
+          "light-ansi",
+          "light-daltonized"
+        ],
+        "type": "string"
+      },
+      "theme|1": {
+        "type": "any"
+      },
+      "todoFeatureEnabled": {
+        "type": "boolean"
+      },
+      "totalTokensReminder": {
+        "enum": ["countdown", "fixed", "infinite", "off", "padded-countdown"],
+        "type": "string"
+      },
+      "totalTokensReminderAfterUserTurn": {
+        "type": "boolean"
+      },
+      "totalTokensReminderBudget": {
+        "type": "integer"
+      },
+      "tui": {
+        "enum": ["default", "fullscreen"],
+        "type": "string"
+      },
+      "ultracode": {
+        "type": "boolean"
+      },
+      "useAutoModeDuringPlan": {
+        "type": "boolean"
+      },
+      "verbose": {
+        "type": "boolean"
+      },
+      "viewMode": {
+        "enum": ["default", "focus", "verbose"],
+        "type": "string"
+      },
+      "vimInsertModeRemaps": {
+        "type": "object"
+      },
+      "vimInsertModeRemaps.*": {
+        "type": "any"
+      },
+      "voice": {
+        "type": "object"
+      },
+      "voice.autoSubmit": {
+        "type": "boolean"
+      },
+      "voice.enabled": {
+        "type": "boolean"
+      },
+      "voice.mode": {
+        "enum": ["hold", "tap"],
+        "type": "string"
+      },
+      "voiceEnabled": {
+        "type": "boolean"
+      },
+      "wheelScrollAccelerationEnabled": {
+        "type": "boolean"
+      },
+      "workflowKeywordTriggerEnabled": {
+        "type": "boolean"
+      },
+      "workflowSizeGuideline": {
+        "enum": ["large", "medium", "small", "unrestricted"],
+        "type": "string"
+      },
+      "worktree": {
+        "type": "object"
+      },
+      "worktree.baseRef": {
+        "enum": ["fresh", "head"],
+        "type": "string"
+      },
+      "worktree.bgIsolation": {
+        "enum": ["none", "worktree"],
+        "type": "string"
+      },
+      "worktree.location": {
+        "type": "string"
+      },
+      "worktree.sparsePaths": {
+        "type": "array"
+      },
+      "worktree.sparsePaths[]": {
+        "type": "string"
+      },
+      "worktree.symlinkDirectories": {
+        "type": "array"
+      },
+      "worktree.symlinkDirectories[]": {
+        "type": "string"
+      },
+      "wslInheritsWindowsSettings": {
+        "type": "boolean"
+      }
+    },
+    "publicKeys": [
+      "$schema",
+      "additionalMarketplaces",
+      "advisorModel",
+      "agent",
+      "agentPushNotifEnabled",
+      "allowAllClaudeAiMcps",
+      "allowManagedHooksOnly",
+      "allowManagedMcpServersOnly",
+      "allowManagedPermissionRulesOnly",
+      "allowedChannelPlugins",
+      "allowedHttpHookUrls",
+      "allowedMarketplaces",
+      "allowedMcpServers",
+      "alwaysThinkingEnabled",
+      "apiKeyHelper",
+      "askUserQuestionTimeout",
+      "attribution",
+      "autoCompactEnabled",
+      "autoCompactWindow",
+      "autoContinueAtUsageLimit",
+      "autoDreamEnabled",
+      "autoMemoryDirectory",
+      "autoMemoryEnabled",
+      "autoMode",
+      "autoScrollEnabled",
+      "autoUpdatesChannel",
+      "autoUploadSessions",
+      "availableModels",
+      "awsAuthRefresh",
+      "awsCredentialExport",
+      "axScreenReader",
+      "blockedMarketplaces",
+      "channelsEnabled",
+      "claudeMd",
+      "claudeMdExcludes",
+      "cleanupPeriodDays",
+      "companyAnnouncements",
+      "crossSessionInbound",
+      "daemonColdStart",
+      "defaultShell",
+      "defaultView",
+      "deniedMcpServers",
+      "dialogExpiry",
+      "disableAgentView",
+      "disableAllHooks",
+      "disableArtifact",
+      "disableAutoMode",
+      "disableBundledSkills",
+      "disableClaudeAiConnectors",
+      "disableCommandPluginSources",
+      "disableDeepLinkRegistration",
+      "disableRemoteControl",
+      "disableSideloadFlags",
+      "disableSkillShellExecution",
+      "disableWorkflows",
+      "disabledMcpjsonServers",
+      "editorMode",
+      "effortLevel",
+      "emojiCompletionEnabled",
+      "enableAllProjectMcpServers",
+      "enableArtifact",
+      "enableWorkflows",
+      "enabledMcpjsonServers",
+      "enabledPlugins",
+      "enforceAvailableModels",
+      "env",
+      "extraKnownMarketplaces",
+      "fallbackModel",
+      "fastMode",
+      "fastModePerSessionOptIn",
+      "feedbackDrafts",
+      "feedbackSurveyRate",
+      "fileCheckpointingEnabled",
+      "fileSuggestion",
+      "footerLinksRegexes",
+      "forceLoginGatewayUrl",
+      "forceLoginMethod",
+      "forceLoginOrgUUID",
+      "forceRemoteSettingsRefresh",
+      "gcpAuthRefresh",
+      "hooks",
+      "httpHookAllowedEnvVars",
+      "includeCoAuthoredBy",
+      "includeGitInstructions",
+      "inputNeededNotifEnabled",
+      "isolatePeerMachines",
+      "keybindingFlavor",
+      "language",
+      "managedSourcesBehavior",
+      "minimumVersion",
+      "model",
+      "modelOverrides",
+      "modelPicker",
+      "modelPricing",
+      "modelSettings",
+      "otelHeadersHelper",
+      "outputStyle",
+      "parentSettingsBehavior",
+      "permissions",
+      "plansDirectory",
+      "pluginConfigs",
+      "pluginSuggestionMarketplaces",
+      "pluginTrustMessage",
+      "policyHelper",
+      "prUrlTemplate",
+      "precomputeCompactionEnabled",
+      "preferredNotifChannel",
+      "prefersReducedMotion",
+      "processWrapper",
+      "promptCacheTtl",
+      "promptSuggestionEnabled",
+      "proxyAuthHelper",
+      "remote",
+      "remoteControlAtStartup",
+      "requiredMaximumVersion",
+      "requiredMinimumVersion",
+      "respectGitignore",
+      "respondToBashCommands",
+      "sandbox",
+      "showClearContextOnPlanAccept",
+      "showMessageTimestamps",
+      "showThinkingSummaries",
+      "showTurnDuration",
+      "skillListingBudgetFraction",
+      "skillListingMaxDescChars",
+      "skillOverrides",
+      "skipAutoPermissionPrompt",
+      "skipDangerousModePermissionPrompt",
+      "skipWebFetchPreflight",
+      "spellcheck",
+      "spinnerTipsEnabled",
+      "spinnerTipsOverride",
+      "spinnerVerbs",
+      "sshConfigs",
+      "statusLine",
+      "strictKnownMarketplaces",
+      "strictPluginOnlyCustomization",
+      "subagentPromptCacheTtl",
+      "subagentStatusLine",
+      "switchModelsOnFlag",
+      "syncClaudeAiSkills",
+      "syntaxHighlightingDisabled",
+      "teammateMode",
+      "terminalProgressBarEnabled",
+      "terminalTitleFromRename",
+      "theme",
+      "todoFeatureEnabled",
+      "tui",
+      "ultracode",
+      "useAutoModeDuringPlan",
+      "verbose",
+      "viewMode",
+      "vimInsertModeRemaps",
+      "voice",
+      "voiceEnabled",
+      "wheelScrollAccelerationEnabled",
+      "workflowKeywordTriggerEnabled",
+      "workflowSizeGuideline",
+      "worktree",
+      "wslInheritsWindowsSettings"
+    ]
+  },
+  "settingsBooleanKeys": [
+    "enableWorkflows",
+    "ultracode",
+    "workflowKeywordTriggerEnabled"
   ]
 }

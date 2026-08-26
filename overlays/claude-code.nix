@@ -70,16 +70,34 @@ in
         };
         pkgs = ourPkgs;
       };
-      # Pure grep of THIS package's own binary -> committed-sidecar shape.
+      # THIS package's own binary -> committed-sidecar shape: the settings
+      # schema comes from the binary's own emitter (unpacked module graph +
+      # census), the model catalog and launch pins from anchored greps.
       # IFD-safe: consumed ONLY by `nix build` (drift check + update
       # script), NEVER readFile'd at eval. See overlays.md § IFD Patterns.
-      extracted = ourPkgs.runCommandLocal "claude-code-extracted.json" {} (
-        vu.mkClaudeExtract {
-          bin = "${finalAttrs.finalPackage}/bin/claude";
-          pkgs = ourPkgs;
-          dest = "$out";
-        }
-      );
+      #
+      # `runCommand`, NOT `runCommandLocal`. runCommandLocal adds
+      # `allowSubstitutes = false`, which bars this output from ever being
+      # fetched from the binary cache — so every PR and every local `nix flake check`
+      # re-derives it, and because the input is `finalAttrs.finalPackage`
+      # that means realizing the ~390 MB claude binary locally to produce a
+      # ~90 KB JSON. With `runCommand` the sidecar substitutes and the binary
+      # is only fetched when it actually moved.
+      #
+      # `nodejs_24` and not `nodejs`: census.mjs drives `node:module`'s
+      # `registerHooks`, which needs Node >= 22.15. Pinned so a nixpkgs
+      # default bump cannot regress it.
+      extracted =
+        ourPkgs.runCommand "claude-code-extracted.json" {
+          nativeBuildInputs = [ourPkgs.jq ourPkgs.nodejs_24 ourPkgs.python3];
+        } (
+          vu.mkClaudeExtract {
+            assets = ./claude-code;
+            bin = "${finalAttrs.finalPackage}/bin/claude";
+            pkgs = ourPkgs;
+            dest = "$out";
+          }
+        );
     };
     meta = {
       mainProgram = "claude";
