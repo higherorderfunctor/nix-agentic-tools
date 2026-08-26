@@ -1907,3 +1907,117 @@ Found by the landing step running the milestone's validation loop literally as
 worded -- "a clean export to a temp dir" -- rather than as the repository's own
 scripts spell it. The two differ, and only one of them is green.
 <<<
+
+[MECHANISM]
+UID: MECH-UPSTREAM-GRAMMAR-CASES
+TITLE: Borrow upstream's grammar test cases as fixtures rather than extracting them
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The strictdoc package ships no .sgra files at all, and upstream's grammar test
+data is multiline Python strings or objects built straight from constructors,
+so there is no corpus sitting on disk to point a tool at. Building extraction
+machinery for it would cost more than it returns.
+
+Hand-convert a selection of their unit-test grammars into fixtures beside ours
+instead. The value is edge cases nobody here would think to write, not
+coverage: their tests were written against the parser by the people who wrote
+it. Source is their tests/unit tree, the grammar-element tests specifically.
+<<<
+RATIONALE: >>>
+Our fixtures test what we thought of. Theirs test what broke. The two sets
+overlap less than either author would guess, and the conversion is a morning's
+reading rather than a tool to maintain.
+<<<
+
+[MECHANISM]
+UID: MECH-GRAMMAR-ARBITRARY-GENERATOR
+TITLE: Derive a value generator from the grammar surface rather than writing one
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Property testing for the grammar surface, deliberately deferred past milestone
+one. The shape worth building is a generator derived from the same model the
+surface is, the way a schema library derives one, so the generator and the type
+cannot drift apart.
+
+Point it at the ROUND TRIP -- generate a valid grammar, emit it, parse it with
+strictdoc, compare -- not at whether the type accepts what the generator made.
+The second proves almost nothing, because the generator was written from the
+type.
+
+Viable: lib.mod exists and builtins.fromTOML parses hexadecimal, so a seeded
+generator in pure Nix is available if that is where it should live.
+<<<
+RATIONALE: >>>
+The byte-identity gate covers one grammar. A round trip over generated ones
+covers the shapes nobody wrote a fixture for, which is where an emitter that
+handles our five node types and nothing else would still look correct.
+<<<
+
+[MECHANISM]
+UID: MECH-MULTILINE-FIELD-RULES
+TITLE: Which fields may carry block values belongs to the writing tool
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A field's value is written either inline or as a block delimited by the
+triple-angle markers, and strictdoc decides which from three things at once:
+reserved single-line names are never blocks; otherwise position decides, with
+everything after TITLE or STATEMENT being a block; and non-string types are
+never blocks.
+
+That is document-writing behaviour, not grammar declaration, so it belongs to
+the milestone that makes a tool the only writer of sdoc files rather than to
+the grammar surface. Recorded here explicitly UNSETTLED at the operator's
+instruction, to be picked up there rather than rediscovered.
+<<<
+RATIONALE: >>>
+It surfaced during the grammar milestone and was nearly settled in the wrong
+place. A rule about how values are written cannot be enforced by a surface that
+only declares what fields exist.
+<<<
+
+[MECHANISM]
+UID: MECH-RESERVED-FIELD-DECLARATION-LIES
+TITLE: A reserved field name can be declared with a type that is then ignored
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Declaring UID as a choice type parses clean, and the document tokenizer then
+ignores the declared type entirely, matching UID with its own hardcoded
+expression. The declaration is a statement the grammar accepts and nothing
+honours. The same holds for MID.
+
+The operator's call was that this is not worth modelling in the Nix layer: the
+reserved names are ones we depend on rather than ones to ban, and the surface
+would be asserting a rule about a handful of names to catch a mistake nobody
+has made. Recorded so that it reads as a decision rather than an oversight, and
+so a later session does not spend the afternoon rediscovering it.
+<<<
+RATIONALE: >>>
+Five of this repository's ten field names are reserved, so the behaviour is not
+exotic. The reason to leave it alone is proportion, not ignorance of it.
+<<<
+
+[MECHANISM]
+UID: MECH-DIRTY-EDGE-ON-OPTION-CHANGE
+TITLE: A node whose inputs changed should go dirty rather than quietly stale
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The operator's, and it belongs with the behaviour model rather than the grammar
+surface. Once file relations are settled, a change to what a node depends on
+should mark that node DIRTY -- visibly needing reconciliation -- rather than
+leaving it silently stale, with a model filling the gap afterwards.
+
+The fingerprint machinery already does this for node-to-node contracts. What it
+does not cover is a relation pointing at a file, which today resolves to a path
+that nothing checks for existence, let alone for change. Scope this where the
+behaviour model lands.
+<<<
+RATIONALE: >>>
+This is the point of the dirty-edge idea in the operator's semantics rather
+than an incidental feature: staleness that announces itself is the difference
+between a graph that decays and one that asks to be repaired.
+<<<
