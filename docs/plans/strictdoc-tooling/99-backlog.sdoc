@@ -1202,6 +1202,16 @@ The guarantee therefore lives entirely in the consumer's option declaration.
 Either the emitter's entry point takes values already checked -- by declaring
 its input with the normalized type rather than accepting a bare attrset -- or a
 consumer can bypass the surface without noticing.
+
+CONFIRMED by measurement in the repair step of the same milestone, which is why
+this node is not filed a second time under another name. Rendering values.nix
+and fixtures/foreign.nix through `emit.grammar` directly -- not through
+lib/check.nix -- produces bytes IDENTICAL to both committed files, and with
+check.elements gutted to the identity function the model-equal, foreign-roundtrip
+and negative-fixtures checks all stayed GREEN. The emitter reads every key with
+an `or` default, so it is blind to every weakening the types catch. lib/check.nix
+now exists and checks/strictdoc-grammar-surface-live.nix gates it, but the bypass
+itself is still reachable: nothing stops a consumer calling emit.grammar.
 <<<
 RATIONALE: >>>
 Noted while proving the DSL cannot weaken the types. It cannot, but "cannot
@@ -1703,25 +1713,28 @@ rather than loudly wrong.
 
 [MECHANISM]
 UID: MECH-GRAMMAR-CHECKS-ARE-IN-FLAKE-CHECK
-TITLE: The four grammar gates are flake checks, so they are in the CI gate too
+TITLE: The five grammar gates are flake checks, so they are in the CI gate too
 DEPTH: sketch
 AUTHORED_BY: llm
 STATEMENT: >>>
-checks/strictdoc-grammar-{surface-current,model-equal,negative-fixtures,
-foreign-roundtrip}.nix are registered in flake.nix's `checks` output, because
-that output is what makes `nix build .#checks.<system>.<name>` addressable.
-There is no third state: `nix flake check` builds everything in `checks`, so
-these now run in CI as well, on both x86_64-linux and aarch64-darwin.
+checks/strictdoc-grammar-{surface-current,surface-live,model-equal,
+negative-fixtures,foreign-roundtrip}.nix are registered in flake.nix's `checks`
+output, because that output is what makes `nix build .#checks.<system>.<name>`
+addressable. There is no third state: `nix flake check` builds everything in
+`checks`, so these now run in CI as well, on both x86_64-linux and
+aarch64-darwin.
 
 The cost is a closure, not a runtime: `pkgs.ai.devTools.strictdoc` was already
 pulled in by strictdoc-fp-check and strictdoc-cycle-check, but
 `strictdoc-grammar-extract` (a python env carrying strictdoc's dependency
 closure plus ast-grep) is new to CI, and so is alejandra as a check input.
-Every one of the four builds in under a second once its inputs exist.
+Every one of the five builds in under a second once its inputs exist.
 
-If the milestone's "wires no CI" is to hold literally, the four move out of
+If the milestone's "wires no CI" is to hold literally, the five move out of
 `checks` into a separate flake output and lose the addressable name. That is
-the operator's call, not this session's.
+the operator's call, not this session's. It was four when this node was
+written; -surface-live.nix was added afterwards, in the same milestone, and the
+count is the kind of thing that goes stale silently.
 <<<
 RATIONALE: >>>
 Recorded because the milestone brief says CI wiring is not required, and this is
@@ -1847,4 +1860,50 @@ RATIONALE: >>>
 Written when item 3 was added and the choice had to be made once. Deferring is
 cheap for a new arm and a rewrite for the existing five, so the existing five
 were left alone and the divergence recorded instead of half-fixed.
+<<<
+
+[MECHANISM]
+UID: MECH-DEFAULT-EXPORT-IS-RED-ON-RST
+TITLE: The default export format fails on this corpus, so only --formats=json is ever green
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+`strictdoc export . --output-dir <dir>` with no `--formats` exits 1 on this
+corpus, and always has. StrictDoc renders every node field through docutils on
+the HTML path, and SLICE-SDOC-IN-SEMBLE's STATEMENT carries the bare glob
+`*.sdoc`, which RST reads as an inline emphasis start-string with no end-string:
+"problems when converting RST to HTML", raised from
+rst_to_html_fragment_writer.py:231. Measured against strictdoc 0.28.3 on
+2026-08-26. The prose predates this plan's tooling work.
+
+Every documented loop in this repository passes `--formats=json` -- the sdoc
+skill, docs/sdoc/README.md, the recipe in dev/scripts/fp-check.py and
+cycle-check.py, checks/strictdoc-fp-check.nix and checks/strictdoc-cycle-check.nix
+-- so the RST writer never runs and the breakage is invisible. Nothing checks
+this corpus against the renderer a person would read it in.
+
+The fix at authoring time is one character, and the rule is not the one it looks
+like. MEASURED by driving docutils directly: a glob inside a single backtick is
+CLEAN, and so is one inside double backticks, while a bare glob warns whether it
+appears once or twice on a line -- an asterisk that opens emphasis needs a
+closing asterisk that ENDS a word, and a glob never supplies one. So a pair of
+globs on one line is not a matched pair; it is two unterminated openings.
+
+Three bare sites exist today: 01-tooling.sdoc:195, 01-tooling.sdoc:208, and the
+unquoted `checks/strictdoc-grammar-*.nix` inside
+MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE, which this milestone wrote -- all three
+confirmed to warn, by a session with no way to notice. The export aborts at the
+first, so the count comes from probing docutils rather than from the export.
+
+Fix shape: either escape globs at authoring time and put an HTML export in the
+gate, or record that HTML is not a supported view of this corpus and make the
+JSON-only loop explicit rather than incidental. Pinning formats per
+MECH-SDOC-LEAN-FORMATS would settle it by removing the HTML writer -- note that
+node's separate false green, where `--formats=html` then exits 0 having written
+nothing.
+<<<
+RATIONALE: >>>
+Found by the landing step running the milestone's validation loop literally as
+worded -- "a clean export to a temp dir" -- rather than as the repository's own
+scripts spell it. The two differ, and only one of them is green.
 <<<
