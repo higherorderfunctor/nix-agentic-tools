@@ -5,17 +5,23 @@
 #
 # Plain data against the NORMALIZED element shape -- deliberately not written
 # through the DSL, so the fixture does not track the DSL's constructor names.
+# `title` sits INSIDE the chosen alternative because each of the four
+# GrammarElementField* rules carries its own TITLE production.
 {
   tag = "NOTE";
   prefix = "NOTE-";
   fields = [
     {
-      title = "UID";
-      kind.string = {required = true;};
+      string = {
+        title = "UID";
+        required = true;
+      };
     }
     {
-      title = "STATEMENT";
-      kind.string = {required = true;};
+      string = {
+        title = "STATEMENT";
+        required = true;
+      };
     }
   ];
   relations = [
