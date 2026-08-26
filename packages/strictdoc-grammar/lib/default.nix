@@ -1,21 +1,26 @@
-# Barrel for the four grammar-surface files. Wiring only — every layer's body
-# lives in its own file so the generated ones can be overwritten wholesale.
+# Barrel for the grammar-surface files. Wiring only — every layer's body lives
+# in its own file so the generated ones can be overwritten wholesale.
 #
 # The dependency direction is fixed and one-way:
 #
-#   faithful  <- nothing
+#   faithful   <- nothing
 #   normalized <- faithful      (rewrites specific nodes; deep-merge in spirit)
+#   check      <- normalized    (applies the types to a value)
 #   emit       <- normalized    (needs the encoders to render values)
 #   dsl        <- normalized    (sugar over the normalized types)
 #
-# SCAFFOLD: the four imports below are stubs/placeholders. The argument sets
-# passed here are the contract the implementing sessions write against — a stub
-# accepts them with `{...}:` and ignores them.
+# `render` is the whole chain in one call, and the only entry point a consumer
+# needs: DSL values in, `.sgra` source text out, with the type check in between.
+# Calling `emit.grammar` directly skips that check and is for testing the
+# renderer, not for producing a file.
 {lib}: let
   faithful = import ./faithful.nix {inherit lib;};
   normalized = import ./normalized.nix {inherit lib faithful;};
+  check = import ./check.nix {inherit lib normalized;};
   emit = import ./emit.nix {inherit lib normalized;};
   dsl = import ./dsl.nix {inherit lib normalized;};
 in {
-  inherit dsl emit faithful normalized;
+  inherit check dsl emit faithful normalized;
+
+  render = elements: emit.grammar (check.elements elements);
 }

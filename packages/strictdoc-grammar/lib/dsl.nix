@@ -9,19 +9,41 @@
 #     with choices on a string kind, two kinds at once, or an unknown kind are
 #     all rejected by the types.
 #
-# Nothing here asserts, defaults or coerces. Every constructor is a plain
-# attrset literal, so the only thing that can reject a value is the normalized
-# option surface it is checked against — which is exactly what "sugar only"
-# has to mean for it to be true rather than aspirational.
+# Nothing here asserts or coerces. Every constructor is a plain attrset literal,
+# so the only thing that can reject a value is the normalized option surface it
+# is checked against — which is exactly what "sugar only" has to mean for it to
+# be true rather than aspirational.
 #
 # WHY `normalized` IS ACCEPTED AND IGNORED. The barrel passes it (see
 # ./default.nix) and the eventual signature in that file names it, but the DSL
 # is value-level: types flow up from strictdoc into ./normalized.nix, values
 # flow down from here into ./emit.nix, and the two meet when a value is checked
-# against `normalized.types`. Reading the types here would either duplicate
-# that check or, at this stage, run against an empty placeholder surface and
-# reject everything. `...` keeps the barrel's call site honest without naming an
-# argument this file has no business reading.
+# against `normalized.types` (./check.nix does that). Reading the types here
+# would only duplicate that check. `...` keeps the barrel's call site honest
+# without naming an argument this file has no business reading.
+#
+# WHERE `title` LIVES, and why not where the brief's sketch drew it. The brief
+# sketches `fieldType = submodule { options = { title; kind = kindType; }; }` —
+# title hoisted out of the union. The GENERATED surface cannot hoist it: each of
+# the four `GrammarElementField*` rules carries its own `TITLE` production, so
+# the attrTag sits directly over the field and `title` is INSIDE the chosen
+# alternative. The generated surface is the one that is authoritative — it is
+# what a `.sgra` can express — so the DSL maps onto it:
+#
+#   field.str "UID"  =>  {string = {title = "UID"; required = false;};}
+#
+# That is a reshape, not a weakening: the value a constructor produces is
+# checked against exactly the same types either way. It also removes the `kind`
+# indirection, which existed only to carry the hoist.
+#
+# WHY `mk` SEEDS `required = false`. `REQUIRED` is mandatory on every field in
+# the grammar, so the surface's `required` option has no default and a value
+# omitting it does not type-check. Seeding it here is what makes "absence of
+# `field.required` is optional" a value the surface accepts rather than a claim
+# about a value it rejects — and `field.required` still overrides it. It is
+# seeded in `mk` rather than in the four named constructors so a kind reached
+# only through `mk` gets it too; every field kind the grammar has carries
+# `REQUIRED`.
 #
 # GENERIC CONSTRUCTORS. `field.mk` and `rel.mk` are the general forms the named
 # constructors specialize. They exist so that a field type or relation type
@@ -55,10 +77,10 @@
 #     tag = "EXAMPLE";
 #     prefix = "EX-";
 #     fields = [
-#       {title = "UID";    kind.string         = {required = true;};}
-#       {title = "LABELS"; kind.tag            = {};}
-#       {title = "STATUS"; kind.singleChoice   = {choices = ["Draft" "Active"];};}
-#       {title = "OWNERS"; kind.multipleChoice = {choices = ["ops" "docs"];};}
+#       {string         = {title = "UID";    required = true;};}
+#       {tag            = {title = "LABELS"; required = false;};}
+#       {singleChoice   = {title = "STATUS"; required = false; choices = ["Draft" "Active"];};}
+#       {multipleChoice = {title = "OWNERS"; required = false; choices = ["ops" "docs"];};}
 #     ];
 #     relations = [
 #       {parent = {role = "Refines";   reverseRole = "Refined_By";};}
@@ -70,8 +92,12 @@
   # Field constructors. `mk` is the general form the other four specialize.
   field = rec {
     mk = kindName: title: body: {
-      inherit title;
-      kind.${kindName} = body;
+      ${kindName} =
+        {
+          inherit title;
+          required = false;
+        }
+        // body;
     };
 
     str = title: mk "string" title {};
@@ -79,13 +105,12 @@
     one = title: choices: mk "singleChoice" title {inherit choices;};
     many = title: choices: mk "multipleChoice" title {inherit choices;};
 
-    # REQUIRED is a property of the field's TYPE body, not of the field, so it
-    # is set through the single tag `kind` carries. Written as a mapAttrs rather
-    # than by naming the tag so it works for any kind, including one `mk`
-    # reached that has no named constructor here.
+    # REQUIRED lives inside the chosen alternative, so this maps over the single
+    # tag the field carries rather than naming it — which makes it work for any
+    # kind, including one `mk` reached that has no named constructor here.
     #
     # There is deliberately no `optional`: absence is optional.
-    required = field: field // {kind = lib.mapAttrs (_: body: body // {required = true;}) field.kind;};
+    required = field: lib.mapAttrs (_: body: body // {required = true;}) field;
 
     raw = x: x;
   };

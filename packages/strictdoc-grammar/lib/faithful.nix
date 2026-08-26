@@ -441,7 +441,7 @@ in {
           attr = "options";
           kind = "assign";
           multiplicity = "one";
-          option = "options";
+          option = "choices";
           value = {
             kind = "rule";
             name = "ChoiceOption";
@@ -451,7 +451,7 @@ in {
           attr = "options";
           kind = "assign";
           multiplicity = "zeroOrMore";
-          option = "options";
+          option = "choices";
           value = {
             kind = "rule";
             name = "ChoiceOptionXs";
@@ -542,7 +542,7 @@ in {
           attr = "options";
           kind = "assign";
           multiplicity = "one";
-          option = "options";
+          option = "choices";
           value = {
             kind = "rule";
             name = "ChoiceOption";
@@ -552,7 +552,7 @@ in {
           attr = "options";
           kind = "assign";
           multiplicity = "zeroOrMore";
-          option = "options";
+          option = "choices";
           value = {
             kind = "rule";
             name = "ChoiceOptionXs";
@@ -1018,6 +1018,7 @@ in {
   types = rec {
     BooleanChoice = patternType {
       deny = [];
+      denyAtLineStart = [];
       ere = "(True|False)";
       literals = [
         "True"
@@ -1030,6 +1031,7 @@ in {
     };
     ChoiceOption = patternType {
       deny = [];
+      denyAtLineStart = [];
       ere = "([\"])[^,]+\"|[^,()\"]+";
       rewrites = [
         "backreference-to-literal"
@@ -1049,6 +1051,7 @@ in {
           description = "`IMPORT_FROM_FILE` of `DocumentGrammar`. Optional; a single value. Upstream textx attribute `import_from_file`.";
           type = t.nullOr (patternType {
             deny = [];
+            denyAtLineStart = [];
             ere = ".+\$";
             rewrites = [];
             source = ".+\$";
@@ -1065,7 +1068,8 @@ in {
       };
     };
     FieldName = patternType {
-      deny = [
+      deny = [];
+      denyAtLineStart = [
         "UID"
         "RELATIONS"
       ];
@@ -1073,7 +1077,7 @@ in {
       rewrites = [
         "bracket-escaped-hyphen"
         "hoist-negative-lookahead"
-        "strip-start-anchor"
+        "line-anchored-lookahead-is-positional"
       ];
       source = "(?!^UID)(?!^RELATIONS)[A-Z]+[A-Za-z0-9_\\-]*";
     };
@@ -1088,6 +1092,7 @@ in {
           description = "`IS_COMPOSITE` of `GrammarElement`. Optional; a single value. Upstream textx attribute `property_is_composite`.";
           type = t.nullOr (patternType {
             deny = [];
+            denyAtLineStart = [];
             ere = "(True|False)";
             rewrites = [];
             source = "(True|False)";
@@ -1098,6 +1103,7 @@ in {
           description = "`PREFIX` of `GrammarElement`. Optional; a single value. Upstream textx attribute `property_prefix`.";
           type = t.nullOr (patternType {
             deny = [];
+            denyAtLineStart = [];
             ere = ".*";
             rewrites = [];
             source = ".*";
@@ -1117,6 +1123,7 @@ in {
           description = "`VIEW_STYLE` of `GrammarElement`. Optional; a single value. Upstream textx attribute `property_view_style`.";
           type = t.nullOr (patternType {
             deny = [];
+            denyAtLineStart = [];
             ere = "(Plain|Simple|Inline|Narrative|Table|Zebra)";
             rewrites = [];
             source = "(Plain|Simple|Inline|Narrative|Table|Zebra)";
@@ -1144,14 +1151,14 @@ in {
     };
     GrammarElementFieldMultipleChoice = t.submodule {
       options = {
+        choices = mkOption {
+          description = "an unlabelled production of `GrammarElementFieldMultipleChoice`. Mandatory; a list. Upstream textx attribute `options`.";
+          type = t.nonEmptyListOf ChoiceOption;
+        };
         humanTitle = mkOption {
           default = null;
           description = "`HUMAN_TITLE` of `GrammarElementFieldMultipleChoice`. Optional; a single value. Upstream textx attribute `human_title`.";
           type = t.nullOr SingleLineString;
-        };
-        options = mkOption {
-          description = "an unlabelled production of `GrammarElementFieldMultipleChoice`. Mandatory; a list. Upstream textx attribute `options`.";
-          type = t.nonEmptyListOf ChoiceOption;
         };
         required = mkOption {
           description = "`REQUIRED` of `GrammarElementFieldMultipleChoice`. Mandatory; a single value. Upstream textx attribute `required`.";
@@ -1165,14 +1172,14 @@ in {
     };
     GrammarElementFieldSingleChoice = t.submodule {
       options = {
+        choices = mkOption {
+          description = "an unlabelled production of `GrammarElementFieldSingleChoice`. Mandatory; a list. Upstream textx attribute `options`.";
+          type = t.nonEmptyListOf ChoiceOption;
+        };
         humanTitle = mkOption {
           default = null;
           description = "`HUMAN_TITLE` of `GrammarElementFieldSingleChoice`. Optional; a single value. Upstream textx attribute `human_title`.";
           type = t.nullOr SingleLineString;
-        };
-        options = mkOption {
-          description = "an unlabelled production of `GrammarElementFieldSingleChoice`. Mandatory; a list. Upstream textx attribute `options`.";
-          type = t.nonEmptyListOf ChoiceOption;
         };
         required = mkOption {
           description = "`REQUIRED` of `GrammarElementFieldSingleChoice`. Mandatory; a single value. Upstream textx attribute `required`.";
@@ -1239,6 +1246,7 @@ in {
           description = "`REVERSE_ROLE` of `GrammarElementRelationChild`. Optional; a single value. Upstream textx attribute `reverse_relation_role`.";
           type = t.nullOr (patternType {
             deny = [];
+            denyAtLineStart = [];
             ere = ".+";
             rewrites = [];
             source = ".+";
@@ -1249,6 +1257,7 @@ in {
           description = "`ROLE` of `GrammarElementRelationChild`. Optional; a single value. Upstream textx attribute `relation_role`.";
           type = t.nullOr (patternType {
             deny = [];
+            denyAtLineStart = [];
             ere = ".+";
             rewrites = [];
             source = ".+";
@@ -1259,6 +1268,7 @@ in {
           description = "`TYPE` of `GrammarElementRelationChild`. Mandatory; a single value. Upstream textx attribute `relation_type`.";
           type = patternType {
             deny = [];
+            denyAtLineStart = [];
             ere = "Child";
             literals = [
               "Child"
@@ -1278,6 +1288,7 @@ in {
           description = "`ROLE` of `GrammarElementRelationFile`. Optional; a single value. Upstream textx attribute `relation_role`.";
           type = t.nullOr (patternType {
             deny = [];
+            denyAtLineStart = [];
             ere = ".+";
             rewrites = [];
             source = ".+";
@@ -1288,6 +1299,7 @@ in {
           description = "`TYPE` of `GrammarElementRelationFile`. Mandatory; a single value. Upstream textx attribute `relation_type`.";
           type = patternType {
             deny = [];
+            denyAtLineStart = [];
             ere = "File";
             literals = [
               "File"
@@ -1307,6 +1319,7 @@ in {
           description = "`REVERSE_ROLE` of `GrammarElementRelationParent`. Optional; a single value. Upstream textx attribute `reverse_relation_role`.";
           type = t.nullOr (patternType {
             deny = [];
+            denyAtLineStart = [];
             ere = ".+";
             rewrites = [];
             source = ".+";
@@ -1317,6 +1330,7 @@ in {
           description = "`ROLE` of `GrammarElementRelationParent`. Optional; a single value. Upstream textx attribute `relation_role`.";
           type = t.nullOr (patternType {
             deny = [];
+            denyAtLineStart = [];
             ere = ".+";
             rewrites = [];
             source = ".+";
@@ -1327,6 +1341,7 @@ in {
           description = "`TYPE` of `GrammarElementRelationParent`. Mandatory; a single value. Upstream textx attribute `relation_type`.";
           type = patternType {
             deny = [];
+            denyAtLineStart = [];
             ere = "Parent";
             literals = [
               "Parent"
@@ -1344,6 +1359,7 @@ in {
         "DOCUMENT"
         "GRAMMAR"
       ];
+      denyAtLineStart = [];
       denyRule = "ReservedKeyword";
       ere = "[A-Z]+(_[A-Z]+)*";
       rewrites = [
@@ -1353,6 +1369,7 @@ in {
     };
     ReservedKeyword = patternType {
       deny = [];
+      denyAtLineStart = [];
       ere = "(DOCUMENT|GRAMMAR)";
       literals = [
         "DOCUMENT"
@@ -1367,6 +1384,7 @@ in {
       deny = [
         ">>>\r?\n"
       ];
+      denyAtLineStart = [];
       ere = "[^[:space:]][^\r\n]*";
       rewrites = [
         "control-escape-to-literal"

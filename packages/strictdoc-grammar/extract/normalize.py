@@ -1,4 +1,4 @@
-# cspell:ignore attrpath attrset attrsets arpeggio sgra textx nullOr strmatching
+# cspell:ignore attrpath attrset attrsets arpeggio lookaheads sgra textx nullOr strmatching
 """Normalize the faithful Nix surface into better Nix types, plus encoders.
 
 Reads ``packages/strictdoc-grammar/lib/faithful.nix`` and writes
@@ -135,6 +135,28 @@ CONVERTERS: dict[str, dict[str, object]] = {
             "it here."
         ),
     },
+    "decodedOption": {
+        "kind": "pair",
+        "rewrite": "lib.types.strMatching, over the DECODED value",
+        "encoder": None,
+        "description": (
+            "A pattern whose faithful spelling is the TOKEN AS WRITTEN and "
+            "whose normalized value is what that token means. ChoiceOption is "
+            "the only one: `([\"])[^,]+\\1|[^,()\"]+` is a bare option OR a "
+            "quoted one, and quoting is not part of the option — it is what "
+            "buys a literal parenthesis past the unquoted branch. So the "
+            "normalized value is the option itself, and the encode half puts "
+            "the quotes back. That half is `emit.nix`'s `choiceOption`, "
+            "deliberately: `GrammarElementFieldSingleChoice."
+            "get_unprocessed_options` decides WHEN to quote, and it lives in "
+            "strictdoc's WRITER, not in the grammar this file is derived from. "
+            "The type here is narrower than faithful in one direction (no "
+            "embedded double quote, which would make the round trip "
+            "ambiguous) and wider in the other (an unquoted parenthesis is "
+            "fine, because the encoder quotes it) — which is what a converter "
+            "pair is."
+        ),
+    },
     "literalAlternation": {
         "kind": "pair",
         "rewrite": "lib.types.enum",
@@ -253,18 +275,25 @@ KNOWN_REWRITES = frozenset(
         "bracket-escaped-hyphen",
         "control-escape-to-literal",
         "hoist-negative-lookahead",
+        "line-anchored-lookahead-is-positional",
         "literal-to-pattern",
         "negative-lookahead-rule",
         "ordered-choice-to-alternation",
         "shorthand-class-to-posix",
-        "strip-start-anchor",
     }
 )
 
 # Keys a `patternType` argument may carry. `literals` and `denyRule` are
 # optional; the rest are mandatory.
-PATTERN_KEYS = frozenset({"deny", "denyRule", "ere", "literals", "rewrites", "source"})
-PATTERN_REQUIRED_KEYS = frozenset({"deny", "ere", "rewrites", "source"})
+#
+# `denyAtLineStart` carries the `^`-anchored lookaheads, which constrain WHERE a
+# rule may be entered rather than what its value may be, and are therefore
+# recorded and not enforced — see extract.py's module docstring. Nothing here
+# converts it: it is metadata about the pattern, not part of the type.
+PATTERN_KEYS = frozenset(
+    {"deny", "denyAtLineStart", "denyRule", "ere", "literals", "rewrites", "source"}
+)
+PATTERN_REQUIRED_KEYS = frozenset({"deny", "denyAtLineStart", "ere", "rewrites", "source"})
 
 # Patterns that stay regex checks, registered as (upstream source, our ERE) with
 # the reason. Keyed on BOTH dialects on purpose: upstream changing the regex and
@@ -277,10 +306,6 @@ PATTERN_REQUIRED_KEYS = frozenset({"deny", "ere", "rewrites", "source"})
 # grammar-derived vocabulary: no enum, knob or field list is typed here.
 PRESERVED_PATTERNS: dict[tuple[str, str], str] = {
     (
-        '(["])[^,]+\\1|[^,()"]+',
-        '(["])[^,]+"|[^,()"]+',
-    ): "ChoiceOption — an alternation whose branches are character classes, not literals",
-    (
         "(?!^UID)(?!^RELATIONS)[A-Z]+[A-Za-z0-9_\\-]*",
         "[A-Z]+[A-Za-z0-9_-]*",
     ): "FieldName — a character class with a quantifier, plus two denied prefixes",
@@ -292,6 +317,23 @@ PRESERVED_PATTERNS: dict[tuple[str, str], str] = {
         "(?!>>>\r?\n)\\S[^\\r\\n]*",
         "[^[:space:]][^\r\n]*",
     ): "SingleLineString — two character classes, plus a denied prefix",
+}
+
+# Patterns whose normalized type is the DECODED value rather than the token, as
+# (upstream source, our ERE) -> (replacement Nix source, reason). Same keying and
+# same hand-written discipline as PRESERVED_PATTERNS; consulted first, because
+# deciding what a token MEANS supersedes describing how it is spelled.
+DECODED_PATTERNS: dict[tuple[str, str], tuple[str, str]] = {
+    (
+        '(["])[^,]+\\1|[^,()"]+',
+        '(["])[^,]+"|[^,()"]+',
+    ): (
+        't.strMatching "[^,\\"]+"',
+        "ChoiceOption -- the decoded option, not the token. A comma is excluded "
+        "in both spellings because the separator is unconditionally ', '; a "
+        "double quote is excluded so the encoder's quoting round-trips; a "
+        "parenthesis is allowed here and quoted on the way out",
+    ),
 }
 
 # EREs that constrain nothing but emptiness, and what each becomes. `$` is an
@@ -469,6 +511,15 @@ def classify_pattern(path: str, arg) -> dict[str, object]:
             f"{path}: pattern carries rewrite(s) {strange} this module has never "
             f"seen, so nothing here has classified what they did to {source!r}"
         )
+
+    decoded = DECODED_PATTERNS.get((source, ere))
+    if decoded is not None:
+        replacement, reason = decoded
+        return {
+            "converter": "decodedOption",
+            "replacement": replacement,
+            "detail": reason,
+        }
 
     parsed = literal_alternation(ere)
 

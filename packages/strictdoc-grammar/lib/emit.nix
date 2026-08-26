@@ -92,34 +92,40 @@
   ## Field ####################################################################
 
   fieldTypeText = kindName: body: let
-    options = let
+    vocabulary = let
       cs = body.choices or (fail "field kind '${kindName}' has no `choices`");
     in
       if cs == []
       then fail "field kind '${kindName}' needs at least one choice"
       else enc.list (map enc.choiceOption cs);
 
-    # The four TYPE spellings, and there are no others. `options` is lazy, so
-    # the two that do not take a vocabulary never force it.
+    # The four TYPE spellings, and there are no others. `vocabulary` is lazy, so
+    # the two that do not take one never force it.
     spellings = {
       string = "String";
       tag = "Tag";
-      singleChoice = "SingleChoice(${options})";
-      multipleChoice = "MultipleChoice(${options})";
+      singleChoice = "SingleChoice(${vocabulary})";
+      multipleChoice = "MultipleChoice(${vocabulary})";
     };
   in
     spellings.${kindName} or (fail "unknown field kind '${kindName}'");
 
+  # A field is the attrTag itself: each of the four `GrammarElementField*` rules
+  # carries its own TITLE / HUMAN_TITLE / REQUIRED production, so `title` lives
+  # INSIDE the chosen alternative rather than beside it. Same shape as
+  # `relation` below, for the same reason.
+  fieldBodyOf = f: f.${lib.head (lib.attrNames f)};
+
   field = f: let
-    kindNames = lib.attrNames (f.kind or {});
+    kindNames = lib.attrNames f;
     kindName = lib.head kindNames;
-    body = f.kind.${kindName};
+    body = f.${kindName};
   in
     if lib.length kindNames != 1
-    then fail "field '${f.title or "<untitled>"}' must carry exactly one kind, got ${toString (lib.length kindNames)}"
+    then fail "a field must carry exactly one kind, got ${toString (lib.length kindNames)}"
     else
-      "  - TITLE: ${f.title}\n"
-      + optionalLine "    " "HUMAN_TITLE" (f.humanTitle or null)
+      "  - TITLE: ${body.title}\n"
+      + optionalLine "    " "HUMAN_TITLE" (body.humanTitle or null)
       + "    TYPE: ${fieldTypeText kindName body}\n"
       # REQUIRED is mandatory on every field, so it is emitted unconditionally
       # rather than skipped when false.
@@ -156,10 +162,16 @@
     prefix = e.prefix or null;
     viewStyle = e.viewStyle or null;
     fields = e.fields or [];
-    relations = e.relations or [];
+    # `relations` is `nullOr (nonEmptyListOf …)` on the surface and defaults to
+    # null, so a checked value spells "no relations" as null while a hand-written
+    # one may leave the key off or write `[]`. All three mean the same file.
+    relations =
+      if (e.relations or null) == null
+      then []
+      else e.relations;
 
     where = "element '${e.tag or "<untagged>"}'";
-    dupTitles = duplicates (map (f: f.title) fields);
+    dupTitles = duplicates (map (f: (fieldBodyOf f).title) fields);
     dupRelations = duplicates (map (r: let n = lib.head (lib.attrNames r); in relationKey n r.${n}) relations);
   in
     if fields == []
