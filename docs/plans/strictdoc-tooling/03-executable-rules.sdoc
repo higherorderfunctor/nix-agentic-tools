@@ -304,7 +304,7 @@ before generate:sdoc-grammar` regenerates the two surfaces, and `devenv tasks
 run check:sdoc-grammar` runs the acceptance list in one command. Both depend on
 interactive-only packages, so neither can run in CI.
 
-The acceptance list also exists as four flake checks, which do not.
+The acceptance list also exists as five flake checks, which do not.
 checks/strictdoc-grammar-surface-current.nix regenerates both surfaces and
 diffs; -model-equal.nix asserts the model strictdoc builds from the rendered
 grammar equals the one it builds from the committed file, plus an empty byte
@@ -315,6 +315,24 @@ table rather than restating it; -foreign-roundtrip.nix exports the emitted
 foreign grammar. Each carries a positive control, because every assertion in
 them is of the form "this failed" or "these matched", and each strictdoc export
 runs over a throwaway project with its own fresh output directory.
+
+The fifth, -surface-live.nix, gates acceptance item 3, and it was added because
+the other four did not. Rendering values.nix and the foreign fixture through
+emit.grammar directly -- bypassing the type check entirely -- produces bytes
+IDENTICAL to both committed files, MEASURED, so all four stayed green with
+lib/check.nix gutted to the identity function: the emitter reads named keys with
+`or` defaults and is blind to every weakening the types catch. The check is
+therefore a DIFFERENTIAL rather than a rejection count: each case must be
+rejected WITH the type check, and six of the nine must additionally be ACCEPTED
+by the emitter alone, which is the only thing that makes "rejected" evidence
+that the surface is live. check:sdoc-grammar defers to it rather than restating
+its table.
+
+A sixth, pre-existing check bounds this work from outside:
+-corpus.nix requires the patched tree-sitter grammar to parse every .sdoc/.sgra
+in the repository, and it went red the moment fixtures/foreign.sgra landed --
+correctly, on a real gap. Details and the measured cost of the obvious fix are
+in MECH-TREE-SITTER-CHOICE-OPTION-CANNOT-LEX-A-DOT.
 
 They reach strictdoc through nativeBuildInputs rather than the devShell, so
 `nix build .#checks.<system>.<name>` runs them with nothing installed. `nix

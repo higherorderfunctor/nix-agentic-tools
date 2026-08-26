@@ -51,12 +51,19 @@ in
     preBuild = "tree-sitter generate grammar/grammar.js";
 
     # Patches the grammar DEFINITION (grammar/grammar.js,
-    # grammar/rules/document_grammar.js), not the generated parser: makes the
-    # root rule accept a standalone [GRAMMAR] block with no [DOCUMENT] header
-    # (upstream's root rule required one, so a bare .sgra grammar file could
-    # never parse), and adds the REVERSE_ROLE relation field this repo's own
-    # grammar.sgra uses on every non-File Parent relation (upstream's
-    # grammar_relation_parent/child rules had no field for it at all).
+    # grammar/rules/document_grammar.js, grammar/rules/type_system.js), not the
+    # generated parser. Three gaps, each measured against a real file upstream
+    # could not parse:
+    #   - the root rule required a [DOCUMENT] header, so a bare .sgra grammar
+    #     file could never parse at all;
+    #   - grammar_relation_parent/child had no REVERSE_ROLE field, which this
+    #     repo's own grammar.sgra uses on every non-File Parent relation;
+    #   - choice_option was `[\w/-]+`, which rejects both the QUOTED option form
+    #     and any option containing a `.`. StrictDoc's own production is
+    #     `(["])[^,]+\1|[^,()"]+`, so a legal
+    #     `SingleChoice("MIT (Expat)", GPL-3.0-or-later, proprietary)` failed.
+    #     Found by checks/strictdoc-grammar-corpus.nix the moment
+    #     packages/strictdoc-grammar/fixtures/foreign.sgra entered the corpus.
     patches = [./tree-sitter-strictdoc.patch];
     patchFlags = ["-p1" "--fuzz=0"];
 

@@ -44,7 +44,7 @@ in [
     fields = [
       (required (str "UID"))
       (required (str "STATEMENT"))
-      (one "LICENCE" ["MIT (Expat)" "GPL-3.0-or-later" "proprietary"])
+      (one "LICENCE" ["MIT (Expat)" "GPL-3-only" "proprietary"])
       (str "NOTES")
     ];
     relations = [
