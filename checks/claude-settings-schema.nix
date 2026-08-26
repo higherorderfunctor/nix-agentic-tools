@@ -66,6 +66,132 @@
   # grammar regression, not a fact about upstream.
   expectedMixedWildcard = [];
 
+  # ── Composed-surface behavior ────────────────────────────────
+  # The rules above interrogate the REPORT. These run real values through the
+  # option surface a user actually gets — generated options and hand-authored
+  # ones merged — because the two can disagree and the report cannot see it.
+  #
+  # This exists because a dev harness that exercised the generator in ISOLATION
+  # reported a bad `tui` value as accepted. It was a harness artifact: it listed
+  # `tui` among the paths the generator stands down for, without supplying the
+  # hand declaration that was supposed to take over, so the value fell through
+  # to the freeform type. The real surface rejects it. A test that can pass for
+  # a reason unrelated to the thing it names is worse than no test, so the
+  # assertion lives here against the composed surface instead.
+  aiCommon = import ../lib/ai/ai-common.nix {inherit lib;};
+
+  evalSurface = def:
+    (lib.evalModules {
+      modules = [
+        {
+          options.nativeSettings = lib.mkOption {
+            type = lib.types.submodule {
+              freeformType = (pkgs.formats.json {}).type;
+              inherit (surface) options;
+            };
+            default = {};
+          };
+        }
+        {nativeSettings = def;}
+      ];
+    })
+    .config
+    .nativeSettings;
+
+  # `deepSeq` because the module system is lazy: a bad value buried in an
+  # unforced attribute would otherwise "pass" by never being looked at.
+  verdictOf = def: let
+    attempt = builtins.tryEval (builtins.deepSeq (evalSurface def) "accepted");
+  in
+    if attempt.success
+    then attempt.value
+    else "rejected";
+
+  renderedOf = def: builtins.toJSON (aiCommon.filterNulls (evalSurface def));
+
+  behaviorCases = [
+    {
+      name = "an unset config still renders nothing";
+      actual = renderedOf {};
+      expected = "{}";
+      remedy = ''
+        Every generated option defaults to null and `filterNulls` is what keeps
+        those out of settings.json. If this renders anything, the new surface
+        MATERIALIZES keys the user never set — a behavior change for every
+        consumer on upgrade, and the single thing this whole generator is not
+        allowed to do.
+      '';
+    }
+    {
+      name = "only what was set survives, nested";
+      actual = renderedOf {permissions.defaultMode = "manual";};
+      expected = ''{"permissions":{"defaultMode":"manual"}}'';
+      remedy = ''
+        Null siblings leaked into a nested record, or `filterNulls` stopped
+        recursing / stopped dropping emptied sub-attrsets.
+      '';
+    }
+    {
+      name = "a closed value set on a HAND-AUTHORED option still rejects";
+      actual = verdictOf {tui = "nonsense";};
+      expected = "rejected";
+      remedy = ''
+        `tui` is hand-authored, so the generator stands down for it. If this
+        accepts, the hand declaration lost its enum, or its `externalPaths`
+        entry stood the generator down without anything taking over — which is
+        precisely the harness bug described above, now in the real surface.
+      '';
+    }
+    {
+      name = "a closed value set on a GENERATED option rejects";
+      actual = verdictOf {permissions.defaultMode = "bogus";};
+      expected = "rejected";
+      remedy = ''
+        A generated enum degraded to a plain string. Check whether the node
+        gained a wildcard sibling (see `mixedWildcard`) or whether the enum
+        branch stopped firing for its type.
+      '';
+    }
+    {
+      name = "a declared scalar type rejects the wrong shape";
+      actual = verdictOf {cleanupPeriodDays = "thirty";};
+      expected = "rejected";
+      remedy = "A generated scalar lost its type and fell through to freeform.";
+    }
+    {
+      name = "an alias outside the enum literal is still accepted";
+      actual = verdictOf {permissions.defaultMode = "manual";};
+      expected = "accepted";
+      remedy = ''
+        `manual` is legal input that the binary rewrites, and it is NOT in the
+        enum literal — the census widens the set by resolving the wrapper. If
+        this rejects, that widening regressed and Nix now refuses a value the
+        product accepts.
+      '';
+    }
+    {
+      name = "an unrecognized key is still settable (catch-all stays open)";
+      actual = verdictOf {someKeyUpstreamHasNotShippedYet = true;};
+      expected = "accepted";
+      remedy = ''
+        The freeform catch-all is deliberate: a brand-new upstream setting must
+        be usable the day it ships, before this pin advances. Typos are caught
+        by the unrecognized-key assertions in mkClaude.nix, not by closing this.
+      '';
+    }
+  ];
+
+  behaviorFailures =
+    lib.filter (case: case.actual != case.expected) behaviorCases;
+
+  describeBehavior = case: ''
+    composed-surface case failed: ${case.name}
+
+      expected: ${case.expected}
+      actual:   ${case.actual}
+
+    ${case.remedy}'';
+
   renderList = xs:
     if xs == []
     then "    (none)"
@@ -163,7 +289,8 @@
 
   failures =
     map describeEmptiness emptinessFailures
-    ++ map describeSnapshot snapshotFailures;
+    ++ map describeSnapshot snapshotFailures
+    ++ map describeBehavior behaviorFailures;
 in {
   claude-settings-schema =
     if failures != []
@@ -176,6 +303,6 @@ in {
       ''
     else
       pkgs.runCommandLocal "claude-settings-schema-check" {} ''
-        echo "ok — ${toString (builtins.length (lib.attrNames surface.options))} nativeSettings options, no stale or shadowed exception-table rows" > $out
+        echo "ok — ${toString (builtins.length (lib.attrNames surface.options))} nativeSettings options, no stale or shadowed exception-table rows, ${toString (builtins.length behaviorCases)} composed-surface cases green" > $out
       '';
 }
