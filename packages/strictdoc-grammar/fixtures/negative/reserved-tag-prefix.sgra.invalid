@@ -1,0 +1,15 @@
+[GRAMMAR]
+ELEMENTS:
+- TAG: NOTE
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+- TAG: DOCUMENT_FROM_FILE
+  FIELDS:
+  - TITLE: TITLE
+    TYPE: String
+    REQUIRED: True
