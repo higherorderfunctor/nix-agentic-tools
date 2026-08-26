@@ -48,8 +48,24 @@ type that throws the moment anything is checked against it. Every pattern
 therefore carries BOTH spellings: ``source`` is upstream's, verbatim and
 authoritative, and ``ere`` is a mechanical dialect rewrite whose every step is
 named in ``rewrites``. The rewrites are exact, never widening: a leading
-``(?!^UID)`` becomes an explicit ``deny`` prefix rather than being dropped, and
-a construct no named rewrite claims is an ERROR, not a fallback to free text.
+``(?!DOCUMENT)`` becomes an explicit ``deny`` prefix rather than being dropped,
+and a construct no named rewrite claims is an ERROR, not a fallback to free
+text.
+
+**A ``^``-anchored lookahead is POSITIONAL, not a value constraint**, and it is
+recorded rather than enforced. arpeggio compiles every ``RegExMatch`` with
+``re.MULTILINE`` and applies it with ``regex.match(input, pos)``, so ``^`` holds
+only where ``pos`` is a line start. ``FieldName`` is
+``/(?!^UID)(?!^RELATIONS)[A-Z]+[A-Za-z0-9_\\-]*/`` and is always entered
+mid-line, immediately after the literal ``'  - TITLE: '`` — so a field titled
+``UID`` parses, which is exactly what this repository's own
+``docs/sdoc/grammar.sgra`` does. Hoisting those two into ``deny`` produced a
+type that rejected a string StrictDoc accepts. They now land in
+``denyAtLineStart``, under the named rewrite
+``line-anchored-lookahead-is-positional``: recognized and written down, but not
+a constraint the value alone can violate. ``RequirementType``'s
+``!ReservedKeyword`` is the other shape and stays a real ``deny`` — it is a
+lookahead over the value itself, with no anchor.
 """
 
 from __future__ import annotations
@@ -350,15 +366,23 @@ def compile_pattern(source: str, *, literals: list[str] | None = None) -> dict:
     if hoisted:
         rewrites.add("hoist-negative-lookahead")
     denials = []
+    positional = []
     for denial in raw_denials:
+        # A `^`-anchored lookahead constrains WHERE the rule may be entered, not
+        # what the value may be — see the module docstring. Recorded, not
+        # enforced: enforcing it rejects `UID` as a field title, which parses.
         if denial.startswith("^"):
-            denial = denial[1:]
-            rewrites.add("strip-start-anchor")
+            rewrites.add("line-anchored-lookahead-is-positional")
+            positional.append(
+                _rewrite_body(denial[1:], _capture_group_sources(denial[1:]), rewrites)
+            )
+            continue
         denials.append(_rewrite_body(denial, _capture_group_sources(denial), rewrites))
     record: dict[str, Any] = {
         "source": source,
         "ere": _rewrite_body(body, groups, rewrites),
         "deny": denials,
+        "denyAtLineStart": positional,
         "rewrites": sorted(rewrites),
     }
     if literals is not None:
@@ -372,6 +396,7 @@ def literal_pattern(text: str) -> dict:
         "source": text,
         "ere": "".join(("\\" + c) if c in _ERE_SPECIAL else c for c in text),
         "deny": [],
+        "denyAtLineStart": [],
         "rewrites": ["literal-to-pattern"],
         "literals": [text],
     }
@@ -392,6 +417,7 @@ def literal_set_pattern(texts: list[str]) -> dict:
         "source": "|".join(texts),
         "ere": "(" + "|".join(branches) + ")",
         "deny": [],
+        "denyAtLineStart": [],
         "rewrites": ["ordered-choice-to-alternation"],
         "literals": list(texts),
     }
@@ -404,6 +430,38 @@ def camel(name: str) -> str:
     """``IS_COMPOSITE`` / ``import_from_file`` -> ``isComposite`` / ``importFromFile``."""
     head, *tail = [part for part in name.split("_") if part]
     return head.lower() + "".join(part.capitalize() for part in tail)
+
+
+# Attribute names the Nix module system reserves at the top level of a module.
+# A submodule's CONFIG cannot carry one: `{title = "UID"; options = [...];}` is
+# read as an option DECLARATION, and every sibling key then errors out with
+# "Module has an unsupported attribute". So an option that would be named one of
+# these is renamed, and a collision with no rename is fatal rather than silently
+# producing a surface no value can satisfy.
+#
+# `options` is the only collision the `.sgra` grammar has: the choice vocabulary
+# of `SingleChoice(...)` / `MultipleChoice(...)` is textx attribute `options`,
+# labelled by a parenthesis rather than a key, so `camel` falls back to it.
+# `choices` is the replacement because that is what it is and what the consumer
+# DSL calls it.
+_RESERVED_MODULE_ATTRS = frozenset(
+    {"_file", "_module", "config", "freeformType", "imports", "key", "options"}
+)
+_OPTION_RENAMES = {"options": "choices"}
+
+
+def option_name(name: str) -> str:
+    """The Nix option name for one grammar key or textx attribute."""
+    out = camel(name)
+    if out not in _RESERVED_MODULE_ATTRS:
+        return out
+    renamed = _OPTION_RENAMES.get(out)
+    if renamed is None:
+        raise ExtractionError(
+            f"option name {out!r} is reserved by the Nix module system and has "
+            "no entry in _OPTION_RENAMES"
+        )
+    return renamed
 
 
 def lower_first(name: str) -> str:
@@ -675,7 +733,7 @@ def attributes_of(rule: dict) -> list[dict]:
     for attr in order:
         record = merged[attr]
         key = record["key"]
-        record["option"] = camel(key) if key else camel(attr)
+        record["option"] = option_name(key) if key else option_name(attr)
         attributes.append(record)
 
     names = [record["option"] for record in attributes]
@@ -850,7 +908,7 @@ def _production_data(rule: dict, attributes_by_attr: dict) -> Any:
                 entry["attr"] = item["attr"]
                 entry["multiplicity"] = item["multiplicity"]
                 record = attributes_by_attr.get(item["attr"])
-                entry["option"] = record["option"] if record else camel(item["attr"])
+                entry["option"] = record["option"] if record else option_name(item["attr"])
                 entry["value"] = dict(item["value"])
             elif item["kind"] == "choice":
                 entry["branches"] = [render(branch) for branch in item["branches"]]

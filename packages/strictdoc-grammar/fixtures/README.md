@@ -1,13 +1,27 @@
 # fixtures
 
-`foreign.sgra` is the positive fixture: a deliberately foreign grammar built to
-exercise the half of StrictDoc's surface this repository's own five node types
-never touch — a composite element, a `VIEW_STYLE`, a field `HUMAN_TITLE`, a
-`Child` relation, a `File` relation carrying a `ROLE`, a `Tag` field, a
-`MultipleChoice` field, an element declared with no `PREFIX`, and a quoted
-choice option containing parentheses. It parses and exports clean under
-strictdoc 0.28.3, so anything the surface emits for it must too; it backs
-acceptance item 7, and nothing in it is specific to this repository.
+`foreign.nix` is the DSL value set and `foreign.sgra` is what it renders to,
+byte for byte. Together they are the positive fixture: a deliberately foreign
+grammar exercising the half of StrictDoc's surface this repository's own five
+node types never touch — a composite element, a `VIEW_STYLE`, a field
+`HUMAN_TITLE`, a `Child` relation, a `File` relation carrying a `ROLE`, a
+role-less `Parent` relation, a `Tag` field, a `MultipleChoice` field, an element
+declared with no `PREFIX`, and a quoted choice option containing parentheses. It
+parses and exports clean under strictdoc 0.28.3, so anything the surface emits
+for it must too; it backs acceptance item 7, and nothing in it is specific to
+this repository.
+
+One thing `foreign.sgra` deliberately no longer carries. It was first written
+with `GPL-3.0-or-later` quoted as well, which is legal input — but strictdoc
+quotes an option **only** when it contains a parenthesis
+(`GrammarElementFieldSingleChoice.get_unprocessed_options`), so that spelling is
+one strictdoc's own writer never produces and the emitter therefore cannot
+reproduce. `extract/compare.py` was run across the two spellings and reported
+the models EQUAL — the redundant quotes vanish at parse, and `options` is
+`['MIT (Expat)', 'GPL-3.0-or-later', 'proprietary']` either way — so the file
+was normalized to the canonical form and the byte gate kept. That is the
+difference between the two gates, in one measurement: semantically identical,
+not byte-identical, and only one of the two spellings is canonical.
 
 `negative/` holds one file per case that must fail, named for what it proves,
 split by the layer that owns the rejection. The two `.nix` files are **ours, at

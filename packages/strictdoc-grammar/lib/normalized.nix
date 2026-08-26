@@ -50,7 +50,7 @@ in
     converters = {
       applied = {
         "types.BooleanChoice" = "boolean";
-        "types.ChoiceOption" = "regexPreserved";
+        "types.ChoiceOption" = "decodedOption";
         "types.ChoiceOptionXs" = "alias";
         "types.DocumentGrammar" = "submodule";
         "types.DocumentGrammar.options.elements.type" = "optionalGroup";
@@ -80,17 +80,17 @@ in
         "types.GrammarElementField.string.type" = "ruleReference";
         "types.GrammarElementField.tag.type" = "ruleReference";
         "types.GrammarElementFieldMultipleChoice" = "submodule";
+        "types.GrammarElementFieldMultipleChoice.options.choices.type" = "commaList";
+        "types.GrammarElementFieldMultipleChoice.options.choices.type.nonEmptyListOf" = "ruleReference";
         "types.GrammarElementFieldMultipleChoice.options.humanTitle.type" = "optionalGroup";
         "types.GrammarElementFieldMultipleChoice.options.humanTitle.type.nullOr" = "ruleReference";
-        "types.GrammarElementFieldMultipleChoice.options.options.type" = "commaList";
-        "types.GrammarElementFieldMultipleChoice.options.options.type.nonEmptyListOf" = "ruleReference";
         "types.GrammarElementFieldMultipleChoice.options.required.type" = "ruleReference";
         "types.GrammarElementFieldMultipleChoice.options.title.type" = "ruleReference";
         "types.GrammarElementFieldSingleChoice" = "submodule";
+        "types.GrammarElementFieldSingleChoice.options.choices.type" = "commaList";
+        "types.GrammarElementFieldSingleChoice.options.choices.type.nonEmptyListOf" = "ruleReference";
         "types.GrammarElementFieldSingleChoice.options.humanTitle.type" = "optionalGroup";
         "types.GrammarElementFieldSingleChoice.options.humanTitle.type.nullOr" = "ruleReference";
-        "types.GrammarElementFieldSingleChoice.options.options.type" = "commaList";
-        "types.GrammarElementFieldSingleChoice.options.options.type.nonEmptyListOf" = "ruleReference";
         "types.GrammarElementFieldSingleChoice.options.required.type" = "ruleReference";
         "types.GrammarElementFieldSingleChoice.options.title.type" = "ruleReference";
         "types.GrammarElementFieldString" = "submodule";
@@ -129,7 +129,7 @@ in
       };
       detail = {
         "types.BooleanChoice" = "'True|False' via namedChoice";
-        "types.ChoiceOption" = "ChoiceOption — an alternation whose branches are character classes, not literals";
+        "types.ChoiceOption" = "ChoiceOption -- the decoded option, not the token. A comma is excluded in both spellings because the separator is unconditionally ', '; a double quote is excluded so the encoder's quoting round-trips; a parenthesis is allowed here and quoted on the way out";
         "types.ChoiceOptionXs" = "ChoiceOption";
         "types.DocumentGrammar.options.elements.type" = "unset is null, not missing";
         "types.DocumentGrammar.options.elements.type.nullOr" = "`elements += …` in DocumentGrammar";
@@ -137,7 +137,7 @@ in
         "types.DocumentGrammar.options.importFromFile.type" = "unset is null, not missing";
         "types.DocumentGrammar.options.importFromFile.type.nullOr" = "'.+\$' constrains nothing but emptiness";
         "types.DocumentGrammarWrapper.options.grammar.type" = "DocumentGrammar";
-        "types.FieldName" = "FieldName — a character class with a quantifier, plus two denied prefixes; denied prefixes 'UID', 'RELATIONS'";
+        "types.FieldName" = "FieldName — a character class with a quantifier, plus two denied prefixes";
         "types.GrammarElement.options.fields.type" = "`fields += …` in GrammarElement";
         "types.GrammarElement.options.fields.type.nonEmptyListOf" = "GrammarElementField";
         "types.GrammarElement.options.isComposite.type" = "unset is null, not missing";
@@ -154,16 +154,16 @@ in
         "types.GrammarElementField.singleChoice.type" = "GrammarElementFieldSingleChoice";
         "types.GrammarElementField.string.type" = "GrammarElementFieldString";
         "types.GrammarElementField.tag.type" = "GrammarElementFieldTag";
+        "types.GrammarElementFieldMultipleChoice.options.choices.type" = "`choices = …` then `choices *= …` in GrammarElementFieldMultipleChoice; the separator rule's own text is suppressed out of the surface, so the ', ' join is the encoder's";
+        "types.GrammarElementFieldMultipleChoice.options.choices.type.nonEmptyListOf" = "ChoiceOption";
         "types.GrammarElementFieldMultipleChoice.options.humanTitle.type" = "unset is null, not missing";
         "types.GrammarElementFieldMultipleChoice.options.humanTitle.type.nullOr" = "SingleLineString";
-        "types.GrammarElementFieldMultipleChoice.options.options.type" = "`options = …` then `options *= …` in GrammarElementFieldMultipleChoice; the separator rule's own text is suppressed out of the surface, so the ', ' join is the encoder's";
-        "types.GrammarElementFieldMultipleChoice.options.options.type.nonEmptyListOf" = "ChoiceOption";
         "types.GrammarElementFieldMultipleChoice.options.required.type" = "BooleanChoice";
         "types.GrammarElementFieldMultipleChoice.options.title.type" = "FieldName";
+        "types.GrammarElementFieldSingleChoice.options.choices.type" = "`choices = …` then `choices *= …` in GrammarElementFieldSingleChoice; the separator rule's own text is suppressed out of the surface, so the ', ' join is the encoder's";
+        "types.GrammarElementFieldSingleChoice.options.choices.type.nonEmptyListOf" = "ChoiceOption";
         "types.GrammarElementFieldSingleChoice.options.humanTitle.type" = "unset is null, not missing";
         "types.GrammarElementFieldSingleChoice.options.humanTitle.type.nullOr" = "SingleLineString";
-        "types.GrammarElementFieldSingleChoice.options.options.type" = "`options = …` then `options *= …` in GrammarElementFieldSingleChoice; the separator rule's own text is suppressed out of the surface, so the ', ' join is the encoder's";
-        "types.GrammarElementFieldSingleChoice.options.options.type.nonEmptyListOf" = "ChoiceOption";
         "types.GrammarElementFieldSingleChoice.options.required.type" = "BooleanChoice";
         "types.GrammarElementFieldSingleChoice.options.title.type" = "FieldName";
         "types.GrammarElementFieldString.options.humanTitle.type" = "unset is null, not missing";
@@ -218,6 +218,12 @@ in
           encoder = "list";
           kind = "pair";
           rewrite = "unchanged (lib.types.nonEmptyListOf)";
+        };
+        decodedOption = {
+          description = "A pattern whose faithful spelling is the TOKEN AS WRITTEN and whose normalized value is what that token means. ChoiceOption is the only one: `([\"])[^,]+\\1|[^,()\"]+` is a bare option OR a quoted one, and quoting is not part of the option — it is what buys a literal parenthesis past the unquoted branch. So the normalized value is the option itself, and the encode half puts the quotes back. That half is `emit.nix`'s `choiceOption`, deliberately: `GrammarElementFieldSingleChoice.get_unprocessed_options` decides WHEN to quote, and it lives in strictdoc's WRITER, not in the grammar this file is derived from. The type here is narrower than faithful in one direction (no embedded double quote, which would make the round trip ambiguous) and wider in the other (an unquoted parenthesis is fine, because the encoder quotes it) — which is what a converter pair is.";
+          encoder = null;
+          kind = "pair";
+          rewrite = "lib.types.strMatching, over the DECODED value";
         };
         literalAlternation = {
           description = "An INLINE regex that is a single group of pure literal alternation, e.g. VIEW_STYLE's /(Plain|Simple|Inline|Narrative|Table|Zebra)/. Exact, not a widening: builtins.match anchors, so the pattern already accepted exactly this set.";
@@ -286,11 +292,12 @@ in
           attrTag = 2;
           boolean = 2;
           commaList = 2;
+          decodedOption = 1;
           literalAlternation = 1;
           namedChoice = 4;
           oneOrMore = 3;
           optionalGroup = 15;
-          regexPreserved = 4;
+          regexPreserved = 3;
           ruleReference = 26;
           submodule = 10;
           unconstrained = 7;
@@ -301,14 +308,7 @@ in
       };
     types = rec {
       BooleanChoice = t.bool;
-      ChoiceOption = patternType {
-        deny = [];
-        ere = "([\"])[^,]+\"|[^,()\"]+";
-        rewrites = [
-          "backreference-to-literal"
-        ];
-        source = "([\"])[^,]+\\1|[^,()\"]+";
-      };
+      ChoiceOption = t.strMatching "[^,\"]+";
       ChoiceOptionXs = ChoiceOption;
       DocumentGrammar = t.submodule {
         options = {
@@ -333,7 +333,8 @@ in
         };
       };
       FieldName = patternType {
-        deny = [
+        deny = [];
+        denyAtLineStart = [
           "UID"
           "RELATIONS"
         ];
@@ -341,7 +342,7 @@ in
         rewrites = [
           "bracket-escaped-hyphen"
           "hoist-negative-lookahead"
-          "strip-start-anchor"
+          "line-anchored-lookahead-is-positional"
         ];
         source = "(?!^UID)(?!^RELATIONS)[A-Z]+[A-Za-z0-9_\\-]*";
       };
@@ -397,14 +398,14 @@ in
       };
       GrammarElementFieldMultipleChoice = t.submodule {
         options = {
+          choices = mkOption {
+            description = "an unlabelled production of `GrammarElementFieldMultipleChoice`. Mandatory; a list. Upstream textx attribute `options`.";
+            type = t.nonEmptyListOf ChoiceOption;
+          };
           humanTitle = mkOption {
             default = null;
             description = "`HUMAN_TITLE` of `GrammarElementFieldMultipleChoice`. Optional; a single value. Upstream textx attribute `human_title`.";
             type = t.nullOr SingleLineString;
-          };
-          options = mkOption {
-            description = "an unlabelled production of `GrammarElementFieldMultipleChoice`. Mandatory; a list. Upstream textx attribute `options`.";
-            type = t.nonEmptyListOf ChoiceOption;
           };
           required = mkOption {
             description = "`REQUIRED` of `GrammarElementFieldMultipleChoice`. Mandatory; a single value. Upstream textx attribute `required`.";
@@ -418,14 +419,14 @@ in
       };
       GrammarElementFieldSingleChoice = t.submodule {
         options = {
+          choices = mkOption {
+            description = "an unlabelled production of `GrammarElementFieldSingleChoice`. Mandatory; a list. Upstream textx attribute `options`.";
+            type = t.nonEmptyListOf ChoiceOption;
+          };
           humanTitle = mkOption {
             default = null;
             description = "`HUMAN_TITLE` of `GrammarElementFieldSingleChoice`. Optional; a single value. Upstream textx attribute `human_title`.";
             type = t.nullOr SingleLineString;
-          };
-          options = mkOption {
-            description = "an unlabelled production of `GrammarElementFieldSingleChoice`. Mandatory; a list. Upstream textx attribute `options`.";
-            type = t.nonEmptyListOf ChoiceOption;
           };
           required = mkOption {
             description = "`REQUIRED` of `GrammarElementFieldSingleChoice`. Mandatory; a single value. Upstream textx attribute `required`.";
@@ -542,6 +543,7 @@ in
           "DOCUMENT"
           "GRAMMAR"
         ];
+        denyAtLineStart = [];
         denyRule = "ReservedKeyword";
         ere = "[A-Z]+(_[A-Z]+)*";
         rewrites = [
@@ -554,6 +556,7 @@ in
         deny = [
           ">>>\r?\n"
         ];
+        denyAtLineStart = [];
         ere = "[^[:space:]][^\r\n]*";
         rewrites = [
           "control-escape-to-literal"
