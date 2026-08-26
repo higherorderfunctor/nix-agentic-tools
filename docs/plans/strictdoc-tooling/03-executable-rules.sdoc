@@ -282,109 +282,29 @@ module system as an option DECLARATION, so every sibling key errors out. The
 extractor now renames reserved module-system attribute names, and a collision
 with no rename is fatal rather than silent.
 
-Not settled here, and left where it was: whether docs/sdoc/grammar.sgra becomes
-a generated file. values.nix renders it byte-identically today, but the
-generation task deliberately does not write it -- check:sdoc-grammar renders to
-a temporary file and diffs instead. Making a hand-maintained contract file
-generated is the operator's call.
+WHAT CLOSES THIS SLICE, ruled by the operator 2026-08-26. The slice is
+implemented but not accepted, and these three stand between:
 
-This slice still carries a Governed_By edge to DEC-FP-FIELDS-CONFIGURABLE and a
-matching PARENT_FP entry, from when contract fields were in scope here. They
-are not any more. That edge belongs on the milestone that delivers contract
-fields. Left in place because PARENT_FP is the operator's to change.
+  MECH-STRICTDOC-DEVENV-MODULE -- an ai.strictdoc module owning the wrapping and
+    the grammar generation, with enable, package and grammars.
+  MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY -- strip the wrapped environment out of
+    the overlay; the overlay converts, the module wraps.
+  MECH-STRICTDOC-UPSTREAM-FLAKE -- take strictdoc from upstream's own flake and
+    retire the step-zero overlay, accepting that it tracks main.
 
-The detailed evaluation-versus-build classification -- every item with its
-category, measured behaviour and source location -- is held in the operator's
-working area outside the repository.
+Settled at the same time and no longer open here: docs/sdoc/grammar.sgra IS
+generated, through that module, as this repository's convention rather than a
+constraint on consumers. Contract-bearing fields are semantic and their edge
+leaves this slice -- see MECH-CONTRACT-FIELDS-EDGE-TO-SEMANTIC-LAYER; the
+PARENT_FP entry moves with it and only the operator changes those. HTML
+rendering becomes a requirement of its own rather than a property of this
+slice, tracked as MECH-HTML-RENDER-MUST-PASS.
 
-Update the sdoc skill wherever the generated grammar changes its instructions.
-
-Generation is local only, as the milestone allowed: `devenv tasks run --mode
-before generate:sdoc-grammar` regenerates the two surfaces, and `devenv tasks
-run check:sdoc-grammar` runs the acceptance list in one command. Both depend on
-interactive-only packages, so neither can run in CI.
-
-The acceptance list also exists as five flake checks, which do not.
-checks/strictdoc-grammar-surface-current.nix regenerates both surfaces and
-diffs; -model-equal.nix asserts the model strictdoc builds from the rendered
-grammar equals the one it builds from the committed file, plus an empty byte
-diff; -negative-fixtures.nix asserts all eight negatives fail, each AT THE LAYER
-fixtures/README.md names -- two at Nix evaluation, three at the textx parse,
-three at SDocValidator during the export -- reading the expectation out of that
-table rather than restating it; -foreign-roundtrip.nix exports the emitted
-foreign grammar. Each carries a positive control, because every assertion in
-them is of the form "this failed" or "these matched", and each strictdoc export
-runs over a throwaway project with its own fresh output directory.
-
-The fifth, -surface-live.nix, gates acceptance item 3, and it was added because
-the other four did not. Rendering values.nix and the foreign fixture through
-emit.grammar directly -- bypassing the type check entirely -- produces bytes
-IDENTICAL to both committed files, MEASURED, so all four stayed green with
-lib/check.nix gutted to the identity function: the emitter reads named keys with
-`or` defaults and is blind to every weakening the types catch. The check is
-therefore a DIFFERENTIAL rather than a rejection count: each case must be
-rejected WITH the type check, and six of the nine must additionally be ACCEPTED
-by the emitter alone, which is the only thing that makes "rejected" evidence
-that the surface is live. check:sdoc-grammar defers to it rather than restating
-its table.
-
-A sixth, pre-existing check bounds this work from outside:
--corpus.nix requires the patched tree-sitter grammar to parse every .sdoc/.sgra
-in the repository, and it went red the moment fixtures/foreign.sgra landed --
-correctly, on a real gap. Details and the measured cost of the obvious fix are
-in MECH-TREE-SITTER-CHOICE-OPTION-CANNOT-LEX-A-DOT.
-
-They reach strictdoc through nativeBuildInputs rather than the devShell, so
-`nix build .#checks.<system>.<name>` runs them with nothing installed. `nix
-flake check` builds everything in checks, so as a consequence they are in the CI
-gate; whether that is wanted is the operator's call and is logged as
-MECH-GRAMMAR-CHECKS-ARE-IN-FLAKE-CHECK.
-
-Landed 2026-08-26. DEPTH is implemented rather than verified: the chain runs end
-to end and every acceptance item has a gate that fails when its subject is
-broken, but no independent session has re-derived any of it.
-
-What runs, and what each of the seven acceptance items is gated by. The extractor
-produces the faithful surface with no hand-typed enum and the normalizer produces
-the normalized surface plus encoders, both regenerated and diffed by
--surface-current (1, 2). The DSL cannot weaken the types, gated by -surface-live
-as a differential -- rejected WITH the type check, and six of the nine cases
-additionally ACCEPTED by the emitter alone (3). The emitted grammar builds a model
-equal to the one strictdoc builds from the committed docs/sdoc/grammar.sgra, and
-the bytes are identical, gated by -model-equal (4, 5) -- no normalization commit
-was needed and grammar.sgra was never touched. Eight negative fixtures fail, each
-at the layer fixtures/README.md names, gated by -negative-fixtures (6). The
-foreign grammar -- composite nodes, view styles, human titles, child relations,
-Tag, MultipleChoice, a no-prefix element -- round-trips and exports, gated by
--foreign-roundtrip (7).
-
-Nothing in the milestone is red. Two things outside it are worth stating.
-strictdoc-grammar-corpus went red when fixtures/foreign.sgra landed, on a real
-gap in the patched tree-sitter grammar rather than on the fixture, and is green
-again -- see MECH-TREE-SITTER-CHOICE-OPTION-CANNOT-LEX-A-DOT for what was
-widened and what the fixture gave up to get there. Separately, a DEFAULT-format
-`strictdoc export` of this corpus exits 1 and predates this work: the HTML path
-renders through docutils and a bare `*.sdoc` glob in one node's prose is an
-unterminated RST emphasis. Every documented loop here passes --formats=json, so
-that path is never exercised; logged as MECH-DEFAULT-EXPORT-IS-RED-ON-RST.
-
-Open, and the operator's to decide rather than a session's:
-
-- whether docs/sdoc/grammar.sgra becomes a generated file, now that it renders
-  byte-identically (MECH-GRAMMAR-SGRA-NOT-GENERATED);
-- whether the five gates stay flake checks, which puts them in CI against this
-  milestone's "wires no CI" (MECH-GRAMMAR-CHECKS-ARE-IN-FLAKE-CHECK);
-- whether the Governed_By edge to DEC-FP-FIELDS-CONFIGURABLE and its PARENT_FP
-  entry move to the milestone that delivers contract fields;
-- whether dev/tasks/check.nix defers to the flake checks rather than restating
-  them in bash (MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE);
-- whether emit.grammar stays callable without lib/check.nix, which is the one
-  way a consumer still reaches the emitter with no type in between
-  (MECH-DSL-CHECKS-NOTHING-BY-ITSELF);
-- whether the caret-anchored denials recorded under denyAtLineStart are ever
-  enforced, and where (MECH-LINE-ANCHORED-DENIAL-UNENFORCED);
-- whether HTML is a supported view of this corpus at all
-  (MECH-DEFAULT-EXPORT-IS-RED-ON-RST).
+Still needing a round with the operator before they can be closed: whether the
+grammar gates belong in the flake checks output, whether the emitter should stay
+reachable without the type in front of it, and whether the line-anchored
+denials recorded above are enforced anywhere. None of the three blocks the
+three closure items above.
 <<<
 RELATIONS:
 - TYPE: Parent

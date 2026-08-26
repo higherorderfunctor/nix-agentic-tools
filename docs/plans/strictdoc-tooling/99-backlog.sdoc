@@ -1150,6 +1150,15 @@ kind of thing that stops being noticed once the logic lands on top of it, and
 the choice belongs to whoever owns the overlay taxonomy rather than to the
 session that tripped over it.
 <<<
+NOTES: >>>
+RULED by the operator 2026-08-26: the invariant was read the wrong way round.
+It is correct that an overlay should be the faithful conversion of upstream, but
+the conclusion is not that sources must move under overlays/ -- it is that the
+WRAPPING does not belong in an overlay at all. It belongs in a module. See
+MECH-STRICTDOC-DEVENV-MODULE for where it goes, and
+MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES for the repo-wide version of the same
+mistake.
+<<<
 
 [MECHANISM]
 UID: MECH-DSL-NAMED-CONSTRUCTORS-DO-NOT-SPAN
@@ -1654,6 +1663,13 @@ contract file generated changes who owns it, and this milestone was told not to
 edit that file at all. Recorded so the half-wired state is legible as a
 decision rather than read as a missing task.
 <<<
+NOTES: >>>
+RULED by the operator 2026-08-26: yes, generate it. In this repository every
+sdoc grammar is generated, by way of the devenv module in
+MECH-STRICTDOC-DEVENV-MODULE. That is a local convention and is explicitly NOT
+imposed on anyone consuming the published surface -- a consumer may use the
+module, call the library directly, or hand-write the file.
+<<<
 
 [MECHANISM]
 UID: MECH-MID-IS-PER-PARSE-RANDOM
@@ -1861,6 +1877,16 @@ Written when item 3 was added and the choice had to be made once. Deferring is
 cheap for a new arm and a rewrite for the existing five, so the existing five
 were left alone and the divergence recorded instead of half-fixed.
 <<<
+NOTES: >>>
+The operator asked for a position rather than a question, 2026-08-26. Position:
+the flake check is the gate and the devenv task should defer to it, which one of
+the six arms already does. The duplication is therefore a defect rather than a
+design.
+
+Held rather than acted on, because the boundary it depends on is not written
+down anywhere -- see MECH-CHECK-SYSTEM-BOUNDARY, which is the repo-wide version
+and interacts with the standing intention to move checks into packages/.
+<<<
 
 [MECHANISM]
 UID: MECH-DEFAULT-EXPORT-IS-RED-ON-RST
@@ -1906,6 +1932,16 @@ RATIONALE: >>>
 Found by the landing step running the milestone's validation loop literally as
 worded -- "a clean export to a temp dir" -- rather than as the repository's own
 scripts spell it. The two differ, and only one of them is green.
+<<<
+NOTES: >>>
+RULED by the operator 2026-08-26: tech debt against this plan, LOW priority, may
+sit unfixed for several milestones. Found during milestone one, which is where
+it should be referenced back to.
+
+The requirement it implies is separate and is tracked as
+MECH-HTML-RENDER-MUST-PASS: whatever the fix, either repair the prose or make it
+error loudly, but the operator does not want this to become a blocker on work
+that has nothing to do with HTML.
 <<<
 
 [MECHANISM]
@@ -2020,4 +2056,186 @@ RATIONALE: >>>
 This is the point of the dirty-edge idea in the operator's semantics rather
 than an incidental feature: staleness that announces itself is the difference
 between a graph that decays and one that asks to be repaired.
+<<<
+
+[MECHANISM]
+UID: MECH-HTML-RENDER-MUST-PASS
+TITLE: Rendering to HTML should be a requirement, with a check that is not a full render
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Make it a requirement that this corpus renders to HTML, and gate it. The
+operator expects to use strictdoc's own site occasionally until their viewer
+exists, so a corpus that only survives the JSON path is not good enough even
+though JSON is the interface everything else uses.
+
+The gate does not have to be a full render. Two shapes, and the second is
+preferred: a light checker for the shapes known to break, or invoke the actual
+parser strictdoc uses on each field and fail on its diagnostics. The second
+avoids maintaining a corpus of known failures that will always lag what the
+renderer actually rejects.
+
+Matters more once a tool is the only writer of these documents, since that tool
+is where the check belongs -- rejecting the prose at authoring time rather than
+discovering it at export.
+<<<
+RATIONALE: >>>
+MECH-DEFAULT-EXPORT-IS-RED-ON-RST is the instance; this is the rule that would
+have caught it. A format nobody exercises decays silently, and this one decayed
+without a single failing check.
+<<<
+
+[MECHANISM]
+UID: MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES
+TITLE: Move package wrapping out of overlays and into modules, repo-wide
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Repo-wide, not attached to any milestone. An overlay should be the faithful
+conversion of an upstream package and nothing more; wrapping -- environment,
+flags, configuration -- belongs in the module that consumes it. That is the
+operator's convention and it is not currently applied consistently:
+overlays/kiro-cli.nix does its wrapping in the overlay, which is why it read as
+the example to follow.
+
+Sweep the overlays, list what wraps rather than converts, and move each into its
+module. The operator wants to inspect that list rather than have an agent decide
+edge cases against a stated invariant, so this is HITL at the point of sweeping,
+not a mechanical migration.
+
+One open question to answer first, because it changes the shape: if the devenv
+module and the home-manager module wrap identically, does that build two
+derivations, and can they share one?
+<<<
+RATIONALE: >>>
+Overlays that wrap are the reason a consumer cannot take the package plainly,
+and the reason an agent reading the tree infers the wrong convention from the
+nearest example. Both showed up during milestone one.
+<<<
+
+[MECHANISM]
+UID: MECH-AGENTS-INFER-OVERLAY-CONVENTION-FROM-EXAMPLES
+TITLE: Agents keep putting wrapping in overlays because the examples do
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A behavioural defect rather than a code one. The convention is that an overlay
+converts and a module wraps, and agents have repeatedly done the opposite --
+most recently the strictdoc grammar extractor, which shipped a wrapped
+environment in the overlay.
+
+The cause is not a missing rule; it is that the nearest example teaches the
+opposite. An agent looking for the pattern finds overlays/kiro-cli.nix doing its
+wrapping in the overlay and copies it. A written instruction loses to a working
+example every time.
+
+Fix in the same pass as MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES -- once the
+examples agree with the convention, the inference stops being wrong. State it in
+the overlay fragment as well, but do not expect the prose alone to hold.
+<<<
+RATIONALE: >>>
+Recorded because the operator noticed it as a pattern across sessions rather
+than as one agent's mistake, and because the remedy is to change what the tree
+teaches rather than to write the rule down more firmly.
+<<<
+
+[MECHANISM]
+UID: MECH-STRICTDOC-DEVENV-MODULE
+TITLE: A devenv module owns strictdoc's wrapping and its grammar generation
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Add a devenv module, named for the tool rather than the milestone --
+ai.strictdoc, not ai.strictdocGrammar. Home-manager is deliberately out of
+scope for now.
+
+Surface:
+  ai.strictdoc.enable    -- installs and wraps it in the dev shell
+  ai.strictdoc.package   -- override the package, accepted as unsafe since the
+                            generated option surface is pinned to a version
+  ai.strictdoc.grammars  -- the intended way to configure it, and the path by
+                            which this repository's own grammar file is
+                            generated
+
+Generating the grammar through this module is this repository's convention, not
+a constraint on anyone consuming the published surface: a consumer may use the
+module, call the library directly, or hand-write the file.
+
+Closes the wrapping half of MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY and settles
+MECH-GRAMMAR-SGRA-NOT-GENERATED.
+<<<
+RATIONALE: >>>
+The overlay currently ships a wrapped environment because an invariant about
+overlays not importing from packages was read as forbidding the layout rather
+than as pointing at the wrong layer. The module is where the wrap was always
+meant to live.
+<<<
+
+[MECHANISM]
+UID: MECH-STRICTDOC-UPSTREAM-FLAKE
+TITLE: Take strictdoc from upstream's own flake instead of our overlay
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+strictdoc ships a flake. Cut over to it and retire the overlay written as step
+zero of this plan.
+
+The operator has accepted the consequence: an upstream flake tracks main rather
+than releases, which is a change from the release-tracking the overlay was built
+for and is normal practice. Worth watching rather than worth avoiding.
+
+Check on the way through whether the two dependency adjustments the overlay
+carries -- the newer reqif and the relaxed pygments pin -- are still needed, and
+whether cache-hit parity survives, since an upstream flake brings its own lock.
+<<<
+RATIONALE: >>>
+The overlay existed because nobody had checked for a flake. Keeping a
+first-party override alongside an upstream one is two things to maintain for
+one package.
+<<<
+
+[MECHANISM]
+UID: MECH-CHECK-SYSTEM-BOUNDARY
+TITLE: Decide what belongs in flake checks versus devenv tasks
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Repo-wide, and a tangent from milestone one rather than part of it. Two check
+systems exist -- the flake's checks output and devenv tasks -- and there is no
+stated rule for which gets what. The grammar milestone ended up writing five of
+its six acceptance arms in both.
+
+A position to argue with rather than a conclusion: the flake output is the gate,
+because it is what CI builds and what a consumer can run; devenv tasks are for
+things a person triggers while working, and should defer to the flake check
+rather than restate it. On that reading the duplication is simply wrong and the
+devenv side should shell out, which one arm already does.
+
+Interacts with the standing intention to move checks into packages/<package>
+rather than leaving them in one large evaluation test.
+<<<
+RATIONALE: >>>
+The operator did not know the repository had two check systems until this
+milestone produced duplicate gates in both, which is itself the argument for
+writing the boundary down.
+<<<
+
+[MECHANISM]
+UID: MECH-CONTRACT-FIELDS-EDGE-TO-SEMANTIC-LAYER
+TITLE: Contract-bearing fields are semantic, and their edge should move
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+SLICE-GRAMMAR-FROM-NIX still carries a Governed_By edge to
+DEC-FP-FIELDS-CONFIGURABLE and a matching PARENT_FP entry, from when
+contract-bearing fields were in its scope. They are not: which fields count as a
+node's contract is special meaning laid over the grammar, so it belongs to the
+semantic layer along with relation target sets and the lifecycle.
+
+Move the edge to the milestone that delivers the semantic layer. The PARENT_FP
+entry has to move with it and only the operator changes those.
+<<<
+RATIONALE: >>>
+Left in place deliberately rather than overlooked: an agent editing PARENT_FP is
+the failure this graph already recorded once.
 <<<
