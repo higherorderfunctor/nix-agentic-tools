@@ -925,6 +925,11 @@ overlays/README.md now carries the seam in its source-pattern bullets, which
 is where an overlay author looks; the dev fragment is where an AGENT looks,
 and it is the one still silent.
 <<<
+NOTES: >>>
+Filed as issue #1267, self-contained, on 2026-08-25. That issue is the
+user-visible tracker; this node is the design-graph record of which slice found
+it. Close both together.
+<<<
 
 [MECHANISM]
 UID: MECH-STRICTDOC-CLOSURE-TRIM
@@ -1006,4 +1011,9 @@ and they are the model for the fix.
 
 Not scoped to this plan's subject. Recorded here because it was found here and
 there is no other parking lot; move it if the repo grows one.
+<<<
+NOTES: >>>
+Filed as issue #1266, self-contained, on 2026-08-25 -- the parking lot the
+rationale above asks for. That issue is the user-visible tracker; this node is
+the design-graph record of which slice found it. Close both together.
 <<<
