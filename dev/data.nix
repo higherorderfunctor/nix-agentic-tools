@@ -95,6 +95,7 @@ _: let
     gh = "GitHub CLI";
     glab = "GitLab CLI";
     oxlint = "Fast JS/TS linter with type-aware (tsgo) linting and JS plugins";
+    strictdoc = "Requirements and technical documentation as a validated node graph";
     tsgolint = "Type-aware linting backend for oxlint (typescript-go)";
   };
 
