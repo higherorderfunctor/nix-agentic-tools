@@ -34,7 +34,7 @@ ELEMENTS:
     TYPE: String
     REQUIRED: True
   - TITLE: LICENCE
-    TYPE: SingleChoice("MIT (Expat)", GPL-3.0-or-later, proprietary)
+    TYPE: SingleChoice("MIT (Expat)", GPL-3-only, proprietary)
     REQUIRED: False
   - TITLE: NOTES
     TYPE: String

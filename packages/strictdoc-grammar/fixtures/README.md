@@ -11,17 +11,32 @@ parses and exports clean under strictdoc 0.28.3, so anything the surface emits
 for it must too; it backs acceptance item 7, and nothing in it is specific to
 this repository.
 
-One thing `foreign.sgra` deliberately no longer carries. It was first written
-with `GPL-3.0-or-later` quoted as well, which is legal input — but strictdoc
-quotes an option **only** when it contains a parenthesis
+Two things `foreign.sgra` deliberately does NOT carry, and neither absence is
+cosmetic.
+
+It was first written with `GPL-3.0-or-later` quoted as well, which is legal
+input — but strictdoc quotes an option **only** when it contains a parenthesis
 (`GrammarElementFieldSingleChoice.get_unprocessed_options`), so that spelling is
 one strictdoc's own writer never produces and the emitter therefore cannot
 reproduce. `extract/compare.py` was run across the two spellings and reported
-the models EQUAL — the redundant quotes vanish at parse, and `options` is
-`['MIT (Expat)', 'GPL-3.0-or-later', 'proprietary']` either way — so the file
-was normalized to the canonical form and the byte gate kept. That is the
-difference between the two gates, in one measurement: semantically identical,
-not byte-identical, and only one of the two spellings is canonical.
+the models EQUAL — the redundant quotes vanish at parse — so the file was
+normalized to the canonical form and the byte gate kept. That is the difference
+between the two gates, in one measurement: semantically identical, not
+byte-identical, and only one of the two spellings is canonical.
+
+The unquoted option is now `GPL-3-only` rather than `GPL-3.0-or-later`, and the
+dot is what changed. Nothing in strictdoc objects to it; the patched tree-sitter
+grammar (`overlays/generic/tree-sitter-strictdoc.patch`) cannot lex a `.` inside
+an unquoted `choice_option`, and `checks/strictdoc-grammar-corpus.nix` requires
+that grammar to parse every `.sdoc`/`.sgra` in this repository cleanly. Widening
+the charset to admit one was MEASURED and rejected: it takes
+`strictdoc_04_release_notes.sdoc` from 9 error nodes to 89 and from 76795 error
+bytes to 98406, because tree-sitter lexes by longest match over every token
+valid in the current state and a wider `choice_option` out-competes the narrow
+ones. The QUOTED arm, which is what actually buys the parenthesis this fixture
+exists to exercise, costs nothing and was added in the same patch. A dot in an
+unquoted option is a tracked gap in the editor grammar, not a surface feature
+this fixture ever claimed — see `docs/plans/strictdoc-tooling/99-backlog.sdoc`.
 
 `negative/` holds one file per case that must fail, named for what it proves,
 split by the layer that owns the rejection. The two `.nix` files are **ours, at
