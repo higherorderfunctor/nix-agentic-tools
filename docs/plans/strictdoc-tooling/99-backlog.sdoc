@@ -893,3 +893,117 @@ the assertion and the config option when the work is picked up. Related
 symptom already logged elsewhere: format and manage take no --output-dir and
 write ./output into the project.
 <<<
+
+[MECHANISM]
+UID: MECH-OVERLAY-PYTHON-OVERRIDE-SEAM
+TITLE: Record overridePythonAttrs as the third override seam in the overlay fragment
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+dev/fragments/overlays/overlay-pattern.md teaches two override seams and a
+rule for choosing between them: a thin overrideAttrs for a builder that reads
+version and src as ordinary attrs, and .override on the BUILDER for a
+lib.extendMkDerivation one that consumed an argument to derive an attr. It
+never mentions overridePythonAttrs, which is the correct seam for a
+buildPythonPackage and is what two packages here already use --
+overlays/git-tools/git-revise.nix and, since SLICE-STRICTDOC-OVERLAY,
+overlays/dev-tools/strictdoc.nix.
+
+The INPUT-versus-OUTPUT rule the fragment already states decides this case
+too: buildPythonPackage consumes `dependencies` and `pythonRelaxDeps` as
+arguments, so overrideAttrs lands them as dead attrs nothing reads, exactly
+like an overridden npmDepsHash. Add the seam and cite the rule rather than
+writing a third independent one.
+<<<
+RATIONALE: >>>
+A pre-existing gap, not one this slice opened -- git-revise predates it. It
+surfaced while writing the strictdoc overlay, where the fragment was read for
+the seam decision and did not answer, and the answer had to be re-derived from
+the nixpkgs source. The next Python package pays that cost again.
+
+overlays/README.md now carries the seam in its source-pattern bullets, which
+is where an overlay author looks; the dev fragment is where an AGENT looks,
+and it is the one still silent.
+<<<
+
+[MECHANISM]
+UID: MECH-STRICTDOC-CLOSURE-TRIM
+TITLE: Drop the three strictdoc dependencies that cost closure and are unused
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+SPIKE-EXECUTABLE-RULES measured six dependencies in nixpkgs' strictdoc
+expression that upstream's pyproject.toml does not declare. Three of them --
+graphviz, pybtex and setuptools -- cost closure; the other three return
+through html2pdf4doc, so removing them buys nothing. Removing the three is a
+`dependencies` filter in overlays/dev-tools/strictdoc.nix.
+
+Deliberately NOT done as part of SLICE-STRICTDOC-OVERLAY, whose shape is a
+thin override that leaves the dependency set upstream-owned. Trimming it is a
+separate, arguable change: it makes this package diverge from nixpkgs in a way
+a version bump cannot re-converge, and the win is closure size on a package
+every session already has.
+<<<
+RATIONALE: >>>
+Recorded so the measurement is not re-run. If it is picked up, verify the
+six-and-three split against the release in the sidecar rather than trusting
+this node -- it was measured against 0.27.1 and the dependency list moved in
+0.28.
+<<<
+
+[MECHANISM]
+UID: MECH-REQIF-PIN-HAS-NO-SWEEP
+TITLE: Decide what keeps the inline reqif pin current
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+overlays/dev-tools/strictdoc.nix pins reqif inline at 0.1.0, because
+mkUpdateScript rebuilds the sidecar from scratch on every write and would
+erase a second package's pin parked there. Nothing sweeps that pin.
+
+The failure is asymmetric and only half of it is loud. A strictdoc release
+that outgrows the pin fails the BUILD, because the release's own constraint is
+checked at build time -- that half is fine. But reqif moving on its own leaves
+the pin quietly behind, and once the nixpkgs pin reaches 0.1.x the override
+keeps shadowing it with an older release for no reason at all.
+
+Three shapes, none argued yet: give reqif its own tracked overlay row; branch
+on lib.versionOlder so the override disappears when nixpkgs catches up; or
+accept the staleness and say so in the overlay. The third is what is in force
+today by default rather than by decision.
+<<<
+RATIONALE: >>>
+This is the transitive-hash gap wearing different clothes -- the same
+"ghArchiveUpdateScript refreshes only the src hash" root cause that forces a
+Rust package to derive cargoDeps from the pinned src. A Python dependency is a
+separate derivation rather than a hash, so the Rust answer does not transfer
+and the question stays open.
+<<<
+
+[MECHANISM]
+UID: MECH-README-ROWS-FOLLOW-DESCRIPTIONS-NOT-PACKAGES
+TITLE: Make a package with no description fail rather than vanish from the README
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+dev/generate.nix's mkDescriptionRows maps over dev/data.nix's description
+attrsets, not over the overlay's package set, so a package with no description
+entry is silently absent from the generated README table. Nothing fails: not
+the generator, not nix flake check, not the drift check, which compares the
+generated file against the same incomplete input.
+
+Fix shape: derive the row set from the overlay group and look each description
+up, so a missing one throws with the package's name. That inverts the failure
+from a silent omission into an eval error naming exactly what to write.
+<<<
+RATIONALE: >>>
+Found while landing SLICE-STRICTDOC-OVERLAY: the package was registered in
+overlays/default.nix, config.update.targets and the cache-hit-parity registry
+-- three surfaces that DO fail when incomplete -- and would still have shipped
+absent from the public README, because the fourth surface is a lookup table
+nothing cross-checks. The three loud registries are why this was caught at all,
+and they are the model for the fix.
+
+Not scoped to this plan's subject. Recorded here because it was found here and
+there is no other parking lot; move it if the repo grows one.
+<<<
