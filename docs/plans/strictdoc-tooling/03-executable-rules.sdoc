@@ -167,16 +167,26 @@ is committed; Nix never parses strictdoc during evaluation. A drift check
 regenerates and diffs, so a stale surface is a red check.
 
 How the conversion is expressed is open. Two shapes, both viable, and the
-choice decides whether the faithful layer is a committed file. Converters can
-live inside the extractor, which keeps one toolchain and preserves why each
-shape was classified as it was. Or the extractor emits the faithful surface and
-a declarative rewrite pass transforms it -- measured working with ast-grep,
-whose Nix support parses our shapes and whose rule files turn a literal
-alternation into an enum in about fifteen lines, with the fail-closed condition
-expressible as one more catch-all rule at error severity rather than a special
-case in code. That second shape trades provenance for reviewability: it matches
-the generated text rather than the grammar it came from, so a boolean
-alternation is indistinguishable from something that merely looks like one.
+choice decides whether the faithful layer is a committed file.
+
+Converters can live inside the extractor, working on the parsed grammar. That
+preserves why each shape was classified as it was: a pattern is known to have
+come from a particular grammar rule rather than inferred from how it rendered.
+
+Or the extractor emits the faithful surface and a declarative rewrite
+transforms it. Measured: ast-grep is tree-sitter based and ships a Nix grammar,
+so it parses our shapes with nothing added; a rule of about fifteen lines turns
+a literal-alternation pattern into an enum; and the fail-closed condition is
+one more catch-all rule at error severity rather than a special case in code.
+Both the tool and its Python bindings are packaged already, and the bindings
+work on Nix source in process, so this needs no second toolchain and no
+separate file format -- the rewrite can live in the same script as the
+extraction.
+
+The remaining cost of the second shape is provenance, and it is the whole
+argument. It matches generated text rather than the grammar behind it, so a
+two-value alternation that means a boolean is indistinguishable from one that
+merely looks like it.
 
 Our own grammar values -- the five node types with their fields and relations
 -- are data filling the generated surface, not part of it.
