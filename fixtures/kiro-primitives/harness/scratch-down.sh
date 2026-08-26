@@ -44,6 +44,7 @@ case "$HOME/.kiro" in
   echo "refusing: the real ${HOME}/.kiro lies under the scratch root" >&2
   exit 1
   ;;
+*) ;;
 esac
 
 if [ "$keep_logs" -eq 1 ]; then

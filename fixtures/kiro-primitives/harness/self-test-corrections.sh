@@ -219,9 +219,9 @@ control 'client: process.env.KIRO_HOME read exists' \
 if [ -n "$kh" ]; then
   win="$(head -c $((kh + 260)) "$client" | tail -c 320 | tr -c '[:print:]\n' '.')"
   hits=0
-  case "$win" in *'KIRO_HOME'*) hits=$((hits + 1)) ;; esac
-  case "$win" in *'.kiro'*) hits=$((hits + 1)) ;; esac
-  case "$win" in *'process.env.HOME'*) hits=$((hits + 1)) ;; esac
+  case "$win" in *'KIRO_HOME'*) hits=$((hits + 1)) ;; *) ;; esac
+  case "$win" in *'.kiro'*) hits=$((hits + 1)) ;; *) ;; esac
+  case "$win" in *'process.env.HOME'*) hits=$((hits + 1)) ;; *) ;; esac
   check 'client: KIRO_HOME resolver names KIRO_HOME, .kiro and HOME' 3 "$hits"
 fi
 
