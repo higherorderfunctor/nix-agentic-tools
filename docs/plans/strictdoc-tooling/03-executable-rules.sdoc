@@ -8,7 +8,7 @@ IMPORT_FROM_FILE: @repo
 UID: DEC-EXECUTABLE-RULES-ROADMAP
 TITLE: The rules become executable in five milestones, plumbing before migration
 AUTHORED_BY: llm
-STATUS: open
+STATUS: accepted
 RETIRES_ON: >>>
 The fifth milestone is verified, or a milestone's review changes the order or
 the number of milestones.
@@ -50,8 +50,10 @@ open decisions -- who signs, whether DEPTH may regress, agent identity -- from
 blocking the plumbing.
 <<<
 NOTES: >>>
-Open until the operator has read it; the order and the review rule are the
-operator's own words, the rest is the planning session's reading of them.
+Accepted by the operator on 2026-08-25 with one expectation stated: design
+happens inside each step and may reshape that step. The plan was deliberately
+not designed in full up front, to move faster through this part; a step's
+slice is a starting shape, not a finished contract, until its own review.
 
 The evidence behind every milestone is the SPIKE-EXECUTABLE-RULES assessment
 and the fold-in review of two outside research documents that followed it,
