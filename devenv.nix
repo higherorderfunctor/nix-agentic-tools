@@ -854,7 +854,7 @@ in {
 
   # ── Tasks ─────────────────────────────────────────────────────────────
   tasks = let
-    checkTasks = (import ./dev/tasks/check.nix {}).tasks;
+    checkTasks = (import ./dev/tasks/check.nix {inherit pkgs;}).tasks;
     generateTasks = (import ./dev/tasks/generate.nix {inherit lib pkgs instr;}).tasks;
   in
     checkTasks
