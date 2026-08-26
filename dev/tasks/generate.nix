@@ -278,6 +278,61 @@ in {
       '';
     };
 
+    # ── The typed `.sgra` grammar surface (SLICE-GRAMMAR-FROM-NIX) ──────
+    #
+    # Two GENERATED files, in a fixed order: `extract.py` reads strictdoc's own
+    # grammar and writes faithful.nix; `normalize.py` reads faithful.nix and
+    # writes normalized.nix. Running the second against a stale first produces a
+    # surface derived from a grammar nobody is running, so the edge below is
+    # load-bearing rather than tidiness.
+    #
+    # NOT in `generate:all`, and deliberately: `strictdoc-grammar-extract` is an
+    # interactive-only package (devenv.nix gates it on `!isCI`), so an aggregate
+    # that reached it would fail in CI on a missing binary. Milestone 1 is
+    # locally invoked and wires no CI.
+    #
+    # `docs/sdoc/grammar.sgra` is NOT written here. `values.nix` renders it
+    # byte-identically, but whether that hand-maintained file becomes a
+    # generated one is the operator's call, not this task's; until then
+    # `check:sdoc-grammar` renders it to a temporary file and diffs.
+    "generate:sdoc-grammar:faithful" = {
+      description = "Extract the faithful .sgra surface from strictdoc's own grammar";
+      before = ["generate:sdoc-grammar:normalized"];
+      exec = ''
+        ${bashPreamble}
+        ${log}
+        cd "$DEVENV_ROOT"
+        log "Extracting packages/strictdoc-grammar/lib/faithful.nix"
+        strictdoc-grammar-extract packages/strictdoc-grammar/extract/extract.py \
+          --output packages/strictdoc-grammar/lib/faithful.nix
+      '';
+    };
+
+    "generate:sdoc-grammar:normalized" = {
+      description = "Normalize the faithful .sgra surface into typed nodes plus encoders";
+      before = ["generate:sdoc-grammar"];
+      exec = ''
+        ${bashPreamble}
+        ${log}
+        cd "$DEVENV_ROOT"
+        log "Normalizing packages/strictdoc-grammar/lib/normalized.nix"
+        strictdoc-grammar-extract packages/strictdoc-grammar/extract/normalize.py
+      '';
+    };
+
+    "generate:sdoc-grammar" = {
+      description = "Generate the typed .sgra grammar surface (faithful + normalized)";
+      after = [
+        "generate:sdoc-grammar:faithful"
+        "generate:sdoc-grammar:normalized"
+      ];
+      exec = ''
+        ${bashPreamble}
+        ${log}
+        log "Grammar surface generated — run `devenv tasks run check:sdoc-grammar` to gate it"
+      '';
+    };
+
     "generate:all" = {
       description = "Generate all content (instructions + repo)";
       after = [
