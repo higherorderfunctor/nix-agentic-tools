@@ -2290,3 +2290,50 @@ Raised when a lower-level emitter was about to be named faithful.emit. The name
 was self-documenting only to someone who had read the three-layer design, which
 is exactly the wrong audience test for a published interface.
 <<<
+
+[MECHANISM]
+UID: MECH-EMIT-LAYER-BOUNDARY
+TITLE: Emit is the renderer composed with the type mapping, and they split cleanly
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Settled with the operator 2026-08-26. Two jobs, one composition:
+
+  the inner emitter -- takes values that are all strings, knows the FILE FORMAT,
+    and does no encoding. A pure renderer.
+  denormalize      -- knows the TYPE MAPPING: a Nix bool becomes the literal
+    True or False, an enum member becomes its bare string, a list becomes a
+    comma-space join.
+  the outer emitter = the inner one composed with denormalize.
+
+The normalized surface is deliberately a MIXTURE, and this is already how it is
+built: a shape no converter upgraded stays as the extracted string, carried
+inside normalized rather than pushed elsewhere. regexPreserved records that as
+"unchanged" with a null encoder, and the current file has four upgraded sites
+sitting beside five that stayed patterns. So a consumer never falls off the
+normalized surface -- the untranslated case surfaces there in its original
+form.
+
+The inner emitter therefore has a real caller: someone holding string values
+who is deliberately skipping the type layer, which is the same role `raw` plays
+one level up. It is not an escape hatch for cases the surface cannot express.
+
+Mechanism, if the two are exposed from one value: an attrset carrying
+__functor is callable AND openable, so `emit xs` and `emit.<inner> ys` both
+work with no module system and no override machinery. Measured.
+<<<
+RATIONALE: >>>
+Recorded because the shape was argued to the wrong conclusion twice before
+landing here -- first as two code paths that would drift, which was wrong since
+it is one implementation composed, then as an escape hatch for the
+inexpressible, which was wrong because the untranslated case never leaves the
+normalized surface in the first place.
+<<<
+NOTES: >>>
+OPEN, and deliberately not decided here: what the inner entry point is called
+and whether it is exposed at all yet. It cannot be called faithful -- see
+MECH-FAITHFUL-IS-NOT-A-CONSUMER-WORD. A leading underscore reads as private
+across Nix, which is the wrong signal for something supported. Since __functor
+makes adding it a one-line change later, waiting for a caller costs nothing and
+removing a published attribute costs more than adding one.
+<<<
