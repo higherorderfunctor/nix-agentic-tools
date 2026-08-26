@@ -12,12 +12,17 @@
 # checks/strictdoc-fp-check.nix: `strictdoc export` caches under its output
 # dir, and a broken input can exit 1 then exit 0 on re-run against a warm one.
 # `runCommand` gives every build its own fresh $TMPDIR.
+#
+# `pkgs.ai.devTools.strictdoc`, not `pkgs.strictdoc`: the overlay tracks the
+# latest upstream release, and the design system is measured against that
+# rather than against whichever version the nixpkgs pin carries
+# (SLICE-STRICTDOC-OVERLAY).
 {
   pkgs,
   self,
 }:
 pkgs.runCommand "strictdoc-cycle-check" {
-  nativeBuildInputs = [pkgs.strictdoc pkgs.python3];
+  nativeBuildInputs = [pkgs.ai.devTools.strictdoc pkgs.python3];
 } ''
   set -euETo pipefail
   shopt -s inherit_errexit 2>/dev/null || :

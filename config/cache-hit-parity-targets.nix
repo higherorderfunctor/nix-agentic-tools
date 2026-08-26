@@ -46,6 +46,7 @@ _: {
     gh = {consumerPath = ["ai" "devTools" "gh"];};
     glab = {consumerPath = ["ai" "devTools" "glab"];};
     oxlint = {consumerPath = ["ai" "devTools" "oxlint"];};
+    strictdoc = {consumerPath = ["ai" "devTools" "strictdoc"];};
     tsgolint = {consumerPath = ["ai" "devTools" "tsgolint"];};
 
     # ── Generic supporting packages — live at `consumerPkgs.ai.generic.<name>` ──
