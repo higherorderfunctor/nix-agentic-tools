@@ -343,6 +343,7 @@ remapper
 reparent
 replayable
 repoint
+reqif
 reprioritize
 repros
 rerere
