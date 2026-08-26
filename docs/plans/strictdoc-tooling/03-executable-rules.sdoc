@@ -8,43 +8,51 @@ IMPORT_FROM_FILE: @repo
 UID: DEC-EXECUTABLE-RULES-ROADMAP
 TITLE: The rules become executable in five milestones, plumbing before migration
 AUTHORED_BY: llm
-STATUS: accepted
+STATUS: open
 RETIRES_ON: >>>
 The fifth milestone is verified, or a milestone's review changes the order or
 the number of milestones.
 <<<
 STATEMENT: >>>
 The rules of the design system become executable in five milestones, in this
-order: one, the grammar generated from a typed Nix option surface with a
-validation gate at commit and in CI; two, a CLI that is the only writer of sdoc
-files, with direct edits denied; three, the behaviour model -- states, moves,
-gates, triggers, flows -- defined in Nix and rendered for review; four, that
-behaviour wired into the CLI and into checkpoints at command, commit and merge
-time, with strictdoc's own hook as the backstop; five, this system's own
-semantics -- fingerprints, signing, the ripple, DEPTH -- migrated onto that
-plumbing.
+order:
 
-Every milestone is consumer-facing, so each ends in two operator reviews: the
-option surface or verb list is reviewed before the milestone is implemented,
-and the implementation is reviewed before the next milestone starts.
-Milestones one and two are separate slices and separate sessions. Migration
-waits for the plumbing; the operator may integrate an earlier milestone sooner.
+1. The grammar, generated from a typed Nix option surface, with a validation
+   gate at commit time and in CI.
+2. A command-line tool that is the only writer of sdoc files, with direct
+   edits denied.
+3. The behaviour model -- states, moves, gates, triggers, flows -- defined in
+   Nix and rendered so it can be looked at.
+4. That behaviour wired into the tool and into checkpoints at command, commit
+   and merge time, with strictdoc's own hooks as the backstop.
+5. This system's own semantics -- fingerprints, signing, the ripple, DEPTH --
+   migrated onto that plumbing.
 
-One implementing session per milestone, taking the slice UID. The planning
-session that produced these nodes stays open, to re-slot a milestone whose
-timing was wrong.
+Every milestone is consumer-facing, so its option surface or verb list is
+reviewed by the operator before the milestone is implemented. Milestones one
+and two are separate slices; each milestone normally runs in its own session,
+and the operator may continue from one to the next in the same session when
+the first goes well. Migration waits for the plumbing. Whether a finished
+milestone is worth integrating sooner is the operator's call.
+
+The planning session that produced these nodes stays open, to re-slot a
+milestone whose timing was wrong.
 <<<
 RATIONALE: >>>
-The activity began because a model produces sdoc in incorrect formats, nothing
-validates a write when it happens, and the operator could not reason about the
-node lifecycle from prose. Milestones one and two end the first two problems
-without waiting on any lifecycle decision; milestone three is where the
-lifecycle becomes something that can be looked at; only after four does a rule
-run rather than get read, which is what INV-GUARDS-MUST-EXECUTE asks for.
-Ordering migration last keeps the instance's open decisions -- who signs,
-whether DEPTH may regress, agent identity -- from blocking the plumbing.
+In the operator's words, the activity began because a model produces sdoc in
+incorrect formats, nothing validates a write when it happens, and the node
+lifecycle could not be reasoned about from prose. Milestones one and two end
+the first two problems without waiting on any lifecycle decision; milestone
+three is where the lifecycle becomes something that can be looked at; only
+after four does a rule run rather than get read, which is what
+INV-GUARDS-MUST-EXECUTE asks for. Ordering migration last keeps the instance's
+open decisions -- who signs, whether DEPTH may regress, agent identity -- from
+blocking the plumbing.
 <<<
 NOTES: >>>
+Open until the operator has read it; the order and the review rule are the
+operator's own words, the rest is the planning session's reading of them.
+
 The evidence behind every milestone is the SPIKE-EXECUTABLE-RULES assessment
 and the fold-in review of two outside research documents that followed it,
 both held in the operator's working area outside the repository.
@@ -107,47 +115,47 @@ RELATIONS:
 [SLICE]
 UID: SLICE-GRAMMAR-FROM-NIX
 TITLE: Generate the grammar from a typed Nix option surface, and gate it
-DEPTH: interface-settled
+DEPTH: needs-design
 AUTHORED_BY: llm
 STATEMENT: >>>
-Define the grammar as a typed Nix option tree: one ordered master list of
-fields, each node type selecting the fields it carries and specialising a
-field where it must (STATUS differs between DECISION and SPIKE); relations and
-prefixes per type; no untyped option anywhere. Generate docs/sdoc/grammar.sgra
-from it, byte-identical to today's, plus a committed sidecar naming the
-contract-bearing fields per type, and keep the @repo alias resolving. Commit
-the generated files and add a drift check, so a stale grammar is a red check.
-Add the validation gate: a clean-directory strictdoc export over the whole
-corpus at commit time and in CI, because some grammar defects only surface
-through documents.
+Define the grammar as a typed Nix option tree, with every shared field
+declared once and each node type selecting the fields it carries (STATUS
+differs between DECISION and SPIKE, so a type may specialise a field).
+Relations and prefixes per type; no untyped option anywhere. Generate
+docs/sdoc/grammar.sgra from it, byte-identical to today's, together with a
+committed record of which fields count as a node's contract; keep the @repo
+alias resolving. Commit the generated files and add a drift check, so a stale
+grammar is a red check. Add the validation gate: a clean-directory strictdoc
+export over the whole corpus at commit time and in CI, because some grammar
+defects only surface through documents.
 
 Consumer surface the operator reviews before implementation: the option tree
-for node types and fields. Reviewed after: the regenerated grammar as a no-op
-diff, and the gate firing on a deliberately broken fixture.
+for node types and fields, with one question decided there first -- whether
+field order is one global list or per node type (strictdoc accepts both).
+Reviewed after: the regenerated grammar as an empty diff, and the gate firing
+on a deliberately broken fixture.
 
-Not included: behaviour, transitions, ownership rules, and the contract-field
-selection itself -- this delivers the surface, not the values.
+Not included: behaviour, transitions, ownership rules, and which fields count
+as contract -- this delivers the surface, not the values.
 <<<
 RATIONALE: >>>
 Proven in the spike: a typed surface regenerates the grammar byte-for-byte in
 0.03 s and rejects thirteen of thirteen bad declarations once the merged value
 is forced, and strictdoc rejects six of six injected grammar defects. The gate
 needs nothing but the strictdoc package. Two rules carried from the
-measurement: cross-field checks live in one apply that forces evaluation,
-because addCheck never runs on a submodule-typed option; and the corpus export
-is the second gate.
+measurement: cross-field checks live in one place that forces evaluation of
+the whole value, because Nix's addCheck never runs on a nested option; and the
+corpus export is the second gate.
 <<<
 PARENT_FP: >>>
 DEC-EXECUTABLE-RULES-ROADMAP:0000000
 DEC-FP-FIELDS-CONFIGURABLE:0000000
 <<<
 NOTES: >>>
-Carry the full native grammar surface -- HUMAN_TITLE, IS_COMPOSITE,
-VIEW_STYLE, Child relations, File roles, a three-state PREFIX -- rather than
-excluding them as design choices. One shape question the review left open is
-brought as the first review item: one global field order, or per-element
-order (strictdoc validates order per element and accepts both). Update the
-sdoc skill wherever the generated grammar changes its instructions.
+Carry the rest of strictdoc's native grammar features rather than excluding
+them as design choices: human-readable field titles, composite nodes, view
+styles, child relations, file roles, and an explicit no-prefix option. Update
+the sdoc skill wherever the generated grammar changes its instructions.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -174,38 +182,39 @@ RELATIONS:
 
 [SLICE]
 UID: SLICE-SDOC-CLI
-TITLE: A CLI that is the only writer of sdoc files
-DEPTH: interface-settled
+TITLE: A command-line tool that is the only writer of sdoc files
+DEPTH: needs-design
 AUTHORED_BY: llm
 STATEMENT: >>>
-Build the command-line tool through which every node is created and changed:
-create, set, relate and move, with flags derived from the generated grammar
-(fields, choices, relation roles); UIDs minted through strictdoc's own hook;
-required fields filled from arguments so a TBD never lands; every write
-validated against the whole graph before the file is replaced; formatting
-applied by the same code path. Deny direct edits of sdoc and grammar files at
-the tool-call layer and point the model at the CLI. No lifecycle verbs yet:
-this milestone is CRUD.
+Build the tool through which every node is created and changed: create, set,
+relate and move, with flags derived from the generated grammar (fields,
+choices, relation roles); UIDs minted through strictdoc's own hook; required
+fields filled from arguments so a TBD never lands; every write validated
+against the whole graph as it would be after the write, before the file is
+replaced; formatting applied by the same code path. Deny direct edits of sdoc
+and grammar files in the agent harness, before the edit tool runs, and point
+the model at the tool. No lifecycle verbs yet: this milestone is create, read,
+update and delete.
 
 Consumer surface the operator reviews before implementation: the verb list
-and their flags. Reviewed after: a session that authors nodes through the CLI
-only, and a direct edit being refused.
+and their flags. Reviewed after: a session that authors nodes through the
+tool only, and a direct edit being refused.
 <<<
 RATIONALE: >>>
-The tool takes the model's hands off the files, which is the root failure:
-incorrect formats and unvalidated writes. Measured: creating a node in-process
-costs 0.35 s, validating the prospective state 0.3 s, and strictdoc's node
-model writes any field in grammar order -- nothing here waits on the behaviour
-model.
+In the operator's words, the root failure is a model producing incorrect
+formats with nothing validating the write; the tool takes the model's hands
+off the files. Measured: creating a node in-process costs 0.35 s, validating
+the whole graph 0.3 s, and strictdoc's node model writes any field in grammar
+order -- nothing here waits on the behaviour model.
 <<<
 PARENT_FP: DEC-EXECUTABLE-RULES-ROADMAP:0000000
 NOTES: >>>
 Build on strictdoc's own machinery rather than re-implementing writes: manage
 new for scaffolding, set_field_value for fields, the writer for formatting.
 The cache directory must live outside the checkout for worktrees. Validating
-the whole graph per command is affordable warm -- about a second on this
-corpus, two at five thousand nodes -- only when the candidate copy sits at a
-stable path sharing one output directory; a fresh temporary path is cold.
+the whole graph per command costs about a second on this corpus and about
+two at five thousand nodes when strictdoc's cache is warm, which needs the
+working copy at a stable path; a fresh temporary copy pays the cold cost.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -239,31 +248,41 @@ TITLE: Define the behaviour model in Nix and render it for review
 DEPTH: needs-design
 AUTHORED_BY: llm
 STATEMENT: >>>
-Define, as a typed Nix option tree layered over the grammar: the lifecycle of
-each node type -- its states over grammar fields, the legal moves, who may
-make each, what each writes; triggers -- a command, an outside event such as
-landing in main, a timer, another move finishing; gates and invariants, each
-declaring what it needs to see so that the places it can run are derived;
-relation contracts -- which node types a role may point at, cycles,
-propagation; and flows as ordered references to moves. Cross-check every value
-against the grammar at evaluation. From one evaluation emit a machine-readable
-model for the CLI and the validators, a state diagram per node type, a diagram
-per flow, a table of moves against gates, a table of gates against where they
-can run, and a report of what is still only prose.
+Define, as a typed Nix option tree layered over the grammar:
+
+- the lifecycle of each node type: its states over grammar fields, the legal
+  moves, who may make each move, what each move writes;
+- triggers: a command, an outside event such as landing in main, a timer,
+  another move finishing;
+- gates and invariants, each declaring what it needs to see, so that the
+  places it can run are derived rather than declared;
+- relation contracts: which node types a role may point at, whether cycles
+  are allowed, whether a change propagates across the relation;
+- flows.
+
+Cross-check every value against the grammar at evaluation. From one
+evaluation emit a machine-readable model for the tool and the validators, a
+state diagram per node type, a diagram per flow, a table of moves against
+gates, a table of gates against where they can run, and a report of what is
+still only prose.
 
 Consumer surface the operator reviews before implementation: the option tree
 and the rendered diagrams -- this is where the node lifecycle becomes
 something to look at rather than guess at. Three shape questions are open and
 are brought one at a time before the surface is fixed: whether state is one
-machine per field or one machine over the tuple of fields; whether the ripple
-is derived from declared read and write scopes or from the contract-field
-flag; whether a flow is a list of move references or a step-by-step script.
+machine per field or one machine over all of a node's state fields at once;
+whether the ripple -- what goes stale when a node changes -- is derived from
+declared read and write scopes or from a per-field contract flag; whether a
+flow is a list of move references or a step-by-step script. Reviewed after:
+the diagrams and tables regenerate from one evaluation, and the rendered
+lifecycle matches the graph as it stands.
 <<<
 RATIONALE: >>>
 Every part of this was prototyped in the spike and its review: both state
 shapes, four representations of gate placement that all derive the same
-result -- including an empty run set for the authorship guard -- flows that
-drift when they restate moves, and eight rendered views from one evaluation.
+result -- including that the authorship guard can run nowhere today -- flows
+that drift when they restate moves, and eight rendered views from one
+evaluation.
 <<<
 PARENT_FP: >>>
 DEC-EXECUTABLE-RULES-ROADMAP:0000000
@@ -273,8 +292,8 @@ NOTES: >>>
 Vocabulary adopted from the outside research: a command is a request and may
 be refused; an event is an accepted fact; a milestone is an achieved fact that
 can go stale; a gate's evidence records what it depended on. The instance's
-signed edge is a milestone with evidence rather than a node type of its own --
-contested in review, revisit when the surface is fixed.
+signed edge is carried as evidence that can go stale rather than as a node
+type of its own -- contested in review, settled when the surface is fixed.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -301,19 +320,23 @@ RELATIONS:
 
 [SLICE]
 UID: SLICE-CHECKPOINT-WIRING
-TITLE: Wire the behaviour model into the CLI and the checkpoints
+TITLE: Wire the behaviour model into the tool and the checkpoints
 DEPTH: needs-design
 AUTHORED_BY: llm
 STATEMENT: >>>
-Add the lifecycle verbs to the CLI: a move is a command that selects one
+Add the lifecycle verbs to the tool: a move is a command that selects one
 transition, checks its gates, and either refuses with a diagnostic or writes.
 Register the existing checks -- fingerprint drift, cycles, plan boundaries,
 the authorship guard -- as validators at the checkpoints the model derives for
 them: the command before and after its write, the pre-commit hook against the
-previous commit, CI against the merge base, and strictdoc's read seam and
-post-index hook as backstops for edits that bypass the CLI. Fail the
-evaluation when a gate has no validator, or no checkpoint that can see what it
-needs.
+previous commit, CI against the point where the branch left main, and
+strictdoc's own read-time and after-parse hooks as backstops for edits that
+bypass the tool. Surface every gate that has no validator, or no checkpoint
+able to see what it needs; whether that fails the evaluation or only reports
+is settled at review. One such gate is known already: the authorship guard
+needs both git history and who is acting, and no checkpoint sees both, so it
+is recorded as unenforceable until agents have their own identity (milestone
+five).
 
 Consumer surface the operator reviews before implementation: the checkpoint
 table -- which check runs where, and what is still unenforceable. Reviewed
@@ -321,10 +344,11 @@ after: a rule that used to live in the skill being refused by a running check.
 <<<
 RATIONALE: >>>
 This is the milestone INV-GUARDS-MUST-EXECUTE asks for. Measured: strictdoc's
-hook never runs on node creation, so it is a backstop; the read seam fires on
-every command; checks that need the previous state cannot run at command time
-by construction; checks that need to know who is acting can run only in the
-acting session until agents have their own identity.
+after-parse hook never runs when a node is created, so it is a backstop; its
+read-time hook fires on every command; checks that need the previous state
+cannot run at command time by construction; checks that need to know who is
+acting can run only in the acting session until agents have their own
+identity.
 <<<
 PARENT_FP: DEC-EXECUTABLE-RULES-ROADMAP:0000000
 NOTES: >>>
@@ -369,19 +393,21 @@ TITLE: Migrate this system's own semantics onto the plumbing
 DEPTH: needs-design
 AUTHORED_BY: llm
 STATEMENT: >>>
-Express fingerprints, acceptance, the ripple, DEPTH and the two keys in the
-behaviour model, and retire the hand-written scripts they live in today: the
-contract-field selection as the model's read scopes; a signed edge as a
-milestone whose evidence goes stale when a parent's contract changes;
-readiness and degrees of freedom as gates over the closure; signing and the
-authorship flip as moves with an actor rule; revocation made visible. The
-decisions this milestone needs are the instance's own -- who may sign, whether
-DEPTH may move backwards, whether implemented and verified belong in DEPTH,
-agent identity -- and are taken at its review, not before.
+Express this system's own semantics in the behaviour model and retire the
+hand-written scripts they live in today: which fields count as a node's
+contract; a signed edge as evidence that goes stale when the parent's
+contract changes; readiness -- everything a node depends on is settled -- and
+its count of open decisions as gates; signing and the authorship flip as moves
+with a rule about who may make them; revocation made visible. The two keys
+stay separate: an independent session marks a node verified, and only the
+operator claims authorship. The decisions this milestone needs are the
+instance's own -- who may sign, whether DEPTH may move backwards, whether
+implemented and verified belong in DEPTH, agent identity -- and are taken at
+its review, not before.
 
 Consumer surface the operator reviews before implementation: the instance's
 lifecycle rendered from the model, with those decisions marked. Reviewed
-after: the existing fingerprint and readiness checks passing through the new
+after: the existing fingerprint and readiness checks pass through the new
 validators with identical results on the real graph.
 <<<
 RATIONALE: >>>
