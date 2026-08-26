@@ -138,6 +138,22 @@
       echo "ai.shell test vector passed"
     '';
   };
+
+  # Interpreter for packages/strictdoc-grammar/extract/ (SLICE-GRAMMAR-FROM-NIX).
+  # A plain `python3` plus `ast_grep_py`, which the normalizer uses to match and
+  # capture over the faithful surface's Nix source in process — ast-grep is
+  # tree-sitter based and ships a Nix grammar, so nothing else is needed.
+  #
+  # A SUPERSET of the bare `python3` this list used to carry, so the operator-run
+  # `fixtures/kiro-primitives` suites still resolve their interpreter. Kept as one
+  # entry rather than two so a single `python3` is on PATH and it is never
+  # ambiguous which one a script got.
+  #
+  # It deliberately does NOT carry strictdoc's own modules. That is
+  # `pkgs.ai.devTools.strictdoc-grammar-extract`, below, which puts strictdoc's
+  # site-packages on PYTHONPATH — `python3Packages.strictdoc` does not exist, so
+  # `withPackages` cannot reach the grammar builder.
+  grammarPython = pkgs.python3.withPackages (ps: [ps.ast-grep-py]);
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
@@ -189,7 +205,7 @@ in {
     # the packages it explains rather than being read as an LSP concern.
     ++ lib.optionals (!isCI) [
       jq
-      python3
+      grammarPython
     ]
     # strictdoc CLI for the sdoc skill's required format/export loop and for
     # dev/scripts/fp-check.py, fp-accept.py (SLICE-FP-DETECTOR) and
@@ -204,6 +220,20 @@ in {
     # tracks the latest upstream release (SLICE-STRICTDOC-OVERLAY), so a
     # session and the checks it has to satisfy run the same version.
     ++ lib.optionals (!isCI) [pkgs.ai.devTools.strictdoc]
+    # Grammar-surface generation (SLICE-GRAMMAR-FROM-NIX). Interactive only, on
+    # the same reasoning as strictdoc above: milestone 1 is locally invoked and
+    # wires no CI.
+    #
+    #   ast-grep                  the matcher CLI, for writing and testing rules
+    #                             by hand before the normalizer embeds them
+    #   strictdoc-grammar-extract python + strictdoc's dependency closure +
+    #                             strictdoc's own site-packages on PYTHONPATH,
+    #                             with the entry point passed as its argument
+    #                             (see the header of that overlay for why)
+    ++ lib.optionals (!isCI) [
+      pkgs.ast-grep
+      pkgs.ai.devTools.strictdoc-grammar-extract
+    ]
     # LSP servers (in PATH for ENABLE_LSP_TOOL and MCP bridging) —
     # interactive-only, dropped from the diagnostic closure (~1GB: nixd pulls
     # llvm, marksman pulls dotnet). See the isCI note above.
