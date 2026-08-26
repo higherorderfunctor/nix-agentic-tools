@@ -313,9 +313,9 @@ in
           read-only-store caveat). Null typed keys are filtered out before
           reaching upstream, so an option left at its default writes nothing.
 
-          The freeform tail still accepts a key newer than this package's
-          schema — see `allowUnrecognizedSettings`, which is what keeps that
-          tail from also accepting typos. The undocumented `ultracode` session
+          The freeform catch-all still accepts a key newer than this
+          package's schema — see `allowUnrecognizedSettings`, which is what
+          stops it accepting typos too. The undocumented `ultracode` session
           key is intentionally NOT a hand-authored option (see
           ultracodeOnLaunch) but is declared by the binary and so is typed
           like any other.
