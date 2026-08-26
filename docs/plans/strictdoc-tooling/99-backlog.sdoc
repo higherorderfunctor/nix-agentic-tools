@@ -1111,3 +1111,42 @@ Noted while measuring ast-grep for the grammar milestone's conversion pass.
 Two capabilities this repository already carries separately turn out to
 compose, and nothing records that they might.
 <<<
+
+[MECHANISM]
+UID: MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY
+TITLE: The grammar extractor's sources sit on the wrong side of the overlay boundary
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+dev/fragments/overlays/overlay-pattern.md states an invariant: an overlay must
+not import build sources from packages/, because that outbound edge prevents
+lifting the overlay tree as a clean directory move. The two worked examples,
+overlays/kiro-memory-distiller/ and overlays/mcp-servers/openmemory-mem/, both
+keep their repo-local sources beside the derivation that consumes them.
+
+The grammar milestone's layout puts the extractor's three Python entry points
+under packages/strictdoc-grammar/extract/ while exposing the runner at
+pkgs.ai.devTools.strictdoc-grammar-extract, so wiring the entry points into the
+derivation would create exactly that edge.
+
+overlays/dev-tools/strictdoc-grammar-extract.nix therefore ships only the
+environment -- an interpreter carrying strictdoc's dependency closure, its
+site-packages on PYTHONPATH, and ast-grep on PATH -- and takes the entry point
+as its first argument. It works, and it is not the intended shape.
+
+Two ways out, both one small edit. Relocate the entry points under
+overlays/dev-tools/strictdoc-grammar-extract/ and add src plus an --add-flags
+line, which honours the invariant and splits the package's sources from its
+generated output. Or record an exemption to the invariant for generation-time
+tooling and point src at packages/, which keeps the package's four surfaces
+co-located and admits one overlay-to-packages edge.
+
+Nothing enforces the invariant mechanically; there is no check, and no such
+edge exists in the tree today.
+<<<
+RATIONALE: >>>
+Noted while scaffolding the grammar package. A partial wiring that works is the
+kind of thing that stops being noticed once the logic lands on top of it, and
+the choice belongs to whoever owns the overlay taxonomy rather than to the
+session that tripped over it.
+<<<
