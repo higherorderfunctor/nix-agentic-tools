@@ -117,8 +117,11 @@ in {
         log "rendering packages/strictdoc-grammar/values.nix"
         render packages/strictdoc-grammar/values.nix > "$work/grammar.sgra" \
           || fail "values.nix does not render"
+        # `>&2` because devenv shows a task's stderr and swallows its stdout, and
+        # a semantic gate whose PASS is invisible reads exactly like one that
+        # never ran.
         strictdoc-grammar-extract "$extract/compare.py" \
-          docs/sdoc/grammar.sgra "$work/grammar.sgra" \
+          docs/sdoc/grammar.sgra "$work/grammar.sgra" >&2 \
           || fail "the rendered grammar parses to a DIFFERENT model than docs/sdoc/grammar.sgra"
         if diff -u docs/sdoc/grammar.sgra "$work/grammar.sgra"; then
           log "byte-identical to docs/sdoc/grammar.sgra"
@@ -131,7 +134,7 @@ in {
         render "$fixtures/foreign.nix" > "$work/foreign.sgra" \
           || fail "foreign.nix does not render"
         strictdoc-grammar-extract "$extract/compare.py" \
-          "$fixtures/foreign.sgra" "$work/foreign.sgra" \
+          "$fixtures/foreign.sgra" "$work/foreign.sgra" >&2 \
           || fail "the rendered foreign grammar parses to a DIFFERENT model"
         if diff -u "$fixtures/foreign.sgra" "$work/foreign.sgra"; then
           log "byte-identical to $fixtures/foreign.sgra"

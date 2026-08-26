@@ -329,7 +329,9 @@ in {
       exec = ''
         ${bashPreamble}
         ${log}
-        log "Grammar surface generated — run `devenv tasks run check:sdoc-grammar` to gate it"
+        # No backticks in this message: the exec body is bash, and a backtick
+        # pair here really did run the check task as a command substitution.
+        log "Grammar surface generated — gate it with: devenv tasks run check:sdoc-grammar"
       '';
     };
 
