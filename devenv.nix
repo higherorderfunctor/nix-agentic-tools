@@ -265,10 +265,16 @@ in {
     # strictdoc CLI for the sdoc skill's required format/export loop and for
     # dev/scripts/fp-check.py, fp-accept.py (SLICE-FP-DETECTOR) and
     # cycle-check.py (MECH-CYCLE-CHECK). Interactive only --
-    # checks/strictdoc-fp-check.nix, checks/strictdoc-cycle-check.nix, and
-    # checks/strictdoc-grammar-corpus.nix pull it via nativeBuildInputs, not
-    # devShell PATH.
-    ++ lib.optionals (!isCI) [strictdoc]
+    # checks/strictdoc-fp-check.nix and checks/strictdoc-cycle-check.nix pull
+    # it via nativeBuildInputs, not devShell PATH. (checks/
+    # strictdoc-grammar-corpus.nix, named here until 2026-08-25, needs no
+    # strictdoc at all: it exercises the patched tree-sitter grammar against a
+    # pinned fetch of strictdoc's own .sdoc docs.)
+    #
+    # `pkgs.ai.devTools.strictdoc`, not the nixpkgs attribute: the overlay
+    # tracks the latest upstream release (SLICE-STRICTDOC-OVERLAY), so a
+    # session and the checks it has to satisfy run the same version.
+    ++ lib.optionals (!isCI) [pkgs.ai.devTools.strictdoc]
     # LSP servers (in PATH for ENABLE_LSP_TOOL and MCP bridging) —
     # interactive-only, dropped from the CI closure (~1GB: nixd pulls
     # llvm, marksman pulls dotnet). See the isCI note above.
