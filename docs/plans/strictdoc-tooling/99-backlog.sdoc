@@ -2239,3 +2239,28 @@ RATIONALE: >>>
 Left in place deliberately rather than overlooked: an agent editing PARENT_FP is
 the failure this graph already recorded once.
 <<<
+
+[MECHANISM]
+UID: MECH-CI-UP-TO-PAR-BEFORE-MERGE
+TITLE: Bring CI up to par before this branch merges, not while proving it out
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+CI is required to merge, so this branch cannot land without it. The operator's
+position for now is deliberately the other way round: additional CI tooling is
+not required for the bulk of this experiment, because the point is to prove the
+approach out before investing in machinery around it.
+
+So: existing CI tooling is fine, and an agent that adds tooling without having
+got that memo is also fine -- neither is worth reverting. What is needed is a
+pass before merge that checks what actually gates the branch, rather than
+discovering at restack time that the gates were never wired.
+
+Do this when the long-lived branch is restacked into reviewable pull requests,
+not before.
+<<<
+RATIONALE: >>>
+Recorded because "CI is not required" and "CI is required to merge" are both
+true at different times, and only writing the second one down keeps the first
+from being read as permanent.
+<<<
