@@ -426,10 +426,10 @@ DEC-FP-FIELDS-CONFIGURABLE:0000000
 DEC-SYSTEM-PURPOSE:0000000
 <<<
 NOTES: >>>
-Run 2026-08-25. Assessment: private/strict-doc/executable-rules-assessment.md
-(untracked), with the four finder reports, eight contest files, critic pass,
-logs and the Q1 prototype beside it under private/strict-doc/executable-rules/.
-Thirteen agents: one finder per question, a refuter and a defender per report,
+Run 2026-08-25. The assessment is held in the operator's working area outside
+the repository, with the four finder reports, eight contest files, critic pass,
+logs and the Q1 prototype beside it; a fold-in review against two outside
+research documents followed the same day. Thirteen agents: one finder per question, a refuter and a defender per report,
 one cross-question critic; nine refuter-defender splits are surfaced for the
 operator, none adjudicated. RETIRES_ON is not yet met: the operator has not
 reviewed it.
