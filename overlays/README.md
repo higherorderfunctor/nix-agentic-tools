@@ -65,6 +65,25 @@ computed at eval time via `overlays/lib.nix:mkVersion`
   then `npmDepsHash`, in that order because `npmDeps` is derived from `src`. It
   is also `passthru.fixNpmDepsHash`, for a nixpkgs-side change that invalidates
   a hash with no version bump.
+- **Python packages on a bare release tag** (`strictdoc`): the
+  `ghArchiveUpdateScript` contract with three wrinkles. Upstream tags releases
+  with NO `v` (`0.28.3`), so `tagPrefix = ""` — it feeds both the archive URL
+  and `ghLatestVersionCmd`'s tag-stripping sed, and getting it wrong breaks the
+  version check silently rather than the URL loudly. `version`, `src`,
+  `dependencies` and `pythonRelaxDeps` move through `overridePythonAttrs`, not
+  `overrideAttrs`: `buildPythonPackage` CONSUMES the last two as arguments, so
+  an `overrideAttrs` would leave them as dead attrs nothing reads. And
+  `meta.changelog` has to be re-pointed, because nixpkgs builds it from
+  `finalAttrs.src.tag` and a `fetchzip` src has no `tag` at all — anything that
+  reads it (`nix-update` does) dies on a missing attribute rather than on a
+  stale link. Two DEPENDENCY adjustments have their own rules. One the release
+  outgrows is pinned INLINE (`reqif`), never in the sidecar, because
+  `mkUpdateScript` rebuilds the sidecar from scratch and would erase it; that is
+  the same transitive-hash gap as an inline `cargoHash`, and it fails loud
+  rather than silent because the release's own constraint is checked at build
+  time. One the nixpkgs set nearly satisfies is RELAXED via `pythonRelaxDeps`
+  (`pygments`, pinned `== 2.21.0` against 2.20.0) rather than overridden — a
+  patch-level override there forks the closure of the whole Python package set.
 - **Go toolchain gaps** (`gluetun`, `oh-my-posh`): declare the package's go.mod
   floor and let `vu.goToolchainForFloor` DERIVE the toolchain — `ourPkgs.go`
   while our pin satisfies the floor, otherwise the lowest `go-bin`
@@ -157,6 +176,7 @@ computed at eval time via `overlays/lib.nix:mkVersion`
 | gh                    | devTools   | GitHub archive          | go (nixpkgs override)     | `gh`                  | — (doCheck 0) | --version                    |
 | glab                  | devTools   | GitLab tag (fetcher)    | go (nixpkgs override)     | `glab`                | —             | --version                    |
 | oxlint                | devTools   | GitHub main             | pnpm (nixpkgs override)   | `oxlint`              | installCheck  | --type-aware                 |
+| strictdoc             | devTools   | GitHub stable release   | python (nixpkgs override) | `strictdoc`           | imports only  | version == pin               |
 | tsgolint              | devTools   | GitHub main             | go (nixpkgs override)     | `tsgolint`            | upstream      | --help                       |
 | arkenfox              | generic    | GitHub archive          | files only                | —                     | —             | —                            |
 | bruno                 | generic    | GitHub tag (fetcher)    | npm (nixpkgs override)    | `bruno`               | —             | —                            |
