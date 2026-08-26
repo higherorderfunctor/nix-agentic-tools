@@ -1150,3 +1150,389 @@ kind of thing that stops being noticed once the logic lands on top of it, and
 the choice belongs to whoever owns the overlay taxonomy rather than to the
 session that tripped over it.
 <<<
+
+[MECHANISM]
+UID: MECH-DSL-NAMED-CONSTRUCTORS-DO-NOT-SPAN
+TITLE: The DSL's named constructors cover the common case, not the relation space
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The settled DSL shape gives rel.parent and rel.child two positional roles, and
+rel.file as a bare value carrying none. The grammar allows more than that in
+both directions: ROLE and REVERSE_ROLE are optional on Parent and Child, so a
+role-less parent relation is legal, and File takes a ROLE even though it has no
+REVERSE_ROLE production at all.
+
+So the three named constructors between them cannot write two shapes the
+grammar accepts. Both are reachable through the generic rel.mk -- rel.mk
+"parent" {} and rel.mk "file" {role = "Depends";} -- and the types accept both,
+so nothing is unwritable. What is missing is a named way to say it.
+
+Whether that matters depends on whether the DSL is meant to be the readable
+surface for every legal grammar or the fast path for the common one. The same
+question applies to HUMAN_TITLE, which no field constructor names either.
+<<<
+RATIONALE: >>>
+Noted while implementing the DSL against the settled shape. The gap is easy to
+mistake for an oversight and rewrite, and the fix -- more arities, or optional
+attrset arguments -- costs the property that every constructor is currently a
+one-line attrset literal.
+<<<
+
+[MECHANISM]
+UID: MECH-DSL-CHECKS-NOTHING-BY-ITSELF
+TITLE: DSL values are unchecked until something feeds them to the option surface
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The DSL is sugar only, which means it asserts nothing: every constructor is a
+plain attrset literal, and the sole thing that can reject a malformed value is
+the normalized option surface it is checked against. Measured by evaluating the
+DSL with its normalized argument bound to a throw -- every constructor still
+worked, including the ones building values the surface rejects.
+
+That is the intended design, and it has a consequence worth stating. The
+barrel declares a dsl to normalized dependency edge that does not exist at
+evaluation time, so a consumer that imports the DSL and hands the result
+straight to the emitter passes through no type at all. The emitted file would
+then be checked only by strictdoc, at export, where the two silent duplicate
+cases are known not to fire.
+
+The guarantee therefore lives entirely in the consumer's option declaration.
+Either the emitter's entry point takes values already checked -- by declaring
+its input with the normalized type rather than accepting a bare attrset -- or a
+consumer can bypass the surface without noticing.
+<<<
+RATIONALE: >>>
+Noted while proving the DSL cannot weaken the types. It cannot, but "cannot
+weaken" is a statement about a value that reaches the surface, and nothing in
+the current wiring guarantees one does.
+<<<
+
+[MECHANISM]
+UID: MECH-SGRA-ADMITS-NO-COMMENTS
+TITLE: A .sgra file cannot carry a generated-file header, because it has no comment syntax
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The grammar for .sgra files admits nothing before [GRAMMAR] and nothing between
+its keys. A leading # line fails the textx parse at 1:1 with
+Expected '[GRAMMAR]', and there is no alternative comment production anywhere in
+the file. Measured against strictdoc 0.28.3.
+
+Every other generated artefact in this repository opens with a line saying it is
+generated and naming its generator. A .sgra emitted by the grammar surface
+cannot, so docs/sdoc/grammar.sgra will look hand-written forever and a session
+editing it by hand gets no warning at the point of editing. The only places a
+banner could hide are a field HUMAN_TITLE or an element PREFIX, both of which
+change what the file means.
+
+Whatever marks the file as generated therefore has to live outside it -- a
+sibling README, a treefmt or check rule that regenerates and diffs, or a path
+convention. Undecided which.
+<<<
+RATIONALE: >>>
+Noted while building the negative fixture corpus, where the same limitation
+forced the per-fixture expectation out of the fixture files and into their
+README.
+<<<
+
+[MECHANISM]
+UID: MECH-JSON-EXPORT-DROPS-GRAMMAR-DETAIL
+TITLE: The JSON export flattens the grammar it reports, so it cannot verify an emitted .sgra
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+strictdoc export --formats=json reports a DOCUMENTS[].GRAMMAR block, and that
+block is lossy in four ways. Measured on 0.28.3 against a grammar that uses all
+four of them.
+
+Every field TYPE is reported as the string "String" -- a Tag field and a
+MultipleChoice(reader, author, reviewer) field are indistinguishable from a
+plain String one. HUMAN_TITLE is absent. The PROPERTIES block is absent
+entirely, so IS_COMPOSITE, PREFIX and VIEW_STYLE do not appear. Relations carry
+TYPE and ROLE but not REVERSE_ROLE.
+
+That rules the JSON export out as the oracle for the grammar milestone's
+acceptance item 4, which compares the model strictdoc builds from an emitted
+.sgra against the model it builds from the committed one: two grammars differing
+in any of the four would compare equal. The comparison has to run in process
+against the parsed document model, not over exported JSON. It also bounds what
+the sdoc-cli milestone can learn about a grammar from the export it already
+depends on.
+<<<
+RATIONALE: >>>
+Noted while checking that the foreign fixture actually exercised the surface it
+claims to. The export accepted every feature and then reported almost none of
+them back, which is exactly the shape that makes a round-trip check pass without
+having checked anything.
+<<<
+
+[MECHANISM]
+UID: MECH-SGRA-SCANNED-PROJECT-WIDE
+TITLE: A whole-project export reads every .sgra under the root, referenced or not
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+strictdoc export . reads every file with an .sgra extension anywhere beneath the
+project root, whether or not a document imports it. A grammar file that fails to
+parse therefore fails the whole export, from wherever it sits in the tree.
+
+Measured on 0.28.3 while committing the negative fixture corpus for the grammar
+milestone: six deliberately invalid grammars under
+packages/strictdoc-grammar/fixtures/negative/ took the repository-wide export
+from exit 0 to exit 1, on a file nothing referenced. They now carry an
+.sgra.invalid suffix so the scan skips them, which works but encodes the
+constraint in a filename rather than in configuration.
+
+exclude_doc_paths in strictdoc_config.py is the configured answer and already
+carries two globs for the same class of problem with .md files. Whether the
+fixture suffix or a third glob is the right shape is undecided; the glob keeps
+fixtures under their natural extension, the suffix keeps the config from
+listing every directory that might hold one.
+<<<
+RATIONALE: >>>
+The failure is remote from its cause -- the export names the fixture, but
+nothing connects "a file I added under packages/" to "the command that reads the
+design graph". A session that adds an invalid grammar anywhere and then sees the
+graph command break has no reason to look in packages/ for it.
+<<<
+
+[MECHANISM]
+UID: MECH-MULTIPLECHOICE-QUOTING-ASYMMETRY
+TITLE: SingleChoice and MultipleChoice options are quoted by different rules on read and on write
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured on 0.28.3 while writing the .sgra emitter. StrictDoc's reader and
+writer treat SingleChoice and MultipleChoice options differently, and only
+SingleChoice is self-consistent.
+
+GrammarElementFieldSingleChoice strips a surrounding double quote from every
+option at construction, and get_unprocessed_options re-adds it on write for any
+option containing a parenthesis. GrammarElementFieldMultipleChoice does
+neither: the model keeps whatever quoting the file carried, and the writer joins
+options verbatim.
+
+Two consequences. A MultipleChoice option holding a parenthesis, built
+programmatically without quotes, is written to a file that does not parse --
+verified, it fails with a TextXSyntaxError expecting a separator or a closing
+parenthesis at the inner one. And a correctly quoted one round-trips
+byte-stable but carries the literal quote characters inside the model's option
+string, so a node's field value has to include them to match.
+
+The emitter quotes parenthesized options for both kinds, because that is the
+only spelling the grammar accepts. The residual asymmetry is in the model value
+and is upstream's.
+<<<
+RATIONALE: >>>
+Noticed because the emitter's quoting rule was specified as what strictdoc's own
+writer does, and the writer does two different things depending on the field
+kind. Worth knowing before any consumer compares an option vocabulary against a
+field value, and before anyone treats strictdoc's writer as the byte-identity
+oracle for a grammar that uses MultipleChoice.
+<<<
+
+[MECHANISM]
+UID: MECH-DUPLICATE-ELEMENT-TAG-SILENT
+TITLE: Duplicate element TAG is a third silent grammar collision
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured on 0.28.3. Two grammar elements sharing a TAG parse clean and export
+exit 0. DocumentGrammar registers each element with an assignment into
+elements_by_type keyed on the tag, so the lookup keeps the LAST while
+grammar.elements still holds both. Verified directly: a two-element grammar with
+both elements tagged X reports elements X and X, registered_elements holding the
+single name X, and elements_by_type for X carrying the SECOND element's fields.
+
+That is the same class as the duplicate field title and duplicate relation role
+cases the implementation brief records, and the same direction as the field one.
+The brief says those two are the only checks that belong at Nix evaluation; that
+count is one short.
+
+packages/strictdoc-grammar/lib/emit.nix already guards it in its whole-file
+renderer alongside the other two. The open item is the brief's line, and the
+prior question of whether such checks belong to the emitter at all or to the
+type surface.
+<<<
+RATIONALE: >>>
+Found while proving the emitter, by asking whether the two documented collisions
+were the whole set rather than by happening to hit one.
+<<<
+
+[MECHANISM]
+UID: MECH-NIX-REGEX-DIALECT-GAP
+TITLE: Nix's regex engine cannot express the dialect StrictDoc's grammar is written in
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured on 0.28.3 while writing the faithful extractor. builtins.match is
+POSIX ERE. It rejects, outright and at match time rather than at declaration
+time, three constructs the .sgra grammar uses: negative lookahead, the \S class
+shorthand, and backreferences. Three of the nineteen reachable rules carry one:
+FieldName is (?!^UID)(?!^RELATIONS)..., SingleLineString is (?!>>>\r?\n)\S...,
+and ChoiceOption is (["])[^,]+\1|[^,()"]+.
+
+So "faithful means the exact regex" and "the type is checkable" cannot both
+hold. lib/faithful.nix therefore carries two spellings per pattern -- source,
+upstream's verbatim, and ere, a mechanical rewrite -- plus the named rewrites
+that got from one to the other and any deny prefixes a hoisted lookahead
+became. Every rewrite is exact rather than widening: a lookahead becomes an
+explicit prefix rejection, and a construct no named rewrite claims raises.
+
+The open item is that nothing re-validates ere against source. A rewrite that
+silently widened would pass every check in this milestone, because the only
+oracle is that the ERE compiles at all.
+<<<
+RATIONALE: >>>
+Worth knowing before anyone reads the surface as carrying upstream's patterns
+verbatim, and before the normalizer treats ere as the authority. source is the
+authority; ere is a derived artifact of a translation with no test behind it.
+<<<
+
+[MECHANISM]
+UID: MECH-TEXTX-ASGN-ATTR-NAME
+TITLE: The peg assignment node carries its attribute name, and positional correlation is wrong
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured on textx as pinned by 0.28.3. A synthetic __asgn_plain /
+__asgn_oneormore / __asgn_zeroormore node carries _attr_name and _exp_str, both
+the attribute's name. That is the correct way to pair a peg assignment with the
+metamodel attribute it fills.
+
+The obvious alternative -- pairing them positionally, since _tx_attrs preserves
+declaration order -- is wrong, and wrong in exactly one place, which is the
+worst shape for a bug like this. GrammarElementFieldSingleChoice and
+GrammarElementFieldMultipleChoice each assign options TWICE, as
+(options = ChoiceOption) (options *= ChoiceOptionXs), so they have five
+assignment nodes against four attributes and every attribute after the third
+shifts by one. Every other reachable rule correlates positionally just fine.
+<<<
+RATIONALE: >>>
+Recorded because a positional walk passes on eighteen of nineteen rules and
+then mislabels REQUIRED as options on the two choice-field rules, which is a
+plausible surface that type-checks and is silently wrong.
+<<<
+
+[MECHANISM]
+UID: MECH-PEG-REACHABILITY-COUNT
+TITLE: Nineteen rules are reachable from DocumentGrammarWrapper, not twenty-five
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured on 0.28.3. Walking rule references out of the arpeggio parser tree,
+unioned with _tx_inh_by for the two abstract rules, closes at NINETEEN rules
+from DocumentGrammarWrapper: BooleanChoice, ChoiceOption, ChoiceOptionXs,
+DocumentGrammar, DocumentGrammarWrapper, FieldName, GrammarElement,
+GrammarElementField and its four concrete kinds, GrammarElementRelation and its
+three concrete kinds, RequirementType, ReservedKeyword, SingleLineString.
+
+The implementation brief says 25 of 43. The difference is the access path, not
+the grammar: _tx_attrs reports an attribute's declared class, and for a value
+that is an inline regex textx declares it STRING, which drags textx's
+synthesized base types (STRING, ID, BOOL, INT, FLOAT, STRICTFLOAT, NUMBER,
+OBJECT, BASETYPE) into a metamodel-side walk. None of them appears in the peg,
+and none of them constrains anything a .sgra file can say.
+<<<
+RATIONALE: >>>
+Both numbers are right about their own walk. Recorded so a later session
+checking the surface for completeness against the brief's 25 does not go
+looking for six missing rules that are not rules of this grammar.
+<<<
+
+[MECHANISM]
+UID: MECH-EXTRACT-WRAPPER-NO-FORMATTER
+TITLE: The extraction wrapper carries no Nix formatter, so generation is only idempotent by accident
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+overlays/dev-tools/strictdoc-grammar-extract.nix puts strictdoc's dependency
+closure and ast-grep on the wrapper's PATH. It does not put alejandra there.
+
+Generated Nix has to come out already formatted, or treefmt rewrites it and the
+next --check reads that rewrite as drift. extract.py therefore shells out to
+alejandra and warns when it is missing. In a devenv shell it resolves from the
+ambient PATH, which is why generation is currently idempotent -- verified,
+treefmt reports 0 changed and --check exits 0 -- but that is the operator's
+profile doing the work, not the package.
+
+Two ways to close it: add alejandra to the wrapper's --suffix PATH, or have the
+generator emit alejandra's canonical form directly. The first is one line and
+makes the warning unreachable.
+<<<
+RATIONALE: >>>
+Noticed because the warning path is the one that runs in CI, where the wrapper
+is the whole environment. A CI regeneration would silently produce a file that
+the repository's own formatter immediately changes.
+<<<
+
+[MECHANISM]
+UID: MECH-LIST-SEPARATOR-SUPPRESSED
+TITLE: A separated list's separator does not survive into the faithful surface
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured on 0.28.3. The choice-option list is spelled
+
+  '(' ((options = ChoiceOption) (options *= ChoiceOptionXs)) ')'
+
+and ChoiceOptionXs is the separator-carrying rule:
+
+  ChoiceOptionXs[noskipws]: /, /- ChoiceOption
+
+The `-` suffix is arpeggio's suppression marker, and the extracted production
+for ChoiceOptionXs carries only the rule reference: the /, / match is gone.
+
+So the SHAPE of a separated list is derivable from the surface -- one mandatory
+assignment then a zeroOrMore assignment to the same option -- and the
+normalizer classifies it from exactly that. The SEPARATOR is not. The ", " join
+therefore lives in the encoder as knowledge rather than as a derivation, in
+both lib/emit.nix and the `commaList` pair in extract/normalize.py.
+
+Fix shape: teach extract.py to record suppressed matches as a `separator` on
+the repetition item, and have the encoder read it.
+<<<
+RATIONALE: >>>
+The whole point of generating the surface is that no vocabulary is hand-typed.
+", " is currently a hand-typed constant in two files, and if upstream ever
+changed the separator both would keep emitting the old one against a grammar
+that no longer parses it.
+<<<
+
+[MECHANISM]
+UID: MECH-DSL-SHAPE-DIVERGES-FROM-SURFACE
+TITLE: The DSL and emitter value shape does not typecheck against the generated surface
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Two incompatible field shapes are live at once in packages/strictdoc-grammar.
+
+The generated surface follows textx, which repeats TITLE inside every
+alternative, so a field is the union itself:
+
+  {singleChoice = {title = "STATUS"; options = ["Draft"]; required = true;};}
+
+lib/dsl.nix and lib/emit.nix follow the implementation brief's "shape, as
+designed", which hoists the title out and names the union `kind`, and which
+spells the vocabulary `choices`:
+
+  {title = "STATUS"; kind.singleChoice = {choices = ["Draft"];};}
+
+Both evaluate. They do not typecheck against each other: values built with the
+DSL are never checked by types.GrammarElementField, so the brief's acceptance
+item 3 -- "the DSL evaluates and cannot weaken the types" -- is not currently
+demonstrable, and item 4's round trip runs entirely on the emitter's own shape.
+
+Fix shape: one of the two moves. Either the emitter and DSL adopt the generated
+shape, or normalize.py grows a converter pair that rewrites the union into
+title-plus-kind and encodes back -- which is exactly what a converter pair is
+for, and would make the hoist a recorded decision rather than a divergence.
+<<<
+RATIONALE: >>>
+Noticed while checking that emit.nix consumes normalized.encoders: it does, but
+it reads `body.choices` off a value the normalized types would reject. Two
+shapes that both work in isolation are the kind of thing that only surfaces
+when someone finally wires the check that compares them.
+<<<
