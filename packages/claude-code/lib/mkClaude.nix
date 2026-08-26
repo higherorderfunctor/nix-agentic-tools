@@ -986,9 +986,20 @@ in
           })
           # Legacy `settings.hooks` escape hatch → same settings.json.hooks,
           # verbatim (composes via the list merge, never clobbers).
-          (lib.mkIf ((cfg.nativeSettings.hooks or {}) != {}) {
-            files.".claude/settings.json".json.hooks = cfg.nativeSettings.hooks;
-          })
+          #
+          # Test the VALUE, not the presence. `hooks` used to be undeclared, so
+          # `or {}` supplied the unset case; it is now a generated option that
+          # always exists and defaults to null, so `or` never fires and
+          # `null != {}` is true for every consumer who set no hooks at all.
+          # That wrote `json.hooks = null`, which both conjured a settings.json
+          # nobody asked for and collided with devenv's own non-null definition
+          # of the same attr. Any future `cfg.nativeSettings.<key> or <default>`
+          # has the same trap: declaring a key changes what `or` means.
+          (lib.mkIf
+            (cfg.nativeSettings.hooks != null && cfg.nativeSettings.hooks != {})
+            {
+              files.".claude/settings.json".json.hooks = cfg.nativeSettings.hooks;
+            })
           # Script bodies → standalone hook files (greenfield; mirrors HM's
           # programs.claude-code.hooks path, which devenv's claude.code lacks).
           (lib.mkIf (cfg.hookScripts != {}) {
