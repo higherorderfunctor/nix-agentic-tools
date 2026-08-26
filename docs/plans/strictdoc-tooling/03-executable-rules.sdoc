@@ -339,6 +339,52 @@ They reach strictdoc through nativeBuildInputs rather than the devShell, so
 flake check` builds everything in checks, so as a consequence they are in the CI
 gate; whether that is wanted is the operator's call and is logged as
 MECH-GRAMMAR-CHECKS-ARE-IN-FLAKE-CHECK.
+
+Landed 2026-08-26. DEPTH is implemented rather than verified: the chain runs end
+to end and every acceptance item has a gate that fails when its subject is
+broken, but no independent session has re-derived any of it.
+
+What runs, and what each of the seven acceptance items is gated by. The extractor
+produces the faithful surface with no hand-typed enum and the normalizer produces
+the normalized surface plus encoders, both regenerated and diffed by
+-surface-current (1, 2). The DSL cannot weaken the types, gated by -surface-live
+as a differential -- rejected WITH the type check, and six of the nine cases
+additionally ACCEPTED by the emitter alone (3). The emitted grammar builds a model
+equal to the one strictdoc builds from the committed docs/sdoc/grammar.sgra, and
+the bytes are identical, gated by -model-equal (4, 5) -- no normalization commit
+was needed and grammar.sgra was never touched. Eight negative fixtures fail, each
+at the layer fixtures/README.md names, gated by -negative-fixtures (6). The
+foreign grammar -- composite nodes, view styles, human titles, child relations,
+Tag, MultipleChoice, a no-prefix element -- round-trips and exports, gated by
+-foreign-roundtrip (7).
+
+Nothing in the milestone is red. Two things outside it are worth stating.
+strictdoc-grammar-corpus went red when fixtures/foreign.sgra landed, on a real
+gap in the patched tree-sitter grammar rather than on the fixture, and is green
+again -- see MECH-TREE-SITTER-CHOICE-OPTION-CANNOT-LEX-A-DOT for what was
+widened and what the fixture gave up to get there. Separately, a DEFAULT-format
+`strictdoc export` of this corpus exits 1 and predates this work: the HTML path
+renders through docutils and a bare `*.sdoc` glob in one node's prose is an
+unterminated RST emphasis. Every documented loop here passes --formats=json, so
+that path is never exercised; logged as MECH-DEFAULT-EXPORT-IS-RED-ON-RST.
+
+Open, and the operator's to decide rather than a session's:
+
+- whether docs/sdoc/grammar.sgra becomes a generated file, now that it renders
+  byte-identically (MECH-GRAMMAR-SGRA-NOT-GENERATED);
+- whether the five gates stay flake checks, which puts them in CI against this
+  milestone's "wires no CI" (MECH-GRAMMAR-CHECKS-ARE-IN-FLAKE-CHECK);
+- whether the Governed_By edge to DEC-FP-FIELDS-CONFIGURABLE and its PARENT_FP
+  entry move to the milestone that delivers contract fields;
+- whether dev/tasks/check.nix defers to the flake checks rather than restating
+  them in bash (MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE);
+- whether emit.grammar stays callable without lib/check.nix, which is the one
+  way a consumer still reaches the emitter with no type in between
+  (MECH-DSL-CHECKS-NOTHING-BY-ITSELF);
+- whether the caret-anchored denials recorded under denyAtLineStart are ever
+  enforced, and where (MECH-LINE-ANCHORED-DENIAL-UNENFORCED);
+- whether HTML is a supported view of this corpus at all
+  (MECH-DEFAULT-EXPORT-IS-RED-ON-RST).
 <<<
 RELATIONS:
 - TYPE: Parent
