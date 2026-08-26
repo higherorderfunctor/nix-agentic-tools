@@ -1,5 +1,6 @@
 APFS
 EEXIST
+FREETEXT
 GOARCH
 GOOS
 GOTOOLCHAIN
@@ -22,7 +23,9 @@ argjson
 argstr
 aristocratos
 arkenfox
+arpeggio
 arxanas
+attrTag
 attrset
 attrsets
 aubut
@@ -142,7 +145,6 @@ fixpoint
 foldl
 footgun
 formedness
-FREETEXT
 frepo
 frontloaded
 frontmatter
@@ -239,6 +241,7 @@ mdformat
 memoizer
 mergetool
 metacharacter
+metamodel
 misattributes
 miscited
 mlen
@@ -248,6 +251,7 @@ moff
 mojibake
 mountpoint
 mtimes
+mult
 mystor
 napi
 narinfo
@@ -338,14 +342,15 @@ reflog
 reftable
 regen
 reimplementation
+relitigate
 relpath
 remapper
 reparent
 replayable
 repoint
-reqif
 reprioritize
 repros
+reqif
 rerere
 restager
 revertibility
@@ -413,6 +418,7 @@ sympy
 taplo
 tengu
 testapp
+textx
 timespec
 tinyduck
 tmpfs
