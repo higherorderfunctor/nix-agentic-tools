@@ -52,6 +52,8 @@ inputs:
     inputs:
       nixpkgs:
         follows: nixpkgs
+  strictdoc:
+    url: github:strictdoc-project/strictdoc/7cf8183498ec87be531499230602df33523ed058
   treefmt-nix:
     url: github:numtide/treefmt-nix/27b3b12a8e6375f28ebe122f07d230ca5459bbfa
     inputs:

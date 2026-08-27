@@ -68,6 +68,20 @@
       url = "github:oraios/serena";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # strictdoc — taken from UPSTREAM'S OWN FLAKE, not built here. Its
+    # uv.lock is the single source of truth for every Python dependency, so
+    # the reqif pin and the pygments relaxation this repo used to carry
+    # against nixpkgs' recipe are gone with the first-party build.
+    #
+    # NO follows, deliberately: the flake is a uv2nix package set locked and
+    # tested against upstream's own nixpkgs, and rewriting that pin would
+    # fork the set this repo does not own. It also keeps the package's store
+    # path independent of any consumer's nixpkgs, which is what
+    # checks.cache-hit-parity asserts. Swept by the normal flake-input
+    # update (config/generate-update-ninja.nix derives its targets from
+    # flake.lock), claimed by `passthru.updateFlakeInput` in
+    # overlays/dev-tools/strictdoc.nix.
+    strictdoc.url = "github:strictdoc-project/strictdoc";
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";

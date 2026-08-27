@@ -189,10 +189,6 @@ _: {
     otel-tui = {flags = ["--use-update-script" "--override-filename" "overlays/generic/otel-tui.nix"];};
     pnpm_10 = {flags = ["--use-update-script" "--override-filename" "overlays/generic/pnpm_10.nix"];};
     pnpm_11 = {flags = ["--use-update-script" "--override-filename" "overlays/generic/pnpm_11.nix"];};
-    # strictdoc is the one row here whose upstream tags carry NO `v` prefix.
-    # That lives entirely inside the overlay's `tagPrefix = ""` and is
-    # invisible to this registry, the same way glab's GitLab version check is.
-    strictdoc = {flags = ["--use-update-script" "--override-filename" "overlays/dev-tools/strictdoc.nix"];};
   };
 
   # Packages excluded from the update loop entirely.
