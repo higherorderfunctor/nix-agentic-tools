@@ -1,20 +1,27 @@
 # cspell:ignore attrpath attrset attrsets arpeggio lookaheads sgra textx nullOr strmatching
-"""Normalize the faithful Nix surface into better Nix types, plus encoders.
+"""Build the typed Nix surface from faithful's raw rule records, plus encoders.
 
 Reads ``packages/strictdoc-grammar/lib/faithful.nix`` and writes
 ``packages/strictdoc-grammar/lib/normalized.nix``.
 
+THE DECOMPOSITION LIVES HERE, not in the faithful surface. ``faithful.nix`` is
+the grammar's own production tree with every pattern exactly as upstream spells
+it — no types, no dialect rewrite, no lookahead lifted out of anything. Turning
+that into Nix types is a transformation, so it happens on this side of the line:
+``decompose.py`` spells a rule as a Nix type and names every rewrite it
+performed on the way, and this module decides which of those types can be
+better than a checked string.
+
 Every converter is a PAIR — a type rewrite (faithful type -> normalized type)
 and an encoder (normalized value -> faithful value, on the way to the file).
-``IS_COMPOSITE`` is ``strMatching "(True|False)"`` faithfully and ``types.bool``
+``IS_COMPOSITE`` is ``strMatching "(True|False)"`` decomposed and ``types.bool``
 normalized, so its encoder is ``b: if b then "True" else "False"``.
 
-NORMALIZED IS FAITHFUL WITH NODES REPLACED, not a parallel structure. The
-generated file is literally faithful's own ``types`` source text with the
-converted nodes spliced out and their rewrites spliced in; everything else —
-``productions``, ``meta``, every preserved regex, every description — comes
-through unchanged, and the emitted body is ``faithful // { … }``. A node this
-file never mentions is byte-for-byte the node the extractor wrote.
+``decompose.py`` builds every node and calls back here for each one; a converter
+returns replacement Nix source or nothing, and a node no converter replaces is
+the one the decomposition built. ``converters.applied`` in the generated file is
+the complete census: every node of the surface, and the named converter that
+claimed it.
 
 FAILS LOUDLY. A shape no converter recognizes is an error, never a fallback to
 free text: declaring a value unconstrained is itself a NAMED converter, so "we
@@ -22,20 +29,19 @@ decided this is free text" stays distinguishable from "nobody classified this".
 An upstream grammar change therefore reddens the update sweep instead of
 quietly widening a type. Concretely, every one of these raises:
 
-* a ``patternType`` argument carrying a key, or a ``rewrites`` entry, this
-  module has not been taught (the extractor learned a trick nobody classified);
+* a pattern record carrying a key, or a ``rewrites`` entry, this module has not
+  been taught (``decompose.py`` learned a trick nobody classified);
 * a regex that is neither a literal alternation, nor unconstrained, nor in
   ``PRESERVED_PATTERNS`` — the explicit register of patterns a human read and
   decided stay a regex check;
-* a type expression whose head is not one of the four this surface uses
-  (``patternType``, ``t.submodule``, ``t.attrTag``, ``t.nullOr`` /
-  ``t.nonEmptyListOf``), or a rule reference to a rule that does not exist;
-* an optional option that does not carry ``default = null``;
+* a node kind ``decompose.py`` emits that no converter claims;
 * a list whose faithful production is neither a ``oneOrMore`` repetition nor
-  the mandatory-then-``zeroOrMore`` separated pair.
+  the mandatory-then-``zeroOrMore`` separated pair;
+* a ``^``-anchored lookahead whose enforcement nobody has decided — see
+  ``decompose.LINE_ANCHORED_DENIALS``.
 
 To see the error path, point the normalizer at a doctored faithful surface —
-change one ``ere`` to something unclassifiable and it exits non-zero naming the
+change one pattern to something unclassifiable and it exits non-zero naming the
 pattern and the path it came from:
 
     sed 's/"(Plain|Simple|Inline|Narrative|Table|Zebra)"/"[a-f0-9]{32}"/' \\
@@ -47,14 +53,9 @@ MEASURED, do not re-derive (see ../docs/implementation-brief.md):
 * Convert a pattern to an enum ONLY when it is a single group of pure literal
   alternation. A character class, a quantifier or a nested group stays a regex
   check. Never guess an enum from a pattern that was not fully understood.
-* ``ast-grep`` is the MATCHER, not a rewriter. A ``fix:`` rule emits one text
-  replacement and cannot produce a type declaration *and* an encoder from one
-  match, so: match, take the captures, emit both from Python. The owning
-  attribute name is reachable by walking up to the enclosing ``binding`` node,
-  so the field name is available alongside the pattern.
 * ``ast-grep`` and its ``ast_grep_py`` bindings are both 0.45.1, tree-sitter
-  based, and ship a Nix grammar — they match and capture over Nix source in
-  process with nothing added.
+  based, and ship a Nix grammar — they read the faithful surface's data back
+  out of the file in process, with nothing added.
 """
 
 from __future__ import annotations
@@ -67,15 +68,18 @@ from typing import Sequence
 
 from ast_grep_py import SgRoot
 
+import decompose
 import emit_nix
+from decompose import Surface
 from emit_nix import Raw
+from shape import ExtractionError
 
 DEFAULT_INPUT = "packages/strictdoc-grammar/lib/faithful.nix"
 DEFAULT_OUTPUT = "packages/strictdoc-grammar/lib/normalized.nix"
 
 
 class UnrecognizedShape(Exception):
-    """Raised when no named converter claims a faithful node.
+    """Raised when no named converter claims a decomposed node.
 
     This is the fail-closed condition, and it is deliberately an exception and
     not a warning: an unclassified shape must stop the sweep.
@@ -127,12 +131,12 @@ CONVERTERS: dict[str, dict[str, object]] = {
         "description": (
             "A separated list: one mandatory element then zero or more of the "
             "separator rule. Type unchanged — the grammar demands at least one "
-            "option and normalized never weakens faithful — so the whole "
-            "content of this pair is the encoder, which joins with ', '. That "
-            "is the SHARED encoder a MultipleChoice or Tag field value also "
-            "uses at the document layer; in the grammar surface itself Tag "
-            "declares no vocabulary, so only the two choice-option lists reach "
-            "it here."
+            "option and normalized never weakens the decomposition — so the "
+            "whole content of this pair is the encoder, which joins with ', '. "
+            "That is the SHARED encoder a MultipleChoice or Tag field value "
+            "also uses at the document layer; in the grammar surface itself "
+            "Tag declares no vocabulary, so only the two choice-option lists "
+            "reach it here."
         ),
     },
     "decodedOption": {
@@ -150,7 +154,7 @@ CONVERTERS: dict[str, dict[str, object]] = {
             "deliberately: `GrammarElementFieldSingleChoice."
             "get_unprocessed_options` decides WHEN to quote, and it lives in "
             "strictdoc's WRITER, not in the grammar this file is derived from. "
-            "The type here is narrower than faithful in one direction (no "
+            "The type here is narrower than the token in one direction (no "
             "embedded double quote, which would make the round trip "
             "ambiguous) and wider in the other (an unquoted parenthesis is "
             "fine, because the encoder quotes it) — which is what a converter "
@@ -174,9 +178,9 @@ CONVERTERS: dict[str, dict[str, object]] = {
         "rewrite": "lib.types.enum",
         "encoder": "enum",
         "description": (
-            "A named rule whose literal vocabulary the extractor read off the "
-            "grammar STRUCTURE (an OrderedChoice of StrMatch children, or a "
-            "bare StrMatch) rather than off a regex, and recorded as "
+            "A named rule whose literal vocabulary the decomposition read off "
+            "the grammar STRUCTURE (an OrderedChoice of StrMatch children, or "
+            "a bare StrMatch) rather than off a regex, and recorded as "
             "`literals`. Same rewrite as literalAlternation, kept a separate "
             "name because it is a separate access path and the two disagreeing "
             "is a bug worth being able to see."
@@ -187,9 +191,9 @@ CONVERTERS: dict[str, dict[str, object]] = {
         "rewrite": "unchanged (lib.types.nonEmptyListOf)",
         "encoder": None,
         "description": (
-            "A `+=` repetition. Already nonEmptyListOf in faithful; classified "
-            "so that a list is never left unaccounted for, and so that a "
-            "future repetition shape has to be classified rather than "
+            "A `+=` repetition. Already nonEmptyListOf as decomposed; "
+            "classified so that a list is never left unaccounted for, and so "
+            "that a future repetition shape has to be classified rather than "
             "inherited."
         ),
     },
@@ -198,24 +202,27 @@ CONVERTERS: dict[str, dict[str, object]] = {
         "rewrite": "unchanged (lib.types.nullOr, default null)",
         "encoder": None,
         "description": (
-            "An optional group in the grammar. Already nullOr in faithful; the "
-            "content of this pair is the ASSERTION that the option carries "
-            "`default = null`, without which an unset optional would be a "
-            "missing-value error instead of an omitted line, and the emitter's "
-            "`or null` reads would never see it."
+            "An optional group in the grammar. The content of this pair is "
+            "that the option carries `default = null` — without which an unset "
+            "optional would be a missing-value error instead of an omitted "
+            "line, and the emitter's `or null` reads would never see it. "
+            "`decompose.py` gives every optional that default as it builds the "
+            "declaration, so a nullOr without one cannot be built at all "
+            "rather than merely being rejected."
         ),
     },
     "regexPreserved": {
         "kind": "pair",
-        "rewrite": "unchanged (the faithful pattern)",
+        "rewrite": "unchanged (the decomposed pattern)",
         "encoder": None,
         "description": (
             "A pattern a human read and decided stays a regex check — a "
             "character class, a quantifier or a nested group, none of which can "
-            "become an enum without guessing. Registered by (source, ere) pair "
-            "in PRESERVED_PATTERNS, NOT a fallback: an unregistered pattern is "
-            "an error, so 'we decided this stays a regex' and 'nobody "
-            "classified this' stay distinguishable."
+            "become an enum without guessing; or one carrying a denial lifted "
+            "out of a lookahead, which no enum can express. Registered by "
+            "(source, ere) pair in PRESERVED_PATTERNS, NOT a fallback: an "
+            "unregistered pattern is an error, so 'we decided this stays a "
+            "regex' and 'nobody classified this' stay distinguishable."
         ),
     },
     "ruleReference": {
@@ -266,16 +273,17 @@ ENCODER_SOURCE: dict[str, str] = {
     "str": "s: s",
 }
 
-# Every rewrite name `extract.py` can attach to a pattern. An unknown one means
-# the extractor learned a rewrite this module has never seen, and the pattern it
-# is attached to has therefore not been classified by anyone.
+# Every rewrite name `decompose.py` can attach to a pattern. An unknown one
+# means the decomposition learned a rewrite this module has never seen, and the
+# pattern it is attached to has therefore not been classified by anyone.
 KNOWN_REWRITES = frozenset(
     {
         "backreference-to-literal",
         "bracket-escaped-hyphen",
         "control-escape-to-literal",
         "hoist-negative-lookahead",
-        "line-anchored-lookahead-is-positional",
+        decompose.POSITIONAL_REWRITE,
+        decompose.RESERVED_REWRITE,
         "literal-to-pattern",
         "negative-lookahead-rule",
         "ordered-choice-to-alternation",
@@ -283,13 +291,15 @@ KNOWN_REWRITES = frozenset(
     }
 )
 
-# Keys a `patternType` argument may carry. `literals` and `denyRule` are
-# optional; the rest are mandatory.
+# Keys a pattern record may carry. `literals` and `denyRule` are optional; the
+# rest are mandatory.
 #
-# `denyAtLineStart` carries the `^`-anchored lookaheads, which constrain WHERE a
-# rule may be entered rather than what its value may be, and are therefore
-# recorded and not enforced — see extract.py's module docstring. Nothing here
-# converts it: it is metadata about the pattern, not part of the type.
+# The two denial lists are the two halves of one split, and both are consulted
+# here only to keep the pattern's faithful spelling. `deny` is enforced by
+# `patternType`'s addCheck branch and holds every denial that constrains the
+# VALUE — a bare lookahead, and a `^`-anchored one whose word is an alternative
+# of nothing. `denyAtLineStart` holds the rest: recorded, deliberately inert,
+# and never part of the type. `decompose.py` decides which is which.
 PATTERN_KEYS = frozenset(
     {"deny", "denyAtLineStart", "denyRule", "ere", "literals", "rewrites", "source"}
 )
@@ -297,8 +307,8 @@ PATTERN_REQUIRED_KEYS = frozenset({"deny", "denyAtLineStart", "ere", "rewrites",
 
 # Patterns that stay regex checks, registered as (upstream source, our ERE) with
 # the reason. Keyed on BOTH dialects on purpose: upstream changing the regex and
-# extract.py changing how it rewrites one are different regressions, and each
-# should stop the sweep.
+# `decompose.py` changing how it rewrites one are different regressions, and
+# each should stop the sweep.
 #
 # This register is hand-written, and that is the point — it is the only place a
 # human decision about a pattern is recorded, so upstream adding a constrained
@@ -308,7 +318,7 @@ PRESERVED_PATTERNS: dict[tuple[str, str], str] = {
     (
         "(?!^UID)(?!^RELATIONS)[A-Z]+[A-Za-z0-9_\\-]*",
         "[A-Z]+[A-Za-z0-9_-]*",
-    ): "FieldName — a character class with a quantifier, plus two denied prefixes",
+    ): "FieldName — a character class with a quantifier, plus two lifted lookahead groups",
     (
         "[A-Z]+(_[A-Z]+)*",
         "[A-Z]+(_[A-Z]+)*",
@@ -352,8 +362,19 @@ _REGEX_META = frozenset(".[]()*+?{}|^$\\")
 # The escapes `emit_nix.render_string` produces, inverted.
 _UNESCAPE = {"\\": "\\", '"': '"', "n": "\n", "r": "\r", "t": "\t", "$": "$"}
 
+# The generated file's `let`, as (name to test for use, binding name, source).
+# A binding nothing mentions is DROPPED: a converted node can orphan the helper
+# it used, and deadnix fails a commit on an unused `let` binding. A binding name
+# of None renders its source as a whole line, which is the only way to spell an
+# `inherit`.
+PREAMBLE: tuple[tuple[str, str | None, str], ...] = (
+    ("t", "t", "lib.types"),
+    ("mkOption", None, "inherit (lib) mkOption;"),
+    ("patternType", "patternType", decompose.PATTERN_TYPE_SRC),
+)
 
-## Nix source helpers ########################################################
+
+## Reading the faithful surface ##############################################
 
 
 def decode_nix_string(text: str) -> str:
@@ -385,15 +406,14 @@ def bindings_of(node) -> dict[str, object]:
     """
     found: dict[str, object] = {}
     for child in node.children():
-        candidates = (
-            child.children() if child.kind() == "binding_set" else [child]
-        )
+        candidates = child.children() if child.kind() == "binding_set" else [child]
         for candidate in candidates:
             if candidate.kind() != "binding":
                 continue
             path = candidate.field("attrpath")
             if path is not None:
-                found[path.text()] = candidate
+                key = path.text()
+                found[decode_nix_string(key) if key.startswith('"') else key] = candidate
     return found
 
 
@@ -402,40 +422,59 @@ def value_of(binding):
     return binding.field("expression")
 
 
-def unwrap(node):
-    """Strip one layer of parentheses, if there is one."""
-    if node.kind() != "parenthesized_expression":
-        return node
-    for child in node.children():
-        if child.kind() not in ("(", ")"):
-            return child
-    raise UnrecognizedShape("empty parenthesized expression")
+_ATOMS = {"true": True, "false": False, "null": None}
 
 
-def apply_parts(node) -> tuple[str, object]:
-    """Split an application into its function's source text and its argument."""
-    children = [c for c in node.children() if c.kind() not in ("(", ")")]
-    if len(children) != 2:
+def nix_data(node):
+    """One Nix DATA expression as a Python value.
+
+    The faithful surface is data all the way down — that is what it means for it
+    to carry no types — so this reader is total over it, and anything it meets
+    that is not data is an error rather than a string it guessed at.
+    """
+    kind = node.kind()
+    if kind == "attrset_expression":
+        return {name: nix_data(value_of(b)) for name, b in bindings_of(node).items()}
+    if kind == "list_expression":
+        return [
+            nix_data(child)
+            for child in node.children()
+            if child.kind() not in ("[", "]")
+        ]
+    if kind == "string_expression":
+        return decode_nix_string(node.text())
+    if kind == "integer_expression":
+        return int(node.text())
+    if kind == "variable_expression":
+        text = node.text()
+        if text in _ATOMS:
+            return _ATOMS[text]
+    raise UnrecognizedShape(
+        f"the faithful surface carries a {kind} where data was expected: "
+        f"{node.text()[:60]!r}"
+    )
+
+
+def read_faithful(source: str) -> dict:
+    """The rule records of a faithful surface, by rule name."""
+    root = SgRoot(source, "nix").root()
+    attrset = root.find(kind="attrset_expression")
+    if attrset is None:
+        raise UnrecognizedShape("the faithful surface has no attribute set body")
+    top = bindings_of(attrset)
+    for required in ("meta", "productions"):
+        if required not in top:
+            raise UnrecognizedShape(f"the faithful surface has no top-level `{required}`")
+    if "types" in top:
         raise UnrecognizedShape(
-            f"expected a one-argument application, got {len(children)} children"
+            "the faithful surface carries a `types` block. Types are a "
+            "decomposition and this layer must not have one — regenerate it with "
+            "the current extract.py"
         )
-    return children[0].text(), unwrap(children[1])
-
-
-def string_value(node) -> str:
-    """The value of a string-literal expression."""
-    return decode_nix_string(node.text())
-
-
-def string_list(node) -> list[str]:
-    """The values of a list of string literals."""
-    if node.kind() != "list_expression":
-        raise UnrecognizedShape(f"expected a list, got {node.kind()}")
-    return [
-        string_value(child)
-        for child in node.children()
-        if child.kind() not in ("[", "]")
-    ]
+    rules = nix_data(value_of(top["productions"]))
+    if not rules:
+        raise UnrecognizedShape("the faithful surface has no productions")
+    return rules
 
 
 ## Pattern analysis ##########################################################
@@ -480,32 +519,29 @@ def literal_alternation(ere: str) -> list[str] | None:
     return literals
 
 
-def classify_pattern(path: str, arg) -> dict[str, object]:
-    """Classify one `patternType { … }` argument. Raises when nothing claims it.
+def classify_pattern(path: str, record: dict) -> dict[str, object]:
+    """Classify one pattern record. Raises when nothing claims it.
 
     Returns the classification: the converter's name, the Nix source that
     replaces the node (or None to keep it), and a detail for the census.
     """
-    fields = bindings_of(arg)
-    unknown = set(fields) - PATTERN_KEYS
+    unknown = sorted(set(record) - PATTERN_KEYS)
     if unknown:
         raise UnrecognizedShape(
-            f"{path}: patternType carries key(s) {sorted(unknown)} that no converter "
-            f"has been taught; the extractor is recording something new"
+            f"{path}: the pattern record carries key(s) {unknown} that no converter "
+            f"has been taught; the decomposition is recording something new"
         )
-    missing = PATTERN_REQUIRED_KEYS - set(fields)
+    missing = sorted(PATTERN_REQUIRED_KEYS - set(record))
     if missing:
-        raise UnrecognizedShape(f"{path}: patternType is missing {sorted(missing)}")
+        raise UnrecognizedShape(f"{path}: the pattern record is missing {missing}")
 
-    source = string_value(value_of(fields["source"]))
-    ere = string_value(value_of(fields["ere"]))
-    deny = string_list(value_of(fields["deny"]))
-    rewrites = string_list(value_of(fields["rewrites"]))
-    literals = (
-        string_list(value_of(fields["literals"])) if "literals" in fields else None
-    )
+    source = record["source"]
+    ere = record["ere"]
+    deny = record["deny"]
+    anchored = record["denyAtLineStart"]
+    literals = record.get("literals")
 
-    strange = sorted(set(rewrites) - KNOWN_REWRITES)
+    strange = sorted(set(record["rewrites"]) - KNOWN_REWRITES)
     if strange:
         raise UnrecognizedShape(
             f"{path}: pattern carries rewrite(s) {strange} this module has never "
@@ -523,16 +559,26 @@ def classify_pattern(path: str, arg) -> dict[str, object]:
 
     parsed = literal_alternation(ere)
 
-    # A denied prefix is a constraint no enum can carry, so the pattern keeps
-    # its faithful spelling whatever else it looks like.
-    if deny:
-        return _preserve(path, source, ere, "denied prefixes " + ", ".join(map(repr, deny)))
+    # A lifted lookahead is a constraint no enum can carry, so a pattern that
+    # has one keeps its faithful spelling whatever else it looks like — the
+    # inert half included, because dropping a record is how a decision stops
+    # being visible.
+    if deny or anchored:
+        why = []
+        if deny:
+            why.append("enforced denials " + ", ".join(map(repr, deny)))
+        if anchored:
+            why.append(
+                "recorded but not enforced, being alternatives of the rule that "
+                "denies them: " + ", ".join(map(repr, anchored))
+            )
+        return _preserve(path, source, ere, "; ".join(why))
 
     if literals is not None:
         # The vocabulary came off the grammar STRUCTURE. Cross-check it against
         # the regex: the two access paths disagreeing is a real defect, and the
-        # extractor writing `literals` for a pattern that is not an alternation
-        # means one of them is lying about the same rule.
+        # decomposition writing `literals` for a pattern that is not an
+        # alternation means one of them is lying about the same rule.
         if parsed is None:
             raise UnrecognizedShape(
                 f"{path}: `literals` {literals} was recorded but the ERE {ere!r} is "
@@ -544,10 +590,10 @@ def classify_pattern(path: str, arg) -> dict[str, object]:
                 f"{path}: `literals` {literals} does not match the ERE {ere!r}, "
                 f"which spells {parsed}"
             )
-        return _vocabulary(path, "namedChoice", literals, source, ere)
+        return _vocabulary("namedChoice", literals, source)
 
     if parsed is not None:
-        return _vocabulary(path, "literalAlternation", parsed, source, ere)
+        return _vocabulary("literalAlternation", parsed, source)
 
     if ere in UNCONSTRAINED_EREs:
         return {
@@ -559,9 +605,7 @@ def classify_pattern(path: str, arg) -> dict[str, object]:
     return _preserve(path, source, ere, None)
 
 
-def _vocabulary(
-    path: str, converter: str, literals: list[str], source: str, ere: str
-) -> dict[str, object]:
+def _vocabulary(converter: str, literals: list[str], source: str) -> dict[str, object]:
     """A literal vocabulary: types.bool for True/False, types.enum otherwise."""
     if literals == ["True", "False"]:
         return {
@@ -593,83 +637,86 @@ def _preserve(path: str, source: str, ere: str, why: str | None) -> dict[str, ob
     return {
         "converter": "regexPreserved",
         "replacement": None,
-        "detail": reason if why is None else f"{reason}; {why}",
+        "detail": reason if not why else f"{reason}; {why}",
     }
 
 
-## Productions ###############################################################
+def classify_list(
+    path: str, rule: str, option: str, multiplicities: Sequence[str]
+) -> dict[str, object]:
+    """Decide which list shape a repetition came from.
 
-
-def option_multiplicities(production, option: str) -> list[str]:
-    """The multiplicities of every assignment to `option`, in source order.
-
-    Read out of faithful's `productions` rather than off the type, because the
-    type has already collapsed both list shapes to nonEmptyListOf and the
-    difference between them is exactly what decides whether a separator is
-    involved.
+    Read off the assignments in faithful's production rather than off the type,
+    because the type has already collapsed both list shapes to nonEmptyListOf
+    and the difference between them is exactly what decides whether a separator
+    is involved.
     """
-    hits = []
-    for binding in production.find_all(kind="binding"):
-        path = binding.field("attrpath")
-        if path is None or path.text() != "option":
-            continue
-        if string_value(value_of(binding)) != option:
-            continue
-        item = binding.parent()
-        while item is not None and item.kind() not in (
-            "attrset_expression",
-            "rec_attrset_expression",
-        ):
-            item = item.parent()
-        if item is None:
-            continue
-        fields = bindings_of(item)
-        if "multiplicity" not in fields:
-            continue
-        hits.append(
-            (binding.range().start.index, string_value(value_of(fields["multiplicity"])))
-        )
-    return [multiplicity for _, multiplicity in sorted(hits)]
+    shape = list(multiplicities)
+    if shape == ["oneOrMore"]:
+        return {"converter": "oneOrMore", "detail": f"`{option} += …` in {rule}"}
+    if shape == ["one", "zeroOrMore"]:
+        return {
+            "converter": "commaList",
+            "detail": (
+                f"`{option} = …` then `{option} *= …` in {rule}; the separator "
+                f"rule's own text is suppressed out of the surface, so the "
+                f"', ' join is the encoder's"
+            ),
+        }
+    raise UnrecognizedShape(
+        f"{path}: the production for `{option}` in {rule} has multiplicities "
+        f"{shape}, which is neither a `+=` repetition nor a "
+        f"mandatory-then-`*=` separated pair"
+    )
 
 
 ## The walk ##################################################################
 
 
 class Normalizer:
-    """Classifies every node of the faithful surface, collecting replacements."""
+    """Classifies every node `decompose.py` builds, collecting the census."""
 
     def __init__(self, source: str) -> None:
-        self.source = source
-        self.root = SgRoot(source, "nix").root()
-        top = bindings_of(self._top_attrset())
-        for required in ("meta", "productions", "types"):
-            if required not in top:
-                raise UnrecognizedShape(
-                    f"the faithful surface has no top-level `{required}`"
-                )
-        self.types_node = value_of(top["types"])
-        self.productions = bindings_of(value_of(top["productions"]))
-        self.rules = bindings_of(self.types_node)
-        # (start, end, replacement) in `source` coordinates.
-        self.replacements: list[tuple[int, int, str]] = []
+        self.rules = read_faithful(source)
         # path -> converter name, the complete census.
         self.applied: dict[str, str] = {}
         self.details: dict[str, str] = {}
+        self.types_text = ""
 
-    def _top_attrset(self):
-        node = self.root
-        for kind in ("function_expression", "let_expression"):
-            found = node.find(kind=kind)
-            if found is not None:
-                node = found
-        attrset = node.find(kind="attrset_expression")
-        if attrset is None:
-            raise UnrecognizedShape("the faithful surface has no attribute set body")
-        return attrset
+    def run(self) -> None:
+        types = Surface(self.rules, self.classify).types()
+        self.types_text = "rec " + emit_nix.render_attrs(types, 1)
 
-    ## recording ------------------------------------------------------------
+    ## the converter seam ----------------------------------------------------
 
-    def record(self, path: str, classification: dict[str, object], node=None) -> None:
+    def classify(self, path: str, node: dict) -> str | None:
+        kind = node["kind"]
+        if kind == "pattern":
+            classification = classify_pattern(path, node["record"])
+        elif kind in ("submodule", "attrTag"):
+            classification = {"converter": kind}
+        elif kind == "nullOr":
+            classification = {
+                "converter": "optionalGroup",
+                "detail": "unset is null, not missing",
+            }
+        elif kind == "list":
+            classification = classify_list(
+                path, node["rule"], node["option"], node["multiplicities"]
+            )
+        elif kind in ("alias", "ruleReference"):
+            classification = {"converter": kind, "detail": node["target"]}
+        else:
+            raise UnrecognizedShape(
+                f"{path}: decompose.py built a {kind!r} node, which no converter "
+                f"claims. A new node kind has to be classified before it can be "
+                f"normalized."
+            )
+        self.record(path, classification)
+        replacement = classification.get("replacement")
+        return None if replacement is None else str(replacement)
+
+    def record(self, path: str, classification: dict[str, object]) -> None:
         converter = str(classification["converter"])
         if converter not in CONVERTERS:
             raise UnrecognizedShape(f"{path}: unknown converter {converter!r}")
@@ -679,205 +726,20 @@ class Normalizer:
         detail = classification.get("detail")
         if detail:
             self.details[path] = str(detail)
-        replacement = classification.get("replacement")
-        if replacement is not None:
-            if node is None:
-                raise UnrecognizedShape(f"{path}: a replacement needs a node to splice")
-            # A rewrite that is a single atom swallows the parentheses the
-            # pattern needed, because `t.nullOr (t.bool)` is a statix warning
-            # and `t.nullOr t.bool` is the same type. A rewrite that applies
-            # anything keeps them, because there they are load-bearing.
-            span_node = node
-            if " " not in str(replacement):
-                parent = node.parent()
-                if parent is not None and parent.kind() == "parenthesized_expression":
-                    span_node = parent
-            span = span_node.range()
-            self.replacements.append(
-                (span.start.index, span.end.index, str(replacement))
-            )
-
-    ## walking ---------------------------------------------------------------
-
-    def run(self) -> None:
-        for name, binding in self.rules.items():
-            self.walk_type(f"types.{name}", value_of(binding), rule=name)
-
-    def walk_type(self, path: str, node, *, rule: str, option: str | None = None) -> None:
-        """Classify one type expression, and everything under it."""
-        kind = node.kind()
-
-        if kind == "variable_expression":
-            target = node.text()
-            if target not in self.rules:
-                raise UnrecognizedShape(
-                    f"{path}: reference to `{target}`, which is not a rule of this "
-                    f"surface"
-                )
-            converter = "alias" if path.count(".") == 1 else "ruleReference"
-            self.record(path, {"converter": converter, "detail": target})
-            return
-
-        if kind != "apply_expression":
-            raise UnrecognizedShape(
-                f"{path}: expected a type expression, got a {kind}: "
-                f"{node.text()[:60]!r}"
-            )
-
-        head, arg = apply_parts(node)
-
-        if head == "patternType":
-            self.record(path, classify_pattern(path, arg), node)
-            return
-
-        if head == "t.submodule":
-            self.record(path, {"converter": "submodule"})
-            fields = bindings_of(arg)
-            if set(fields) != {"options"}:
-                raise UnrecognizedShape(
-                    f"{path}: a submodule carrying {sorted(fields)} rather than only "
-                    f"`options`"
-                )
-            for name, binding in bindings_of(value_of(fields["options"])).items():
-                self.walk_option(f"{path}.options.{name}", value_of(binding), rule=rule, option=name)
-            return
-
-        if head == "t.attrTag":
-            self.record(path, {"converter": "attrTag"})
-            for name, binding in bindings_of(arg).items():
-                self.walk_option(f"{path}.{name}", value_of(binding), rule=rule, option=name)
-            return
-
-        if head == "t.nullOr":
-            self.record(
-                path,
-                {"converter": "optionalGroup", "detail": "unset is null, not missing"},
-            )
-            self.walk_type(f"{path}.nullOr", arg, rule=rule, option=option)
-            return
-
-        if head == "t.nonEmptyListOf":
-            self.record(path, self.classify_list(path, rule, option), )
-            self.walk_type(f"{path}.nonEmptyListOf", arg, rule=rule, option=option)
-            return
-
-        raise UnrecognizedShape(
-            f"{path}: no converter claims the type {node.text()[:60]!r}, whose head "
-            f"is `{head}`. The four this surface uses are patternType, "
-            f"t.submodule, t.attrTag and t.nullOr / t.nonEmptyListOf; a fifth has "
-            f"to be classified before it can be normalized."
-        )
-
-    def classify_list(self, path: str, rule: str, option: str | None) -> dict[str, object]:
-        """Decide which list shape a nonEmptyListOf came from."""
-        if option is None or rule not in self.productions:
-            raise UnrecognizedShape(
-                f"{path}: a list with no production to read its shape out of"
-            )
-        multiplicities = option_multiplicities(value_of(self.productions[rule]), option)
-        if multiplicities == ["oneOrMore"]:
-            return {"converter": "oneOrMore", "detail": f"`{option} += …` in {rule}"}
-        if multiplicities == ["one", "zeroOrMore"]:
-            return {
-                "converter": "commaList",
-                "detail": (
-                    f"`{option} = …` then `{option} *= …` in {rule}; the separator "
-                    f"rule's own text is suppressed out of the surface, so the "
-                    f"', ' join is the encoder's"
-                ),
-            }
-        raise UnrecognizedShape(
-            f"{path}: the production for `{option}` in {rule} has multiplicities "
-            f"{multiplicities}, which is neither a `+=` repetition nor a "
-            f"mandatory-then-`*=` separated pair"
-        )
-
-    def walk_option(self, path: str, node, *, rule: str, option: str) -> None:
-        """Classify one `mkOption { … }` declaration."""
-        if node.kind() != "apply_expression":
-            raise UnrecognizedShape(f"{path}: expected mkOption, got a {node.kind()}")
-        head, arg = apply_parts(node)
-        if head != "mkOption":
-            raise UnrecognizedShape(f"{path}: expected mkOption, got `{head}`")
-        fields = bindings_of(arg)
-        unknown = set(fields) - {"default", "description", "type"}
-        if unknown:
-            raise UnrecognizedShape(
-                f"{path}: mkOption carries {sorted(unknown)}, which nothing here "
-                f"knows how to normalize"
-            )
-        if "type" not in fields:
-            raise UnrecognizedShape(f"{path}: mkOption with no type")
-
-        type_node = value_of(fields["type"])
-        type_path = f"{path}.type"
-        # The optionalGroup pair's content is this assertion: an optional whose
-        # default is not null is a missing-value error at evaluation, not an
-        # omitted line at emission.
-        if type_node.kind() == "apply_expression":
-            head, _ = apply_parts(type_node)
-            if head == "t.nullOr":
-                default = fields.get("default")
-                if default is None or value_of(default).text() != "null":
-                    raise UnrecognizedShape(
-                        f"{path}: nullOr without `default = null`, so an unset "
-                        f"optional would not reach the emitter as null"
-                    )
-        self.walk_type(type_path, type_node, rule=rule, option=option)
 
     ## output ---------------------------------------------------------------
 
-    def normalized_types(self) -> str:
-        """Faithful's `types` source with the converted nodes spliced out."""
-        span = self.types_node.range()
-        start, end = span.start.index, span.end.index
-        text = self.source[start:end]
-        for from_index, to_index, replacement in sorted(self.replacements, reverse=True):
-            if not start <= from_index < to_index <= end:
-                raise UnrecognizedShape("a replacement fell outside the types block")
-            text = text[: from_index - start] + replacement + text[to_index - start :]
-        return text
-
-    def preamble(self, types_text: str) -> list[tuple[str | None, object]]:
-        """Faithful's own `let` bindings, verbatim, minus any the splice orphaned.
-
-        Copied rather than reimplemented: the preserved patterns must keep
-        exactly the semantics the extractor gave them, and the only way to be
-        sure of that is to carry the same helper source.
-
-        A binding no longer mentioned is dropped, because a converted node can
-        orphan the helper it used and deadnix fails a commit on an unused
-        `let` binding. An `inherit … ;` is carried across verbatim, name and
-        all — `emit_nix.render_let` renders a `None` name as a whole line.
-        """
-        let_expression = self.root.find(kind="let_expression")
-        if let_expression is None:
-            raise UnrecognizedShape("the faithful surface has no `let`")
+    def preamble(self) -> list[tuple[str | None, object]]:
+        """The `let` bindings the rendered types actually use."""
 
         def used(name: str) -> bool:
-            return re.search(rf"(?<![\w.-]){re.escape(name)}\b", types_text) is not None
-
-        kept: list[tuple[str | None, object]] = []
-        for group in let_expression.children():
-            children = (
-                group.children()
-                if group.kind() == "binding_set"
-                else [group]
+            return (
+                re.search(rf"(?<![\w.-]){re.escape(name)}\b", self.types_text) is not None
             )
-            for child in children:
-                if child.kind() == "binding":
-                    name = child.field("attrpath").text()
-                    if used(name):
-                        kept.append((name, Raw(value_of(child).text())))
-                elif child.kind() == "inherit_from":
-                    names = [
-                        attrs.text()
-                        for attrs in child.children()
-                        if attrs.kind() == "inherited_attrs"
-                    ]
-                    if any(used(name) for name in " ".join(names).split()):
-                        kept.append((None, Raw(child.text())))
-        return kept
+
+        return [
+            (name, Raw(src)) for probe, name, src in PREAMBLE if used(probe)
+        ]
 
 
 ## Rendering #################################################################
@@ -885,14 +747,17 @@ class Normalizer:
 HEADER = """#
 # Written by packages/strictdoc-grammar/extract/normalize.py from ./faithful.nix.
 #
-# NORMALIZED is faithful with specific nodes replaced — deep-merge in spirit and
-# in fact. The body below is `faithful // { … }`, and the `types` block is
-# faithful's own source text with the converted nodes spliced out. Anything this
-# file does not mention is the node the extractor wrote, byte for byte.
+# NORMALIZED is the typed surface, and the whole decomposition happens on this
+# side of the line. ./faithful.nix carries the grammar's own production tree
+# with every pattern exactly as upstream spells it; the `types` block below is
+# built from those records — the POSIX dialect rewrite, the lookahead groups
+# lifted out of a pattern, the alternations read as vocabularies — and every
+# rewrite performed is NAMED where it was performed. The body is `faithful //
+# { … }`, so `productions` and `meta` come through unchanged.
 #
-# Every converter is a PAIR: a type rewrite (faithful type -> normalized type)
+# Every converter is a PAIR: a type rewrite (decomposed type -> normalized type)
 # and an encoder (normalized value -> faithful value, on the way to the file).
-# `IS_COMPOSITE` is `strMatching "(True|False)"` faithfully and `types.bool`
+# `IS_COMPOSITE` is `strMatching "(True|False)"` decomposed and `types.bool`
 # normalized, so its encoder is `b: if b then "True" else "False"`.
 #
 # Encode only. There is no decoder; reading `.sgra` back into Nix is out of
@@ -914,7 +779,6 @@ HEADER = """#
 
 def render(normalizer: Normalizer) -> str:
     """Render the whole normalized surface."""
-    types_text = normalizer.normalized_types()
     used = {
         str(CONVERTERS[converter]["encoder"])
         for converter in normalizer.applied.values()
@@ -939,10 +803,8 @@ def render(normalizer: Normalizer) -> str:
         "faithful\n// "
         + emit_nix.render_attrs(
             {
-                "types": Raw(types_text),
-                "encoders": {
-                    name: Raw(ENCODER_SOURCE[name]) for name in sorted(used)
-                },
+                "types": Raw(normalizer.types_text),
+                "encoders": {name: Raw(ENCODER_SOURCE[name]) for name in sorted(used)},
                 "converters": {
                     "applied": dict(sorted(normalizer.applied.items())),
                     "detail": dict(sorted(normalizer.details.items())),
@@ -967,7 +829,7 @@ def render(normalizer: Normalizer) -> str:
         emit_nix.render_file(
             body,
             "{\n  lib,\n  faithful,\n  ...\n}",
-            preamble=normalizer.preamble(types_text),
+            preamble=normalizer.preamble(),
             header_comment=HEADER,
         )
     )
@@ -979,7 +841,7 @@ def render(normalizer: Normalizer) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="strictdoc-grammar-normalize",
-        description="Rewrite the faithful .sgra surface into normalized types plus encoders.",
+        description="Build the typed .sgra surface from the faithful records, plus encoders.",
     )
     parser.add_argument(
         "--input",
@@ -1010,6 +872,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except UnrecognizedShape as unrecognized:
+    except (UnrecognizedShape, ExtractionError) as unrecognized:
         print(f"normalize.py: unrecognized shape\n{unrecognized}", file=sys.stderr)
         sys.exit(2)

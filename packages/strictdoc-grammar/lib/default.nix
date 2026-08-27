@@ -3,8 +3,8 @@
 #
 # The dependency direction is fixed and one-way:
 #
-#   faithful   <- nothing
-#   normalized <- faithful      (rewrites specific nodes; deep-merge in spirit)
+#   faithful   <- nothing       (raw records; it takes no `lib`, having no types)
+#   normalized <- faithful      (builds the types from those records)
 #   check      <- normalized    (applies the types to a value)
 #   emit       <- normalized    (needs the encoders to render values)
 #   dsl        <- normalized    (sugar over the normalized types)
@@ -14,7 +14,7 @@
 # Calling `emit.grammar` directly skips that check and is for testing the
 # renderer, not for producing a file.
 {lib}: let
-  faithful = import ./faithful.nix {inherit lib;};
+  faithful = import ./faithful.nix;
   normalized = import ./normalized.nix {inherit lib faithful;};
   check = import ./check.nix {inherit lib normalized;};
   emit = import ./emit.nix {inherit lib normalized;};

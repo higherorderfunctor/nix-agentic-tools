@@ -2,14 +2,17 @@
 #
 # Written by packages/strictdoc-grammar/extract/normalize.py from ./faithful.nix.
 #
-# NORMALIZED is faithful with specific nodes replaced — deep-merge in spirit and
-# in fact. The body below is `faithful // { … }`, and the `types` block is
-# faithful's own source text with the converted nodes spliced out. Anything this
-# file does not mention is the node the extractor wrote, byte for byte.
+# NORMALIZED is the typed surface, and the whole decomposition happens on this
+# side of the line. ./faithful.nix carries the grammar's own production tree
+# with every pattern exactly as upstream spells it; the `types` block below is
+# built from those records — the POSIX dialect rewrite, the lookahead groups
+# lifted out of a pattern, the alternations read as vocabularies — and every
+# rewrite performed is NAMED where it was performed. The body is `faithful //
+# { … }`, so `productions` and `meta` come through unchanged.
 #
-# Every converter is a PAIR: a type rewrite (faithful type -> normalized type)
+# Every converter is a PAIR: a type rewrite (decomposed type -> normalized type)
 # and an encoder (normalized value -> faithful value, on the way to the file).
-# `IS_COMPOSITE` is `strMatching "(True|False)"` faithfully and `types.bool`
+# `IS_COMPOSITE` is `strMatching "(True|False)"` decomposed and `types.bool`
 # normalized, so its encoder is `b: if b then "True" else "False"`.
 #
 # Encode only. There is no decoder; reading `.sgra` back into Nix is out of
@@ -39,6 +42,11 @@
   # as prefix rejections instead. `.*` is deliberate: Nix's `.` matches a
   # newline, so a denied prefix is caught wherever the rest of the string
   # goes.
+  #
+  # A `^`-anchored lookahead is in `p.deny` too when the word it denies is an
+  # alternative of nothing — a real reservation rather than a backtracking
+  # guard. `p.denyAtLineStart` is the other half of that split: recorded,
+  # deliberately inert, and never a constraint on the value alone.
     if p.deny == []
     then t.strMatching p.ere
     else
@@ -137,7 +145,7 @@ in
         "types.DocumentGrammar.options.importFromFile.type" = "unset is null, not missing";
         "types.DocumentGrammar.options.importFromFile.type.nullOr" = "'.+\$' constrains nothing but emptiness";
         "types.DocumentGrammarWrapper.options.grammar.type" = "DocumentGrammar";
-        "types.FieldName" = "FieldName — a character class with a quantifier, plus two denied prefixes";
+        "types.FieldName" = "FieldName — a character class with a quantifier, plus two lifted lookahead groups; enforced denials 'RELATIONS'; recorded but not enforced, being alternatives of the rule that denies them: 'UID'";
         "types.GrammarElement.options.fields.type" = "`fields += …` in GrammarElement";
         "types.GrammarElement.options.fields.type.nonEmptyListOf" = "GrammarElementField";
         "types.GrammarElement.options.isComposite.type" = "unset is null, not missing";
@@ -190,9 +198,9 @@ in
         "types.GrammarElementRelationParent.options.role.type" = "unset is null, not missing";
         "types.GrammarElementRelationParent.options.role.type.nullOr" = "'.+' constrains nothing but emptiness";
         "types.GrammarElementRelationParent.options.type.type" = "'Parent' -> ['Parent']";
-        "types.RequirementType" = "RequirementType — a nested group with a quantifier, plus two denied prefixes; denied prefixes 'DOCUMENT', 'GRAMMAR'";
+        "types.RequirementType" = "RequirementType — a nested group with a quantifier, plus two denied prefixes; enforced denials 'DOCUMENT', 'GRAMMAR'";
         "types.ReservedKeyword" = "'DOCUMENT|GRAMMAR' -> ['DOCUMENT', 'GRAMMAR']";
-        "types.SingleLineString" = "SingleLineString — two character classes, plus a denied prefix; denied prefixes '>>>\\r?\\n'";
+        "types.SingleLineString" = "SingleLineString — two character classes, plus a denied prefix; enforced denials '>>>\\r?\\n'";
       };
       registry = {
         alias = {
@@ -214,13 +222,13 @@ in
           rewrite = "lib.types.bool";
         };
         commaList = {
-          description = "A separated list: one mandatory element then zero or more of the separator rule. Type unchanged — the grammar demands at least one option and normalized never weakens faithful — so the whole content of this pair is the encoder, which joins with ', '. That is the SHARED encoder a MultipleChoice or Tag field value also uses at the document layer; in the grammar surface itself Tag declares no vocabulary, so only the two choice-option lists reach it here.";
+          description = "A separated list: one mandatory element then zero or more of the separator rule. Type unchanged — the grammar demands at least one option and normalized never weakens the decomposition — so the whole content of this pair is the encoder, which joins with ', '. That is the SHARED encoder a MultipleChoice or Tag field value also uses at the document layer; in the grammar surface itself Tag declares no vocabulary, so only the two choice-option lists reach it here.";
           encoder = "list";
           kind = "pair";
           rewrite = "unchanged (lib.types.nonEmptyListOf)";
         };
         decodedOption = {
-          description = "A pattern whose faithful spelling is the TOKEN AS WRITTEN and whose normalized value is what that token means. ChoiceOption is the only one: `([\"])[^,]+\\1|[^,()\"]+` is a bare option OR a quoted one, and quoting is not part of the option — it is what buys a literal parenthesis past the unquoted branch. So the normalized value is the option itself, and the encode half puts the quotes back. That half is `emit.nix`'s `choiceOption`, deliberately: `GrammarElementFieldSingleChoice.get_unprocessed_options` decides WHEN to quote, and it lives in strictdoc's WRITER, not in the grammar this file is derived from. The type here is narrower than faithful in one direction (no embedded double quote, which would make the round trip ambiguous) and wider in the other (an unquoted parenthesis is fine, because the encoder quotes it) — which is what a converter pair is.";
+          description = "A pattern whose faithful spelling is the TOKEN AS WRITTEN and whose normalized value is what that token means. ChoiceOption is the only one: `([\"])[^,]+\\1|[^,()\"]+` is a bare option OR a quoted one, and quoting is not part of the option — it is what buys a literal parenthesis past the unquoted branch. So the normalized value is the option itself, and the encode half puts the quotes back. That half is `emit.nix`'s `choiceOption`, deliberately: `GrammarElementFieldSingleChoice.get_unprocessed_options` decides WHEN to quote, and it lives in strictdoc's WRITER, not in the grammar this file is derived from. The type here is narrower than the token in one direction (no embedded double quote, which would make the round trip ambiguous) and wider in the other (an unquoted parenthesis is fine, because the encoder quotes it) — which is what a converter pair is.";
           encoder = null;
           kind = "pair";
           rewrite = "lib.types.strMatching, over the DECODED value";
@@ -232,28 +240,28 @@ in
           rewrite = "lib.types.enum";
         };
         namedChoice = {
-          description = "A named rule whose literal vocabulary the extractor read off the grammar STRUCTURE (an OrderedChoice of StrMatch children, or a bare StrMatch) rather than off a regex, and recorded as `literals`. Same rewrite as literalAlternation, kept a separate name because it is a separate access path and the two disagreeing is a bug worth being able to see.";
+          description = "A named rule whose literal vocabulary the decomposition read off the grammar STRUCTURE (an OrderedChoice of StrMatch children, or a bare StrMatch) rather than off a regex, and recorded as `literals`. Same rewrite as literalAlternation, kept a separate name because it is a separate access path and the two disagreeing is a bug worth being able to see.";
           encoder = "enum";
           kind = "pair";
           rewrite = "lib.types.enum";
         };
         oneOrMore = {
-          description = "A `+=` repetition. Already nonEmptyListOf in faithful; classified so that a list is never left unaccounted for, and so that a future repetition shape has to be classified rather than inherited.";
+          description = "A `+=` repetition. Already nonEmptyListOf as decomposed; classified so that a list is never left unaccounted for, and so that a future repetition shape has to be classified rather than inherited.";
           encoder = null;
           kind = "pair";
           rewrite = "unchanged (lib.types.nonEmptyListOf)";
         };
         optionalGroup = {
-          description = "An optional group in the grammar. Already nullOr in faithful; the content of this pair is the ASSERTION that the option carries `default = null`, without which an unset optional would be a missing-value error instead of an omitted line, and the emitter's `or null` reads would never see it.";
+          description = "An optional group in the grammar. The content of this pair is that the option carries `default = null` — without which an unset optional would be a missing-value error instead of an omitted line, and the emitter's `or null` reads would never see it. `decompose.py` gives every optional that default as it builds the declaration, so a nullOr without one cannot be built at all rather than merely being rejected.";
           encoder = null;
           kind = "pair";
           rewrite = "unchanged (lib.types.nullOr, default null)";
         };
         regexPreserved = {
-          description = "A pattern a human read and decided stays a regex check — a character class, a quantifier or a nested group, none of which can become an enum without guessing. Registered by (source, ere) pair in PRESERVED_PATTERNS, NOT a fallback: an unregistered pattern is an error, so 'we decided this stays a regex' and 'nobody classified this' stay distinguishable.";
+          description = "A pattern a human read and decided stays a regex check — a character class, a quantifier or a nested group, none of which can become an enum without guessing; or one carrying a denial lifted out of a lookahead, which no enum can express. Registered by (source, ere) pair in PRESERVED_PATTERNS, NOT a fallback: an unregistered pattern is an error, so 'we decided this stays a regex' and 'nobody classified this' stay distinguishable.";
           encoder = null;
           kind = "pair";
-          rewrite = "unchanged (the faithful pattern)";
+          rewrite = "unchanged (the decomposed pattern)";
         };
         ruleReference = {
           description = "A type that is another rule by name. Whatever converter fired on THAT rule applies here — which is how REQUIRED becomes a bool without this file naming REQUIRED.";
@@ -333,16 +341,18 @@ in
         };
       };
       FieldName = patternType {
-        deny = [];
+        deny = [
+          "RELATIONS"
+        ];
         denyAtLineStart = [
           "UID"
-          "RELATIONS"
         ];
         ere = "[A-Z]+[A-Za-z0-9_-]*";
         rewrites = [
           "bracket-escaped-hyphen"
           "hoist-negative-lookahead"
           "line-anchored-lookahead-is-positional"
+          "line-anchored-lookahead-is-reserved"
         ];
         source = "(?!^UID)(?!^RELATIONS)[A-Z]+[A-Za-z0-9_\\-]*";
       };
