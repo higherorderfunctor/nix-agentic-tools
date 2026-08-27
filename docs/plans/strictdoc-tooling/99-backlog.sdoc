@@ -1602,30 +1602,33 @@ explicit for the first time.
 
 [MECHANISM]
 UID: MECH-LINE-ANCHORED-DENIAL-UNENFORCED
-TITLE: A caret-anchored lookahead is recorded as positional and enforced by nothing
+TITLE: FieldName's anchored denials are decided from a register, not from the grammar
 DEPTH: sketch
 AUTHORED_BY: llm
 STATEMENT: >>>
-extract.py now splits negative lookaheads in two. An unanchored one, like
-SingleLineString's `(?!>>>\r?\n)`, stays a value-level `deny`. A `^`-anchored
-one lands in `denyAtLineStart` and is enforced by nothing at all.
+The split itself is now decided per word rather than per anchor, and the rule
+is in decompose.py: run each denied word against the SIBLING ALTERNATIVES of
+the rule that denies it, enforce the ones that are an alternative of nothing,
+and record the rest. `sibling_alternatives` computes that set off the
+production tree, so the decision is the grammar's wherever the grammar shows
+it, and an anchored denial that is neither computable nor registered is a hard
+error.
 
-That is correct today. arpeggio compiles every RegExMatch with re.MULTILINE and
-applies it with `regex.match(input, pos)`, so `^` holds only where `pos` is a
-line start, and FieldName -- `/(?!^UID)(?!^RELATIONS).../` -- is only ever
-entered immediately after the literal '  - TITLE: '. Enforcing it as a value
-constraint rejected a field named UID, which docs/sdoc/grammar.sgra declares
-five times.
+What is left is that FieldName's two answers are REGISTERED, in
+decompose.LINE_ANCHORED_DENIALS, rather than derived. The rule that gives its
+lookaheads their purpose is SDocNodeField, which lives in the DOCUMENT grammar
+and is not in the recipe this surface walks -- the .sgra grammar only ever
+enters FieldName after the literal '  - TITLE: ', which is a position no choice
+discriminates. So the register carries UID (an alternative of SDocNodeField, a
+backtracking guard, unenforced) and RELATIONS (an alternative of nothing, a
+reservation, enforced), each with its reason.
 
-What is unenforced is the CONDITION. Nothing checks that the rules carrying a
-denyAtLineStart entry are in fact unreachable at a line start. If upstream
-moved FieldName into a production that starts a line, or added a rule that is
-reachable both ways, the surface would silently accept a value strictdoc
-rejects -- the same class of error as before, in the other direction.
-
-Fix shape: derive reachability-at-line-start from the parser tree, since the
-literal immediately preceding each rule reference is already extracted, and
-fail when a rule with a positional denial is reachable at a line start.
+A register entry is a human decision about a rule nobody is reading, and it
+cannot notice upstream moving a word from one bucket to the other. Fix shape:
+walk the document grammar too, at least far enough to read the alternatives at
+each anchored rule's entry positions, and let the same discriminator answer
+without a register. The discriminator is already exercised against a synthetic
+SDocNodeField-shaped recipe, so what is missing is the input, not the rule.
 <<<
 RATIONALE: >>>
 The first spelling of this rewrite was `strip-start-anchor`, which dropped the
@@ -1661,6 +1664,49 @@ lowercase name rejected.
 The earlier reasoning here was wrong twice over -- that the machinery did not
 exist, and that a lookahead's absence from the regex dialect meant the rule
 could not be enforced at all.
+
+IMPLEMENTED 2026-08-27, together with moving the whole decomposition out of the
+faithful surface. FieldName now carries deny = ["RELATIONS"] and
+denyAtLineStart = ["UID"], and the type rejects a field titled RELATIONS,
+accepts one titled UID, and still rejects a lowercase title. The rendered
+grammar is byte-identical to docs/sdoc/grammar.sgra, which declares UID five
+times, so the accept arm is not a bare assertion. What this node still names is
+the register, not the enforcement.
+<<<
+
+[MECHANISM]
+UID: MECH-ENFORCED-DENIAL-IS-A-PREFIX
+TITLE: An enforced denial rejects every word starting with it, and only the exact word was measured
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+patternType's addCheck branch rejects a value whose PREFIX is a denied word --
+`builtins.match "(${d}).*"` -- so enforcing RELATIONS also rejects a field
+titled RELATIONSHIP or RELATIONS_2.
+
+That is the faithful transcription. `(?!^RELATIONS)` denies a prefix too: the
+caret constrains where the lookahead applies, not how much of the input it
+covers, so upstream rejects exactly the same set at a line start. RequirementType
+already relies on the same reading, which is why DOCUMENT_FROM_FILE is reserved
+along with DOCUMENT.
+
+What was MEASURED is narrower than what is enforced. The defect behind the
+enforcement was measured on the exact word RELATIONS: a grammar declaring that
+field exports clean and its documents then fail to parse. Nobody has run the
+same experiment on RELATIONSHIP, so it is possible -- not likely, but untested
+-- that the document grammar recovers on a longer word and the type is stricter
+than the parser.
+
+Fix shape: render a grammar declaring a RELATIONSHIP field, export it, and read
+a document that uses it. If it parses, the two denial kinds want different
+enforcement -- a prefix test for the reserved-keyword kind and an equality test
+for this one -- and patternType needs the second branch.
+<<<
+RATIONALE: >>>
+Noticed while wiring the enforcement: `deny` was reused because patternType
+already carried the branch, and reuse imported prefix semantics along with it.
+That is the right default, but it widens a rejection past the measurement that
+justified it, and the widening is invisible in the generated file.
 <<<
 
 [MECHANISM]
