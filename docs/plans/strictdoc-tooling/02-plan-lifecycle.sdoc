@@ -44,25 +44,131 @@ left until the evidence arrives.
 [INVARIANT]
 UID: INV-NO-EXTERNAL-PLAN-REFS
 TITLE: Nothing outside a plan may depend on a plan node
-DEPTH: needs-design
+DEPTH: interface-settled
 AUTHORED_BY: human
 STATEMENT: >>>
 Settled architecture, source annotations, and other plans must not hold
 relations into a plan's nodes. A plan may depend outward; nothing may depend
 inward.
+
+Externality is a property of the FILE a node lives in, not of the node's type
+or of its machinery. Plans and specifications use the same nodes, the same
+edges and the same fingerprints; what differs is retention. Three retention
+classes exist today: a plan directory under docs/plans/<plan>/, collectable as
+a unit, which is also the containment unit DEC-PLAN-SCOPED-BACKLOG already
+scopes its queries to; docs/spec/, durable specification; and **/.sdoc/,
+settled architecture that outlives the plan that produced it and moves with its
+package. A reference is external when its target lives in a plan directory and
+its source does not live in that SAME plan directory.
+
+Plan-to-plan is therefore exactly the violation spec-to-plan is, not a lesser
+one. A peer plan is no more durable than the plan it cites, so a citation
+between two plans strands on whichever of them is collected first.
+
+Two kinds of reference are in scope, and both are keyed on a UID:
+
+- a Parent relation, whatever its ROLE;
+- a PARENT_FP entry, which is a dependency on that parent's contract.
+
+File relations are out of scope. A File VALUE is a path, never a UID, so a File
+relation cannot reference a plan node at all. Whether a File VALUE may name a
+path under docs/plans/ is a separate rule about what a node may claim as its
+implementation, and is not this invariant.
+
+Source annotations -- a UID named in a comment in a source file -- are in scope
+by intent and unenforceable today, because nothing turns them into edges. They
+enter scope unchanged, with no rewording of this rule, on the day a
+source-comment extractor exists. That is DEC-ARCH-COLOCATION's own retirement
+condition.
 <<<
 RATIONALE: >>>
-Follows directly from plans being collectable. If a plan can be deleted or never
-committed, an inbound reference is a dangling relation waiting to happen -- and
-because a dangling relation is a hard export error, one collected plan would
-break the build for everything that cited it.
+Follows directly from plans being collectable. If a plan can be deleted or
+never committed, an inbound reference is a dangling relation waiting to happen
+-- and because a dangling relation is a hard export error, one collected plan
+would break the build for everything that cited it.
+
+Fingerprints are in scope for the opposite reason. A dangling relation fails
+loudly; a dangling fingerprint does not fail at all, because PARENT_FP is a
+String field the parser never resolves. So relations make a collected plan a
+build break and fingerprints make it a silent rot, and only the second one
+survives a green run.
+
+Keying the rule on the containing file rather than on the node's type is what
+lets it survive DEC-PLAN-LIFECYCLE-OPEN's narrowing. That decision established
+that plans are not structurally different from specifications -- same nodes,
+same edges, same machinery -- and left only retention open. A rule phrased in
+terms of what a plan node IS would have had nothing left to say after that
+narrowing. A rule phrased in terms of where a node lives keeps working, and
+keeps working if a retention class is renamed or a fourth one appears.
 <<<
 NOTES: >>>
-Needs design because it is currently unenforced and this graph may already
-violate it. A check is cheap: any relation whose source is outside
-docs/plans/<plan>/ and whose target is inside it. Its necessity is contingent on
-DEC-PLAN-LIFECYCLE-OPEN, but the direction holds under every option considered
-so far, so building the check does not depend on settling that.
+Measured 2026-08-27 over a full clean export: 139 nodes in 9 documents. The
+UID-to-file map was built by grepping ^UID: across the tree, because the JSON
+export carries no document path -- a document is TITLE, GRAMMAR and NODES only
+-- the same gap MECH-PLAN-REFS-CHECK records.
+
+Nodes per retention class: docs/plans/strictdoc-tooling 113,
+docs/plans/beads-migration 18, docs/spec 4, packages/semble/.sdoc 4.
+
+95 relations: 3 File, 92 Parent. Seven Parent relations cross a class. Five are
+outward and legal: SLICE-SDOC-IN-SEMBLE Crosses both semble mechanisms;
+SPIKE-EXECUTABLE-RULES and MECH-SEMANTICS-DEFINITION-BOUNDARY are Governed_By
+DEC-SYSTEM-PURPOSE; MECH-SDOC-SKILL-CORRECTIONS Guarantees
+INV-GUARDS-MUST-EXECUTE. Two violate, both plan-to-plan and both from
+beads-migration into strictdoc-tooling: MECH-RENDER-CACHE Assumes MECH-FP-CHECK
+(00-approach.sdoc:224) and MECH-CORPUS-EDGE-MAP Assumes MECH-CYCLE-CHECK
+(02-conversion-map.sdoc:93). Inbound edges from docs/spec/ or **/.sdoc/ into
+any plan: zero.
+
+31 PARENT_FP entries. One crosses a class -- SPIKE-EXECUTABLE-RULES to
+DEC-SYSTEM-PURPOSE -- and it is outward. Inbound: zero. MECH-PLAN-REFS-CHECK's
+STATEMENT scopes itself to relations only; fingerprints are the half that fails
+silently and the check must cover both.
+
+All three File relations point into packages/semble/. None names a path under
+docs/plans/.
+
+59 source-comment citations of strictdoc-tooling plan UIDs appear in 30 files
+outside the graph -- checks/, dev/scripts/, dev/tasks/, devenv.nix, flake.nix,
+overlays/dev-tools/strictdoc.nix, packages/strictdoc-grammar/. Several name the
+plan file path beside the UID, for example overlays/dev-tools/strictdoc.nix:15
+citing SLICE-STRICTDOC-OVERLAY with its document path. None is an edge today.
+All 59 become inbound violations the day an extractor reads them.
+
+Four export measurements on a scratch copy, clean output directory each time,
+baseline exit 0:
+
+- A Parent VALUE naming a nonexistent UID exits 1: "Requirement
+  MECH-SEMBLE-EXTRA-GRAMMARS references parent requirement which doesn't exist".
+  This is the loud half, and it is the fact the RATIONALE rests on.
+- A File VALUE naming docs/plans/strictdoc-tooling/NO-SUCH-FILE.sdoc exits 0.
+  File targets are not resolved at all; see MECH-FILE-RELATION-EXISTENCE.
+- A PARENT_FP naming a nonexistent UID exits 0.
+- An arch node given an Assumes relation into a plan node exits 0. The parser
+  has no opinion on direction, so this invariant is enforceable only by our own
+  check, which is INV-GUARDS-MUST-EXECUTE applied to this rule.
+
+Positive control for those zero counts: the same scanner that reported no
+inbound edges on the real graph flagged the injected arch-to-plan edge on the
+fourth run, and reported the two plan-to-plan violations on both runs.
+
+The previous NOTES said this needs design because it is unenforced and the
+graph may already violate it. Both facts are true and neither is a design gap:
+enforcement is MECH-PLAN-REFS-CHECK, and the two violations are recorded there.
+What actually needed settling was the scope -- which reference kinds count, and
+what makes one external once plans and specifications are the same machinery.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Whether docs/spec/ and **/.sdoc/ are one durable class or two ranked ones. This invariant only forbids depending INTO a plan; it deliberately does not say whether settled architecture may depend on durable specification, or the reverse. Today one edge exists in that space (MECH-SDOC-SKILL-CORRECTIONS Guarantees INV-GUARDS-MUST-EXECUTE, plan to spec) and none between arch and spec, so nothing forces the ranking yet. A full retention partial order is a semantics rule, not plumbing.
+
+- Whether the 59 existing source annotations must be rewritten to name durable nodes before an extractor lands, or logged and left. This node states the rule and the trigger; it does not schedule the remediation.
+
+- Whether a violation is a hard failure or a warning, and whether the two known plan-to-plan edges are grandfathered while the check goes in. That is MECH-PLAN-REFS-CHECK's severity policy and is left blank here deliberately.
+
+- AUTHORED_BY on this node is currently human, and the proposed STATEMENT is llm-written prose that keeps the operator's original two sentences as its opening but adds four paragraphs beneath them. The key is the operator's to turn; flagging it rather than touching it.
 <<<
 RELATIONS:
 - TYPE: Parent
