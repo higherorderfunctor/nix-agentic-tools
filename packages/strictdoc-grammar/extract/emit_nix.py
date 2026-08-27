@@ -228,7 +228,7 @@ def render_let(bindings: Sequence[tuple[str | None, object]], body: object) -> s
 
 def render_file(
     body: object,
-    arg_pattern: str,
+    arg_pattern: str | None,
     *,
     preamble: Sequence[tuple[str, object]] = (),
     header_comment: str = "",
@@ -238,11 +238,18 @@ def render_file(
     ``preamble`` becomes a ``let`` between the argument pattern and the body.
     ``header_comment`` is emitted verbatim under ``GENERATED_HEADER``; it is the
     caller's job to have commented it.
+
+    ``arg_pattern`` may be ``None``, for a file that is a plain value rather
+    than a function. That is not a nicety: a `{lib}:` an unused surface never
+    reads is an unused lambda pattern, which deadnix reports and this
+    repository's pre-commit hooks act on, so a generated file cannot take an
+    argument it does not need.
     """
     parts = [GENERATED_HEADER]
     if header_comment:
         parts.append(header_comment if header_comment.endswith("\n") else header_comment + "\n")
-    parts.append(f"{arg_pattern}: ")
+    if arg_pattern is not None:
+        parts.append(f"{arg_pattern}: ")
     parts.append(render_let(list(preamble), body))
     text = "".join(parts)
     return text if text.endswith("\n") else text + "\n"
