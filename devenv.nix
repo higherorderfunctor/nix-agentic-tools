@@ -154,6 +154,13 @@
   # wraps upstream's OWN venv interpreter, because `python3Packages.strictdoc`
   # does not exist and `withPackages` cannot reach the grammar builder.
   grammarPython = pkgs.python3.withPackages (ps: [ps.ast-grep-py]);
+
+  # The typed `.sgra` surface, imported here for ONE reason: its consumer DSL.
+  # `ai.strictdoc.grammars.<name>.elements` is declared with the NORMALIZED
+  # type, and packages/strictdoc-grammar/values.nix is written against the sugar
+  # over it — so the DSL has to be handed in from the call site. Everything else
+  # about the surface is the module's business, not this file's.
+  sdocGrammar = import ./packages/strictdoc-grammar/lib {inherit lib;};
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
@@ -440,7 +447,29 @@ in {
     # incidental: the two generated layers of the option surface are extracted
     # from ONE strictdoc release's own grammar string, so overriding it
     # type-checks values against a grammar nothing runs.
-    strictdoc.enable = !isCI;
+    strictdoc = {
+      enable = !isCI;
+
+      # docs/sdoc/grammar.sgra is GENERATED, by the operator's 2026-08-27
+      # ruling on MECH-GRAMMAR-SGRA-NOT-GENERATED: every `.sgra` in this
+      # repository comes through this module. Do not hand-edit the file —
+      # `nix flake check`'s strictdoc-grammar-model-equal diffs it against
+      # what values.nix renders, and it is the render that wins.
+      #
+      # Write it with: devenv tasks run generate:sgra
+      #
+      # Declared unconditionally, which costs nothing in CI: the module reads
+      # `grammars` only from inside its `mkIf cfg.enable`, so with `enable`
+      # false nothing forces `rendered` and no grammar is rendered during a
+      # `devenv test`. The flake check renders its own copy from the flake's
+      # `self` regardless.
+      grammars.repo = {
+        target = "docs/sdoc/grammar.sgra";
+        elements = import ./packages/strictdoc-grammar/values.nix {
+          inherit (sdocGrammar) dsl;
+        };
+      };
+    };
   };
 
   # ── treefmt ────────────────────────────────────────────────────────────

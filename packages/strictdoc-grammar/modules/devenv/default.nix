@@ -1,5 +1,5 @@
 # `ai.strictdoc` — the devenv module that owns strictdoc's wrapping and, through
-# `grammars`, the route by which a `.sgra` file is generated.
+# `grammars`, the generation of a project's `.sgra` files.
 # (MECH-STRICTDOC-DEVENV-MODULE, docs/plans/strictdoc-tooling/99-backlog.sdoc.)
 #
 # Named for the TOOL, not the milestone: `ai.strictdoc`, never
@@ -22,18 +22,30 @@
 # imports this directory directly instead, which is what "this repository's
 # convention" means here — see MECH-STRICTDOC-DEVENV-MODULE-NOT-PUBLISHED.
 #
-# ── What this module does NOT do yet ────────────────────────────────────────
+# ── `generate:sgra` WRITES the files, and what that does not oblige ─────────
 #
-# It renders each declared grammar and names the file that grammar belongs in.
-# NOTHING WRITES THAT FILE. Wiring the write is a later step, because the
-# generators' output shape is changing in parallel; until then `grammars.<name>`
-# is the path by which `docs/sdoc/grammar.sgra` WOULD be generated, and
-# `check:sdoc-grammar` still renders to a temporary file and diffs.
+# Each declared grammar is rendered at evaluation and written into the working
+# tree by the `generate:sgra` task below. So in THIS repository
+# `docs/sdoc/grammar.sgra` is a generated file: hand-editing it is drift, and
+# `checks/strictdoc-grammar-model-equal.nix` is what notices.
 #
-# Consequence worth stating, because it is the one thing that can rot here
-# unnoticed: `target` is declared and read by nothing. It exists so the step
-# that wires the write has one place to take the destination from rather than
-# inventing a second convention for it.
+# THAT IS A CONVENTION OF THIS REPOSITORY, NOT A RULE THE SURFACE IMPOSES.
+# `packages/strictdoc-grammar` is general purpose and intended for publication,
+# and the operator's 2026-08-27 ruling ("every sdoc grammar here is generated,
+# by way of this module") binds this repository only. A consumer of the
+# published surface may use this module, call `lib/default.nix`'s `render`
+# directly, or hand-write the file; nothing in the library knows which.
+#
+# ── Why the write is its OWN task, with no edge into `generate:sdoc-grammar` ─
+#
+# `rendered` is an EVALUATION-time string. devenv evaluates the whole task graph
+# before running any of it, so the bytes a task writes are fixed before the
+# first task starts. Chaining the write behind `generate:sdoc-grammar:normalized`
+# would therefore write the grammar rendered from the normalized surface that
+# existed when the run BEGAN — silently, in precisely the run that regenerated
+# it. Two invocations, deliberately: regenerate the surface, then write the
+# files. Nothing here references a task defined outside this module, which also
+# keeps the module importable by a project that has no such tasks.
 {
   config,
   lib,
@@ -56,6 +68,20 @@
     inherit lib pkgs;
     strictdoc = cfg.package;
   };
+
+  # Store paths rather than bare names: `generate:sgra` is a plain script and
+  # must not depend on what happens to be on the caller's PATH. `cmp` ships in
+  # diffutils, NOT coreutils — getting that wrong here would fail silently, in
+  # an `if` condition where a missing binary is just a false branch.
+  cu = "${pkgs.coreutils}/bin";
+  du = "${pkgs.diffutils}/bin";
+
+  # One `write_sgra` call per declared grammar. The rendered text goes through
+  # the store rather than a heredoc so no quoting of the grammar's own bytes is
+  # involved.
+  writeCall = name: g: ''
+    write_sgra ${pkgs.writeText "${name}.sgra" g.rendered} ${lib.escapeShellArg g.target}
+  '';
 in {
   options.ai.strictdoc = {
     enable = mkOption {
@@ -93,7 +119,8 @@ in {
       description = ''
         Grammar files this project generates, keyed by name. The intended way
         to configure this module, and the route by which a `.sgra` file gets
-        written.
+        written: `devenv tasks run generate:sgra` writes every entry to its
+        `target`.
 
         Values are declared with the NORMALIZED type rather than as bare
         attribute sets. That is the whole guarantee: the DSL in
@@ -102,8 +129,9 @@ in {
         passes through no type at all. Declaring the input here is what closes
         that (MECH-DSL-CHECKS-NOTHING-BY-ITSELF).
 
-        Rendering happens at evaluation. WRITING DOES NOT HAPPEN YET — see the
-        header of this file.
+        Rendering happens at evaluation; writing happens in a separate task
+        invocation, and the header of this file says why it cannot be the same
+        one.
       '';
       example = lib.literalExpression ''
         {
@@ -136,11 +164,10 @@ in {
             default = name;
             defaultText = lib.literalMD "the attribute name";
             description = ''
-              Path, relative to the project root, that this grammar belongs in.
-
-              Nothing writes it yet. It is declared now so the later step that
-              wires the write has one place to read the destination from,
-              rather than inventing a second convention for it.
+              Path, relative to the project root, this grammar is written to by
+              `generate:sgra`. Interpreted against `$DEVENV_ROOT`, because a
+              task's default working directory is the caller's and direnv
+              activates in subdirectories.
             '';
           };
 
@@ -159,8 +186,8 @@ in {
               SOURCE TEXT, not a derivation, and that is what lets a check
               compare it: a `writeText` here would put the rendered bytes
               behind a build, so nothing could read them back at evaluation.
-              The step that wires the write can call `writeText` on this; the
-              reverse is not available.
+              `generate:sgra` calls `writeText` on this itself; the reverse is
+              not available.
             '';
           };
         };
@@ -173,5 +200,46 @@ in {
       cfg.package
       extract
     ];
+
+    # Declared even when `grammars` is empty, so `devenv tasks list` shows the
+    # route rather than making its absence look like a missing feature. With no
+    # grammars the body is just the helper definition and the task is a no-op.
+    tasks."generate:sgra" = {
+      description = "Write the .sgra grammar files declared in ai.strictdoc.grammars";
+      exec = ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
+        # A task's default cwd is the caller's, and direnv activates in
+        # SUBDIRECTORIES, so a relative `target` has to be anchored.
+        cd "$DEVENV_ROOT"
+
+        # Idempotent: an unchanged file is never rewritten, so a `.sgra`'s mtime
+        # does not churn on every run. The write goes through mktemp + mv so a
+        # concurrent reader — this repository is routinely co-occupied — sees old
+        # bytes or new bytes, never a partial file. Same shape and same reasons
+        # as dev/tasks/generate.nix's `sync_file`.
+        #
+        # The `if` form rather than `cmp -s … && return`: an AND-list whose final
+        # command fails would trip errexit.
+        write_sgra() {
+          if ${du}/cmp -s "$1" "$2" 2>/dev/null; then
+            echo "==> unchanged $2" >&2
+            return 0
+          fi
+          ${cu}/mkdir -p "$(${cu}/dirname "$2")"
+          # Hidden prefix: a crashed run must not strand a visible
+          # `grammar.sgra.XXXXXX` next to the real one, where a whole-project
+          # `strictdoc export .` would read it as another grammar.
+          tmp=$(${cu}/mktemp "$(${cu}/dirname "$2")/.$(${cu}/basename "$2").XXXXXX")
+          ${cu}/cp -L "$1" "$tmp"
+          ${cu}/chmod 0644 "$tmp"
+          ${cu}/mv -f "$tmp" "$2"
+          echo "==> wrote $2" >&2
+        }
+
+        ${lib.concatStrings (lib.mapAttrsToList writeCall cfg.grammars)}
+      '';
+    };
   };
 }

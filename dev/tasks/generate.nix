@@ -196,10 +196,18 @@ in {
     # would fail in CI on a missing binary. Milestone 1 is locally invoked and
     # wires no CI.
     #
-    # `docs/sdoc/grammar.sgra` is NOT written here. `values.nix` renders it
-    # byte-identically, but whether that hand-maintained file becomes a
-    # generated one is the operator's call, not this task's; until then
-    # `check:sdoc-grammar` renders it to a temporary file and diffs.
+    # `docs/sdoc/grammar.sgra` is not written here either, and that is now an
+    # ORDERING constraint rather than the open question it used to be. The
+    # operator ruled 2026-08-27 that every `.sgra` in this repository is
+    # generated (MECH-GRAMMAR-SGRA-NOT-GENERATED); the `ai.strictdoc` devenv
+    # module writes them, from its own `generate:sgra` task.
+    #
+    # That task is a SEPARATE INVOCATION on purpose. The rendered bytes are an
+    # evaluation-time value and devenv fixes every task's script before running
+    # any of them, so a `generate:sgra` chained into this run would write the
+    # grammar rendered from the normalized surface that existed when the run
+    # began — silently, in exactly the run that regenerated it. See
+    # packages/strictdoc-grammar/modules/devenv/default.nix.
     "generate:sdoc-grammar:faithful" = {
       description = "Extract the faithful .sgra surface from strictdoc's own grammar";
       before = ["generate:sdoc-grammar:normalized"];
@@ -236,7 +244,9 @@ in {
         ${log}
         # No backticks in this message: the exec body is bash, and a backtick
         # pair here really did run the check task as a command substitution.
-        log "Grammar surface generated — gate it with: devenv tasks run check:sdoc-grammar"
+        log "Grammar surface generated. Next, in a FRESH invocation each:"
+        log "  devenv tasks run generate:sgra      (write the .sgra files)"
+        log "  devenv tasks run check:sdoc-grammar (gate the result)"
       '';
     };
 
