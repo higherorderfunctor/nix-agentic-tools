@@ -13,12 +13,18 @@ them.
 
 ## Layout
 
-| path                       | holds                                                                     |
-| -------------------------- | ------------------------------------------------------------------------- |
-| `strictdoc_config.py`      | project root config: the `@repo` grammar alias and the markdown exclusion |
-| `docs/sdoc/grammar.sgra`   | the one grammar, shared by every document                                 |
-| `docs/plans/<plan>/*.sdoc` | a named plan. One directory per plan, many files per plan. Decays.        |
-| `**/.sdoc/*.sdoc`          | settled architecture about the package it sits beside                     |
+| path                       | holds                                                                      |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `strictdoc_config.py`      | project root config: the `@repo` grammar alias and the markdown exclusion  |
+| `docs/sdoc/grammar.sgra`   | the one grammar, shared by every document. **GENERATED — never hand-edit** |
+| `docs/plans/<plan>/*.sdoc` | a named plan. One directory per plan, many files per plan. Decays.         |
+| `docs/spec/*.sdoc`         | the plan model itself — the nodes describing how plans work                |
+| `**/.sdoc/*.sdoc`          | settled architecture about the package it sits beside                      |
+
+`grammar.sgra` is rendered from `packages/strictdoc-grammar/values.nix` by
+`devenv tasks run generate:sgra`. A hand edit reddens
+`strictdoc-grammar-model-equal`, which is inside `nix flake check`. To change
+the grammar, change `values.nix` and regenerate.
 
 Every document opens with the same two blocks. The alias is what lets a document
 at any depth share one grammar — `IMPORT_FROM_FILE` otherwise accepts only a
@@ -43,12 +49,16 @@ IMPORT_FROM_FILE: @repo
 | `INVARIANT` | `INV-`   | a rule that must hold               | "interface satisfied, rule violated"        |
 | `SPIKE`     | `SPIKE-` | a probe that decides something      | carries `STATUS` and `RETIRES_ON`           |
 
+`STATUS` is polymorphic and both spellings are required on their node type:
+`DECISION` takes `open` / `accepted` / `rejected` / `superseded`, `SPIKE` takes
+`unrun` / `run` / `blocked`.
+
 Relation roles: `Governed_By` (→ a `DECISION`), `Crosses` (`SLICE` →
 `MECHANISM`), `Guarantees` (→ an `INVARIANT`), `Proven_By` (→ a `SPIKE`),
 `Assumes`, `Serialized_By`, `Superseded_By` (`DECISION` → `DECISION`), and
 `File`.
 
-## The three governance fields
+## The four governance fields
 
 - **`DEPTH`** — `sketch` / `needs-design` / `needs-spike` / `interface-settled`
   / `implemented` / `verified`. Declares intent. The `needs-*` values are the
@@ -80,13 +90,22 @@ SD=$(command -v strictdoc)
 Validation is not a separate command — it runs at parse time, so any export
 validates. Non-zero exit means the graph is broken. Do not proceed.
 
+`format` takes no `--output-dir` and writes `./output/` unconditionally; only
+`export` can be redirected. `format` also rewrites `.sdoc` only — a `.sgra` file
+is read and never written, so it is not the grammar's formatter.
+
 ## Hard rules
 
-1. **Never invent a UID.** Run `strictdoc manage auto-uid .` — the `PREFIX` on
-   each grammar element supplies the right prefix.
-2. **Never hand-write a node from memory.** `strictdoc manage new` scaffolds
-   valid boilerplate in the right position. Field order and blank-line rules are
-   what get subtly wrong.
+1. **UIDs are hand-chosen and semantic.** `MECH-SDOC-LEAN-FORMATS`, not
+   `MECH-7`. All 139 nodes are named this way, by the operator's 2026-08-27
+   ruling: they read rendered views, and an index is a handle they cannot
+   dereference. **Do not run `strictdoc manage auto-uid`** — it mints
+   prefix-plus-counter, which is the form nobody here keeps.
+2. **Never hand-write a node from memory.** Copy a neighbouring node of the same
+   type and edit it: field order and blank-line rules are what get subtly wrong.
+   `strictdoc manage new` does not help here — it needs a project tree with
+   exactly one document and this tree has nine, and its `--node-type` defaults
+   to `REQUIREMENT`, which this grammar has no element for.
 3. **Never edit `PARENT_FP`.** Only a human accepts a contract change; the hash
    transition in a commit is the signature. An agent that clears its own
    fingerprints is a rubber stamp.
@@ -106,17 +125,22 @@ validates. Non-zero exit means the graph is broken. Do not proceed.
 
 - **Field order is enforced.** Node fields must appear in grammar order. When
   extending the grammar, **append** — inserting mid-list means repositioning the
-  field in every existing node.
+  field in every existing node. Extend it in
+  `packages/strictdoc-grammar/values.nix` and regenerate; the `.sgra` is output.
 - **One blank line between nodes**, and **no blank line between grammar
   elements**. Both are parse errors.
 - **A `TAG:` starting with `SECTION` will not parse** — it collides with the
   built-in `[SECTION]`. Treat `SECTION*` as reserved.
-- **`File` relations take `VALUE` only** — no `ROLE`, no `REVERSE_ROLE`. A
-  `REVERSE_ROLE` under `TYPE: File` is a hard grammar syntax error.
-- **`format` and `export` write a cache into `./output/` by default.** Always
-  pass `--output-dir`, and never `git add -A` after running either from the repo
-  root — the cache is gitignored now, but it will still bloat a staging area if
-  the ignore is missed.
+- **`File` relations carry `VALUE` only — by convention here, not by the
+  parser.** Measured: a `ROLE:` under `TYPE: File` parses clean. Only adding a
+  `REVERSE_ROLE:` is a hard grammar syntax error. Keep to `VALUE` alone so the
+  corpus stays uniform, but do not expect the parser to enforce it.
+- **`format` and `export` write a cache into `./output/` by default.** Pass
+  `--output-dir` to `export`; `format` has no such flag and cannot be
+  redirected. Never `git add -A` after running either from the repo root — the
+  cache is gitignored now, but it will still bloat a staging area if the ignore
+  is missed. Note the asserted literal is `Output/_cache` with a capital O, and
+  `STRICTDOC_CACHE_DIR` is read BEFORE the config value and overrides it.
 - **One error per run.** A hundred identically-broken documents report one
   error. Script the fix loop rather than iterating by hand.
 
@@ -173,10 +197,13 @@ should.
 The operator's judgment budget is the scarce resource. A logged finding is not
 lost; mentioning it costs attention, logging it costs nothing.
 
-## What does not exist yet
+## What exists, and what still does not
 
-There is no suspect-link detection, no readiness query, and no derived view.
-Until those land, **a human or an agent reading the diff is the only check that
-a contract change was propagated** — the parser proves an edge resolves, never
-that its two ends agree. Say so plainly rather than implying the graph is
-verified.
+Suspect-link detection, the readiness query and a derived view all shipped on
+this branch: `dev/scripts/fp-check.py`, `docs/sdoc/status.py`'s
+`closure_verdict()`, and `docs/sdoc/render.py`. The first is a required check.
+
+What is still true: **nothing has ever been signed.** All 31 fingerprint entries
+are placeholders — 0 signed, 0 suspect — so no contract change has yet been
+accepted by anyone. The parser proves an edge resolves, never that its two ends
+agree. Say so plainly rather than implying the graph is verified.
