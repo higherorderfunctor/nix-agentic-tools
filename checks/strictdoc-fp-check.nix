@@ -9,10 +9,10 @@
 # `runCommand` gives every build its own fresh $TMPDIR, so there is no warm
 # cache to produce that false green with.
 #
-# `pkgs.ai.devTools.strictdoc`, not `pkgs.strictdoc`: the overlay tracks the
-# latest upstream release, and the design system is measured against that
-# rather than against whichever version the nixpkgs pin carries
-# (SLICE-STRICTDOC-OVERLAY).
+# `pkgs.ai.devTools.strictdoc`, not `pkgs.strictdoc`: the overlay re-exports
+# upstream's own flake, which tracks main, so the design system is measured
+# against what upstream ships rather than against whichever version the nixpkgs
+# pin carries (SLICE-STRICTDOC-OVERLAY).
 {
   pkgs,
   self,

@@ -1143,7 +1143,7 @@ compose, and nothing records that they might.
 
 [MECHANISM]
 UID: MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY
-TITLE: The grammar extractor's sources sit on the wrong side of the overlay boundary
+TITLE: The overlay that put the extractor's sources on the wrong side is gone
 DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
@@ -1796,7 +1796,7 @@ justified it, and the widening is invisible in the generated file.
 
 [MECHANISM]
 UID: MECH-GRAMMAR-SGRA-NOT-GENERATED
-TITLE: docs/sdoc/grammar.sgra renders byte-identically but is still hand-maintained
+TITLE: docs/sdoc/grammar.sgra is generated from values.nix and CI-gated
 DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
@@ -1917,9 +1917,12 @@ addressable. There is no third state: `nix flake check` builds everything in
 aarch64-darwin.
 
 The cost is a closure, not a runtime: `pkgs.ai.devTools.strictdoc` was already
-pulled in by strictdoc-fp-check and strictdoc-cycle-check, but
-`strictdoc-grammar-extract` (a python env carrying strictdoc's dependency
-closure plus ast-grep) is new to CI, and so is alejandra as a check input.
+pulled in by strictdoc-fp-check and strictdoc-cycle-check, but the extraction
+wrapper is new to CI, and so is alejandra as a check input. That wrapper is
+packages/strictdoc-grammar/lib/mkExtract.nix, which puts ast_grep_py on
+PYTHONPATH around upstream's own venv interpreter -- not the deleted
+overlays/dev-tools/strictdoc-grammar-extract.nix, and not a python env carrying
+a second copy of strictdoc's dependency closure.
 Every one of the five builds in under a second once its inputs exist.
 
 If the milestone's "wires no CI" is to hold literally, the five move out of
