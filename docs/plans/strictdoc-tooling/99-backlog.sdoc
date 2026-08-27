@@ -2410,7 +2410,10 @@ now specifies a build that does not exist ("a thin override of the nixpkgs
 derivation ... from a sidecar, with the two dependency adjustments"); only its
 NOTES record the change. Whether that statement is rewritten or the slice is
 closed and superseded is a contract question and so the operator's, not an
-implementing session's.
+implementing session's. RULED 2026-08-27: rewritten in place, because
+superseding is not expressible for a slice -- `Superseded_By` is declared only
+on DECISION. That statement now describes the shipped shape, and the missing
+transition is logged as MECH-SLICE-CANNOT-BE-SUPERSEDED.
 
 One consumer DID have to change, and it is the one that never went through the
 seam. overlays/dev-tools/strictdoc-grammar-extract.nix read the derivation's
@@ -2763,4 +2766,55 @@ RATIONALE: >>>
 Logged because the failure is silent and self-confirming in the direction a
 session already wants to believe: a generator that appears to have nothing to do
 is indistinguishable from a generator that is already correct.
+<<<
+
+[MECHANISM]
+UID: MECH-SLICE-CANNOT-BE-SUPERSEDED
+TITLE: A slice has no way to say it was replaced
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+`Superseded_By` is declared only on DECISION, so when a slice's subject is
+replaced the only options are rewriting its statement in place or leaving it
+describing something that no longer exists. Both lose the transition. Hit for
+real on SLICE-STRICTDOC-OVERLAY, whose statement specified a first-party build
+that the upstream flake switch retired. Decide whether the relation is extended
+to the other node types, whether slices are collected differently, or whether
+rewriting in place is the intended answer and the history belongs in the commit
+rather than the graph.
+<<<
+RATIONALE: >>>
+The graph records what is true now and, through fingerprints, when a contract
+changed. It has no way to record that a unit of work was replaced wholesale,
+which is a different event from either.
+<<<
+
+[MECHANISM]
+UID: MECH-AI-STRICTDOC-HOME-PARITY
+TITLE: Satisfy options parity with a home-level install, and defer the rest
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+checks/options-doc.nix demands exact home-manager parity for an `ai.*` facet, so
+the devenv-only ai.strictdoc module fails by construction. Operator's ruling:
+add a home-manager module carrying `enable` and `package` only -- a user-global
+install, the same shape packages/semble/modules/homeManager already has -- which
+satisfies parity as a bucket item.
+
+`grammars` is deliberately NOT mirrored at the home level, and this is a
+judgement rather than an omission: managing sdoc grammars for a user with no
+defined project root does not fit. The operator maintains their own
+configuration in a separate repository, as most home-manager users do, and
+expects grammars to be maintained through devenv inside whichever repository
+owns the documents.
+
+That makes this a real exception to the repo's config-parity rule rather than a
+gap to close later, so the parity language itself needs updating to say a
+surface may be intentionally home-absent when it is inherently project-scoped.
+<<<
+RATIONALE: >>>
+The parity rule exists so a feature is not quietly available in one place and
+missing in another. A surface that is meaningless without a project root is not
+that case, and forcing it into home-manager would produce an option nobody can
+use correctly.
 <<<
