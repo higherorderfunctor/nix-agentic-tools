@@ -180,19 +180,126 @@ RELATIONS:
 [MECHANISM]
 UID: MECH-AUTHORED-BY-GUARD
 TITLE: Reject an AUTHORED_BY flip on a node already merged to main
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: human
 STATEMENT: >>>
-A static check that fails when AUTHORED_BY changes from llm to human on a node
-whose current value in main is llm. Operator override available, since the
-operator is the only party entitled to make that flip.
+A static check over committed trees that reports every node claiming
+AUTHORED_BY: human, classified by what a baseline tree said about the same node.
 
-Could run as a commit hook rather than only in the merge gate, if being
-pedantic is worth the friction.
+Build a map of UID to AUTHORED_BY from every .sdoc file in a tree -- plans,
+docs/spec, and the co-located packages/*/.sdoc alike -- and build it twice, once
+at the baseline and once at the candidate. Key by UID across the whole tree,
+never per file: grooming moves a node between files with its UID intact, and a
+per-file or line-diff view reads that move as a fresh claim. Every node whose
+candidate value is human falls into one of two classes. A FLIP is a node the
+baseline carried as llm. A NEW-HUMAN is a node the baseline tree does not carry
+at all. A flip fails the check; a new-human node is listed and does not.
+
+The baseline is the merge base of the branch and origin/main, not origin/main's
+tip. It attributes exactly the changes this branch made and is unmoved by main
+advancing underneath a long-lived branch. It moves only when the branch rebases,
+and then it moves forward past claims that have already reached main, which is
+correct -- those are main's now, and re-reporting them would train the reader to
+skip the report. On the branch's first restacked pull request the baseline
+carries no .sdoc file at all, so every human node in it reports as new-human;
+that is the intended reading of a first appearance, not noise to suppress.
+
+The checkpoint is a CI job checked out with full history. It cannot be a nix
+flake check: the flake source tree has no .git, so nothing running under nix
+flake check can see a baseline. The same comparison may run in the pre-commit
+hook against the previous commit, and there it is a convenience only -- the hook
+suite is disabled under CI, and squash merge erases the per-commit record it
+would produce.
+
+Permanently out of scope on this side: who made the change. A committed tree
+carries no evidence of the actor, so this check reports a claim and never
+authorizes one. That is the line with MECH-RUNTIME-WRITE-GUARD, which sees the
+actor and the write it is making and no history. Neither sees both, so an
+entitled flip and an unentitled one are indistinguishable to either, and this
+milestone therefore ships no override token: anything it could accept would be
+forgeable by exactly the party the check guards against. Whether a failing check
+blocks a merge is not settled here either -- promoting the job to a required
+status check is a ruleset change, which only the operator can make.
 <<<
 RATIONALE: >>>
-AUTHORED_BY is the operator's key and nothing currently stops an agent turning
-it. A skill rule forbids it, which is guidance rather than enforcement.
+AUTHORED_BY is the operator's key, and the only thing standing against an agent
+turning it is a rule in the authoring skill. INV-GUARDS-MUST-EXECUTE measured
+that class: the sibling rule against editing PARENT_FP failed, and an agent
+signed five contracts under the operator's committer identity. Something that
+runs is what replaces guidance.
+
+Detection without authorization is worth shipping on its own. The enforcement
+actually available today is making every appearance of the operator's key
+visible at the place acceptance is turned -- pull-request review, per
+DEC-LONG-LIVED-BRANCH -- and a per-pull-request list of nodes claiming that key
+is correct without knowing who acted. Withholding the mechanism until it can
+also authorize leaves the key unwatched through all of milestones one to four,
+and authorization waits on MECH-AGENT-IDENTITY-KEYS.
+
+The comparison is UID-keyed against a merge base rather than a diff against main
+because both cheaper readings are wrong in measured ways: a line diff cannot
+distinguish a groom from a birth, and main's tip drifts for reasons that have
+nothing to do with the branch.
+<<<
+NOTES: >>>
+Measured 2026-08-27 on feat/strictdoc-trial at bc646f12, merge base ec980d15.
+
+origin/main carries 0 .sdoc files; the branch carries 9 across three locations.
+Every one of the 139 nodes is a first appearance against main today, so the
+llm-to-human transition the earlier statement described has no subject yet.
+Over the branch's 71 commits: 0 flips and 31 nodes born human, introduced in 13
+commits. Creation, not flipping, is what happens.
+
+Why UID-keyed. Commit 4e3f15f4 adds three "+AUTHORED_BY: human" lines: one is a
+new node (MECH-PLAN-CHANGE-KINDS) and two are DEC-SYSTEM-PURPOSE and
+DEC-PLAN-SINGLE-OWNER relocating from 02-plan-lifecycle.sdoc into
+docs/spec/01-plan-model.sdoc. The UID-keyed comparison reports one. Positive
+control: the same line scan reports three on 7f6719db, where all three are
+genuine new nodes. Thirteen such relocations occurred across the branch.
+
+Why the actor is invisible here. All 71 commits are authored and committed as
+the operator and none is signed (%G? = N for all 71), while 31 of the nodes were
+written in agent sessions. The 13 commits that introduced them carry no
+Co-Authored-By trailer at all; positive control, the same grep finds
+"Co-Authored-By: Claude Opus 5 (1M context)" on bc646f12 and 41 such lines
+elsewhere on the branch. Commit metadata is not evidence of who acted.
+
+Cost. 0.079 s to compare a 109-node baseline against a 139-node candidate over 9
+files (git ls-tree plus one git show per file), 0.063 s against the empty
+baseline.
+
+Implementation gotcha. The scan pairs each "UID:" line with the following
+"AUTHORED_BY:" line. Both are single-line and field order is enforced, so this
+holds under the current grammar and would break silently if the grammar
+reordered them. The candidate side can be cross-checked against the JSON export,
+which carries AUTHORED_BY for all 139 nodes and agreed exactly with the text
+scan (139 nodes, 31 human). The baseline side gets no such cross-check --
+exporting a historical tree would require checking it out.
+
+Placement evidence. The flake source store path holds the 9 .sdoc files and no
+.git, which is why checks/strictdoc-fp-check.nix and
+checks/strictdoc-cycle-check.nix run over ${self} with no history. The precedent
+for a history-needing gate in this repo is the gitleaks job at
+.github/workflows/ci.yml:718 with fetch-depth: 0. The pre-commit path is gated at
+devenv.nix:607 (git-hooks.hooks = lib.optionalAttrs (!isCI)).
+
+Refines SLICE-CHECKPOINT-WIRING, which records this guard as unenforceable until
+agents have their own identity. The detection half needs only history and is
+enforceable at the CI checkpoint now; only authorization needs the actor.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Whether a reported flip blocks a merge -- promoting the CI job to a required status check is a ruleset change and the operator's alone.
+
+- What an entitled flip by the operator looks like: whether it is accompanied by anything at all, and what form an override takes once MECH-AGENT-IDENTITY-KEYS makes one authenticatable.
+
+- Whether AUTHORED_BY may move human back to llm, and whether an agent rewriting a human-authored statement must make it do so.
+
+- Whether new-human nodes accumulate an acceptance record once reviewed, or are simply re-listed against each pull request's own merge base until they land in main.
+
+- Whether the key means 'the operator wrote these words' or 'the operator originated this node' -- the guard's direction is one-sided either way, but the second reading leaves the words under the key free to drift.
 <<<
 
 [MECHANISM]
@@ -261,34 +368,52 @@ are reviewed through.
 [MECHANISM]
 UID: MECH-FP-MAIN-LINEAGE
 TITLE: Fail safes for fingerprints that reference a state main cannot reconstruct
-DEPTH: needs-design
+DEPTH: interface-settled
 AUTHORED_BY: human
 STATEMENT: >>>
-A fingerprint is a content hash of a parent's contract fields, not a Git
-object, so squashing does not invalidate it. What squashing destroys is the
-ability to RECONSTRUCT the accepted state: if a parent hashed to X only on an
-intermediate commit that the squash erased, a later suspect report can say the
-edge is stale but not what changed.
+A fingerprint that reaches main names its parent's state in the commit that carries it, so main can always reconstruct that state with git show on the commit and the file. This holds by construction, not by archaeology: an entry naming any other state hashes differently from the tree it lands in, and fp-check already reports that as drifted, or as deleted when the parent is gone.
 
-Two checks:
+The fail safe is therefore one gate, not a lineage tracker. fp-check runs against the merge result -- the tree that is about to become main, not a diff against the branch's base -- and refuses the merge when it exits non-zero. Nothing is warned and nothing is re-anchored. Re-anchoring is re-signing, re-signing is an acceptance, and acceptance is the operator's act at pull-request review; a gate that silently re-anchors is the rubber stamp the fingerprint exists to prevent.
 
-- Every recorded hash corresponds to a parent state reachable in main.
-- No recorded hash is ahead of the branch's common base with main; if one is,
-  rebase before accepting, so acceptances are taken against states that will
-  survive the squash.
+Squash needs no special handling. It preserves the final tree, so the signature and the state it names land in the same commit whatever the branch did in between. Rebase and conflict-authored content are a different failure -- the parent's content genuinely changed -- and stay with MECH-FP-GIT-FLOW-HAZARDS.
+
+Reconstruction, meaning answering what changed for a drift already on main, is a diagnostic and is out of scope for this mechanism. If it is built its shape is fixed: walk git log backwards from HEAD over the file holding the parent, export at each candidate commit, hash the parent, stop at the first match. It must hash from the JSON export rather than from the .sdoc text, or it will not reproduce the recorded value.
 <<<
 RATIONALE: >>>
-Without these, an acceptance taken mid-branch against a parent that changed
-again before merge leaves a dangling reference the moment the branch squashes.
-The mechanism still reports the edge as suspect, which is correct, but it loses
-the diff that makes the report actionable -- and a report that only says
-"something changed" is the one people learn to ignore.
+The two checks this node used to propose were both git archaeology, and the branch they were written for refutes both. origin/main and the merge base ec980d15 each contain zero .sdoc files while HEAD contains nine, so "every recorded hash corresponds to a parent state reachable in main" and "no recorded hash is ahead of the branch's common base" would each refuse all 31 fingerprint entries on this branch. A fail safe that refuses everything on the only live example is not a fail safe, and neither check can run cheaply enough to gate anything.
+
+The replacement costs nothing to build because it is already built. fp-check compares a recorded hash against the parent's hash in whatever tree it is handed and touches git not at all, which is exactly what makes it evaluable against a merge result. What this mechanism adds is not a check but a place to run one.
+
+Storing the accepted parent state beside its hash was considered and rejected. It would make drift diffs answerable without git, and cost is not the objection -- the twelve parents currently referenced total 7.6 KB of contract payload and all 139 nodes total 120 KB. Redundancy is. A state that passes the gate is already in the merge commit, so the store would duplicate the tree to avoid reading it.
 <<<
 NOTES: >>>
-Merge-time discipline may subsume both. If acceptance is taken as the last step
-before merge, the recorded hash is by construction the state that becomes main.
-Worth checking whether the two checks are then redundant or still needed as a
-backstop against acceptances taken earlier in the branch.
+Measured 2026-08-27 against a clean export of the branch tip.
+
+Today the failure has zero instances: fp-check reports 31 fingerprint entries, 0 signed and current, 31 never signed, 0 suspect. Every recorded value is the placeholder 0000000.
+
+Both controls run on copies of the export, never on the tree. Signing MECH-FP-ACCEPT-READINESS against MECH-FP-CHECK's own current hash 5360cbe gives "1 signed and current, 0 suspect", exit 0. The same edge with deadbee gives "drifted -- recorded deadbee, current 5360cbe", exit 1. So the gate fires on a hash naming a state the tree does not contain, and does not fire on one that names the tree itself. fp-check.py:38 lists drifted, unbacked and deleted as failing and returns 1 for any of them; only drifted and deleted are this invariant's cases, unbacked belongs to MECH-FP-RELATION-LINT.
+
+Why reconstruction is a diagnostic and not a gate: a whole-project JSON export takes 2.06 s wall, and there is no cheaper unit -- strictdoc export against a single .sdoc fails with "error: '@repo'" because the grammar alias resolves only from the root strictdoc_config.py. A sweep of this branch's 61 sdoc-touching commits is therefore about 126 s, and after the squash the intermediate states it would search are gone anyway.
+
+PARENT_FP records 7 hex characters (sdoc_fp.HASH_LEN), 28 bits. If a payload store is ever built despite the rejection above, key it by the full digest and resolve the prefix the way git does; 28 bits reaches a birthday collision near 16k stored states.
+
+MECH-FP-PREMERGE-GC should be folded here and retired rather than groomed. Its premise is that fingerprints referencing intermediate branch states become dangling references the instant the branch squashes; under this gate such fingerprints are drifted at the tip and cannot reach main, so there is nothing left to collect. MECH-FP-GIT-FLOW-HAZARDS stays separate: it is about whether a drift report is legitimate, not about whether the state it names survives, and the two overlap only in the sentence "squash is safe", which belongs there.
+
+SLICE-CHECKPOINT-WIRING names its CI checkpoint as "the point where the branch left main". For this invariant that anchor is wrong -- the evaluation tree is the merge result, and a diff against the base cannot see it.
+
+Residual, not handled: a merge that bypasses the gate. Detecting one needs the same fp-check run on main after the fact, which is the same command against a different tree.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Severity of drifted/deleted at every surface other than the merge gate — command time, pre-commit, pre-push. Only the merge boundary is settled here, and only because the consequence there is permanent and no reader judgement is available. The per-checkpoint severity table is SLICE-CHECKPOINT-WIRING's surface and the operator's call.
+
+- Whether the reconstruction diagnostic is built at all. Its shape is fixed above; whether 2.06 s per candidate commit is worth spending, and whether a drift report citing two hashes is already enough, is a judgement about operator attention.
+
+- Who may re-sign after a legitimate drift. DEC-FP-ACCEPT-AUTHORITY is open and this node deliberately does not narrow it — it only rules out the gate re-anchoring on its own.
+
+- Whether main is swept periodically to catch a merge that bypassed the gate. The mechanism is identical (fp-check on a different tree); whether the bypass is worth guarding is a trust question.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -356,35 +481,61 @@ RELATIONS:
 [MECHANISM]
 UID: MECH-FP-GIT-FLOW-HAZARDS
 TITLE: Git operations that change node content before it reaches main
-DEPTH: needs-design
+DEPTH: interface-settled
 AUTHORED_BY: human
 STATEMENT: >>>
-Squash is SAFE. It preserves the final tree, so a content hash is byte
-identical before and after and matches the branch tip. Only the intermediate
-commits are lost, which costs diagnostics rather than correctness.
+Squash-merge is the only method the repository allows, and it is safe for the hash: it preserves the final tree, so a contract hash is byte-identical before and after and matches the branch tip. What it destroys is the ability to reconstruct an intermediate accepted state, and the per-commit attribution of which signature was turned alongside which content change. Under squash-only, and on a branch that restack and absorb routinely rewrite, the durable unit of signature is the pull request, not the commit. MECH-FP-MAIN-LINEAGE and MECH-FP-PREMERGE-GC own that.
 
-Rebase is the hazard, in two ways:
+The rest of the workflow's hazards, each with what it breaks and who closes it:
 
-- Rebasing onto a main that changed a node you depend on makes the parent's
-  content genuinely different, so a recorded hash goes stale. This is correct
-  behavior arriving at the wrong moment: during a mechanical operation, where
-  the reader is not thinking about design and learns to dismiss the report.
-- Conflict resolution can produce node content that neither side authored. The
-  result is a contract nobody accepted, created silently by a merge.
+- Rebase onto a main whose copy of a parent has moved. The parent's content is genuinely different, so the recorded hash is stale, fp-check reports it drifted and the flake check fails. Detection is correct and already built; what is undesigned is the response, and the response is a signing-authority question, not a git one.
+- Conflict resolution inside a parent's contract fields. Produces content neither side authored, and is detected: the parent's hash moves and every child that signed it goes drifted.
+- Conflict resolution inside a child's PARENT_FP block. NOT detected. fp-check asserts only that a recorded hash equals the parent's current hash, so any resolution leaving the current hash in place reads as signed and current. This is the same undetectable class MECH-SIGNATURE-REVOCATION measured for a hand-restored line, and it is that node's to close rather than this one's.
+- rerere with autoupdate, which is on in this environment. A resolution recorded once is replayed and staged on every later rebase of the same conflict with no prompt, so both conflict hazards above recur through a restack without a human seeing a conflict at all. Restacking is a series of rebases, which is exactly the shape rerere exists to automate.
+- Carving the branch into a stack of pull requests. checks/strictdoc-fp-check.nix runs over the whole tree inside nix flake check, a required status check, and fails on any drifted, unbacked or deleted entry. A contract change and every acceptance it invalidates therefore have to land in the SAME pull request: split either way round, the first to merge leaves main red and blocks the rest of the stack, and a pair split so the parent has not landed yet fails as a missing parent instead. This constrains the cut points of SLICE-RESTACK-TO-PRS by the fingerprint graph, not only by readability, and it is the one hazard here that yields a buildable rule rather than a policy question.
+- git absorb, git revise and git move routing a hunk into an earlier commit. A PARENT_FP line sits in the same node block as the STATEMENT it signs, so a signature can be absorbed into a commit that predates the state it names. The merged tree is unaffected, so this costs a misleading blame and a possibly red intermediate commit under per-commit testing, not a wrong main.
 
-Restacking is a series of rebases and therefore the second hazard repeatedly.
+Out of scope: rebase --update-refs and archive refs move refs, not content; the bot's update/* sweep never touches an sdoc file.
+
+Two questions in this list are the operator's and are deliberately left blank here: whether a rebase should re-accept automatically when the parent's change falls outside the fingerprinted fields, and whether a drifted-on-rebase report blocks or only warns. Both are signing authority, both sit under DEC-FP-ACCEPT-AUTHORITY, and both are settled at the review that defines this instance's semantics.
 <<<
 RATIONALE: >>>
-None of this bites until a branch reaches main; before that it is local churn
-and a re-accept costs nothing. Merging to main is the forcing function, so the
-handling is deliberately deferred until the first merge -- by which point the
-approach may have changed enough that a solution designed now would be wasted.
+The enumeration is worth settling now even though the handling stays deferred, because the hazards do not all arm at the same moment and the one that arms first shapes work already scheduled. main carries no sdoc file at all, so nothing on main can move a parent under this branch today; every hazard here arms at the first merge, and the pull-request atomicity constraint arms at the restack that produces that merge. Deferring the whole list until after the first merge would mean discovering the constraint that dictates the cut points while making the cuts.
+
+The handling still waits, and that part of the original deferral holds. What is settled here is which operations are hazards, which are already detected by the checker, and which node owns each one. That is routing, not policy.
 <<<
 NOTES: >>>
-What is NOT yet designed: whether a rebase should re-accept automatically when
-the parent's change is confined to fields outside the fingerprint, and how to
-detect content produced by conflict resolution rather than by an author. Both
-want a real merge to look at rather than speculation.
+Measured 2026-08-27 in the strictdoc-trial worktree unless stated otherwise.
+
+The fingerprint is a function of file content only. contract_hash hashes the JSON export's node fields, and PARENT_FP is in EXCLUDED_FIELDS beside RATIONALE and NOTES (dev/scripts/sdoc_fp.py:33). That is simultaneously why squash is safe for the hash and why a rewritten PARENT_FP block is invisible to the checker.
+
+rerere.enabled and rerere.autoupdate are both true in file:/home/caubut/.config/git/config -- global, so they apply in every worktree of every clone -- with 35 resolutions already cached in the shared rr-cache. rebase.updateRefs is true there too. 24 worktrees share one common git dir, git-branchless is initialized (.git/branchless exists) and git-absorb is on PATH, so the absorb-routing hazard is a live path rather than a hypothetical.
+
+Nothing has bitten yet, and the reason is measurable: fp-check over the current export reports 31 fingerprint entries, 0 signed and current, 31 never signed, 0 suspect, exit 0. The placeholder never fails the check (fp-check.py:38, FAILING_CASES excludes never-signed), so every hazard here arms with the first real signature -- which per DEC-LONG-LIVED-BRANCH is turned at pull-request review, that is, at the restack.
+
+main holds 0 sdoc files against this branch's 9; the branch is 71 commits ahead of merge base ec980d15.
+
+The gate is real: checks/strictdoc-fp-check.nix is merged into flake.nix's checks (flake.nix:295 and :305), the CI test job runs a plain nix flake check (.github/workflows/ci.yml:591, :643), and test is one of the six required status checks. A missing parent is reported as deleted and fails (fp-check.py:58-60).
+
+Not measured: whether rerere's conflict-hash keying makes cross-node replay likelier in a corpus this uniform, where every node repeats the same field names and similar prose. rerere replays per identical conflict hunk, so two nodes conflicting identically would share one resolution; nobody has produced that case here.
+
+MECH-FP-MAIN-LINEAGE should stay a separate node. It specifies two checks; this one enumerates and routes, and the consumers differ -- SLICE-RESTACK-TO-PRS and MECH-FP-PREMERGE-GC read the enumeration, SLICE-INSTANCE-SEMANTICS-MIGRATION crosses the checks. Merging would give one node that both analyses and specifies. The condition under which merging becomes right is that node's own open question: if merge-time-only signing subsumes both of its checks, it collapses, and its residue is this node's first paragraph.
+
+Correction to what this node used to say. "Costs diagnostics rather than correctness" is right about the hash and understates the attribution loss. DEC-FINGERPRINT-IN-NODE's rationale rests on acceptance being "a reviewable git diff, attributable to a commit"; the commit carrying a signature does not survive squash, restack or absorb. That does not contradict the decision, it fixes the granularity. The earlier NOTES also filed the auto-re-accept question as wanting "a real merge to look at"; it is not a measurement question at all, it is signing authority, and DEC-FP-ACCEPT-AUTHORITY already owns it.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Whether a rebase should re-accept a fingerprint automatically when the parent's change is confined to fields outside the fingerprint. Left blank: it is a signing-authority rule under DEC-FP-ACCEPT-AUTHORITY, which is still open.
+
+- Whether a drifted-on-rebase report blocks the operation or only warns. The mechanism that detects it exists; the severity is policy.
+
+- Whether acceptance is permitted only as the last step before merge. MECH-FP-MAIN-LINEAGE's NOTES treats this as the discipline that might subsume its two checks; it is a rule about when a signature may be turned, so it is the operator's, and whether the checks survive it follows from the answer rather than the other way round.
+
+- Who may re-sign after a conflict resolution, given that the resolver is often the same agent that authored one side. Named but not answered.
+
+- What a revoked-versus-never-signed marker looks like. MECH-SIGNATURE-REVOCATION poses it as a choice between a distinct marker value and a CI history check against main; the PARENT_FP conflict case adds a third caller but does not pick.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -484,23 +635,56 @@ DEC-EXECUTABLE-RULES-ROADMAP already schedules an operator review of this milest
 [MECHANISM]
 UID: MECH-AGENT-IDENTITY-KEYS
 TITLE: Give agents their own signing identity
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: human
 STATEMENT: >>>
-Per-agent SSH keys, so a commit made by a model is attributable to that model
-rather than to the operator whose machine it ran on.
+An acting identity is a commit-message trailer written by a hook from the environment. It is not a key, not the git author or committer, and not a field on any node.
+
+The trailer names three things the session already knows. Measured in an agent process on 2026-08-27: AI_AGENT=claude-code_2-1-241_agent gives the harness, its version and the role; CLAUDE_CODE_SESSION_ID gives the run; CLAUDE_CODE_CHILD_SESSION=1 marks a subagent, which is the kind of actor that signed the five contracts reverted in 9958f190. A commit-msg-stage hook reads them and appends an Acted-By trailer carrying class, harness and run, so the model never writes it and cannot forget it. commit-msg rather than prepare-commit-msg, because the latter's output is still editable before the commit is made. This repository already installs a prek-managed commit-msg hook for convco, so the wiring point exists.
+
+Absence is a third state. A commit with no trailer is unattributed, not the operator's. The operator's own commits are stamped by the same hook from an environment carrying no agent marker, and that inference is only as strong as whatever launches the session. The prek hooks are local-only and bypassable with --no-verify, so the stamp is evidence, not proof.
+
+A verifier reads git, not the graph: blame the PARENT_FP line in porcelain mode to get the commit, then read that commit's trailer. PARENT_FP entries are UID:hash and carry no signer, and putting one there would store a per-event fact in a per-node field.
+
+No new sdoc field, and AUTHORED_BY is unchanged. AUTHORED_BY is the class of a node's statement author; this is the identity of a single act. A rule keyed on grade reads the first, an audit of who turned a key reads the second. This is also what makes MECH-AUTHORED-BY-GUARD enforceable at a checkpoint rather than only inside the acting session.
+
+Scope is the branch: attribution durable across a branch's own history, which is where the review that catches a bad signature happens. Out of scope, deliberately -- cryptographic signing and key issuance; any rule about who may sign what, which is DEC-FP-ACCEPT-AUTHORITY's; and whether attribution must survive the squash to main.
 <<<
 RATIONALE: >>>
-Identity is the one thing that must not go fuzzy, and today it is: an agent
-commits under the operator's name, which is what made five agent-written
-signatures forensically indistinguishable from real ones. Every guard
-downstream of this -- fingerprint acceptance, AUTHORED_BY, any future audit --
-rests on being able to tell who acted, and none of them can while the answer is
-always the operator.
+Per-agent SSH keys were the original shape and buy nothing available here. Nothing on this branch is signed -- 71 of 71 commits report %G? = N -- and the operator's git config declares no gpg.format, no user.signingkey and no commit.gpgsign, so this would be commit signing established from zero. It would not be unforgeable at the end of it: the agent process runs as UNIX user caubut, which owns ~/.ssh/id_ed25519 at mode 0600, so a key the agent can use is a key the agent can substitute. Cryptographic separation needs the operator's key held where the agent cannot reach it, and one machine under one user does not offer that.
+
+The threat is confusion, not forgery. The five signatures were written by an agent that misread its authority, not one that lied about who it was. Attribution answers confusion; only a real principal boundary answers forgery, and there is none to be had here.
+
+The trailer is written by a hook because the convention version has already failed at exactly this. The harness asks the model to add Co-Authored-By, nothing in this repository asks for or checks it, and 41 of the branch's 71 commits carry it while 30 do not -- the 30 including 9958f190 and the rest of the fingerprint incident. A carrier the model writes measured 58% on a branch that is almost entirely model-written.
 <<<
 NOTES: >>>
-Probably belongs to the beads work rather than here, and is likely to get lost
-there. Tracked in this plan so it survives, not because this is its home.
+Probably belongs to the beads work rather than here, and is likely to get lost there. Tracked in this plan so it survives, not because this is its home.
+
+Measured 2026-08-27 on feat/strictdoc-trial from its fork point ec980d15, 71 commits.
+
+Author and committer are the operator on 71 of 71, so the committer field carries no information today and is available. It is not durable: 41 of 71 commits already have committer-time != author-time, meaning they were re-created and their committer replaced by whoever rebased. Controlled test in a scratch repo -- a commit with committer "claude-code agent" plus an Acted-By trailer keeps both through a fast-forward rebase; git rebase --root --force-rebase resets the committer to the rebaser and leaves the trailer intact. That is why the trailer is the carrier and the committer is not.
+
+Same test, squashed: both gone, and blame on the agent-written line resolves to the operator's single squash commit. Per-line attribution does not survive a squash by construction, whatever the message says, and this repository squash-merges only. MECH-FP-GIT-FLOW-HAZARDS says "Squash is SAFE", which holds for the content hash and is false for attribution.
+
+Positive control for the reader: the same trailer query returned the value on the rebased commit and empty on the squashed one, so an empty result is a real absence rather than a broken query.
+
+Verifier walk-through on the incident line itself -- git blame --porcelain -L85,85 docs/plans/strictdoc-tooling/01-tooling.sdoc gives 9958f190, whose author-mail and committer-mail are both the operator's. The mechanism works and returns the operator for an agent action, which is the defect. git blame prints the author by default; committer appears only under --porcelain, so any check must ask for it.
+
+AI_AGENT is not defined anywhere in this repository -- it comes from the operator's environment. The hook can read it and cannot guarantee it.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Who may sign what, and whether an acting identity grants or withholds authority. This mechanism makes the actor legible and nothing more; DEC-FP-ACCEPT-AUTHORITY is open and unaffected.
+
+- Whether attribution must survive the squash to main, and what carrier could do it. Measured that neither committer nor trailer survives, so the answer is a statement about what the record is for -- and it meets MECH-FP-PREMERGE-GC and MECH-FP-GIT-FLOW-HAZARDS.
+
+- The vocabulary of the actor class. The trailer carries whatever the environment names; whether that vocabulary is AUTHORED_BY's llm/human, a finer grading, or something else is a semantics call, not plumbing.
+
+- Whether an unattributed commit should be refused rather than recorded. The plumbing only distinguishes the three states; turning 'unattributed' into a gate is a rule.
+
+- Whether the operator's own commits should be positively stamped at all, given the stamp is inferred from an absent agent marker rather than asserted.
 <<<
 
 [DECISION]
@@ -556,16 +740,58 @@ no edge between its two halves is exactly that, made durable.
 [MECHANISM]
 UID: MECH-TESTS-AS-CONTRACT
 TITLE: Flows get tests as a contract once they settle
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: human
 STATEMENT: >>>
-Once a flow's mechanics are settled, it gets tests that stand as its contract.
-No regression is acceptable in this area afterwards.
+Once a flow's mechanics are settled it gets tests that stand as its contract, and no regression is acceptable in this area afterwards. Concretely:
+
+What a test is. A scripted run of one flow through the sdoc tool against a throwaway project, asserting what the flow does rather than what any component says it does. One test is an ordered list of steps; a step names the move, its arguments, and exactly one expected outcome -- writes, giving the field values the move must leave on the node, or refused, naming the identifier of the gate that must have refused it. Assertions are on the gate identifier and on the resulting node fields, never on diagnostic wording. A test that pins prose turns a rewording into breakage, which is this node's own rationale arriving one layer later.
+
+Where it is declared. Beside the flow, in the behaviour model of SLICE-BEHAVIOUR-MODEL, as a tests list on the flow itself. Not as fixture files on disk: a second source for one expectation is the drift MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE records, and the milestone's premise is that one evaluation emits the model for the tool and the validators both.
+
+Which node type owns it. Neither a new node type nor a new grammar field. A test is data on a flow, so the MECHANISM or SLICE that declares the flow owns it and carries a File relation to the check that runs it.
+
+Where it runs. One generated harness executes every declared flow test and is registered in flake.nix's checks output as strictdoc-flow-contracts, beside strictdoc-fp-check and strictdoc-cycle-check, so nix flake check -- this repository's validation entrypoint -- is what runs it. Each flow gets its own throwaway project and its own --output-dir under the derivation's TMPDIR. No copy in dev/tasks/check.nix: where a working-tree fast path is wanted the task shells out to nix build .#checks.<system>.strictdoc-flow-contracts, which is the one arm of check:sdoc-grammar that already defers instead of restating.
+
+Positive control, per test rather than per suite. A step expecting refused is paired with the same flow run with that gate's precondition removed, which must be accepted. Without the pair, a harness broken in any way at all reports a clean sweep and every refusal in the file means nothing.
+
+The trigger, named in DEPTH. A flow may be built and land at implemented with no contract test. The node that declares it may not move to verified until each of its flows has a test that runs in the check and carries its positive control. That is what "once they settle" means here: implemented is where the mechanics stop moving, verified is the independent pass the ladder already draws, and the requirement needs no new state and no new field.
+
+After a test exists, the flow's declared outcome is the contract. A change to it is read as a contract change, and a test is never relaxed to make a change pass. Whether a flow carrying no test at all fails the evaluation or is only reported in the checkpoint table is SLICE-CHECKPOINT-WIRING's review question, not settled here.
 <<<
 RATIONALE: >>>
-Deliberately after settling, not before. Writing tests against mechanics still
-being played with pins the wrong thing and makes changing it feel like
-breakage.
+Deliberately after settling, not before. Writing tests against mechanics still being played with pins the wrong thing and makes changing it feel like breakage.
+
+The shape follows from what a flow produces. Its observable product is a sequence of writes and refusals, both exactly reproducible from a fixed starting project, so a fixture run is sufficient; a property test would only re-describe the model that generated the flow, and a golden file over rendered output would assert the renderer. Asserting on gate identifiers rather than on diagnostics buys at the wording level the same freedom that waiting for settling buys at the mechanics level.
+
+Declaring the expectation in the model rather than on disk is this repository's own measured lesson. check:sdoc-grammar and checks/strictdoc-grammar-*.nix implement one acceptance list twice, in bash and in Nix, against the same fixtures; they agree today and nothing makes them agree tomorrow (MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE).
+
+The per-test positive control is INV-GUARDS-MUST-EXECUTE turned on the tests themselves. Every assertion in a refusal test has the form "this failed", and a broken harness fails everything identically.
+<<<
+NOTES: >>>
+Harness precedent: checks/strictdoc-grammar-negative-fixtures.nix. It builds a throwaway project per fixture outside the repository under TMPDIR, gives each export its own --output-dir, reads each fixture's expected layer out of fixtures/README.md rather than restating it, and carries two positive controls because every assertion in it is of the form "this failed". A flow-contract harness is that file with the fixture table replaced by the model's flow tests. The clean output directory is load-bearing rather than tidy: strictdoc export caches under its output dir, and a broken input exits 1 then 0 on re-run against a warm one.
+
+Corpus, measured 2026-08-27 over the JSON export: 139 nodes; 77 at sketch, 16 at implemented, 2 at verified (SLICE-GRAPH-CHECKS, SLICE-SDOC-IN-SEMBLE). Three File relations exist in the whole graph and all three name implementation files -- packages/semble/lib/withGrammars.nix twice and packages/semble/patches/extra-grammars.patch -- none a check. So scoping the verified requirement to flows is deliberate: no flow exists yet, so the rule is wired against an empty legacy instead of going red on day one, which is the corpus-first order MECH-RELATION-TARGET-TYPE-LINT records. The same rule applied to every node would invalidate both existing verified nodes on the day it landed.
+
+The File edge from a flow's node to its check is documentation, not enforcement. Measured in MECH-FILE-RELATION-EXISTENCE: a File relation whose VALUE names a path that does not exist exports with exit 0. The harness is the enforcement.
+
+The trigger is phrased against the DEPTH ladder as it stands today. If milestone five moves implemented and verified out of DEPTH -- an open instance decision listed in SLICE-INSTANCE-SEMANTICS-MIGRATION -- the trigger moves with them, because the condition it names is the independent review pass rather than the field that carries it.
+
+A flow whose gates read git cannot be exercised the way the existing strictdoc checks are. checks/strictdoc-fp-check.nix and checks/strictdoc-cycle-check.nix run over ${self}, a flake source store path with no .git, and neither dev/scripts/fp-check.py nor dev/scripts/cycle-check.py contains the string git or subprocess (0 matches each; the same grep returns 6 on checks/doubled-words.py and finds subprocess at line 116 of checks/strictdoc-grammar-negative-fixtures.nix, so the search works). SLICE-CHECKPOINT-WIRING's pre-commit checkpoint runs against the previous commit, so any flow reaching it needs a synthetic repository built inside the derivation. Logged as MECH-FLOW-TEST-GIT-CHECKPOINTS rather than solved here.
+
+AUTHORED_BY still reads human. The operator's two sentences are preserved -- the first opens the STATEMENT and the RATIONALE's first paragraph is theirs verbatim -- and everything after them was written by a model. Only the operator turns that key (MECH-AUTHORED-BY-GUARD), so it is left alone and flagged here rather than corrected.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Whether a flow carrying no contract test at all fails the evaluation or is only reported in the checkpoint table. SLICE-CHECKPOINT-WIRING already reserves that same fail-vs-report question for its own review; answering it here would settle a policy in two places.
+
+- Which flows are worth a contract test at all. The mechanism says how a test is declared and where it runs, and deliberately declares no minimum coverage.
+
+- Whether a change to a flow's declared outcome is a signing event. The statement says only that it is read as a contract change; whether it produces a fingerprint, a signature, or a revocation is SLICE-INSTANCE-SEMANTICS-MIGRATION's, and milestone 5's.
+
+- Whether implemented and verified stay in DEPTH at all. The trigger is written against the ladder as it stands and NOTES records that it follows the review pass rather than the field if milestone 5 moves them.
 <<<
 
 [MECHANISM]
@@ -809,25 +1035,64 @@ a moment later.
 [MECHANISM]
 UID: MECH-READINESS-PREDICATE-RECONCILE
 TITLE: One readiness predicate, consumed by every script that asks
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
-Five definitions of ready exist and no two agree on rejected, superseded and
-suspect. sdoc_fp.is_ready refuses only STATUS open, so fp-accept signs against
-a rejected or superseded parent. status.py closure_verdict blocks superseded
-and passes rejected, and never calls fp-check, so no-suspect-edge is not
-applied. The skill, MECH-READY-QUERY and DEC-LOCAL-IMPLEMENTABILITY each word
-it a third way. SLICE-SDOC-IN-SEMBLE is verified while status.py reports it
-blocked on DEC-ARCH-COLOCATION being open.
+Readiness is defined in four places, read at two scopes, and the four disagree. dev/scripts/sdoc_fp.py:100 is_ready is the node-local rule fp-accept consults before signing a fingerprint. docs/sdoc/status.py:58 closure_verdict re-implements the same rule inline while walking a slice's closure. dev/skills/sdoc/SKILL.md:68 and MECH-READY-QUERY state it in prose, identically to each other and differently from both executables. DEC-LOCAL-IMPLEMENTABILITY is the contract all four claim to implement and enumerates no state at all.
 
-Latent today: zero rejected decisions and one superseded decision with no
-dependents. Decide the rule, then one predicate in sdoc_fp consumed by both
-scripts and by MECH-READY-QUERY when it lands.
+Measured disagreement, four cells. A rejected decision: both executables pass it, both prose readings block it. A superseded decision: fp-accept signs against it, status.py blocks. A SPIKE whose STATUS is unrun or blocked: every reading treats it as settled on DEPTH alone, because no gate consults a spike's STATUS. A suspect edge: DEC-LOCAL-IMPLEMENTABILITY makes it part of the predicate, and status.py never computes one because it never calls fp-check.
+
+The dependency edge set is defined twice with complementary filters -- status.py:47 takes every relation whose TYPE is not File, sdoc_fp.py:97 takes every relation whose TYPE is Parent -- and the DEPTH ladder is written three times in two languages: packages/strictdoc-grammar/values.nix:35, status.py:33, sdoc_fp.py:38.
+
+The deliverable is one read point, not a ruling. The predicate and the edge-set live in dev/scripts/sdoc_fp.py, which cycle-check.py already imports by the sys.path.insert idiom the dev/scripts carry; status.py and render.py gain that import rather than moving, because checks/strictdoc-fp-check.nix and checks/strictdoc-cycle-check.nix name dev/scripts/ paths while the skill names docs/sdoc/ paths. It exports four things, and nothing outside it decides readiness:
+
+STATE_VERDICTS -- a table from one state-field value to settled, blocks or freedom. Seven rows: one per DECISION STATUS, one per SPIKE STATUS, plus the cut point on the DEPTH ladder. Its contents are milestone 5's, listed below.
+
+settled(node) -> (bool, reason) -- the node-local question fp-accept asks of a single parent, answered from the table.
+
+dependencies(node) -> set of UID -- the one edge-set: every relation whose TYPE is Parent, plus every PARENT_FP parent. TYPE is Parent, not "is not File": a Child relation points downstream and is not a dependency, and status.py's complement filter would walk one into the closure the day the grammar declares one.
+
+suspect_edges(index) -> set of (node, parent) -- fp-check.py:42's drifted, unbacked and deleted findings lifted out so a closure walk can apply the no-suspect-edge condition status.py omits. never-signed is not suspect.
+
+After the change fp-accept calls settled, fp-check calls suspect_edges, status.py's closure_verdict calls all four and holds no rule of its own, and MECH-READY-QUERY calls the same four when it lands. cycle-check.py's build_graph moves here too. It filters TYPE == Parent, which is the SAME edge set and the same direction as sdoc_fp.relation_parent_uids and differs only by carrying the ROLE alongside the target, so it takes a flag for whether the role travels and another for whether PARENT_FP parents count as edges. render.py computes no readiness and only imports the fingerprint placeholder.
+
+Behaviour is held constant except where a gate tightens. The shipped table transcribes status.py's current reading, the stricter of the two executables on the one cell where they differ, so fp-accept stops signing against a superseded parent and no other output moves. Transcribing rather than ruling is the point: which states are settled is not this mechanism's to decide.
+
+Left blank for milestone 5, one cell each: whether rejected blocks; whether superseded blocks; whether a decision that is neither open nor accepted contributes a degree of freedom; whether a SPIKE's STATUS gates at all and which of unrun and blocked blocks; and whether no-suspect-edge belongs in the predicate or in a separate report. When SLICE-BEHAVIOUR-MODEL's evaluation emits its machine-readable model, the table becomes a projection of it and stops being a literal.
+
+Done when all five scripts produce byte-identical output on the current corpus, except fp-accept's superseded refusal, and the injected-state control below is re-run against the module.
 <<<
-RATIONALE: >>>
-Two executables implementing two readings of one rule is exactly the
-document-borne drift INV-GUARDS-MUST-EXECUTE names; the disagreement is
-invisible until the first rejected decision acquires a dependent.
+RATIONALE: Two executables carrying two readings of one rule is the document-borne drift INV-GUARDS-MUST-EXECUTE names, and the rule is the one part of this that should not be code: it is lifecycle policy, which DEC-EXECUTABLE-RULES-ROADMAP puts in milestone 5. Separating the read point from the rule now means milestone 5 fills a seven-cell table instead of editing four scripts in two directories, and means the disagreement is inspectable as data rather than distributed across two hand-copied constants and two inline conditionals. Deferring the extraction until milestone 5 inverts that: the migration would arrive to find the thing it migrates written four times.
+NOTES: >>>
+Measured 2026-08-27 against a clean export of 139 nodes (rm -rf of the output dir first; incremental export produces false greens). Relation TYPE census: Parent 92, File 3, Child 0. DECISION STATUS: 13 accepted, 7 open, 1 superseded, 0 rejected. DEPTH: 77 sketch, 16 implemented, 14 interface-settled, 9 needs-design, 2 verified, 21 decisions carrying none. Fingerprints: 31 entries, 31 never-signed, 0 suspect -- so no-suspect-edge is vacuously true today and starts to matter at the first signed fingerprint.
+
+How much of the divergence is latent, and how much is not. Latent: zero rejected decisions exist, and the one superseded decision, DEC-VIEWER-BEFORE-BULK, has zero inbound relations and is named by zero PARENT_FP entries. Not latent: SPIKE-CONVERSION-SIGNAL is STATUS unrun at DEPTH interface-settled, so both predicates already count an unrun spike as settled wherever it appears in a closure. Also not yet live but one grammar edit away: packages/strictdoc-grammar/lib/dsl.nix:123 already offers rel.child, and values.nix:8 records the child relation as surface this repository does not exercise.
+
+Positive control, run in memory over a deep copy of the export with no file written. Setting DEC-ARCH-COLOCATION's STATUS to each of the four values in turn: open -> fp-accept refuses and status.py blocks; accepted -> fp-accept signs and status.py passes; rejected -> fp-accept signs and status.py passes; superseded -> fp-accept signs and status.py blocks. The control detects agreement as well as disagreement, so the one divergent row is not an artefact of the harness. Setting SPIKE-EXECUTABLE-RULES's STATUS to unrun, run and blocked in turn changes neither answer. Appending one TYPE Child relation to MECH-CYCLE-CHECK makes status.py's dependencies return two UIDs where sdoc_fp's relation_parent_uids returns one.
+
+Three implementations of node discovery also exist -- the recursive UID-prefix walk in status.py:20, the same walk in render.py:27, and the DOCUMENTS/NODES walk keyed on _NODE_TYPE in sdoc_fp.py:45 -- and all three return the same 139 nodes today. They are out of scope here and logged separately; the count is recorded so a later divergence is legible as a change rather than a discovery.
+
+Sequencing. MECH-READY-QUERY and this node are not the same work and do not merge: this one produces the predicate and the edge-set, that one the closure query and the bounded implementation prompt built from the same traversal. MECH-READINESS-REPORT-FRONTIER is a different case -- both of its complaints, a root reporting itself as its own blocker and an undifferentiated blocker list, are answered by MECH-READY-QUERY's record, so it closes as subsumed when that lands. This one lands first and changes no output; the other two consume it. MECH-READY-QUERY carries only a Governed_By edge to DEC-LOCAL-IMPLEMENTABILITY and has no edge recording that dependency.
+
+Correction to this node's earlier statement, kept so the change is legible. It said five definitions exist and no two agree. There are four readings, not five -- DEC-LOCAL-IMPLEMENTABILITY is the contract the other four implement, not a fifth reading of it -- and two pairs do agree: the skill and MECH-READY-QUERY word it identically, and on rejected the two executables agree by both passing it. The executables differ in exactly one cell, superseded. It also cited SLICE-SDOC-IN-SEMBLE being verified while status.py reports it blocked on DEC-ARCH-COLOCATION; that reproduces exactly, but both predicates answer the same there, so it is DEPTH and closure-readiness being independent axes rather than two predicates disagreeing, and it is already recorded verbatim in MECH-READY-QUERY's own notes.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Whether a `rejected` decision in a closure blocks. Both executables currently pass it; both prose readings block it. Zero instances exist today.
+
+- Whether a `superseded` decision blocks. This is the single cell where the two executables actually disagree today. The one superseded decision has no dependents.
+
+- Whether a decision that is neither open nor accepted contributes to the degrees-of-freedom count, or only to the blocker list.
+
+- Whether a SPIKE's STATUS gates at all, and if so which of `unrun` and `blocked` blocks. DEPTH describes a spike's design maturity and STATUS its execution; nothing today says whether an unrun spike may sit in a settled closure.
+
+- Whether no-suspect-edge is part of the readiness predicate, as DEC-LOCAL-IMPLEMENTABILITY words it, or a separate report status.py prints alongside its verdict.
+
+- Whether the DEPTH cut point stays at interface-settled for every node type, or differs per type.
+
+- The shipped table transcribes status.py's reading as a placeholder so no gate loosens. That transcription is not a ruling on any cell above and is expected to be replaced wholesale at milestone 5.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -837,25 +1102,84 @@ RELATIONS:
 [MECHANISM]
 UID: MECH-RELATION-TARGET-TYPE-LINT
 TITLE: Lint relation target types, which the parser never checks
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
-strictdoc validates a relation's ROLE against the source element's grammar
-only; the target's element type is never checked. Measured: a MECHANISM
-Governed_By a SPIKE exports clean. The skill's role table is prose.
+A relation's legal target type is a contract keyed on the pair (source element tag, relation role), not on the role alone. The grammar declares thirteen Parent relations across the five element types, so the table has thirteen rows, one per declared pair. File relations carry no row: their VALUE names a filesystem path, not a UID.
 
-The live graph already carries two Governed_By edges whose target is not a
-DECISION -- MECH-FP-ACCEPT-READINESS to MECH-FP-CHECK, and
-SPIKE-CONVERSION-SIGNAL to SLICE-FIRST-CONVERSION -- plus five MECHANISM
-Assumes MECHANISM edges the skill's table gives no target for, and
-Serialized_By has no stated target at all. Decide the Assumes and
-Serialized_By rules, fix or accept the two edges, then wire the lint. A lint
-wired first goes red on day one.
+| source | role | legal target |
+| --- | --- | --- |
+| DECISION | Superseded_By | DECISION |
+| MECHANISM | Governed_By | DECISION |
+| MECHANISM | Guarantees | INVARIANT |
+| MECHANISM | Serialized_By | (none yet) |
+| MECHANISM | Proven_By | SPIKE |
+| MECHANISM | Assumes | DECISION, MECHANISM |
+| SLICE | Governed_By | DECISION |
+| SLICE | Crosses | MECHANISM |
+| SLICE | Assumes | DECISION, SLICE |
+| SLICE | Proven_By | SPIKE |
+| INVARIANT | Governed_By | DECISION |
+| INVARIANT | Proven_By | SPIKE |
+| SPIKE | Governed_By | DECISION |
+
+Two absences are represented differently and both are load-bearing. A pair the grammar declares with no row at all is an evaluation error, so a role cannot exist without a contract. A row whose target set is empty, carrying a reason, means the role is grammatically available and deliberately has no contract yet; every use of it is a violation reporting that reason rather than passing. Serialized_By is the only such row, because nothing uses it and MECH-CORPUS-EDGE-MAP defers it until the locks document converts.
+
+The table lives in the milestone-three behaviour-model surface, layered over the normalized grammar surface rather than inside it. SLICE-GRAMMAR-FROM-NIX excludes "which node types a relation may point at" by name and assigns it to a consumer of that surface. The join key is the element tag and the relation role, both already carried by the normalized layer.
+
+Three checks run at evaluation, against the grammar values in the same evaluation: every declared (element, role) pair has exactly one row, every row names a pair the grammar declares, and every target names a declared element tag. A role renamed or dropped upstream therefore fails evaluation instead of leaving a row that silently covers nothing.
+
+One check runs over the corpus: dev/scripts/relation-target-check.py, taking a clean JSON export and the machine-readable model emitted by that same evaluation, so the table exists once and no second copy can drift. It walks every Parent-type relation, resolves both ends to their _NODE_TYPE, and reports each edge whose target tag is outside its row's set, printing source UID, role, target UID, the target's actual tag and the legal set. Exit status is non-zero when any violation is found, and the summary line is "N nodes, M parent edges checked: K violation(s)" -- MECH-CYCLE-CHECK's shape, for the same reason: a count is what makes a green run distinguishable from a run that checked nothing. Its CI gate is checks/strictdoc-relation-target-check.nix, mirroring checks/strictdoc-cycle-check.nix's clean-$TMPDIR export harness rather than sharing its derivation, so the two stay independently attributable on failure. Dangling targets need no handling: a VALUE naming no node is already fatal at parse.
+
+There is no exemption or allowlist mechanism. The corpus is fixed before the gate lands, and that is two edges:
+
+SPIKE-CONVERSION-SIGNAL Governed_By SLICE-FIRST-CONVERSION becomes SLICE-FIRST-CONVERSION Proven_By SPIKE-CONVERSION-SIGNAL. SPIKE declares only Governed_By and File, so a spike has no role that can name what it probes; the reverse direction is expressible and is how the other seven spike citations are already written.
+
+MECH-FP-ACCEPT-READINESS Governed_By MECH-FP-CHECK becomes Assumes. It refines fp-check's behaviour rather than being governed by a decision, which is what the seven other MECHANISM-to-MECHANISM edges say. Its PARENT_FP entry stays and needs no re-signature: RELATIONS is excluded from the contract hash, so changing a role does not move it.
+
+The thirteen rows are data filling this surface, not part of it. Turning a row is a one-line edit that does not touch this mechanism.
+
+Refusing the write at edit time belongs to milestone four, in the sdoc CLI, consuming the same emitted model. It is not part of this mechanism.
 <<<
 RATIONALE: >>>
-The parser proves an edge resolves, never that it points at the kind of node
-the role promises. Corpus first, gate second is this repo's own practice from
-SLICE-FP-DETECTOR.
+The parser proves an edge resolves, never that it points at the kind of node the role promises. Measured on a scratch copy of the corpus: a SLICE Crosses a DECISION, and a DECISION Superseded_By a MECHANISM, both export with exit 0 and the edge intact in the JSON. The second is the worse of the two, because the skill's supersession rule is the one place the graph claims a discipline no mechanism enforces.
+
+Key the contract on the pair rather than on the role because the corpus already uses one role from several source types with different targets. Assumes is MECHANISM-to-MECHANISM seven times and SLICE-to-SLICE six; a role-keyed table would have to admit the union and would then permit MECHANISM Assumes SLICE, which nothing has argued for. Governed_By is declared on four of the five element types.
+
+Corpus first, gate second is this repo's own practice from SLICE-FP-DETECTOR. A lint wired before the two miscast edges are fixed is red on day one, and a check that is red on arrival is a check people learn to skip.
+
+The table belongs to the semantic layer rather than the grammar surface because that is where the operator can see it. Milestone three exists so the lifecycle becomes something to look at instead of guess at, and a target-type table hidden in a Python dict is prose again.
+<<<
+NOTES: >>>
+MEASURED 2026-08-27, strictdoc 0.28.3 via the trial venv, against a byte-copy of the corpus in a scratch tree (139 nodes, identical to the live export). Every injection went into the same file at the same anchor and each ran against its own clean output directory.
+
+Silent: SLICE-GRAPH-CHECKS --Crosses--> DEC-SYSTEM-PURPOSE exits 0, and the edge is present in the export's RELATIONS. DEC-VIEWER-BEFORE-BULK --Superseded_By--> MECH-CYCLE-CHECK exits 0 with zero error lines.
+
+Positive controls, same harness, same file, same anchor -- what strictdoc does check, so the two exit-0 results above are a real absence and not a broken injection. A role the source element does not declare (SLICE ... ROLE: Guarantees) exits 1 with "Semantic error: Requirement relation type/role is not registered: Parent / Guarantees". A target UID that does not exist exits 1 with "[DocumentIndex.create] Requirement SLICE-GRAPH-CHECKS references parent requirement which doesn't exist".
+
+A thirteen-row prototype of the checker over the live export: 139 nodes, 92 parent edges checked, 2 violations -- exactly the two named in the STATEMENT. Re-run against each injected export it reported 3, catching the injected edge alongside them.
+
+THE ROLE TABLE HAS TWO AUTHORITIES AND THEY DISAGREE. MECH-CORPUS-EDGE-MAP is interface-settled, fingerprinted, and states a role table of its own: Assumes MECHANISM-to-DECISION, Proven_By MECHANISM-or-INVARIANT-to-SPIKE, Governed_By MECHANISM-to-DECISION. The live graph matches none of those three. It has zero MECHANISM Assumes DECISION edges against seven MECHANISM-to-MECHANISM and six SLICE-to-SLICE; zero MECHANISM or INVARIANT Proven_By against seven SLICE-to-SPIKE; and Governed_By sourced from SLICE, INVARIANT and SPIKE as well as MECHANISM. The rows above are the union, on the reading that MECH-CORPUS-EDGE-MAP forecasts how one unconverted corpus will be converted (its counts are of source material, not of nodes that exist) while this table is graph-wide. The union is safe because the argument that motivated its narrower Assumes -- "any-to-any is a cycle generator", written when nothing detected cycles -- has since been discharged by MECH-CYCLE-CHECK, which is implemented and gated in CI. Its STATEMENT is a contract field, so reconciling it is the operator's: MECH-EDGE-MAP-TABLE-RECONCILE.
+
+Logged, not decided: no Assumes edge in the graph carries a fingerprint, 0 of 14, while Governed_By carries one on 17 of 26 and Crosses on 3 of 29. The skill's fingerprint ladder runs strictly downward, DECISION to MECHANISM to SLICE, and has no place for a same-tier Assumes. Whether such an edge is contract-bearing at all is DEC-ASSUMES-CONTRACT-BEARING.
+
+Grammar counts, for the evaluation cross-check to assert against: thirteen Parent (element, role) pairs and three File relations, from packages/strictdoc-grammar/values.nix. That file is the consumer holding this repository's five node types; the table sits beside it as a second consumer of the same surface, not inside it.
+
+CORRECTIONS TO THIS NODE'S EARLIER STATEMENT, all from graph growth between 61 and 139 nodes. It said five MECHANISM Assumes MECHANISM edges; there are seven. It said the skill's table gives Assumes no target and Serialized_By none at all -- true of the skill, false of the graph, since MECH-CORPUS-EDGE-MAP gives both a stated home and defers Serialized_By explicitly. And it scoped the gap to Governed_By, Assumes and Serialized_By; measured, no role is checked, Superseded_By included.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- The thirteen row VALUES are a proposal derived from measured usage plus the skill's prose table. They are data filling the surface; the operator turns any row without touching this mechanism
+
+- MECHANISM Serialized_By is deliberately left with an EMPTY target set rather than a guessed one. Nothing uses the role and MECH-CORPUS-EDGE-MAP defers it; the first person who wants it writes its contract
+
+- Whether an Assumes edge is contract-bearing at all — 0 of 14 carry a fingerprint, and the skill's downward ladder has no place for a same-tier edge. Left to DEC-ASSUMES-CONTRACT-BEARING and to milestone 5's ripple model
+
+- Whether per-plan narrowing of the table (a profile, so the beads corpus could enforce a tighter Assumes than the graph-wide contract) should exist. The union is proposed instead; the narrowing question is logged, not answered
+
+- Reconciling MECH-CORPUS-EDGE-MAP's STATEMENT with the graph-wide table. It is a contract field on a fingerprinted node, so only the operator changes it
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -865,18 +1189,50 @@ RELATIONS:
 [MECHANISM]
 UID: MECH-PLAN-REFS-CHECK
 TITLE: Check INV-NO-EXTERNAL-PLAN-REFS over the export
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
-The invariant is violated twice today: MECH-RENDER-CACHE and
-MECH-CORPUS-EDGE-MAP, both in the beads-migration plan, depend into the
-strictdoc-tooling plan. The JSON export carries no document path -- a
-document is TITLE, GRAMMAR and NODES -- so the check needs a UID-to-file map,
-the same gap fp-accept works around by grepping UID lines in the source tree.
+A node is in plan P when its source file is under docs/plans/<P>/. Everywhere else is outside every plan: docs/spec/, **/.sdoc/, and any location added later. The check reports a Parent-type relation whose target is in a plan and whose source is not in that same plan. Another plan counts as outside -- both live violations are plan-to-plan, not architecture-to-plan.
+
+File relations are excluded, as in cycle-check.py and fp-check.py: their VALUE names a filesystem path, not a node. PARENT_FP entries are scanned as a second case, since an entry unbacked by a relation has no edge for the first pass to see.
+
+The export carries no source path for a node, so the check takes a repository root alongside the export and builds a UID-to-file map by scanning docs/**/*.sdoc and **/.sdoc/*.sdoc for a line-anchored ^UID: (\S+)$. A UID present in the export that the map cannot place is a finding, not a skip: treating an unplaceable node as outside would pass silently, which is the false-green shape the other graph checks exist to avoid. The map builder lives in dev/scripts/sdoc_fp.py beside the other shared logic, and fp-accept.py's own discovery is replaced by it.
+
+The CLI is dev/scripts/plan-refs-check.py <export.json> --repo-root PATH. It groups findings by case under a `== case (n) ==` header, prints a one-line summary of what was checked whether or not anything failed, and exits non-zero on any finding -- the shape cycle-check.py and fp-check.py already use. A check(index, uid_file) function returns the findings without printing, so SLICE-CHECKPOINT-WIRING can register it as a validator rather than shell out to the CLI.
+
+The gate is a flake check, checks/strictdoc-plan-refs-check.nix, registered in flake.nix's checks output: its own runCommand with its own clean $TMPDIR export, mirroring checks/strictdoc-cycle-check.nix rather than sharing a derivation, so a failure stays attributable to this check. No devenv task. MECH-CHECK-SYSTEM-BOUNDARY's position is that the flake output is the gate and a devenv task should defer to it rather than restate it; neither sibling graph check has one, and the interactive path is the strictdoc CLI devenv.nix already ships.
+
+Corpus before gate, as with SLICE-FP-DETECTOR: the two violating Assumes edges are deleted and the dependency restated as prose in the depending node's NOTES, in the same commit that wires the check, so the gate does not land red.
 <<<
 RATIONALE: >>>
-Predicted by the invariant's own NOTES and now measured. Cheap once the map
-exists, and the map is needed by the wrapper anyway.
+Predicted by the invariant's own NOTES and now measured. The check itself is a few dozen lines over data the export already holds; what needed settling was the definition of outside a plan, and where the source-path information comes from, since the export has none.
+
+Defining plan membership positively -- docs/plans/<P>/ and nothing else -- rather than enumerating what counts as outside is what makes the rule survive a new location. docs/spec/ already exists and is absent from the sdoc skill's layout table; an enumerated complement would have silently exempted it.
+
+Deleting the two edges rather than waiting for their targets to graduate is the unblocked move. Both are Assumes, neither carries a fingerprint, so nothing is being un-signed. The better fix -- promoting MECH-FP-CHECK and MECH-CYCLE-CHECK out of the plan into settled specification, which would make both edges legal outward references -- needs a promotion path, and that waits on DEC-PLAN-LIFECYCLE-OPEN.
+<<<
+NOTES: >>>
+Measured at bc646f12 against a clean export of the whole repository: 139 nodes, 92 Parent-type edges, 2 violations. MECH-RENDER-CACHE (docs/plans/beads-migration/00-approach.sdoc) --Assumes--> MECH-FP-CHECK, and MECH-CORPUS-EDGE-MAP (docs/plans/beads-migration/02-conversion-map.sdoc) --Assumes--> MECH-CYCLE-CHECK, both landing in docs/plans/strictdoc-tooling/01-tooling.sdoc. No PARENT_FP entry crosses a plan boundary today.
+
+The inbound arm the invariant is actually named for -- settled architecture depending into a plan -- has zero live hits, so it was proven with a positive control rather than assumed. Injecting MECH-SEMBLE-EXTRA-GRAMMARS --Assumes--> MECH-FP-CHECK into a copy of the export takes the count from 2 to 3 and reports the new one as inbound. Two negative controls hold the count at 2: an outward edge from a plan node to INV-GUARDS-MUST-EXECUTE in docs/spec/, and a File relation whose VALUE is a path under docs/plans/. A third positive control removes MECH-FP-CHECK from the map, and the check reports it unmapped rather than passing.
+
+The export carries no document path. Walking every key at every depth of the 393 KB index.json yields no key containing PATH or FILE; the only paths present are File-relation VALUEs. docs/sdoc/render.py reads RELATIVE_PATH or PATH per node, and neither is ever there.
+
+fp-accept.py's map is wrong twice and must not be copied. Its find_source_file substring-matches `UID: <uid>`, so a UID that is a prefix of another resolves to whichever file rglob reaches first: measured, MECH-READY-QUERY resolves to 99-backlog.sdoc, where MECH-READY-QUERY-GRAPH-REUSE lives, while the node itself is in 01-tooling.sdoc; MECH-STRICTDOC-DEVENV-MODULE has the same shape against MECH-STRICTDOC-DEVENV-MODULE-NOT-PUBLISHED. And its discover_sdoc_files scans docs/plans and **/.sdoc only, so the four nodes in docs/spec/01-plan-model.sdoc are invisible to it. The line-anchored scan places all 139.
+
+Cost: 9 ms to build the map over the whole worktree, 0.1 ms to run the check. The strictdoc export dominates, and this makes a fourth export of the same corpus inside nix flake check.
+
+The source-annotation arm is unenforceable with this input. The invariant names source annotations, but strictdoc_config.py sets no source root, no annotated node exists, and @relation comments never appear in the JSON export. This check covers document-to-document edges only; the annotation arm needs a different input and is out of scope here.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Whether a plan-boundary violation FAILS a checkpoint or only REPORTS at it. This node fixes the CLI's own exit code to non-zero, matching cycle-check.py and fp-check.py, because that is the flake-check contract. How the same validator behaves once SLICE-CHECKPOINT-WIRING registers it at command, commit and merge time is that slice's review question, not settled here.
+
+- The retention and promotion policy that would make the two live edges legal instead of deleted -- promoting an implemented mechanism out of a plan into settled specification. That is DEC-PLAN-LIFECYCLE-OPEN, still open, and its RETIRES_ON has not been met.
+
+- Whether the invariant's source-annotation arm is ever enforced, and against what input. Recorded as out of scope with a reason, not decided.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -886,22 +1242,56 @@ RELATIONS:
 [MECHANISM]
 UID: MECH-SIGNATURE-REVOCATION
 TITLE: Make a revoked fingerprint distinguishable from one never signed
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
-Commit 387cdaec reverted five agent-written signatures to the placeholder.
-All four distinct reverted hashes equal today's hashes, and a hand-restored
-line reads as signed and current -- measured on a copy, fp-check exit 0.
-strictdoc format does not normalise a PARENT_FP block, and fp-accept keeps
-deleted and unbacked entries forever, so nothing executable distinguishes
-revoked from never-signed, or restored from signed. Decide whether revocation
-is a marker value distinct from the placeholder, or a history check in CI
-against main.
+A PARENT_FP entry's value slot carries three states rather than two: the placeholder 0000000, meaning nobody has accepted this edge; a seven-character contract hash, meaning the edge was accepted at that hash; and revoked:<hash>, meaning an acceptance at that hash was withdrawn. The tag cannot be mistaken for a hash, since hashes are hexadecimal and the tag is not, and the existing parser already returns the value slot whole. Carrying it therefore needs no grammar change -- PARENT_FP is an unconstrained String -- and no parser change.
+
+fp-check gains a fifth case beside never-signed, drifted, unbacked and deleted. It is tested after unbacked and before the drift comparison; in the other order a revoked entry is reported as drift. The report names both the withdrawn hash and the parent's current hash, because equality between the two is the restoration risk: the contract has not moved since it was revoked, so a hash copied out of the reverting commit still reads as current. Revoked ships in the same non-failing bucket as never-signed, so a revocation never turns the gate red. Which cases fail is one named set in the checker, and setting it is the operator's rule, not this mechanism's.
+
+Writing stays with the single writer that owns PARENT_FP today, as a revoke verb on it rather than a second tool and never as a hand edit -- fp-accept now, the sdoc CLI's verb list when that lands, a move in the behaviour model after that. Two refusals are what give the marker meaning. Revoking an entry still at the placeholder is refused, because there is nothing to withdraw. Signing over a revoked entry is refused, so re-signing becomes a deliberate request to clear a revocation instead of something a re-run does silently. Who may make that request is DEC-FP-ACCEPT-AUTHORITY's to answer.
+
+The on-disk record is deliberately the minimum: the tag, the withdrawn hash, one state per edge, no history. Who revoked, when and why live in the commit, which is where DEC-FINGERPRINT-IN-NODE already puts the sign-off. An entry additionally carrying an actor, a timestamp or a reason would be per-edge state a node field cannot hold, which is that decision's own retirement condition.
+
+Detecting a hand-restored signature is out of scope and cannot be done from the file, because whoever restores it controls the file. That needs history against main (MECH-FP-MAIN-LINEAGE) or an identity the commit is attributable to (MECH-AGENT-IDENTITY-KEYS), both deferred. What this mechanism buys is that a restoration becomes the visible deletion of a named marker rather than an invisible edit of seven zeros.
 <<<
 RATIONALE: >>>
-The revert was the right call and left no trace the checker can see. A
-signature that can be silently restored is the rubber stamp the mechanism
-exists to prevent, arrived at through git.
+The revert in 387cdaec was the right call and left no trace the checker can see. A signature that can be silently restored is the rubber stamp the mechanism exists to prevent, arrived at through git.
+
+The sketch offered a history check in CI against main as the alternative. It does not fit the gate that exists: checks/strictdoc-fp-check.nix runs over the flake source, and a flake source copy carries no .git, so a history check would have to be a second, git-aware gate outside nix flake check. The marker also works in a worktree before anything has reached main, which is where every acceptance in this plan will be taken. History stays the only way to catch a restoration performed by hand, so the two are complements rather than alternatives, and the marker is the half that is buildable now.
+
+Keeping the record inside PARENT_FP rather than in a sidecar is the same argument DEC-FINGERPRINT-IN-NODE made for the fingerprint itself: the state transition is a reviewable diff hunk, attributable to a commit and revertable.
+<<<
+NOTES: >>>
+Measured 2026-08-27 against the JSON export, using fixtures in a scratch copy; the worktree was not touched.
+
+Baseline: 31 fingerprint entries, 0 signed and current, 31 never signed, 0 suspect.
+
+The four distinct hashes 387cdaec reverted -- b2c00b4, ff63967, 5360cbe, 704b6d9 -- are all still the current contract hashes of their parents. Writing b2c00b4 back into MECH-FP-CHECK's entry gives "1 signed and current, 0 suspect" and exit 0: a restoration copy-pasted out of the revert diff is accepted with no complaint. Positive control on the same fixture: deadbee in the same slot gives "1 suspect" and exit 1, so the harness does detect a bad hash.
+
+Third fixture, DEC-FINGERPRINT-IN-NODE:revoked:b2c00b4 against today's checker: classified drifted, exit 1. The marker is therefore not inert -- shipping the representation without the classification turns all five reverted entries into false suspects. With the classification, the honest state of this graph is 26 never signed and 5 revoked out of 31.
+
+parse_parent_fp partitions on the first colon, so the value slot already survives whole: the fixture parses to ('DEC-FINGERPRINT-IN-NODE', 'revoked:b2c00b4'). Longest possible rendered entry across this graph is 50 characters, MECH-READINESS-PREDICATE-RECONCILE:revoked:0000000, or 61 with the single-entry field prefix, so no line-width question arises.
+
+The flake source store path contains docs/plans and no .git, which is what rules the history check out of the existing gate.
+
+Whether strictdoc format normalises a PARENT_FP block was not re-measured and no longer matters: distinguishability lives in the value slot, not in the layout.
+
+Constraint on MECH-FP-PREMERGE-GC when it is groomed: a revoked entry is not collectible lineage. Collecting it restores exactly the indistinguishability this mechanism removes.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- WHEN a signature should be revoked. No trigger, no condition, no policy is stated — the mechanism only defines how a withdrawal is written down and read back.
+
+- Whether a revoked entry should gate. It ships in the non-failing bucket so the mechanism is inert on arrival; membership is one named set (fp-check.py:38) and moving it there is a one-line change the operator's rule can make.
+
+- Who may revoke, and who may lift a revocation by signing over it. Left to DEC-FP-ACCEPT-AUTHORITY, which is still open and is explicitly about grading signing authority rather than about revocation specifically.
+
+- Whether a revocation ever expires, or whether an edge can be revoked more than once with each withdrawal retained. The design keeps one state per edge and no history; a retention rule that wants more is the operator's, and would trip DEC-FINGERPRINT-IN-NODE's RETIRES_ON.
+
+- The tag spelling itself. `revoked` is chosen because it is non-hex and self-describing in a diff; any other non-hex token works identically, and the operator may prefer a different vocabulary once the behaviour model names its moves.
 <<<
 RELATIONS:
 - TYPE: Parent
