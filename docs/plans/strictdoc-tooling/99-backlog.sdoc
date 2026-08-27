@@ -938,6 +938,13 @@ NOTES: >>>
 Filed as issue #1267, self-contained, on 2026-08-25. That issue is the
 user-visible tracker; this node is the design-graph record of which slice found
 it. Close both together.
+
+One of the two worked examples cited above is GONE as of 2026-08-27:
+overlays/dev-tools/strictdoc.nix uses no override seam at all now, having become
+a plain attrset extension of upstream's flake package
+(MECH-STRICTDOC-UPSTREAM-FLAKE). overlays/git-tools/git-revise.nix is still the
+example, the gap in dev/fragments/overlays/overlay-pattern.md is unchanged, and
+#1267 is still the tracker -- the finding lost a citation, not its subject.
 <<<
 
 [MECHANISM]
@@ -963,6 +970,17 @@ Recorded so the measurement is not re-run. If it is picked up, verify the
 six-and-three split against the release in the sidecar rather than trusting
 this node -- it was measured against 0.27.1 and the dependency list moved in
 0.28.
+<<<
+NOTES: >>>
+CHANGED SHAPE 2026-08-27, by MECH-STRICTDOC-UPSTREAM-FLAKE, and there is no
+sidecar to verify against any more. The measurement was taken against nixpkgs'
+strictdoc expression, and this repository no longer builds from it: the package
+is upstream's own uv2nix build from their uv.lock. There is no `dependencies`
+filter to apply and no first-party override to hang one on, so the six-and-three
+split describes a derivation nothing here evaluates.
+
+If closure size is still worth chasing it is now a question for upstream's own
+flake, which puts it outside this repository and probably outside this plan.
 <<<
 
 [MECHANISM]
@@ -992,6 +1010,17 @@ This is the transitive-hash gap wearing different clothes -- the same
 Rust package to derive cargoDeps from the pinned src. A Python dependency is a
 separate derivation rather than a hash, so the Rust answer does not transfer
 and the question stays open.
+<<<
+NOTES: >>>
+MOOT 2026-08-27, by MECH-STRICTDOC-UPSTREAM-FLAKE. There is no inline reqif pin
+any more, and no sidecar for one to live in: overlays/dev-tools/strictdoc.nix
+re-exports upstream's flake package, and its uv2nix set resolves reqif from
+upstream's own uv.lock at the artifact the release was tested against. All three
+shapes offered above are answered by not having the problem.
+
+The ROOT CAUSE is not moot and is not this node's to carry: an update script
+that refreshes only the src hash still leaves a transitive pin unswept for every
+package that parks one, which is the standing transitive-hash gap.
 <<<
 
 [MECHANISM]
@@ -1115,7 +1144,7 @@ compose, and nothing records that they might.
 [MECHANISM]
 UID: MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY
 TITLE: The grammar extractor's sources sit on the wrong side of the overlay boundary
-DEPTH: sketch
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 dev/fragments/overlays/overlay-pattern.md states an invariant: an overlay must
@@ -1158,6 +1187,33 @@ WRAPPING does not belong in an overlay at all. It belongs in a module. See
 MECH-STRICTDOC-DEVENV-MODULE for where it goes, and
 MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES for the repo-wide version of the same
 mistake.
+
+IMPLEMENTED 2026-08-27, and by NEITHER of the two ways out the statement above
+lists. Both of those assumed the wrap survives somewhere and only argued about
+where its sources sit. The ruling says it does not belong in an overlay at all,
+so overlays/dev-tools/strictdoc-grammar-extract.nix was DELETED rather than
+thinned and pkgs.ai.devTools.strictdoc-grammar-extract no longer exists. The
+outbound overlay-to-packages edge is gone because the overlay is gone, not
+because anything moved to satisfy the invariant.
+
+packages/strictdoc-grammar/lib/mkExtract.nix is now the only copy. It is a
+factory rather than inline module code because it has two consumers that are
+not each other: ../modules/devenv puts it in the dev shell, and flake.nix builds
+it ONCE for the strictdoc-grammar-* checks, which run the same entry points in a
+derivation with no module system in sight. Measured at the move: the wrapper's
+store path is unchanged, and devenv's package list carries exactly one copy.
+
+One consequence, recorded because it is what wrapping in a module MEANS rather
+than a side effect of this edit. Build inputs now come from the CONSUMER's pkgs
+instead of an overlay's isolated ourPkgs. That is only safe here because the
+part that has to agree with upstream's virtual environment is upstream's own
+interpreter, and the single spliced import (ast_grep_py) is guarded by the
+wrapper's install check.
+
+The repo-wide version of the same mistake is untouched and still open:
+MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES, and
+MECH-AGENTS-INFER-OVERLAY-CONVENTION-FROM-EXAMPLES for why writing the rule
+down again is not the remedy.
 <<<
 
 [MECHANISM]
@@ -1315,6 +1371,19 @@ The failure is remote from its cause -- the export names the fixture, but
 nothing connects "a file I added under packages/" to "the command that reads the
 design graph". A session that adds an invalid grammar anywhere and then sees the
 graph command break has no reason to look in packages/ for it.
+<<<
+NOTES: >>>
+A second producer of .sgra files under the root arrived 2026-08-27: the
+ai.strictdoc module's generate:sgra task writes every declared grammar into the
+working tree. It MITIGATES this node rather than resolving it. The task writes
+through a temporary file carrying a LEADING DOT, so a crashed run cannot strand
+a visible `grammar.sgra.XXXXXX` beside the real one for a whole-project export
+to pick up as another grammar.
+
+That is the constraint encoded in a filename for a second time, next to the
+fixtures' .sgra.invalid suffix. Two encodings of one rule, neither of them in
+strictdoc_config.py, is the argument for settling the exclude_doc_paths question
+rather than an argument against it.
 <<<
 
 [MECHANISM]
@@ -1485,6 +1554,17 @@ RATIONALE: >>>
 Noticed because the warning path is the one that runs in CI, where the wrapper
 is the whole environment. A CI regeneration would silently produce a file that
 the repository's own formatter immediately changes.
+<<<
+NOTES: >>>
+The FILE moved 2026-08-27 and the finding did not. The wrapper is now
+packages/strictdoc-grammar/lib/mkExtract.nix, the overlay having been deleted
+outright (MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY); alejandra is still deliberately
+absent from it, and the header now says so in as many words rather than leaving
+it to be noticed. The workaround is still per-caller:
+checks/strictdoc-grammar-surface-current.nix names alejandra in
+nativeBuildInputs. Neither of the two ways to close it has been taken. Read
+together with MECH-FORMAT-NIX-DOWNGRADES-A-MISSING-FORMATTER, the same defect
+seen from the generator's side.
 <<<
 
 [MECHANISM]
@@ -1672,6 +1752,11 @@ accepts one titled UID, and still rejects a lowercase title. The rendered
 grammar is byte-identical to docs/sdoc/grammar.sgra, which declares UID five
 times, so the accept arm is not a bare assertion. What this node still names is
 the register, not the enforcement.
+
+DEPTH STAYS sketch, which is not drift against the paragraph above. What landed
+is the enforcement; what this node is TITLED for -- deriving FieldName's two
+answers from the document grammar instead of registering them -- is unbuilt and
+has no design yet. Raising DEPTH here would report the residual as done.
 <<<
 
 [MECHANISM]
@@ -2340,6 +2425,12 @@ ourPkgs 3.14.7, ast_grep_py imports clean, and the grammar builder returns the
 same 4adcdb05... grammar the implementation brief records. That splice is a
 minor-version coupling and the package's existing installCheckPhase is what
 makes a future divergence fail at build time.
+
+Written before the wrapper moved: it left overlays/ entirely later the same day
+and is packages/strictdoc-grammar/lib/mkExtract.nix, so the path named above no
+longer exists and its ourPkgs is now the consumer's pkgs. The splice, the
+measurement and the coupling are unchanged -- see
+MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY.
 <<<
 
 [MECHANISM]
@@ -2457,7 +2548,7 @@ operator's.
 [MECHANISM]
 UID: MECH-EMIT-LAYER-BOUNDARY
 TITLE: Emit is the renderer composed with the type mapping, and they split cleanly
-DEPTH: sketch
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Settled with the operator 2026-08-26. Two jobs, one composition:
@@ -2611,4 +2702,65 @@ RATIONALE: >>>
 Hit while running the loop for the grammar-write wiring. Recorded because the
 skill names the two commands and says nothing about how to reach them from a
 worktree, which is the only place work happens here.
+<<<
+
+[MECHANISM]
+UID: MECH-DEVENV-TASK-SCRIPTS-FIXED-AT-EVAL
+TITLE: A devenv task cannot consume what another task in the same run regenerates
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Repo-wide, not attached to any milestone. devenv renders every task's `exec`
+into a script at EVALUATION and runs the graph afterwards, so anything a task
+body interpolates out of Nix is fixed before the first task in the run starts. A
+task that consumes what an earlier task in the same run regenerates therefore
+sees the PRE-RUN value, and the failure is silent: the run reports success and
+writes a stale artefact.
+
+Measured 2026-08-27 while wiring generate:sgra.
+`ai.strictdoc.grammars.<name>.rendered` is an evaluation-time string, so chaining
+the write behind generate:sdoc-grammar:normalized would have emitted the grammar
+rendered from the surface that existed when the run BEGAN -- in precisely the run
+that regenerated it. The two are deliberately separate invocations and
+generate:sdoc-grammar's log line names the follow-up rather than running it.
+
+The generate:* graph is largely interpolation-free today and so does not hit
+this, which is why it has never been noticed. Nothing detects the shape. The fix
+in any given case is either a second invocation or a task body that READS the
+file at run time instead of interpolating it, and the second only works where a
+file is what is being passed.
+<<<
+RATIONALE: >>>
+Recorded repo-wide rather than inside the grammar nodes because the reasoning has
+nothing to do with strictdoc: it is a property of how devenv builds its task
+graph. The next session to chain a generator behind a regeneration pays the same
+cost, and pays it as a wrong output rather than as an error.
+<<<
+
+[MECHANISM]
+UID: MECH-IDEMPOTENT-WRITER-UNCHANGED-IS-NOT-PROOF
+TITLE: An idempotent writer reporting unchanged proves nothing about whether it can write
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+generate:sgra skips a file whose bytes already match and logs `unchanged`. So
+does a run whose target path is wrong, whose cwd anchor is wrong, or whose
+comparison is inverted. Every one of those logs `unchanged` and exits 0, against
+a file it never touched, and the reassuring word is the same in all four cases.
+
+The first run of the write task on 2026-08-27 reported exactly that against
+docs/sdoc/grammar.sgra. It was believed only after DELETING the file and
+re-running, which logged `wrote` and reproduced the committed bytes; that
+sequence is what makes the write and the byte-identity claim one measurement
+instead of two assertions sitting next to each other.
+
+The shape is not local to this task: dev/tasks/generate.nix's `sync_file` has the
+same blind spot, and so does any comparison-first writer. Fix shape, if one is
+wanted, is to make the log carry the path that was compared, so a wrong anchor
+prints a wrong path rather than a right-sounding word.
+<<<
+RATIONALE: >>>
+Logged because the failure is silent and self-confirming in the direction a
+session already wants to believe: a generator that appears to have nothing to do
+is indistinguishable from a generator that is already correct.
 <<<
