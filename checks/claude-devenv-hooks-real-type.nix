@@ -24,9 +24,18 @@
   inherit (pkgs) lib;
   root = "/tmp/devenv-root";
   # Minimal stubs for the devenv options claude.nix reads (config.devenv.root,
-  # config.git-hooks.*) and writes (assertions, files, enterShell, changelogs,
-  # infoSections).
-  # Re-derive against devenv's claude.nix on a devenv bump if this eval breaks.
+  # config.git-hooks.*) and writes (assertions, changelogs, files, infoSections,
+  # warnings). Re-derive against devenv's claude.nix on a devenv bump if this
+  # eval breaks — an undeclared option makes the module system's
+  # unmatched-definition check throw before the drift assertion below ever runs.
+  #
+  # Two reads are deliberately NOT stubbed: config.lib.fileSpecType and
+  # config.lib.fileCopyModeType, both added to devenv's files.nix alongside the
+  # claude.code.skills option. They are reached only from inside the skills
+  # submodule's own option declarations, and skills defaults to {}, so the
+  # module system never instantiates them here. Stubbing them ahead of a real
+  # need would absorb the next drift SILENTLY; leaving them out keeps this
+  # guard failing loud, which is its whole job.
   ev = lib.evalModules {
     specialArgs = {inherit pkgs;};
     modules = [
@@ -35,6 +44,10 @@
         options = {
           assertions = lib.mkOption {
             type = lib.types.listOf lib.types.unspecified;
+            default = [];
+          };
+          warnings = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
             default = [];
           };
           devenv.root = lib.mkOption {
@@ -52,10 +65,6 @@
           files = lib.mkOption {
             type = lib.types.attrsOf lib.types.anything;
             default = {};
-          };
-          enterShell = lib.mkOption {
-            type = lib.types.lines;
-            default = "";
           };
           changelogs = lib.mkOption {
             type = lib.types.listOf lib.types.attrs;
