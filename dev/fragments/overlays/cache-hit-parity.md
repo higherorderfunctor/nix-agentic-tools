@@ -1,58 +1,66 @@
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-24 (commit pending — Beads now pins its nested Dolt
-> runtime from the same `ourPkgs` instance and passes that exact derivation into
-> nixpkgs' Beads wrapper, so the grouped release cadence adds no consumer-pinned
-> build input and remains covered by Beads' existing parity row). Prior:
-> 2026-08-16 (commit pending — corrects the current Go-floor count to eight
-> after Beads joined the covered set; Kiro's `withFhsPayload` passthru and FHS
-> opt-out leave the default derivation byte-identical, and only configurations
-> requesting an inner chat wrapper or the explicit unwrapped selection fork from
-> it). Prior: 2026-08-15 (commit pending — adds the stable-release Beads overlay
-> under `pkgs.ai.devTools`, built from this repository's nixpkgs pin rather than
-> the independently pinned Numtide derivation). Prior: 2026-08-16 (commit
-> pending — nixpkgs 9ddfd8a consolidated Kiro's three FHS derivations into one
-> shared environment. The overlay still recomposes exclusively through
-> `ourPkgs`, so the topology change preserves the same consumer/standalone cache
-> identity contract). Prior: 2026-08-10 (commit pending —
-> `overlays/kiro-cli.nix` is no longer a plain `overrideAttrs`, so the "pure
-> binary-fetch" example below is re-pointed. nixpkgs f13ff45a split the package,
-> and the overlay now overrides `kiro-cli-unwrapped` and re-composes upstream's
-> wrapper with `.override`. Parity is UNAFFECTED and the reason is worth
-> stating: both sides of the parity check import `inputs.nixpkgs`, so the
-> `ourPkgs ? kiro-cli-unwrapped` feature-detection resolves the same way on both
-> and cannot itself drift — see the overlay-pattern fragment for the seam).
-> Prior: 2026-08-05 (commit pending — records that a consumer's
-> `inputs.nixpkgs.follows` defeats `ourPkgs` BY CONSTRUCTION, since it rewrites
-> the input rather than the overlay argument, and that its cost is not merely
-> the documented cache miss: measured on a real consumer, a followed April 2026
-> nixpkgs FAILED the `glab` build outright on the Go floor. Do not "fix"
-> `ourPkgs` for this — `checks/cache-hit-parity.nix` already asserts the drift).
-> Prior: 2026-08-03 (commit pending — annotates Semble's unchanged upstream
-> derivation and git-branchless's passthru with their flake-input update owners
-> without moving either derivation). Prior: 2026-08-03 (commit pending — patches
-> Oxlint's `@napi-rs/cli` dependency in its pnpm-fetched source rather than
-> admitting Darwin's `/bin/ps` into the sandbox; both fetch and build use pnpm
-> 11 from pinned `ourPkgs`, matching upstream's major). Prior: 2026-08-03
-> (commit pending — nests every binary-package group under `pkgs.ai`, moves `gh`
-> and `glab` into `ai.devTools`, and updates the consumer-path registry without
-> changing any derivation). Prior: 2026-08-03 (commit pending — relocates the
-> two repo-local auto-memory source trees beside their overlay derivations
-> without changing package inputs or cache-hit semantics). Prior: 2026-08-03
-> (commit pending — adds a positive control that substitutes the overlay's own
-> `inputs.nixpkgs` the way a consumer's `follows` directive does, proving that
-> unsupported configuration drifts from the cache-published `fblog` path).
-> Prior: 2026-08-02 (commit pending — adds the pinned external Semble exception:
-> direct upstream selection preserves Numtide's derivation, while a plain meta
-> overlay exposes the MCP role without forking the build). Prior: 2026-07-25
-> (commit pending — the worked example moved off `git-branchless`, which had not
-> carried this shape for a long time, onto `git-absorb`, which does; also
-> corrects the new-package signature, the namespacing in the manual verification
-> snippet, and the pure-binary-fetch package list). If you touch any
-> `overlays/<name>.nix` overlay file or the overlay composition machinery and
-> this fragment isn't updated in the same commit, stop and fix it. Regressions
-> are gated by the `checks.cache-hit-parity` flake check (see "Verification"
-> below).
+> **Last verified:** 2026-08-27 (commit pending — adds strictdoc as a second
+> pinned-external row and records that for this class parity holds STRUCTURALLY:
+> the derivation closes over the upstream flake's own locked nixpkgs and reads
+> `final` for nothing but `system`, so neither side of the two-pin comparison
+> can move. Also records a coverage asymmetry measured the same day — Semble has
+> an explicit `sembleUpstreamOk` assertion in checks/cache-hit-parity.nix and
+> strictdoc has none, so `rg -c semble` returns 16 there and `rg -c strictdoc`
+> returns 0; strictdoc's row is carried only by the generic two-pin comparison,
+> which a structurally immovable path passes by construction.) Prior: 2026-08-24
+> (commit pending — Beads now pins its nested Dolt runtime from the same
+> `ourPkgs` instance and passes that exact derivation into nixpkgs' Beads
+> wrapper, so the grouped release cadence adds no consumer-pinned build input
+> and remains covered by Beads' existing parity row). Prior: 2026-08-16 (commit
+> pending — corrects the current Go-floor count to eight after Beads joined the
+> covered set; Kiro's `withFhsPayload` passthru and FHS opt-out leave the
+> default derivation byte-identical, and only configurations requesting an inner
+> chat wrapper or the explicit unwrapped selection fork from it). Prior:
+> 2026-08-15 (commit pending — adds the stable-release Beads overlay under
+> `pkgs.ai.devTools`, built from this repository's nixpkgs pin rather than the
+> independently pinned Numtide derivation). Prior: 2026-08-16 (commit pending —
+> nixpkgs 9ddfd8a consolidated Kiro's three FHS derivations into one shared
+> environment. The overlay still recomposes exclusively through `ourPkgs`, so
+> the topology change preserves the same consumer/standalone cache identity
+> contract). Prior: 2026-08-10 (commit pending — `overlays/kiro-cli.nix` is no
+> longer a plain `overrideAttrs`, so the "pure binary-fetch" example below is
+> re-pointed. nixpkgs f13ff45a split the package, and the overlay now overrides
+> `kiro-cli-unwrapped` and re-composes upstream's wrapper with `.override`.
+> Parity is UNAFFECTED and the reason is worth stating: both sides of the parity
+> check import `inputs.nixpkgs`, so the `ourPkgs ? kiro-cli-unwrapped`
+> feature-detection resolves the same way on both and cannot itself drift — see
+> the overlay-pattern fragment for the seam). Prior: 2026-08-05 (commit pending
+> — records that a consumer's `inputs.nixpkgs.follows` defeats `ourPkgs` BY
+> CONSTRUCTION, since it rewrites the input rather than the overlay argument,
+> and that its cost is not merely the documented cache miss: measured on a real
+> consumer, a followed April 2026 nixpkgs FAILED the `glab` build outright on
+> the Go floor. Do not "fix" `ourPkgs` for this — `checks/cache-hit-parity.nix`
+> already asserts the drift). Prior: 2026-08-03 (commit pending — annotates
+> Semble's unchanged upstream derivation and git-branchless's passthru with
+> their flake-input update owners without moving either derivation). Prior:
+> 2026-08-03 (commit pending — patches Oxlint's `@napi-rs/cli` dependency in its
+> pnpm-fetched source rather than admitting Darwin's `/bin/ps` into the sandbox;
+> both fetch and build use pnpm 11 from pinned `ourPkgs`, matching upstream's
+> major). Prior: 2026-08-03 (commit pending — nests every binary-package group
+> under `pkgs.ai`, moves `gh` and `glab` into `ai.devTools`, and updates the
+> consumer-path registry without changing any derivation). Prior: 2026-08-03
+> (commit pending — relocates the two repo-local auto-memory source trees beside
+> their overlay derivations without changing package inputs or cache-hit
+> semantics). Prior: 2026-08-03 (commit pending — adds a positive control that
+> substitutes the overlay's own `inputs.nixpkgs` the way a consumer's `follows`
+> directive does, proving that unsupported configuration drifts from the
+> cache-published `fblog` path). Prior: 2026-08-02 (commit pending — adds the
+> pinned external Semble exception: direct upstream selection preserves
+> Numtide's derivation, while a plain meta overlay exposes the MCP role without
+> forking the build). Prior: 2026-07-25 (commit pending — the worked example
+> moved off `git-branchless`, which had not carried this shape for a long time,
+> onto `git-absorb`, which does; also corrects the new-package signature, the
+> namespacing in the manual verification snippet, and the pure-binary-fetch
+> package list). If you touch any `overlays/<name>.nix` overlay file or the
+> overlay composition machinery and this fragment isn't updated in the same
+> commit, stop and fix it. Regressions are gated by the
+> `checks.cache-hit-parity` flake check (see "Verification" below).
 
 ### The rule
 
@@ -297,9 +305,21 @@ curl -sI "https://nix-agentic-tools.cachix.org/${HASH}.narinfo" | head -1
 
 ### Exceptions
 
-**Pinned external derivations preserve the upstream identity.** Semble is
-selected directly from `inputs.llm-agents.packages.${system}.semble`, with no
-nixpkgs follow, `overlays.shared-nixpkgs`, local `ourPkgs` rebuild, or
+**Pinned external derivations preserve the upstream identity.** There are two:
+Semble and strictdoc. For both, parity holds for a STRUCTURAL reason rather than
+a maintained one — the derivation closes over the upstream flake's own locked
+nixpkgs and reads `final` for nothing but `system`, so neither side of the
+two-pin comparison can move.
+
+That makes the generic check weak for them, and the coverage is uneven. Measured
+2026-08-27: `checks/cache-hit-parity.nix` carries an explicit `sembleUpstreamOk`
+assertion pinning `self.packages.<system>.semble` to the upstream `drvPath` and
+`outPath`, wired into the pass condition with its own failure message. It names
+strictdoc nowhere at all. Giving that row real teeth means mirroring the Semble
+assertion, which is a check change and not a documentation one.
+
+Semble is selected directly from `inputs.llm-agents.packages.${system}.semble`,
+with no nixpkgs follow, `overlays.shared-nixpkgs`, local `ourPkgs` rebuild, or
 `overrideAttrs`. Its cache identity belongs to the upstream flake rather than to
 this repository's nixpkgs pin. Both the standalone output and a deliberately
 divergent consumer must match that upstream `drvPath` and `outPath` exactly.
