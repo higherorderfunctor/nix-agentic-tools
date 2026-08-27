@@ -28,12 +28,13 @@
 {
   pkgs,
   self,
+  strictdocGrammarExtract,
 }: let
   grammarDir = "${self}/packages/strictdoc-grammar";
 in
   pkgs.runCommand "strictdoc-grammar-surface-current" {
     nativeBuildInputs = [
-      pkgs.ai.devTools.strictdoc-grammar-extract
+      strictdocGrammarExtract
       pkgs.alejandra
     ];
   } ''

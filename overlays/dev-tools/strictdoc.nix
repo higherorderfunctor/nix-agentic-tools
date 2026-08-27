@@ -24,7 +24,10 @@
 # its dependency closure is the venv referenced by that script's shebang, and
 # it is not a flake output. A consumer that needs strictdoc as a LIBRARY
 # rather than as a CLI has to reach it that way — see
-# ./strictdoc-grammar-extract.nix, the only one that does.
+# ../../packages/strictdoc-grammar/lib/mkExtract.nix, the only one that does.
+# It is deliberately NOT an overlay: this file converts, that one wraps, and
+# wrapping belongs to the module that consumes the package
+# (MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES).
 #
 # `dependencies` exists but is uv2nix-shaped: an ATTRSET of name → extras,
 # not nixpkgs' list of derivations. Anything that used to splice it will

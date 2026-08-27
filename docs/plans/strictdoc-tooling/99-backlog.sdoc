@@ -2522,3 +2522,35 @@ Worth recording because the loss is invisible: the package still builds, the
 checks still pass, and the only signal that the assertion is gone is that the
 file no longer contains it.
 <<<
+
+[MECHANISM]
+UID: MECH-STRICTDOC-DEVENV-MODULE-NOT-PUBLISHED
+TITLE: ai.strictdoc cannot be published as a devenv facet while options-doc demands exact HM parity
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+packages/strictdoc-grammar/modules/devenv/ is imported by PATH from devenv.nix
+rather than exposed as modules.devenv on the package barrel, and that is a
+constraint rather than a preference.
+
+flake.nix builds devenvModules.nix-agentic-tools from collectFacet ["modules"
+"devenv"], which walks every barrel. checks/options-doc.nix then diffs that
+merged devenv option tree against homeManagerModules.default option name for
+option name. Any ai.* option with a devenv facet and no home-manager facet
+fails that check by construction, and ai.strictdoc has no home-manager half by
+ruling (MECH-STRICTDOC-DEVENV-MODULE).
+
+So there are three ways forward and none is free. Add a home-manager facet,
+which the ruling declined. Teach options-doc an explicit devenv-only allowlist,
+which weakens the parity gate for every future module. Or leave the module
+unpublished, which is what happened, at the cost that a consumer of this
+repository's flake cannot import ai.strictdoc at all -- only this repository's
+own devenv.nix reaches it.
+
+Nothing records the third cost anywhere a consumer would see it.
+<<<
+RATIONALE: >>>
+Noticed while stripping the wrap out of the overlay: the module header asserted
+this constraint and cited a node UID that did not exist, so the reasoning was
+one edit away from being lost entirely.
+<<<

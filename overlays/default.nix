@@ -274,14 +274,6 @@
     strictdoc = import ./dev-tools/strictdoc.nix {
       inherit inputs final;
     };
-    # The generation-time runner for the typed .sgra Nix surface. A PARTIAL
-    # scaffold: it ships the interpreter environment, not the extractor's entry
-    # points, because wiring those would need an overlays/ -> packages/ source
-    # edge the overlay-pattern invariant forbids. See the header of
-    # ./dev-tools/strictdoc-grammar-extract.nix.
-    strictdoc-grammar-extract = import ./dev-tools/strictdoc-grammar-extract.nix {
-      inherit inputs final;
-    };
     tsgolint = import ./dev-tools/tsgolint.nix {
       inherit inputs final;
     };
