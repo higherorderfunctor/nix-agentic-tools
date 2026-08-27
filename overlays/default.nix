@@ -269,8 +269,8 @@
     oxlint = import ./dev-tools/oxlint.nix {
       inherit inputs final;
     };
-    # Release-tracked like beads, but on bare tags (`0.28.3`), so its
-    # updateScript passes `tagPrefix = ""`. See ./dev-tools/strictdoc.nix.
+    # Not built here at all: re-exported unchanged from upstream's own
+    # flake, like ./semble.nix. See ./dev-tools/strictdoc.nix.
     strictdoc = import ./dev-tools/strictdoc.nix {
       inherit inputs final;
     };

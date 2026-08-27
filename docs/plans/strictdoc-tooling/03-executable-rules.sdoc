@@ -132,6 +132,42 @@ build fails in installCheckPhase.
 The whole design corpus formats and exports clean under 0.28.3, so the bump is
 not a migration: nothing in the grammar or the existing nodes needed changing
 to move off the nixpkgs version.
+
+RETIRED 2026-08-27, two days later: the first-party build is gone and
+overlays/dev-tools/strictdoc.nix now re-exports upstream's OWN flake package
+unchanged, on the same plain-attrset-update contract as overlays/semble.nix.
+The STATEMENT above therefore describes a shape that no longer exists; see
+MECH-STRICTDOC-UPSTREAM-FLAKE in the plan backlog for the grooming question
+that raises, and MECH-STRICTDOC-VERSION-SMOKE for what the switch cost.
+
+What changed and what it settles. Upstream's flake is a uv2nix set built from
+the repository's own uv.lock, which pins every Python dependency to the exact
+artifact the release was tested against, so BOTH dependency adjustments are
+dead rather than merely unnecessary here: reqif comes from uv.lock at the
+version the constraint wants, and pygments needs no relaxation because nothing
+is resolving it against a nixpkgs pin. The sidecar, the tagPrefix = "" wrinkle,
+the meta.changelog repointing and the update-targets row all went with them.
+The update owner is now passthru.updateFlakeInput = "strictdoc", which
+checks.update-targets-parity accepts and the ordinary flake-input sweep serves
+(config/generate-update-ninja.nix derives its targets from flake.lock, so the
+input needed no registration anywhere).
+
+The cache-hit-parity row stays and still holds. It now holds TRIVIALLY -- the
+derivation closes over upstream's locked nixpkgs, so its store path cannot vary
+with a consumer's pin -- but a row that passes for a structural reason is still
+what would catch a later edit reintroducing a final-bound wrapper, so it was
+not removed.
+
+One thing the switch DID force, and it is the only consumer that noticed. The
+package is mkApplication over a virtual environment: $out holds bin/strictdoc
+and nothing else -- no interpreter, no site-packages -- and its `dependencies`
+is a uv2nix name-to-extras ATTRSET, not nixpkgs' list of derivations.
+overlays/dev-tools/strictdoc-grammar-extract.nix consumed both of those, so it
+could not survive unchanged; it now wraps the venv interpreter named by that
+script's shebang, with ast_grep_py spliced onto PYTHONPATH from ourPkgs.
+MEASURED: upstream's interpreter is 3.14.6 against ourPkgs' 3.14.7, the splice
+imports clean, and the grammar builder returns the same 4adcdb05... grammar the
+implementation brief records.
 <<<
 RELATIONS:
 - TYPE: Parent

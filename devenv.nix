@@ -217,8 +217,9 @@ in {
     # pinned fetch of strictdoc's own .sdoc docs.)
     #
     # `pkgs.ai.devTools.strictdoc`, not the nixpkgs attribute: the overlay
-    # tracks the latest upstream release (SLICE-STRICTDOC-OVERLAY), so a
-    # session and the checks it has to satisfy run the same version.
+    # re-exports upstream's own flake package (SLICE-STRICTDOC-OVERLAY), which
+    # is both newer than the nixpkgs recipe and built from upstream's uv.lock,
+    # so a session and the checks it has to satisfy run the same version.
     ++ lib.optionals (!isCI) [pkgs.ai.devTools.strictdoc]
     # Grammar-surface generation (SLICE-GRAMMAR-FROM-NIX). Interactive only, on
     # the same reasoning as strictdoc above: milestone 1 is locally invoked and
@@ -226,10 +227,11 @@ in {
     #
     #   ast-grep                  the matcher CLI, for writing and testing rules
     #                             by hand before the normalizer embeds them
-    #   strictdoc-grammar-extract python + strictdoc's dependency closure +
-    #                             strictdoc's own site-packages on PYTHONPATH,
-    #                             with the entry point passed as its argument
-    #                             (see the header of that overlay for why)
+    #   strictdoc-grammar-extract upstream's own venv interpreter (strictdoc
+    #                             plus everything uv.lock pins) with
+    #                             ast_grep_py spliced onto PYTHONPATH, and the
+    #                             entry point passed as its argument (see the
+    #                             header of that overlay for why, both times)
     ++ lib.optionals (!isCI) [
       pkgs.ast-grep
       pkgs.ai.devTools.strictdoc-grammar-extract

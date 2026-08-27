@@ -65,25 +65,6 @@ computed at eval time via `overlays/lib.nix:mkVersion`
   then `npmDepsHash`, in that order because `npmDeps` is derived from `src`. It
   is also `passthru.fixNpmDepsHash`, for a nixpkgs-side change that invalidates
   a hash with no version bump.
-- **Python packages on a bare release tag** (`strictdoc`): the
-  `ghArchiveUpdateScript` contract with three wrinkles. Upstream tags releases
-  with NO `v` (`0.28.3`), so `tagPrefix = ""` — it feeds both the archive URL
-  and `ghLatestVersionCmd`'s tag-stripping sed, and getting it wrong breaks the
-  version check silently rather than the URL loudly. `version`, `src`,
-  `dependencies` and `pythonRelaxDeps` move through `overridePythonAttrs`, not
-  `overrideAttrs`: `buildPythonPackage` CONSUMES the last two as arguments, so
-  an `overrideAttrs` would leave them as dead attrs nothing reads. And
-  `meta.changelog` has to be re-pointed, because nixpkgs builds it from
-  `finalAttrs.src.tag` and a `fetchzip` src has no `tag` at all — anything that
-  reads it (`nix-update` does) dies on a missing attribute rather than on a
-  stale link. Two DEPENDENCY adjustments have their own rules. One the release
-  outgrows is pinned INLINE (`reqif`), never in the sidecar, because
-  `mkUpdateScript` rebuilds the sidecar from scratch and would erase it; that is
-  the same transitive-hash gap as an inline `cargoHash`, and it fails loud
-  rather than silent because the release's own constraint is checked at build
-  time. One the nixpkgs set nearly satisfies is RELAXED via `pythonRelaxDeps`
-  (`pygments`, pinned `== 2.21.0` against 2.20.0) rather than overridden — a
-  patch-level override there forks the closure of the whole Python package set.
 - **Go toolchain gaps** (`gluetun`, `oh-my-posh`): declare the package's go.mod
   floor and let `vu.goToolchainForFloor` DERIVE the toolchain — `ourPkgs.go`
   while our pin satisfies the floor, otherwise the lowest `go-bin`
@@ -125,6 +106,20 @@ computed at eval time via `overlays/lib.nix:mkVersion`
   is a plain attr/meta overlay selecting `semble-mcp`; it shares the same
   `drvPath` and `outPath` as the CLI. Do not apply `overlays.shared-nixpkgs`,
   rebuild with local packages, or use `overrideAttrs`.
+- **Upstream's own flake, re-exported** (`strictdoc`): same `//`-not-
+  `overrideAttrs` contract as `semble`, and the same reason — identity with
+  upstream's build. It replaced a first-party nixpkgs override that had to pin
+  `reqif` forward and relax `pygments`; upstream's flake is a uv2nix set built
+  from the repository's `uv.lock`, which pins every dependency to the artifact
+  the release was tested against, so both adjustments are dead rather than
+  merely unnecessary. The input carries NO `follows`: rewriting its nixpkgs
+  would fork a package set this repo does not own, and leaving it alone is what
+  makes the store path independent of a consumer's pin. What the shape costs a
+  CONSUMER: the package is `mkApplication` over a venv, so `$out` is
+  `bin/strictdoc` and nothing else — no interpreter, no `site-packages` — and
+  its `dependencies` is a uv2nix name → extras ATTRSET, not nixpkgs' list of
+  derivations. Anything wanting strictdoc as a LIBRARY has to go through that
+  script's shebang; `strictdoc-grammar-extract` is the only such consumer.
 - **Patched grammar source, regenerated at build time**
   (`tree-sitter-strictdoc`): `pkgs.tree-sitter.buildGrammar` with
   `generate = true` plus a `preBuild` override naming the grammar's actual entry
@@ -144,53 +139,53 @@ computed at eval time via `overlays/lib.nix:mkVersion`
 
 ## Package table
 
-| Package                   | Group      | Source                  | Build                       | nixpkgs               | Tests         | Smoke                        |
-| ------------------------- | ---------- | ----------------------- | --------------------------- | --------------------- | ------------- | ---------------------------- |
-| agnix                     | root       | GitHub main             | cargo                       | —                     | cargo test    | --version + MCP/LSP          |
-| chatgpt-codex             | root       | GitHub releases         | pre-built binary (musl)     | —                     | —             | --version                    |
-| claude-code               | root       | GCS manifest            | pre-built binary            | —                     | —             | binary                       |
-| copilot-cli               | root       | GitHub releases         | pre-built binary            | `github-copilot-cli`  | —             | binary                       |
-| kimchi                    | root       | GitHub releases         | pre-built binary (bun)      | —                     | —             | --version                    |
-| kiro-cli                  | root       | AWS manifest            | pre-built binary            | `kiro-cli`            | —             | binary                       |
-| kiro-gateway              | root       | GitHub main             | python                      | —                     | pytest (1413) | —                            |
-| kiro-memory-distiller     | root       | in-repo                 | bun wrapper                 | —                     | bun test (80) | stdin exit 0                 |
-| semble                    | root       | flake input (unchanged) | python                      | —                     | upstream      | --help                       |
-| aihubmix-mcp              | mcpServers | npm tarball (manual)    | npm (vendored lock+patch)   | —                     | —             | MCP stdio marker             |
-| context7-mcp              | mcpServers | GitHub main             | pnpm (nixpkgs override)     | `context7-mcp`        | vitest (2)    | version check                |
-| effect-mcp                | mcpServers | GitHub main             | pnpm                        | —                     | —             | MCP stdin                    |
-| git-intel-mcp             | mcpServers | GitHub main             | npm                         | —                     | vitest (40)   | MCP stdin                    |
-| github-mcp                | mcpServers | GitHub main             | go (nixpkgs override)       | `github-mcp-server`   | go test       | MCP stdin                    |
-| kagi-mcp                  | mcpServers | GitHub main             | python                      | —                     | —             | MCP stdin                    |
-| mcp-language-server       | mcpServers | GitHub main             | go (nixpkgs override)       | `mcp-language-server` | go test       | MCP stdin                    |
-| mcp-proxy                 | mcpServers | GitHub main             | python (nixpkgs override)   | `mcp-proxy`           | pytest        | MCP stdin                    |
-| nixos-mcp                 | mcpServers | flake input             | —                           | —                     | upstream      | MCP stdin                    |
-| openmemory-mcp            | mcpServers | GitHub main             | npm                         | `openmemory-mem`      | bun test (30) | MCP stdin + mem              |
-| serena-mcp                | mcpServers | flake input             | —                           | —                     | —             | MCP stdin                    |
-| semble-mcp                | mcpServers | same as `semble`        | —                           | —                     | upstream      | MCP initialize               |
-| sympy-mcp                 | mcpServers | GitHub main             | python                      | —                     | pytest (62)   | MCP stdin                    |
-| modelcontextprotocol      | mcpServers | GitHub main             | npm + python                | —                     | pytest        | all 6 bins                   |
-| git-absorb                | gitTools   | GitHub main             | cargo (nixpkgs override)    | `git-absorb`          | cargo test    | --version                    |
-| git-branchless            | gitTools   | flake input             | cargo (upstream overlay)    | —                     | upstream      | —                            |
-| git-revise                | gitTools   | GitHub main             | python (nixpkgs override)   | `git-revise`          | pytest        | nixpkgs                      |
-| beads                     | devTools   | GitHub stable pair      | go (nixpkgs overrides)      | `beads` + `dolt`      | go test       | version + wrapper            |
-| gh                        | devTools   | GitHub archive          | go (nixpkgs override)       | `gh`                  | — (doCheck 0) | --version                    |
-| glab                      | devTools   | GitLab tag (fetcher)    | go (nixpkgs override)       | `glab`                | —             | --version                    |
-| oxlint                    | devTools   | GitHub main             | pnpm (nixpkgs override)     | `oxlint`              | installCheck  | --type-aware                 |
-| strictdoc                 | devTools   | GitHub stable release   | python (nixpkgs override)   | `strictdoc`           | imports only  | version == pin               |
-| strictdoc-grammar-extract | devTools   | repo-local (no src)     | makeWrapper over python env | —                     | —             | grammar builder imports      |
-| tsgolint                  | devTools   | GitHub main             | go (nixpkgs override)       | `tsgolint`            | upstream      | --help                       |
-| arkenfox                  | generic    | GitHub archive          | files only                  | —                     | —             | —                            |
-| bruno                     | generic    | GitHub tag (fetcher)    | npm (nixpkgs override)      | `bruno`               | —             | —                            |
-| btop                      | generic    | GitHub archive          | cmake (nixpkgs override)    | `btop`                | —             | --version                    |
-| bun                       | generic    | GitHub releases         | pre-built binary            | `bun`                 | —             | —                            |
-| catppuccin-btop           | generic    | GitHub archive          | files only                  | —                     | —             | —                            |
-| dns-root-hints            | generic    | InterNIC (no version)   | files only                  | —                     | —             | —                            |
-| fblog                     | generic    | GitHub archive          | cargo (nixpkgs override)    | `fblog`               | —             | --version                    |
-| gluetun                   | generic    | GitHub archive          | go (linux only)             | —                     | — (subPkg)    | starts + exits               |
-| oh-my-posh                | generic    | GitHub archive          | go (nixpkgs override)       | `oh-my-posh`          | go test       | --version                    |
-| otel-tui                  | generic    | GitHub archive          | go (nixpkgs override)       | `otel-tui`            | go test       | --version                    |
-| pnpm_10                   | generic    | npm `latest-10` tag     | files only (nixpkgs ovr)    | `pnpm_10`             | —             | --version                    |
-| pnpm_11                   | generic    | npm `latest-11` tag     | files only (nixpkgs ovr)    | `pnpm_11`             | —             | --version                    |
-| tree-sitter-strictdoc     | generic    | GitHub main (patched)   | tree-sitter buildGrammar    | —                     | corpus check  | parser loads + language attr |
-| agnix-mcp                 | mcpServers | mainProgram override    | —                           | —                     | —             | —                            |
-| agnix-lsp                 | lspServers | mainProgram override    | —                           | —                     | —             | —                            |
+| Package                   | Group      | Source                  | Build                      | nixpkgs               | Tests         | Smoke                        |
+| ------------------------- | ---------- | ----------------------- | -------------------------- | --------------------- | ------------- | ---------------------------- |
+| agnix                     | root       | GitHub main             | cargo                      | —                     | cargo test    | --version + MCP/LSP          |
+| chatgpt-codex             | root       | GitHub releases         | pre-built binary (musl)    | —                     | —             | --version                    |
+| claude-code               | root       | GCS manifest            | pre-built binary           | —                     | —             | binary                       |
+| copilot-cli               | root       | GitHub releases         | pre-built binary           | `github-copilot-cli`  | —             | binary                       |
+| kimchi                    | root       | GitHub releases         | pre-built binary (bun)     | —                     | —             | --version                    |
+| kiro-cli                  | root       | AWS manifest            | pre-built binary           | `kiro-cli`            | —             | binary                       |
+| kiro-gateway              | root       | GitHub main             | python                     | —                     | pytest (1413) | —                            |
+| kiro-memory-distiller     | root       | in-repo                 | bun wrapper                | —                     | bun test (80) | stdin exit 0                 |
+| semble                    | root       | flake input (unchanged) | python                     | —                     | upstream      | --help                       |
+| aihubmix-mcp              | mcpServers | npm tarball (manual)    | npm (vendored lock+patch)  | —                     | —             | MCP stdio marker             |
+| context7-mcp              | mcpServers | GitHub main             | pnpm (nixpkgs override)    | `context7-mcp`        | vitest (2)    | version check                |
+| effect-mcp                | mcpServers | GitHub main             | pnpm                       | —                     | —             | MCP stdin                    |
+| git-intel-mcp             | mcpServers | GitHub main             | npm                        | —                     | vitest (40)   | MCP stdin                    |
+| github-mcp                | mcpServers | GitHub main             | go (nixpkgs override)      | `github-mcp-server`   | go test       | MCP stdin                    |
+| kagi-mcp                  | mcpServers | GitHub main             | python                     | —                     | —             | MCP stdin                    |
+| mcp-language-server       | mcpServers | GitHub main             | go (nixpkgs override)      | `mcp-language-server` | go test       | MCP stdin                    |
+| mcp-proxy                 | mcpServers | GitHub main             | python (nixpkgs override)  | `mcp-proxy`           | pytest        | MCP stdin                    |
+| nixos-mcp                 | mcpServers | flake input             | —                          | —                     | upstream      | MCP stdin                    |
+| openmemory-mcp            | mcpServers | GitHub main             | npm                        | `openmemory-mem`      | bun test (30) | MCP stdin + mem              |
+| serena-mcp                | mcpServers | flake input             | —                          | —                     | —             | MCP stdin                    |
+| semble-mcp                | mcpServers | same as `semble`        | —                          | —                     | upstream      | MCP initialize               |
+| sympy-mcp                 | mcpServers | GitHub main             | python                     | —                     | pytest (62)   | MCP stdin                    |
+| modelcontextprotocol      | mcpServers | GitHub main             | npm + python               | —                     | pytest        | all 6 bins                   |
+| git-absorb                | gitTools   | GitHub main             | cargo (nixpkgs override)   | `git-absorb`          | cargo test    | --version                    |
+| git-branchless            | gitTools   | flake input             | cargo (upstream overlay)   | —                     | upstream      | —                            |
+| git-revise                | gitTools   | GitHub main             | python (nixpkgs override)  | `git-revise`          | pytest        | nixpkgs                      |
+| beads                     | devTools   | GitHub stable pair      | go (nixpkgs overrides)     | `beads` + `dolt`      | go test       | version + wrapper            |
+| gh                        | devTools   | GitHub archive          | go (nixpkgs override)      | `gh`                  | — (doCheck 0) | --version                    |
+| glab                      | devTools   | GitLab tag (fetcher)    | go (nixpkgs override)      | `glab`                | —             | --version                    |
+| oxlint                    | devTools   | GitHub main             | pnpm (nixpkgs override)    | `oxlint`              | installCheck  | --type-aware                 |
+| strictdoc                 | devTools   | flake input (unchanged) | uv2nix (upstream flake)    | —                     | —             | —                            |
+| strictdoc-grammar-extract | devTools   | repo-local (no src)     | makeWrapper over that venv | —                     | —             | grammar builder imports      |
+| tsgolint                  | devTools   | GitHub main             | go (nixpkgs override)      | `tsgolint`            | upstream      | --help                       |
+| arkenfox                  | generic    | GitHub archive          | files only                 | —                     | —             | —                            |
+| bruno                     | generic    | GitHub tag (fetcher)    | npm (nixpkgs override)     | `bruno`               | —             | —                            |
+| btop                      | generic    | GitHub archive          | cmake (nixpkgs override)   | `btop`                | —             | --version                    |
+| bun                       | generic    | GitHub releases         | pre-built binary           | `bun`                 | —             | —                            |
+| catppuccin-btop           | generic    | GitHub archive          | files only                 | —                     | —             | —                            |
+| dns-root-hints            | generic    | InterNIC (no version)   | files only                 | —                     | —             | —                            |
+| fblog                     | generic    | GitHub archive          | cargo (nixpkgs override)   | `fblog`               | —             | --version                    |
+| gluetun                   | generic    | GitHub archive          | go (linux only)            | —                     | — (subPkg)    | starts + exits               |
+| oh-my-posh                | generic    | GitHub archive          | go (nixpkgs override)      | `oh-my-posh`          | go test       | --version                    |
+| otel-tui                  | generic    | GitHub archive          | go (nixpkgs override)      | `otel-tui`            | go test       | --version                    |
+| pnpm_10                   | generic    | npm `latest-10` tag     | files only (nixpkgs ovr)   | `pnpm_10`             | —             | --version                    |
+| pnpm_11                   | generic    | npm `latest-11` tag     | files only (nixpkgs ovr)   | `pnpm_11`             | —             | --version                    |
+| tree-sitter-strictdoc     | generic    | GitHub main (patched)   | tree-sitter buildGrammar   | —                     | corpus check  | parser loads + language attr |
+| agnix-mcp                 | mcpServers | mainProgram override    | —                          | —                     | —             | —                            |
+| agnix-lsp                 | lspServers | mainProgram override    | —                          | —                     | —             | —                            |

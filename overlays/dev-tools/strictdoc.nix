@@ -1,138 +1,72 @@
-# strictdoc — the latest upstream release on this repository's update cadence,
-# rather than whatever the nixpkgs pin happens to carry. The base is nixpkgs'
-# recipe, so its build system, dependency set and import check stay upstream-
-# owned; this overlay moves the pin and makes the two dependency adjustments the
-# release needs.
+# strictdoc — re-exported from UPSTREAM'S OWN FLAKE
+# (`inputs.strictdoc.packages.<system>.default`), unchanged.
+#
+# This file used to be a first-party build: nixpkgs' `strictdoc` recipe with
+# the version and `src` moved onto the latest release through a
+# `strictdoc-sources.json` sidecar, plus two dependency adjustments nixpkgs'
+# dependency set needed (reqif pinned forward to 0.1.0, pygments relaxed off
+# its exact 2.21.0 pin). All of that is gone. Upstream's flake is a uv2nix
+# package set built from the repository's own `uv.lock`, which pins every
+# Python dependency to the exact PyPI artifact the release was tested against
+# — reqif and pygments included — so both adjustments are dead, not merely
+# unnecessary here.
 #
 # Every sdoc session, flake check and devShell in this repository runs this
 # package (SLICE-STRICTDOC-OVERLAY, docs/plans/strictdoc-tooling/
-# 03-executable-rules.sdoc). It is step zero of the executable-rules roadmap:
-# the grammar gate, the writer CLI and the lifecycle model are all measured
-# against the latest release, so they should also run on it.
+# 03-executable-rules.sdoc). That node still describes the retired
+# first-party build; see MECH-STRICTDOC-UPSTREAM-FLAKE in the plan backlog.
 #
-# Release-tracked (upstream ships roughly three releases a month), on the same
-# fetchzip + sidecar + ghArchiveUpdateScript contract as ./beads.nix. The one
-# wrinkle is the TAG PREFIX: strictdoc tags releases bare (`0.28.3`, not
-# `v0.28.3`), so both the archive URL and the version check pass
-# `tagPrefix = ""`.
+# ── What upstream's package IS, because it constrains consumers ────────────
 #
-# Instantiates `ourPkgs` from `inputs.nixpkgs` for cache-hit parity
-# (see dev/fragments/overlays/cache-hit-parity.md).
+# `mkApplication` over a uv2nix virtual environment. `$out` holds
+# `bin/strictdoc` and NOTHING ELSE — no interpreter, no activation scripts and
+# no `lib/pythonX.Y/site-packages`. The interpreter that carries strictdoc and
+# its dependency closure is the venv referenced by that script's shebang, and
+# it is not a flake output. A consumer that needs strictdoc as a LIBRARY
+# rather than as a CLI has to reach it that way — see
+# ./strictdoc-grammar-extract.nix, the only one that does.
+#
+# `dependencies` exists but is uv2nix-shaped: an ATTRSET of name → extras,
+# not nixpkgs' list of derivations. Anything that used to splice it will
+# throw rather than silently mis-resolve.
+#
+# ── Extended by plain attrset update, not `overrideAttrs` ──────────────────
+#
+# Same contract as ./../semble.nix: `//` preserves the upstream derivation's
+# drvPath and outPath byte for byte, which is what lets a consumer on a
+# different nixpkgs substitute upstream's build (and the copy mirrored into
+# this project's cache) instead of rebuilding it. `overrideAttrs` would
+# produce a different derivation for no gain.
+#
+# Two things the first-party build carried do NOT come back:
+#   * The `version ==` install check. The version assertion moved to where it
+#     can still hold — the release is whatever the pinned input builds, and
+#     `strictdoc version` reporting it is checked by hand at input bumps
+#     rather than asserted against a sidecar that no longer exists.
+#   * `passthru.updateScript`. There is no sidecar to rewrite; the input is
+#     bumped by the ordinary flake-input sweep, claimed below.
+#
+# No `ourPkgs` here, and no cache-hit-parity concern of the usual kind: the
+# derivation closes over upstream's locked nixpkgs, never `final`/`prev`, so
+# its store path is the same whatever nixpkgs a consumer brings. The
+# `strictdoc` row in config/cache-hit-parity-targets.nix still holds and is
+# still worth keeping — it is what would catch a later edit that reintroduces
+# a `final`-bound wrapper around this package.
 {
   inputs,
   final,
   ...
 }: let
-  ourPkgs = import inputs.nixpkgs {
-    inherit (final.stdenv.hostPlatform) system;
-  };
-  inherit (ourPkgs) fetchzip;
-  vu = import ../lib.nix;
-
-  sources = builtins.fromJSON (builtins.readFile ./strictdoc-sources.json);
-  sourcesFile = "overlays/dev-tools/strictdoc-sources.json";
-
-  # ── Dependency adjustment 1: reqif ────────────────────────────────────
-  # strictdoc 0.28.x declares `reqif >= 0.1.0, == 0.1.*`; the nixpkgs pin is
-  # still on the 0.0.x line, so the runtime dependency check rejects the build
-  # outright. 0.1.0 is a pure version move for our purposes — its own
-  # dependency list (lxml, jinja2, xmlschema, openpyxl) is byte-identical to
-  # 0.0.54's, so nixpkgs' expression needs nothing but a new src.
-  #
-  # Pinned INLINE rather than in the sidecar on purpose: `mkUpdateScript`
-  # rebuilds the sidecar from scratch on every write, so a second package's
-  # pin parked there would be erased by the next sweep. Drift is loud instead
-  # of silent — strictdoc's declared constraint is checked at build time, so a
-  # future release that outgrows this pin fails the build rather than shipping.
-  reqifVersion = "0.1.0";
-  reqif = ourPkgs.python3Packages.reqif.overridePythonAttrs (old: {
-    version = reqifVersion;
-    src = ourPkgs.fetchFromGitHub {
-      owner = "strictdoc-project";
-      repo = "reqif";
-      tag = reqifVersion;
-      hash = "sha256-aMjq2x9/aC7HRDL2T2v/yvz+TP+AAKSY3e/TmboKq9Q=";
-    };
-    # nixpkgs builds `meta.changelog` from the fetcher's `tag`, and `rec`
-    # captured the OLD version — `${src.tag}` in the base expression resolves
-    # against the original `src`, not ours. Repoint it at the pinned tag so the
-    # link stays valid rather than naming a version this derivation is not.
-    meta =
-      old.meta
-      // {
-        changelog = "https://github.com/strictdoc-project/reqif/releases/tag/${reqifVersion}";
-      };
-  });
+  strictdoc = inputs.strictdoc.packages.${final.stdenv.hostPlatform.system}.default;
 in
-  ourPkgs.strictdoc.overridePythonAttrs (old: {
-    inherit (sources) version;
-    src = fetchzip {inherit (sources.src) url hash;};
-
-    # Substitution by IDENTITY, not by position: nixpkgs' `dependencies` list is
-    # upstream-owned and reorders freely, and a positional splice would silently
-    # replace the wrong package the first time it does. Throw if the entry we
-    # are replacing is not there any more — that means nixpkgs restructured the
-    # dependency set and this override needs re-reading, not skipping.
-    dependencies = let
-      swapped =
-        map (
-          dep:
-            if (dep.pname or null) == "reqif"
-            then reqif
-            else dep
-        )
-        old.dependencies;
-    in
-      if builtins.any (dep: (dep.pname or null) == "reqif") old.dependencies
-      then swapped
-      else throw "strictdoc: nixpkgs no longer lists reqif among the dependencies";
-
-    # ── Dependency adjustment 2: pygments ───────────────────────────────
-    # strictdoc 0.28.x pins `pygments == 2.21.0` exactly; the nixpkgs pin is
-    # 2.20.0. Relaxed rather than overridden because pygments sits under a
-    # large part of the Python package set, so pinning it here would fork the
-    # closure of everything strictdoc pulls in for a single patch-level move.
-    # strictdoc uses pygments to colour source excerpts in its HTML export —
-    # nothing this repository's validate-and-export loop reads — so the risk of
-    # the two minor versions disagreeing is confined to rendering.
-    #
-    # Extended from upstream's list rather than restated, so nixpkgs adding a
-    # third relaxation is inherited instead of dropped.
-    pythonRelaxDeps = (old.pythonRelaxDeps or []) ++ ["pygments"];
-
-    # Same `finalAttrs.src.tag` trap as reqif above, and it bites harder here:
-    # our `src` is a `fetchzip`, which has no `tag` attribute at all, so
-    # anything that reads `meta.changelog` (nix-update does) dies on a missing
-    # attribute rather than on a stale link.
-    meta =
-      old.meta
-      // {
-        changelog = "https://github.com/strictdoc-project/strictdoc/releases/tag/${sources.version}";
-      };
-
-    # The slice's own acceptance condition — `strictdoc version` reports the
-    # release we pinned — asserted at build time rather than left to a session
-    # to notice. Catches the whole class of override seams that evaluate fine
-    # and produce upstream's version anyway.
-    doInstallCheck = true;
-    installCheckPhase = ''
-      runHook preInstallCheck
-
-      ${ourPkgs.coreutils}/bin/env -i HOME="$TMPDIR" "$out/bin/strictdoc" version \
-        | ${ourPkgs.gnugrep}/bin/grep -F "${sources.version}"
-
-      runHook postInstallCheck
-    '';
-
+  strictdoc
+  // {
     passthru =
-      (old.passthru or {})
+      (strictdoc.passthru or {})
       // {
-        updateScript = vu.ghArchiveUpdateScript {
-          pkgs = ourPkgs;
-          pname = "strictdoc";
-          repo = "strictdoc-project/strictdoc";
-          inherit sourcesFile;
-          tagPrefix = "";
-        };
+        # checks.update-targets-parity accepts a versioned package whose
+        # update owner is a declared flake input. Plain attrset extension
+        # preserves the upstream drvPath/outPath identity.
+        updateFlakeInput = "strictdoc";
       };
-  })
+  }
