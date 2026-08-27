@@ -21,8 +21,10 @@
 #         g = import ./packages/strictdoc-grammar/lib {inherit lib;};
 #     in g.render (import ./packages/strictdoc-grammar/values.nix {inherit (g) dsl;})'
 #
-# or, the way anything else should reach it, through the `generate:sdoc-grammar`
-# devenv task.
+# or, the way anything else should reach it, through the `generate:sgra` devenv
+# task, which is what actually writes `../../docs/sdoc/grammar.sgra`. That file
+# is GENERATED in this repository — hand-editing it is drift, and
+# `checks/strictdoc-grammar-model-equal.nix` is what notices.
 {dsl}: let
   inherit (dsl) el field rel;
   inherit (field) one required str;
