@@ -165,7 +165,7 @@ status.py does not apply the no-suspect-edge clause, measured rather than read. 
 
 All 31 fingerprint entries currently have a matching relation, 0 unbacked, so the relation set and the PARENT_FP set coincide. MECH-FP-RELATION-LINT is a check and not a write-time invariant, so the walk still unions them; ignoring the fingerprint half is how an earlier status.py reported a blocked slice as ready.
 
-Degrees of freedom is not a headline on its own. Seven of the twelve slices are blocked with zero open decisions in their closure, because unsettled mechanisms do not move the count; only SLICE-CHECKPOINT-WIRING at 1 and SLICE-INSTANCE-SEMANTICS-MIGRATION at 2 have any.
+Degrees of freedom is not a headline on its own. Most blocked slices are blocked with ZERO open decisions in their closure, because an unsettled mechanism does not move the count -- only an open DECISION does. A slice can therefore read "degrees of freedom: 0" and still be unbuildable, which is why the record carries the frontier as well as the count. Deliberately stated without arithmetic: the counts move every time anything is groomed.
 
 MECH-READY-QUERY-GRAPH-REUSE is answered: cycle-check.py's build_graph is this walk minus PARENT_FP, so it moves into sdoc_fp.py with a flag for whether fingerprint parents count as edges.
 

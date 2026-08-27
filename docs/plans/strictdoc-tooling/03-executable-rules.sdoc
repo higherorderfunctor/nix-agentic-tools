@@ -453,12 +453,14 @@ denial split holds in all four arms with a passing control title. The
 fail-closed path was reproduced by hand at exit 2 against a control at exit 0.
 All five gates plus the module arms build green at bc646f12.
 
-Four divergences were found and are fixed above: the anchored-denial paragraph,
-the conversion shape still framed as open, the duplicate-detection claim, and
-this evidence list. Two gaps were found that are NOT this node's to fix and are
-logged instead -- the fail-closed arm has no standing gate, and the devenv
-module builds a second copy of the extraction derivation rather than reusing the
-flake's.
+Five divergences were found and are fixed above: the anchored-denial paragraph,
+the conversion shape still framed as open, the duplicate-detection claim, this
+evidence list, and a MECH-CHECK-SYSTEM-BOUNDARY reference wrapped across a line
+break so that it resolved to nothing. Four further findings were NOT this
+node's to fix and are logged as their own nodes instead: the fail-closed arm has
+no standing gate, the devenv module builds a second copy of the extraction
+derivation rather than reusing the flake's, wrapped UIDs in prose are a class
+rather than a typo, and the groomed nodes were left in the backlog file.
 
 One promise in the governing decision is still unmet and is tracked separately:
 DEC-EXECUTABLE-RULES-ROADMAP says milestone one delivers a validation gate at

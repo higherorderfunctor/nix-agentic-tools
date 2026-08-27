@@ -198,6 +198,14 @@ where they get written.
 - Whether a violation is a hard failure or a warning, and whether the two known plan-to-plan edges are grandfathered while the check goes in. That is MECH-PLAN-REFS-CHECK's severity policy and is left blank here deliberately.
 
 - AUTHORED_BY on this node is currently human, and the proposed STATEMENT is llm-written prose that keeps the operator's original two sentences as its opening but adds four paragraphs beneath them. The key is the operator's to turn; flagging it rather than touching it.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
 <<<
 RELATIONS:
 - TYPE: Parent
