@@ -36,6 +36,60 @@ Nothing else needs restoring. No devenv shell entry is required in the worktree
 — commits from it work, because the prek hooks resolve their config from the
 primary checkout.
 
+## Where this stands — 2026-08-27
+
+**Milestone one is built and unaccepted.** `SLICE-GRAMMAR-FROM-NIX` sits at
+`implemented`, deliberately not raised to `verified`: every closure paragraph
+was written by a session in the same run as the work it describes, and a session
+cannot verify its own round. Raising it needs an independent read of the node
+against the tree.
+
+Independently re-measured after the closure round, not transcribed from it:
+
+- the grammar renders byte-identically to `docs/sdoc/grammar.sgra`, 4085 bytes
+- the denial split is right — `UID` accepted, `RELATIONS` rejected, a lowercase
+  title rejected, with a control title that passes
+- all seven flake checks build green
+
+The library surface is `{check, dsl, emit, normalized, render}`. `faithful` is
+imported but not exported. The inner renderer is `sgra.nix`, named for the file
+format rather than the layer. `emit` is `denormalize` composed with it.
+
+strictdoc now comes from upstream's own flake, tracking main, at 0.28.3.
+
+### Eight decisions the operator owns
+
+Accepting the slice. Whether the grammar gates belong in the flake `checks`
+output. Whether `dev/tasks/check.nix` defers to those rather than restating five
+of its six arms. Whether the inner renderer is named and published, and whether
+a library consumer reaching `emit.grammar` directly is acceptable. Whether
+anything re-asserts the strictdoc binary's version now that the first-party
+build's install check went with it. How `ai.strictdoc` gets published. Moving
+the contract-fields edge and its `PARENT_FP`. And what `SLICE-STRICTDOC-OVERLAY`
+becomes.
+
+### The next piece of work
+
+**Evaluate moving to worktrees-of-worktrees.** The closure round ran three
+agents in parallel inside one worktree and they collided — one stopped mid-task
+reporting live concurrent writes, another watched files change underneath it.
+The work was recovered by later phases, but the lesson is that parallel agents
+in a shared checkout need disjoint DIRECTORIES, not merely disjoint files, and
+nothing enforces that.
+
+The operator's proposal: branch off the long-lived branch into a worktree per
+unit of work, so concurrent agents cannot share a tree at all. Secondary benefit
+they named — it makes what is going into the branch reviewable in pieces rather
+than as one accumulating diff.
+
+This is an evaluation, not an implementation. What it has to answer: how a
+worktree-of-a-worktree interacts with the shared common git dir and the
+branchless event database (both already documented as shared, not per-worktree);
+whether the prek hooks still resolve, given they derive config from the primary
+checkout and `PREK_HOME` from the committing worktree; what the teardown
+discipline is; and whether the graph's own validation loop still works from a
+nested tree.
+
 ## Teeing up a session
 
 Both prompts assume cwd is the **primary checkout**. You do not need to `cd` to
