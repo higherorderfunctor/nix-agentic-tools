@@ -4,8 +4,8 @@
 #
 # The two GENERATED layers must be current. `lib/faithful.nix` is extracted
 # from strictdoc's own grammar string and `lib/normalized.nix` is rewritten
-# from faithful, so either one can silently rot the moment the overlay's
-# strictdoc release moves -- and a stale surface is worse than no surface: it
+# from faithful, so either one can silently rot the moment the pinned input's
+# strictdoc moves -- and a stale surface is worse than no surface: it
 # type-checks values against a grammar strictdoc no longer speaks.
 #
 # Both entry points already carry `--check`, which regenerates in memory and

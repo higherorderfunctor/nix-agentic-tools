@@ -13,10 +13,10 @@
 # dir, and a broken input can exit 1 then exit 0 on re-run against a warm one.
 # `runCommand` gives every build its own fresh $TMPDIR.
 #
-# `pkgs.ai.devTools.strictdoc`, not `pkgs.strictdoc`: the overlay tracks the
-# latest upstream release, and the design system is measured against that
-# rather than against whichever version the nixpkgs pin carries
-# (SLICE-STRICTDOC-OVERLAY).
+# `pkgs.ai.devTools.strictdoc`, not `pkgs.strictdoc`: the overlay re-exports
+# upstream's own flake, which tracks main, so the design system is measured
+# against what upstream ships rather than against whichever version the nixpkgs
+# pin carries (SLICE-STRICTDOC-OVERLAY).
 {
   pkgs,
   self,
