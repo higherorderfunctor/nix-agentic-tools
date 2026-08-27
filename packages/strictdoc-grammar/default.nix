@@ -8,7 +8,10 @@
 #   lib/faithful.nix    GENERATED  exactly what a .sgra file can express
 #   lib/normalized.nix  GENERATED  faithful with named converters applied
 #   lib/dsl.nix         hand-written sugar over normalized; cannot weaken it
-#   lib/emit.nix        normalized values -> .sgra source text (encode only)
+#   lib/emit.nix        normalized values -> .sgra source text (encode only),
+#                       and it is exactly two halves composed:
+#     lib/denormalize.nix  the TYPE MAPPING — each converter's encode half
+#     lib/sgra.nix         the FILE FORMAT — strings in, source text out
 #
 # Types flow UP from strictdoc at generation time; values flow DOWN from the DSL
 # at authoring time. The extractor that WRITES the two generated files lives in
