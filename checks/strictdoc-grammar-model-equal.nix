@@ -31,6 +31,7 @@
   lib,
   pkgs,
   self,
+  strictdocGrammarExtract,
 }: let
   grammarDir = "${self}/packages/strictdoc-grammar";
 
@@ -41,7 +42,7 @@
     (grammar.render (import "${grammarDir}/values.nix" {inherit (grammar) dsl;}));
 in
   pkgs.runCommand "strictdoc-grammar-model-equal" {
-    nativeBuildInputs = [pkgs.ai.devTools.strictdoc-grammar-extract];
+    nativeBuildInputs = [strictdocGrammarExtract];
   } ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :

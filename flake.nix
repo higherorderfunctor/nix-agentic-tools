@@ -282,12 +282,22 @@
       sembleTemplatesCheck = import ./checks/semble-templates.nix {inherit lib pkgs self;};
       splitCodeSpansCheck = {split-code-spans = import ./checks/split-code-spans.nix {inherit pkgs;};};
       strictdocCycleCheck = {strictdoc-cycle-check = import ./checks/strictdoc-cycle-check.nix {inherit pkgs self;};};
+      # The grammar extractor's environment, built ONCE for the four checks
+      # that run it. It is not an overlay attribute: an overlay converts an
+      # upstream package, wrapping belongs to the consumer, and the consumer
+      # here is packages/strictdoc-grammar/lib/mkExtract.nix — the same factory
+      # the `ai.strictdoc` devenv module builds, so a session and CI run one
+      # wrap rather than two (MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY).
+      strictdocGrammarExtract = import ./packages/strictdoc-grammar/lib/mkExtract.nix {
+        inherit lib pkgs;
+        inherit (pkgs.ai.devTools) strictdoc;
+      };
       strictdocFpCheck = {strictdoc-fp-check = import ./checks/strictdoc-fp-check.nix {inherit pkgs self;};};
       strictdocGrammarCorpusCheck = {strictdoc-grammar-corpus = import ./checks/strictdoc-grammar-corpus.nix {inherit lib pkgs self;};};
-      strictdocGrammarForeignRoundtripCheck = {strictdoc-grammar-foreign-roundtrip = import ./checks/strictdoc-grammar-foreign-roundtrip.nix {inherit lib pkgs self;};};
-      strictdocGrammarModelEqualCheck = {strictdoc-grammar-model-equal = import ./checks/strictdoc-grammar-model-equal.nix {inherit lib pkgs self;};};
-      strictdocGrammarNegativeFixturesCheck = {strictdoc-grammar-negative-fixtures = import ./checks/strictdoc-grammar-negative-fixtures.nix {inherit lib pkgs self;};};
-      strictdocGrammarSurfaceCurrentCheck = {strictdoc-grammar-surface-current = import ./checks/strictdoc-grammar-surface-current.nix {inherit pkgs self;};};
+      strictdocGrammarForeignRoundtripCheck = {strictdoc-grammar-foreign-roundtrip = import ./checks/strictdoc-grammar-foreign-roundtrip.nix {inherit lib pkgs self strictdocGrammarExtract;};};
+      strictdocGrammarModelEqualCheck = {strictdoc-grammar-model-equal = import ./checks/strictdoc-grammar-model-equal.nix {inherit lib pkgs self strictdocGrammarExtract;};};
+      strictdocGrammarNegativeFixturesCheck = {strictdoc-grammar-negative-fixtures = import ./checks/strictdoc-grammar-negative-fixtures.nix {inherit lib pkgs self strictdocGrammarExtract;};};
+      strictdocGrammarSurfaceCurrentCheck = {strictdoc-grammar-surface-current = import ./checks/strictdoc-grammar-surface-current.nix {inherit pkgs self strictdocGrammarExtract;};};
       strictdocGrammarSurfaceLiveCheck = {strictdoc-grammar-surface-live = import ./checks/strictdoc-grammar-surface-live.nix {inherit lib pkgs self;};};
       updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit inputs lib pkgs self updateRegistry;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};

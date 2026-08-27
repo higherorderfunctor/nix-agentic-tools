@@ -48,6 +48,7 @@
   lib,
   pkgs,
   self,
+  strictdocGrammarExtract,
 }: let
   grammarDir = "${self}/packages/strictdoc-grammar";
   negativeDir = "${grammarDir}/fixtures/negative";
@@ -301,7 +302,7 @@ in
   pkgs.runCommand "strictdoc-grammar-negative-fixtures" {
     nativeBuildInputs = [
       pkgs.ai.devTools.strictdoc
-      pkgs.ai.devTools.strictdoc-grammar-extract
+      strictdocGrammarExtract
     ];
   } ''
     set -euETo pipefail
