@@ -19,6 +19,7 @@
     "fixtures/kiro-primitives/evidence/**",
     "fixtures/kiro-primitives/records/**",
     "overlays/chatgpt-codex-extracted.json",
+    "overlays/claude-code-extracted.json",
     "overlays/dev-tools/glab-extracted.json",
     "overlays/sources",
     "result"
@@ -27,7 +28,7 @@
   "overrides": [
     {
       "dictionaries": ["python", "node", "npm", "rust"],
-      "filename": ["**/*.md", "**/*.nix", "**/*.sh"]
+      "filename": ["**/*.md", "**/*.mjs", "**/*.nix", "**/*.py", "**/*.sh"]
     }
   ],
   "version": "0.2"

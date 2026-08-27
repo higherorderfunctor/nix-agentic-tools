@@ -35,9 +35,11 @@
 #     wrappers — invoked directly, possibly with a replaced (PATH-less)
 #     environment. Absolute store paths REQUIRED.
 #   - mkMcpSmokeTest, mkClaudeExtract, mkCodexExtract, mkKiroExtract emit build-context
-#     script bodies (installCheckPhase, runCommandLocal) that run inside
-#     stdenv with a full PATH from build inputs. Bare commands are
-#     CORRECT there.
+#     script bodies (installCheckPhase, runCommand/runCommandLocal) that run
+#     inside stdenv with a full PATH from build inputs. Bare commands are
+#     CORRECT there — including ones this check's word lists do not carry,
+#     such as mkClaudeExtract's `python3` and `node`, which run out of that
+#     derivation's own nativeBuildInputs.
 #
 # So a bare command in one of the build-context helpers is a false
 # positive and gets a `# bare-commands: ok` marker on its own line rather
