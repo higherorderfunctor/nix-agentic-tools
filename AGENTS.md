@@ -556,29 +556,45 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-19 (commit pending — the rebase backup advice
-> recommended a local TAG, reasoning that `--update-refs` moves branches but not
-> tags. True, but incomplete: tags are refs in the COMMON git dir, so a fetch
-> from ANY worktree can prune them all in one shot when `fetch.pruneTags` is
-> set, which is a global (not per-repo) git config setting — measured twice on
-> 2026-08-15, the second time by the same session's own fetch. Neither a local
-> tag nor a local branch survives both hazards; only a ref actually pushed to
-> `origin` does. Backup guidance now says
-> `git push origin refs/heads/archive/<slug>`, created and pushed in the same
-> sequence as the rebase rather than verified afterward, since verifying is
-> itself a fetch that can destroy the thing being verified. Also adds local tags
-> to the shared-across-worktrees list, since the root cause is that tags are
-> common-dir refs, not anything about rebasing specifically.) Prior: 2026-08-18
-> (commit pending — the per-worktree bootstrap requirement is GONE. The shared
-> prek hooks now resolve `.pre-commit-config.yaml` from the PRIMARY CHECKOUT,
-> derived from the shared common git dir, so a linked worktree that has never
-> entered `devenv shell` commits fine. `PREK_HOME` stays anchored to the
-> committing worktree, because under the agent sandbox the primary checkout is a
-> read-only bind. Written for the sandbox-stack pivot's "devenv is never
-> activated in a worktree" topology (#1106), under which the old model rejected
-> every worktree commit by design. Do NOT re-add a `devenv shell` step to the
-> worktree recipe below.) Prior: 2026-08-17 (commit pending — shared prek hooks
-> now derive `PREK_HOME` from the committing worktree, so commits launched
+> **Last verified:** 2026-08-27 (commit pending — adds the per-unit worktree
+> recipe, and corrects the premise it was asked for under. There is no such
+> thing as a worktree OF a worktree: `git worktree add` run from inside a linked
+> worktree registers the new tree under the ORIGINAL clone, with `commondir`
+> `../..` — the same two-level path a level-one worktree has — so depth is a
+> filesystem-layout choice and every piece of shared machinery survives because
+> there is no second level to get lost in. Measured: prek resolves in both
+> directions (a mis-formatted staged file failed the real hook, a clean one
+> passed, the parent's prek state untouched) and `strictdoc export` yields an
+> identical graph. The one genuinely new hazard is LAYOUT — a worktree placed
+> inside its parent's tree is untracked to the outer `git status` and so reaches
+> treefmt/prek/gitleaks, and hard-fails `strictdoc export` on duplicate UIDs —
+> and the "worktree of a worktree" phrasing invites exactly that, so the phrase
+> is retired here. The isolation bought is PARTIAL: the shared-across-worktrees
+> list is unchanged at depth two, so concurrent `git branchless` operations
+> still serialize, and merge-back still happens in the long-lived worktree
+> because git refuses a second checkout of a checked-out branch.) Prior:
+> 2026-08-19 (commit pending — the rebase backup advice recommended a local TAG,
+> reasoning that `--update-refs` moves branches but not tags. True, but
+> incomplete: tags are refs in the COMMON git dir, so a fetch from ANY worktree
+> can prune them all in one shot when `fetch.pruneTags` is set, which is a
+> global (not per-repo) git config setting — measured twice on 2026-08-15, the
+> second time by the same session's own fetch. Neither a local tag nor a local
+> branch survives both hazards; only a ref actually pushed to `origin` does.
+> Backup guidance now says `git push origin refs/heads/archive/<slug>`, created
+> and pushed in the same sequence as the rebase rather than verified afterward,
+> since verifying is itself a fetch that can destroy the thing being verified.
+> Also adds local tags to the shared-across-worktrees list, since the root cause
+> is that tags are common-dir refs, not anything about rebasing specifically.)
+> Prior: 2026-08-18 (commit pending — the per-worktree bootstrap requirement is
+> GONE. The shared prek hooks now resolve `.pre-commit-config.yaml` from the
+> PRIMARY CHECKOUT, derived from the shared common git dir, so a linked worktree
+> that has never entered `devenv shell` commits fine. `PREK_HOME` stays anchored
+> to the committing worktree, because under the agent sandbox the primary
+> checkout is a read-only bind. Written for the sandbox-stack pivot's "devenv is
+> never activated in a worktree" topology (#1106), under which the old model
+> rejected every worktree commit by design. Do NOT re-add a `devenv shell` step
+> to the worktree recipe below.) Prior: 2026-08-17 (commit pending — shared prek
+> hooks now derive `PREK_HOME` from the committing worktree, so commits launched
 > outside a devenv shell retain isolated project-local state instead of falling
 > back to the user-global XDG cache; the bootstrap diagnostic now names shell
 > entry as the only materialization path, and shared-hook rewrites serialize and
@@ -1194,8 +1210,9 @@ pipeline could not, and fix the reason.
 
 ### What is shared across worktrees — and what is not
 
-Linked worktrees of one clone share the common `.git` directory, so these are
-**shared, not per-worktree**:
+Linked worktrees of one clone share the common `.git` directory — at ANY depth,
+since git has no nested worktrees (next section) — so these are **shared, not
+per-worktree**:
 
 - **The hooks directory.** One `core.hooksPath` serves every worktree, and it
   holds git-branchless's hooks (`post-commit`, `post-rewrite`,
@@ -1266,6 +1283,59 @@ grep -rl "<the concept, not the slug>" "$MEMORY_DIR"
 This is a general cross-harness rule, not a Claude Code one: any two agent
 sessions sharing a memory store have it, and the failure is silent in all of
 them.
+
+### Worktrees off a worktree are FLAT — git has no second level
+
+A long-lived branch sometimes wants per-unit-of-work isolation of its own: a
+parallel session per unit, each with its own tree. `git worktree add` run from
+inside a linked worktree does that — and it produces a plain SIBLING, not a
+child. The new worktree registers under the ORIGINAL clone's `.git/worktrees/`
+and its `commondir` is `../..`, the same two-level path a level-one worktree
+has. Measured 2026-08-27.
+
+So a "worktree of a worktree" does not exist, and the phrase is worth retiring:
+depth is a filesystem-layout choice and nothing else. Everything above survives
+unchanged because there is no second level for it to get lost in. Measured on
+such a tree: prek resolves correctly in both directions — config from the
+primary checkout, `PREK_HOME` under the committing worktree — a mis-formatted
+staged file FAILED the real hook, a clean one passed, and the parent worktree's
+prek state was untouched; `strictdoc export` yielded an identical graph (139
+UIDs, same set).
+
+Use the same `$worktrees` directory the one-level recipe derives, flat, with the
+unit slug PREFIXED by its parent's:
+
+```bash
+git worktree add -b <type>/<parent>-<unit> "$worktrees/<parent>-<unit>" <branch>
+```
+
+Two reasons — one measured, one not:
+
+- **Never place it inside the parent's tree.** The outer tree's
+  `git status --porcelain` reports the inner one as untracked, so its files
+  reach treefmt, prek and gitleaks; and `strictdoc export` from the outer tree
+  HARD-FAILS on duplicate UIDs. Both measured. The "worktree of a worktree"
+  framing invites exactly that layout, which is the other reason to drop it.
+- **The registry is a FLAT namespace keyed on the path's LAST COMPONENT**, so
+  generic basenames (`docs`, `wip`, `fix`) collide across a per-unit population.
+  Prefixing is a caution, not a finding — the collision behavior itself was not
+  measured.
+
+**The isolation is PARTIAL, and the list above is the whole of what it misses.**
+Disjoint working directories, yes; the branchless event database, the hooks
+directory, local tags and the refs namespace stay shared at depth two exactly as
+at depth one. Per-unit worktrees fix file collisions between parallel agents.
+They do NOT make concurrent `git branchless` operations safe.
+
+Merge a unit back **in the long-lived worktree** — git refuses a second checkout
+of a branch already checked out — which makes that worktree the one
+serialization point the pattern still needs.
+
+Teardown is step 7's, once per unit, with one addition: a session that dies
+leaves TWO residues and only one is collected. The registry entry goes
+`prunable` and any `git worktree prune` sweeps it; the branch is an orphan that
+nothing ever collects. `git worktree remove` handles the tree and never the
+branch — `git branch -D` stays a separate, mandatory step.
 
 ### Rebasing: back up with a PUSHED ref, not a tag or a local branch
 
