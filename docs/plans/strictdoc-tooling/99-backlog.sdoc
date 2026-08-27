@@ -2408,6 +2408,21 @@ Raised when a lower-level emitter was about to be named faithful.emit. The name
 was self-documenting only to someone who had read the three-layer design, which
 is exactly the wrong audience test for a published interface.
 <<<
+NOTES: >>>
+PARTLY CLOSED 2026-08-27, by the review round on the decomposition and the emit
+split. `lib/default.nix` was still re-exporting `faithful`, so the barrel really
+did publish the attribute path this node rules out; it now wires the layer as a
+let-binding and exports `check`, `dsl`, `emit` and `normalized` only. Nothing
+read it -- and nothing needs to, since `normalized` IS `faithful // { … }`, so
+`normalized.productions` and `normalized.meta` are the same values under a name
+that describes the layer rather than the methodology.
+
+Still OPEN: the word remains in comments and in the two generated files' own
+names (`lib/faithful.nix`), which is where a contributor meets it and is the
+side of the line this node puts it on. Whether the FILE should be renamed too,
+and whether this belongs in a repository issue rather than here, are the
+operator's.
+<<<
 
 [MECHANISM]
 UID: MECH-EMIT-LAYER-BOUNDARY

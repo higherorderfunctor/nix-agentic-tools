@@ -150,7 +150,8 @@ CONVERTERS: dict[str, dict[str, object]] = {
             "quoted one, and quoting is not part of the option — it is what "
             "buys a literal parenthesis past the unquoted branch. So the "
             "normalized value is the option itself, and the encode half puts "
-            "the quotes back. That half is `emit.nix`'s `choiceOption`, "
+            "the quotes back. That half is `denormalize.nix`'s "
+            "`choiceOption`, "
             "deliberately: `GrammarElementFieldSingleChoice."
             "get_unprocessed_options` decides WHEN to quote, and it lives in "
             "strictdoc's WRITER, not in the grammar this file is derived from. "
@@ -257,15 +258,16 @@ CONVERTERS: dict[str, dict[str, object]] = {
     },
 }
 
-# The Nix source of each encoder, keyed by the name `emit.nix` reads it under.
-# Only the encoders whose converter actually fired are emitted, so an encoder in
-# the file is evidence a node needed it.
+# The Nix source of each encoder, keyed by the name `denormalize.nix` reads it
+# under. Only the encoders whose converter actually fired are emitted, so an
+# encoder in the file is evidence a node needed it.
 #
-# `emit.nix` merges `defaultEncoders // normalized.encoders`, and says so: a
-# name shipped here WINS, a name not shipped keeps its local twin. These four
-# are therefore the authoritative halves of their pairs, and `choiceOption` —
-# the quoting rule, which comes from strictdoc's WRITER and not from the
-# grammar — is deliberately left to `emit.nix` rather than duplicated here.
+# `denormalize.nix` merges `defaultEncoders // normalized.encoders`, and says
+# so: a name shipped here WINS, a name not shipped keeps its local twin. These
+# four are therefore the authoritative halves of their pairs, and `choiceOption`
+# — the quoting rule, which comes from strictdoc's WRITER and not from the
+# grammar — is deliberately left to `denormalize.nix` rather than duplicated
+# here.
 ENCODER_SOURCE: dict[str, str] = {
     "bool": 'b:\n  if b\n  then "True"\n  else "False"',
     "enum": "v: v",
@@ -769,11 +771,11 @@ HEADER = """#
 # below is the complete census: every node of the surface, and the named
 # converter that claimed it.
 #
-# `encoders` is keyed the way ./emit.nix reads it, which merges
+# `encoders` is keyed the way ./denormalize.nix reads it, which merges
 # `defaultEncoders // normalized.encoders` — a name here wins, a name missing
-# here keeps emit.nix's own. `choiceOption` is deliberately absent: that quoting
-# rule comes from strictdoc's writer, not from the grammar, so it is not this
-# layer's to own.
+# here keeps denormalize.nix's own. `choiceOption` is deliberately absent: that
+# quoting rule comes from strictdoc's writer, not from the grammar, so it is not
+# this layer's to own.
 """
 
 

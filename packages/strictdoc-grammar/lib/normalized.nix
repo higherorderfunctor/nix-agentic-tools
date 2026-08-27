@@ -24,11 +24,11 @@
 # below is the complete census: every node of the surface, and the named
 # converter that claimed it.
 #
-# `encoders` is keyed the way ./emit.nix reads it, which merges
+# `encoders` is keyed the way ./denormalize.nix reads it, which merges
 # `defaultEncoders // normalized.encoders` — a name here wins, a name missing
-# here keeps emit.nix's own. `choiceOption` is deliberately absent: that quoting
-# rule comes from strictdoc's writer, not from the grammar, so it is not this
-# layer's to own.
+# here keeps denormalize.nix's own. `choiceOption` is deliberately absent: that
+# quoting rule comes from strictdoc's writer, not from the grammar, so it is not
+# this layer's to own.
 {
   lib,
   faithful,
@@ -228,7 +228,7 @@ in
           rewrite = "unchanged (lib.types.nonEmptyListOf)";
         };
         decodedOption = {
-          description = "A pattern whose faithful spelling is the TOKEN AS WRITTEN and whose normalized value is what that token means. ChoiceOption is the only one: `([\"])[^,]+\\1|[^,()\"]+` is a bare option OR a quoted one, and quoting is not part of the option — it is what buys a literal parenthesis past the unquoted branch. So the normalized value is the option itself, and the encode half puts the quotes back. That half is `emit.nix`'s `choiceOption`, deliberately: `GrammarElementFieldSingleChoice.get_unprocessed_options` decides WHEN to quote, and it lives in strictdoc's WRITER, not in the grammar this file is derived from. The type here is narrower than the token in one direction (no embedded double quote, which would make the round trip ambiguous) and wider in the other (an unquoted parenthesis is fine, because the encoder quotes it) — which is what a converter pair is.";
+          description = "A pattern whose faithful spelling is the TOKEN AS WRITTEN and whose normalized value is what that token means. ChoiceOption is the only one: `([\"])[^,]+\\1|[^,()\"]+` is a bare option OR a quoted one, and quoting is not part of the option — it is what buys a literal parenthesis past the unquoted branch. So the normalized value is the option itself, and the encode half puts the quotes back. That half is `denormalize.nix`'s `choiceOption`, deliberately: `GrammarElementFieldSingleChoice.get_unprocessed_options` decides WHEN to quote, and it lives in strictdoc's WRITER, not in the grammar this file is derived from. The type here is narrower than the token in one direction (no embedded double quote, which would make the round trip ambiguous) and wider in the other (an unquoted parenthesis is fine, because the encoder quotes it) — which is what a converter pair is.";
           encoder = null;
           kind = "pair";
           rewrite = "lib.types.strMatching, over the DECODED value";
