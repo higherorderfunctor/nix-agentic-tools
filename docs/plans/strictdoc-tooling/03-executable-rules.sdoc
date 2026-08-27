@@ -60,8 +60,8 @@ and the fold-in review of two outside research documents that followed it,
 both held in the operator's working area outside the repository.
 
 A step zero precedes milestone one: SLICE-STRICTDOC-OVERLAY, the overlay that
-keeps strictdoc on the latest release. Not a milestone -- it has no consumer
-surface to review -- but every milestone runs on it.
+keeps strictdoc current from upstream's own flake. Not a milestone -- it has no
+consumer surface to review -- but every milestone runs on it.
 <<<
 
 [SLICE]
@@ -102,8 +102,8 @@ that tracks the latest release or main -- update cadence is never a
 consideration, and the version in nixpkgs is never an input. Several sessions
 noted the version gap and none built the overlay; this node exists so the next
 session builds it rather than noting it again. Everything after it -- the
-grammar gate, the CLI, the behaviour model -- is measured against the latest
-release and should run on it.
+grammar gate, the CLI, the behaviour model -- is measured against what upstream's
+flake builds and should run on it.
 <<<
 PARENT_FP: DEC-EXECUTABLE-RULES-ROADMAP:0000000
 NOTES: >>>
