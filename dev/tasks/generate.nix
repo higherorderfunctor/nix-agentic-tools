@@ -286,10 +286,11 @@ in {
     # surface derived from a grammar nobody is running, so the edge below is
     # load-bearing rather than tidiness.
     #
-    # NOT in `generate:all`, and deliberately: `strictdoc-grammar-extract` is an
-    # interactive-only package (devenv.nix gates it on `!isCI`), so an aggregate
-    # that reached it would fail in CI on a missing binary. Milestone 1 is
-    # locally invoked and wires no CI.
+    # NOT in `generate:all`, and deliberately: `strictdoc-grammar-extract` is
+    # interactive-only (devenv.nix sets `ai.strictdoc.enable = !isCI`, and that
+    # module is what puts the runner on PATH), so an aggregate that reached it
+    # would fail in CI on a missing binary. Milestone 1 is locally invoked and
+    # wires no CI.
     #
     # `docs/sdoc/grammar.sgra` is NOT written here. `values.nix` renders it
     # byte-identically, but whether that hand-maintained file becomes a

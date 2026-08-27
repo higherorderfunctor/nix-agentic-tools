@@ -31,6 +31,7 @@
   lib,
   pkgs,
   self,
+  strictdocGrammarExtract,
 }: let
   grammarDir = "${self}/packages/strictdoc-grammar";
 
@@ -43,7 +44,7 @@ in
   pkgs.runCommand "strictdoc-grammar-foreign-roundtrip" {
     nativeBuildInputs = [
       pkgs.ai.devTools.strictdoc
-      pkgs.ai.devTools.strictdoc-grammar-extract
+      strictdocGrammarExtract
     ];
   } ''
     set -euETo pipefail
