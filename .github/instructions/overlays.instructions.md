@@ -7,59 +7,67 @@ applyTo: "overlays/*.nix,overlays/**/*.nix"
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-24 (commit pending — Beads now pins its nested Dolt
-> runtime from the same `ourPkgs` instance and passes that exact derivation into
-> nixpkgs' Beads wrapper, so the grouped release cadence adds no consumer-pinned
-> build input and remains covered by Beads' existing parity row). Prior:
-> 2026-08-16 (commit pending — corrects the current Go-floor count to eight
-> after Beads joined the covered set; Kiro's `withFhsPayload` passthru and FHS
-> opt-out leave the default derivation byte-identical, and only configurations
-> requesting an inner chat wrapper or the explicit unwrapped selection fork from
-> it). Prior: 2026-08-15 (commit pending — adds the stable-release Beads overlay
-> under `pkgs.ai.devTools`, built from this repository's nixpkgs pin rather than
-> the independently pinned Numtide derivation). Prior: 2026-08-16 (commit
-> pending — nixpkgs 9ddfd8a consolidated Kiro's three FHS derivations into one
-> shared environment. The overlay still recomposes exclusively through
-> `ourPkgs`, so the topology change preserves the same consumer/standalone cache
-> identity contract). Prior: 2026-08-10 (commit pending —
-> `overlays/kiro-cli.nix` is no longer a plain `overrideAttrs`, so the "pure
-> binary-fetch" example below is re-pointed. nixpkgs f13ff45a split the package,
-> and the overlay now overrides `kiro-cli-unwrapped` and re-composes upstream's
-> wrapper with `.override`. Parity is UNAFFECTED and the reason is worth
-> stating: both sides of the parity check import `inputs.nixpkgs`, so the
-> `ourPkgs ? kiro-cli-unwrapped` feature-detection resolves the same way on both
-> and cannot itself drift — see the overlay-pattern fragment for the seam).
-> Prior: 2026-08-05 (commit pending — records that a consumer's
-> `inputs.nixpkgs.follows` defeats `ourPkgs` BY CONSTRUCTION, since it rewrites
-> the input rather than the overlay argument, and that its cost is not merely
-> the documented cache miss: measured on a real consumer, a followed April 2026
-> nixpkgs FAILED the `glab` build outright on the Go floor. Do not "fix"
-> `ourPkgs` for this — `checks/cache-hit-parity.nix` already asserts the drift).
-> Prior: 2026-08-03 (commit pending — annotates Semble's unchanged upstream
-> derivation and git-branchless's passthru with their flake-input update owners
-> without moving either derivation). Prior: 2026-08-03 (commit pending — patches
-> Oxlint's `@napi-rs/cli` dependency in its pnpm-fetched source rather than
-> admitting Darwin's `/bin/ps` into the sandbox; both fetch and build use pnpm
-> 11 from pinned `ourPkgs`, matching upstream's major). Prior: 2026-08-03
-> (commit pending — nests every binary-package group under `pkgs.ai`, moves `gh`
-> and `glab` into `ai.devTools`, and updates the consumer-path registry without
-> changing any derivation). Prior: 2026-08-03 (commit pending — relocates the
-> two repo-local auto-memory source trees beside their overlay derivations
-> without changing package inputs or cache-hit semantics). Prior: 2026-08-03
-> (commit pending — adds a positive control that substitutes the overlay's own
-> `inputs.nixpkgs` the way a consumer's `follows` directive does, proving that
-> unsupported configuration drifts from the cache-published `fblog` path).
-> Prior: 2026-08-02 (commit pending — adds the pinned external Semble exception:
-> direct upstream selection preserves Numtide's derivation, while a plain meta
-> overlay exposes the MCP role without forking the build). Prior: 2026-07-25
-> (commit pending — the worked example moved off `git-branchless`, which had not
-> carried this shape for a long time, onto `git-absorb`, which does; also
-> corrects the new-package signature, the namespacing in the manual verification
-> snippet, and the pure-binary-fetch package list). If you touch any
-> `overlays/<name>.nix` overlay file or the overlay composition machinery and
-> this fragment isn't updated in the same commit, stop and fix it. Regressions
-> are gated by the `checks.cache-hit-parity` flake check (see "Verification"
-> below).
+> **Last verified:** 2026-08-27 (commit pending — adds strictdoc as a second
+> pinned-external row and records that for this class parity holds STRUCTURALLY:
+> the derivation closes over the upstream flake's own locked nixpkgs and reads
+> `final` for nothing but `system`, so neither side of the two-pin comparison
+> can move. Also records a coverage asymmetry measured the same day — Semble has
+> an explicit `sembleUpstreamOk` assertion in checks/cache-hit-parity.nix and
+> strictdoc has none, so `rg -c semble` returns 16 there and `rg -c strictdoc`
+> returns 0; strictdoc's row is carried only by the generic two-pin comparison,
+> which a structurally immovable path passes by construction.) Prior: 2026-08-24
+> (commit pending — Beads now pins its nested Dolt runtime from the same
+> `ourPkgs` instance and passes that exact derivation into nixpkgs' Beads
+> wrapper, so the grouped release cadence adds no consumer-pinned build input
+> and remains covered by Beads' existing parity row). Prior: 2026-08-16 (commit
+> pending — corrects the current Go-floor count to eight after Beads joined the
+> covered set; Kiro's `withFhsPayload` passthru and FHS opt-out leave the
+> default derivation byte-identical, and only configurations requesting an inner
+> chat wrapper or the explicit unwrapped selection fork from it). Prior:
+> 2026-08-15 (commit pending — adds the stable-release Beads overlay under
+> `pkgs.ai.devTools`, built from this repository's nixpkgs pin rather than the
+> independently pinned Numtide derivation). Prior: 2026-08-16 (commit pending —
+> nixpkgs 9ddfd8a consolidated Kiro's three FHS derivations into one shared
+> environment. The overlay still recomposes exclusively through `ourPkgs`, so
+> the topology change preserves the same consumer/standalone cache identity
+> contract). Prior: 2026-08-10 (commit pending — `overlays/kiro-cli.nix` is no
+> longer a plain `overrideAttrs`, so the "pure binary-fetch" example below is
+> re-pointed. nixpkgs f13ff45a split the package, and the overlay now overrides
+> `kiro-cli-unwrapped` and re-composes upstream's wrapper with `.override`.
+> Parity is UNAFFECTED and the reason is worth stating: both sides of the parity
+> check import `inputs.nixpkgs`, so the `ourPkgs ? kiro-cli-unwrapped`
+> feature-detection resolves the same way on both and cannot itself drift — see
+> the overlay-pattern fragment for the seam). Prior: 2026-08-05 (commit pending
+> — records that a consumer's `inputs.nixpkgs.follows` defeats `ourPkgs` BY
+> CONSTRUCTION, since it rewrites the input rather than the overlay argument,
+> and that its cost is not merely the documented cache miss: measured on a real
+> consumer, a followed April 2026 nixpkgs FAILED the `glab` build outright on
+> the Go floor. Do not "fix" `ourPkgs` for this — `checks/cache-hit-parity.nix`
+> already asserts the drift). Prior: 2026-08-03 (commit pending — annotates
+> Semble's unchanged upstream derivation and git-branchless's passthru with
+> their flake-input update owners without moving either derivation). Prior:
+> 2026-08-03 (commit pending — patches Oxlint's `@napi-rs/cli` dependency in its
+> pnpm-fetched source rather than admitting Darwin's `/bin/ps` into the sandbox;
+> both fetch and build use pnpm 11 from pinned `ourPkgs`, matching upstream's
+> major). Prior: 2026-08-03 (commit pending — nests every binary-package group
+> under `pkgs.ai`, moves `gh` and `glab` into `ai.devTools`, and updates the
+> consumer-path registry without changing any derivation). Prior: 2026-08-03
+> (commit pending — relocates the two repo-local auto-memory source trees beside
+> their overlay derivations without changing package inputs or cache-hit
+> semantics). Prior: 2026-08-03 (commit pending — adds a positive control that
+> substitutes the overlay's own `inputs.nixpkgs` the way a consumer's `follows`
+> directive does, proving that unsupported configuration drifts from the
+> cache-published `fblog` path). Prior: 2026-08-02 (commit pending — adds the
+> pinned external Semble exception: direct upstream selection preserves
+> Numtide's derivation, while a plain meta overlay exposes the MCP role without
+> forking the build). Prior: 2026-07-25 (commit pending — the worked example
+> moved off `git-branchless`, which had not carried this shape for a long time,
+> onto `git-absorb`, which does; also corrects the new-package signature, the
+> namespacing in the manual verification snippet, and the pure-binary-fetch
+> package list). If you touch any `overlays/<name>.nix` overlay file or the
+> overlay composition machinery and this fragment isn't updated in the same
+> commit, stop and fix it. Regressions are gated by the
+> `checks.cache-hit-parity` flake check (see "Verification" below).
 
 ### The rule
 
@@ -304,9 +312,21 @@ curl -sI "https://nix-agentic-tools.cachix.org/${HASH}.narinfo" | head -1
 
 ### Exceptions
 
-**Pinned external derivations preserve the upstream identity.** Semble is
-selected directly from `inputs.llm-agents.packages.${system}.semble`, with no
-nixpkgs follow, `overlays.shared-nixpkgs`, local `ourPkgs` rebuild, or
+**Pinned external derivations preserve the upstream identity.** There are two:
+Semble and strictdoc. For both, parity holds for a STRUCTURAL reason rather than
+a maintained one — the derivation closes over the upstream flake's own locked
+nixpkgs and reads `final` for nothing but `system`, so neither side of the
+two-pin comparison can move.
+
+That makes the generic check weak for them, and the coverage is uneven. Measured
+2026-08-27: `checks/cache-hit-parity.nix` carries an explicit `sembleUpstreamOk`
+assertion pinning `self.packages.<system>.semble` to the upstream `drvPath` and
+`outPath`, wired into the pass condition with its own failure message. It names
+strictdoc nowhere at all. Giving that row real teeth means mirroring the Semble
+assertion, which is a check change and not a documentation one.
+
+Semble is selected directly from `inputs.llm-agents.packages.${system}.semble`,
+with no nixpkgs follow, `overlays.shared-nixpkgs`, local `ourPkgs` rebuild, or
 `overrideAttrs`. Its cache identity belongs to the upstream flake rather than to
 this repository's nixpkgs pin. Both the standalone output and a deliberately
 divergent consumer must match that upstream `drvPath` and `outPath` exactly.
@@ -391,82 +411,86 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-24 (commit pending — Bruno's 4.1+ SQLite shim now
-> covers only the interval where its sidecar leads nixpkgs, and sidecar hash
-> drift distinguishes the package updater's early exit from CI's automatic
-> repair and an out-of-band fixer). Prior: 2026-08-24 (commit pending — Beads
-> now owns a second sidecar-pinned Go derivation for its exact Dolt runtime;
-> both child release scripts retain the standard source/vendor/floor mechanics
-> and one compound Beads update script groups them into one target and PR).
-> Prior: 2026-08-16 (commit pending — corrects the current Go-floor enumeration
-> to include all eight packages; Kiro's recomposition seam also exposes
-> `withFhsPayload`, so configured chat-only wrappers can enter the upstream FHS
-> root without reimplementing it while the public default stays byte-identical
-> and `useFhsSandbox = false` is an explicit module-level selection of
-> `passthru.unwrapped`). Prior: 2026-08-15 (commit pending — adds Beads as the
-> eighth Go package and as a stable-release, sidecar-pinned thin override in the
-> `devTools` group). Prior: 2026-08-16 (commit pending — documents Beads'
-> distinct builder override plus anchored wrapper-extension seam). Prior:
-> 2026-08-16 (commit pending — nixpkgs 9ddfd8a consolidated Kiro's three
-> per-command FHS environments into one shared environment behind thin command
-> wrappers. Re-pointing the unwrapped base and recomposing through upstream's
-> `.override` remains the correct seam and inherited the topology change without
-> implementation edits). Prior: 2026-08-10 (commit pending — adds the third
-> override-seam failure mode, measured on `kiro-cli`: the attribute you are
-> overriding stops being a derivation at all. nixpkgs f13ff45a split it into
-> `kiro-cli-unwrapped` plus a `symlinkJoin` of `buildFHSEnv` sandboxes, and
-> `overrideAttrs` on that join silently dropped our `src`, `version` AND
-> `postFixup` while the build stayed green. Unlike the `extendMkDerivation`
-> cases below, NO seam on the public attribute can fix it — the base has to be
-> re-pointed at the derivation that still owns a `src`. Also retires this
-> section's claim that a thin `overrideAttrs` picks upstream changes up
-> "automatically"). Prior: 2026-08-05 (commit pending — the Go toolchain floor
-> is now DERIVED from the pinned source's go.mod rather than hand-written, is
-> carried by ALL SEVEN Go packages rather than two, and is reached through the
-> new `vu.mkGoBuilder`; adds `checks/go-floor-drift.nix` as the loud half and
-> records that the toolchain is a BUILDER argument only `.override` can reach.
-> Measured: `gh` had ALREADY silently required Go >= 1.26.5, so it was the next
-> package to break after `glab`). Prior: 2026-08-03 (commit pending — records
-> the property used to associate versioned derivations with a flake-input update
-> owner or a reasoned local-source exemption). Prior: 2026-08-03 (commit pending
-> — makes `pkgs.ai` the single binary-package namespace, retains `generic` as a
-> temporary nested bucket, and moves the two forge CLIs into `ai.devTools`).
-> Prior: 2026-08-03 (commit pending — makes overlay-owned local implementation
-> sources a boundary invariant and relocates the auto-memory helper and
-> distiller sources accordingly). Prior: 2026-08-02 (commit pending — adds
-> Semble's direct external-flake derivation pattern and identity-preserving MCP
-> role). Prior: 2026-08-01 (commit pending — records that `glab`'s
-> `extraExtract` also regenerates its `passthru.extracted` sidecar, via the new
-> shared `vu.mkExtractRegen`, and that glab is the one extracted package where
-> the fixer-then-extract ORDER is forced. It had NO regeneration at all until
-> now, which nothing caught until its first version bump reddened
-> `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28 — the commit
-> adding THAT line lands `glab`: the first Go package whose SRC hash also lives
-> in the sidecar (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
-> (`vu.glLatestVersionCmd`), and the collapse of the three sidecar hash fixers
-> onto one `vu.mkHashFix` body driven by `hashFixTargets`. It also corrects the
-> thin-override list, which now has to distinguish the SIDECAR contract (where a
-> hash comes from) from the OVERRIDE SEAM (`.override` vs `overrideAttrs`) —
-> `glab` shares bruno's former but not its latter. Prior: 2026-07-27 retired the
-> "bruno is the ONLY worked example" claim (`overlays/git-tools/git-absorb.nix`
-> is a second one and PREDATES it), replaces the heuristic with the
-> INPUT-vs-OUTPUT rule read out of the pinned nixpkgs' `lib.extendMkDerivation`,
-> and corrects "the failure is SILENT … shape-independent" — silent for
-> `buildNpmPackage`, LOUD for `buildRustPackage`. Prior: 2026-07-25 wired
-> `passthru.fixVendorHash` / `passthru.fixNpmDepsHash` to a real caller
-> (`fix_sidecar_hashes`) for the first time and corrected the `overlays/lib.nix`
-> comment that claimed a re-run which did not exist; see the Go-vendorHash
-> section below. Before that: two changes, both wanted. `bc23e34b` (LANDED)
-> records that the CI warm step now forces `drvPath` and therefore DOES cover
-> sidecar-versioned packages; the commit adding this line (pending) adds the
-> sidecar-vs-inline decision rule and the `.override`-vs-`overrideAttrs` rule
-> for `lib.extendMkDerivation` builders. Both sit on top of the Go
-> sidecar-`vendorHash` mechanism, the derived-Go-toolchain seam, and the
-> platform-gated-attribute rule, on top of the multi-major-attribute shape, the
-> namespaced-only rule and the store-path-parity expectation for thin nixpkgs
-> overrides. If you add, remove or rename an overlay namespace, move a package
-> between namespaces, or change how a `generic` package relates to its nixpkgs
-> original, and this section isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-27 (commit pending — Semble is no longer the only
+> direct external-flake derivation; `overlays/dev-tools/strictdoc.nix` is a
+> second on the identical contract, so the pattern is described as a class
+> rather than as one package's exception.) Prior: 2026-08-24 (commit pending —
+> Bruno's 4.1+ SQLite shim now covers only the interval where its sidecar leads
+> nixpkgs, and sidecar hash drift distinguishes the package updater's early exit
+> from CI's automatic repair and an out-of-band fixer). Prior: 2026-08-24
+> (commit pending — Beads now owns a second sidecar-pinned Go derivation for its
+> exact Dolt runtime; both child release scripts retain the standard
+> source/vendor/floor mechanics and one compound Beads update script groups them
+> into one target and PR). Prior: 2026-08-16 (commit pending — corrects the
+> current Go-floor enumeration to include all eight packages; Kiro's
+> recomposition seam also exposes `withFhsPayload`, so configured chat-only
+> wrappers can enter the upstream FHS root without reimplementing it while the
+> public default stays byte-identical and `useFhsSandbox = false` is an explicit
+> module-level selection of `passthru.unwrapped`). Prior: 2026-08-15 (commit
+> pending — adds Beads as the eighth Go package and as a stable-release,
+> sidecar-pinned thin override in the `devTools` group). Prior: 2026-08-16
+> (commit pending — documents Beads' distinct builder override plus anchored
+> wrapper-extension seam). Prior: 2026-08-16 (commit pending — nixpkgs 9ddfd8a
+> consolidated Kiro's three per-command FHS environments into one shared
+> environment behind thin command wrappers. Re-pointing the unwrapped base and
+> recomposing through upstream's `.override` remains the correct seam and
+> inherited the topology change without implementation edits). Prior: 2026-08-10
+> (commit pending — adds the third override-seam failure mode, measured on
+> `kiro-cli`: the attribute you are overriding stops being a derivation at all.
+> nixpkgs f13ff45a split it into `kiro-cli-unwrapped` plus a `symlinkJoin` of
+> `buildFHSEnv` sandboxes, and `overrideAttrs` on that join silently dropped our
+> `src`, `version` AND `postFixup` while the build stayed green. Unlike the
+> `extendMkDerivation` cases below, NO seam on the public attribute can fix it —
+> the base has to be re-pointed at the derivation that still owns a `src`. Also
+> retires this section's claim that a thin `overrideAttrs` picks upstream
+> changes up "automatically"). Prior: 2026-08-05 (commit pending — the Go
+> toolchain floor is now DERIVED from the pinned source's go.mod rather than
+> hand-written, is carried by ALL SEVEN Go packages rather than two, and is
+> reached through the new `vu.mkGoBuilder`; adds `checks/go-floor-drift.nix` as
+> the loud half and records that the toolchain is a BUILDER argument only
+> `.override` can reach. Measured: `gh` had ALREADY silently required Go >=
+> 1.26.5, so it was the next package to break after `glab`). Prior: 2026-08-03
+> (commit pending — records the property used to associate versioned derivations
+> with a flake-input update owner or a reasoned local-source exemption). Prior:
+> 2026-08-03 (commit pending — makes `pkgs.ai` the single binary-package
+> namespace, retains `generic` as a temporary nested bucket, and moves the two
+> forge CLIs into `ai.devTools`). Prior: 2026-08-03 (commit pending — makes
+> overlay-owned local implementation sources a boundary invariant and relocates
+> the auto-memory helper and distiller sources accordingly). Prior: 2026-08-02
+> (commit pending — adds Semble's direct external-flake derivation pattern and
+> identity-preserving MCP role). Prior: 2026-08-01 (commit pending — records
+> that `glab`'s `extraExtract` also regenerates its `passthru.extracted`
+> sidecar, via the new shared `vu.mkExtractRegen`, and that glab is the one
+> extracted package where the fixer-then-extract ORDER is forced. It had NO
+> regeneration at all until now, which nothing caught until its first version
+> bump reddened `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28
+> — the commit adding THAT line lands `glab`: the first Go package whose SRC
+> hash also lives in the sidecar (`vu.mkGoSrcVendorFix`), the first
+> GitLab-hosted version check (`vu.glLatestVersionCmd`), and the collapse of the
+> three sidecar hash fixers onto one `vu.mkHashFix` body driven by
+> `hashFixTargets`. It also corrects the thin-override list, which now has to
+> distinguish the SIDECAR contract (where a hash comes from) from the OVERRIDE
+> SEAM (`.override` vs `overrideAttrs`) — `glab` shares bruno's former but not
+> its latter. Prior: 2026-07-27 retired the "bruno is the ONLY worked example"
+> claim (`overlays/git-tools/git-absorb.nix` is a second one and PREDATES it),
+> replaces the heuristic with the INPUT-vs-OUTPUT rule read out of the pinned
+> nixpkgs' `lib.extendMkDerivation`, and corrects "the failure is SILENT …
+> shape-independent" — silent for `buildNpmPackage`, LOUD for
+> `buildRustPackage`. Prior: 2026-07-25 wired `passthru.fixVendorHash` /
+> `passthru.fixNpmDepsHash` to a real caller (`fix_sidecar_hashes`) for the
+> first time and corrected the `overlays/lib.nix` comment that claimed a re-run
+> which did not exist; see the Go-vendorHash section below. Before that: two
+> changes, both wanted. `bc23e34b` (LANDED) records that the CI warm step now
+> forces `drvPath` and therefore DOES cover sidecar-versioned packages; the
+> commit adding this line (pending) adds the sidecar-vs-inline decision rule and
+> the `.override`-vs-`overrideAttrs` rule for `lib.extendMkDerivation` builders.
+> Both sit on top of the Go sidecar-`vendorHash` mechanism, the
+> derived-Go-toolchain seam, and the platform-gated-attribute rule, on top of
+> the multi-major-attribute shape, the namespaced-only rule and the
+> store-path-parity expectation for thin nixpkgs overrides. If you add, remove
+> or rename an overlay namespace, move a package between namespaces, or change
+> how a `generic` package relates to its nixpkgs original, and this section
+> isn't updated in the same commit, stop and fix it.
 
 `overlays/default.nix` aggregates every binary package under the single
 `pkgs.ai` namespace. Flat AI CLIs live directly below it; supporting categories
@@ -500,8 +524,14 @@ directory move. The auto-memory sources are the worked examples:
 
 ### Direct external-flake derivations
 
-Semble is the external pinned-package exception to the local-build patterns
-below. `overlays/semble.nix` returns
+Two packages take this shape, and it is a class rather than an exception: Semble
+and, since 2026-08-27, strictdoc — `overlays/dev-tools/strictdoc.nix` re-exports
+`inputs.strictdoc.packages.${system}.default` on the identical contract. What
+follows describes Semble; strictdoc differs only in the input it names and in
+tracking upstream's main rather than a release.
+
+Semble is the original external pinned-package case, against the local-build
+patterns below. `overlays/semble.nix` returns
 `inputs.llm-agents.packages.${system}.semble` directly. It does not apply the
 input's `overlays.shared-nixpkgs`, rebuild with this repository's `ourPkgs`, or
 call `overrideAttrs`; any of those would replace the upstream cache identity
