@@ -3661,3 +3661,130 @@ missing in another. A surface that is meaningless without a project root is not
 that case, and forcing it into home-manager would produce an option nobody can
 use correctly.
 <<<
+
+[MECHANISM]
+UID: MECH-FAIL-CLOSED-ARM-HAS-NO-GATE
+TITLE: The unrecognised-shape refusal is demonstrated but nothing runs it
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+SLICE-GRAMMAR-FROM-NIX's acceptance list includes "an unrecognised grammar shape
+failing the extractor", and the mechanism works: a pattern carrying an inline
+group Nix's regex engine cannot express makes normalize.py exit 2 with a message
+naming the shape, against exit 0 on the unmodified surface. Nothing exercises it
+on a schedule. checks/strictdoc-grammar-surface-current.nix says outright that
+its --input stays the COMMITTED faithful surface precisely so a mutation cannot
+raise the refusal instead of reporting drift, and dev/tasks/check.nix runs the
+same two invocations and nothing more.
+
+So the arm that makes the whole drift argument work -- upstream changes shape,
+we refuse rather than emit a wrong surface -- is proven once by hand and then
+untested forever.
+<<<
+RATIONALE: >>>
+Found while verifying milestone one, and deliberately not fixed there: adding a
+gate is work with a design question in it (a fixture carrying a deliberately
+unrepresentable pattern has to live somewhere and be kept current), not a
+correction to the node.
+<<<
+NOTES: >>>
+Measured 2026-08-27 in a scratch copy: one pattern replaced with an inline-group
+form gives exit 2 and the diagnostic; the unmodified copy gives exit 0. Both
+arms present, so a check would only need to pin the fixture.
+<<<
+
+[MECHANISM]
+UID: MECH-DEVENV-MODULE-REBUILDS-EXTRACT
+TITLE: The devenv module instantiates the extraction wrapper a second time
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+packages/strictdoc-grammar/lib/mkExtract.nix states the rule in its own header:
+flake.nix builds it once for the checks and nothing else may build a second
+copy, or a session and CI stop running the same interpreter. The devenv module
+imports mkExtract.nix itself and passes its own package argument rather than
+receiving the flake's instantiation, which is a second instantiation of exactly
+that kind.
+
+Benign today and not obviously benign tomorrow. Two imports of one factory with
+equal arguments are the same derivation and the same store path, so nothing is
+built twice while the arguments agree -- and they are pinned to agree, since the
+module's package option defaults to the same overlay attribute the flake passes.
+The defect is that nothing enforces the agreement.
+<<<
+RATIONALE: >>>
+The header names the failure it is trying to prevent, and the module performs
+the thing the header forbids. Either the rule is wrong and should be relaxed in
+writing, or the module should receive the flake's instantiation.
+<<<
+NOTES: >>>
+Surfaced while verifying milestone one. Contested during that review: the
+refutation is that Nix derivation identity makes the duplication invisible, and
+the counter is that invisibility is a property of the arguments currently
+agreeing rather than of anything checking that they do.
+<<<
+
+[MECHANISM]
+UID: MECH-PROSE-UID-REFS-CAN-BREAK-SILENTLY
+TITLE: A UID wrapped across a line break stops resolving and nothing notices
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+strictdoc format rewraps prose, and a UID mentioned in prose can be wrapped
+across a line break. The result is a reference that resolves to nothing: grep
+for the UID does not find the file that cites it, and docs/sdoc/render.py prints
+the broken form. There is no relation to dangle, so the parser is content and
+every existing check passes.
+
+Found once, on MECH-CHECK-SYSTEM-BOUNDARY in 03-executable-rules.sdoc, and fixed
+by rewrapping the sentence. A formatter run can reintroduce it at any time.
+
+The check is cheap: scan node field text for a token matching a known UID
+prefix that is split by a newline, and for any bare prefix-shaped token that is
+not a live UID.
+<<<
+RATIONALE: >>>
+Prose UID references are how this corpus does most of its cross-referencing --
+far more of them than there are relations -- and they are the only class of
+reference nothing validates. The failure is silent in both directions: the
+citing file loses the pointer, and the cited node loses an inbound mention it
+never knew it had.
+<<<
+NOTES: >>>
+Related but distinct from MECH-FILE-RELATION-EXISTENCE, which is about relation
+VALUEs naming paths that do not exist. This is about prose, where there is no
+relation at all. Both are cases of the parser proving structure and nothing
+proving reference.
+<<<
+
+[MECHANISM]
+UID: MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE
+TITLE: Groomed nodes were left in 99-backlog.sdoc instead of moving
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The backlog protocol says grooming means moving a node into a numbered document
+in the same plan and raising its DEPTH. The 2026-08-27 grooming pass raised
+DEPTH on eighteen nodes and moved none of them, so 99-backlog.sdoc now holds a
+large set of interface-settled nodes and its name no longer describes it.
+
+Nothing is broken by this. The ungroomed query is DEPTH == sketch scoped to the
+directory, so it still answers correctly, and UIDs never change, so nothing
+citing a node cares which file it sits in. What is lost is the file-level
+signal: opening 99-backlog.sdoc no longer tells you what is ungroomed.
+
+The work is deciding which numbered document each node belongs to -- 01-tooling,
+02-plan-lifecycle or 03-executable-rules -- and moving it.
+<<<
+RATIONALE: >>>
+Logged rather than done because the destination is a judgement per node and
+moving eighteen nodes between files in the same pass that rewrote their contents
+would make the diff unreviewable, on a branch whose whole review model is the
+carve-up into pull requests.
+<<<
+NOTES: >>>
+Rough split by subject at the time of logging: the readiness and predicate nodes
+belong with 01-tooling, the plan-refs and lifecycle nodes with
+02-plan-lifecycle, and the CLI, guard and signing nodes with
+03-executable-rules.
+<<<
