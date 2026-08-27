@@ -13,8 +13,10 @@
 #
 # Every sdoc session, flake check and devShell in this repository runs this
 # package (SLICE-STRICTDOC-OVERLAY, docs/plans/strictdoc-tooling/
-# 03-executable-rules.sdoc). That node still describes the retired
-# first-party build; see MECH-STRICTDOC-UPSTREAM-FLAKE in the plan backlog.
+# 03-executable-rules.sdoc). That node's STATEMENT was rewritten in place on
+# 2026-08-27 to describe THIS shape; its NOTES keep the retired first-party
+# build as history. See MECH-STRICTDOC-UPSTREAM-FLAKE in the plan backlog for
+# the record of the switch.
 #
 # ── What upstream's package IS, because it constrains consumers ────────────
 #

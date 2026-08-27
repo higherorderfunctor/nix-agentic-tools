@@ -66,28 +66,35 @@ surface to review -- but every milestone runs on it.
 
 [SLICE]
 UID: SLICE-STRICTDOC-OVERLAY
-TITLE: Step zero -- an overlay that keeps strictdoc on the latest release
+TITLE: Step zero -- an overlay that keeps strictdoc current from upstream's flake
 DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
-Add a first-party overlay for strictdoc that tracks upstream's latest GitHub
-release, so every session, check and devShell in this repository runs the
-current version and the nixpkgs version stops being a topic. Shape: a thin
-override of the nixpkgs derivation carrying our version and source from a
-sidecar, with the two dependency adjustments the current release needs -- a
-newer reqif and a relaxed pygments pin -- registered like the other tracked
-packages: an update-targets row on the release-tracking contract, a
-cache-hit-parity row, and the strictdoc-using flake checks and the devShell
-switched to the overlay package. No patches; if one is ever needed it applies
-with fuzz disabled.
+strictdoc comes from upstream's own flake, so every session, check and devShell
+in this repository runs the current version and the nixpkgs version stops being
+a topic. Shape: a flake input named `strictdoc`
+(github:strictdoc-project/strictdoc, tracking main, deliberately without a
+nixpkgs `follows`), and overlays/dev-tools/strictdoc.nix as a thin re-export of
+`inputs.strictdoc.packages.<system>.default`, extended by plain attrset update
+so upstream's drvPath and outPath survive byte for byte. That overlay is the
+seam: `pkgs.ai.devTools.strictdoc` is the attribute every consumer takes, and
+the strictdoc-using flake checks and the devShell take it.
+
+There is no first-party build. No `strictdoc-sources.json` sidecar, no override
+of the nixpkgs derivation, no dependency adjustments and no update-targets row:
+upstream's flake is a uv2nix set built from the repository's own uv.lock, and
+the update owner is `passthru.updateFlakeInput = "strictdoc"`, which
+checks.update-targets-parity accepts and the ordinary flake-input sweep serves.
+The cache-hit-parity row stays.
 
 No operator review before implementation: this is plumbing, not a consumer
 surface. Reviewed after: `strictdoc version` in the devShell and in the checks
-reports the latest release, and the update sweep bumps it on its own.
+reports what the pinned input builds, and the input sweep bumps it on its own.
 
-Tracking main instead of releases is the operator's call per package, made on
-release cadence and how stable main is; strictdoc ships roughly three releases
-a month, so release tracking is the default here.
+Tracking main rather than a release is not a per-package call here -- it is what
+taking upstream's own flake means. The operator accepted that consequence when
+the switch was proposed, holding a pin to `refs/tags/<release>` as the
+contingency if main ever misbehaves.
 <<<
 RATIONALE: >>>
 Standing rule from the operator: any package used seriously gets an overlay
@@ -100,14 +107,35 @@ release and should run on it.
 <<<
 PARENT_FP: DEC-EXECUTABLE-RULES-ROADMAP:0000000
 NOTES: >>>
-Precedents to follow: the thin Python override in overlays/git-tools/
-git-revise.nix, the release-tracking update-targets row for beads, the
-cache-hit-parity registry, and overlays/generic/tree-sitter-strictdoc.nix for
-the fuzz-free patch flags should a patch ever appear. Group: dev-tools, the
-same class as beads.
+STATEMENT REWRITTEN IN PLACE 2026-08-27, not superseded. What this node
+originally specified was a first-party override of the nixpkgs derivation,
+carrying its version and source from a `strictdoc-sources.json` sidecar plus
+two dependency adjustments: reqif pinned forward to 0.1.0, and pygments relaxed
+off the release's exact pin. Both adjustments turned out to be DEAD rather than
+merely unnecessary once the package came from upstream's uv2nix set, which
+resolves every Python dependency from the repository's own uv.lock; the sidecar,
+the update-targets row and the tagPrefix wrinkle went with them. The STATEMENT
+above now describes the shape that actually ships. Everything below is the
+history of the shape it replaced, kept because the measurements in it are real.
 
-Implemented 2026-08-25: overlays/dev-tools/strictdoc.nix plus its
-strictdoc-sources.json sidecar, registered in overlays/default.nix
+Rewritten rather than superseded because the graph cannot express supersession
+for a slice. `Superseded_By` is declared only on DECISION in
+docs/sdoc/grammar.sgra, so there is no relation to point from a retired slice at
+what replaced it, and adding one would be a grammar change rather than the
+transcription this was. Only an accepted DECISION's STATEMENT is frozen -- a
+slice's is not -- so rewriting in place is permitted; it just loses the
+transition, which is the gap logged as MECH-SLICE-CANNOT-BE-SUPERSEDED in the
+plan backlog.
+
+Precedents the retired first-party build followed: the thin Python override in
+overlays/git-tools/git-revise.nix, the release-tracking update-targets row for
+beads, the cache-hit-parity registry, and
+overlays/generic/tree-sitter-strictdoc.nix for the fuzz-free patch flags should
+a patch ever appear. Group: dev-tools, the same class as beads.
+
+Implemented 2026-08-25 and retired two days later:
+overlays/dev-tools/strictdoc.nix plus its strictdoc-sources.json sidecar,
+registered in overlays/default.nix
 (pkgs.ai.devTools.strictdoc, flattened to the .#strictdoc flake package), with
 an update-targets row and a cache-hit-parity row. The two strictdoc-using
 checks (strictdoc-fp-check, strictdoc-cycle-check) and the devShell now take
@@ -133,12 +161,11 @@ The whole design corpus formats and exports clean under 0.28.3, so the bump is
 not a migration: nothing in the grammar or the existing nodes needed changing
 to move off the nixpkgs version.
 
-RETIRED 2026-08-27, two days later: the first-party build is gone and
+CUT OVER 2026-08-27, two days later: the first-party build is gone and
 overlays/dev-tools/strictdoc.nix now re-exports upstream's OWN flake package
 unchanged, on the same plain-attrset-update contract as overlays/semble.nix.
-The STATEMENT above therefore describes a shape that no longer exists; see
-MECH-STRICTDOC-UPSTREAM-FLAKE in the plan backlog for the grooming question
-that raises, and MECH-STRICTDOC-VERSION-SMOKE for what the switch cost.
+See MECH-STRICTDOC-UPSTREAM-FLAKE in the plan backlog for the switch's own
+record, and MECH-STRICTDOC-VERSION-SMOKE for what it cost.
 
 What changed and what it settles. Upstream's flake is a uv2nix set built from
 the repository's own uv.lock, which pins every Python dependency to the exact
@@ -382,7 +409,9 @@ the installCheckPhase that asserted the binary's version;
 MECH-STRICTDOC-DEVENV-MODULE-NOT-PUBLISHED, because options-doc demands exact
 home-manager parity and so a devenv-only ai.* facet cannot be exported, leaving
 ai.strictdoc importable only by this repository; and SLICE-STRICTDOC-OVERLAY's
-STATEMENT, which now specifies a build that does not exist.
+STATEMENT, which specified a build that no longer existed. The third is closed:
+that statement was rewritten in place on 2026-08-27, supersession not being
+expressible for a slice (MECH-SLICE-CANNOT-BE-SUPERSEDED).
 
 DEPTH STAYS implemented, and that is a finding rather than an oversight.
 verified means an INDEPENDENT session checked the code against this node, and
