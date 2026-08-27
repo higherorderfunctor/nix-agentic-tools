@@ -5422,8 +5422,8 @@
       "name": "collaboration_modes"
     },
     {
-      "default": false,
-      "maturity": "under development",
+      "default": true,
+      "maturity": "stable",
       "name": "compaction_image_budget"
     },
     {
@@ -5435,6 +5435,11 @@
       "default": false,
       "maturity": "under development",
       "name": "concurrent_reasoning_summaries"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "content_item_kinds"
     },
     {
       "default": false,
@@ -5534,6 +5539,11 @@
     {
       "default": false,
       "maturity": "under development",
+      "name": "guardian_ext"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
       "name": "guardian_node_repl_transcript_images"
     },
     {
@@ -5580,6 +5590,11 @@
       "default": true,
       "maturity": "stable",
       "name": "in_app_dictation"
+    },
+    {
+      "default": true,
+      "maturity": "stable",
+      "name": "in_app_local_automation"
     },
     {
       "default": true,
@@ -5772,6 +5787,11 @@
       "name": "shell_snapshot"
     },
     {
+      "default": false,
+      "maturity": "under development",
+      "name": "shell_snapshot_v2"
+    },
+    {
       "default": true,
       "maturity": "stable",
       "name": "shell_tool"
@@ -5847,6 +5867,11 @@
       "name": "tool_suggest"
     },
     {
+      "default": false,
+      "maturity": "under development",
+      "name": "transcript_v2"
+    },
+    {
       "default": true,
       "maturity": "removed",
       "name": "tui_app_server"
@@ -5872,8 +5897,8 @@
       "name": "unified_exec"
     },
     {
-      "default": false,
-      "maturity": "under development",
+      "default": true,
+      "maturity": "removed",
       "name": "unified_exec_zsh_fork"
     },
     {
@@ -5926,7 +5951,7 @@
     {
       "defaultReasoningLevel": "medium",
       "displayName": "Codex Auto Review",
-      "reasoningLevels": ["high", "low", "medium", "xhigh"],
+      "reasoningLevels": ["high", "low", "max", "medium", "xhigh"],
       "slug": "codex-auto-review"
     },
     {
@@ -5970,10 +5995,22 @@
       "displayName": "GPT-5.6-Terra",
       "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
       "slug": "gpt-5.6-terra"
+    },
+    {
+      "defaultReasoningLevel": "low",
+      "displayName": "Daybreak Blue",
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-daybreak-blue-latest"
+    },
+    {
+      "defaultReasoningLevel": "medium",
+      "displayName": "Daybreak Red",
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-daybreak-red-latest"
     }
   ],
   "provenance": {
-    "codexVersion": "0.149.1",
+    "codexVersion": "0.150.1",
     "extractorSchema": 1
   }
 }
