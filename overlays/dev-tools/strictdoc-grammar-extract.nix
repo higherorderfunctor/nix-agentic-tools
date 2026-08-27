@@ -33,21 +33,30 @@
 #
 # ── The environment, which IS settled ────────────────────────────────────────
 #
-# * The interpreter carries strictdoc's own dependency closure. `dependencies`
-#   is THIS repository's overridden list (reqif pinned to 0.1.0 by
-#   ./strictdoc.nix), and `withPackages` takes the transitive closure of what it
-#   is given, so textx and arpeggio — neither of which is on a plain
-#   interpreter's path — resolve along with everything else strictdoc imports.
-# * strictdoc itself is not a library in nixpkgs (`python3Packages.strictdoc`
-#   does not exist — MEASURED against this repository's pin), so its own
-#   site-packages goes on PYTHONPATH by hand. This replaces the brief's
-#   `sed -n '3p' .strictdoc-wrapped` recipe, which is the right move for an
-#   interactive shell and the wrong one for a derivation.
-# * ast-grep is on PATH and `ast_grep_py` is in the interpreter, because the
-#   normalizer matches over the faithful surface's Nix source in process.
+# The interpreter is UPSTREAM'S OWN VIRTUAL ENVIRONMENT, reached through the
+# shebang of `${strictdoc}/bin/strictdoc`, and that indirection is forced.
+# ./strictdoc.nix now re-exports upstream's flake package, which is
+# `mkApplication` over a uv2nix venv: `$out` holds that one script and nothing
+# else, so there is no `site-packages` to put on PYTHONPATH and no list of
+# dependency derivations to hand to `withPackages` (`dependencies` on that
+# package is a uv2nix name → extras ATTRSET). The venv the shebang names is a
+# build input of the application, not a flake output, so the script is the only
+# handle on it. It carries strictdoc plus everything `uv.lock` pins, textx and
+# arpeggio included — neither of which is on a plain interpreter's path.
 #
-# Cache-hit parity: every build input routes through `ourPkgs` (this repo's
-# nixpkgs pin), never `final`/`prev`. See dev/fragments/overlays/cache-hit-parity.md.
+# `ast_grep_py` is the one thing that venv does not carry, and it arrives on
+# PYTHONPATH from `ourPkgs` (ast-grep is on PATH from there too), because the
+# normalizer matches over the faithful surface's Nix source in process. That
+# splice is a version coupling: an extension module built for `ourPkgs.python3`
+# is only importable by upstream's interpreter while the two agree on the
+# Python MINOR version. MEASURED 2026-08-27 — ourPkgs 3.14.7 against upstream's
+# 3.14.6, `import ast_grep_py` clean and the grammar builder returning the same
+# `4adcdb05…` grammar the brief records. The install check below is what makes
+# a future divergence fail here rather than in a session.
+#
+# Cache-hit parity: every build input either routes through `ourPkgs` (this
+# repo's nixpkgs pin) or comes from upstream's own locked flake, never
+# `final`/`prev`. See dev/fragments/overlays/cache-hit-parity.md.
 {
   inputs,
   final,
@@ -62,7 +71,7 @@
   # is extracted from the release a session and the checks actually run.
   strictdoc = import ./strictdoc.nix {inherit inputs final;};
 
-  pythonEnv = python3.withPackages (ps: strictdoc.dependencies ++ [ps.ast-grep-py]);
+  astGrepPy = ourPkgs.python3Packages.ast-grep-py;
 in
   stdenvNoCC.mkDerivation {
     pname = "strictdoc-grammar-extract";
@@ -78,8 +87,20 @@ in
 
     installPhase = ''
       runHook preInstall
-      makeWrapper ${pythonEnv}/bin/python3 "$out/bin/strictdoc-grammar-extract" \
-        --prefix PYTHONPATH : "${strictdoc}/${python3.sitePackages}" \
+
+      # Upstream's application is a single script whose shebang names the venv
+      # interpreter. Read it rather than guessing a path, and fail loudly if the
+      # shape ever changes — a wrapper, a launcher, anything but an interpreter
+      # — because the alternative is a wrapper that builds and cannot import.
+      venvPython=$(sed -n '1s|^#!||p' "${strictdoc}/bin/strictdoc")
+      if [ ! -x "$venvPython" ]; then
+        echo "strictdoc-grammar-extract: ${strictdoc}/bin/strictdoc no longer" \
+             "shebangs an executable interpreter (got '$venvPython')" >&2
+        exit 1
+      fi
+
+      makeWrapper "$venvPython" "$out/bin/strictdoc-grammar-extract" \
+        --prefix PYTHONPATH : "${astGrepPy}/${python3.sitePackages}" \
         --suffix PATH : "${lib.makeBinPath [ast-grep]}"
       runHook postInstall
     '';

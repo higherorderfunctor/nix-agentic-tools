@@ -2203,7 +2203,7 @@ meant to live.
 [MECHANISM]
 UID: MECH-STRICTDOC-UPSTREAM-FLAKE
 TITLE: Take strictdoc from upstream's own flake instead of our overlay
-DEPTH: sketch
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 strictdoc ships a flake. Cut over to it and retire the overlay written as step
@@ -2221,6 +2221,49 @@ RATIONALE: >>>
 The overlay existed because nobody had checked for a flake. Keeping a
 first-party override alongside an upstream one is two things to maintain for
 one package.
+<<<
+NOTES: >>>
+Implemented 2026-08-27. overlays/dev-tools/strictdoc.nix re-exports
+inputs.strictdoc.packages.<system>.default unchanged, on the same plain-attrset-
+update contract as overlays/semble.nix, so pkgs.ai.devTools.strictdoc keeps its
+attribute path and its store path is byte-identical to a direct build of the
+upstream flake. No consumer that takes the package from that seam changed.
+
+Both questions the statement asked, answered. The dependency adjustments are
+DEAD, not merely unneeded: upstream's flake is a uv2nix set built from the
+repository's own uv.lock, which pins every dependency to the artifact the
+release was tested against, so nothing resolves reqif or pygments against a
+nixpkgs pin any more. Cache-hit parity SURVIVES and now holds trivially -- the
+derivation closes over upstream's locked nixpkgs, so no consumer pin can move
+it -- and the row was kept because a row that passes structurally is still what
+catches a later final-bound wrapper.
+
+The main-tracking consequence did not bite. Main was byte-identical to release
+0.28.3 when the input was added (same tarball narHash), it built clean, and the
+binary reports 0.28.3. The pre-approved contingency of pinning refs/tags/<rel>
+was not used.
+
+Two things this cost, both logged rather than fixed here. The version assertion
+is gone -- MECH-STRICTDOC-VERSION-SMOKE. And SLICE-STRICTDOC-OVERLAY's STATEMENT
+now specifies a build that does not exist ("a thin override of the nixpkgs
+derivation ... from a sidecar, with the two dependency adjustments"); only its
+NOTES record the change. Whether that statement is rewritten or the slice is
+closed and superseded is a contract question and so the operator's, not an
+implementing session's.
+
+One consumer DID have to change, and it is the one that never went through the
+seam. overlays/dev-tools/strictdoc-grammar-extract.nix read the derivation's
+internals: `.dependencies` (a nixpkgs list of derivations) and
+$out/<sitePackages>. Upstream's package is mkApplication over a virtual
+environment, so $out holds bin/strictdoc and nothing else, and `dependencies`
+is a uv2nix name-to-extras ATTRSET -- the splice throws at eval rather than
+mis-resolving. It now wraps the venv interpreter named by that script's shebang,
+which is the only handle on the venv since it is not a flake output, with
+ast_grep_py added to PYTHONPATH from ourPkgs. MEASURED: upstream 3.14.6 against
+ourPkgs 3.14.7, ast_grep_py imports clean, and the grammar builder returns the
+same 4adcdb05... grammar the implementation brief records. That splice is a
+minor-version coupling and the package's existing installCheckPhase is what
+makes a future divergence fail at build time.
 <<<
 
 [MECHANISM]
@@ -2365,4 +2408,34 @@ MECH-FAITHFUL-IS-NOT-A-CONSUMER-WORD. A leading underscore reads as private
 across Nix, which is the wrong signal for something supported. Since __functor
 makes adding it a one-line change later, waiting for a caller costs nothing and
 removing a published attribute costs more than adding one.
+<<<
+
+[MECHANISM]
+UID: MECH-STRICTDOC-VERSION-SMOKE
+TITLE: Nothing asserts the strictdoc binary's version any more
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The retired first-party build asserted its own acceptance condition in an
+installCheckPhase: `strictdoc version` had to print the version the sidecar
+pinned, and that assertion was positive-controlled. Re-exporting upstream's
+flake package took it away, because the package is extended by plain attrset
+update -- `//`, not overrideAttrs -- precisely so its drvPath and outPath stay
+identical to upstream's, and adding a phase would forfeit that.
+
+So the whole class of "the seam evaluates fine and produces some other
+version" is now unguarded. It was checked by hand at the switch (0.28.3, the
+release main was sitting on) and by hand is where it stands.
+
+Possible shapes, none costed: a separate flake check that runs
+`${pkgs.ai.devTools.strictdoc}/bin/strictdoc version` and greps for the input's
+locked rev-derived version; folding the same assertion into one of the two
+existing strictdoc checks, which already have the binary on nativeBuildInputs;
+or accepting that an upstream flake asserting its own version is upstream's job
+and dropping the requirement.
+<<<
+RATIONALE: >>>
+Worth recording because the loss is invisible: the package still builds, the
+checks still pass, and the only signal that the assertion is gone is that the
+file no longer contains it.
 <<<
