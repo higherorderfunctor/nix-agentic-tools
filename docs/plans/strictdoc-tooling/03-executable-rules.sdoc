@@ -210,7 +210,7 @@ RELATIONS:
 [SLICE]
 UID: SLICE-GRAMMAR-FROM-NIX
 TITLE: Generate the grammar from a typed Nix option surface, and gate it
-DEPTH: implemented
+DEPTH: verified
 AUTHORED_BY: llm
 STATEMENT: >>>
 Generate a typed Nix option surface from strictdoc's own grammar definition,
@@ -232,8 +232,10 @@ The extractor runs at generation time, outside Nix, and emits Nix source that
 is committed; Nix never parses strictdoc during evaluation. A drift check
 regenerates and diffs, so a stale surface is a red check.
 
-How the conversion is expressed is open. Two shapes, both viable, and the
-choice decides whether the faithful layer is a committed file.
+How the conversion is expressed was open when this was written. It is not now:
+the SECOND shape shipped, and both layers are committed files. What follows
+records both shapes because the losing argument is what makes the choice cheap
+to revisit.
 
 Converters can live inside the extractor, working on the parsed grammar. That
 preserves why each shape was classified as it was: a pattern is known to have
@@ -254,6 +256,12 @@ argument. It matches generated text rather than the grammar behind it, so a
 two-value alternation that means a boolean is indistinguishable from one that
 merely looks like it.
 
+TAKEN, and the cost accepted: extract/normalize.py parses the emitted faithful
+Nix source with ast_grep_py, and lib/faithful.nix is committed. The provenance
+loss is mitigated rather than avoided -- decompose.py calls back into
+normalize.py so both classify the same nodes, which keeps the two halves from
+drifting apart even though neither can see the grammar rule any more.
+
 Our own grammar values -- the five node types with their fields and relations
 -- are data filling the generated surface, not part of it.
 
@@ -264,7 +272,12 @@ only validation that ever happens to a generated grammar.
 
 What belongs at evaluation is only what strictdoc has no rule for anywhere: two
 fields with the same title, and two relations with the same type and role.
-Both are made unrepresentable by keying on name rather than asserted against.
+Both are ASSERTED against rather than made unrepresentable. Keying on name was
+the intent here and it did not survive implementation: elements, fields and
+relations are all lists, never attribute sets, because Nix sorts attribute-set
+keys and strictdoc enforces order. So sgra.nix throws on duplicate titles,
+duplicate relations and duplicate element tags, each message naming which one
+strictdoc would silently have kept.
 Everything strictdoc does enforce is left to strictdoc and becomes a negative
 fixture proving the gate fires.
 
@@ -339,8 +352,15 @@ FieldName is /(?!^UID)(?!^RELATIONS).../ and arpeggio matches with re.MULTILINE
 at the current position, so the lookahead can only fire at a line start -- which
 a field title, sitting after the literal '  - TITLE: ', never is. Hoisting those
 two into a value-level denial produced a type that rejected a field named UID,
-which this repository's own grammar declares five times. They are now recorded
-under denyAtLineStart and not enforced.
+which this repository's own grammar declares five times.
+
+That was true of both when written and is now true of only one. bb14e09c split
+them: RELATIONS is an alternative of the rule that denies it, so it can never be
+a legal field name and IS enforced as a value-level denial (deny). UID is not,
+so it stays recorded under denyAtLineStart and unenforced. Measured through the
+package's own entry points: a field titled RELATIONS is rejected by the types
+and accepted by emit.grammar alone, which proves the rejection is the surface's
+and not the emitter's; a field titled UID is accepted by both.
 
 The choice vocabulary could not keep its upstream name. textx calls it options,
 and a submodule whose CONFIG carries a key named options is read by the Nix
@@ -380,8 +400,8 @@ with the operator did not move together:
     (MECH-GRAMMAR-CHECKS-ARE-IN-FLAKE-CHECK). The devenv task still restates
     five of the six acceptance arms instead of deferring to them
     (MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE), which is held rather than fixed
-    because the boundary it needs is not written down (MECH-CHECK-SYSTEM-
-    BOUNDARY).
+    because the boundary it needs is not written down
+    (MECH-CHECK-SYSTEM-BOUNDARY).
   Whether the emitter stays reachable without the type in front of it -- PARTLY
     answered. This repository's own path can no longer bypass the surface,
     because the module declares its input with the normalized type, and the
@@ -413,16 +433,37 @@ STATEMENT, which specified a build that no longer existed. The third is closed:
 that statement was rewritten in place on 2026-08-27, supersession not being
 expressible for a slice (MECH-SLICE-CANNOT-BE-SUPERSEDED).
 
-DEPTH STAYS implemented, and that is a finding rather than an oversight.
+DEPTH WAS HELD at implemented until an independent read happened.
 verified means an INDEPENDENT session checked the code against this node, and
-none has: every paragraph above was written by a session in the same run as the
-work it describes, and the run that assembled this section built nothing and ran
-no check. The five flake gates plus the module-eval arm are real mechanical
-evidence -- byte identity, model equality, a foreign round-trip, the negative
-fixtures, surface currency, and the option path reaching the same bytes -- but a
-green check proves the code does what the code does, not that it does what this
-node says. DEPTH == implemented is the review-queue query, and this node belongs
-in it.
+for a while none had: every paragraph above was written by a session in the same
+run as the work it describes, and the run that assembled this section built nothing and ran
+no check. This slice's five flake gates are strictdoc-grammar-model-equal (which
+is two gates, semantic equality AND byte identity, and its own header says so),
+-foreign-roundtrip, -negative-fixtures, -surface-current and -surface-live, plus
+the module-eval arm for the option path. strictdoc-grammar-corpus is registered
+beside them but belongs to SLICE-SDOC-IN-SEMBLE and the patched tree-sitter
+grammar, not here. All are real mechanical evidence, but a green check proves
+the code does what the code does, not that it does what this node says.
+
+VERIFIED 2026-08-27 by an independent session that wrote none of this code, and
+DEPTH is raised on the strength of it. Re-measured rather than transcribed: the
+grammar renders byte-identically at 4085 bytes, with a positive control -- one
+PREFIX mutated in a scratch copy produces a diff, so the comparison is live. The
+denial split holds in all four arms with a passing control title. The
+fail-closed path was reproduced by hand at exit 2 against a control at exit 0.
+All five gates plus the module arms build green at bc646f12.
+
+Four divergences were found and are fixed above: the anchored-denial paragraph,
+the conversion shape still framed as open, the duplicate-detection claim, and
+this evidence list. Two gaps were found that are NOT this node's to fix and are
+logged instead -- the fail-closed arm has no standing gate, and the devenv
+module builds a second copy of the extraction derivation rather than reusing the
+flake's.
+
+One promise in the governing decision is still unmet and is tracked separately:
+DEC-EXECUTABLE-RULES-ROADMAP says milestone one delivers a validation gate at
+commit time AND in CI. The CI half exists. devenv.nix declares no strictdoc
+hook, so the commit-time half does not.
 <<<
 RELATIONS:
 - TYPE: Parent
