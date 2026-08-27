@@ -103,16 +103,22 @@ is read and never written, so it is not the grammar's formatter.
    prefix-plus-counter, which is the form nobody here keeps.
 2. **Never hand-write a node from memory.** Copy a neighbouring node of the same
    type and edit it: field order and blank-line rules are what get subtly wrong.
-   `strictdoc manage new` does not help here — it needs a project tree with
-   exactly one document and this tree has nine, and its `--node-type` defaults
-   to `REQUIREMENT`, which this grammar has no element for.
+   `strictdoc manage new` _does_ work here — pass `--document-path <file>` and
+   `--node-type <TAG>`, both required in this tree (the single-document shortcut
+   applies only when neither is given, and `--node-type` has no default, so it
+   exits 1 asking for one). Do not use it anyway: it mints a `MECH-1`-style UID
+   that rule 1 forbids, and fills every required field with `TBD`, which parses
+   clean.
 3. **Never edit `PARENT_FP`.** Only a human accepts a contract change; the hash
    transition in a commit is the signature. An agent that clears its own
    fingerprints is a rubber stamp.
 4. **Never edit an accepted `DECISION`'s `STATEMENT`.** Set its `STATUS` to
    `superseded`, add `Superseded_By`, and write a new decision.
-5. **Always `format` before hashing.** `format` rewraps prose, so a fingerprint
-   taken over unformatted text churns on its own.
+5. **Always `format` before hashing.** It does not rewrap prose _today_ —
+   `strictdoc_config.py` sets no `document_line_width`, so the round-trip is a
+   no-op on paragraph text and only node structure is normalized. Run it anyway:
+   MECH-TREEFMT-SDOC would set that width, and a fingerprint taken over
+   unformatted text would then churn on its own.
 6. **Never set `AUTHORED_BY: human`.** It records who wrote the statement, and
    only the operator turns that key — at pull-request review, not here.
 7. **Commit as you go, unprompted.** One commit per unit of work, not one at the

@@ -111,6 +111,14 @@ MIRROR THE .gitignore TOO. project_config reads the project's .gitignore and ext
 A TRAP IN THE FILE LIST: packages/semble/.sdoc is a DIRECTORY whose name ends in .sdoc, so `find -name '*.sdoc'` matches it. Use -type f.
 
 COST. The wrapper runs in 1.84 s warm against 1.81 s for a bare in-place format, so mirroring 12 files costs about 30 ms. treefmt invokes the command once per batch and nine files is one batch. strictdoc is already in CI's build closure -- checks/strictdoc-fp-check.nix takes pkgs.ai.devTools.strictdoc as a nativeBuildInput -- so registering it here adds nothing to what checks.formatting must build, even though the devenv shell keeps ai.strictdoc.enable = !isCI.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
 <<<
 
 [MECHANISM]
@@ -300,6 +308,14 @@ where they get written.
 - Whether new-human nodes accumulate an acceptance record once reviewed, or are simply re-listed against each pull request's own merge base until they land in main.
 
 - Whether the key means 'the operator wrote these words' or 'the operator originated this node' -- the guard's direction is one-sided either way, but the second reading leaves the words under the key free to drift.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
 <<<
 
 [MECHANISM]
@@ -397,9 +413,9 @@ Why reconstruction is a diagnostic and not a gate: a whole-project JSON export t
 
 PARENT_FP records 7 hex characters (sdoc_fp.HASH_LEN), 28 bits. If a payload store is ever built despite the rejection above, key it by the full digest and resolve the prefix the way git does; 28 bits reaches a birthday collision near 16k stored states.
 
-MECH-FP-PREMERGE-GC should be folded here and retired rather than groomed. Its premise is that fingerprints referencing intermediate branch states become dangling references the instant the branch squashes; under this gate such fingerprints are drifted at the tip and cannot reach main, so there is nothing left to collect. MECH-FP-GIT-FLOW-HAZARDS stays separate: it is about whether a drift report is legitimate, not about whether the state it names survives, and the two overlap only in the sentence "squash is safe", which belongs there.
+MECH-FP-PREMERGE-GC MAY be foldable here, and that is a recommendation rather than a retirement -- three other nodes (MECH-SIGNATURE-REVOCATION, MECH-FP-GIT-FLOW-HAZARDS twice) still treat it as live, and collection policy is deferred past milestone five by standing ruling, so retiring it is not this node's call. Its premise is that fingerprints referencing intermediate branch states become dangling references the instant the branch squashes; under this gate such fingerprints are drifted at the tip and cannot reach main, so there is nothing left to collect. MECH-FP-GIT-FLOW-HAZARDS stays separate: it is about whether a drift report is legitimate, not about whether the state it names survives, and the two overlap only in the sentence "squash is safe", which belongs there.
 
-SLICE-CHECKPOINT-WIRING names its CI checkpoint as "the point where the branch left main". For this invariant that anchor is wrong -- the evaluation tree is the merge result, and a diff against the base cannot see it.
+SLICE-CHECKPOINT-WIRING anchors its CI checkpoint at the branch point and enumerates no merge-result checkpoint. This gate needs one: the tree that matters is the merge result, and a diff against the base cannot see it. Owed to that slice as a sixth checkpoint, not a criticism of the anchor it chose for the checks it does enumerate.
 
 Residual, not handled: a merge that bypasses the gate. Detecting one needs the same fp-check run on main after the fact, which is the same command against a different tree.
 
@@ -414,6 +430,14 @@ where they get written.
 - Who may re-sign after a legitimate drift. DEC-FP-ACCEPT-AUTHORITY is open and this node deliberately does not narrow it — it only rules out the gate re-anchoring on its own.
 
 - Whether main is swept periodically to catch a merge that bypassed the gate. The mechanism is identical (fp-check on a different tree); whether the bypass is worth guarding is a trust question.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -507,7 +531,7 @@ The handling still waits, and that part of the original deferral holds. What is 
 NOTES: >>>
 Measured 2026-08-27 in the strictdoc-trial worktree unless stated otherwise.
 
-The fingerprint is a function of file content only. contract_hash hashes the JSON export's node fields, and PARENT_FP is in EXCLUDED_FIELDS beside RATIONALE and NOTES (dev/scripts/sdoc_fp.py:33). That is simultaneously why squash is safe for the hash and why a rewritten PARENT_FP block is invisible to the checker.
+The fingerprint is a function of file content only. contract_hash hashes the JSON export's node fields, and PARENT_FP is in EXCLUDED_FIELDS beside RATIONALE and NOTES (dev/scripts/sdoc_fp.py:32). That is simultaneously why squash is safe for the hash and why a rewritten PARENT_FP block is invisible to the checker.
 
 rerere.enabled and rerere.autoupdate are both true in file:/home/caubut/.config/git/config -- global, so they apply in every worktree of every clone -- with 35 resolutions already cached in the shared rr-cache. rebase.updateRefs is true there too. 24 worktrees share one common git dir, git-branchless is initialized (.git/branchless exists) and git-absorb is on PATH, so the absorb-routing hazard is a live path rather than a hypothetical.
 
@@ -536,6 +560,14 @@ where they get written.
 - Who may re-sign after a conflict resolution, given that the resolver is often the same agent that authored one side. Named but not answered.
 
 - What a revoked-versus-never-signed marker looks like. MECH-SIGNATURE-REVOCATION poses it as a choice between a distinct marker value and a CI history check against main; the PARENT_FP conflict case adds a third caller but does not pick.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -630,6 +662,14 @@ fp-accept.py is guarded by nothing today. Any session can run it and one did. Th
 DEC-FP-ACCEPT-AUTHORITY is open and may later let an agent re-sign contracts that were only ever llm-graded. It does not conflict with this node and is deliberately not a parent: whatever authority rule lands will be implemented by whichever entry point performs the signing, and this node's claim is only that the ordinary authoring verbs are not that entry point. An edge would gate milestone two on an open decision without making the contract any truer.
 
 DEC-EXECUTABLE-RULES-ROADMAP already schedules an operator review of this milestone's verb list before implementation. An objection to create always writing llm belongs at that review, with this statement in front of it.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
 <<<
 
 [MECHANISM]
@@ -685,6 +725,14 @@ where they get written.
 - Whether an unattributed commit should be refused rather than recorded. The plumbing only distinguishes the three states; turning 'unattributed' into a gate is a rule.
 
 - Whether the operator's own commits should be positively stamped at all, given the stamp is inferred from an absent agent marker rather than asserted.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
 <<<
 
 [DECISION]
@@ -792,6 +840,14 @@ where they get written.
 - Whether a change to a flow's declared outcome is a signing event. The statement says only that it is read as a contract change; whether it produces a fingerprint, a signature, or a revocation is SLICE-INSTANCE-SEMANTICS-MIGRATION's, and milestone 5's.
 
 - Whether implemented and verified stay in DEPTH at all. The trigger is written against the ladder as it stands and NOTES records that it follows the review pass rather than the field if milestone 5 moves them.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
 <<<
 
 [MECHANISM]
@@ -1038,7 +1094,7 @@ TITLE: One readiness predicate, consumed by every script that asks
 DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
-Readiness is defined in four places, read at two scopes, and the four disagree. dev/scripts/sdoc_fp.py:100 is_ready is the node-local rule fp-accept consults before signing a fingerprint. docs/sdoc/status.py:58 closure_verdict re-implements the same rule inline while walking a slice's closure. dev/skills/sdoc/SKILL.md:68 and MECH-READY-QUERY state it in prose, identically to each other and differently from both executables. DEC-LOCAL-IMPLEMENTABILITY is the contract all four claim to implement and enumerates no state at all.
+Readiness is defined in four places, read at two scopes, and the four disagree. dev/scripts/sdoc_fp.py:100 is_ready is the node-local rule fp-accept consults before signing a fingerprint. docs/sdoc/status.py:58 closure_verdict re-implements the same rule inline while walking a slice's closure. dev/skills/sdoc/SKILL.md:77 and MECH-READY-QUERY state it in prose, identically to each other and differently from both executables. DEC-LOCAL-IMPLEMENTABILITY is the contract all four claim to implement and enumerates no state at all.
 
 Measured disagreement, four cells. A rejected decision: both executables pass it, both prose readings block it. A superseded decision: fp-accept signs against it, status.py blocks. A SPIKE whose STATUS is unrun or blocked: every reading treats it as settled on DEPTH alone, because no gate consults a spike's STATUS. A suspect edge: DEC-LOCAL-IMPLEMENTABILITY makes it part of the predicate, and status.py never computes one because it never calls fp-check.
 
@@ -1064,13 +1120,13 @@ Done when all five scripts produce byte-identical output on the current corpus, 
 <<<
 RATIONALE: Two executables carrying two readings of one rule is the document-borne drift INV-GUARDS-MUST-EXECUTE names, and the rule is the one part of this that should not be code: it is lifecycle policy, which DEC-EXECUTABLE-RULES-ROADMAP puts in milestone 5. Separating the read point from the rule now means milestone 5 fills a seven-cell table instead of editing four scripts in two directories, and means the disagreement is inspectable as data rather than distributed across two hand-copied constants and two inline conditionals. Deferring the extraction until milestone 5 inverts that: the migration would arrive to find the thing it migrates written four times.
 NOTES: >>>
-Measured 2026-08-27 against a clean export of 139 nodes (rm -rf of the output dir first; incremental export produces false greens). Relation TYPE census: Parent 92, File 3, Child 0. DECISION STATUS: 13 accepted, 7 open, 1 superseded, 0 rejected. DEPTH: 77 sketch, 16 implemented, 14 interface-settled, 9 needs-design, 2 verified, 21 decisions carrying none. Fingerprints: 31 entries, 31 never-signed, 0 suspect -- so no-suspect-edge is vacuously true today and starts to matter at the first signed fingerprint.
+Measured 2026-08-27 against a clean export at bc646f12, BEFORE that day's grooming moved twenty nodes (rm -rf of the output dir first; incremental export produces false greens). The counts below are that snapshot and are not current; the shape of the finding is what carries, not the arithmetic. 139 nodes then. Relation TYPE census: Parent 92, File 3, Child 0. DECISION STATUS: 13 accepted, 7 open, 1 superseded, 0 rejected. DEPTH: 77 sketch, 16 implemented, 14 interface-settled, 9 needs-design, 2 verified, 21 decisions carrying none. Fingerprints: 31 entries, 31 never-signed, 0 suspect -- so no-suspect-edge is vacuously true today and starts to matter at the first signed fingerprint.
 
 How much of the divergence is latent, and how much is not. Latent: zero rejected decisions exist, and the one superseded decision, DEC-VIEWER-BEFORE-BULK, has zero inbound relations and is named by zero PARENT_FP entries. Not latent: SPIKE-CONVERSION-SIGNAL is STATUS unrun at DEPTH interface-settled, so both predicates already count an unrun spike as settled wherever it appears in a closure. Also not yet live but one grammar edit away: packages/strictdoc-grammar/lib/dsl.nix:123 already offers rel.child, and values.nix:8 records the child relation as surface this repository does not exercise.
 
 Positive control, run in memory over a deep copy of the export with no file written. Setting DEC-ARCH-COLOCATION's STATUS to each of the four values in turn: open -> fp-accept refuses and status.py blocks; accepted -> fp-accept signs and status.py passes; rejected -> fp-accept signs and status.py passes; superseded -> fp-accept signs and status.py blocks. The control detects agreement as well as disagreement, so the one divergent row is not an artefact of the harness. Setting SPIKE-EXECUTABLE-RULES's STATUS to unrun, run and blocked in turn changes neither answer. Appending one TYPE Child relation to MECH-CYCLE-CHECK makes status.py's dependencies return two UIDs where sdoc_fp's relation_parent_uids returns one.
 
-Three implementations of node discovery also exist -- the recursive UID-prefix walk in status.py:20, the same walk in render.py:27, and the DOCUMENTS/NODES walk keyed on _NODE_TYPE in sdoc_fp.py:45 -- and all three return the same 139 nodes today. They are out of scope here and logged separately; the count is recorded so a later divergence is legible as a change rather than a discovery.
+Three implementations of node discovery also exist -- the recursive UID-prefix walk in status.py:20, the same walk in render.py:27, and the DOCUMENTS/NODES walk keyed on _NODE_TYPE in sdoc_fp.py:45 -- and all three returned the same 139 nodes at that snapshot. They are out of scope here and logged separately; the count is recorded so a later divergence is legible as a change rather than a discovery.
 
 Sequencing. MECH-READY-QUERY and this node are not the same work and do not merge: this one produces the predicate and the edge-set, that one the closure query and the bounded implementation prompt built from the same traversal. MECH-READINESS-REPORT-FRONTIER is a different case -- both of its complaints, a root reporting itself as its own blocker and an undifferentiated blocker list, are answered by MECH-READY-QUERY's record, so it closes as subsumed when that lands. This one lands first and changes no output; the other two consume it. MECH-READY-QUERY carries only a Governed_By edge to DEC-LOCAL-IMPLEMENTABILITY and has no edge recording that dependency.
 
@@ -1304,31 +1360,46 @@ RELATIONS:
 [MECHANISM]
 UID: MECH-SDOC-SKILL-CORRECTIONS
 TITLE: Correct the sdoc skill and README where they are now false
-DEPTH: sketch
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
-Measured while running SPIKE-EXECUTABLE-RULES. The Layout table omits
-docs/spec, which holds four nodes. The closing section says there is no
-suspect-link detection and no readiness query; fp-check and status.py exist.
-File relations accept ROLE at the grammar level -- only REVERSE_ROLE is a
-syntax error -- so VALUE only is this corpus's rule, not the parser's. format
-and manage take no --output-dir and write ./output in the project. STATUS is
-polymorphic: DECISION and SPIKE carry different choices. And the
-strictdoc_config.py sys.path line from MECH-SDOC-CONFIG-HOOK-IMPORTABILITY
-belongs in the gotcha list.
+Correct the sdoc skill and the design-graph README where they are now false.
 
-Two more, both now actionable. The restore block hands a fresh session a bare
-strictdoc export while the same file says no devenv shell is needed in the
-worktree; that is true of commits only, and a session outside the shell gets
-command not found. SLICE-STRICTDOC-OVERLAY put pkgs.ai.devTools.strictdoc in
-the devShell, so say the shell is required for strictdoc and not for
-committing. And the skill's never invent a UID, run manage auto-uid is
-contradicted by every node here: all UIDs are semantic and hand-chosen, and
-manage new mints a prefix-plus-counter UID that nobody keeps.
+DONE 2026-08-27 in commit e8aa43b0, with a follow-up correcting the correction.
+What landed: docs/sdoc/grammar.sgra marked GENERATED from values.nix and gated
+by a required check; docs/spec added to the Layout table; the governance-field
+count fixed from three to four; the STATUS enum recorded as polymorphic; the
+auto-uid rule INVERTED to say UIDs are hand-chosen and semantic, per the
+operator's ruling the same day; the File-relation ROLE claim demoted from parser
+rule to house convention, measured; format's missing --output-dir and its
+inability to write a .sgra recorded; the cache literal corrected to Output/_cache
+with STRICTDOC_CACHE_DIR noted as overriding rather than inert; and the "what
+does not exist yet" paragraph rewritten, since suspect-link detection, the
+readiness query and a derived view all shipped.
+
+What did NOT land, and why. The manage-new rule was corrected twice: the first
+attempt asserted that the command cannot work here, which an independent review
+measured false, and the reason this node had already recorded -- prefix-plus-
+counter UIDs and TBD-filled fields -- was the correct one all along. The rule
+now says the command works and should still not be used, for that reason.
 <<<
 RATIONALE: >>>
-A document that is wrong is worse than one that is silent, which is the
-invariant's own argument turned on the document that states it.
+A skill that is loaded by every session and is wrong is worse than no skill: its
+statements read as verified. Two of its claims would have sent an agent to
+hand-edit a generated file and to run a UID minter whose output this corpus
+immediately renames.
+<<<
+NOTES: >>>
+Raised to implemented rather than verified: the session that corrected the skill
+is the session that wrote this, and verified requires an independent read.
+
+An independent review of that work found one blocker in it -- see the manage-new
+paragraph above -- which is itself the argument for the implemented/verified
+split existing at all.
+
+Deliberately still open, and NOT part of this node: the skill says nothing about
+the sys.path line strictdoc_config.py needs, because SLICE-CHECKPOINT-WIRING
+measured that fixed upstream at 0.28.3.
 <<<
 RELATIONS:
 - TYPE: Parent
