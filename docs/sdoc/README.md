@@ -32,9 +32,15 @@ away.
 strictdoc export . --formats=json --output-dir /tmp/sdoc-out   # exit 0 required
 ```
 
-Nothing else needs restoring. No devenv shell entry is required in the worktree
-— commits from it work, because the prek hooks resolve their config from the
-primary checkout.
+**The `strictdoc` binary needs a devenv shell.** `devenv.nix` gates
+`ai.strictdoc.enable` on `!isCI`, so the binary reaches `PATH` only through
+shell entry — every bare `strictdoc` command in this file assumes you are in
+one, or that you pass an absolute path to a built one.
+
+That is the only thing shell entry is needed for. **Committing** from a worktree
+does not need it: the prek hooks resolve their config from the primary checkout,
+so a worktree that has never entered a shell validates exactly like one that
+has.
 
 ## Where this stands — 2026-08-27
 
