@@ -20,6 +20,13 @@
 # emitter is called, and whether it is published at all, is deliberately open
 # (MECH-EMIT-LAYER-BOUNDARY's NOTES) — and an attribute is cheaper to add later
 # than to remove once someone depends on it.
+#
+# `faithful` is not re-exported either, and that one is settled rather than open:
+# MECH-FAITHFUL-IS-NOT-A-CONSUMER-WORD rules the word out of anything a consumer
+# reads, an attribute path included. It names a transformation methodology, which
+# is self-documenting only to someone who has read this package's layer design.
+# Nothing is lost by withholding it — `normalized` IS `faithful // { … }`, so
+# `normalized.productions` and `normalized.meta` are the same values.
 {lib}: let
   faithful = import ./faithful.nix;
   normalized = import ./normalized.nix {inherit lib faithful;};
@@ -29,7 +36,7 @@
   emit = import ./emit.nix {inherit denormalize lib sgra;};
   dsl = import ./dsl.nix {inherit lib normalized;};
 in {
-  inherit check dsl emit faithful normalized;
+  inherit check dsl emit normalized;
 
   render = elements: emit.grammar (check.elements elements);
 }
