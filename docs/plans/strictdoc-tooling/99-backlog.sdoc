@@ -2454,6 +2454,28 @@ MECH-FAITHFUL-IS-NOT-A-CONSUMER-WORD. A leading underscore reads as private
 across Nix, which is the wrong signal for something supported. Since __functor
 makes adding it a one-line change later, waiting for a caller costs nothing and
 removing a published attribute costs more than adding one.
+
+IMPLEMENTED 2026-08-27. `lib/denormalize.nix` carries the encode halves and
+`lib/sgra.nix` the file format; `lib/emit.nix` is the two composed, one entry
+point per node type, derived from the renderer's own attribute names. The
+renderer takes no `normalized` at all, which is what makes "no encoding on this
+side" checkable rather than asserted. Both surfaces still render
+docs/sdoc/grammar.sgra and fixtures/foreign.sgra byte for byte, and the
+emitter-alone arm of the surface-live check still accepts every case it is meant
+to, so the split moved no rejection across the type boundary.
+
+Two boundary calls the sketch did not settle, both decided by what each half can
+SEE. The `", "`-joined choice vocabulary is already a string by the time the
+renderer runs, so "at least one option" is checked in denormalize -- the last
+layer holding the list -- while "this kind needs a vocabulary at all" stays in
+the renderer. And the file's spelling of each field kind and relation type
+(`String`, `Parent`) stays in the renderer beside the other format constants: it
+is not an encoded value, it is what the discriminator is called in the file.
+
+__functor was not needed. The inner emitter is four renderers, not one function,
+so the callable-and-openable trick has nothing to apply to unless a single entry
+point is later published. The naming question above is still open, and nothing
+outside `lib/emit.nix` reaches either half.
 <<<
 
 [MECHANISM]
