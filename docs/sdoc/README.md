@@ -96,6 +96,28 @@ checkout and `PREK_HOME` from the committing worktree; what the teardown
 discipline is; and whether the graph's own validation loop still works from a
 nested tree.
 
+## Who turns what
+
+**A `DECISION` moves from `open` to `accepted` when the operator says so, in
+conversation.** There is no gate, no trigger and no form. That is deliberate
+while the system is being dogfooded, and it is written down here so nobody
+invents ceremony for it — a transition that exists only in the enum is the kind
+of gate that gets guessed at.
+
+**Signing a fingerprint is a different thing and does not work that way.**
+`PARENT_FP` is accepted at pull-request review and never before, per
+`DEC-LONG-LIVED-BRANCH`: the stack is reviewed as a whole for usability, design
+and flow, the pull requests are reviewed for implementation choices, and
+operator acceptance is turned at the second of those. An agent never runs
+`fp-accept`.
+
+**`DEPTH` is the agent's to move, with one condition.** `implemented` means code
+landed and is unreviewed; `verified` means an _independent_ session — one that
+did not write the code — checked the node against the tree. A session raising
+its own work to `verified` is the thing that value exists to prevent.
+
+**`AUTHORED_BY` is never an agent's to set**, in either direction.
+
 ## Teeing up a session
 
 Both prompts assume cwd is the **primary checkout**. You do not need to `cd` to

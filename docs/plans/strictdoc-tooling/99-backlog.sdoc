@@ -1596,7 +1596,7 @@ UID: SPIKE-DECISION-ACCEPTANCE-PATH
 TITLE: Who moves a DECISION from open to accepted, and how
 DEPTH: sketch
 AUTHORED_BY: llm
-STATUS: unrun
+STATUS: run
 RETIRES_ON: >>>
 The first open-to-accepted transition is made on this branch with its actor
 and its trigger recorded, or the README states the path outright.
@@ -1613,6 +1613,27 @@ machine is inferred from the enum, not observed.
 RATIONALE: >>>
 A transition that exists only in the enum is the kind of gate that gets
 guessed at. Observing it once settles who owns it.
+<<<
+NOTES: >>>
+RUN 2026-08-27, by observation rather than by probe. The operator stated the
+path outright, which is this spike's second retirement arm.
+
+WHO: the operator. HOW: in conversation, ad hoc. There is no gate, no trigger
+and no form, and that is deliberate while the system is being dogfooded. In
+their words: "We are making it up as you go, pretend dog fooding its a good
+system."
+
+Record it plainly and do not build ceremony around it. This spike's own
+rationale is that a transition existing only in the enum "is the kind of gate
+that gets guessed at", so the value of the answer is that it stops the next
+session inventing one.
+
+Do NOT read this as covering fingerprint signing. This spike already drew that
+line -- DEC-LONG-LIVED-BRANCH's acceptance language is about signing, not STATUS
+-- and that decision is unchanged: two reviews, the stack reviewed whole for
+usability and flow, the pull requests reviewed for implementation choices, and
+operator acceptance turned at the second of these, never before. STATUS is
+conversational; signing waits for the pull request.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -3561,22 +3582,54 @@ is indistinguishable from a generator that is already correct.
 [MECHANISM]
 UID: MECH-SLICE-CANNOT-BE-SUPERSEDED
 TITLE: A slice has no way to say it was replaced
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
-`Superseded_By` is declared only on DECISION, so when a slice's subject is
-replaced the only options are rewriting its statement in place or leaving it
-describing something that no longer exists. Both lose the transition. Hit for
-real on SLICE-STRICTDOC-OVERLAY, whose statement specified a first-party build
-that the upstream flake switch retired. Decide whether the relation is extended
-to the other node types, whether slices are collected differently, or whether
-rewriting in place is the intended answer and the history belongs in the commit
-rather than the graph.
+Superseded_By and Supersedes are declared on DECISION only, so a MECHANISM,
+SLICE, INVARIANT or SPIKE whose subject is replaced has no way to say so.
+
+The question this node asked -- whether the relation is extended, whether slices
+are collected differently, or whether rewriting in place is the intended answer
+-- is answered by DEC-SUPERSESSION-RULE, and the answer is "it depends on what
+actually changed". Rewriting in place is correct when the deliverable survived
+in a different shape. It is the wrong tool only for genuine
+abandoned-and-replaced work, and the relation stays unextended until that
+happens twice.
+
+This node's remaining job is to be the LEDGER for that trigger: every genuine
+case-3 instance on a non-DECISION node is recorded here, and the second one is
+what promotes extending the relation from a proposal to work.
+
+INSTANCES SO FAR: zero. The case that prompted this node was not one.
 <<<
 RATIONALE: >>>
 The graph records what is true now and, through fingerprints, when a contract
 changed. It has no way to record that a unit of work was replaced wholesale,
 which is a different event from either.
+
+Kept as a ledger rather than closed because a count is the only thing that
+distinguishes a real gap from a felt one, and this node was filed on a case that
+turned out not to be an instance.
+<<<
+NOTES: >>>
+RECLASSIFIED 2026-08-27. This node was filed after SLICE-STRICTDOC-OVERLAY's
+statement was rewritten in place, on the reading that the rewrite lost a
+transition. It did not. The deliverable -- an overlay keeping strictdoc current
+-- still exists and still ships; only the implementation shape changed, from a
+first-party build to a re-export of upstream's flake. The unit of work
+delivered. So the rewrite was correct and the transition it "lost" was of shape,
+not of work, and shape history belongs in NOTES and the commit, where it went.
+
+That leaves the count at zero, which is the point: the gap is real but
+UNEXERCISED, and building the relation now would be speculative.
+
+Cost of extending, measured 2026-08-27 and lower than when this was filed:
+docs/sdoc/grammar.sgra is generated from packages/strictdoc-grammar/values.nix
+since milestone one, so adding a relation role is a typed edit plus a
+regeneration rather than a hand-edited grammar file.
+
+The one place extension is not free is the readiness query, which would have to
+skip superseded nodes or a retired slice keeps blocking its successor.
 <<<
 
 [MECHANISM]
