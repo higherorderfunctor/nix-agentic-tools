@@ -67,27 +67,50 @@ rest.
 [MECHANISM]
 UID: MECH-TREEFMT-SDOC
 TITLE: Register strictdoc format as the treefmt formatter for sdoc and sgra
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: human
 STATEMENT: >>>
-treefmt currently formats nothing with an sdoc or sgra extension: there is no
-catch-all and unmatched files only warn. The canonical formatter for both is
-strictdoc format, which is idempotent over this corpus and currently a no-op
-because the files were written in canonical form by hand.
+treefmt formats no file with an sdoc extension today: none of its five formatters -- alejandra, biome, prettier, shfmt, taplo -- claims one, and an unmatched path is logged at info while the run still exits zero. Register strictdoc format as treefmt's formatter for *.sdoc, and set document_line_width = 80 in strictdoc_config.py so that the command has something to enforce. Without the width the command normalises nothing a reader can see: measured, every deviation short of a parse error round-trips unchanged, so a formatter registered without it is a validator wearing a formatter's name.
 
-Wire it in treefmt.nix so formatting is enforced rather than incidental.
+The wiring is one settings.formatter.strictdoc entry with includes = ["*.sdoc"] whose command is a writeShellApplication carrying pkgs.ai.devTools.strictdoc. treefmt.nix becomes a {pkgs, ...}: module to reach that package; both of its consumers already supply pkgs as a module argument, so no other file changes shape.
+
+The wrapper does not format in place. It mirrors strictdoc_config.py, .gitignore and every .sdoc and .sgra file into a temporary directory, runs strictdoc format . there, and copies back only the paths treefmt named, and only those whose bytes differ. That indirection is what pays for the awkward fit, and both halves of it are load-bearing. format takes one project directory and rewrites every document under it unconditionally, changed or not, so formatting in place advances the mtime of every document in the tree; treefmt decides a file changed by size and mtime, so --fail-on-change would then fail on every run over a byte-identical corpus. And the pre-commit hook passes filenames, so a commit-time run is handed only the staged paths -- an in-place run would silently reformat unstaged documents while treefmt, which stats only what it emitted, reported the run clean.
+
+*.sgra is explicitly OUT, and not merely deferred. strictdoc format never writes one: it reads a grammar to parse documents, and its writer loop covers .sdoc and .md only. Both .sgra files in this repository already have a writer -- docs/sdoc/grammar.sgra is written by the generate:sgra devenv task from ai.strictdoc.grammars.repo and gated by checks/strictdoc-grammar-model-equal.nix, and packages/strictdoc-grammar/fixtures/foreign.sgra is a round-trip fixture whose bytes are the assertion. Registering a formatter over either would put a second writer on a generated file.
+
+Also out, and permanently rather than as a later optimisation: any narrowing of what runs. format accepts exactly one positional path, and resolving the @repo grammar alias against anything narrower than the project root fails, --config included, because the alias is validated against the input path rather than against the config's directory. One invocation per treefmt batch, each formatting the whole tree, is the only mode there is.
 <<<
 RATIONALE: >>>
-Two things depend on canonical form. Fingerprints are taken over field text, so
-an unformatted file hashes differently from the same content formatted. And the
-commit gate runs treefmt with fail-on-change, so anything treefmt does not know
-about cannot be enforced there.
+Two things depend on canonical form. Fingerprints are taken over field text, so an unformatted file hashes differently from the same content formatted. And the commit gate runs treefmt with fail-on-change, so anything treefmt does not know about cannot be enforced there.
+
+Both reasons require a width. contract_hash serialises the node's raw field values, newlines included, so what a fingerprint signs is the wrapping as typed; and fail-on-change can only enforce a rule the formatter actually applies. With document_line_width unset there is no such rule, which is why the width is part of this mechanism rather than a separate preference.
+
+The sandboxed copy is not defensiveness about a hypothetical. Both failures it prevents were reproduced: an in-place wrapper made treefmt report all nine documents changed on a corpus it had just left byte-identical, and an in-place run given a single path reformatted a different, unstaged document while treefmt reported zero changes.
 <<<
 NOTES: >>>
-Watch for two things when doing it. strictdoc format takes a project directory,
-not a file list, which is an awkward fit for treefmt's per-file invocation
-model. And it mints a document MID on first run for any document lacking one,
-which is a content change treefmt would report as a reformat.
+Measured 2026-08-27 against strictdoc 0.28.3 and treefmt 2.5.0, on a copy of the corpus outside the repository.
+
+THE MID WARNING DOES NOT REPRODUCE, and the mechanism says why it cannot. strictdoc format . over the whole corpus leaves all nine .sdoc files byte-identical and adds no MID to any of them; no file in the corpus carries one. The writer emits MID only when document.mid_permanent or document.config.enable_mid holds, and mid_permanent is set from `mid is not None` at parse -- that is, only for a document that already declared one in its source. ENABLE_MID is not a lever that could be tripped by accident either: setting it on a probe document made the export fail with "Grammar element 'DECISION' is missing the MID field which contradicts to the DOCUMENT's ENABLE_MID setting", so it additionally requires a MID field on every grammar element. The observation behind the warning most likely came from `manage new`, whose own comment says it sets mid_permanent so the writer persists a MID -- and even there only when enable_mid is set. Positive control that the harness would have seen minting: the same before/after comparison detects a 93-line reflow, and detects a one-word edit under the whitespace-insensitive comparison used below.
+
+WHAT FORMAT ACTUALLY NORMALISES WITHOUT A WIDTH: nothing observable. A paragraph de-wrapped to a single 120-character line survives format . unchanged. Single-line and >>>-delimited forms of the same field are both preserved. The deviations that do get corrected are the ones the parser rejects outright -- a double blank line between blocks fails with "Expected EOF" rather than being repaired. So the statement that the corpus is a no-op "because the files were written in canonical form by hand" is true by the wrong mechanism: nothing was being enforced.
+
+THE ONE-TIME COST OF SETTING document_line_width = 80. Five of the nine documents reflow, 93 changed lines in total: 00-approach 6, 01-tooling 27, 02-plan-lifecycle 7, 99-backlog 47, packages/semble/.sdoc/01-grammar-injection 6. Every one of the five is whitespace-only -- collapsing runs of spaces and newlines gives an identical byte stream before and after, and that comparison does detect a planted one-word change. A second run is byte-identical, so it converges in one pass. The corpus is not currently at 80 by hand: maximum line lengths run 80, 81, 82, 85, 86, 99, 100, 111 and 349. strictdoc's wrapper leaves an over-long unbreakable token overflowing rather than splitting it, the same way prettier's proseWrap does, so 82-character lines survive legitimately.
+
+The reflow costs no fingerprint today and will not stay free. fp-check over the current export reports 31 fingerprint entries, 0 signed and current, 31 never signed. Every signature taken before this lands would drift the moment it does, so it belongs ahead of the first fp-accept rather than after it.
+
+TREEFMT DECIDES BY MTIME. Its diagnostic prints prev_size and current_size and they were equal for every file it flagged -- the reflow swaps a space for a newline and the byte count does not move -- so mtime is the discriminator. Two runs pin it down: an in-place wrapper produced "formatted 9 files (9 changed)" and failed --fail-on-change over a corpus whose bytes it had not altered; the same wrapper with the original mtime restored on every unchanged file produced "0 changed" and exit 0.
+
+COLLATERAL WRITES ARE REAL AND SILENT. devenv's git-hooks treefmt hook is defined with pass_filenames = true. Running treefmt on one path, with a different document left non-canonical, reformatted that other document and reported "1 files (0 changed)": treefmt stats only what it emitted, so the working tree moved and the gate stayed green. The sandboxed copy is what closes this; it reproduces the in-place width-80 result byte for byte while touching only the named paths.
+
+THE DIAGNOSTIC GOES TO STDOUT. strictdoc prints its parse and semantic errors on stdout, not stderr, so a wrapper ending in `strictdoc format . > /dev/null` swallows every error message while still exiting 1. Measured with a deliberately broken document, treefmt then reports only "failed to apply with options '[]': exit status 1", formats nothing in that batch, and exits non-zero. Fail-closed, but useless to read: keep the output, or redirect stdout to stderr.
+
+TWO SIDE EFFECTS THAT MUST NOT LAND IN THE TREE. format writes output/_cache/<version>/ (2.4 MB on this corpus) into the current directory -- it has no --output-dir -- and importing strictdoc_config.py leaves a __pycache__ beside it. Inside the temporary directory both are discarded with it. If a future in-place path is ever wanted, dir_for_sdoc_cache in strictdoc_config.py does relocate the cache (verified: the tree root stayed clean and the cache appeared at the configured absolute path), which is the same lever MECH-SDOC-CACHE-DIR-FOR-WORKTREES describes; PYTHONDONTWRITEBYTECODE=1 suppresses the other.
+
+MIRROR THE .gitignore TOO. project_config reads the project's .gitignore and extends exclude_doc_paths with its patterns, so a copy without it has a different document set from the real tree.
+
+A TRAP IN THE FILE LIST: packages/semble/.sdoc is a DIRECTORY whose name ends in .sdoc, so `find -name '*.sdoc'` matches it. Use -type f.
+
+COST. The wrapper runs in 1.84 s warm against 1.81 s for a bare in-place format, so mirroring 12 files costs about 30 ms. treefmt invokes the command once per batch and nine files is one batch. strictdoc is already in CI's build closure -- checks/strictdoc-fp-check.nix takes pkgs.ai.devTools.strictdoc as a nativeBuildInput -- so registering it here adds nothing to what checks.formatting must build, even though the devenv shell keeps ai.strictdoc.enable = !isCI.
 <<<
 
 [MECHANISM]
@@ -424,24 +447,38 @@ AUTHORED_BY already carries the distinction, so this likely needs no new field.
 [MECHANISM]
 UID: MECH-RUNTIME-WRITE-GUARD
 TITLE: Enforce field ownership at the runtime rather than in a document
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: human
 STATEMENT: >>>
-Guard operator-owned fields where the model actually acts, not in guidance it
-has to have read. A tool-call hook that inspects an edit for a change to a
-guarded field and fails loudly back to the model is the cheap version, and it
-works whether the model edits directly or through a script it wrote.
+Two fields are the operator's and the tool never writes them: PARENT_FP and AUTHORED_BY. What enforces that is the absence of a code path, not a check placed in front of one. The sdoc CLI derives its field flags from the grammar it loads, minus a named guarded set, so create and set carry no flag for either field; naming one anyway exits non-zero saying who owns it. There is no override flag, because a flag the model can pass is a document rule wearing a different hat.
 
-Not exhaustive, and heavier options are probably bad ideas: a filesystem layer
-that makes guarded fields unwritable was considered and is recorded only so it
-is not reinvented enthusiastically later.
+The two fields need different handling because the grammar treats them differently. AUTHORED_BY is REQUIRED on all five element types, so create cannot omit it and writes llm unconditionally -- the operator's own authorship is recorded by an edit outside the tool, which stays legal for the operator because the harness denial below binds only agent sessions. PARENT_FP is optional on four types and absent from DECISION, so the tool never emits it at all; dev/scripts/fp-accept.py remains its only writer per DEC-FINGERPRINT-IN-NODE, and this milestone does not absorb that verb into the CLI.
+
+The guarded set is a list of field titles held by the CLI, not an annotation carried on the grammar. That placement is forced rather than preferred: a .sgra file has no syntax for ownership, and the Nix surface that renders docs/sdoc/grammar.sgra is gated on byte identity and model equality with it, so an extra key there fails a check rather than reaching the tool. The list is validated against the loaded grammar, so a guarded name the grammar no longer declares is an error rather than a silently dead entry.
+
+Three things are explicitly out. The harness denial of direct sdoc and grammar edits is SLICE-SDOC-CLI's own clause and stays there: it is a path-based blanket deny of the edit tool, not a field inspection, and a field-inspecting hook on the same paths would be dead code behind it. Ownership as a modelled, general property over arbitrary fields belongs to the semantic layer along with the rest of the special meaning laid over the grammar (MECH-CONTRACT-FIELDS-EDGE-TO-SEMANTIC-LAYER), which is milestone three; this node is deliberately a fixed two-name list so milestone two does not wait on it. State-dependent ownership is out for the same reason -- an accepted DECISION's frozen STATEMENT, and who moves STATUS from open to accepted, which SPIKE-DECISION-ACCEPTANCE-PATH has not yet run on.
+
+What this does not cover, said here rather than left implied: a model that writes a guarded field with a script of its own. Nothing at write time sees that, and no write-time guard reachable in this milestone can. The complete guarantee is detection afterwards -- fp-check for PARENT_FP, already a flake check, and MECH-AUTHORED-BY-GUARD for the other.
 <<<
 RATIONALE: >>>
-Demonstrated rather than hypothetical. A hard rule in the authoring skill did
-not prevent an agent from signing five contracts, because a rule in a document
-is guidance and nothing checks it. The same gap covers AUTHORED_BY, which
-MECH-AUTHORED-BY-GUARD already tracks from the static side; this is the runtime
-side of the same problem.
+Demonstrated rather than hypothetical. A hard rule in the authoring skill did not stop an agent signing five contracts, and because it committed under the operator's name those signatures were forensically indistinguishable from real ones. INV-GUARDS-MUST-EXECUTE records the wider split: every guard that lived in a document failed, every executable one held.
+
+Making the writer incapable of the write is the cheapest executable form and the only one that holds without the harness. Measured: the project settings file that would carry a hook is a devenv shell-entry artifact and is missing from 10 of this clone's 22 worktrees, with no PreToolUse hook at user level behind it. A guard whose guarantee rests on that file is absent about half the time, and absent silently.
+
+An override flag would put the failure back. The incident was a model doing the forbidden thing while holding the document that forbade it; an escape hatch it can reach is the same document with an exit code attached.
+<<<
+NOTES: >>>
+The original statement proposed a tool-call hook and claimed it "works whether the model edits directly or through a script it wrote". The second half is false and was measured on 2026-08-27 against this repository's own guard, packages/claude-code/lib/memory-collision-guard.sh. A PreToolUse envelope carries tool_name and tool_input and nothing else: for Write and Edit that is a file_path, for Bash it is a command string. Positive control, same script, same guarded directory, one run apart -- the Write envelope naming the path returns permissionDecision deny with a populated reason; the Bash envelope whose command writes that same path produces empty stdout and exit 0, which is allow. A Bash matcher can only string-match the command, so it catches an invocation by name and not a heredoc. Logged as MECH-PRETOOLUSE-BLIND-TO-BASH.
+
+Delivery measurement behind the RATIONALE's number: 12 of the 22 worktrees under nix-agentic-tools-worktrees have .claude/settings.json, a symlink into /nix/store written on devenv shell entry and gitignored at .gitignore:38; 10 do not. The user-level ~/.claude/settings.json carries PreCompact and UserPromptSubmit hooks only, so nothing backstops a missing project hook. The same gap currently leaves validate-at-stop unarmed in those 10 worktrees, which is a live finding about this repository rather than a hypothetical about this guard. Logged as MECH-PROJECT-HOOKS-ABSENT-IN-WORKTREES.
+
+Test harness precedent: checks/claude-memory-collision-guard.nix, a hermetic runCommandLocal that drives the script over JSON envelopes, gates it through shellcheck -x, and pins the cadence because a deny that repeats is a livelock. A rejection test for this guard should take that shape, with the positive control being the same verb succeeding on an unguarded field -- otherwise a CLI that rejected everything would pass.
+
+fp-accept.py is guarded by nothing today. Any session can run it and one did. The CLI cannot tell operator from agent either: same binary, same uid, same git identity, which is what MECH-AGENT-IDENTITY-KEYS is about. That is why the discriminator here is the channel rather than the identity -- a harness hook fires only inside an agent session by construction, and the operator running the same command in their own terminal never reaches it.
+
+DEC-FP-ACCEPT-AUTHORITY is open and may later let an agent re-sign contracts that were only ever llm-graded. It does not conflict with this node and is deliberately not a parent: whatever authority rule lands will be implemented by whichever entry point performs the signing, and this node's claim is only that the ordinary authoring verbs are not that entry point. An edge would gate milestone two on an open decision without making the contract any truer.
+
+DEC-EXECUTABLE-RULES-ROADMAP already schedules an operator review of this milestone's verb list before implementation. An objection to create always writing llm belongs at that review, with this statement in front of it.
 <<<
 
 [MECHANISM]
@@ -613,28 +650,160 @@ version bump is a convenience here, not a capability.
 [MECHANISM]
 UID: MECH-SDOC-LEAN-FORMATS
 TITLE: Pin formats to SDoc and JSON in strictdoc_config.py
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
-ProjectConfig.default_formats() imports the HTML, Excel, PDF and tree-map
-stack and costs about 0.7 s of every CLI invocation; the forkserver
-parallelizer adds about 1.4 s more. Passing formats=[SDocFormat(),
-JSONFormat()] cuts export from 3.2 to 1.24 s, export --no-parallelization
-from 1.79 to 0.85 s, format from 3.3 to 1.15 s and manage new from 3.2 to
-1.15 s, with the JSON export byte-identical for all 65 nodes.
+strictdoc_config.py registers exactly two formats, SDocFormat and JSONFormat,
+and there is one config, at the repository root. Not a wrapper-only or CI-only
+config: `format` and `manage` take no `--formats` flag, so the project config is
+the only lever on their cost, and a second config would be two files obliged to
+agree about the same thing.
 
-Two consequences to handle in the same change. Markdown ingestion stops, so
-exclude_doc_paths and the config docstring saying both globs are required go
-stale. And export --formats=html then exits 0 while writing nothing, because
-argparse still accepts the handle and no registered Format claims it -- a
-false green. Pin the formats only in a config the wrapper and CI read, or keep
-HTMLFormat and pay the 0.6 s.
+strictdoc.api exports ProjectConfig and no Format class at all, so the config
+imports the two from strictdoc.backend.sdoc.sdoc_format and
+strictdoc.backend.json.json_format. That couples the config to non-public module
+paths on an overlay that tracks latest upstream, and it fails closed: a renamed
+module exits 1 naming strictdoc_config.py and the import line, which the two
+corpus-export gates already run.
+
+exclude_doc_paths stays as written. Its two globs cost nothing measurable and
+re-arm the moment MarkdownFormat is registered again. What changes is the
+docstring, which says both globs are required -- a condition that stops holding.
+
+What the repository gives up is exporting html, html2pdf, rst, markdown, excel,
+reqif-sdoc, reqifz-sdoc, doxygen and spdx, and ingesting .md, .markdown and
+.gra.md as documents or grammars. Nothing asks for any of them: every check,
+script, skill recipe and README line passes --formats=json. .sgra grammar
+reading is unaffected -- it comes from SDocFormat, which stays.
+
+What it gains, per invocation on this corpus: export 2.02 s to 1.09 s, format
+1.50 s to 0.73 s, manage auto-uid 1.70 s to 0.73 s.
+
+The cost is a false green whose shape is narrower than it looks. Asking for a
+handle no registered format claims -- html, rst, markdown, excel, or the bare
+default, which is html -- exits 0 and writes no non-cache file. It is confined
+to OUTPUT. Validation is unaffected: the traceability index is built before any
+format is dispatched, so a corpus with a field-order violation exits 1 under
+every one of those handles. Both existing gates read their output file
+immediately after exporting and die on its absence, so neither can pass on an
+empty export.
+
+Making that loud is owed and is not this node's to build. strictdoc's --formats
+allowlist is a hardcoded list of built-in handles that a config can only extend,
+never narrow, so the guard belongs in the tool SLICE-SDOC-CLI builds -- the same
+slice this mechanism blocks. Until then the mitigation is documentary, which per
+INV-GUARDS-MUST-EXECUTE is not a guard and should be written as one that does
+not yet execute.
+
+Explicitly out of scope: making HTML render. This node does not repair it, gate
+it, or decide whether it should exist -- MECH-DEFAULT-EXPORT-IS-RED-ON-RST is
+the instance, MECH-HTML-RENDER-MUST-PASS the requirement. Re-registering
+HTMLFormat is that node's change and a one-line revert here.
 <<<
 RATIONALE: >>>
 The traceability index build is 3 ms; the cost of every strictdoc command is
-startup, config construction and the parallelizer. This is the single largest
-lever on the skill loop and on every validation tier, and it needs no package
-change.
+startup, config construction and the format stack default_formats() imports.
+This is the single largest lever on the skill loop and on every validation tier,
+and it needs no package change.
+
+The fork this node ended on -- pin the formats, or keep HTMLFormat and pay for
+it -- collapses on measurement, in both directions.
+
+Keeping HTMLFormat preserves no working HTML export. With HTMLFormat registered,
+`strictdoc export . --formats=html` exits 1 on this corpus, aborting partway with
+113 files written, because a bare glob in one node's prose is an unterminated RST
+emphasis marker. That arm buys a red render for 0.48 s of every command, and the
+operator has already ruled the breakage low-priority tech debt that must not
+block unrelated work.
+
+Dropping it opens no validation hole. The dangerous reading of the false green --
+that the loop the skill documents as "export == validate" would report green on a
+broken graph -- is false. Validation happens in the index build, upstream of
+format dispatch.
+
+What is left is a real but bounded output trap, in a repository where nothing
+invokes an unregistered handle and both gates would fail if one did. Against
+roughly halving every strictdoc invocation, on the commands every authoring loop
+and both CI checks run, that trades well.
+<<<
+NOTES: >>>
+Re-measured 2026-08-27 against strictdoc 0.28.3, cold cache (clean --output-dir
+per run, since the cache lives at <output-dir>/_cache/<version>), on a copy of
+the worktree. Interleaved A/B/C rounds, four of them:
+
+  export --formats=json   stock 1.98-2.12 s  lean 1.08-1.13 s  lean+HTML 1.55-1.58 s
+  export --no-parallelization --formats=json  stock 2.14-2.28 s  lean 1.31 s (x3)
+  format .                stock 1.48-1.97 s  lean 0.70-1.18 s
+  manage auto-uid .       stock 1.63-1.78 s  lean 0.71-0.74 s
+
+JSON output is byte-identical across stock, lean and lean+HTML (diff -r over the
+json/ tree), and identical again with exclude_doc_paths removed under lean.
+
+FOUR CORRECTIONS to the numbers this node previously carried, all from the
+re-measurement above.
+
+The absolute timings do not reproduce. This node said export 3.2 s to 1.24 s;
+measured 2.02 s to 1.09 s. The RATIO holds -- pinning roughly halves every
+command -- the absolutes do not, so quote the ratio.
+
+The claim that "the forkserver parallelizer adds about 1.4 s" is REFUTED.
+--no-parallelization is SLOWER than parallel in both configs, by about 0.15 s
+stock and 0.22 s lean. There is no 1.4 s parallelizer tax to recover, and
+--no-parallelization is not a lever.
+
+"65 nodes" is stale: the corpus is 139 UIDs across 9 documents.
+
+The fork's second arm was priced at 0.6 s for HTMLFormat; measured 0.48 s
+(2.02 vs 1.55). More to the point, what it buys exits 1.
+
+MEASURED, on the false green. Under lean, --formats=html, rst, markdown, excel
+and the bare default all exit 0 with zero non-cache files written; the 367 files
+in the output dir are all _cache. --formats=json,html writes json/ and exits 0.
+Positive control, same binary, same command, HTMLFormat registered: 26 html
+files then exit 1 on this corpus, and on a clean two-node mini corpus 5 html
+files and exit 0. So "writes nothing" is a property of the format registry, not
+of the broken prose.
+
+Second positive control, on the validation half: a field-order violation
+injected into 99-backlog.sdoc exits 1 under lean for the bare default, for
+--formats=json and for --formats=html alike, with "Semantic error: Wrong field
+order". Third: fp-check.py and cycle-check.py both traceback and exit 1 on a
+missing index.json, so an empty export cannot pass either gate.
+
+MEASURED, on the markdown half. With MarkdownFormat unregistered, deleting
+exclude_doc_paths changes nothing: exit 0, JSON byte-identical, no measurable
+time difference (1.06-1.19 s against 1.04-1.20 s). Positive control with the
+full format stack and the globs deleted: exit 1, "Reading SDOC: 281 tasks", then
+"A process in the process pool was terminated abruptly". That crash is the
+reason the globs stay -- they are free, and they are the difference between a
+clean export and an unreadable pool failure if MarkdownFormat ever returns.
+
+Upstream mechanics worth not re-deriving. default_formats() (project_config.py
+:572) returns 13 Format instances and is used whenever the config passes no
+formats= (:411). export_formats defaults to ["html"] (:723), which is why bare
+`export` is an html request. ExportAction iterates the REGISTERED formats and
+matches them against the requested handles (export_action.py:91), so an
+unclaimed handle is a no-op loop -- while needs_html_templates is gated on the
+REQUESTED handle (:53), so --formats=html still compiles Jinja templates for
+0.53 s before writing nothing. build_index() runs in ExportAction.__init__
+(:27), which is why validation is upstream of all of this. EXPORT_FORMATS
+(commands/export.py:17) is the hardcoded argparse allowlist and config formats
+only append to it (:88), so no config can make --formats=html an argparse error.
+DocumentFinder builds its extension table from the registered formats
+(document_finder.py:41), which is the whole markdown-ingestion effect.
+
+PROPAGATION, in the same commit. Landing this makes the first sentence of
+MECH-DEFAULT-EXPORT-IS-RED-ON-RST false -- bare `strictdoc export .` stops
+exiting 1 and starts exiting 0 having written nothing -- so that node's
+STATEMENT changes with this one. The config docstring's "BOTH globs are
+required" changes too.
+
+A minor lever, measured and not required: importing ProjectConfig from
+strictdoc.core.project_config rather than strictdoc.api saves about 0.06 s
+(1.06 s against 1.12 s), because strictdoc.api's __init__ imports ExcelGenerator
+and so drags openpyxl in even when no Excel format is registered. Under the
+stock format list it saves nothing, default_formats() importing the same modules
+a moment later.
 <<<
 
 [MECHANISM]
@@ -779,22 +948,127 @@ RELATIONS:
 [MECHANISM]
 UID: MECH-SDOC-EDIT-VIA-MODEL
 TITLE: Replace sdoc_edit.py's hand-copied field order with strictdoc's node model
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
-sdoc_edit.py carries a copy of the grammar's field order for four element
-types. SDocNode.set_field_value inserts or replaces a field at its grammar
-index and SDWriter serialises in grammar order -- measured: NOTES set before
-RATIONALE serialises RATIONALE first, with single-line versus block form
-chosen automatically. The copy matches the grammar today and is a drift
-hazard the model API removes. It requires loading the graph rather than one
-document, because elements_by_type is populated only after the index builder
-resolves the @repo import.
+Replace dev/scripts/sdoc_edit.py with dev/scripts/sdoc_model.py, a module over
+strictdoc's node model that owns a loaded graph. Three operations:
+open_graph(root: Path, *, output_dir: Path | None = None) -> Graph,
+Graph.set_field(uid: str, field: str, value: str | None) -> None, and
+Graph.save() -> list[Path] returning the files rewritten. set_field validates
+before it returns and raises rather than leaving a bad node in the graph; save
+writes only the documents whose nodes were touched. Batching is the point: the
+graph load is the expensive step and fp-accept signs several UIDs per run.
+FIELD_ORDER, find_node_block, find_field_span and render_field all go, and
+nothing in the replacement knows the grammar's field order or its block syntax.
+
+The call sequence is fixed by what strictdoc requires. Load with
+ProjectConfigLoader.load(input_path=root, output_dir=...) then
+TraceabilityIndexBuilder.create(project_config=..., parallelizer=
+NullParallelizer(), skip_source_files=True). Reach a node with
+index.get_node_by_uid(uid) and its file with
+node.get_document().meta.input_doc_full_path. Write a field with
+SDocNode.set_field_value(field_name=..., form_field_index=0, value=...), where
+value=None deletes the field. Check the node with SDocValidator.validate_node(
+node, document_grammar=doc.grammar, path_to_sdoc_file=...). Serialise with
+SDWriter(project_config).write(document) and replace the file with that string.
+
+Three obligations sit on the module because strictdoc does not carry them.
+Value validation: set_field_value accepts anything, so an invalid SingleChoice
+and the deletion of a required field both reach disk and are caught only by a
+later parse -- validate_node is the catchable gate and costs about 20 us.
+Delimiter rejection: a value containing a line that begins at column zero with
+"<<<" serialises to a file that cannot be re-parsed, and validate_node does not
+see it, so set_field rejects such values itself. Path discovery: the model
+supplies each node's source file directly, replacing fp-accept's glob-and-grep
+scan for a "UID: " line.
+
+Out of scope, each belonging to a named sibling: the verb and flag surface, UID
+minting and node creation (SLICE-SDOC-CLI); refusing writes to operator-owned
+fields (MECH-RUNTIME-WRITE-GUARD); relocating the cache
+(MECH-SDOC-CACHE-DIR-FOR-WORKTREES); trimming the format set
+(MECH-SDOC-LEAN-FORMATS). fp-check keeps reading the JSON export; this changes
+the write path only.
 <<<
 RATIONALE: >>>
-A wrapper will need field writes for every field, not one; generalising a
-hand-copied order list is the wrong direction when the tool already owns the
-order.
+The copied order list matches the grammar today, and the wrapper will need field
+writes for every field rather than one, so generalising a hand-copied list is the
+wrong direction when strictdoc already owns the order. The larger gain is that
+going through the model collapses find, edit and format into one path: the model
+knows each node's file, so the glob-and-grep scan disappears, and SDWriter
+produces the canonical form, so the "run strictdoc format afterward" step in
+fp-accept's docstring disappears with it. That is what SLICE-SDOC-CLI means by
+formatting applied by the same code path.
+
+Owning validation on this side is not a tax the model API imposes; it is the
+finding that makes this node necessary rather than tidy. set_field_value is a
+mutator with no opinion about the value, so a wrapper that only swapped in the
+API would be strictly less safe than the text editor it replaces, which at least
+could not produce an invalid choice by accident.
+<<<
+NOTES: >>>
+Measured on strictdoc 0.28.3 against a scratch copy of this repo's nine
+documents; nothing was written in the checkout.
+
+Grammar resolution. A single-document parse leaves elements_by_type at ["TEXT"]
+and set_field_value raises KeyError("MECHANISM"); after
+TraceabilityIndexBuilder.create it holds all six element types and
+element.field_titles for MECHANISM is exactly the grammar's list. The @repo
+alias is resolved in traceability_index_builder.py:421-446 through
+project_config.grammars, not by the reader.
+
+The previous statement said the whole graph is required. It is not, and the
+correction matters because the cheap path looks like it works. SDocGrammarReader
+().read_from_file(...) plus document.grammar.update_with_elements(g.elements)
+makes set_field_value work off a single-document parse (0.43 s parse, 7 ms
+grammar) and for 99-backlog.sdoc produces a byte-identical 130839-byte write.
+It drops the TEXT element the builder back-fills at
+traceability_index_builder.py:447-456: on a probe document carrying free text
+that the corpus exports clean (exit 0), the hand-stitched path raises
+KeyError("TEXT") on the TEXT node. Use the builder.
+
+Timings, one process, NullParallelizer: cold index build 1.44 s, warm 0.11 s,
+warm rebuild after one changed file 0.97 s; three set_field_value calls 36 us;
+SDWriter.write of the 2820-line, 130839-byte 99-backlog.sdoc 0.8 ms;
+validate_node 8-22 us; SDReader re-parse of that document 0.37 s; the whole
+set-validate-write-reparse-save cycle 0.34 s. Config construction alone is
+0.67-0.81 s of every number here, which is MECH-SDOC-LEAN-FORMATS's lever.
+
+Field order holds under abuse. On a node stripped of RATIONALE, PARENT_FP and
+NOTES, setting them in the order NOTES, PARENT_FP, RATIONALE serialises them
+RATIONALE, PARENT_FP, NOTES. Round trip is byte-stable: loading all nine
+documents and writing every one back unmodified changes no file, and a
+single-field edit produces a diff confined to that node.
+
+One visible difference from the text editor. Single-line versus block form comes
+from the grammar, not from what was parsed -- is_field_idx_multiline
+(grammar_element.py:410) makes every String field after TITLE multiline -- so a
+PARENT_FP written through the model is always a >>> block. Existing single-entry
+values in the corpus are inline (01-tooling.sdoc:85) because format preserves
+each parsed field's own flag, so re-signing such a node reflows it. Cosmetic
+only: sdoc_fp.py:32 excludes PARENT_FP from the contract hash, so no fingerprint
+churns.
+
+What set_field_value accepts silently, each confirmed by a clean full export
+exiting 1 where the unmutated corpus exits 0: DEPTH "totally-not-a-depth"
+("invalid SingleChoice value"), AUTHORED_BY "robot", and value=None on a
+required STATEMENT ("Node is missing a field that is required by grammar").
+validate_node catches all three plus a newline inside a single-line choice
+field, raising StrictDocSemanticError. It does not catch a "<<<" line inside a
+multiline value. Only a line starting at column zero with "<<<" terminates a
+block: "  <<<", "a<<<b", ">>>" and a literal "[MECHANISM]" line all survive the
+round trip intact, so the reject rule is one regex. An unknown field name fails
+closed but unhelpfully, as ValueError("list.index(x): x not in list").
+
+Do not validate by rebuilding the index. TraceabilityIndexBuilder.create prints
+and calls sys.exit(1) on a semantic error (traceability_index_builder.py:394,
+470, 527), so it is a process exit, not an exception carrying detail.
+
+SDWriter, SDReader and SDocValidator are not exported from strictdoc.api; of
+what this needs, only TraceabilityIndexBuilder, ProjectConfigLoader,
+Parallelizer, SDocNode, SDocDocument, TraceabilityIndex and DocumentTreeError
+are. The module takes three internal imports, which the pinned overlay makes
+tolerable and a version bump should re-check.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -804,19 +1078,127 @@ RELATIONS:
 [MECHANISM]
 UID: MECH-FILE-RELATION-EXISTENCE
 TITLE: File relations to nonexistent paths export clean
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
-Measured: a File relation whose VALUE names a path that does not exist exports
-with exit 0. MECH-SEMBLE-EXTRA-GRAMMARS and MECH-SEMBLE-PATH-MAPPINGS carry
-File relations today, so the gap is latent rather than theoretical. The check
-belongs in the wrapper or in a user_plugin over the built index; the parser
-will not do it.
+Check every File relation against the repository tree in
+dev/scripts/file-check.py, built in cycle-check.py's shape: it reuses
+sdoc_fp's load_index and iter_nodes, prints every finding with its node UID
+and owning document title, and exits non-zero when there is one. Its argv is
+the export JSON plus the repository root, a second argument neither
+cycle-check.py nor fp-check.py takes, because the JSON export carries no path
+for anything and so offers nothing to resolve against.
+checks/strictdoc-file-check.nix runs it over the flake source beside the
+cycle and fingerprint checks, which puts it in nix flake check.
+
+A VALUE is well-formed in exactly one shape: a normalized POSIX path relative
+to the repository root, not absolute, with no leading ./ and no .. segment.
+Any other shape is a finding in its own right rather than a path to normalize
+and then resolve. The target must be an existing regular file; a directory is
+a finding. That rule is upstream's, not ours -- strictdoc's own
+file-traceability validation accepts precisely this shape and rejects ./x,
+../x, an absolute path and a directory with the same message -- so holding to
+it keeps the corpus able to turn that feature on later.
+
+The sdoc CLI checks only the VALUEs it is about to write, applying the same
+well-formedness rule plus one stat: microseconds, not a whole-graph pass. The
+corpus-wide gate stays alongside it, because a write-time check cannot see a
+file deleted or moved after its relation was written, and that is the
+direction the ghost problem actually runs.
+
+Two exclusions, both deliberate and both cheap to reverse. Targets outside
+the repository are not supported; no File relation names one today. Forward
+references are not supported either -- a node may not name a path its own
+unbuilt work will create. All three File relations in the corpus sit on
+implemented nodes, so the strict rule costs nothing now, and relaxing it
+later by gating existence on DEPTH is a one-line change, where tightening it
+later would not be.
 <<<
 RATIONALE: >>>
-The original assessment claimed strictdoc fails closed on a broken File
-relation. It does not, and a design that claims code which no longer exists
-is the v1-ghost problem the File role was adopted to catch.
+This node's own earlier premise -- that the parser will not do it -- is
+refuted. StrictDoc validates File relations exactly this way, but only when
+REQUIREMENT_TO_SOURCE_TRACEABILITY is in project_features, which this project
+does not set. Enabling it is one config line, and it was rejected on three
+measurements rather than on taste. It costs 12.32 s against 1.52 s on this
+890-file tree, and that cost lands on every export, including the whole-graph
+validation the sdoc CLI runs per write, which is budgeted at about a second.
+It reports one broken relation per run, so N defects cost N runs of 12 s. And
+its predicate is "is an indexed source file", not "exists": a File relation
+naming a file that is present but binary is reported as not existing. A
+checker over the JSON export has the exact predicate, reports every finding
+in one pass, and costs 0.03 s.
+
+The defect itself is worth closing rather than tolerating because a design
+that claims code which no longer exists is the ghost problem the File role
+was adopted to catch.
+<<<
+NOTES: >>>
+Measured 2026-08-27 on a scratch copy of the tree, strictdoc 0.28.3
+(/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env), every export
+into a clean output directory.
+
+The defect, and a positive control for the same harness:
+
+- A File relation with VALUE packages/semble/lib/doesNotExist.nix exports
+  with exit 0, emits no warning line at all, and the dead path survives
+  verbatim into index.json.
+- Replacing it with a dangling NODE relation fails the identical export with
+  exit 1 and "references parent requirement which doesn't exist"
+  (traceability_index_builder.py:663). The export gate is alive; it just does
+  not cover File.
+- Prototype checker over the JSON export: 0.03 s, exit 1, all three injected
+  broken relations named in one run. Negative control on the unmodified
+  corpus: 3 File relations checked, 0 broken, exit 0 -- both on the scratch
+  copy and on the real graph.
+
+Upstream's own check, measured by adding
+project_features=["REQUIREMENT_TO_SOURCE_TRACEABILITY"] to the scratch
+strictdoc_config.py:
+
+- Broken path: exit 1, "Requirement MECH-FILE-RELATION-EXISTENCE references a
+  file that does not exist" (file_traceability_index.py:615).
+- Accepted forms, probed exhaustively: packages/semble/lib/withGrammars.nix
+  passes, while ./packages/semble/lib/withGrammars.nix,
+  packages/semble/lib/../lib/withGrammars.nix,
+  ../../../packages/semble/lib/withGrammars.nix, /etc/hostname, the directory
+  packages/semble, and a document-relative 01-tooling.sdoc all fail.
+  Resolution is a string lookup in the indexed-source-file map keyed by a
+  POSIX path relative to source_root_path -- not filesystem resolution --
+  which is why every non-normalized form fails while naming a real file.
+- A file that exists but is not indexed reports the same "does not exist":
+  measured on a .pyc and on a file containing a NUL byte, both skipped as
+  binary. A plain .txt passes.
+- Cost on the whole repo, 890 tracked files and 885 source tasks: 1.52 s off,
+  12.32 s on, 244 MB maxrss. Narrowing include_source_paths to
+  packages/semble/** drops it to 1.84 s and 16 tasks, but then
+  dev/scripts/cycle-check.py -- which exists -- is reported as not existing.
+  Narrowing trades cost for false positives and is not viable.
+- One error per run: three broken relations across two nodes produced one
+  error line, and it named the second node's.
+- The JSON export is byte-identical with the feature on and off, so enabling
+  it would not perturb cycle-check or fp-check.
+
+Two traps found while measuring, neither confined to this node:
+
+- ProjectConfig(project_features=[...]) REPLACES the defaults (TABLE_SCREEN,
+  TRACEABILITY_SCREEN, DEEP_TRACEABILITY_SCREEN, SEARCH) rather than adding
+  to them. The JSON export is unaffected -- measured identical -- but the
+  HTML screens would be lost.
+- StrictDoc's own grammar source calls this role experimental: "FileReference
+  is an early, experimental feature. Do not use yet."
+  (backend/sdoc/grammar/type_system.py:25).
+
+The check's repository-root argument comes from the flake source in the check
+derivation, following checks/strictdoc-cycle-check.nix's
+"strictdoc export ${self}". That is the git-tracked tree, so a File relation
+naming an untracked file passes locally and fails in CI -- correct behaviour,
+but the failure appears at a distance from the edit.
+
+sdoc_fp.iter_nodes walks only each document's top-level NODES and does not
+recurse into sections. A recursive walk finds the same 3 File relations on
+today's corpus, so the two are currently equivalent; use iter_nodes for
+consistency with the other two checkers and fix it in one place if sections
+ever nest nodes.
 <<<
 
 [SPIKE]
@@ -884,23 +1266,38 @@ RELATIONS:
 [MECHANISM]
 UID: MECH-SDOC-CACHE-DIR-FOR-WORKTREES
 TITLE: Put strictdoc's cache directory where a worktree hook does not scan it
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
-Set dir_for_sdoc_cache in strictdoc_config.py to a location outside the
-checkout for worktrees. Today strictdoc writes its cache under ./output in the
-cwd; that directory appeared in a worktree (since deleted) and cspell, run from
-a hook, produced so many findings over it that the hook failed.
+strictdoc_config.py's create_config() passes dir_for_sdoc_cache="$TMPDIR" to ProjectConfig. That exact literal is a sentinel strictdoc expands to <tempfile.gettempdir()>/strictdoc_cache/<md5 of os.getcwd()>/<strictdoc version>, so every worktree gets its own cache outside its own checkout, keyed by the directory the command ran in. That one keyword argument is the whole change. No devenv wiring, no wrapper, no environment variable, no new option.
 
-STRICTDOC_CACHE_DIR is not a lever: the code asserts the value equals exactly
-output/_cache and aborts otherwise, so the environment cannot relocate it. The
-config option is the only path.
+It covers the parse cache written by every command, export, format, manage and server alike, because the expansion happens in ProjectConfig.__init__ and every entry point builds one. It does not cover the export ARTIFACT directory: a bare strictdoc export . still writes ./output/json, so the output/ line in .gitignore stays. The change stops the 3.8 MB of _cache landing under it, not the directory itself.
+
+Two constraints bind the tool that consumes this. The cache path is keyed on the cwd at the moment ProjectConfig is constructed, so the CLI chdirs to the project root before constructing it. And each cached parse is keyed on the output directory concatenated with the input path, so a warm cache also needs one stable --output-dir; a fresh output directory is a cold parse cache and leaves behind a second full set of entries.
 <<<
 RATIONALE: >>>
-Recorded as an LLM diagnosis on 2026-08-25, not litigated: track it, verify
-the assertion and the config option when the work is picked up. Related
-symptom already logged elsewhere: format and manage take no --output-dir and
-write ./output into the project.
+The cache is the only thing strictdoc writes into the checkout that nobody asked for, and it got in once already: commit 893009a0 records a git add -A staging the parse cache and cspell reporting 2591 issues over it. That same commit closed the route by gitignoring output/, which is why nothing fails today. What remains is 3.8 MB of untracked files inside a worktree defended by an ignore rule, in a repository where the standing advice is to run git add -A and where the sdoc skill has to carry a warning about it. Moving the writer is cheaper than maintaining the exclusion, and it is one line.
+
+The $TMPDIR sentinel rather than a hand-picked absolute path because the cached parses are per-file but the dependency map is a single file per cache directory, so worktrees pointed at one fixed path would overwrite each other's. The sentinel's md5-of-cwd component gives each worktree its own directory with no per-worktree configuration to keep in sync.
+<<<
+NOTES: >>>
+Measured 2026-08-27 against strictdoc 0.28.3, on a scratch copy of the corpus, never in the tree.
+
+STRICTDOC_CACHE_DIR is worse than inert. project_config.py:244 asserts it equals exactly "Output/_cache" -- capital O, which the earlier draft of this node got wrong. Lowercase output/_cache aborts too, with the bare message "error: output/_cache" and no explanation. The branch is checked BEFORE the config value (241-245 versus 246-251), so it overrides dir_for_sdoc_cache: with the config already set to "$TMPDIR", STRICTDOC_CACHE_DIR=Output/_cache put the cache back inside the checkout at ./Output/_cache/0.28.3. It is not a relocation lever, it is a way to undo this mechanism. Nothing in this repository sets it.
+
+Which commands dirty the checkout today: format . creates ./output/_cache/<version>/ with 11 files. Only integrate_server_config and integrate_export_config move the cache into the output directory (project_config.py:716 and 755), and they fire only because the default value startswith "output/_cache"; format and manage have neither hook nor --output-dir. So export --output-dir <elsewhere> never dirtied the checkout, and the 3.8 MB in the current worktree, holding 0.28.2 and 0.28.3 side by side, is from format and manage runs.
+
+After the change --output-dir no longer moves the cache, because the expanded value is absolute and fails that startswith guard. Measured: export --formats=json --output-dir <scratch> left ./output absent and wrote /tmp/strictdoc_cache/<md5>/0.28.3.
+
+Positive control that the relocated cache is read and not merely written: on this 10-document corpus export costs 1.87 to 1.92 s cold and 1.32 to 1.57 s warm at a stable output directory. A brand-new output directory against the same warm cache directory costs 2.04 s, then 1.51 s -- because pickle_cache.py:127 keys each entry on output_dir + the input path. Three output directories left 27 entries for 9 sdoc files. Nothing prunes them, and the version component means a strictdoc bump strands the old tree; that is true today as well, just in /tmp instead of the checkout.
+
+The one file shared within a cache directory is <cache>/dependencies (file_dependency_manager.py:36). It is written even by a json-only export but read only by the HTML generator's must_generate, so with formats pinned to SDoc and JSON (MECH-SDOC-LEAN-FORMATS) nothing consumes it.
+
+TMPDIR is unset on this machine and /tmp is mode 1777, so the path is world-writable and predictable while pickle_cache.py:38 unpickles without validation. Not a concern on a single-user laptop; on a shared host, set TMPDIR.
+
+Not proven either way: the sdoc skill's "incremental export produces false greens" gotcha did not reproduce on 0.28.3 for a syntax break -- an unknown field appended to 99-backlog.sdoc gave exit 1 on a fresh output directory, on a reused one, and on repeats, both before and after the change. So the relocation is measured not to INTRODUCE a false green for that break class, and the original gotcha is unreproduced rather than refuted. See the SPIKE proposed alongside this node.
+
+Lands with MECH-SDOC-LEAN-FORMATS: same file, same function, both single keyword arguments. Two things go stale in the same commit -- the sdoc skill's line that "format and export write a cache into ./output/ by default", and any existing output/_cache directories, which the change should delete rather than leave as orphans of a version that no longer writes there.
 <<<
 
 [MECHANISM]
