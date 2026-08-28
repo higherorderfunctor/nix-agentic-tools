@@ -36,3 +36,7 @@ The whole point of generating the surface is that no vocabulary is hand-typed.
 changed the separator both would keep emitting the old one against a grammar
 that no longer parses it.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

@@ -8,7 +8,7 @@ IMPORT_FROM_FILE: @repo
 UID: DEC-PLAN-SCOPED-BACKLOG
 TITLE: Each plan carries its own backlog document, and no new node type
 AUTHORED_BY: human
-STATUS: accepted
+STATUS: superseded
 RETIRES_ON: >>>
 An item needs to be tracked while living outside its plan's backlog document,
 at which point an explicit register node and a Backlogged_In role become the
@@ -35,3 +35,7 @@ NOTES: >>>
 Deliberately not solved here: a repo-level backlog above plans. That decision
 waits for a plan to actually close with debt on it.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-BACKLOG-IS-A-REGISTER-NODE
+  ROLE: Superseded_By

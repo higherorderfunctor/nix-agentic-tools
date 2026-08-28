@@ -39,3 +39,7 @@ split describes a derivation nothing here evaluates.
 If closure size is still worth chasing it is now a question for upstream's own
 flake, which puts it outside this repository and probably outside this plan.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

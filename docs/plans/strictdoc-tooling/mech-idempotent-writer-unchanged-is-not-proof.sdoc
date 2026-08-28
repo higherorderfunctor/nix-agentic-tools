@@ -31,3 +31,7 @@ Logged because the failure is silent and self-confirming in the direction a
 session already wants to believe: a generator that appears to have nothing to do
 is indistinguishable from a generator that is already correct.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

@@ -29,3 +29,7 @@ The operator did not know the repository had two check systems until this
 milestone produced duplicate gates in both, which is itself the argument for
 writing the boundary down.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

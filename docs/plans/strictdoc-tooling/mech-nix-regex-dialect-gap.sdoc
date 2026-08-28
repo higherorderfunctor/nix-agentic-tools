@@ -33,3 +33,7 @@ Worth knowing before anyone reads the surface as carrying upstream's patterns
 verbatim, and before the normalizer treats ere as the authority. source is the
 authority; ere is a derived artifact of a translation with no test behind it.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

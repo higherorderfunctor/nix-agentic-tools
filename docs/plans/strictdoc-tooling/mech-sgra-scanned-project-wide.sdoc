@@ -46,3 +46,7 @@ fixtures' .sgra.invalid suffix. Two encodings of one rule, neither of them in
 strictdoc_config.py, is the argument for settling the exclude_doc_paths question
 rather than an argument against it.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

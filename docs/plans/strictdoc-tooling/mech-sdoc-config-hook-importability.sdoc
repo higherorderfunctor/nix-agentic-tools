@@ -29,3 +29,7 @@ arrival without it, and the failure presents as a crash in a worker rather than
 as a config error. The upstream fix is the same line moved into the tool, so a
 version bump is a convenience here, not a capability.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

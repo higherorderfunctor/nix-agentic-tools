@@ -18,3 +18,7 @@ The grammar surface has the analogous problem in the opposite direction and answ
 NOTES: >>>
 Named in `SLICE-BEHAVIOUR-MODEL`'s NOTES as "the one piece of plumbing here with no measured precedent" — the stamp is in the emitted JSON, the compatibility rule is not. Filed so the gap survives that slice moving to implemented, at which point its NOTES stop being a worklist.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

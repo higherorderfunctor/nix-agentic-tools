@@ -18,3 +18,7 @@ RATIONALE: >>>
 NOTES: >>>
 Logged as the durable home for a measurement summarised in `MECH-RUNTIME-WRITE-GUARD`'s NOTES. Positive control is the pair itself: the same script, the same guarded directory, one run apart, denying one envelope and allowing the other.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

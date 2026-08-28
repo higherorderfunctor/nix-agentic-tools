@@ -31,3 +31,7 @@ The warning is the right call for a write, where an unformatted file is fixed by
 the next treefmt. It is the wrong call for a comparison, where the formatter is
 part of what "current" means.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

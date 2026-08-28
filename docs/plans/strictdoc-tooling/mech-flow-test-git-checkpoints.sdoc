@@ -18,3 +18,7 @@ RATIONALE: >>>
 NOTES: >>>
 Cited by UID in `MECH-TESTS-AS-CONTRACT`'s NOTES — "Logged as MECH-FLOW-TEST-GIT-CHECKPOINTS rather than solved here" — which also carries the grep and its positive control.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

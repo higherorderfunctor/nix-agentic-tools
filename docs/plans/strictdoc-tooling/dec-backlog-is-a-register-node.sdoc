@@ -1,0 +1,73 @@
+[DOCUMENT]
+TITLE: A plan's backlog is a register node, and items point at it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-BACKLOG-IS-A-REGISTER-NODE
+TITLE: A plan's backlog is a register node, and items point at it
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: >>>
+Milestone five gives items real semantics and the register turns out to be
+carrying something the item types should carry themselves, or a second axis of
+containment appears that one Backlogged_In edge per item cannot express.
+<<<
+STATEMENT: >>>
+Every plan directory holds a backlog REGISTER: one node, in its own file, that
+the plan's ungroomed items point at with Backlogged_In. The register holds no
+list; the edges are the list, and the backlog is the register's inbound Backlogs
+set.
+
+An item may carry other edges at the same time -- Governed_By, Crosses, Assumes,
+whatever it actually relates to. Containment by edge does not consume the item's
+only parent, so an item can be in the backlog and in the graph at once.
+
+This supersedes containment by DOCUMENT. It does not change what an item IS: an
+ungroomed item is still an ordinary node at DEPTH sketch, there is still no
+BACKLOG node type, and grooming still raises DEPTH.
+<<<
+RATIONALE: >>>
+DEC-PLAN-SCOPED-BACKLOG named this successor in its own retirement condition --
+an item needing to be tracked while living outside its plan's backlog document
+is the point at which an explicit register node and a Backlogged_In role become
+the cheaper answer. The one-node-per-file carve put every item outside that
+document, so the condition fired rather than being reinterpreted.
+
+The intermediate state the carve left behind was a directory query, DEPTH ==
+sketch scoped to a plan's directory. It answers correctly and it is not in the
+graph: it is a fact about where bytes sit, invisible to anything traversing
+edges, and unavailable to a reader who has a node and follows its relations. The
+whole point of the carve was to make the fetchable unit the addressable unit;
+leaving containment outside the edges would have moved the same problem up a
+level.
+
+An edge also composes where both a file and a directory query did not. A file
+forces exactly one containment, since a node sits in one file; the query forces
+one more, since a node sits in one directory. An edge is additive.
+<<<
+NOTES: >>>
+Ruled by the operator 2026-08-27, immediately after the carve, verbatim: "having
+the 99 is fine, but its the lynchpin node. every issue under it parents that.
+issues may parent other nodes that are related, but thats the idea, a web" and
+"i mean 99 is still a file, the node has to exist some place."
+
+Scope, stated because the operator stated it: "we havent fully designed
+semantics yet, thats milestone 5 in the strictdoc plan, this is jsut an
+intermediate carbe out." So this decision is deliberately narrow. What kinds of
+item there are, what grooming promotes an item INTO, and what closes one are
+milestone five's questions and are not answered here. What is settled is only
+where an item is filed and how.
+
+Applied the same day: MECH-BACKLOG-STRICTDOC-TOOLING and
+MECH-BACKLOG-BEADS-MIGRATION exist, and all 81 nodes at DEPTH sketch carry
+Backlogged_In to their own plan's register. Verified as a set equality in both
+directions -- no sketch node unfiled, no filed node above sketch -- and nothing
+enforces it yet; MECH-SDOC-LAYOUT-CHECK is where that guard belongs.
+
+The Backlogged_In / Backlogs role pair was added to all five node types in
+packages/strictdoc-grammar/values.nix and the .sgra regenerated. Every type
+carries it because anything can be noticed before it is groomed, including a
+decision nobody has made yet.
+<<<

@@ -23,3 +23,7 @@ RATIONALE: >>>
 Left in place deliberately rather than overlooked: an agent editing PARENT_FP is
 the failure this graph already recorded once.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

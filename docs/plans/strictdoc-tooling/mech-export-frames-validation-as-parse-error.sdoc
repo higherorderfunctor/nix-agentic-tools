@@ -33,3 +33,7 @@ Worth recording because the misleading half is the part a reader sees first, and
 because it makes the obvious implementation of a layer assertion silently wrong
 rather than loudly wrong.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

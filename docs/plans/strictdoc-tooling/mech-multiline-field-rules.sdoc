@@ -26,3 +26,7 @@ It surfaced during the grammar milestone and was nearly settled in the wrong
 place. A rule about how values are written cannot be enforced by a surface that
 only declares what fields exist.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

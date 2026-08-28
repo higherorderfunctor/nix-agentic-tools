@@ -20,3 +20,7 @@ Measured 2026-08-27. `MECH-PLAN-REFS-CHECK` puts the source-annotation arm expli
 
 Absorbs the proposed `MECH-ANNOTATION-TARGET-DURABILITY` and `MECH-NODE-TO-CODE-EDGE-COVERAGE`.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

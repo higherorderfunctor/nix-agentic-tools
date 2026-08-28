@@ -60,3 +60,7 @@ MECH-HTML-RENDER-MUST-PASS: whatever the fix, either repair the prose or make it
 error loudly, but the operator does not want this to become a blocker on work
 that has nothing to do with HTML.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

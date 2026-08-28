@@ -31,3 +31,7 @@ mistake for an oversight and rewrite, and the fix -- more arities, or optional
 attrset arguments -- costs the property that every constructor is currently a
 one-line attrset literal.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

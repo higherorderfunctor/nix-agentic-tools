@@ -34,3 +34,7 @@ Measured 2026-08-27 in a scratch copy: one pattern replaced with an inline-group
 form gives exit 2 and the diagnostic; the unmodified copy gives exit 0. Both
 arms present, so a check would only need to pin the fixture.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

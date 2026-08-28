@@ -33,3 +33,7 @@ missing in another. A surface that is meaningless without a project root is not
 that case, and forcing it into home-manager would produce an option nobody can
 use correctly.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

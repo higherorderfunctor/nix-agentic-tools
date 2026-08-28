@@ -25,3 +25,7 @@ RATIONALE: >>>
 Five of this repository's ten field names are reserved, so the behaviour is not
 exotic. The reason to leave it alone is proportion, not ignorance of it.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

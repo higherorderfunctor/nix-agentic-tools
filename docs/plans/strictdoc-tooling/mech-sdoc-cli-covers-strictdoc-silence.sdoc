@@ -20,3 +20,7 @@ Both measurements are already recorded: the false green in `MECH-SDOC-LEAN-FORMA
 
 Absorbs the proposed `MECH-UNREGISTERED-HANDLE-MUST-FAIL` and `MECH-STRICTDOC-ERRORS-ON-STDOUT`.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

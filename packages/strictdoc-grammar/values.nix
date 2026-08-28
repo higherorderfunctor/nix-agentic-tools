@@ -9,10 +9,18 @@
 # or `MultipleChoice` field — which is exactly why `fixtures/foreign.sgra`
 # exists alongside them.
 #
-# ORDER IS LOAD-BEARING at every level. StrictDoc enforces element, field and
-# relation order, so the surface uses lists and the emitter renders them as
-# given. The order here is the committed file's order, element for element and
-# line for line; changing it changes the rendered file.
+# ORDER IS LOAD-BEARING, though not uniformly, and the difference was measured
+# 2026-08-27 rather than assumed. StrictDoc enforces element and FIELD order: a
+# node whose fields are out of grammar order is a semantic error. It does NOT
+# enforce relation order inside a node -- a RELATIONS block listing roles in any
+# order parses clean. What it does check is that the role is REGISTERED:
+# an unknown one fails with "Requirement relation type/role is not registered".
+#
+# The surface still uses lists and the emitter still renders them as given, and
+# a new relation role should still be APPENDED rather than inserted, because the
+# order here is the committed file's order line for line and reordering it
+# rewrites `docs/sdoc/grammar.sgra` for no reason. That is a diff-hygiene
+# argument, not a parser one.
 #
 # Rendered with:
 #
@@ -59,6 +67,13 @@
   governedBy = rel.parent "Governed_By" "Governs";
   provenBy = rel.parent "Proven_By" "Proves";
   assumes = rel.parent "Assumes" "Assumed_By";
+
+  # Containment by EDGE rather than by file. A plan's backlog is a register
+  # node, and an ungroomed item points at it. Carried by every type because
+  # anything can be noticed before it is groomed. Appended to each element's
+  # relation list rather than slotted in beside the roles it reads like, per the
+  # ORDER note above.
+  backloggedIn = rel.parent "Backlogged_In" "Backlogs";
 in [
   (el "DECISION" {prefix = "DEC-";} {
     fields = [
@@ -73,6 +88,7 @@ in [
     ];
     relations = [
       (rel.parent "Superseded_By" "Supersedes")
+      backloggedIn
     ];
   })
 
@@ -94,6 +110,7 @@ in [
       provenBy
       assumes
       rel.file
+      backloggedIn
     ];
   })
 
@@ -114,6 +131,7 @@ in [
       assumes
       provenBy
       rel.file
+      backloggedIn
     ];
   })
 
@@ -131,6 +149,7 @@ in [
     relations = [
       governedBy
       provenBy
+      backloggedIn
     ];
   })
 
@@ -150,6 +169,7 @@ in [
     relations = [
       governedBy
       rel.file
+      backloggedIn
     ];
   })
 ]

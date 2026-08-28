@@ -22,3 +22,7 @@ The slice settles on the flag and says flipping costs a type edit plus a regener
 NOTES: >>>
 The corpus this runs against is the graph in this repository — 144 nodes, 92 Parent relations, 31 fingerprint entries — and the field catalogue the flag reads is `packages/strictdoc-grammar/values.nix`. State every measurement in this node when it is run; no result may cite a document outside this repository, since a reader of this graph cannot open one.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

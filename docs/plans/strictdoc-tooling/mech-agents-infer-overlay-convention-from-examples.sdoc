@@ -29,3 +29,7 @@ Recorded because the operator noticed it as a pattern across sessions rather
 than as one agent's mistake, and because the remedy is to change what the tree
 teaches rather than to write the rule down more firmly.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

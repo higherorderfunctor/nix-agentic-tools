@@ -38,3 +38,7 @@ already carried the branch, and reuse imported prefix semantics along with it.
 That is the right default, but it widens a rejection past the measurement that
 justified it, and the widening is invisible in the generated file.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

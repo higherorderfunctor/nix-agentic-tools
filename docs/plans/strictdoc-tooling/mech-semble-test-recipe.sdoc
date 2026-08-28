@@ -21,3 +21,7 @@ binary silently runs the installed one with the installed mappings. The failure
 presents as the new grammar not working, which is a false defect report waiting
 to happen. It already caused one.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

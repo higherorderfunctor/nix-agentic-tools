@@ -27,3 +27,7 @@ MECH-READY-QUERY is still needs-design and this is an implementation detail
 for whoever designs it, not a reason to touch it while implementing an
 unrelated slice.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

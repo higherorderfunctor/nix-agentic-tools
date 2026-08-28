@@ -42,3 +42,7 @@ existing strictdoc-* checks. Note that a runCommandLocal derivation sets
 allowSubstitutes = false and would re-execute on every flake check rather than
 being fetched from the cache.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In
