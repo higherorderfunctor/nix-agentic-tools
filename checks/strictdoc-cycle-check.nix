@@ -1,7 +1,7 @@
 # checks/strictdoc-cycle-check.nix -- SLICE-GRAPH-CHECKS's CI gate for
-# MECH-CYCLE-CHECK (docs/plans/strictdoc-tooling/01-tooling.sdoc). Exports the
-# whole design graph and runs dev/scripts/cycle-check.py over it, failing the
-# build on any relation cycle.
+# MECH-CYCLE-CHECK (docs/plans/strictdoc-tooling/mech-cycle-check.sdoc). Exports
+# the whole design graph and runs dev/scripts/cycle-check.py over it, failing
+# the build on any relation cycle.
 #
 # StrictDoc's own cycle detection only sees role-less edges, and every
 # relation in this grammar carries a role, so it never fires here -- a cycle

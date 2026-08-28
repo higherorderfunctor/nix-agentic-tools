@@ -1,5 +1,6 @@
 # `emit` is the inner emitter composed with denormalize, and nothing else. The
-# shape is MECH-EMIT-LAYER-BOUNDARY (docs/plans/strictdoc-tooling/99-backlog.sdoc):
+# shape is MECH-EMIT-LAYER-BOUNDARY
+# (docs/plans/strictdoc-tooling/mech-emit-layer-boundary.sdoc):
 #
 #   ./denormalize.nix  knows the TYPE MAPPING — a Nix bool becomes the literal
 #                      True or False, an enum member becomes its bare string, a

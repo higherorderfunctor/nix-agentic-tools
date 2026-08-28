@@ -12,11 +12,12 @@
 # unnecessary here.
 #
 # Every sdoc session, flake check and devShell in this repository runs this
-# package (SLICE-STRICTDOC-OVERLAY, docs/plans/strictdoc-tooling/
-# 03-executable-rules.sdoc). That node's STATEMENT was rewritten in place on
-# 2026-08-27 to describe THIS shape; its NOTES keep the retired first-party
-# build as history. See MECH-STRICTDOC-UPSTREAM-FLAKE in the plan backlog for
-# the record of the switch.
+# package (SLICE-STRICTDOC-OVERLAY,
+# docs/plans/strictdoc-tooling/slice-strictdoc-overlay.sdoc). That node's
+# STATEMENT was rewritten in place on 2026-08-27 to describe THIS shape; its
+# NOTES keep the retired first-party build as history. See
+# docs/plans/strictdoc-tooling/mech-strictdoc-upstream-flake.sdoc for the record
+# of the switch.
 #
 # ── What upstream's package IS, because it constrains consumers ────────────
 #

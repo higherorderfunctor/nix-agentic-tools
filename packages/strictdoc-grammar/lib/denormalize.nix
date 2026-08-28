@@ -1,8 +1,8 @@
 # The TYPE MAPPING half of MECH-EMIT-LAYER-BOUNDARY
-# (docs/plans/strictdoc-tooling/99-backlog.sdoc): NORMALIZED values in, the same
-# shape out with every leaf already a string. A Nix bool becomes the literal
-# `True` or `False`, an enum member becomes its bare string, a list becomes a
-# `", "` join.
+# (docs/plans/strictdoc-tooling/mech-emit-layer-boundary.sdoc): NORMALIZED
+# values in, the same shape out with every leaf already a string. A Nix bool
+# becomes the literal `True` or `False`, an enum member becomes its bare
+# string, a list becomes a `", "` join.
 #
 # Every converter is a PAIR: a type rewrite (decomposed type -> normalized type)
 # and an encoder (normalized value -> faithful value, on the way to the file).
