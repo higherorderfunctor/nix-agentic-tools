@@ -1,0 +1,72 @@
+[DOCUMENT]
+TITLE: One readiness predicate, consumed by every script that asks
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-READINESS-PREDICATE-RECONCILE
+TITLE: One readiness predicate, consumed by every script that asks
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Readiness is defined in four places, read at two scopes, and the four disagree. dev/scripts/sdoc_fp.py:100 is_ready is the node-local rule fp-accept consults before signing a fingerprint. docs/sdoc/status.py:58 closure_verdict re-implements the same rule inline while walking a slice's closure. dev/skills/sdoc/SKILL.md:77 and MECH-READY-QUERY state it in prose, identically to each other and differently from both executables. DEC-LOCAL-IMPLEMENTABILITY is the contract all four claim to implement and enumerates no state at all.
+
+Measured disagreement, four cells. A rejected decision: both executables pass it, both prose readings block it. A superseded decision: fp-accept signs against it, status.py blocks. A SPIKE whose STATUS is unrun or blocked: every reading treats it as settled on DEPTH alone, because no gate consults a spike's STATUS. A suspect edge: DEC-LOCAL-IMPLEMENTABILITY makes it part of the predicate, and status.py never computes one because it never calls fp-check.
+
+The dependency edge set is defined twice with complementary filters -- status.py:47 takes every relation whose TYPE is not File, sdoc_fp.py:97 takes every relation whose TYPE is Parent -- and the DEPTH ladder is written three times in two languages: packages/strictdoc-grammar/values.nix:35, status.py:33, sdoc_fp.py:38.
+
+The deliverable is one read point, not a ruling. The predicate and the edge-set live in dev/scripts/sdoc_fp.py, which cycle-check.py already imports by the sys.path.insert idiom the dev/scripts carry; status.py and render.py gain that import rather than moving, because checks/strictdoc-fp-check.nix and checks/strictdoc-cycle-check.nix name dev/scripts/ paths while the skill names docs/sdoc/ paths. It exports four things, and nothing outside it decides readiness:
+
+STATE_VERDICTS -- a table from one state-field value to settled, blocks or freedom. Seven rows: one per DECISION STATUS, one per SPIKE STATUS, plus the cut point on the DEPTH ladder. Its contents are milestone 5's, listed below.
+
+settled(node) -> (bool, reason) -- the node-local question fp-accept asks of a single parent, answered from the table.
+
+dependencies(node) -> set of UID -- the one edge-set: every relation whose TYPE is Parent, plus every PARENT_FP parent. TYPE is Parent, not "is not File": a Child relation points downstream and is not a dependency, and status.py's complement filter would walk one into the closure the day the grammar declares one.
+
+suspect_edges(index) -> set of (node, parent) -- fp-check.py:42's drifted, unbacked and deleted findings lifted out so a closure walk can apply the no-suspect-edge condition status.py omits. never-signed is not suspect.
+
+After the change fp-accept calls settled, fp-check calls suspect_edges, status.py's closure_verdict calls all four and holds no rule of its own, and MECH-READY-QUERY calls the same four when it lands. cycle-check.py's build_graph moves here too. It filters TYPE == Parent, which is the SAME edge set and the same direction as sdoc_fp.relation_parent_uids and differs only by carrying the ROLE alongside the target, so it takes a flag for whether the role travels and another for whether PARENT_FP parents count as edges. render.py computes no readiness and only imports the fingerprint placeholder.
+
+Behaviour is held constant except where a gate tightens. The shipped table transcribes status.py's current reading, the stricter of the two executables on the one cell where they differ, so fp-accept stops signing against a superseded parent and no other output moves. Transcribing rather than ruling is the point: which states are settled is not this mechanism's to decide.
+
+Left blank for milestone 5, one cell each: whether rejected blocks; whether superseded blocks; whether a decision that is neither open nor accepted contributes a degree of freedom; whether a SPIKE's STATUS gates at all and which of unrun and blocked blocks; and whether no-suspect-edge belongs in the predicate or in a separate report. When SLICE-BEHAVIOUR-MODEL's evaluation emits its machine-readable model, the table becomes a projection of it and stops being a literal.
+
+Done when all five scripts produce byte-identical output on the current corpus, except fp-accept's superseded refusal, and the injected-state control below is re-run against the module.
+<<<
+RATIONALE: Two executables carrying two readings of one rule is the document-borne drift INV-GUARDS-MUST-EXECUTE names, and the rule is the one part of this that should not be code: it is lifecycle policy, which DEC-EXECUTABLE-RULES-ROADMAP puts in milestone 5. Separating the read point from the rule now means milestone 5 fills a seven-cell table instead of editing four scripts in two directories, and means the disagreement is inspectable as data rather than distributed across two hand-copied constants and two inline conditionals. Deferring the extraction until milestone 5 inverts that: the migration would arrive to find the thing it migrates written four times.
+NOTES: >>>
+Measured 2026-08-27 against a clean export at bc646f12, BEFORE that day's grooming moved twenty nodes (rm -rf of the output dir first; incremental export produces false greens). The counts below are that snapshot and are not current; the shape of the finding is what carries, not the arithmetic. 139 nodes then. Relation TYPE census: Parent 92, File 3, Child 0. DECISION STATUS: 13 accepted, 7 open, 1 superseded, 0 rejected. DEPTH: 77 sketch, 16 implemented, 14 interface-settled, 9 needs-design, 2 verified, 21 decisions carrying none. Fingerprints: 31 entries, 31 never-signed, 0 suspect -- so no-suspect-edge is vacuously true today and starts to matter at the first signed fingerprint.
+
+How much of the divergence is latent, and how much is not. Latent: zero rejected decisions exist, and the one superseded decision, DEC-VIEWER-BEFORE-BULK, has zero inbound relations and is named by zero PARENT_FP entries. Not latent: SPIKE-CONVERSION-SIGNAL is STATUS unrun at DEPTH interface-settled, so both predicates already count an unrun spike as settled wherever it appears in a closure. Also not yet live but one grammar edit away: packages/strictdoc-grammar/lib/dsl.nix:123 already offers rel.child, and values.nix:8 records the child relation as surface this repository does not exercise.
+
+Positive control, run in memory over a deep copy of the export with no file written. Setting DEC-ARCH-COLOCATION's STATUS to each of the four values in turn: open -> fp-accept refuses and status.py blocks; accepted -> fp-accept signs and status.py passes; rejected -> fp-accept signs and status.py passes; superseded -> fp-accept signs and status.py blocks. The control detects agreement as well as disagreement, so the one divergent row is not an artefact of the harness. Setting SPIKE-EXECUTABLE-RULES's STATUS to unrun, run and blocked in turn changes neither answer. Appending one TYPE Child relation to MECH-CYCLE-CHECK makes status.py's dependencies return two UIDs where sdoc_fp's relation_parent_uids returns one.
+
+Three implementations of node discovery also exist -- the recursive UID-prefix walk in status.py:20, the same walk in render.py:27, and the DOCUMENTS/NODES walk keyed on _NODE_TYPE in sdoc_fp.py:45 -- and all three returned the same 139 nodes at that snapshot. They are out of scope here and logged separately; the count is recorded so a later divergence is legible as a change rather than a discovery.
+
+Sequencing. MECH-READY-QUERY and this node are not the same work and do not merge: this one produces the predicate and the edge-set, that one the closure query and the bounded implementation prompt built from the same traversal. MECH-READINESS-REPORT-FRONTIER is a different case -- both of its complaints, a root reporting itself as its own blocker and an undifferentiated blocker list, are answered by MECH-READY-QUERY's record, so it closes as subsumed when that lands. This one lands first and changes no output; the other two consume it. MECH-READY-QUERY carries only a Governed_By edge to DEC-LOCAL-IMPLEMENTABILITY and has no edge recording that dependency.
+
+Correction to this node's earlier statement, kept so the change is legible. It said five definitions exist and no two agree. There are four readings, not five -- DEC-LOCAL-IMPLEMENTABILITY is the contract the other four implement, not a fifth reading of it -- and two pairs do agree: the skill and MECH-READY-QUERY word it identically, and on rejected the two executables agree by both passing it. The executables differ in exactly one cell, superseded. It also cited SLICE-SDOC-IN-SEMBLE being verified while status.py reports it blocked on DEC-ARCH-COLOCATION; that reproduces exactly, but both predicates answer the same there, so it is DEPTH and closure-readiness being independent axes rather than two predicates disagreeing, and it is already recorded verbatim in MECH-READY-QUERY's own notes.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Whether a `rejected` decision in a closure blocks. Both executables currently pass it; both prose readings block it. Zero instances exist today.
+
+- Whether a `superseded` decision blocks. This is the single cell where the two executables actually disagree today. The one superseded decision has no dependents.
+
+- Whether a decision that is neither open nor accepted contributes to the degrees-of-freedom count, or only to the blocker list.
+
+- Whether a SPIKE's STATUS gates at all, and if so which of `unrun` and `blocked` blocks. DEPTH describes a spike's design maturity and STATUS its execution; nothing today says whether an unrun spike may sit in a settled closure.
+
+- Whether no-suspect-edge is part of the readiness predicate, as DEC-LOCAL-IMPLEMENTABILITY words it, or a separate report status.py prints alongside its verdict.
+
+- Whether the DEPTH cut point stays at interface-settled for every node type, or differs per type.
+
+- The shipped table transcribes status.py's reading as a placeholder so no gate loosens. That transcription is not a ruling on any cell above and is expected to be replaced wholesale at milestone 5.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LOCAL-IMPLEMENTABILITY
+  ROLE: Governed_By

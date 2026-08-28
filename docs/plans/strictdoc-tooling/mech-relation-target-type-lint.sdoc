@@ -1,0 +1,92 @@
+[DOCUMENT]
+TITLE: Lint relation target types, which the parser never checks
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-RELATION-TARGET-TYPE-LINT
+TITLE: Lint relation target types, which the parser never checks
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+A relation's legal target type is a contract keyed on the pair (source element tag, relation role), not on the role alone. The grammar declares thirteen Parent relations across the five element types, so the table has thirteen rows, one per declared pair. File relations carry no row: their VALUE names a filesystem path, not a UID.
+
+| source | role | legal target |
+| --- | --- | --- |
+| DECISION | Superseded_By | DECISION |
+| MECHANISM | Governed_By | DECISION |
+| MECHANISM | Guarantees | INVARIANT |
+| MECHANISM | Serialized_By | (none yet) |
+| MECHANISM | Proven_By | SPIKE |
+| MECHANISM | Assumes | DECISION, MECHANISM |
+| SLICE | Governed_By | DECISION |
+| SLICE | Crosses | MECHANISM |
+| SLICE | Assumes | DECISION, SLICE |
+| SLICE | Proven_By | SPIKE |
+| INVARIANT | Governed_By | DECISION |
+| INVARIANT | Proven_By | SPIKE |
+| SPIKE | Governed_By | DECISION |
+
+Two absences are represented differently and both are load-bearing. A pair the grammar declares with no row at all is an evaluation error, so a role cannot exist without a contract. A row whose target set is empty, carrying a reason, means the role is grammatically available and deliberately has no contract yet; every use of it is a violation reporting that reason rather than passing. Serialized_By is the only such row, because nothing uses it and MECH-CORPUS-EDGE-MAP defers it until the locks document converts.
+
+The table lives in the milestone-three behaviour-model surface, layered over the normalized grammar surface rather than inside it. SLICE-GRAMMAR-FROM-NIX excludes "which node types a relation may point at" by name and assigns it to a consumer of that surface. The join key is the element tag and the relation role, both already carried by the normalized layer.
+
+Three checks run at evaluation, against the grammar values in the same evaluation: every declared (element, role) pair has exactly one row, every row names a pair the grammar declares, and every target names a declared element tag. A role renamed or dropped upstream therefore fails evaluation instead of leaving a row that silently covers nothing.
+
+One check runs over the corpus: dev/scripts/relation-target-check.py, taking a clean JSON export and the machine-readable model emitted by that same evaluation, so the table exists once and no second copy can drift. It walks every Parent-type relation, resolves both ends to their _NODE_TYPE, and reports each edge whose target tag is outside its row's set, printing source UID, role, target UID, the target's actual tag and the legal set. Exit status is non-zero when any violation is found, and the summary line is "N nodes, M parent edges checked: K violation(s)" -- MECH-CYCLE-CHECK's shape, for the same reason: a count is what makes a green run distinguishable from a run that checked nothing. Its CI gate is checks/strictdoc-relation-target-check.nix, mirroring checks/strictdoc-cycle-check.nix's clean-$TMPDIR export harness rather than sharing its derivation, so the two stay independently attributable on failure. Dangling targets need no handling: a VALUE naming no node is already fatal at parse.
+
+There is no exemption or allowlist mechanism. The corpus is fixed before the gate lands, and that is two edges:
+
+SPIKE-CONVERSION-SIGNAL Governed_By SLICE-FIRST-CONVERSION becomes SLICE-FIRST-CONVERSION Proven_By SPIKE-CONVERSION-SIGNAL. SPIKE declares only Governed_By and File, so a spike has no role that can name what it probes; the reverse direction is expressible and is how the other seven spike citations are already written.
+
+MECH-FP-ACCEPT-READINESS Governed_By MECH-FP-CHECK becomes Assumes. It refines fp-check's behaviour rather than being governed by a decision, which is what the seven other MECHANISM-to-MECHANISM edges say. Its PARENT_FP entry stays and needs no re-signature: RELATIONS is excluded from the contract hash, so changing a role does not move it.
+
+The thirteen rows are data filling this surface, not part of it. Turning a row is a one-line edit that does not touch this mechanism.
+
+Refusing the write at edit time belongs to milestone four, in the sdoc CLI, consuming the same emitted model. It is not part of this mechanism.
+<<<
+RATIONALE: >>>
+The parser proves an edge resolves, never that it points at the kind of node the role promises. Measured on a scratch copy of the corpus: a SLICE Crosses a DECISION, and a DECISION Superseded_By a MECHANISM, both export with exit 0 and the edge intact in the JSON. The second is the worse of the two, because the skill's supersession rule is the one place the graph claims a discipline no mechanism enforces.
+
+Key the contract on the pair rather than on the role because the corpus already uses one role from several source types with different targets. Assumes is MECHANISM-to-MECHANISM seven times and SLICE-to-SLICE six; a role-keyed table would have to admit the union and would then permit MECHANISM Assumes SLICE, which nothing has argued for. Governed_By is declared on four of the five element types.
+
+Corpus first, gate second is this repo's own practice from SLICE-FP-DETECTOR. A lint wired before the two miscast edges are fixed is red on day one, and a check that is red on arrival is a check people learn to skip.
+
+The table belongs to the semantic layer rather than the grammar surface because that is where the operator can see it. Milestone three exists so the lifecycle becomes something to look at instead of guess at, and a target-type table hidden in a Python dict is prose again.
+<<<
+NOTES: >>>
+MEASURED 2026-08-27, strictdoc 0.28.3 via the trial venv, against a byte-copy of the corpus in a scratch tree (139 nodes, identical to the live export). Every injection went into the same file at the same anchor and each ran against its own clean output directory.
+
+Silent: SLICE-GRAPH-CHECKS --Crosses--> DEC-SYSTEM-PURPOSE exits 0, and the edge is present in the export's RELATIONS. DEC-VIEWER-BEFORE-BULK --Superseded_By--> MECH-CYCLE-CHECK exits 0 with zero error lines.
+
+Positive controls, same harness, same file, same anchor -- what strictdoc does check, so the two exit-0 results above are a real absence and not a broken injection. A role the source element does not declare (SLICE ... ROLE: Guarantees) exits 1 with "Semantic error: Requirement relation type/role is not registered: Parent / Guarantees". A target UID that does not exist exits 1 with "[DocumentIndex.create] Requirement SLICE-GRAPH-CHECKS references parent requirement which doesn't exist".
+
+A thirteen-row prototype of the checker over the live export: 139 nodes, 92 parent edges checked, 2 violations -- exactly the two named in the STATEMENT. Re-run against each injected export it reported 3, catching the injected edge alongside them.
+
+THE ROLE TABLE HAS TWO AUTHORITIES AND THEY DISAGREE. MECH-CORPUS-EDGE-MAP is interface-settled, fingerprinted, and states a role table of its own: Assumes MECHANISM-to-DECISION, Proven_By MECHANISM-or-INVARIANT-to-SPIKE, Governed_By MECHANISM-to-DECISION. The live graph matches none of those three. It has zero MECHANISM Assumes DECISION edges against seven MECHANISM-to-MECHANISM and six SLICE-to-SLICE; zero MECHANISM or INVARIANT Proven_By against seven SLICE-to-SPIKE; and Governed_By sourced from SLICE, INVARIANT and SPIKE as well as MECHANISM. The rows above are the union, on the reading that MECH-CORPUS-EDGE-MAP forecasts how one unconverted corpus will be converted (its counts are of source material, not of nodes that exist) while this table is graph-wide. The union is safe because the argument that motivated its narrower Assumes -- "any-to-any is a cycle generator", written when nothing detected cycles -- has since been discharged by MECH-CYCLE-CHECK, which is implemented and gated in CI. Its STATEMENT is a contract field, so reconciling it is the operator's: MECH-EDGE-MAP-TABLE-RECONCILE.
+
+Logged, not decided: no Assumes edge in the graph carries a fingerprint, 0 of 14, while Governed_By carries one on 17 of 26 and Crosses on 3 of 29. The skill's fingerprint ladder runs strictly downward, DECISION to MECHANISM to SLICE, and has no place for a same-tier Assumes. Whether such an edge is contract-bearing at all is DEC-ASSUMES-CONTRACT-BEARING.
+
+Grammar counts, for the evaluation cross-check to assert against: thirteen Parent (element, role) pairs and three File relations, from packages/strictdoc-grammar/values.nix. That file is the consumer holding this repository's five node types; the table sits beside it as a second consumer of the same surface, not inside it.
+
+CORRECTIONS TO THIS NODE'S EARLIER STATEMENT, all from graph growth between 61 and 139 nodes. It said five MECHANISM Assumes MECHANISM edges; there are seven. It said the skill's table gives Assumes no target and Serialized_By none at all -- true of the skill, false of the graph, since MECH-CORPUS-EDGE-MAP gives both a stated home and defers Serialized_By explicitly. And it scoped the gap to Governed_By, Assumes and Serialized_By; measured, no role is checked, Superseded_By included.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- The thirteen row VALUES are a proposal derived from measured usage plus the skill's prose table. They are data filling the surface; the operator turns any row without touching this mechanism
+
+- MECHANISM Serialized_By is deliberately left with an EMPTY target set rather than a guessed one. Nothing uses the role and MECH-CORPUS-EDGE-MAP defers it; the first person who wants it writes its contract
+
+- Whether an Assumes edge is contract-bearing at all — 0 of 14 carry a fingerprint, and the skill's downward ladder has no place for a same-tier edge. Left to DEC-ASSUMES-CONTRACT-BEARING and to milestone 5's ripple model
+
+- Whether per-plan narrowing of the table (a profile, so the beads corpus could enforce a tighter Assumes than the graph-wide contract) should exist. The union is proposed instead; the narrowing question is logged, not answered
+
+- Reconciling MECH-CORPUS-EDGE-MAP's STATEMENT with the graph-wide table. It is a contract field on a fingerprinted node, so only the operator changes it
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-CYCLE-CHECK
+  ROLE: Assumes

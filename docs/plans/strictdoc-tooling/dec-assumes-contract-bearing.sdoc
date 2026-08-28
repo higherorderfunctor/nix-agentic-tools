@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: Whether an Assumes edge is weaker than the other roles
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-ASSUMES-CONTRACT-BEARING
+TITLE: Whether an Assumes edge is weaker than the other roles
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: >>>
+The first Assumes edge somebody wants to sign, or the first slice whose closure blocks only through an Assumes edge, or milestone five's ripple model landing — whichever comes first.
+<<<
+STATEMENT: >>>
+Two consumers ask the same question about `Assumes` and neither has an answer. The fingerprint side: measured over the 144-node graph, 0 of 14 Assumes edges carry a PARENT_FP entry, while Governed_By carries one on 28 of 39 and Crosses on 3 of 29. The skill's fingerprint ladder runs strictly downward — DECISION to MECHANISM to SLICE — and has no place for the same-tier MECHANISM-to-MECHANISM (7 edges) and SLICE-to-SLICE (6 edges) that make up thirteen of the fourteen. The readiness side: the closure walk ignores ROLE entirely (`docs/sdoc/status.py:47-51`), so an Assumes edge — a stated premise — blocks a root exactly as hard as a Crosses edge — a mechanism the slice must build on. Decide whether Assumes is a weaker edge in either sense, both, or neither.
+<<<
+RATIONALE: >>>
+Either Assumes is deliberately not contract-bearing, in which case fp-accept should refuse to sign one and say so, or it is and fourteen edges are unsigned. Today neither is written down, and a uniform absence is indistinguishable from nobody having got round to it. The two faces are one decision because both turn on what the role means, and answering one without the other produces a graph where an edge carries no contract yet blocks at full strength.
+<<<
+NOTES: >>>
+Both faces are named in committed text. `MECH-RELATION-TARGET-TYPE-LINT`'s NOTES cites this UID directly, twice. `MECH-READY-QUERY`'s LEFT TO THE OPERATOR list says "Whether relation roles weigh differently in the closure … filed as a backlog DECISION". Latent today on the readiness side: every Assumes target in the graph is already settled, so no verdict currently turns on it.
+
+Absorbs the proposed `DEC-CLOSURE-EDGE-ROLES`.
+<<<

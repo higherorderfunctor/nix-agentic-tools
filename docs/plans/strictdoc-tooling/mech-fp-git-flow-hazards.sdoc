@@ -1,0 +1,77 @@
+[DOCUMENT]
+TITLE: Git operations that change node content before it reaches main
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-FP-GIT-FLOW-HAZARDS
+TITLE: Git operations that change node content before it reaches main
+DEPTH: interface-settled
+AUTHORED_BY: human
+STATEMENT: >>>
+Squash-merge is the only method the repository allows, and it is safe for the hash: it preserves the final tree, so a contract hash is byte-identical before and after and matches the branch tip. What it destroys is the ability to reconstruct an intermediate accepted state, and the per-commit attribution of which signature was turned alongside which content change. Under squash-only, and on a branch that restack and absorb routinely rewrite, the durable unit of signature is the pull request, not the commit. MECH-FP-MAIN-LINEAGE and MECH-FP-PREMERGE-GC own that.
+
+The rest of the workflow's hazards, each with what it breaks and who closes it:
+
+- Rebase onto a main whose copy of a parent has moved. The parent's content is genuinely different, so the recorded hash is stale, fp-check reports it drifted and the flake check fails. Detection is correct and already built; what is undesigned is the response, and the response is a signing-authority question, not a git one.
+- Conflict resolution inside a parent's contract fields. Produces content neither side authored, and is detected: the parent's hash moves and every child that signed it goes drifted.
+- Conflict resolution inside a child's PARENT_FP block. NOT detected. fp-check asserts only that a recorded hash equals the parent's current hash, so any resolution leaving the current hash in place reads as signed and current. This is the same undetectable class MECH-SIGNATURE-REVOCATION measured for a hand-restored line, and it is that node's to close rather than this one's.
+- rerere with autoupdate, which is on in this environment. A resolution recorded once is replayed and staged on every later rebase of the same conflict with no prompt, so both conflict hazards above recur through a restack without a human seeing a conflict at all. Restacking is a series of rebases, which is exactly the shape rerere exists to automate.
+- Carving the branch into a stack of pull requests. checks/strictdoc-fp-check.nix runs over the whole tree inside nix flake check, a required status check, and fails on any drifted, unbacked or deleted entry. A contract change and every acceptance it invalidates therefore have to land in the SAME pull request: split either way round, the first to merge leaves main red and blocks the rest of the stack, and a pair split so the parent has not landed yet fails as a missing parent instead. This constrains the cut points of SLICE-RESTACK-TO-PRS by the fingerprint graph, not only by readability, and it is the one hazard here that yields a buildable rule rather than a policy question.
+- git absorb, git revise and git move routing a hunk into an earlier commit. A PARENT_FP line sits in the same node block as the STATEMENT it signs, so a signature can be absorbed into a commit that predates the state it names. The merged tree is unaffected, so this costs a misleading blame and a possibly red intermediate commit under per-commit testing, not a wrong main.
+
+Out of scope: rebase --update-refs and archive refs move refs, not content; the bot's update/* sweep never touches an sdoc file.
+
+Two questions in this list are the operator's and are deliberately left blank here: whether a rebase should re-accept automatically when the parent's change falls outside the fingerprinted fields, and whether a drifted-on-rebase report blocks or only warns. Both are signing authority, both sit under DEC-FP-ACCEPT-AUTHORITY, and both are settled at the review that defines this instance's semantics.
+<<<
+RATIONALE: >>>
+The enumeration is worth settling now even though the handling stays deferred, because the hazards do not all arm at the same moment and the one that arms first shapes work already scheduled. main carries no sdoc file at all, so nothing on main can move a parent under this branch today; every hazard here arms at the first merge, and the pull-request atomicity constraint arms at the restack that produces that merge. Deferring the whole list until after the first merge would mean discovering the constraint that dictates the cut points while making the cuts.
+
+The handling still waits, and that part of the original deferral holds. What is settled here is which operations are hazards, which are already detected by the checker, and which node owns each one. That is routing, not policy.
+<<<
+NOTES: >>>
+Measured 2026-08-27 in the strictdoc-trial worktree unless stated otherwise.
+
+The fingerprint is a function of file content only. contract_hash hashes the JSON export's node fields, and PARENT_FP is in EXCLUDED_FIELDS beside RATIONALE and NOTES (dev/scripts/sdoc_fp.py:32). That is simultaneously why squash is safe for the hash and why a rewritten PARENT_FP block is invisible to the checker.
+
+rerere.enabled and rerere.autoupdate are both true in file:/home/caubut/.config/git/config -- global, so they apply in every worktree of every clone -- with 35 resolutions already cached in the shared rr-cache. rebase.updateRefs is true there too. 24 worktrees share one common git dir, git-branchless is initialized (.git/branchless exists) and git-absorb is on PATH, so the absorb-routing hazard is a live path rather than a hypothetical.
+
+Nothing has bitten yet, and the reason is measurable: fp-check over the current export reports 31 fingerprint entries, 0 signed and current, 31 never signed, 0 suspect, exit 0. The placeholder never fails the check (fp-check.py:38, FAILING_CASES excludes never-signed), so every hazard here arms with the first real signature -- which per DEC-LONG-LIVED-BRANCH is turned at pull-request review, that is, at the restack.
+
+main holds 0 sdoc files against this branch's 9; the branch is 71 commits ahead of merge base ec980d15.
+
+The gate is real: checks/strictdoc-fp-check.nix is merged into flake.nix's checks (flake.nix:295 and :305), the CI test job runs a plain nix flake check (.github/workflows/ci.yml:591, :643), and test is one of the six required status checks. A missing parent is reported as deleted and fails (fp-check.py:58-60).
+
+Not measured: whether rerere's conflict-hash keying makes cross-node replay likelier in a corpus this uniform, where every node repeats the same field names and similar prose. rerere replays per identical conflict hunk, so two nodes conflicting identically would share one resolution; nobody has produced that case here.
+
+MECH-FP-MAIN-LINEAGE should stay a separate node. It specifies two checks; this one enumerates and routes, and the consumers differ -- SLICE-RESTACK-TO-PRS and MECH-FP-PREMERGE-GC read the enumeration, SLICE-INSTANCE-SEMANTICS-MIGRATION crosses the checks. Merging would give one node that both analyses and specifies. The condition under which merging becomes right is that node's own open question: if merge-time-only signing subsumes both of its checks, it collapses, and its residue is this node's first paragraph.
+
+Correction to what this node used to say. "Costs diagnostics rather than correctness" is right about the hash and understates the attribution loss. DEC-FINGERPRINT-IN-NODE's rationale rests on acceptance being "a reviewable git diff, attributable to a commit"; the commit carrying a signature does not survive squash, restack or absorb. That does not contradict the decision, it fixes the granularity. The earlier NOTES also filed the auto-re-accept question as wanting "a real merge to look at"; it is not a measurement question at all, it is signing authority, and DEC-FP-ACCEPT-AUTHORITY already owns it.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Whether a rebase should re-accept a fingerprint automatically when the parent's change is confined to fields outside the fingerprint. Left blank: it is a signing-authority rule under DEC-FP-ACCEPT-AUTHORITY, which is still open.
+
+- Whether a drifted-on-rebase report blocks the operation or only warns. The mechanism that detects it exists; the severity is policy.
+
+- Whether acceptance is permitted only as the last step before merge. MECH-FP-MAIN-LINEAGE's NOTES treats this as the discipline that might subsume its two checks; it is a rule about when a signature may be turned, so it is the operator's, and whether the checks survive it follows from the answer rather than the other way round.
+
+- Who may re-sign after a conflict resolution, given that the resolver is often the same agent that authored one side. Named but not answered.
+
+- What a revoked-versus-never-signed marker looks like. MECH-SIGNATURE-REVOCATION poses it as a choice between a distinct marker value and a CI history check against main; the PARENT_FP conflict case adds a third caller but does not pick.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Assumes

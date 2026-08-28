@@ -1,0 +1,62 @@
+[DOCUMENT]
+TITLE: Register strictdoc format as the treefmt formatter for sdoc and sgra
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-TREEFMT-SDOC
+TITLE: Register strictdoc format as the treefmt formatter for sdoc and sgra
+DEPTH: interface-settled
+AUTHORED_BY: human
+STATEMENT: >>>
+treefmt formats no file with an sdoc extension today: none of its five formatters -- alejandra, biome, prettier, shfmt, taplo -- claims one, and an unmatched path is logged at info while the run still exits zero. Register strictdoc format as treefmt's formatter for *.sdoc, and set document_line_width in strictdoc_config.py so that the command has something to enforce. The width comes from a new option, ai.strictdoc.settings.format.lineLength, defaulting to 80 -- prettier's printWidth here, which treefmt.nix records as a deliberate choice, so prose inside a .sdoc block wraps at the same column as prose in a .md file. Without the width the command normalises nothing a reader can see: measured, every deviation short of a parse error round-trips unchanged, so a formatter registered without it is a validator wearing a formatter's name.
+
+The wiring is one settings.formatter.strictdoc entry with includes = ["*.sdoc"] whose command is a writeShellApplication carrying pkgs.ai.devTools.strictdoc. treefmt.nix becomes a {pkgs, ...}: module to reach that package; both of its consumers already supply pkgs as a module argument, so no other file changes shape.
+
+The wrapper does not format in place. It mirrors strictdoc_config.py, .gitignore and every .sdoc and .sgra file into a temporary directory, runs strictdoc format . there, and copies back only the paths treefmt named, and only those whose bytes differ. That indirection is what pays for the awkward fit, and both halves of it are load-bearing. format takes one project directory and rewrites every document under it unconditionally, changed or not, so formatting in place advances the mtime of every document in the tree; treefmt decides a file changed by size and mtime, so --fail-on-change would then fail on every run over a byte-identical corpus. And the pre-commit hook passes filenames, so a commit-time run is handed only the staged paths -- an in-place run would silently reformat unstaged documents while treefmt, which stats only what it emitted, reported the run clean.
+
+*.sgra is explicitly OUT, and not merely deferred. strictdoc format never writes one: it reads a grammar to parse documents, and its writer loop covers .sdoc and .md only. Both .sgra files in this repository already have a writer -- docs/sdoc/grammar.sgra is written by the generate:sgra devenv task from ai.strictdoc.grammars.repo and gated by checks/strictdoc-grammar-model-equal.nix, and packages/strictdoc-grammar/fixtures/foreign.sgra is a round-trip fixture whose bytes are the assertion. Registering a formatter over either would put a second writer on a generated file.
+
+Also out, and permanently rather than as a later optimisation: any narrowing of what runs. format accepts exactly one positional path, and resolving the @repo grammar alias against anything narrower than the project root fails, --config included, because the alias is validated against the input path rather than against the config's directory. One invocation per treefmt batch, each formatting the whole tree, is the only mode there is.
+<<<
+RATIONALE: >>>
+Two things depend on canonical form. Fingerprints are taken over field text, so an unformatted file hashes differently from the same content formatted. And the commit gate runs treefmt with fail-on-change, so anything treefmt does not know about cannot be enforced there.
+
+Both reasons require a width. contract_hash serialises the node's raw field values, newlines included, so what a fingerprint signs is the wrapping as typed; and fail-on-change can only enforce a rule the formatter actually applies. With document_line_width unset there is no such rule, which is why the width is part of this mechanism rather than a separate preference.
+
+The sandboxed copy is not defensiveness about a hypothetical. Both failures it prevents were reproduced: an in-place wrapper made treefmt report all nine documents changed on a corpus it had just left byte-identical, and an in-place run given a single path reformatted a different, unstaged document while treefmt reported zero changes.
+<<<
+NOTES: >>>
+Measured 2026-08-27 against strictdoc 0.28.3 and treefmt 2.5.0, on a copy of the corpus outside the repository.
+
+THE MID WARNING DOES NOT REPRODUCE, and the mechanism says why it cannot. strictdoc format . over the whole corpus leaves all nine .sdoc files byte-identical and adds no MID to any of them; no file in the corpus carries one. The writer emits MID only when document.mid_permanent or document.config.enable_mid holds, and mid_permanent is set from `mid is not None` at parse -- that is, only for a document that already declared one in its source. ENABLE_MID is not a lever that could be tripped by accident either: setting it on a probe document made the export fail with "Grammar element 'DECISION' is missing the MID field which contradicts to the DOCUMENT's ENABLE_MID setting", so it additionally requires a MID field on every grammar element. The observation behind the warning most likely came from `manage new`, whose own comment says it sets mid_permanent so the writer persists a MID -- and even there only when enable_mid is set. Positive control that the harness would have seen minting: the same before/after comparison detects a 93-line reflow, and detects a one-word edit under the whitespace-insensitive comparison used below.
+
+WHAT FORMAT ACTUALLY NORMALISES WITHOUT A WIDTH: nothing observable. A paragraph de-wrapped to a single 120-character line survives format . unchanged. Single-line and >>>-delimited forms of the same field are both preserved. The deviations that do get corrected are the ones the parser rejects outright -- a double blank line between blocks fails with "Expected EOF" rather than being repaired. So the statement that the corpus is a no-op "because the files were written in canonical form by hand" is true by the wrong mechanism: nothing was being enforced.
+
+THE ONE-TIME COST OF SETTING document_line_width = 80. Five of the nine documents reflow, 93 changed lines in total: 00-approach 6, 01-tooling 27, 02-plan-lifecycle 7, 99-backlog 47, packages/semble/.sdoc/01-grammar-injection 6. Every one of the five is whitespace-only -- collapsing runs of spaces and newlines gives an identical byte stream before and after, and that comparison does detect a planted one-word change. A second run is byte-identical, so it converges in one pass. The corpus is not currently at 80 by hand: maximum line lengths run 80, 81, 82, 85, 86, 99, 100, 111 and 349. strictdoc's wrapper leaves an over-long unbreakable token overflowing rather than splitting it, the same way prettier's proseWrap does, so 82-character lines survive legitimately.
+
+The reflow costs no fingerprint today and will not stay free. fp-check over the current export reports 31 fingerprint entries, 0 signed and current, 31 never signed. Every signature taken before this lands would drift the moment it does, so it belongs ahead of the first fp-accept rather than after it.
+
+TREEFMT DECIDES BY MTIME. Its diagnostic prints prev_size and current_size and they were equal for every file it flagged -- the reflow swaps a space for a newline and the byte count does not move -- so mtime is the discriminator. Two runs pin it down: an in-place wrapper produced "formatted 9 files (9 changed)" and failed --fail-on-change over a corpus whose bytes it had not altered; the same wrapper with the original mtime restored on every unchanged file produced "0 changed" and exit 0.
+
+COLLATERAL WRITES ARE REAL AND SILENT. devenv's git-hooks treefmt hook is defined with pass_filenames = true. Running treefmt on one path, with a different document left non-canonical, reformatted that other document and reported "1 files (0 changed)": treefmt stats only what it emitted, so the working tree moved and the gate stayed green. The sandboxed copy is what closes this; it reproduces the in-place width-80 result byte for byte while touching only the named paths.
+
+THE DIAGNOSTIC GOES TO STDOUT. strictdoc prints its parse and semantic errors on stdout, not stderr, so a wrapper ending in `strictdoc format . > /dev/null` swallows every error message while still exiting 1. Measured with a deliberately broken document, treefmt then reports only "failed to apply with options '[]': exit status 1", formats nothing in that batch, and exits non-zero. Fail-closed, but useless to read: keep the output, or redirect stdout to stderr.
+
+TWO SIDE EFFECTS THAT MUST NOT LAND IN THE TREE. format writes output/_cache/<version>/ (2.4 MB on this corpus) into the current directory -- it has no --output-dir -- and importing strictdoc_config.py leaves a __pycache__ beside it. Inside the temporary directory both are discarded with it. If a future in-place path is ever wanted, dir_for_sdoc_cache in strictdoc_config.py does relocate the cache (verified: the tree root stayed clean and the cache appeared at the configured absolute path), which is the same lever MECH-SDOC-CACHE-DIR-FOR-WORKTREES describes; PYTHONDONTWRITEBYTECODE=1 suppresses the other.
+
+MIRROR THE .gitignore TOO. project_config reads the project's .gitignore and extends exclude_doc_paths with its patterns, so a copy without it has a different document set from the real tree.
+
+A TRAP IN THE FILE LIST: packages/semble/.sdoc is a DIRECTORY whose name ends in .sdoc, so `find -name '*.sdoc'` matches it. Use -type f.
+
+COST. The wrapper runs in 1.84 s warm against 1.81 s for a bare in-place format, so mirroring 12 files costs about 30 ms. treefmt invokes the command once per batch and nine files is one batch. strictdoc is already in CI's build closure -- checks/strictdoc-fp-check.nix takes pkgs.ai.devTools.strictdoc as a nativeBuildInput -- so registering it here adds nothing to what checks.formatting must build, even though the devenv shell keeps ai.strictdoc.enable = !isCI.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
+<<<

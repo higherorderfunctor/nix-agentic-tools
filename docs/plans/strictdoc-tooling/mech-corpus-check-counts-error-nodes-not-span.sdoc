@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: The corpus check's no-regression arm counts ERROR nodes, which recovery reshapes
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-CORPUS-CHECK-COUNTS-ERROR-NODES-NOT-SPAN
+TITLE: The corpus check's no-regression arm counts ERROR nodes, which recovery reshapes
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+checks/strictdoc-grammar-corpus.nix gates a grammar change on the number of
+ERROR/MISSING NODES per already-failing file. That number is a property of how
+tree-sitter's error recovery segmented the unparsed text, not of how much text
+went unparsed: one candidate patch took strictdoc_01_user_guide.sdoc from 42
+nodes to 19 while its error BYTES fell 1921 -> 501 (a genuine improvement), and
+another took strictdoc_04_release_notes.sdoc from 9 nodes to 89 with error bytes
+rising 76795 -> 98406 (a genuine loss). Both directions happened to agree here,
+so the check's verdict was right -- but only by luck, since a change that merely
+fragments one big ERROR into many reads as a large regression.
+
+Fix shape: report both, and gate on the byte span. The node count stays useful
+as a diagnostic.
+<<<
+RATIONALE: >>>
+Noticed while iterating on the choice_option widening above, where the node
+count was the only signal available and had to be cross-checked by hand against
+the spans before the verdict could be trusted.
+<<<

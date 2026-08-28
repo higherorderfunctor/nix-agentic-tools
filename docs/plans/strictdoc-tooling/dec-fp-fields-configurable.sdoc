@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: Which fields are contract-bearing is configuration, not a constant
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-FP-FIELDS-CONFIGURABLE
+TITLE: Which fields are contract-bearing is configuration, not a constant
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+The Nix option surface for custom fields and workflow mechanics exists and the
+operator has reviewed the field selection through it.
+<<<
+STATEMENT: >>>
+The set of fields a fingerprint covers is a per-project option, not a hardcoded
+list in a script. A prototype may hardcode any reasonable selection to exercise
+the logic, but that selection is not settled by having been prototyped.
+<<<
+RATIONALE: >>>
+The selection is the whole mechanism: too broad and every wording change
+re-suspects everything until sign-off becomes a rubber stamp, too narrow and a
+decision going superseded fails to stale its dependents. That trade is the
+operator's to make, and it cannot be reviewed sensibly as an argument in prose
+-- it needs the typed option surface the rest of this repository's integrations
+are reviewed through.
+<<<

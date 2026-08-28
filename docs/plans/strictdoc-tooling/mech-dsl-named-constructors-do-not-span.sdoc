@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: The DSL's named constructors cover the common case, not the relation space
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-DSL-NAMED-CONSTRUCTORS-DO-NOT-SPAN
+TITLE: The DSL's named constructors cover the common case, not the relation space
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The settled DSL shape gives rel.parent and rel.child two positional roles, and
+rel.file as a bare value carrying none. The grammar allows more than that in
+both directions: ROLE and REVERSE_ROLE are optional on Parent and Child, so a
+role-less parent relation is legal, and File takes a ROLE even though it has no
+REVERSE_ROLE production at all.
+
+So the three named constructors between them cannot write two shapes the
+grammar accepts. Both are reachable through the generic rel.mk -- rel.mk
+"parent" {} and rel.mk "file" {role = "Depends";} -- and the types accept both,
+so nothing is unwritable. What is missing is a named way to say it.
+
+Whether that matters depends on whether the DSL is meant to be the readable
+surface for every legal grammar or the fast path for the common one. The same
+question applies to HUMAN_TITLE, which no field constructor names either.
+<<<
+RATIONALE: >>>
+Noted while implementing the DSL against the settled shape. The gap is easy to
+mistake for an oversight and rewrite, and the fix -- more arities, or optional
+attrset arguments -- costs the property that every constructor is currently a
+one-line attrset literal.
+<<<

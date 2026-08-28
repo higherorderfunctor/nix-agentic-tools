@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: Tune the contract field selection once the option surface exists
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-FP-FIELD-TUNING
+TITLE: Tune the contract field selection once the option surface exists
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+Revisit which fields a fingerprint covers, through the Nix option surface,
+after the prototype has been in use. The prototype's hardcoded selection is a
+starting point chosen to exercise the logic, not a settled answer.
+<<<
+RATIONALE: >>>
+The option surface is not load bearing for building the detector, so waiting on
+it would block work for no gain. But the selection does need the operator's
+review eventually, and reviewing it as prose was already rejected.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-FP-FIELDS-CONFIGURABLE
+  ROLE: Governed_By

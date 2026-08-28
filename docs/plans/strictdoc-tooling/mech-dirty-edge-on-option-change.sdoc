@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: A node whose inputs changed should go dirty rather than quietly stale
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-DIRTY-EDGE-ON-OPTION-CHANGE
+TITLE: A node whose inputs changed should go dirty rather than quietly stale
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The operator's, and it belongs with the behaviour model rather than the grammar
+surface. Once file relations are settled, a change to what a node depends on
+should mark that node DIRTY -- visibly needing reconciliation -- rather than
+leaving it silently stale, with a model filling the gap afterwards.
+
+The fingerprint machinery already does this for node-to-node contracts. What it
+does not cover is a relation pointing at a file, which today resolves to a path
+that nothing checks for existence, let alone for change. Scope this where the
+behaviour model lands.
+<<<
+RATIONALE: >>>
+This is the point of the dirty-edge idea in the operator's semantics rather
+than an incidental feature: staleness that announces itself is the difference
+between a graph that decays and one that asks to be repaired.
+<<<

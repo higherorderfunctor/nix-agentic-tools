@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: A .sgra file cannot carry a generated-file header, because it has no comment syntax
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SGRA-ADMITS-NO-COMMENTS
+TITLE: A .sgra file cannot carry a generated-file header, because it has no comment syntax
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The grammar for .sgra files admits nothing before [GRAMMAR] and nothing between
+its keys. A leading # line fails the textx parse at 1:1 with
+Expected '[GRAMMAR]', and there is no alternative comment production anywhere in
+the file. Measured against strictdoc 0.28.3.
+
+Every other generated artefact in this repository opens with a line saying it is
+generated and naming its generator. A .sgra emitted by the grammar surface
+cannot, so docs/sdoc/grammar.sgra will look hand-written forever and a session
+editing it by hand gets no warning at the point of editing. The only places a
+banner could hide are a field HUMAN_TITLE or an element PREFIX, both of which
+change what the file means.
+
+Whatever marks the file as generated therefore has to live outside it -- a
+sibling README, a treefmt or check rule that regenerates and diffs, or a path
+convention. Undecided which.
+<<<
+RATIONALE: >>>
+Noted while building the negative fixture corpus, where the same limitation
+forced the per-fixture expectation out of the fixture files and into their
+README.
+<<<

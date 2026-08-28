@@ -1,0 +1,46 @@
+[DOCUMENT]
+TITLE: Keep faithful out of the consumer glossary
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-FAITHFUL-IS-NOT-A-CONSUMER-WORD
+TITLE: Keep faithful out of the consumer glossary
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Faithful describes a transformation methodology -- how the surface is derived
+from strictdoc's own grammar, and the promise that no opinion was added on the
+way. It is a contributor-side term. It may well exist as a contributor-side
+grammar in its own right.
+
+It should not appear in anything a consumer reads: not an option name, not an
+attribute path, not documentation aimed at someone using the published surface.
+A consumer does not care which of our layers a thing came from, and naming a
+public entry point after the methodology asks them to learn our build process
+before they can call a function.
+
+Low priority. The operator may move this to a repository issue rather than
+keeping it here.
+<<<
+RATIONALE: >>>
+Raised when a lower-level emitter was about to be named faithful.emit. The name
+was self-documenting only to someone who had read the three-layer design, which
+is exactly the wrong audience test for a published interface.
+<<<
+NOTES: >>>
+PARTLY CLOSED 2026-08-27, by the review round on the decomposition and the emit
+split. `lib/default.nix` was still re-exporting `faithful`, so the barrel really
+did publish the attribute path this node rules out; it now wires the layer as a
+let-binding and exports `check`, `dsl`, `emit` and `normalized` only. Nothing
+read it -- and nothing needs to, since `normalized` IS `faithful // { … }`, so
+`normalized.productions` and `normalized.meta` are the same values under a name
+that describes the layer rather than the methodology.
+
+Still OPEN: the word remains in comments and in the two generated files' own
+names (`lib/faithful.nix`), which is where a contributor meets it and is the
+side of the line this node puts it on. Whether the FILE should be renamed too,
+and whether this belongs in a repository issue rather than here, are the
+operator's.
+<<<

@@ -1,0 +1,36 @@
+[DOCUMENT]
+TITLE: The JSON export flattens the grammar it reports, so it cannot verify an emitted .sgra
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-JSON-EXPORT-DROPS-GRAMMAR-DETAIL
+TITLE: The JSON export flattens the grammar it reports, so it cannot verify an emitted .sgra
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+strictdoc export --formats=json reports a DOCUMENTS[].GRAMMAR block, and that
+block is lossy in four ways. Measured on 0.28.3 against a grammar that uses all
+four of them.
+
+Every field TYPE is reported as the string "String" -- a Tag field and a
+MultipleChoice(reader, author, reviewer) field are indistinguishable from a
+plain String one. HUMAN_TITLE is absent. The PROPERTIES block is absent
+entirely, so IS_COMPOSITE, PREFIX and VIEW_STYLE do not appear. Relations carry
+TYPE and ROLE but not REVERSE_ROLE.
+
+That rules the JSON export out as the oracle for the grammar milestone's
+acceptance item 4, which compares the model strictdoc builds from an emitted
+.sgra against the model it builds from the committed one: two grammars differing
+in any of the four would compare equal. The comparison has to run in process
+against the parsed document model, not over exported JSON. It also bounds what
+the sdoc-cli milestone can learn about a grammar from the export it already
+depends on.
+<<<
+RATIONALE: >>>
+Noted while checking that the foreign fixture actually exercised the surface it
+claims to. The export accepted every feature and then reported almost none of
+them back, which is exactly the shape that makes a round-trip check pass without
+having checked anything.
+<<<

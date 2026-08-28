@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: StrictDoc mints a fresh MID on every parse, so two reads of one file disagree
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-MID-IS-PER-PARSE-RANDOM
+TITLE: StrictDoc mints a fresh MID on every parse, so two reads of one file disagree
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured on 0.28.3 while writing extract/compare.py. Every node StrictDoc
+builds carries a `mid`, and for a .sgra it is generated fresh on each parse --
+a .sgra has no syntax to declare one. Reading the SAME BYTES twice therefore
+produces two models that disagree on every `mid` in the file.
+
+Any structural comparison of two models has to skip it. Keeping it is not a
+stricter comparison, it is one that can never pass, and because the difference
+is per-parse rather than per-file it does not look like a bug in whatever
+produced the second file.
+
+The consequence beyond comparison: a MID is not an identity that survives a
+re-read, so nothing may key on one across parses.
+<<<
+RATIONALE: >>>
+The first run of compare.py against two byte-identical files reported them
+different, with a mid mismatch on every node. Worth knowing before anything
+else -- a diff tool, a cache key, a cross-file reference -- treats a MID as
+stable.
+<<<

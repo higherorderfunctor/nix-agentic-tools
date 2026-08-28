@@ -1,0 +1,35 @@
+[DOCUMENT]
+TITLE: Satisfy options parity with a home-level install, and defer the rest
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-AI-STRICTDOC-HOME-PARITY
+TITLE: Satisfy options parity with a home-level install, and defer the rest
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+checks/options-doc.nix demands exact home-manager parity for an `ai.*` facet, so
+the devenv-only ai.strictdoc module fails by construction. Operator's ruling:
+add a home-manager module carrying `enable` and `package` only -- a user-global
+install, the same shape packages/semble/modules/homeManager already has -- which
+satisfies parity as a bucket item.
+
+`grammars` is deliberately NOT mirrored at the home level, and this is a
+judgement rather than an omission: managing sdoc grammars for a user with no
+defined project root does not fit. The operator maintains their own
+configuration in a separate repository, as most home-manager users do, and
+expects grammars to be maintained through devenv inside whichever repository
+owns the documents.
+
+That makes this a real exception to the repo's config-parity rule rather than a
+gap to close later, so the parity language itself needs updating to say a
+surface may be intentionally home-absent when it is inherently project-scoped.
+<<<
+RATIONALE: >>>
+The parity rule exists so a feature is not quietly available in one place and
+missing in another. A surface that is meaningless without a project root is not
+that case, and forcing it into home-manager would produce an option nobody can
+use correctly.
+<<<

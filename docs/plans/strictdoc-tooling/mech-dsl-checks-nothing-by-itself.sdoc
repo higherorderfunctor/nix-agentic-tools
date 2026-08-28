@@ -1,0 +1,45 @@
+[DOCUMENT]
+TITLE: DSL values are unchecked until something feeds them to the option surface
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-DSL-CHECKS-NOTHING-BY-ITSELF
+TITLE: DSL values are unchecked until something feeds them to the option surface
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The DSL is sugar only, which means it asserts nothing: every constructor is a
+plain attrset literal, and the sole thing that can reject a malformed value is
+the normalized option surface it is checked against. Measured by evaluating the
+DSL with its normalized argument bound to a throw -- every constructor still
+worked, including the ones building values the surface rejects.
+
+That is the intended design, and it has a consequence worth stating. The
+barrel declares a dsl to normalized dependency edge that does not exist at
+evaluation time, so a consumer that imports the DSL and hands the result
+straight to the emitter passes through no type at all. The emitted file would
+then be checked only by strictdoc, at export, where the two silent duplicate
+cases are known not to fire.
+
+The guarantee therefore lives entirely in the consumer's option declaration.
+Either the emitter's entry point takes values already checked -- by declaring
+its input with the normalized type rather than accepting a bare attrset -- or a
+consumer can bypass the surface without noticing.
+
+CONFIRMED by measurement in the repair step of the same milestone, which is why
+this node is not filed a second time under another name. Rendering values.nix
+and fixtures/foreign.nix through `emit.grammar` directly -- not through
+lib/check.nix -- produces bytes IDENTICAL to both committed files, and with
+check.elements gutted to the identity function the model-equal, foreign-roundtrip
+and negative-fixtures checks all stayed GREEN. The emitter reads every key with
+an `or` default, so it is blind to every weakening the types catch. lib/check.nix
+now exists and checks/strictdoc-grammar-surface-live.nix gates it, but the bypass
+itself is still reachable: nothing stops a consumer calling emit.grammar.
+<<<
+RATIONALE: >>>
+Noted while proving the DSL cannot weaken the types. It cannot, but "cannot
+weaken" is a statement about a value that reaches the surface, and nothing in
+the current wiring guarantees one does.
+<<<
