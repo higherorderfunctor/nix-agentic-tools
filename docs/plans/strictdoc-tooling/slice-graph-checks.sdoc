@@ -1,0 +1,41 @@
+[DOCUMENT]
+TITLE: Make the graph fail loud on cycles and on an unvalidated export
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[SLICE]
+UID: SLICE-GRAPH-CHECKS
+TITLE: Make the graph fail loud on cycles and on an unvalidated export
+DEPTH: verified
+AUTHORED_BY: human
+STATEMENT: >>>
+Two checks over the JSON export, in the harness fp-check already established.
+
+Cycle detection, because StrictDoc's own is blind to relations that carry a
+role and every relation here carries one -- a cycle currently surfaces as a
+recursion crash during render rather than an error.
+
+An export gate, so a malformed document cannot reach the branch. Determine
+first whether checks/strictdoc-fp-check.nix already provides this as a
+byproduct of its clean-directory export; if it does, say so and close
+MECH-SDOC-CI-CHECK rather than adding a second binary.
+<<<
+RATIONALE: >>>
+Both are small and both close holes that have already been hit. A broken graph
+was committed to this branch and the hooks passed it. Cycles have never been
+tested because nothing detects them.
+<<<
+NOTES: >>>
+Cycle detection: MECH-CYCLE-CHECK. Export gate: determined already satisfied
+as a byproduct of checks/strictdoc-fp-check.nix and, now, also of
+checks/strictdoc-cycle-check.nix -- see MECH-SDOC-CI-CHECK's NOTES for the
+determination. No second export-only binary added.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-CYCLE-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SDOC-CI-CHECK
+  ROLE: Crosses

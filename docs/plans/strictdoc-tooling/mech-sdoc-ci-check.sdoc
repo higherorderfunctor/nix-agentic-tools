@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: Gate the design graph in nix flake check
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-CI-CHECK
+TITLE: Gate the design graph in nix flake check
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+Add a flake check that exports the graph to JSON and fails on non-zero exit, so
+a broken relation or an invalid enum value cannot merge.
+<<<
+RATIONALE: >>>
+Validation currently runs only when someone remembers to run it. The export is
+a few seconds on a corpus this size.
+<<<
+NOTES: >>>
+The check must use a clean output directory. Incremental generation produces a
+false green: the same broken input exits 1, then 0 on re-run against a warm
+output directory.
+
+Determined by SLICE-GRAPH-CHECKS: satisfied as a byproduct, no separate check
+added. checks/strictdoc-fp-check.nix (SLICE-FP-DETECTOR) runs `strictdoc
+export` under `set -euETo pipefail` inside a clean runCommand $TMPDIR --
+validation runs at parse time, so a non-zero export exit already fails that
+build. checks/strictdoc-cycle-check.nix (MECH-CYCLE-CHECK) does the same
+independently. Two checks now provide this gate; adding a third binary whose
+only job was the export step itself would just be the same export run a
+third time.
+<<<
