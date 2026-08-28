@@ -1,0 +1,51 @@
+[DOCUMENT]
+TITLE: What looks stale on a first reading
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[SPIKE]
+UID: SPIKE-CORPUS-STALE-INVENTORY
+TITLE: What looks stale on a first reading
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATUS: run
+RETIRES_ON: >>>
+Each item is confirmed or dismissed by the operator, or the section holding it
+is converted and the question resolved in the process.
+<<<
+STATEMENT: >>>
+Ordered by how much each would mislead an implementing model. This is a reading
+pass by a fresh reader, NOT an audit, and no item is confirmed.
+
+1. The register is not the source of truth it claims to be. Seven open-card ids
+   appear in section bodies with no register row. One states a hard blocker
+   cited by four sections and therefore carries no retirement condition. Two
+   rows named pointer-only appear as no card anywhere.
+2. The phases document contradicts itself within 30 lines: the four slices need
+   nothing open resolved, versus no slice owns fleet-instance lifecycle.
+3. The grain label vocabulary is a declared, unfixed blocker: 127 rules, 90
+   distinct labels, one placeholder appearing 22 times, case-variant duplicates.
+4. The same defect undeclared in the cast kind column: ten values declared, 43
+   observed, including multi-word phrases. Nothing notices this one.
+5. Probes are documented twice, differently, in the probes appendix and the
+   register, which the register's own rule forbids.
+6. The measured record contains non-measurements: two entries recorded as
+   unprobed inside a document whose stated purpose is what was actually run.
+7. The grain index is an 87 percent incomplete projection that reads as
+   complete: 16 of 127 rules.
+8. Two layers describe the same cost model twice with different vocabularies.
+   They agree today and nothing checks that they continue to.
+9. Dead scaffolding still cited as live: the three largest holes are referenced
+   as if they were the authoritative home for their mechanism.
+<<<
+RATIONALE: >>>
+Recorded so a conversion session starts from suspicion rather than rediscovering
+these one at a time. Items 1 and 4 are the dangerous ones, because both present
+as complete and neither is flagged anywhere in the corpus.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By
