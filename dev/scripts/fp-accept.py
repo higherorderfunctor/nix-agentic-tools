@@ -9,14 +9,21 @@ relation to (any role) and writes a PARENT_FP entry for it -- unless
 MECH-FP-ACCEPT-READINESS refuses: a MECHANISM/SLICE/INVARIANT/SPIKE parent
 below interface-settled, or a DECISION parent whose STATUS is open.
 
-This is the ONLY thing that writes PARENT_FP (DEC-FINGERPRINT-IN-NODE). It
-edits the node's SOURCE .sdoc file directly, found by scanning
-docs/plans/**/*.sdoc and **/.sdoc/*.sdoc for a `UID: <uid>` line -- the JSON
-export carries no source-file pointer.
+This is the ONLY thing that writes PARENT_FP (DEC-FINGERPRINT-IN-NODE), and
+it writes through sdoc_model (MECH-SDOC-EDIT-VIA-MODEL) like every other
+writer. Two consequences of that, both of which used to be this script's
+problem:
 
-Run `strictdoc format .` and re-export with a clean output directory
-afterward -- this script does neither for you, and a stale export is what
-produces the false-green gotcha the sdoc skill warns about.
+* The glob-and-grep scan for a `UID: <uid>` line is gone. The model gives
+  each node its own source file, which the JSON export does not carry.
+* `strictdoc format .` afterwards is gone. SDWriter emits the canonical form,
+  so the file this writes is already formatted.
+
+Re-export with a CLEAN output directory before the next fp-check -- a stale
+export is the false-green gotcha the sdoc skill warns about, and that part is
+still the caller's.
+
+Hashes still come from the JSON export: this changes the write path only.
 """
 
 from __future__ import annotations
@@ -26,28 +33,15 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from sdoc_edit import set_parent_fp
 from sdoc_fp import build_uid_index, contract_hash, format_parent_fp, is_ready, load_index, parse_parent_fp, relation_parent_uids
-
-
-def discover_sdoc_files(repo_root: Path) -> list:
-    """Source locations per the sdoc skill's Layout table."""
-    files = list((repo_root / "docs" / "plans").rglob("*.sdoc"))
-    files += list(repo_root.rglob(".sdoc/*.sdoc"))
-    return files
-
-
-def find_source_file(files: list, uid: str):
-    needle = f"UID: {uid}"
-    for f in files:
-        if needle in f.read_text():
-            return f
-    return None
+from sdoc_model import SdocError, open_graph
 
 
 def accept(index: dict, repo_root: Path, uids: list) -> int:
     by_uid = build_uid_index(index)
-    files = discover_sdoc_files(repo_root)
+    # One load for every UID on the command line: the graph load is the
+    # expensive step and this script routinely signs several at once.
+    graph = open_graph(repo_root)
     exit_code = 0
 
     for uid in uids:
@@ -88,15 +82,13 @@ def accept(index: dict, repo_root: Path, uids: list) -> int:
                 print(f"  skipped {parent_uid}: {reason}")
             continue
 
-        source = find_source_file(files, uid)
-        if source is None:
-            print(f"error: {uid} matched in export but no source .sdoc file found under {repo_root}", file=sys.stderr)
+        try:
+            graph.set_field(uid, "PARENT_FP", format_parent_fp(list(existing.items())))
+            source = graph.path_of(graph.node(uid))
+        except SdocError as exc:
+            print(f"error: {uid}: {exc}", file=sys.stderr)
             exit_code = 1
             continue
-
-        text = source.read_text()
-        new_text = set_parent_fp(text, uid, node_type, format_parent_fp(list(existing.items())))
-        source.write_text(new_text)
 
         print(f"{uid}: signed {len(signed)} parent(s) in {source.relative_to(repo_root)}")
         for parent_uid in signed:
@@ -104,6 +96,8 @@ def accept(index: dict, repo_root: Path, uids: list) -> int:
         for parent_uid, reason in skipped:
             print(f"  skipped {parent_uid}: {reason}")
 
+    for path in graph.save():
+        print(f"wrote {path.relative_to(repo_root)}")
     return exit_code
 
 
@@ -117,7 +111,7 @@ def main() -> int:
     index = load_index(args.export_json)
     code = accept(index, args.repo_root.resolve(), args.uids)
     if code == 0:
-        print("\nRun `strictdoc format .` and re-export before the next fp-check.")
+        print("\nRe-export with a clean output directory before the next fp-check.")
     return code
 
 
