@@ -469,6 +469,33 @@ in {
           inherit (sdocGrammar) dsl;
         };
       };
+
+      # ── PROPOSAL, NOT WIRED ────────────────────────────────────────────
+      #
+      # A layer-0 two-grammar split under consideration: `plan` for disposable
+      # work decomposition, `spec` for the durable knowledge a finished plan
+      # dissolves into. Written out in full at
+      # packages/strictdoc-grammar/values/{plan,spec}.nix, whose headers carry
+      # the reasoning.
+      #
+      # Left commented deliberately. Uncommenting renders two more `.sgra`
+      # files into docs/sdoc/ on the next `generate:sgra`, and neither has a
+      # corpus, an alias registered in StrictDoc's project config, or a check
+      # that reads it. Enabling it is a decision, not a formality.
+      #
+      # grammars.plan = {
+      #   target = "docs/sdoc/plan.sgra";
+      #   elements = import ./packages/strictdoc-grammar/values/plan.nix {
+      #     inherit (sdocGrammar) dsl;
+      #   };
+      # };
+      #
+      # grammars.spec = {
+      #   target = "docs/sdoc/spec.sgra";
+      #   elements = import ./packages/strictdoc-grammar/values/spec.nix {
+      #     inherit (sdocGrammar) dsl;
+      #   };
+      # };
     };
   };
 
