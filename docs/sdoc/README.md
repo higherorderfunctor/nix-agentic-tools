@@ -123,6 +123,49 @@ It writes nodes and edges. It does not write code, and it does not sign.
 Give it a slice UID, not a description. The slice's closure is the brief, and
 the graph already says whether it is ready.
 
+### A carve-up session — split the corpus to one node per file
+
+> Carve the strictdoc corpus to **one node per file**. Branch
+> `feat/strictdoc-trial`, worktree at `<worktree path>`. Invoke the `sdoc` skill
+> — it states the rule; `MECH-ONE-NODE-PER-FILE` carries the measurement and
+> what is deliberately unsettled.
+>
+> The rule is the operator's and it is not up for discussion: one requirement,
+> one plan step, one plan, one milestone, one backlog item, one decision — one.
+> The graph is pulled in along edges, so the unit a reader fetches has to be the
+> unit the graph addresses.
+>
+> Why, so you do not re-derive it: the corpus is 421 KB across 156 nodes in 8
+> files. An average node is 2.7 KB. Reading one node out of `99-backlog.sdoc`
+> costs 279 KB, because that file holds 110 of them. Every agent that opens it
+> takes the whole backlog into context, on every re-read.
+>
+> Order: `99-backlog.sdoc` first, 110 nodes and by far the worst. Then
+> `03-executable-rules.sdoc` — only 7 nodes but 74 KB, 10.5 KB apiece. Then
+> `01-tooling.sdoc` and `02-plan-lifecycle.sdoc`. The `beads-migration` and
+> `docs/spec` files are already close to the rule; leave them last or alone.
+>
+> **The UID never changes, so nothing citing a node breaks when it moves.** That
+> is what makes this mechanical. Script the split at node boundaries rather than
+> hand-cutting 156 files, and run the validation loop after each file so a
+> failure names the file that caused it.
+>
+> `MECH-ONE-NODE-PER-FILE` says the migration wants the writing tool from
+> `SLICE-SDOC-CLI`. That is a preference, not a gate — the export IS the
+> validator, so a script plus a clean-directory export per step is sufficient.
+> Decide which you are doing and say so in the first commit.
+>
+> **Three things the operator has NOT settled. Bring them back as plain-language
+> cards; do not pick for them.** The naming convention for 156 single-node
+> files. What happens to the numbered-document convention (`01-`, `02-`, `03-`)
+> once a file is one node. And what a per-plan backlog becomes when it is a
+> directory query rather than a file.
+>
+> Standing rules: **never run `fp-accept`**, never set `AUTHORED_BY: human`,
+> never edit an accepted `DECISION`'s `STATEMENT`. Commit as you go — one commit
+> per file carved up, not one at the end. Log incidental findings to the plan
+> backlog rather than telling the operator.
+
 ### What a fresh session loads, and what it does not
 
 **Automatic:** `CLAUDE.md`, `AGENTS.md`, the `MEMORY.md` index, and every
