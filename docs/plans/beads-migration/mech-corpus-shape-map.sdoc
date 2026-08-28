@@ -1,0 +1,54 @@
+[DOCUMENT]
+TITLE: Which content shape becomes which node type
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-CORPUS-SHAPE-MAP
+TITLE: Which content shape becomes which node type
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured across 42 files and 4252 lines. Counts are instances found, not
+estimates. Realistic node total for a full conversion is 360 to 420, against
+the prior bundle's 990 nodes over 99 documents.
+
+| shape | instances | becomes | citation |
+| --- | --- | --- | --- |
+| section body | 41 | SLICE or MECHANISM | one h2 per file |
+| GRAIN rules | 127 over 90 labels | INVARIANT | 01-how-to-read.md:48 |
+| OPEN cards | 132 to 47 distinct ids | DECISION for the 47; 85 fold into their host node | 04-register.md:74 |
+| register green-blockers | 16 rows | fold into the 47 DECISIONs | 04-register.md:96 |
+| register deferred T-rows | 16 rows | fold into DECISION or SPIKE | 04-register.md:127 |
+| cast-table rows | 223 in 25 tables | MECHANISM, deduped to 61-90 | 12-flow-iterate.md:28 |
+| slices B1 to B4 | 4 rows | SLICE | 05-phases-and-gate.md:34 |
+| acceptance bars EX1 to EX5 | 5 | INVARIANT, or fold into SLICE | 05-phases-and-gate.md:61 |
+| probes | 9 rows | SPIKE | 34-appendix-probes.md:36 |
+| measured facts | ~25 bullets | SPIKE with STATUS run | 35-appendix-measured.md:28 |
+| rejected paths | 19 rows + 2 prior-art | DECISION with STATUS rejected | 37-appendix-rejected.md:28 |
+| provenance corrections | 4 rows | Superseded_By edges | 41-appendix-provenance.md:32 |
+| provenance drops | 10 rows | 9 tombstone DECISIONs | 41-appendix-provenance.md:45 |
+| glossary | 21 terms | free text; 7 open ones attach to the hinge | 40-glossary.md:26 |
+| argument/matrix tables | 47 tables, 328 rows | free text inside STATEMENT | 21-isolation-promise.md:51 |
+| pseudocode | 18 blocks, 446 lines | free text plus a symbol-reference lint | 12-flow-iterate.md:77 |
+| mermaid figures | 7 | free text plus a participant lint | 12-flow-iterate.md:52 |
+| HTML presentation markup | 378 lines | DROPPED | every file, lines 14-18 |
+| index table | 29 rows | DELETED, regenerate from JSON | 00-index.md:13 |
+| grain index | 16 rows | DELETED, regenerate from JSON | 39-appendix-grain-index.md:26 |
+| frontmatter counters | 41 x 3 | DELETED, derived | already drifting in 4 of 41 |
+
+Node budget by type: ~41 section nodes, 61-90 MECHANISM from casts, 127
+INVARIANT, ~66 DECISION, ~34 SPIKE, ~5 LAYER.
+<<<
+RATIONALE: >>>
+Do not nodify the argument and matrix tables. They are arguments, not entities,
+and decomposing them is the over-specification trap. The same applies to the
+option tree in the config document: one MECHANISM statement, not a node per
+option.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By
