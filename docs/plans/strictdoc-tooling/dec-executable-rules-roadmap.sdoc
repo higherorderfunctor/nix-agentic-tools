@@ -1,0 +1,65 @@
+[DOCUMENT]
+TITLE: The rules become executable in five milestones, plumbing before migration
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-EXECUTABLE-RULES-ROADMAP
+TITLE: The rules become executable in five milestones, plumbing before migration
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: >>>
+The fifth milestone is verified, or a milestone's review changes the order or
+the number of milestones.
+<<<
+STATEMENT: >>>
+The rules of the design system become executable in five milestones, in this
+order:
+
+1. The grammar, generated from a typed Nix option surface, with a validation
+   gate at commit time and in CI.
+2. A command-line tool that is the only writer of sdoc files, with direct
+   edits denied.
+3. The behaviour model -- states, moves, gates, triggers, flows -- defined in
+   Nix and rendered so it can be looked at.
+4. That behaviour wired into the tool and into checkpoints at command, commit
+   and merge time, with strictdoc's own hooks as the backstop.
+5. This system's own semantics -- fingerprints, signing, the ripple, DEPTH --
+   migrated onto that plumbing.
+
+Every milestone is consumer-facing, so its option surface or verb list is
+reviewed by the operator before the milestone is implemented. Milestones one
+and two are separate slices; each milestone normally runs in its own session,
+and the operator may continue from one to the next in the same session when
+the first goes well. Migration waits for the plumbing. Whether a finished
+milestone is worth integrating sooner is the operator's call.
+
+The planning session that produced these nodes stays open, to re-slot a
+milestone whose timing was wrong.
+<<<
+RATIONALE: >>>
+In the operator's words, the activity began because a model produces sdoc in
+incorrect formats, nothing validates a write when it happens, and the node
+lifecycle could not be reasoned about from prose. Milestones one and two end
+the first two problems without waiting on any lifecycle decision; milestone
+three is where the lifecycle becomes something that can be looked at; only
+after four does a rule run rather than get read, which is what
+INV-GUARDS-MUST-EXECUTE asks for. Ordering migration last keeps the instance's
+open decisions -- who signs, whether DEPTH may regress, agent identity -- from
+blocking the plumbing.
+<<<
+NOTES: >>>
+Accepted by the operator on 2026-08-25 with one expectation stated: design
+happens inside each step and may reshape that step. The plan was deliberately
+not designed in full up front, to move faster through this part; a step's
+slice is a starting shape, not a finished contract, until its own review.
+
+The evidence behind every milestone is the SPIKE-EXECUTABLE-RULES assessment
+and the fold-in review of two outside research documents that followed it,
+both held in the operator's working area outside the repository.
+
+A step zero precedes milestone one: SLICE-STRICTDOC-OVERLAY, the overlay that
+keeps strictdoc current from upstream's own flake. Not a milestone -- it has no
+consumer surface to review -- but every milestone runs on it.
+<<<

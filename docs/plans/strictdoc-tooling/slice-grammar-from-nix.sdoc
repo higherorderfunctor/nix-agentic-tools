@@ -1,0 +1,288 @@
+[DOCUMENT]
+TITLE: Generate the grammar from a typed Nix option surface, and gate it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[SLICE]
+UID: SLICE-GRAMMAR-FROM-NIX
+TITLE: Generate the grammar from a typed Nix option surface, and gate it
+DEPTH: verified
+AUTHORED_BY: llm
+STATEMENT: >>>
+Generate a typed Nix option surface from strictdoc's own grammar definition,
+and generate docs/sdoc/grammar.sgra from that surface. The surface is derived,
+not hand-written: nothing about what a grammar may contain is typed by a
+person.
+
+Two layers. The first is faithful -- it expresses exactly what a .sgra file can
+express, with no opinion of ours in it. The second is normalized: named
+converters turn faithful shapes into better Nix types, so a regex that is a
+pure literal alternation becomes an enum, a two-value alternation becomes a
+boolean, an optional group becomes a nullable with a null default. A shape no
+converter recognises is an error rather than a fallback to free text, so an
+upstream grammar change fails during the update sweep instead of reaching
+anyone. Declaring a value unconstrained is itself a converter, keeping "we
+decided this is free text" distinguishable from "we did not recognise this".
+
+The extractor runs at generation time, outside Nix, and emits Nix source that
+is committed; Nix never parses strictdoc during evaluation. A drift check
+regenerates and diffs, so a stale surface is a red check.
+
+How the conversion is expressed was open when this was written. It is not now:
+the SECOND shape shipped, and both layers are committed files. What follows
+records both shapes because the losing argument is what makes the choice cheap
+to revisit.
+
+Converters can live inside the extractor, working on the parsed grammar. That
+preserves why each shape was classified as it was: a pattern is known to have
+come from a particular grammar rule rather than inferred from how it rendered.
+
+Or the extractor emits the faithful surface and a declarative rewrite
+transforms it. Measured: ast-grep is tree-sitter based and ships a Nix grammar,
+so it parses our shapes with nothing added; a rule of about fifteen lines turns
+a literal-alternation pattern into an enum; and the fail-closed condition is
+one more catch-all rule at error severity rather than a special case in code.
+Both the tool and its Python bindings are packaged already, and the bindings
+work on Nix source in process, so this needs no second toolchain and no
+separate file format -- the rewrite can live in the same script as the
+extraction.
+
+The remaining cost of the second shape is provenance, and it is the whole
+argument. It matches generated text rather than the grammar behind it, so a
+two-value alternation that means a boolean is indistinguishable from one that
+merely looks like it.
+
+TAKEN, and the cost accepted: extract/normalize.py parses the emitted faithful
+Nix source with ast_grep_py, and lib/faithful.nix is committed. The provenance
+loss is mitigated rather than avoided -- decompose.py calls back into
+normalize.py so both classify the same nodes, which keeps the two halves from
+drifting apart even though neither can see the grammar rule any more.
+
+Our own grammar values -- the five node types with their fields and relations
+-- are data filling the generated surface, not part of it.
+
+Add the validation gate: a clean-directory strictdoc export over the whole
+corpus at commit time and in CI. This is not a second opinion. None of
+strictdoc's grammar checks run on a bare parse, so the corpus export is the
+only validation that ever happens to a generated grammar.
+
+What belongs at evaluation is only what strictdoc has no rule for anywhere: two
+fields with the same title, and two relations with the same type and role.
+Both are ASSERTED against rather than made unrepresentable. Keying on name was
+the intent here and it did not survive implementation: elements, fields and
+relations are all lists, never attribute sets, because Nix sorts attribute-set
+keys and strictdoc enforces order. So sgra.nix throws on duplicate titles,
+duplicate relations and duplicate element tags, each message naming which one
+strictdoc would silently have kept.
+Everything strictdoc does enforce is left to strictdoc and becomes a negative
+fixture proving the gate fires.
+
+Consumer surface the operator reviews before implementation: the normalized
+option tree and the converter list. Reviewed after: the regenerated grammar as
+an empty diff, the gate firing on a deliberately broken fixture, and an
+unrecognised grammar shape failing the extractor.
+
+Not included: behaviour, transitions, ownership rules, which fields count as
+contract, which node types a relation may point at, and any ordering policy of
+ours. Those are the semantic layer, defined by a consumer of this surface
+rather than by it.
+<<<
+RATIONALE: >>>
+Generating rather than hand-writing is the operator's call, and the reason is
+drift: the overlay now tracks a project shipping roughly three releases a
+month, and a hand-written surface does not notice a knob being added. It keeps
+generating a valid grammar that cannot express the new thing, with nothing
+going red.
+
+Measured, and it is derivable: strictdoc assembles its own grammar into a
+string that is byte-identical across the last two releases; a metamodel built
+from it reaches 25 of 43 rules from the root, and its abstract rules yield the
+four field types and three relation types without a list being typed by hand --
+including that file relations have no reverse role at all. The metamodel alone
+is not sufficient, reporting every attribute as mandatory and flattening value
+vocabularies, so optionality and literal sets come from the parser tree beneath
+it. Both are reachable from the same object.
+
+Also measured, and the reason two checks stay at evaluation: a grammar
+declaring one field twice and one relation twice exports clean with exit zero,
+and the duplicates resolve in opposite directions -- fields keep the last
+declaration, relations keep the first. No rule against either exists anywhere
+in strictdoc.
+
+Carried from the spike: a typed surface regenerates the grammar byte-for-byte
+in 0.03 s and rejects thirteen of thirteen bad declarations once the merged
+value is forced; strictdoc rejects six of six injected grammar defects; the
+gate needs nothing but the strictdoc package; and cross-field checks must live
+in one place that forces evaluation of the whole value, because Nix's addCheck
+never runs on a nested option.
+<<<
+PARENT_FP: >>>
+DEC-EXECUTABLE-RULES-ROADMAP:0000000
+DEC-FP-FIELDS-CONFIGURABLE:0000000
+<<<
+NOTES: >>>
+The faithful layer carries every native grammar feature by construction, so
+nothing needs listing as a deliberate inclusion. What the NORMALIZED layer
+exposes is a scoping decision and is open below.
+
+What the implementation settled, each of which had been left open here:
+
+Element order is carried by the VALUES. Elements, fields and relations are all
+lists, never attribute sets, because Nix sorts attribute-set keys and strictdoc
+enforces order -- so the conceptual order survives and no reshuffle was needed.
+The consequence is that duplicate detection is an explicit assertion rather than
+a structural side effect, which is why the two duplicate checks exist at all.
+
+Both layers are materialised as committed files, and the component is general
+purpose: the normalized layer carries every native grammar feature, including
+the composite nodes, view styles, human titles, child relations and file roles
+this repository never uses. Those are exercised by
+packages/strictdoc-grammar/fixtures/foreign.nix, which round-trips
+byte-identically, and the five node types are one consumer in
+packages/strictdoc-grammar/values.nix rather than part of the surface.
+
+Two corrections the extraction needed, both found by running the chain:
+
+A '^'-anchored negative lookahead is POSITIONAL, not a value constraint.
+FieldName is /(?!^UID)(?!^RELATIONS).../ and arpeggio matches with re.MULTILINE
+at the current position, so the lookahead can only fire at a line start -- which
+a field title, sitting after the literal '  - TITLE: ', never is. Hoisting those
+two into a value-level denial produced a type that rejected a field named UID,
+which this repository's own grammar declares five times.
+
+That was true of both when written and is now true of only one. bb14e09c split
+them: RELATIONS is an alternative of the rule that denies it, so it can never be
+a legal field name and IS enforced as a value-level denial (deny). UID is not,
+so it stays recorded under denyAtLineStart and unenforced. Measured through the
+package's own entry points: a field titled RELATIONS is rejected by the types
+and accepted by emit.grammar alone, which proves the rejection is the surface's
+and not the emitter's; a field titled UID is accepted by both.
+
+The choice vocabulary could not keep its upstream name. textx calls it options,
+and a submodule whose CONFIG carries a key named options is read by the Nix
+module system as an option DECLARATION, so every sibling key errors out. The
+extractor now renames reserved module-system attribute names, and a collision
+with no rename is fatal rather than silent.
+
+WHAT CLOSED THIS SLICE. The operator ruled on 2026-08-26 that three items stood
+between implemented and accepted. All three landed 2026-08-27, and each carries
+its own record of what was built rather than restating it here:
+
+  MECH-STRICTDOC-DEVENV-MODULE -- DONE. ai.strictdoc, with enable, package and
+    grammars, in packages/strictdoc-grammar/modules/devenv/. Its
+    grammars.<name>.elements is declared with the NORMALIZED type, so the
+    module is a seam values cannot cross unchecked.
+  MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY -- DONE, and by neither route that node
+    proposed. The overlay was DELETED rather than thinned, because the runner
+    converts no upstream package and so had nothing left for an overlay to own.
+    packages/strictdoc-grammar/lib/mkExtract.nix is the only copy; flake.nix
+    builds it once for the checks and the module reuses that derivation.
+  MECH-STRICTDOC-UPSTREAM-FLAKE -- DONE. overlays/dev-tools/strictdoc.nix
+    re-exports inputs.strictdoc.packages.<system>.default by plain attrset
+    update. Both dependency adjustments died with the first-party build.
+
+The fourth thing settled at the same time is also DONE. docs/sdoc/grammar.sgra
+is now WRITTEN, by the module's own generate:sgra task from
+ai.strictdoc.grammars.repo in devenv.nix. The bytes it writes are identical to
+the ones that were already committed, so the one deliberate normalization commit
+acceptance item 5 allows for was not spent.
+
+WHAT IS STILL OPEN. The three questions this node recorded as needing a round
+with the operator did not move together:
+
+  Whether the grammar gates belong in the flake checks output -- UNCHANGED and
+    still the operator's. The five are registered there, which is what makes
+    them addressable by name and, inseparably, what puts them in CI
+    (MECH-GRAMMAR-CHECKS-ARE-IN-FLAKE-CHECK). The devenv task still restates
+    five of the six acceptance arms instead of deferring to them
+    (MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE), which is held rather than fixed
+    because the boundary it needs is not written down
+    (MECH-CHECK-SYSTEM-BOUNDARY).
+  Whether the emitter stays reachable without the type in front of it -- PARTLY
+    answered. This repository's own path can no longer bypass the surface,
+    because the module declares its input with the normalized type, and the
+    emitter split into a renderer plus denormalize as designed
+    (MECH-EMIT-LAYER-BOUNDARY). What is still true is that a consumer importing
+    the library can call emit.grammar directly and pass through no type at all
+    (MECH-DSL-CHECKS-NOTHING-BY-ITSELF), and whether the inner renderer is
+    named or published at all is undecided.
+  Whether the line-anchored denials are enforced anywhere -- ANSWERED and built.
+    Each denied word is now run against the sibling alternatives of the rule
+    that denies it: RELATIONS is an alternative of nothing and is enforced, UID
+    is an alternative of SDocNodeField and is not. What remains is that
+    FieldName's two answers come from a register rather than from the document
+    grammar, which is what MECH-LINE-ANCHORED-DENIAL-UNENFORCED is now about.
+
+Unchanged and still leaving this slice: contract-bearing fields are semantic --
+see MECH-CONTRACT-FIELDS-EDGE-TO-SEMANTIC-LAYER; the PARENT_FP entry moves with
+that edge and only the operator changes those. HTML rendering is a requirement
+of its own rather than a property of this slice, tracked as
+MECH-HTML-RENDER-MUST-PASS.
+
+Three costs the closure round created, logged rather than fixed:
+MECH-STRICTDOC-VERSION-SMOKE, because dropping the first-party build dropped
+the installCheckPhase that asserted the binary's version;
+MECH-STRICTDOC-DEVENV-MODULE-NOT-PUBLISHED, because options-doc demands exact
+home-manager parity and so a devenv-only ai.* facet cannot be exported, leaving
+ai.strictdoc importable only by this repository; and SLICE-STRICTDOC-OVERLAY's
+STATEMENT, which specified a build that no longer existed. The third is closed:
+that statement was rewritten in place on 2026-08-27, supersession not being
+expressible for a slice (MECH-SLICE-CANNOT-BE-SUPERSEDED).
+
+DEPTH WAS HELD at implemented until an independent read happened.
+verified means an INDEPENDENT session checked the code against this node, and
+for a while none had: every paragraph above was written by a session in the same
+run as the work it describes, and the run that assembled this section built nothing and ran
+no check. This slice's five flake gates are strictdoc-grammar-model-equal (which
+is two gates, semantic equality AND byte identity, and its own header says so),
+-foreign-roundtrip, -negative-fixtures, -surface-current and -surface-live, plus
+the module-eval arm for the option path. strictdoc-grammar-corpus is registered
+beside them but belongs to SLICE-SDOC-IN-SEMBLE and the patched tree-sitter
+grammar, not here. All are real mechanical evidence, but a green check proves
+the code does what the code does, not that it does what this node says.
+
+VERIFIED 2026-08-27 by an independent session that wrote none of this code, and
+DEPTH is raised on the strength of it. Re-measured rather than transcribed: the
+grammar renders byte-identically at 4085 bytes, with a positive control -- one
+PREFIX mutated in a scratch copy produces a diff, so the comparison is live. The
+denial split holds in all four arms with a passing control title. The
+fail-closed path was reproduced by hand at exit 2 against a control at exit 0.
+All five gates plus the module arms build green at bc646f12.
+
+Five divergences were found and are fixed above: the anchored-denial paragraph,
+the conversion shape still framed as open, the duplicate-detection claim, this
+evidence list, and a MECH-CHECK-SYSTEM-BOUNDARY reference wrapped across a line
+break so that it resolved to nothing. Four further findings were NOT this
+node's to fix and are logged as their own nodes instead: the fail-closed arm has
+no standing gate, the devenv module builds a second copy of the extraction
+derivation rather than reusing the flake's, wrapped UIDs in prose are a class
+rather than a typo, and the groomed nodes were left in the backlog file.
+
+One promise in the governing decision is still unmet and is tracked separately:
+DEC-EXECUTABLE-RULES-ROADMAP says milestone one delivers a validation gate at
+commit time AND in CI. The CI half exists. devenv.nix declares no strictdoc
+hook, so the commit-time half does not.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-EXECUTABLE-RULES-ROADMAP
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-FP-FIELDS-CONFIGURABLE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-SDOC-CI-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-TREEFMT-SDOC
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SDOC-LEAN-FORMATS
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: SLICE-STRICTDOC-OVERLAY
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: SPIKE-EXECUTABLE-RULES
+  ROLE: Proven_By

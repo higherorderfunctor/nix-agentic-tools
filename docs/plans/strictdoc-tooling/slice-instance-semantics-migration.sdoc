@@ -1,0 +1,222 @@
+[DOCUMENT]
+TITLE: Migrate this system's own semantics onto the plumbing
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[SLICE]
+UID: SLICE-INSTANCE-SEMANTICS-MIGRATION
+TITLE: Migrate this system's own semantics onto the plumbing
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Express this system's own semantics in the behaviour model and retire the
+hand-written scripts they live in today. This slice is the container that
+receives those rules; it does not write them. Every rule it carries is the
+operator's, and each one is brought to them singly before the surface is
+fixed, the way SLICE-BEHAVIOUR-MODEL brings its three shape questions.
+
+Seven units migrate. A unit is migrated when three things hold:
+
+- declared -- the rule appears in the milestone-three model as a state, a
+  move, a gate or a relation contract, cross-checked against the grammar at
+  evaluation, and shows up in the rendered lifecycle;
+- enforced -- milestone four's derivation places its validator at the
+  checkpoints that can see what it needs, or records it as unenforceable with
+  the reason;
+- retired -- the constant or predicate that held it is deleted or reads the
+  emitted model, and no second copy of the rule remains anywhere.
+
+The units:
+
+1. The contract field selection, today a hardcoded exclusion set in
+   dev/scripts/sdoc_fp.py, which DEC-FP-FIELDS-CONFIGURABLE says is a
+   per-project option.
+2. DEPTH and STATUS as declared state machines per node type: which values
+   exist, which transitions are legal, who may make each.
+3. Readiness, as one gate replacing the five definitions
+   MECH-READINESS-PREDICATE-RECONCILE counted, consumed by signing, by the
+   status report and by MECH-READY-QUERY alike.
+4. The ripple -- what goes stale when a parent's contract changes -- as a
+   declared relation contract rather than as fp-check's traversal.
+5. Signing, as a move with an actor gate, per DEC-FP-ACCEPT-AUTHORITY.
+6. Revocation, as a state distinguishable from never-signed and from
+   restored, per MECH-SIGNATURE-REVOCATION.
+7. The AUTHORED_BY flip, as a move whose gate declares that it needs both git
+   history and the actor's identity.
+
+Four ordering constraints bind and the rest is free. The field selection
+moves first or is deliberately frozen, because re-selecting it re-suspects
+every signed edge at once. The DEPTH and STATUS machines precede readiness,
+which is a predicate over them. One readiness rule precedes signing, whose
+gate calls it. Revocation follows signing, being a state of a signature. The
+ripple is free after the field selection; the authorship flip is free
+throughout.
+
+Acceptance is per unit, because the units are not the same kind of change.
+Where the migration is behaviour-preserving -- the field selection and the
+ripple -- the new validator and the retired script agree across the whole
+corpus, and a fixture on which they must differ is shown to be caught, so
+that agreement is falsifiable rather than merely observed. Where it
+reconciles -- readiness -- agreement is impossible by construction, and
+acceptance is one predicate, a fixture for each case the old ones split on,
+and every consumer reading it. Where it introduces a state -- revocation --
+acceptance is a fixture per state, including restored, which today reads as
+signed and current. Where the gate cannot run -- the authorship flip --
+acceptance is the model naming the checkpoint that cannot see what the gate
+needs, and the validator failing to be placed rather than being silently
+absent.
+
+Four files hold the semantics being migrated: dev/scripts/sdoc_fp.py,
+dev/scripts/fp-check.py, dev/scripts/fp-accept.py and docs/sdoc/status.py.
+Three neighbouring scripts are not in this slice: cycle-check.py is a
+relation contract milestone four registers, sdoc_edit.py is replaced by
+milestone two's writer, and render.py is a view carrying no rule.
+
+Boundaries. The slice adds no new kind of option to the model: a semantic
+needing one is a milestone-three change and goes back there, which is what
+keeps this work on the instance side of MECH-SEMANTICS-DEFINITION-BOUNDARY.
+It signs nothing -- every fingerprint entry in the corpus stays a
+placeholder, and the first real signing is the operator's act. It does not
+build agent identity; it declares the actor as an input to gates and records
+which gates are unenforceable without one. Git-flow handling stays deferred,
+and so does collection. A semantic the operator declines to rule on at the
+review is recorded as undeclared, its check keeps today's behaviour, and the
+milestone is not blocked on it.
+
+Consumer surface the operator reviews before implementation: the instance's
+lifecycle rendered from the model, with every undecided rule shown as a blank
+rather than filled with a plausible default. Reviewed after: each unit's
+acceptance evidence above, and those four files holding no rule the model
+does not.
+<<<
+RATIONALE: >>>
+Migration last keeps the open instance decisions from blocking the plumbing,
+and the plumbing is what makes those decisions reviewable rather than
+guessed. The slice is written as a container for the same reason: nearly
+everything it carries is a rule the operator has not made yet, and a slice
+arriving with plausible defaults already filled in gets argued with instead
+of filled in. What is settled here is the plumbing -- which rules move, what
+moving means, in what order they can move, and what evidence closes each one
+-- so that the review is a sitting where rules get written, not a design
+session.
+<<<
+PARENT_FP: >>>
+DEC-EXECUTABLE-RULES-ROADMAP:0000000
+DEC-FINGERPRINT-IN-NODE:0000000
+DEC-FP-ACCEPT-AUTHORITY:0000000
+<<<
+NOTES: >>>
+Measured on this branch at bc646f12, 2026-08-27. The graph holds 139 nodes:
+21 DECISION, 95 MECHANISM, 11 SLICE, 8 SPIKE, 4 INVARIANT. Twenty-four nodes
+carry a PARENT_FP field, 31 entries between them, and none of the 31 is
+signed -- every one is the 0000000 placeholder. Positive control: the same
+regex over the corpus matches 31 lines, and filtering out the placeholder
+leaves zero. So re-selecting the contract fields costs nothing today, and
+costs a re-signature of every signed edge after the first real signing, which
+is why that unit is ordered first.
+
+The readiness disagreement is one case and it is latent. Measured by calling
+both predicates directly: sdoc_fp.is_ready (dev/scripts/sdoc_fp.py:100)
+passes a superseded DECISION and a rejected one, refusing only open;
+status.closure_verdict (docs/sdoc/status.py:58) blocks superseded, passes
+rejected, and refuses open. Positive control: open is refused by both, so the
+harness does discriminate. The corpus has 13 accepted decisions, 7 open, 1
+superseded (DEC-VIEWER-BEFORE-BULK, with no dependents) and none rejected, so
+nothing yet depends on the difference. This is why "identical results" cannot
+be readiness's acceptance criterion.
+
+The four files being migrated are 476 lines: sdoc_fp 116, fp-check 117,
+fp-accept 125, status 118. The two excluded neighbours are cycle-check at 135
+and render at 126.
+
+Operator ruling, 2026-08-27: a DECISION moves from open to accepted
+conversationally, with no gate and no form, deliberately so while dogfooding.
+That is the observation SPIKE-DECISION-ACCEPTANCE-PATH is waiting for.
+Recorded here because it constrains shape rather than policy -- the model has
+to be able to express a move with no gate at all.
+
+Operator ruling, 2026-08-27: collection is deferred past this milestone.
+Retention is supersedes-first and garbage collection becomes its own feature
+afterwards, so supersession is out of this slice. A draft classification rule
+-- a deliverable that survived in a different shape is a rewrite in place, a
+contract moving is a fingerprint, only abandoned-and-replaced is supersession
+-- is held in the operator's working area outside the repository.
+
+Git-flow handling -- rebase, squash lineage, pre-merge collection -- stays
+deferred until a branch reaches main, per MECH-FP-GIT-FLOW-HAZARDS.
+MECH-FP-MAIN-LINEAGE is crossed for placement only: where the lineage checks
+run is plumbing and belongs here, whether a check that cannot reconstruct the
+accepted state fails or reports is the operator's.
+
+Three of milestone three's own shape questions decide how three of these
+units are spelled -- state per field or per node, ripple derived from read
+and write scopes or from a per-field flag, flow as a list of moves or a
+script. They are brought to the operator there, not here. The units and their
+boundaries do not change with the answers; only the syntax does.
+
+This slice sits entirely on the instance side of
+MECH-SEMANTICS-DEFINITION-BOUNDARY and carries no edge to it. Add a Crosses
+relation when the node is next written.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Which fields are contract-bearing. The current selection excludes RATIONALE, NOTES and PARENT_FP (dev/scripts/sdoc_fp.py:32) and its own comment calls that a prototype. DEC-FP-FIELDS-CONFIGURABLE and MECH-FP-FIELD-TUNING own the answer; the slice only moves the selection into the option surface.
+
+- Whether DEPTH may move backwards. Named as an open instance decision by DEC-EXECUTABLE-RULES-ROADMAP; left blank because a regression rule is a design-maturity policy, not plumbing.
+
+- Whether implemented and verified belong in DEPTH at all, or are evidence carried elsewhere. The slice declares whatever machine the operator writes; it does not pre-empt the value set.
+
+- Which DEPTH and STATUS transitions are legal, and whether each node type gets its own machine or shares one. The slice fixes that these are declared machines, not what they contain.
+
+- What readiness says about a rejected parent, a superseded parent, and a suspect edge — the three cases the five existing definitions split on. Left blank deliberately: choosing here would settle MECH-READINESS-PREDICATE-RECONCILE by fiat, and the disagreement is currently latent (zero rejected decisions, one superseded with no dependents), so nothing forces an answer before the review.
+
+- Who may sign a fingerprint, and whether the deciding field is the parent's AUTHORED_BY, the child's, or either end being human. DEC-FP-ACCEPT-AUTHORITY is open and its own NOTES say both readings are defensible and want a real drift event.
+
+- Whether the ripple propagates across every relation role or only some. The slice declares it as a relation contract; which relations carry staleness is the rule.
+
+- How revocation is represented — a marker value distinct from the placeholder, or a history check against main — and whether a restored signature is refused or merely reported. MECH-SIGNATURE-REVOCATION states the choice; this slice does not make it.
+
+- Whether the AUTHORED_BY flip has an operator override and what evidence satisfies it. MECH-AUTHORED-BY-GUARD offers one; the slice records the gate and its unenforceability, not the exemption.
+
+- Whether a lineage check that cannot reconstruct an accepted state fails the evaluation or only reports. Mirrors the same open question in SLICE-CHECKPOINT-WIRING; placement is plumbing, severity is policy.
+
+- Whether agent identity keys are a precondition of the signing-authority rule, or the rule is written to degrade without them. MECH-AGENT-IDENTITY-KEYS says it probably belongs to the beads work, so the slice declares the actor as a gate input and refuses to absorb the dependency.
+
+- Whether the open-to-accepted DECISION move stays ungated past dogfooding. The operator's 2026-08-27 ruling is recorded as an observation, not encoded as the rule; what the slice takes from it is only that the model must be able to express a gateless move.
+
+- What supersession means for this instance, and when a node is collected. Deferred past this milestone by the operator's 2026-08-27 ruling; the draft classification rule stays outside the repository and outside this slice.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-EXECUTABLE-RULES-ROADMAP
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-FINGERPRINT-IN-NODE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-FP-ACCEPT-AUTHORITY
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-FP-ACCEPT-READINESS
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SIGNATURE-REVOCATION
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-AGENT-IDENTITY-KEYS
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-FP-MAIN-LINEAGE
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: SLICE-CHECKPOINT-WIRING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: SPIKE-EXECUTABLE-RULES
+  ROLE: Proven_By
