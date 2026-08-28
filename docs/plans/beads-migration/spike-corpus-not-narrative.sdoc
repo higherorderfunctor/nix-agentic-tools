@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: The corpus is 14 percent prose
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[SPIKE]
+UID: SPIKE-CORPUS-NOT-NARRATIVE
+TITLE: The corpus is 14 percent prose
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATUS: run
+RETIRES_ON: >>>
+Converted.
+<<<
+STATEMENT: >>>
+Across 42 files and 4252 lines: 23.9 percent blank, 16.2 percent tables, 14.3
+percent prose, 12.1 percent rule blockquotes, 11.5 percent frontmatter, 10.4
+percent code blocks, 8.8 percent presentation markup, 2.9 percent headings.
+<<<
+RATIONALE: >>>
+Too narrative to convert is not an available objection.
+<<<
