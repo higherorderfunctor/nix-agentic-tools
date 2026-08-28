@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: The viewer ships before any bulk conversion
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-VIEWER-BEFORE-BULK
+TITLE: The viewer ships before any bulk conversion
+AUTHORED_BY: llm
+STATUS: superseded
+RETIRES_ON: >>>
+A derived human-readable view exists and someone reads a converted slice from
+it without opening a raw sdoc file.
+<<<
+STATEMENT: >>>
+Until a derived view exists, converting prose to sdoc makes the reading surface
+worse, not better. Source that was narrative becomes UID and STATEMENT blocks,
+and StrictDoc's own renders are out of scope by choice.
+<<<
+RATIONALE: >>>
+The corpus was graded F for human digestion after reading ten percent of it.
+Conversion contributes nothing to that grade on its own. Converting the whole
+corpus before building the viewer spends weeks and leaves the grade standing.
+<<<
+NOTES: >>>
+This is the strongest argument against the whole approach and is recorded as an
+open decision rather than buried, so it has to be answered rather than forgotten.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-HITL-IS-THE-VIEWER
+  ROLE: Superseded_By

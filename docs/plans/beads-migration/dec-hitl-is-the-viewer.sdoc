@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: An LLM renders for human reading until a viewer exists
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-HITL-IS-THE-VIEWER
+TITLE: An LLM renders for human reading until a viewer exists
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+A working beads sandbox exists and the viewer that follows it is in use.
+<<<
+STATEMENT: >>>
+Human reading is served by on-the-fly LLM expansion during a working session,
+not by a rendered artifact. The operator makes decisions in conversation, and
+the model pulls in whatever neighbouring content the decision needs.
+
+Conversion is therefore not gated on a viewer. Order of work is the sdoc plan,
+then early beads implementation, then the viewer.
+<<<
+RATIONALE: >>>
+Readability is not the near-term bottleneck. Deciding what is safe to build is.
+The single-source-of-truth property and well-defined edges to that truth are
+what matter in the early hours; the render is downstream of both and can wait.
+<<<

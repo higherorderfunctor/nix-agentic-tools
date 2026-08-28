@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Delete the hand-maintained summary layers and derive them from JSON
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-DERIVE-CACHED-LAYERS
+TITLE: Delete the hand-maintained summary layers and derive them from JSON
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Delete the index table, the grain index, and the per-file frontmatter counters.
+Regenerate each from the JSON export.
+<<<
+RATIONALE: >>>
+These are the duplicated cache layer that motivated the move. They are already
+drifting: four of forty-one files disagree with their own bodies, and the grain
+index covers 16 of 127 rules while reading as complete. This is the one part of
+the reading problem that conversion fixes mechanically on day one.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By
