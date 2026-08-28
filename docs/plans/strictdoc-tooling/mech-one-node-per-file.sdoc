@@ -7,44 +7,30 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-ONE-NODE-PER-FILE
 TITLE: One node per file, because an agent reads files and traverses edges
-DEPTH: sketch
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 A file holds exactly one node. One requirement, one plan step, one plan, one
 milestone, one backlog item, one decision -- one. The operator's word for it is
 ONE.
 
-Measured 2026-08-27, and the ratio is the whole argument. The corpus is 421 KB
-across 156 nodes in 8 files, so an average node is about 2.7 KB. Reading one
-node out of 99-backlog.sdoc costs 279 KB, because that file holds 110 of them.
-Reading one out of 03-executable-rules.sdoc costs 74 KB for 7 nodes, 10.5 KB
-apiece. An agent that opens the backlog to read one item takes the entire
-backlog into context, roughly a hundred times what it came for, and does it
-again on every re-read.
-
 The graph is a web pulled in by edges, not a set of documents read whole. That
-only works if the unit a reader fetches is the unit the graph addresses. Today
-the addressable unit is a node and the fetchable unit is a file, and the two are
-off by two orders of magnitude.
+only works if the unit a reader fetches is the unit the graph addresses. Before
+the carve the addressable unit was a node and the fetchable unit was a file, and
+the two were off by two orders of magnitude.
 
-Migration is mechanical -- the UID never changes, so nothing citing a node
-breaks when it moves -- but it is 156 files and it wants the writing tool from
-SLICE-SDOC-CLI so the split is done by something that validates, not by hand.
-99-backlog.sdoc is the first target and 03-executable-rules.sdoc the second.
-
-The naming and directory convention for 156 single-node files is NOT settled
-here. Nor is what happens to the numbered-document convention, or to the
-per-plan 99-backlog.sdoc, which becomes a query over a directory rather than a
-file.
+The corpus now satisfies this. DEC-NODE-FILE-NAMING carries how a file is named
+and what a plan's backlog became, and MECH-SDOC-LAYOUT-CHECK carries the guard
+that would keep it true, which does not exist yet.
 <<<
 RATIONALE: >>>
-This is a context-economy defect before it is a tidiness one, and the system's
+This was a context-economy defect before it was a tidiness one, and the system's
 stated purpose makes it acute: DEC-SYSTEM-PURPOSE optimizes for a reader with a
-bounded context and no memory of yesterday. A layout that forces that reader to
-take 279 KB to learn 2.7 KB is working against the thing the graph is for.
+bounded context and no memory of yesterday. A layout that forced that reader to
+take 279 KB to learn 2.7 KB was working against the thing the graph is for.
 
-It also compounds silently. Every session that files a backlog item makes the
-next session's read more expensive, and nothing reports the cost.
+It also compounded silently. Every session that filed a backlog item made the
+next session's read more expensive, and nothing reported the cost.
 
 The operator expects this to get clearer once semantics land and each item type
 can have its own grammar, which is when a file's shape and its single node's
@@ -55,20 +41,42 @@ Raised by the operator 2026-08-27 after reading the file sizes: "thats a failure
 mode ... 273k backlog loaded into context churning with re-reads ... you are
 supposed to pull in from the graph what you need from edges."
 
-Deferred deliberately to a later session; recorded here so it is not
-rediscovered from the file listing a third time.
+The measurement that carried the argument, taken before the migration: 421 KB
+across 156 nodes in 8 files, so an average node was about 2.7 KB. Reading one
+node out of the backlog document cost 279 KB, because that file held 110 of
+them. Reading one out of the executable-rules document cost 74 KB for 7 nodes,
+10.5 KB apiece. An agent that opened the backlog to read one item took the
+entire backlog into context, roughly a hundred times what it came for, and did
+it again on every re-read.
 
-This session made it worse before recording it: sixteen consolidated backlog
-nodes were appended to 99-backlog.sdoc rather than given files, which is roughly
-40 KB added to the file this node exists to break up.
+Migration ran the same day, in ten commits from 667d0404 to ccad4c9d, and did
+NOT wait for the writing tool from SLICE-SDOC-CLI as this node originally
+wanted. The export is the validator, so a script splitting at node boundaries
+plus a clean-directory export per step was sufficient. Node bodies were copied
+byte for byte and only the document preamble was regenerated; the UID never
+changes, so no edge moved. Proof rather than assertion: a per-node dump of the
+JSON export, every field but the within-document _TOC position, is identical
+before and after, and 0 of 161 contract hashes changed.
 
-Adjacent but different: MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE is about
-groomed nodes not moving to a numbered document. That is a question of WHICH
-file; this is a question of how many nodes a file may hold. Under this rule the
-other node's problem largely dissolves, since a groomed node moves by being one
-file rather than by being cut out of one.
+After: 161 nodes in 161 files, 447,724 bytes, 2,780 bytes on average. The
+largest file is one node, slice-behaviour-model.sdoc at 17.9 KB, which is the
+node's own size and not a packing problem.
 
-Tool reads are a separate lever and are not in scope here. The operator's words:
-"we can tune later to not have as many tool reads, but for now thats a failure
+DEPTH is implemented rather than verified: the carve was checked by the session
+that ran it and by a contest over its findings, but no independent session has
+read this node against the tree.
+
+Adjacent but different, and now dissolved:
+MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE was about groomed nodes not moving
+to a numbered document. That was a question of WHICH file; this was a question
+of how many nodes a file may hold. Under this rule the other node's problem
+went away, since a groomed node no longer moves at all.
+
+Tool reads are a separate lever and were not in scope. The operator's words: "we
+can tune later to not have as many tool reads, but for now thats a failure
 mode."
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NODE-FILE-NAMING
+  ROLE: Governed_By
