@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SDOC-EDIT-VIA-MODEL
 TITLE: Replace sdoc_edit.py's hand-copied field order with strictdoc's node model
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Replace dev/scripts/sdoc_edit.py with dev/scripts/sdoc_model.py, a module over
@@ -128,8 +128,32 @@ what this needs, only TraceabilityIndexBuilder, ProjectConfigLoader,
 Parallelizer, SDocNode, SDocDocument, TraceabilityIndex and DocumentTreeError
 are. The module takes three internal imports, which the pinned overlay makes
 tolerable and a version bump should re-check.
+
+IMPLEMENTED 2026-08-27 as dev/scripts/sdoc_model.py. sdoc_edit.py is
+deleted, and with it FIELD_ORDER, find_node_block, find_field_span and
+render_field. fp-accept.py is repointed and its glob-and-grep scan for a
+"UID: " line is gone, as is the "run strictdoc format afterward" line in its
+docstring.
+
+The API is as this node specified it, with one addition the CLI needed:
+Graph also carries add_relation, remove_relation, add_node and remove_node,
+because SLICE-SDOC-CLI writes relations and whole nodes and not only fields.
+
+Two predictions confirmed by measurement. SDWriter().write(document) is
+BYTE-IDENTICAL to the formatted file on disk for every document in the
+corpus. And PARENT_FP written through the model is always a block while the
+corpus carries inline single-entry values -- exercised on a scratch fixture
+copy, never in the tree, where fp-accept signed MECH-FP-CHECK and a
+re-export then reported "1 signed and current, 0 suspect".
+
+The delimiter obligation earned a positive control rather than an assertion.
+With check_value_delimiters neutered, a NOTES value whose second line is
+"<<<" at column zero DOES break the parse -- TextXSyntaxError at 18:1 -- the
+write is rolled back, and the file is byte-identical afterwards.
 <<<
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-FINGERPRINT-IN-NODE
   ROLE: Governed_By
+- TYPE: File
+  VALUE: dev/scripts/sdoc_model.py
