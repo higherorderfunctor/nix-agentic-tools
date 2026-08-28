@@ -42,81 +42,41 @@ does not need it: the prek hooks resolve their config from the primary checkout,
 so a worktree that has never entered a shell validates exactly like one that
 has.
 
-## Where this stands — 2026-08-27
+## Where this stands — 2026-08-27 (end of session 2)
 
-**Milestone one is built and unaccepted.** `SLICE-GRAMMAR-FROM-NIX` sits at
-`implemented`, deliberately not raised to `verified`: every closure paragraph
-was written by a session in the same run as the work it describes, and a session
-cannot verify its own round. Raising it needs an independent read of the node
-against the tree.
+**Milestones two and three are READY. Nothing in either closure waits on the
+operator.** Hand either to an implementation session by slice UID.
 
-Independently re-measured after the closure round, not transcribed from it:
+    SLICE-SDOC-CLI          milestone 2  READY
+    SLICE-BEHAVIOUR-MODEL   milestone 3  READY
+    SLICE-CHECKPOINT-WIRING milestone 4  blocked: DEC-PLAN-LIFECYCLE-OPEN, and m2
+    SLICE-INSTANCE-SEMANTICS-MIGRATION  m5  blocked: the above + DEC-FP-ACCEPT-AUTHORITY
 
-- the grammar renders byte-identically to `docs/sdoc/grammar.sgra`, 4085 bytes
-- the denial split is right — `UID` accepted, `RELATIONS` rejected, a lowercase
-  title rejected, with a control title that passes
-- all seven flake checks build green
+**Milestone one is `verified`**, raised after an independent session read the
+node against the tree. Nine divergences were found, all nine survived a
+refute/defend contest, and none were code defects — the implementation was sound
+and the node's accounting was not. Its one unmet promise is tracked, not
+forgotten: the governing decision says milestone one delivers a validation gate
+at commit time AND in CI, and only CI exists.
 
-The library surface is `{check, dsl, emit, normalized, render}`. `faithful` is
-imported but not exported. The inner renderer is `sgra.nix`, named for the file
-format rather than the layer. `emit` is `denormalize` composed with it.
+**Milestone two's scope collapsed once the layers were separated.** The tool's
+option surface derives from the grammar; it runs format and validation; that is
+the milestone. Three questions raised against its draft verb list were ruled
+INSTANCE SEMANTICS and moved to milestone five — whether deleting is legitimate,
+whether raising `DEPTH` is a lifecycle move, and whether to ship the harness
+denial given it is absent in eleven of twenty-three worktrees. `delete` exists
+in the tool and the skill deliberately does not teach it. Denying direct edits
+in the harness moved to milestone four, which owns checkpoints.
 
-strictdoc now comes from upstream's own flake, tracking main, at 0.28.3.
+Graph at close: 160 nodes, 0 suspect fingerprints, 0 cycles, 35
+interface-settled, 80 sketch.
 
-### Eight decisions the operator owns
+### The one thing still open for the operator
 
-Accepting the slice. Whether the grammar gates belong in the flake `checks`
-output. Whether `dev/tasks/check.nix` defers to those rather than restating five
-of its six arms. Whether the inner renderer is named and published, and whether
-a library consumer reaching `emit.grammar` directly is acceptable. Whether
-anything re-asserts the strictdoc binary's version now that the first-party
-build's install check went with it. How `ai.strictdoc` gets published. Moving
-the contract-fields edge and its `PARENT_FP`. And what `SLICE-STRICTDOC-OVERLAY`
-becomes.
-
-### The next piece of work
-
-**Evaluate moving to worktrees-of-worktrees.** The closure round ran three
-agents in parallel inside one worktree and they collided — one stopped mid-task
-reporting live concurrent writes, another watched files change underneath it.
-The work was recovered by later phases, but the lesson is that parallel agents
-in a shared checkout need disjoint DIRECTORIES, not merely disjoint files, and
-nothing enforces that.
-
-The operator's proposal: branch off the long-lived branch into a worktree per
-unit of work, so concurrent agents cannot share a tree at all. Secondary benefit
-they named — it makes what is going into the branch reviewable in pieces rather
-than as one accumulating diff.
-
-This is an evaluation, not an implementation. What it has to answer: how a
-worktree-of-a-worktree interacts with the shared common git dir and the
-branchless event database (both already documented as shared, not per-worktree);
-whether the prek hooks still resolve, given they derive config from the primary
-checkout and `PREK_HOME` from the committing worktree; what the teardown
-discipline is; and whether the graph's own validation loop still works from a
-nested tree.
-
-## Who turns what
-
-**A `DECISION` moves from `open` to `accepted` when the operator says so, in
-conversation.** There is no gate, no trigger and no form. That is deliberate
-while the system is being dogfooded, and it is written down here so nobody
-invents ceremony for it — a transition that exists only in the enum is the kind
-of gate that gets guessed at.
-
-**Signing a fingerprint is a different thing and does not work that way.**
-`PARENT_FP` is accepted at pull-request review and never before, per
-`DEC-LONG-LIVED-BRANCH`: the stack is reviewed as a whole for usability, design
-and flow, the pull requests are reviewed for implementation choices, and
-operator acceptance is turned at the second of those. An agent never runs
-`fp-accept`.
-
-**`DEPTH` is the agent's to move, with one condition.** `implemented` means code
-landed and is unreviewed; `verified` means an _independent_ session — one that
-did not write the code — checked the node against the tree. A session raising
-its own work to `verified` is the thing that value exists to prevent.
-
-**`AUTHORED_BY` is never an agent's to set**, in either direction.
+The roadmap's frozen statement promises milestone one delivers a gate at commit
+time and in CI. Only CI exists. Its STATEMENT is fingerprinted, so correcting it
+is either a supersession of an accepted decision or a contract change that makes
+five nodes suspect and gets signed at pull-request review.
 
 ## Teeing up a session
 
