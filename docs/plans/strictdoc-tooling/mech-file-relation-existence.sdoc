@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-FILE-RELATION-EXISTENCE
 TITLE: File relations to nonexistent paths export clean
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Check every File relation against the repository tree in
@@ -129,4 +129,21 @@ recurse into sections. A recursive walk finds the same 3 File relations on
 today's corpus, so the two are currently equivalent; use iter_nodes for
 consistency with the other two checkers and fix it in one place if sections
 ever nest nodes.
+
+IMPLEMENTED 2026-08-27 as dev/scripts/file-check.py, wired into nix flake
+check by checks/strictdoc-file-check.nix. Built in cycle-check.py's shape as
+specified, reusing sdoc_fp's iter_nodes and load_index and taking the
+repository root as a second argument.
+
+The write-time half is in dev/scripts/sdoc_cli.py: normalize_file_value plus
+one stat, applied to the VALUEs a command is about to write, and it refuses
+an absolute path, a './' or '..' segment and a nonexistent target.
+
+Positive control rather than a clean run reported as proof: against the real
+corpus the checker reports 3 File relations and 0 findings, and against an
+export with two VALUEs rewritten -- one to a deleted path, one to
+'./packages/semble' -- it reports both and exits 1.
 <<<
+RELATIONS:
+- TYPE: File
+  VALUE: dev/scripts/file-check.py
