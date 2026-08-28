@@ -24,12 +24,72 @@ const sortObj = (o) =>
   Object.fromEntries(sortC(Object.keys(o)).map((k) => [k, o[k]]));
 
 // ---------------------------------------------------------------------------
+// Bun's `import.meta.require` — a SYNCHRONOUS require with no Node ESM
+// equivalent. Node throws `(intermediate value).require is not a function`
+// while EVALUATING the module, so it fires before any located symbol is
+// reachable and looks like a locator failure when it is not one.
+//
+// Counted properly: 2.1.245 has ZERO call sites; 2.1.250 has 356 across 64
+// modules. Only ONE of those sits inside the settings closure, but it is a
+// top-level statement, so it is fatal. (An earlier revision said "1 site ->
+// 357 across 65", which conflated the call sites with the ALIAS form below —
+// it compared two different things and inflated both ends.)
+//
+// The rewrite is to a STATIC namespace import. `import * as N from "SPEC"` is
+// hoisted and fully evaluated BEFORE the module body runs, so substituting `N`
+// for the call is synchronous, which a dynamic `import()` is not. It is NOT
+// order-preserving, though: the prelude goes at position 0, so the target is
+// evaluated ahead of the module's other imports rather than at the statement
+// it replaced. That is a real difference and the reason to prefer it is only
+// that the alternatives are worse — top-level await would make the module and
+// every importer of it async. A cycle through the promoted spec surfaces as a
+// TDZ ReferenceError, loudly; ESM has no synchronous-cycle deadlock.
+//
+// A NON-LITERAL specifier in the CALL form is a hard failure rather than a
+// pass-through, so the diagnosis stays attached to its cause instead of
+// resurfacing later as an opaque TypeError.
+//
+// KNOWN GAP, deliberately not closed: only the CALL form is detected. The
+// alias form — `var ee=import.meta.require;` in the react-sentinel chunk — is
+// passed through, and under Node it binds `undefined`. That chunk IS in the
+// settings closure today and is harmless there because nothing in this path
+// calls `ee`. If something ever does, the failure is `ee is not a function`,
+// which reads like an anchor problem and is not one. Rewriting the alias would
+// mean widening this hook over a module it currently never touches, for a
+// caller that does not exist; the honest trade is to name the gap here.
+// ---------------------------------------------------------------------------
+const BUN_REQUIRE_RE = /import\.meta\.require\(\s*(["'])([^"'\\]+)\1\s*\)/g;
+
+export function rewriteBunRequire(src) {
+  if (!src.includes("import.meta.require(")) return { src, specs: 0, sites: 0 };
+  const specs = new Map();
+  let sites = 0;
+  const out = src.replace(BUN_REQUIRE_RE, (_m, _q, spec) => {
+    if (!specs.has(spec)) specs.set(spec, `__c_bunRequire${specs.size}`);
+    sites++;
+    return specs.get(spec);
+  });
+  if (out.includes("import.meta.require(")) {
+    throw new Error(
+      "census: a non-literal `import.meta.require(...)` specifier is present — " +
+        "it cannot be rewritten to a static import, and leaving it would fail " +
+        "later as an opaque TypeError",
+    );
+  }
+  const prelude = [...specs]
+    .map(([spec, name]) => `import * as ${name} from ${JSON.stringify(spec)};`)
+    .join("");
+  return { src: prelude + out, specs: specs.size, sites };
+}
+
+// ---------------------------------------------------------------------------
 // Topology 1: post-code-split (>= 2.1.245). The settings module is its own ESM
 // chunk with no top-level side effects, so it can simply be imported.
 // ---------------------------------------------------------------------------
 let hooksRegistered = false;
 
 async function loadSplit(root, info) {
+  const bunRequire = { modules: 0, sites: 0 };
   const url = pathToFileURL(info.settingsPath).href;
   const shim =
     ";export{" +
@@ -60,12 +120,35 @@ async function loadSplit(root, info) {
     // binding in this module; ESM lets an import be re-exported by local name,
     // which is how the re-export chain gets resolved without naming a chunk.
     load(u, ctx, next) {
-      if (u === url)
+      if (u === url) {
+        const r = rewriteBunRequire(info.src);
+        if (r.specs) {
+          bunRequire.modules++;
+          bunRequire.sites += r.sites;
+        }
+        // (guarded because this branch runs for the settings module whether or
+        // not it carries the call form; the branch below only runs when it does)
         return {
           format: "module",
-          source: info.src + shim,
+          source: r.src + shim,
           shortCircuit: true,
         };
+      }
+      // Every OTHER module in the closure is passed through untouched unless
+      // it carries a Bun-only sync require; see rewriteBunRequire.
+      if (u.startsWith("file:") && u.endsWith(".js")) {
+        let src;
+        try {
+          src = fs.readFileSync(new URL(u), "utf8");
+        } catch {
+          return next(u, ctx);
+        }
+        if (!src.includes("import.meta.require(")) return next(u, ctx);
+        const r = rewriteBunRequire(src);
+        bunRequire.modules++;
+        bunRequire.sites += r.sites;
+        return { format: "module", source: r.src, shortCircuit: true };
+      }
       return next(u, ctx);
     },
   });
@@ -88,7 +171,7 @@ async function loadSplit(root, info) {
       initErrors.push(String(e && e.message).slice(0, 120));
     }
   }
-  return { mod, ran, total, initErrors, topology: "split" };
+  return { mod, ran, total, initErrors, topology: "split", bunRequire };
 }
 
 // ---------------------------------------------------------------------------
@@ -373,12 +456,23 @@ export async function census(
     diagnostics: {
       topology: loaded.topology,
       settingsModule: path.basename(info.settingsPath),
+      // The settings anchors sit in ONE module through 2.1.245 and in TWO from
+      // 2.1.248; report both so a re-chunk is visible in the diagnostics rather
+      // than only as a build failure.
+      settingsLayout: info.layout,
+      schemaModule: path.basename(info.schemaPath),
+      bunRequireRewrites: `${loaded.bunRequire.modules} module(s), ${loaded.bunRequire.sites} site(s)`,
       locatedVia: info.via,
       alternateAnchorsAgree:
         info.alternates.build === info.symbols.build &&
         info.alternates.convert === info.symbols.convert &&
         info.alternates.filter === info.symbols.filter,
       features: info.features,
+      // Both memoizer mechanisms are live upstream, so a module could use
+      // more than one. locateMemoizerLocal unions them; surface the count so a
+      // second family shows up here rather than only as a thunk total that
+      // silently shrank.
+      memoizerFamilies: (info.memo.all ?? [info.memo]).length,
       initThunksRun: `${loaded.ran}/${loaded.total}`,
       distinctInitErrors: [...new Set(loaded.initErrors)],
       aliasesApplied: applied,
