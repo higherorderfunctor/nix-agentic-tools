@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: A plan has one owner and concurrent human editing is not a design concern
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-PLAN-SINGLE-OWNER
+TITLE: A plan has one owner and concurrent human editing is not a design concern
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+Two people need to edit one plan, which would mean plans had become a shared
+artifact rather than an individual one.
+<<<
+STATEMENT: >>>
+Plans are individual. One person owns a plan and directs a model through it. The
+multi-contributor surface is the WORK, not the plan, and at that scale the
+shared artifact is an external tracker rather than anything here.
+<<<
+RATIONALE: >>>
+This removes a whole class of design work. Locking, merge semantics for a plan
+node, and concurrent-edit conflict resolution are all unnecessary. Two people
+editing the same plan node is rare enough to handle by hand if it ever happens.
+<<<
+NOTES: >>>
+Does not extend to the settled architecture nodes, which are shared by
+construction and outlive any one plan.
+<<<
