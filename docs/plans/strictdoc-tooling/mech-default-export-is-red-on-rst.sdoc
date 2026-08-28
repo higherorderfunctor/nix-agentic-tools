@@ -31,10 +31,11 @@ appears once or twice on a line -- an asterisk that opens emphasis needs a
 closing asterisk that ENDS a word, and a glob never supplies one. So a pair of
 globs on one line is not a matched pair; it is two unterminated openings.
 
-Three bare sites exist today: 01-tooling.sdoc:195, 01-tooling.sdoc:208, and the
-unquoted `checks/strictdoc-grammar-*.nix` inside
-MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE, which this milestone wrote -- all three
-confirmed to warn, by a session with no way to notice. The export aborts at the
+Three bare sites exist today, all still unfixed and all now one node per file:
+two in SLICE-SDOC-IN-SEMBLE, one in its STATEMENT and one in its NOTES (formerly
+01-tooling.sdoc:195 and :208), and the unquoted `checks/strictdoc-grammar-*.nix`
+inside MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE, which this milestone wrote -- all
+three confirmed to warn, by a session with no way to notice. The export aborts at the
 first, so the count comes from probing docutils rather than from the export.
 
 Fix shape: either escape globs at authoring time and put an HTML export in the

@@ -122,7 +122,8 @@ files and exit 0. So "writes nothing" is a property of the format registry, not
 of the broken prose.
 
 Second positive control, on the validation half: a field-order violation
-injected into 99-backlog.sdoc exits 1 under lean for the bare default, for
+injected into 99-backlog.sdoc -- pre-carve; inject into any current document to
+re-run it -- exits 1 under lean for the bare default, for
 --formats=json and for --formats=html alike, with "Semantic error: Wrong field
 order". Third: fp-check.py and cycle-check.py both traceback and exit 1 on a
 missing index.json, so an empty export cannot pass either gate.

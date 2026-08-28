@@ -36,7 +36,7 @@ The one file shared within a cache directory is <cache>/dependencies (file_depen
 
 TMPDIR is unset on this machine and /tmp is mode 1777, so the path is world-writable and predictable while pickle_cache.py:38 unpickles without validation. Not a concern on a single-user laptop; on a shared host, set TMPDIR.
 
-Not proven either way: the sdoc skill's "incremental export produces false greens" gotcha did not reproduce on 0.28.3 for a syntax break -- an unknown field appended to 99-backlog.sdoc gave exit 1 on a fresh output directory, on a reused one, and on repeats, both before and after the change. So the relocation is measured not to INTRODUCE a false green for that break class, and the original gotcha is unreproduced rather than refuted. See the SPIKE proposed alongside this node.
+Not proven either way: the sdoc skill's "incremental export produces false greens" gotcha did not reproduce on 0.28.3 for a syntax break -- an unknown field appended to 99-backlog.sdoc, then the largest document in the corpus, gave exit 1 on a fresh output directory, on a reused one, and on repeats, both before and after the change. To re-run it, pick any current document: the one-node-per-file carve deleted that file. So the relocation is measured not to INTRODUCE a false green for that break class, and the original gotcha is unreproduced rather than refuted. See the SPIKE proposed alongside this node.
 
 Lands with MECH-SDOC-LEAN-FORMATS: same file, same function, both single keyword arguments. Two things go stale in the same commit -- the sdoc skill's line that "format and export write a cache into ./output/ by default", and any existing output/_cache directories, which the change should delete rather than leave as orphans of a version that no longer writes there.
 <<<

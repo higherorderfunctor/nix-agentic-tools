@@ -40,7 +40,9 @@ Same test, squashed: both gone, and blame on the agent-written line resolves to 
 
 Positive control for the reader: the same trailer query returned the value on the rebased commit and empty on the squashed one, so an empty result is a real absence rather than a broken query.
 
-Verifier walk-through on the incident line itself -- git blame --porcelain -L85,85 docs/plans/strictdoc-tooling/01-tooling.sdoc gives 9958f190, whose author-mail and committer-mail are both the operator's. The mechanism works and returns the operator for an agent action, which is the defect. git blame prints the author by default; committer appears only under --porcelain, so any check must ask for it.
+Verifier walk-through on the incident line itself -- git blame 9958f190 --porcelain -L85,85 -- docs/plans/strictdoc-tooling/01-tooling.sdoc gives 9958f190, whose author-mail and committer-mail are both the operator's. The mechanism works and returns the operator for an agent action, which is the defect. git blame prints the author by default; committer appears only under --porcelain, so any check must ask for it.
+
+That path is HISTORICAL and the revision is load-bearing: the one-node-per-file carve deleted 01-tooling.sdoc, so the walk-through only runs pinned at 9958f190. The line is now mech-fp-check.sdoc:21, but blaming it there returns the carve commit 74c6f635 rather than the incident commit, because the carve is a copy that neither plain blame nor -C -C traverses. Re-anchoring is therefore not available; pin the revision instead.
 
 AI_AGENT is not defined anywhere in this repository -- it comes from the operator's environment. The hook can read it and cannot guarantee it.
 
