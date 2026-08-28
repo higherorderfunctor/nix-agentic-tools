@@ -16,8 +16,8 @@ for the UID does not find the file that cites it, and docs/sdoc/render.py prints
 the broken form. There is no relation to dangle, so the parser is content and
 every existing check passes.
 
-Found once, on MECH-CHECK-SYSTEM-BOUNDARY in 03-executable-rules.sdoc, and fixed
-by rewrapping the sentence. A formatter run can reintroduce it at any time.
+Found once, on MECH-CHECK-SYSTEM-BOUNDARY, and fixed by rewrapping the
+sentence. A formatter run can reintroduce it at any time.
 
 The check is cheap: scan node field text for a token matching a known UID
 prefix that is split by a newline, and for any bare prefix-shaped token that is

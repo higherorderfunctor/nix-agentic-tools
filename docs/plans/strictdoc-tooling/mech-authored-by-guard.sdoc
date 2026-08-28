@@ -103,7 +103,15 @@ which carries AUTHORED_BY for all 139 nodes and agreed exactly with the text
 scan (139 nodes, 31 human). The baseline side gets no such cross-check --
 exporting a historical tree would require checking it out.
 
-Placement evidence. The flake source store path holds the 9 .sdoc files and no
+Post-carve. The one-node-per-file carve (667d0404 to ccad4c9d, all 2026-08-27,
+after the bc646f12 measurement above) took the branch from 9 .sdoc files holding
+139 nodes to 161 files holding 161 nodes, across the same three locations. The
+cost model is one `git show` per file, so the 0.079 s figure scales with file
+count and must be re-measured; the 31-human figure is unchanged. This paragraph
+was written by a model, recorded here rather than left implicit for the same
+reason this node exists.
+
+Placement evidence. The flake source store path holds the .sdoc files and no
 .git, which is why checks/strictdoc-fp-check.nix and
 checks/strictdoc-cycle-check.nix run over ${self} with no history. The precedent
 for a history-needing gate in this repo is the gitleaks job at

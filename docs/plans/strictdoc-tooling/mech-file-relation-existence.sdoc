@@ -90,7 +90,8 @@ strictdoc_config.py:
   passes, while ./packages/semble/lib/withGrammars.nix,
   packages/semble/lib/../lib/withGrammars.nix,
   ../../../packages/semble/lib/withGrammars.nix, /etc/hostname, the directory
-  packages/semble, and a document-relative 01-tooling.sdoc all fail.
+  packages/semble, and a document-relative sibling filename such as
+  mech-cycle-check.sdoc all fail.
   Resolution is a string lookup in the indexed-source-file map keyed by a
   POSIX path relative to source_root_path -- not filesystem resolution --
   which is why every non-normalized form fails while naming a real file.
