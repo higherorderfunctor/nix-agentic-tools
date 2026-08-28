@@ -30,3 +30,7 @@ Noted while measuring ast-grep for the grammar milestone's conversion pass.
 Two capabilities this repository already carries separately turn out to
 compose, and nothing records that they might.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

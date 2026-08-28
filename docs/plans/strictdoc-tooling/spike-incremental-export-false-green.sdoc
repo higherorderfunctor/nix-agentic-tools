@@ -24,3 +24,7 @@ NOTES: >>>
 
 Absorbs the proposed `MECH-SDOC-STABLE-OUTPUT-DIR`.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

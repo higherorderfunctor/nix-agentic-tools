@@ -18,3 +18,7 @@ The failure is invisible in both directions: the new hook passes at commit, the 
 NOTES: >>>
 `SLICE-CHECKPOINT-WIRING`'s NOTES already carries the consequence for its own validators: wiring one into the prek suite is two edits, not one. That instruction fixes the instance and leaves the mechanism; this node is the mechanism.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

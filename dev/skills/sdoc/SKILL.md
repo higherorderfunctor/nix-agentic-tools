@@ -60,8 +60,8 @@ IMPORT_FROM_FILE: @repo
 
 Relation roles: `Governed_By` (→ a `DECISION`), `Crosses` (`SLICE` →
 `MECHANISM`), `Guarantees` (→ an `INVARIANT`), `Proven_By` (→ a `SPIKE`),
-`Assumes`, `Serialized_By`, `Superseded_By` (`DECISION` → `DECISION`), and
-`File`.
+`Assumes`, `Serialized_By`, `Superseded_By` (`DECISION` → `DECISION`),
+`Backlogged_In` (→ a plan's backlog register), and `File`.
 
 ## The four governance fields
 
@@ -139,6 +139,12 @@ is read and never written, so it is not the grammar's formatter.
   extending the grammar, **append** — inserting mid-list means repositioning the
   field in every existing node. Extend it in
   `packages/strictdoc-grammar/values.nix` and regenerate; the `.sgra` is output.
+- **Relation order inside a node is NOT enforced**, unlike field order —
+  measured 2026-08-27 by moving a role to the front of a `RELATIONS:` block and
+  watching it parse clean. The role itself IS checked: an unregistered one fails
+  with `Requirement relation type/role is not registered`. Keep relations in
+  grammar order anyway, so `format` diffs stay quiet, but do not expect the
+  parser to catch a stray one.
 - **One blank line between nodes**, and **no blank line between grammar
   elements**. Both are parse errors.
 - **A `TAG:` starting with `SECTION` will not parse** — it collides with the
@@ -207,13 +213,24 @@ should.
   survives. What it cost while it existed, since that is the argument for not
   rebuilding it: the corpus averaged 2.7 KB per node, and reading one node out
   of `99-backlog.sdoc` cost 279 KB, because that one file held 110 of them.
+- **File it against the plan's backlog register.** A new item carries
+  `Backlogged_In` to `MECH-BACKLOG-<PLAN>` — the linchpin node every ungroomed
+  item in that plan points at. The register holds no list; the edges are the
+  list. See `DEC-BACKLOG-IS-A-REGISTER-NODE`.
+- **That edge does not use up the item's parents.** Give it `Governed_By`,
+  `Crosses`, `Assumes` to whatever it actually relates to as well. Containment
+  by edge composes; containment by file did not. A web is the point.
 - An ungroomed item is an ordinary node at `DEPTH: sketch` — a `MECHANISM` to
   build, a `DECISION` to make, a `SPIKE` to run. **There is no `BACKLOG` node
   type**, deliberately: the existing types already say what kind of work it is.
 - **Grooming no longer moves a file.** It raises the node's `DEPTH` where the
-  node already sits. Moving between documents was how a node left the backlog
-  when the backlog was a file; it is now a query.
-- A plan's ungroomed set is the query `DEPTH == sketch` scoped to its directory.
+  node already sits, and drops the `Backlogged_In` edge. Moving between
+  documents was how a node left the backlog when the backlog was a file.
+- A plan's ungroomed set is the register's inbound `Backlogs`. The query
+  `DEPTH == sketch` scoped to the directory answers the same question and is
+  worth keeping as a **cross-check**: the two disagreeing means somebody filed
+  without attaching, or groomed without detaching. Nothing enforces the pair yet
+  — `MECH-SDOC-LAYOUT-CHECK`.
 
 The operator's judgment budget is the scarce resource. A logged finding is not
 lost; mentioning it costs attention, logging it costs nothing.

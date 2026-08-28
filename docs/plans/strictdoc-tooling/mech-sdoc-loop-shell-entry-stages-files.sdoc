@@ -31,3 +31,7 @@ Hit while running the loop for the grammar-write wiring. Recorded because the
 skill names the two commands and says nothing about how to reach them from a
 worktree, which is the only place work happens here.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

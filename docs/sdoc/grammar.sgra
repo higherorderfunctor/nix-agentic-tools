@@ -32,6 +32,9 @@ ELEMENTS:
   - TYPE: Parent
     ROLE: Superseded_By
     REVERSE_ROLE: Supersedes
+  - TYPE: Parent
+    ROLE: Backlogged_In
+    REVERSE_ROLE: Backlogs
 - TAG: MECHANISM
   PROPERTIES:
     PREFIX: MECH-
@@ -77,6 +80,9 @@ ELEMENTS:
     ROLE: Assumes
     REVERSE_ROLE: Assumed_By
   - TYPE: File
+  - TYPE: Parent
+    ROLE: Backlogged_In
+    REVERSE_ROLE: Backlogs
 - TAG: SLICE
   PROPERTIES:
     PREFIX: SLICE-
@@ -119,6 +125,9 @@ ELEMENTS:
     ROLE: Proven_By
     REVERSE_ROLE: Proves
   - TYPE: File
+  - TYPE: Parent
+    ROLE: Backlogged_In
+    REVERSE_ROLE: Backlogs
 - TAG: INVARIANT
   PROPERTIES:
     PREFIX: INV-
@@ -154,6 +163,9 @@ ELEMENTS:
   - TYPE: Parent
     ROLE: Proven_By
     REVERSE_ROLE: Proves
+  - TYPE: Parent
+    ROLE: Backlogged_In
+    REVERSE_ROLE: Backlogs
 - TAG: SPIKE
   PROPERTIES:
     PREFIX: SPIKE-
@@ -193,3 +205,6 @@ ELEMENTS:
     ROLE: Governed_By
     REVERSE_ROLE: Governs
   - TYPE: File
+  - TYPE: Parent
+    ROLE: Backlogged_In
+    REVERSE_ROLE: Backlogs

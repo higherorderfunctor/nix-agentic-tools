@@ -25,3 +25,7 @@ grammar change that stops emitting whitespace as a sibling, and neither is
 worth it for the observed cost. A good candidate to hand to an execution engine
 later rather than to spend design attention on now.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

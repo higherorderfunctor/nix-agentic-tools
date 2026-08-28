@@ -28,3 +28,7 @@ Recorded because "CI is not required" and "CI is required to merge" are both
 true at different times, and only writing the second one down keeps the first
 from being read as permanent.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

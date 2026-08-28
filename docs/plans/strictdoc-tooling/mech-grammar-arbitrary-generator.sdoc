@@ -28,3 +28,7 @@ The byte-identity gate covers one grammar. A round trip over generated ones
 covers the shapes nobody wrote a fixture for, which is where an emitter that
 handles our five node types and nothing else would still look correct.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

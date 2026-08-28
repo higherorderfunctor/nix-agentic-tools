@@ -40,3 +40,7 @@ nativeBuildInputs. Neither of the two ways to close it has been taken. Read
 together with MECH-FORMAT-NIX-DOWNGRADES-A-MISSING-FORMATTER, the same defect
 seen from the generator's side.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

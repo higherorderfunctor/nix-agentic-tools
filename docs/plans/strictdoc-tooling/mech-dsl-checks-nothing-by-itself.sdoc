@@ -43,3 +43,7 @@ Noted while proving the DSL cannot weaken the types. It cannot, but "cannot
 weaken" is a statement about a value that reaches the surface, and nothing in
 the current wiring guarantees one does.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

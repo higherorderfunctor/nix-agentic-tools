@@ -39,3 +39,7 @@ ChoiceOption pattern, because the faithful type describes the TOKEN as written
 itself. Adding the decode converter fixed it, and made the pair's split
 explicit for the first time.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

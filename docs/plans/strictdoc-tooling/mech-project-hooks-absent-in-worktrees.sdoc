@@ -18,3 +18,7 @@ A hook that was never installed looks exactly like a hook that found nothing. Th
 NOTES: >>>
 Logged as the durable home for the delivery measurement behind `MECH-RUNTIME-WRITE-GUARD`'s RATIONALE. That node reads it as an argument for making the writer incapable of the write; this node is about the eleven worktrees currently running with no Stop validator, which is a repository defect independent of that design.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

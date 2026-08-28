@@ -36,3 +36,7 @@ Filed as issue #1266, self-contained, on 2026-08-25 -- the parking lot the
 rationale above asks for. That issue is the user-visible tracker; this node is
 the design-graph record of which slice found it. Close both together.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

@@ -31,3 +31,7 @@ RATIONALE: >>>
 Found while proving the emitter, by asking whether the two documented collisions
 were the whole set rather than by happening to hit one.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

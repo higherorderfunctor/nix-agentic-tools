@@ -44,3 +44,7 @@ side of the line this node puts it on. Whether the FILE should be renamed too,
 and whether this belongs in a repository issue rather than here, are the
 operator's.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

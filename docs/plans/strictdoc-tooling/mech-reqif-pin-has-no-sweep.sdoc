@@ -43,3 +43,7 @@ The ROOT CAUSE is not moot and is not this node's to carry: an update script
 that refreshes only the src hash still leaves a transitive pin unswept for every
 package that parks one, which is the standing transitive-hash gap.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

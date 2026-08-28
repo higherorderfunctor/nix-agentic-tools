@@ -31,3 +31,7 @@ Overlays that wrap are the reason a consumer cannot take the package plainly,
 and the reason an agent reading the tree infers the wrong convention from the
 nearest example. Both showed up during milestone one.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

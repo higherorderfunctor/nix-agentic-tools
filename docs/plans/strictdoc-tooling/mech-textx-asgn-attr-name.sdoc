@@ -28,3 +28,7 @@ Recorded because a positional walk passes on eighteen of nineteen rules and
 then mislabels REQUIRED as options on the two choice-field rules, which is a
 plausible surface that type-checks and is silently wrong.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

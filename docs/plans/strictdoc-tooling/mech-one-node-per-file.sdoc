@@ -19,9 +19,10 @@ only works if the unit a reader fetches is the unit the graph addresses. Before
 the carve the addressable unit was a node and the fetchable unit was a file, and
 the two were off by two orders of magnitude.
 
-The corpus now satisfies this. DEC-NODE-FILE-NAMING carries how a file is named
-and what a plan's backlog became, and MECH-SDOC-LAYOUT-CHECK carries the guard
-that would keep it true, which does not exist yet.
+The corpus now satisfies this. DEC-NODE-FILE-NAMING carries how a file is
+named, DEC-BACKLOG-IS-A-REGISTER-NODE carries what a plan's backlog became once
+it stopped being a file, and MECH-SDOC-LAYOUT-CHECK carries the guard that would
+keep both true, which does not exist yet.
 <<<
 RATIONALE: >>>
 This was a context-economy defect before it was a tidiness one, and the system's

@@ -18,3 +18,7 @@ Spun out of `MECH-SIGNATURE-REVOCATION`, whose sketch statement cited the retent
 NOTES: >>>
 Inert today — 31 fingerprint entries, all the 0000000 placeholder, 0 suspect — and arms with the first real signature. `MECH-SIGNATURE-REVOCATION`'s NOTES already records the adjacent constraint from the other side: a revoked entry is not collectible lineage.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

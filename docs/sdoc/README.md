@@ -44,12 +44,16 @@ has.
 
 ## Where this stands — 2026-08-27 (end of session 3)
 
-**The corpus is one node per file.** 163 nodes, 163 files, each named for its
-node's UID lowercased. The ten multi-node documents are gone, the numbered-file
-convention with them. No UID changed, so no edge moved and no citation broke —
-proved rather than asserted: a per-node dump of the JSON export is identical
-across the carve, and 0 of 161 contract hashes moved. Reading one backlog item
-used to cost 279 KB; it now costs the node.
+**The corpus is one node per file, and the backlog is a node rather than a
+file.** 166 nodes, 166 files, each named for its node's UID lowercased. Every
+ungroomed item carries `Backlogged_In` to its plan's register —
+`MECH-BACKLOG-STRICTDOC-TOOLING` or `MECH-BACKLOG-BEADS-MIGRATION` — so the
+backlog is reachable by traversal instead of by listing a directory, and an item
+can carry its other edges at the same time. The ten multi-node documents are
+gone, the numbered-file convention with them. No UID changed, so no edge moved
+and no citation broke — proved rather than asserted: a per-node dump of the JSON
+export is identical across the carve, and 0 of 161 contract hashes moved.
+Reading one backlog item used to cost 279 KB; it now costs the node.
 
 **Milestones two and three are READY. Nothing in either closure waits on the
 operator.** Hand either to an implementation session by slice UID.
@@ -75,10 +79,11 @@ denial given it is absent in eleven of twenty-three worktrees. `delete` exists
 in the tool and the skill deliberately does not teach it. Denying direct edits
 in the harness moved to milestone four, which owns checkpoints.
 
-Graph at close: 163 nodes, 0 suspect fingerprints, 0 cycles, 36
-interface-settled, 81 sketch. Two of those nodes are new this session —
-`DEC-NODE-FILE-NAMING` and `MECH-SDOC-LAYOUT-CHECK` — and the count read 160
-before, which was already wrong by one against the same export.
+Graph at close: 166 nodes, 0 suspect fingerprints, 0 cycles, 38
+interface-settled, 81 sketch. Five are new this session —
+`DEC-NODE-FILE-NAMING`, `MECH-SDOC-LAYOUT-CHECK`,
+`DEC-BACKLOG-IS-A-REGISTER-NODE` and the two backlog registers — and the count
+read 160 before, which was already wrong by one against the same export.
 
 ### What is open for the operator
 
@@ -88,22 +93,21 @@ fingerprinted, so correcting it is either a supersession of an accepted decision
 or a contract change that makes five nodes suspect and gets signed at
 pull-request review.
 
-**The carve's three questions, applied but not ratified.** The naming
-convention, the fate of the numbered-document convention, and what a per-plan
-backlog becomes were all reserved for you — and the carve had to answer all
-three to run at all. They are recorded as applied in `DEC-NODE-FILE-NAMING`,
-left at `STATUS: open` so ratification is still yours. Render it and rule.
+**Two of the carve's three questions, applied but not ratified.** The naming
+convention and the fate of the numbered-document convention were reserved for
+you, and the carve had to answer both to run at all. They are recorded as
+applied in `DEC-NODE-FILE-NAMING`, left at `STATUS: open` so ratification is
+still yours. Render it and rule. The third — what a per-plan backlog becomes —
+you ruled the same day, and it is settled below.
 
-**One conflict an agent may not resolve.** `DEC-PLAN-SCOPED-BACKLOG` is
-accepted, and its statement still says every plan directory may hold a
-99-backlog document and that grooming means moving a node into a numbered
-document. Both are now false. An accepted decision's statement is frozen, and
-`DEC-SUPERSESSION-RULE` classifies this as a description going stale rather than
-work being abandoned — the one case it sends to a rewrite, and the one rewrite
-that node type forbids. So it is untouched, and it is your key: supersede it, or
-rule that its containment half was mechanism rather than contract. Its substance
-is unaffected either way — the ungroomed set is still `DEPTH == sketch` scoped
-to a plan directory, exactly as it says.
+**Settled since, so it is no longer waiting on you.** `DEC-PLAN-SCOPED-BACKLOG`
+described a 99-backlog document and grooming-by-moving, both false after the
+carve, and an accepted statement is frozen. It did not need a waiver in the end:
+its own `RETIRES_ON` names this exact situation — an item tracked while living
+outside the plan's backlog document — and names the successor, an explicit
+register node and a `Backlogged_In` role. The condition fired, so it is
+`superseded` with its statement untouched, and `DEC-BACKLOG-IS-A-REGISTER-NODE`
+is the successor it asked for.
 
 ## Teeing up a session
 

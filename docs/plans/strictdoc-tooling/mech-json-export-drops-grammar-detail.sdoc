@@ -34,3 +34,7 @@ claims to. The export accepted every feature and then reported almost none of
 them back, which is exactly the shape that makes a round-trip check pass without
 having checked anything.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

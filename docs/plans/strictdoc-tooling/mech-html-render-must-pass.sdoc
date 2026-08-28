@@ -30,3 +30,7 @@ MECH-DEFAULT-EXPORT-IS-RED-ON-RST is the instance; this is the rule that would
 have caught it. A format nobody exercises decays silently, and this one decayed
 without a single failing check.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

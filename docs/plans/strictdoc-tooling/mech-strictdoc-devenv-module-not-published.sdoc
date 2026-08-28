@@ -35,3 +35,7 @@ Noticed while stripping the wrap out of the overlay: the module header asserted
 this constraint and cited a node UID that did not exist, so the reasoning was
 one edit away from being lost entirely.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

@@ -33,3 +33,7 @@ Worth recording because the loss is invisible: the package still builds, the
 checks still pass, and the only signal that the assertion is gone is that the
 file no longer contains it.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

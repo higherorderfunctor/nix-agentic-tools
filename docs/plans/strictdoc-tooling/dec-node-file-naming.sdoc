@@ -24,9 +24,10 @@ There is no numbered-document convention. The 01-, 02-, 03- and 99- prefixes
 ordered nodes within a file; a file now holds one node, so there is nothing left
 for them to order. Plan directories are flat.
 
-A plan's backlog is not a file. It is the query DEPTH == sketch scoped to the
-plan's directory, which is what the ungroomed SET already meant. Grooming raises
-a node's DEPTH where the node already sits; it no longer moves anything.
+A plan's backlog is not a file. It is a register NODE that items point at with
+Backlogged_In -- see DEC-BACKLOG-IS-A-REGISTER-NODE, which settled that a
+directory query was the wrong successor because it is not in the graph. Grooming
+raises a node's DEPTH where the node already sits; it moves nothing.
 <<<
 RATIONALE: >>>
 Naming the file for the UID makes the addressable unit and the fetchable unit
@@ -48,21 +49,19 @@ NOTES: >>>
 Written open, not accepted, deliberately. The operator reserved three questions
 for themselves in docs/sdoc/README.md -- the naming convention, the fate of the
 numbered-document convention, and what a per-plan backlog becomes -- and the
-carve had to answer all three to run at all. They are answered here AS APPLIED,
-so that the tree and the graph agree, and left open so that ratification is
-still theirs.
+carve had to answer all three to run at all. The first two are answered here AS
+APPLIED, so that the tree and the graph agree, and left open so that
+ratification is still theirs. The THIRD is no longer open: the operator ruled it
+the same day, and DEC-BACKLOG-IS-A-REGISTER-NODE carries the answer.
 
-One conflict this does not resolve, because an agent may not. The accepted
-decision DEC-PLAN-SCOPED-BACKLOG still states that every plan directory may hold
-a 99-backlog document, and that grooming means moving the node into a numbered
-document in the same plan. Both are false on the ground now. An accepted
-DECISION's STATEMENT is frozen, and DEC-SUPERSESSION-RULE classifies this as a
-description going stale rather than as work being abandoned -- which is the one
-case that rule sends to a rewrite, and the one rewrite this node type forbids.
-So it needs the operator's key: either supersede that decision with a successor,
-or rule that its containment half was mechanism rather than contract. Its
-substance is untouched either way; the ungroomed set is still DEPTH == sketch
-scoped to a plan directory, exactly as it says.
+The conflict this originally left open is RESOLVED, and by the cleanest route
+available. DEC-PLAN-SCOPED-BACKLOG's statement described a 99-backlog document
+and grooming-by-moving, both false after the carve, and an accepted statement is
+frozen. It was not rewritten and did not need the operator to waive anything:
+its own RETIRES_ON names this exact situation -- an item tracked while living
+outside the plan's backlog document -- and names the successor too. The
+condition fired, so the decision was superseded rather than corrected, and
+DEC-BACKLOG-IS-A-REGISTER-NODE is the successor it asked for.
 
 Measured at the carve, 2026-08-27: 161 nodes in 161 files, 447,724 bytes, 2,780
 bytes on average. 135 files under docs/plans/strictdoc-tooling, 18 under

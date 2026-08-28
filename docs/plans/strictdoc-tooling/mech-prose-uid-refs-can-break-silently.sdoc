@@ -36,3 +36,7 @@ VALUEs naming paths that do not exist. This is about prose, where there is no
 relation at all. Both are cases of the parser proving structure and nothing
 proving reference.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In
