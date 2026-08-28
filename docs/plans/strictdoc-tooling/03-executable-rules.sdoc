@@ -493,40 +493,84 @@ RELATIONS:
 [SLICE]
 UID: SLICE-SDOC-CLI
 TITLE: A command-line tool that is the only writer of sdoc files
-DEPTH: needs-design
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
-Build the tool through which every node is created and changed: create, set,
-relate and move, with flags derived from the generated grammar (fields,
-choices, relation roles); UIDs passed in by the author, never minted -- they are
-hand-chosen and semantic by the operator's 2026-08-27 ruling, and the tool
-refuses a name whose prefix does not match the node type; required fields filled
-from arguments so a TBD never lands; every write validated
-against the whole graph as it would be after the write, before the file is
-replaced; formatting applied by the same code path. Deny direct edits of sdoc
-and grammar files in the agent harness, before the edit tool runs, and point
-the model at the tool. No lifecycle verbs yet: this milestone is create, read,
-update and delete.
+Build the command-line tool that produces and edits sdoc documents. Its option
+surface is DERIVED from the generated grammar: one flag per field a node type
+declares, one per relation role it may make, and choices constrained to that
+field's word list. Nothing about what a node may contain is typed by a person.
 
-Consumer surface the operator reviews before implementation: the verb list
-and their flags. Reviewed after: a session that authors nodes through the
-tool only, and a direct edit being refused.
+Writing verbs are new, set, relate, unrelate, move and delete. Reading verbs are
+show, list and check. Every writing verb loads the whole graph, applies the
+change in memory, validates the graph as it would be AFTER the write, formats
+through the same code path, and only then replaces the file. A command that
+cannot validate does not write. Every writing verb takes --dry-run and prints
+the diff instead.
+
+UIDs are passed in by the author and never minted -- they are hand-chosen and
+semantic by the operator's 2026-08-27 ruling, and the tool refuses a name whose
+prefix does not match the node type. Required fields are filled from arguments,
+so a TBD never lands.
+
+NO SEMANTIC RULES APPLY AT THIS MILESTONE, and that is the scope boundary. The
+tool enforces exactly what the GRAMMAR says -- the node types, which fields are
+required, each choice field's word list, and which relation roles a type may
+declare. It enforces nothing about how this instance USES them. Who may sign,
+whether DEPTH may regress, when deleting is legitimate, and where direct edits
+are denied are all instance semantics, and milestone five is where they are
+written.
+
+delete exists in the tool and is deliberately NOT taught by the sdoc skill. The
+verb is available to someone who wants it; nothing points an agent at it.
+
+Moved out of this milestone rather than dropped: denying direct edits of sdoc
+and grammar files in the agent harness before the edit tool runs. That is a
+checkpoint, and milestone four owns checkpoints.
 <<<
 RATIONALE: >>>
-In the operator's words, the root failure is a model producing incorrect
-formats with nothing validating the write; the tool takes the model's hands
-off the files. Measured: creating a node in-process costs 0.35 s, validating
-the whole graph 0.3 s, and strictdoc's node model writes any field in grammar
-order -- nothing here waits on the behaviour model.
+In the operator's words, the root failure is a model producing incorrect formats
+with nothing validating the write; the tool takes the model's hands off the
+files. Measured: creating a node in-process costs 0.35 s, validating the whole
+graph 0.3 s, and strictdoc's node model writes any field in grammar order --
+nothing here waits on the behaviour model.
+
+Deriving the option surface from the grammar rather than hand-writing it is what
+makes the milestone small. The five node types are genuinely asymmetric -- a
+DECISION carries no DEPTH and no File relation, a SPIKE is the only type
+carrying both a DEPTH and a STATUS with a different word list under the same
+name, an INVARIANT cannot point at a file -- and that asymmetry is exactly what
+gets hand-written wrong.
 <<<
 PARENT_FP: DEC-EXECUTABLE-RULES-ROADMAP:0000000
 NOTES: >>>
+SCOPE SETTLED BY THE OPERATOR 2026-08-27, and it collapsed. Their framing: the
+grammar defines the CLI options for everything but delete, the tool runs format
+and validation, and that is the milestone -- "simple cli to produce docs from
+options. no semantic rules apply yet."
+
+Three questions raised against the draft verb list were ruled INSTANCE SEMANTICS
+and are not this milestone's: whether deleting is legitimate, whether raising
+DEPTH is an ordinary edit or a lifecycle move, and whether to ship the harness
+denial given it is absent in eleven of twenty-three worktrees. All three sit
+with milestone five.
+
 Build on strictdoc's own machinery rather than re-implementing writes: manage
-new for scaffolding, set_field_value for fields, the writer for formatting.
-The cache directory must live outside the checkout for worktrees. Validating
-the whole graph per command costs about a second on this corpus and about
-two at five thousand nodes when strictdoc's cache is warm, which needs the
+new for scaffolding, set_field_value for fields, the writer for formatting. Two
+measured constraints on that. set_field_value performs NO value validation --
+DEPTH='totally-not-a-depth' and a None on a required STATEMENT both serialise
+cleanly and reach disk -- so the validation has to be the tool's, not the
+model's. And single-line versus block form is chosen from the grammar rather
+than from what was parsed, so a PARENT_FP written through the model is always a
+block while the corpus carries inline single-entry values; that is hash-neutral
+because PARENT_FP is in EXCLUDED_FIELDS, but it is a visible diff.
+
+Validating the whole graph per command costs about a second on this corpus and
+about two at five thousand nodes when strictdoc's cache is warm, which needs the
 working copy at a stable path; a fresh temporary copy pays the cold cost.
+
+Prefix-to-type agreement is unenforced today: a MECHANISM named SLICE-... exports
+exit 0 and lands in the JSON unremarked. The tool is where that closes.
 <<<
 RELATIONS:
 - TYPE: Parent
