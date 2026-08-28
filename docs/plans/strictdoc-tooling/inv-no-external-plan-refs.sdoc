@@ -65,7 +65,10 @@ narrowing. A rule phrased in terms of where a node lives keeps working, and
 keeps working if a retention class is renamed or a fourth one appears.
 <<<
 NOTES: >>>
-Measured 2026-08-27 over a full clean export: 139 nodes in 9 documents. The
+Measured 2026-08-27 over a full clean export, before the one-node-per-file
+carve: 139 nodes in 9 documents. The coordinates below were re-anchored onto the
+carved files, and the edges themselves are unchanged -- the carve moved no
+relation. The
 UID-to-file map was built by grepping ^UID: across the tree, because the JSON
 export carries no document path -- a document is TITLE, GRAMMAR and NODES only
 -- the same gap MECH-PLAN-REFS-CHECK records.
@@ -79,8 +82,8 @@ SPIKE-EXECUTABLE-RULES and MECH-SEMANTICS-DEFINITION-BOUNDARY are Governed_By
 DEC-SYSTEM-PURPOSE; MECH-SDOC-SKILL-CORRECTIONS Guarantees
 INV-GUARDS-MUST-EXECUTE. Two violate, both plan-to-plan and both from
 beads-migration into strictdoc-tooling: MECH-RENDER-CACHE Assumes MECH-FP-CHECK
-(00-approach.sdoc:224) and MECH-CORPUS-EDGE-MAP Assumes MECH-CYCLE-CHECK
-(02-conversion-map.sdoc:93). Inbound edges from docs/spec/ or **/.sdoc/ into
+(mech-render-cache.sdoc:33) and MECH-CORPUS-EDGE-MAP Assumes MECH-CYCLE-CHECK
+(mech-corpus-edge-map.sdoc:44). Inbound edges from docs/spec/ or **/.sdoc/ into
 any plan: zero.
 
 31 PARENT_FP entries. One crosses a class -- SPIKE-EXECUTABLE-RULES to
@@ -94,8 +97,10 @@ docs/plans/.
 59 source-comment citations of strictdoc-tooling plan UIDs appear in 30 files
 outside the graph -- checks/, dev/scripts/, dev/tasks/, devenv.nix, flake.nix,
 overlays/dev-tools/strictdoc.nix, packages/strictdoc-grammar/. Several name the
-plan file path beside the UID, for example overlays/dev-tools/strictdoc.nix:15
-citing SLICE-STRICTDOC-OVERLAY with its document path. None is an edge today.
+plan file path beside the UID, for example overlays/dev-tools/strictdoc.nix
+citing SLICE-STRICTDOC-OVERLAY with its document path -- which the carve then
+had to rewrite, in all 17 places a citation named one of the ten deleted
+documents. None is an edge today.
 All 59 become inbound violations the day an extractor reads them.
 
 Four export measurements on a scratch copy, clean output directory each time,
