@@ -1,0 +1,36 @@
+[DOCUMENT]
+TITLE: Make the tree-sitter grammar parse standalone .sgra files
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[SPIKE]
+UID: SPIKE-SGRA-PARSE
+TITLE: Make the tree-sitter grammar parse standalone .sgra files
+DEPTH: implemented
+AUTHORED_BY: llm
+STATUS: run
+RETIRES_ON: >>>
+A three-rule patch is applied and the two .sgra files parse with no regression
+across the sdoc corpus.
+<<<
+STATEMENT: >>>
+The upstream tree-sitter grammar parses all sdoc documents but fails every
+standalone .sgra grammar file, because its root rule requires a DOCUMENT header.
+<<<
+NOTES: >>>
+Run. The DOCUMENT-header fix alone was not sufficient: our own grammar.sgra
+also uses REVERSE_ROLE on every non-File Parent relation, and upstream's
+grammar_relation_parent/child rules had no field for it at all, so it still
+errored after the root-rule fix. The applied patch is therefore three rule
+changes across two files (source_file's root choice, a new standalone_grammar
+rule, and REVERSE_ROLE added to both relation rules) rather than one.
+
+Measured against this repo's own corpus (6 .sdoc + grammar.sgra): 6/7 clean
+before the patch, 7/7 after. Measured against strictdoc-project/strictdoc's
+own docs/ (15 files, pinned rev 215cda2e): 5/15 clean both before and after —
+the other 10 fail on pre-existing document-body/FREETEXT coverage gaps this
+patch never targeted (out of DEC-GRAMMAR-PATCH-NOT-FORK's scope; logged as
+MECH-SGRA-BODY-COVERAGE in the plan backlog). checks/strictdoc-grammar-corpus.nix
+is the standing regression gate against both corpora.
+<<<

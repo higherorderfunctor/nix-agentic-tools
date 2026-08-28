@@ -1,0 +1,67 @@
+[DOCUMENT]
+TITLE: Ready-slice query over the contract closure
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-READY-QUERY
+TITLE: Ready-slice query over the contract closure
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+One function in dev/scripts/sdoc_fp.py walks a node's contract-dependency closure from the JSON export and returns a verdict record. dev/scripts/ready.py is its command line, beside cycle-check.py and fp-check.py. The closure follows every relation whose TYPE is Parent, regardless of role, and every PARENT_FP entry. The filter is on Parent rather than on not-File: a Child relation points downstream and is not a dependency, and a complement filter would walk one into the closure the day the grammar declares one.
+
+The record carries, for one root: the root's own DEPTH or STATUS, held separate from its dependencies; whether every dependency is settled; the frontier, meaning the unsettled dependencies that have no unsettled dependency of their own, each with its hop distance from the root and the reason it blocks; how many unsettled nodes sit behind that frontier; the closure size; the open decisions in the closure, which are the degrees of freedom; and the suspect fingerprint entries whose node falls inside the closure, taken from fp-check's finding list rather than recomputed here.
+
+Ready means every dependency is settled and the root itself is settled. What settled MEANS -- which DEPTH values qualify, and whether the cut differs by node type -- is not decided here: it is the single predicate MECH-READINESS-PREDICATE-RECONCILE owns, imported and never restated. A settled closure under an unsettled root is ready to design, which is a different action from ready to implement, and the record says which. The root never appears in its own blocker list.
+
+ready.py prints the record as text, --json emits it verbatim, and --packet prints the closure through docs/sdoc/render.py in dependency-first order as the bounded brief handed to an implementing session. With no root it reports every SLICE. It exits 0 whenever the export parsed; --require-ready opts a caller into exit 1 on a blocked root.
+
+Consumers: docs/sdoc/status.py drops its own closure_verdict and calls the shared function; fp-accept's readiness refusal calls the same predicate; the implementation-session prompt in docs/sdoc/README.md is replaced by --packet; and the milestone-four checkpoint wiring registers the record as gate evidence. The function is the interface and the script is one front end, so the tool from SLICE-SDOC-CLI imports it rather than reimplementing it.
+
+Out of scope, deliberately. This node owns the traversal, the record and the report, not the rule: what settled means for a rejected, superseded or suspect parent is MECH-READINESS-PREDICATE-RECONCILE's single predicate, imported here and never restated. Nothing here writes, signs, or fails nix flake check.
+<<<
+RATIONALE: >>>
+The query already exists informally and disagrees with itself. status.py's closure_verdict is one reading, sdoc_fp.is_ready another, and neither applies the no-suspect-edge clause the definition names. One function returning one record is what stops a fourth reading appearing when the milestone-two tool and the milestone-three behaviour model each need the same answer; a third standalone script would be the drift INV-GUARDS-MUST-EXECUTE names.
+
+It reports and does not gate. DEC-LOCAL-IMPLEMENTABILITY refuses a global readiness gate, and the one time the graph said blocked the operator directed implementation anyway and it shipped clean, so a blocked verdict is information for whoever is deciding, not a refusal.
+
+The record is specified as data with a text rendering rather than as printed output because a gate in milestone four has to consume the verdict, and parsing a report back out of a terminal is how the fifth definition of ready gets written.
+<<<
+PARENT_FP: DEC-LOCAL-IMPLEMENTABILITY:0000000
+NOTES: >>>
+Measured against the current export, 139 nodes, on 2026-08-27.
+
+Closures are small enough to be a prompt. The deepest is SLICE-INSTANCE-SEMANTICS-MIGRATION at 34 nodes and 59,740 characters of field text, against 232,966 for the whole graph rendered by render.py --all. The packet is a quarter of the corpus, not a tenth, and that is the worst case in the graph today.
+
+The frontier is a weaker filter than MECH-READINESS-REPORT-FRONTIER assumes. On that same slice, 21 unsettled dependencies excluding the root, of which 16 are in the frontier -- 10 of the 21 are sketch nodes with no dependencies at all, so they qualify by definition. The cut that actually shortens the report is hop distance: 5 of the 21 are direct dependencies and the closure is 4 hops deep. Hence both axes in the record. That node's "twenty-three blockers" measures 22 today including the root.
+
+status.py does not apply the no-suspect-edge clause, measured rather than read. Replacing MECH-SEMBLE-EXTRA-GRAMMARS's PARENT_FP hash with a wrong non-placeholder value in a scratch copy of the export makes fp-check exit 1 reporting one suspect entry, while status.py's verdict for SLICE-SDOC-IN-SEMBLE, whose closure contains that node, is unchanged. Positive control on the same node and the same copy: setting its DEPTH to sketch does change the verdict, which prints the new blocker.
+
+All 31 fingerprint entries currently have a matching relation, 0 unbacked, so the relation set and the PARENT_FP set coincide. MECH-FP-RELATION-LINT is a check and not a write-time invariant, so the walk still unions them; ignoring the fingerprint half is how an earlier status.py reported a blocked slice as ready.
+
+Degrees of freedom is not a headline on its own. Most blocked slices are blocked with ZERO open decisions in their closure, because an unsettled mechanism does not move the count -- only an open DECISION does. A slice can therefore read "degrees of freedom: 0" and still be unbuildable, which is why the record carries the frontier as well as the count. Deliberately stated without arithmetic: the counts move every time anything is groomed.
+
+MECH-READY-QUERY-GRAPH-REUSE is answered: cycle-check.py's build_graph is this walk minus PARENT_FP, so it moves into sdoc_fp.py with a flag for whether fingerprint parents count as edges.
+
+MECH-READINESS-REPORT-FRONTIER is subsumed. Both of its complaints -- the root reporting itself as its own blocker, and an undifferentiated blocker list -- are answered by this record, so it closes when this lands rather than being groomed separately.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- What settled means for a rejected, superseded or suspect parent. Deliberately not decided here; it is MECH-READINESS-PREDICATE-RECONCILE's single predicate, and this node consumes it as a parameter.
+
+- Whether the closure stops at a settled node or walks through it into that node's own unsettled dependencies. Live instance: SLICE-SDOC-IN-SEMBLE is verified yet reports blocked, because it crosses MECH-SEMBLE-EXTRA-GRAMMARS (implemented) whose Governed_By parent DEC-ARCH-COLOCATION is open. Filed as a backlog DECISION.
+
+- Whether relation roles weigh differently in the closure. The walk treats Governed_By, Crosses, Assumes, Proven_By and Guarantees identically; whether an Assumes edge should block as hard as a Crosses edge is a semantic call, filed as a backlog DECISION.
+
+- Whether readiness ever becomes a merge or commit gate. Specified here as advisory with an opt-in --require-ready flag, so milestone four can arm it without this node choosing the policy.
+
+- Which DEPTH values count as settled, and whether the cut differs per node type. DEPTH is instance-layer by MECH-SEMANTICS-DEFINITION-BOUNDARY's own wording, so this node declares the traversal and imports the cut rather than fixing it.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LOCAL-IMPLEMENTABILITY
+  ROLE: Governed_By

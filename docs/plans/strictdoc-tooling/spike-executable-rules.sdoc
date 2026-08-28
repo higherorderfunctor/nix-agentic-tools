@@ -1,0 +1,99 @@
+[DOCUMENT]
+TITLE: How much of the design system's rules can run rather than be read
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[SPIKE]
+UID: SPIKE-EXECUTABLE-RULES
+TITLE: How much of the design system's rules can run rather than be read
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATUS: run
+RETIRES_ON: >>>
+An assessment the operator has reviewed answers all four questions -- a grammar
+generated from a typed Nix option surface, the state machine and flows that
+gate an sdoc's creation and change, validation tiers with measured costs, and
+whether the strictdoc package needs a first-party overlay -- and each finding
+is either carved into a slice or explicitly declined. A question the assessment
+cannot answer is recorded as a node rather than left implicit.
+<<<
+STATEMENT: >>>
+INV-GUARDS-MUST-EXECUTE records a measured split: every constraint that lived
+in a document failed and every executable one held. This spike assesses how
+much of the design system's rules can be made to run rather than be read, in
+four parts: generating docs/sdoc/grammar.sgra from a typed Nix module with no
+untyped escape hatches; modelling the flows that create and change an sdoc as a
+state machine, and capturing as nodes whatever resists modelling; tiering
+validation by trigger and cost, from the native
+traceability_index_build_finished hook to a CLI wrapper built on strictdoc
+manage new; and whether any of that needs a first-party strictdoc overlay
+rather than the nixpkgs package.
+
+Assessment only. It creates no tasks, does not settle the contract field
+selection (MECH-FP-FIELD-TUNING owns that), and does not touch git-flow
+handling (MECH-FP-GIT-FLOW-HAZARDS).
+<<<
+RATIONALE: >>>
+The operator has no picture of the state machine and is guessing when asked to
+weigh in on it, and the field selection cannot be reviewed as prose either
+(DEC-FP-FIELDS-CONFIGURABLE). A measured assessment with a rendered state
+machine and a sketched option surface is what turns those guesses into
+reviewable decisions.
+<<<
+PARENT_FP: >>>
+DEC-FP-FIELDS-CONFIGURABLE:0000000
+DEC-SYSTEM-PURPOSE:0000000
+<<<
+NOTES: >>>
+Run 2026-08-25. The assessment is held in the operator's working area outside
+the repository, with the four finder reports, eight contest files, critic pass,
+logs and the Q1 prototype beside it; a fold-in review against two outside
+research documents followed the same day. Thirteen agents: one finder per question, a refuter and a defender per report,
+one cross-question critic; nine refuter-defender splits are surfaced for the
+operator, none adjudicated. RETIRES_ON is not yet met: the operator has not
+reviewed it.
+
+Measured, on this corpus with nixpkgs strictdoc 0.27.1. The traceability
+index build is 3 ms and the plugin hook body is under 1 ms; the cost of every
+command is interpreter and imports 0.4 s, ProjectConfig.default_formats() 0.7
+to 1.0 s, and the forkserver parallelizer 1.4 s. Pinning
+formats=[SDocFormat(), JSONFormat()] takes export from 3.2 to 1.24 s, manage
+new from 3.2 to 1.15 s and format from 3.3 to 1.15 s with a byte-identical
+JSON export. The user_plugin hook fires on export, format, manage auto-uid and
+server, never on manage new; a Format subclass in formats intercepts every
+document read on every command, including manage new, inside the workers. A
+hook class defined in strictdoc_config.py crashes every parallelised command
+on 0.27.1 until the config inserts its own directory on sys.path.
+
+A typed evalModules surface with no untyped option regenerates grammar.sgra
+byte for byte (4085 bytes, 0.03 s): an ordered field catalogue plus per-element
+typed subset selection, STATUS the one polymorphic slot. Thirteen of thirteen
+bad declarations are rejected only once apply forces the merged value with
+deepSeq -- two passed lazily and emitted a plausible grammar before that --
+and addCheck's predicate is never called for a submodule in the pinned lib.
+strictdoc rejects six of six injected grammar defects, two of them only
+through the documents, so the gate exports the corpus and needs no first-party
+package.
+
+Of four levels -- node, edge, document, branch -- only the parser and the fp
+and cycle checks execute, and only in CI. The parser accepts DEPTH TBD, a
+Governed_By pointing at a MECHANISM, and an edit to an accepted decision's
+statement. All four hashes reverted in 387cdaec equal today's, so a restored
+signature reads as signed and current. Two live violations each of
+INV-NO-EXTERNAL-PLAN-REFS and of the role-target table; five definitions of
+ready that no two agree on. Ten incidentals logged to 99-backlog.
+
+The package does not need owning for anything questions one or three need.
+Seed facts held except: the version delta needs a reqif override plus a
+pygments relax; of the six unused nixpkgs-only dependencies only graphviz,
+pybtex and setuptools cost closure, the other three return through
+html2pdf4doc; the three-derivation claim was found nowhere.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-FP-FIELDS-CONFIGURABLE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-PURPOSE
+  ROLE: Governed_By

@@ -1,0 +1,74 @@
+[DOCUMENT]
+TITLE: Suspect-link detection and acceptance over the design graph
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[SLICE]
+UID: SLICE-FP-DETECTOR
+TITLE: Suspect-link detection and acceptance over the design graph
+DEPTH: implemented
+AUTHORED_BY: human
+STATEMENT: >>>
+Ship fp-check and fp-accept over the JSON export, plus a flake check that gates
+on fp-check with a clean output directory.
+
+fp-check hashes each node's contract-bearing fields and compares every
+PARENT_FP entry against the current hash of the parent it names. It reports
+three cases distinctly: never signed, where the recorded hash is the
+placeholder; drifted, where a real recorded hash no longer matches; and
+unbacked, where a fingerprint names a parent the node has no relation to.
+
+fp-accept rewrites the named nodes' entries to current hashes and is the only
+thing that writes them. It refuses a parent that is still moving.
+<<<
+RATIONALE: >>>
+The contract field selection is a prototype choice, deliberately not settled --
+see MECH-FP-FIELD-TUNING. Git-flow handling is deliberately absent: nothing
+bites before a branch reaches main, and that merge is the forcing function.
+<<<
+PARENT_FP: >>>
+MECH-FP-ACCEPT-READINESS:0000000
+MECH-FP-CHECK:0000000
+MECH-FP-RELATION-LINT:0000000
+<<<
+NOTES: >>>
+Implemented: dev/scripts/fp-check.py and fp-accept.py, sharing dev/scripts/
+sdoc_fp.py (contract-field hashing, PARENT_FP parsing, the readiness
+predicate) and sdoc_edit.py (structural PARENT_FP field editor -- finds a
+node's line-range by UID and field-range by name rather than splitting on
+blank lines, because a multiline field's own prose can contain blank
+paragraph breaks). CI gate: checks/strictdoc-fp-check.nix, exporting the
+whole graph into a fresh runCommand $TMPDIR on every build. strictdoc added
+to the interactive devShell (devenv.nix) for the skill's format/export loop
+and for running these scripts by hand.
+
+fp-check's first real run over this repo's existing graph found 5 nodes
+across docs/plans/beads-migration and packages/semble/.sdoc with a PARENT_FP
+entry and no matching relation -- exactly MECH-FP-RELATION-LINT's predicted
+defect class, not a tooling bug. Fixed as their own commit (the missing
+Governed_By edge each PARENT_FP already implied; nothing else about those
+nodes changed) before wiring the check into flake.nix, so the gate starts
+green rather than red on day one.
+
+Verified past the happy path: a synthetic export exercises all four
+fp-check cases (signed-and-current, never-signed, drifted, unbacked) plus a
+deleted-parent case in one run, and a synthetic readiness fixture confirms
+fp-accept actually refuses a DECISION parent with STATUS open and a
+MECHANISM parent below interface-settled rather than silently skipping the
+check. fp-accept was then run for real on SLICE-FP-DETECTOR itself (this
+node) and on MECH-FP-CHECK and MECH-FP-ACCEPT-READINESS, producing the
+PARENT_FP entries above and below -- the multi-entry block form is this
+node's own three-parent write, exercised for real rather than only in the
+synthetic fixture.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-FP-ACCEPT-READINESS
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-FP-RELATION-LINT
+  ROLE: Crosses

@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: Suspect-link detection over the JSON export
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-FP-CHECK
+TITLE: Suspect-link detection over the JSON export
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+Hash each node's contract-bearing fields from the JSON export. A node is suspect
+when a parent it records a fingerprint for no longer hashes to the recorded
+value, or when that parent has been deleted. Excludes RATIONALE and NOTES.
+<<<
+RATIONALE: >>>
+StrictDoc has no suspect-link feature. It is on the upstream backlog as
+SDOC-SRS-117 and described unbuilt in their DO-178 notes.
+<<<
+PARENT_FP: DEC-FINGERPRINT-IN-NODE:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-FINGERPRINT-IN-NODE
+  ROLE: Governed_By
