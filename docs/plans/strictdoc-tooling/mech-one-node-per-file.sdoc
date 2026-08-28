@@ -1,5 +1,5 @@
 [DOCUMENT]
-TITLE: One node per file
+TITLE: One node per file, because an agent reads files and traverses edges
 
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
