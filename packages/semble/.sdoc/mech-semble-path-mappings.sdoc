@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: Path mappings assign non-standard filenames to a language and index
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SEMBLE-PATH-MAPPINGS
+TITLE: Path mappings assign non-standard filenames to a language and index
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+An ordered list of path patterns maps files to a language and to one of the
+code, config or docs indexes. First match wins. A match overrides both
+suffix-based language detection and content categorization, and participates in
+file discovery, parser selection and cache validation.
+
+Indexing sdoc files therefore requires a mapping, because discovery is
+extension-driven and .sdoc is in no default extension set.
+<<<
+PARENT_FP: DEC-ARCH-COLOCATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-ARCH-COLOCATION
+  ROLE: Governed_By
+- TYPE: File
+  VALUE: packages/semble/lib/withGrammars.nix

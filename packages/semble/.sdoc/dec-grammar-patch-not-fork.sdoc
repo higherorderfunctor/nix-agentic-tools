@@ -1,0 +1,46 @@
+[DOCUMENT]
+TITLE: Patch the upstream tree-sitter grammar in an overlay rather than forking it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-GRAMMAR-PATCH-NOT-FORK
+TITLE: Patch the upstream tree-sitter grammar in an overlay rather than forking it
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+Upstream revives and the patch stops applying, or the patch set grows past what
+is reviewable as a diff, or the fix lands upstream and the patch is deleted.
+<<<
+STATEMENT: >>>
+The sdoc tree-sitter grammar is consumed as an upstream source archive with a
+small patch series applied in the overlay. No fork repository is created.
+
+The patch targets the grammar definition, not the generated parser, so the
+build must regenerate. A patched grammar definition with a stale generated
+parser is a silent no-op: the build succeeds and the behavior is unchanged.
+
+The grammar's own test corpus lives in this repository as a check, not in the
+grammar source. Upstream ships none.
+<<<
+RATIONALE: >>>
+Patching the definition keeps the diff around thirty reviewable lines. Forking
+would mean carrying a regenerated parser of roughly eighteen thousand lines in
+version history, for a change that is three rules.
+
+Upstream has been dormant for 336 days, so drift risk is low, and fuzz-free
+patch application makes any drift a loud build failure rather than a quiet
+misapplication.
+
+If the fix is accepted upstream later, a fork created at that point is a contribution
+vehicle rather than a dependency, and a merged fix deletes the patch instead of
+leaving a stale fork to reconcile.
+<<<
+NOTES: >>>
+Two build details found by reading the nixpkgs grammar builder. Its generate
+step runs a bare generate command after changing into the path declared in the
+grammar metadata; this grammar declares no path and keeps its definition in a
+subdirectory, so the step fails without an override. And the metadata declares
+a version and a file-type list that both disagree with the repository state.
+<<<
