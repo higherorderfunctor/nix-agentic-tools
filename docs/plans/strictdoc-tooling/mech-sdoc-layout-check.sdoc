@@ -16,10 +16,17 @@ file: exactly one node tag, a basename equal to the node's UID lowercased plus
 beside strictdoc-cycle-check and strictdoc-fp-check, so it runs in nix flake
 check.
 
-None of the three is enforced by anything today. StrictDoc parses a
-multi-node document, a mismatched filename and a divergent document title
-without complaint, so the convention holds only for as long as every session
-remembers it.
+A fourth assertion belongs here too, once the layout half is working: the
+backlog pair. A node at DEPTH sketch must carry Backlogged_In to its own plan's
+register, and a node above sketch must not carry one. The two halves are the
+same check because they are the same failure -- somebody filing without
+attaching, or grooming without detaching -- and the DEPTH == sketch query is
+what makes it decidable without a second source of truth.
+
+None of the four is enforced by anything today. StrictDoc parses a multi-node
+document, a mismatched filename and a divergent document title without
+complaint, and it does not know what Backlogged_In means, so all of it holds
+only for as long as every session remembers it.
 <<<
 RATIONALE: >>>
 INV-GUARDS-MUST-EXECUTE is the reason this is a node rather than a paragraph in
@@ -28,10 +35,12 @@ session writes a node the way it wrote them before the carve, and the failure is
 silent: the graph still exports, the edges still resolve, and only the context
 cost goes back up.
 
-Cheap to write because the carve already proved the predicate. The verification
-pass over all 161 files compared basename to UID and document TITLE to node
-TITLE and found zero exceptions, so the check starts green and its first red is
-a real regression.
+Cheap to write because the carve already proved every predicate. The
+verification pass over all 161 files compared basename to UID and document TITLE
+to node TITLE and found zero exceptions, and the backlog wiring was verified as
+a set equality in both directions across all 81 sketch nodes. The check starts
+green, so its first red is a real regression rather than a backlog of existing
+violations.
 <<<
 NOTES: >>>
 Filed 2026-08-27 by the carve session. Not built in that session because adding
