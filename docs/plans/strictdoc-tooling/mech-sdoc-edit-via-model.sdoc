@@ -1,0 +1,135 @@
+[DOCUMENT]
+TITLE: Replace sdoc_edit.py's hand-copied field order with strictdoc's node model
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-EDIT-VIA-MODEL
+TITLE: Replace sdoc_edit.py's hand-copied field order with strictdoc's node model
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Replace dev/scripts/sdoc_edit.py with dev/scripts/sdoc_model.py, a module over
+strictdoc's node model that owns a loaded graph. Three operations:
+open_graph(root: Path, *, output_dir: Path | None = None) -> Graph,
+Graph.set_field(uid: str, field: str, value: str | None) -> None, and
+Graph.save() -> list[Path] returning the files rewritten. set_field validates
+before it returns and raises rather than leaving a bad node in the graph; save
+writes only the documents whose nodes were touched. Batching is the point: the
+graph load is the expensive step and fp-accept signs several UIDs per run.
+FIELD_ORDER, find_node_block, find_field_span and render_field all go, and
+nothing in the replacement knows the grammar's field order or its block syntax.
+
+The call sequence is fixed by what strictdoc requires. Load with
+ProjectConfigLoader.load(input_path=root, output_dir=...) then
+TraceabilityIndexBuilder.create(project_config=..., parallelizer=
+NullParallelizer(), skip_source_files=True). Reach a node with
+index.get_node_by_uid(uid) and its file with
+node.get_document().meta.input_doc_full_path. Write a field with
+SDocNode.set_field_value(field_name=..., form_field_index=0, value=...), where
+value=None deletes the field. Check the node with SDocValidator.validate_node(
+node, document_grammar=doc.grammar, path_to_sdoc_file=...). Serialise with
+SDWriter(project_config).write(document) and replace the file with that string.
+
+Three obligations sit on the module because strictdoc does not carry them.
+Value validation: set_field_value accepts anything, so an invalid SingleChoice
+and the deletion of a required field both reach disk and are caught only by a
+later parse -- validate_node is the catchable gate and costs about 20 us.
+Delimiter rejection: a value containing a line that begins at column zero with
+"<<<" serialises to a file that cannot be re-parsed, and validate_node does not
+see it, so set_field rejects such values itself. Path discovery: the model
+supplies each node's source file directly, replacing fp-accept's glob-and-grep
+scan for a "UID: " line.
+
+Out of scope, each belonging to a named sibling: the verb and flag surface, UID
+minting and node creation (SLICE-SDOC-CLI); refusing writes to operator-owned
+fields (MECH-RUNTIME-WRITE-GUARD); relocating the cache
+(MECH-SDOC-CACHE-DIR-FOR-WORKTREES); trimming the format set
+(MECH-SDOC-LEAN-FORMATS). fp-check keeps reading the JSON export; this changes
+the write path only.
+<<<
+RATIONALE: >>>
+The copied order list matches the grammar today, and the wrapper will need field
+writes for every field rather than one, so generalising a hand-copied list is the
+wrong direction when strictdoc already owns the order. The larger gain is that
+going through the model collapses find, edit and format into one path: the model
+knows each node's file, so the glob-and-grep scan disappears, and SDWriter
+produces the canonical form, so the "run strictdoc format afterward" step in
+fp-accept's docstring disappears with it. That is what SLICE-SDOC-CLI means by
+formatting applied by the same code path.
+
+Owning validation on this side is not a tax the model API imposes; it is the
+finding that makes this node necessary rather than tidy. set_field_value is a
+mutator with no opinion about the value, so a wrapper that only swapped in the
+API would be strictly less safe than the text editor it replaces, which at least
+could not produce an invalid choice by accident.
+<<<
+NOTES: >>>
+Measured on strictdoc 0.28.3 against a scratch copy of this repo's nine
+documents; nothing was written in the checkout.
+
+Grammar resolution. A single-document parse leaves elements_by_type at ["TEXT"]
+and set_field_value raises KeyError("MECHANISM"); after
+TraceabilityIndexBuilder.create it holds all six element types and
+element.field_titles for MECHANISM is exactly the grammar's list. The @repo
+alias is resolved in traceability_index_builder.py:421-446 through
+project_config.grammars, not by the reader.
+
+The previous statement said the whole graph is required. It is not, and the
+correction matters because the cheap path looks like it works. SDocGrammarReader
+().read_from_file(...) plus document.grammar.update_with_elements(g.elements)
+makes set_field_value work off a single-document parse (0.43 s parse, 7 ms
+grammar) and for 99-backlog.sdoc produces a byte-identical 130839-byte write.
+It drops the TEXT element the builder back-fills at
+traceability_index_builder.py:447-456: on a probe document carrying free text
+that the corpus exports clean (exit 0), the hand-stitched path raises
+KeyError("TEXT") on the TEXT node. Use the builder.
+
+Timings, one process, NullParallelizer: cold index build 1.44 s, warm 0.11 s,
+warm rebuild after one changed file 0.97 s; three set_field_value calls 36 us;
+SDWriter.write of the 2820-line, 130839-byte 99-backlog.sdoc 0.8 ms;
+validate_node 8-22 us; SDReader re-parse of that document 0.37 s; the whole
+set-validate-write-reparse-save cycle 0.34 s. Config construction alone is
+0.67-0.81 s of every number here, which is MECH-SDOC-LEAN-FORMATS's lever.
+
+Field order holds under abuse. On a node stripped of RATIONALE, PARENT_FP and
+NOTES, setting them in the order NOTES, PARENT_FP, RATIONALE serialises them
+RATIONALE, PARENT_FP, NOTES. Round trip is byte-stable: loading all nine
+documents and writing every one back unmodified changes no file, and a
+single-field edit produces a diff confined to that node.
+
+One visible difference from the text editor. Single-line versus block form comes
+from the grammar, not from what was parsed -- is_field_idx_multiline
+(grammar_element.py:410) makes every String field after TITLE multiline -- so a
+PARENT_FP written through the model is always a >>> block. Existing single-entry
+values in the corpus are inline (01-tooling.sdoc:85) because format preserves
+each parsed field's own flag, so re-signing such a node reflows it. Cosmetic
+only: sdoc_fp.py:32 excludes PARENT_FP from the contract hash, so no fingerprint
+churns.
+
+What set_field_value accepts silently, each confirmed by a clean full export
+exiting 1 where the unmutated corpus exits 0: DEPTH "totally-not-a-depth"
+("invalid SingleChoice value"), AUTHORED_BY "robot", and value=None on a
+required STATEMENT ("Node is missing a field that is required by grammar").
+validate_node catches all three plus a newline inside a single-line choice
+field, raising StrictDocSemanticError. It does not catch a "<<<" line inside a
+multiline value. Only a line starting at column zero with "<<<" terminates a
+block: "  <<<", "a<<<b", ">>>" and a literal "[MECHANISM]" line all survive the
+round trip intact, so the reject rule is one regex. An unknown field name fails
+closed but unhelpfully, as ValueError("list.index(x): x not in list").
+
+Do not validate by rebuilding the index. TraceabilityIndexBuilder.create prints
+and calls sys.exit(1) on a semantic error (traceability_index_builder.py:394,
+470, 527), so it is a process exit, not an exception carrying detail.
+
+SDWriter, SDReader and SDocValidator are not exported from strictdoc.api; of
+what this needs, only TraceabilityIndexBuilder, ProjectConfigLoader,
+Parallelizer, SDocNode, SDocDocument, TraceabilityIndex and DocumentTreeError
+are. The module takes three internal imports, which the pinned overlay makes
+tolerable and a version bump should re-check.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-FINGERPRINT-IN-NODE
+  ROLE: Governed_By

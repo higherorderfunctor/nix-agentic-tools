@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: A separated list's separator does not survive into the faithful surface
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-LIST-SEPARATOR-SUPPRESSED
+TITLE: A separated list's separator does not survive into the faithful surface
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured on 0.28.3. The choice-option list is spelled
+
+  '(' ((options = ChoiceOption) (options *= ChoiceOptionXs)) ')'
+
+and ChoiceOptionXs is the separator-carrying rule:
+
+  ChoiceOptionXs[noskipws]: /, /- ChoiceOption
+
+The `-` suffix is arpeggio's suppression marker, and the extracted production
+for ChoiceOptionXs carries only the rule reference: the /, / match is gone.
+
+So the SHAPE of a separated list is derivable from the surface -- one mandatory
+assignment then a zeroOrMore assignment to the same option -- and the
+normalizer classifies it from exactly that. The SEPARATOR is not. The ", " join
+therefore lives in the encoder as knowledge rather than as a derivation, in
+both lib/emit.nix and the `commaList` pair in extract/normalize.py.
+
+Fix shape: teach extract.py to record suppressed matches as a `separator` on
+the repetition item, and have the encoder read it.
+<<<
+RATIONALE: >>>
+The whole point of generating the surface is that no vocabulary is hand-typed.
+", " is currently a hand-typed constant in two files, and if upstream ever
+changed the separator both would keep emitting the old one against a grammar
+that no longer parses it.
+<<<

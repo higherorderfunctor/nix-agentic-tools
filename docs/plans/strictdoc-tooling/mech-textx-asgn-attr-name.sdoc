@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: The peg assignment node carries its attribute name, and positional correlation is wrong
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-TEXTX-ASGN-ATTR-NAME
+TITLE: The peg assignment node carries its attribute name, and positional correlation is wrong
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured on textx as pinned by 0.28.3. A synthetic __asgn_plain /
+__asgn_oneormore / __asgn_zeroormore node carries _attr_name and _exp_str, both
+the attribute's name. That is the correct way to pair a peg assignment with the
+metamodel attribute it fills.
+
+The obvious alternative -- pairing them positionally, since _tx_attrs preserves
+declaration order -- is wrong, and wrong in exactly one place, which is the
+worst shape for a bug like this. GrammarElementFieldSingleChoice and
+GrammarElementFieldMultipleChoice each assign options TWICE, as
+(options = ChoiceOption) (options *= ChoiceOptionXs), so they have five
+assignment nodes against four attributes and every attribute after the third
+shifts by one. Every other reachable rule correlates positionally just fine.
+<<<
+RATIONALE: >>>
+Recorded because a positional walk passes on eighteen of nineteen rules and
+then mislabels REQUIRED as options on the two choice-field rules, which is a
+plausible surface that type-checks and is silently wrong.
+<<<

@@ -1,0 +1,68 @@
+[DOCUMENT]
+TITLE: Fail safes for fingerprints that reference a state main cannot reconstruct
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-FP-MAIN-LINEAGE
+TITLE: Fail safes for fingerprints that reference a state main cannot reconstruct
+DEPTH: interface-settled
+AUTHORED_BY: human
+STATEMENT: >>>
+A fingerprint that reaches main names its parent's state in the commit that carries it, so main can always reconstruct that state with git show on the commit and the file. This holds by construction, not by archaeology: an entry naming any other state hashes differently from the tree it lands in, and fp-check already reports that as drifted, or as deleted when the parent is gone.
+
+The fail safe is therefore one gate, not a lineage tracker. fp-check runs against the merge result -- the tree that is about to become main, not a diff against the branch's base -- and refuses the merge when it exits non-zero. Nothing is warned and nothing is re-anchored. Re-anchoring is re-signing, re-signing is an acceptance, and acceptance is the operator's act at pull-request review; a gate that silently re-anchors is the rubber stamp the fingerprint exists to prevent.
+
+Squash needs no special handling. It preserves the final tree, so the signature and the state it names land in the same commit whatever the branch did in between. Rebase and conflict-authored content are a different failure -- the parent's content genuinely changed -- and stay with MECH-FP-GIT-FLOW-HAZARDS.
+
+Reconstruction, meaning answering what changed for a drift already on main, is a diagnostic and is out of scope for this mechanism. If it is built its shape is fixed: walk git log backwards from HEAD over the file holding the parent, export at each candidate commit, hash the parent, stop at the first match. It must hash from the JSON export rather than from the .sdoc text, or it will not reproduce the recorded value.
+<<<
+RATIONALE: >>>
+The two checks this node used to propose were both git archaeology, and the branch they were written for refutes both. origin/main and the merge base ec980d15 each contain zero .sdoc files while HEAD contains nine, so "every recorded hash corresponds to a parent state reachable in main" and "no recorded hash is ahead of the branch's common base" would each refuse all 31 fingerprint entries on this branch. A fail safe that refuses everything on the only live example is not a fail safe, and neither check can run cheaply enough to gate anything.
+
+The replacement costs nothing to build because it is already built. fp-check compares a recorded hash against the parent's hash in whatever tree it is handed and touches git not at all, which is exactly what makes it evaluable against a merge result. What this mechanism adds is not a check but a place to run one.
+
+Storing the accepted parent state beside its hash was considered and rejected. It would make drift diffs answerable without git, and cost is not the objection -- the twelve parents currently referenced total 7.6 KB of contract payload and all 139 nodes total 120 KB. Redundancy is. A state that passes the gate is already in the merge commit, so the store would duplicate the tree to avoid reading it.
+<<<
+NOTES: >>>
+Measured 2026-08-27 against a clean export of the branch tip.
+
+Today the failure has zero instances: fp-check reports 31 fingerprint entries, 0 signed and current, 31 never signed, 0 suspect. Every recorded value is the placeholder 0000000.
+
+Both controls run on copies of the export, never on the tree. Signing MECH-FP-ACCEPT-READINESS against MECH-FP-CHECK's own current hash 5360cbe gives "1 signed and current, 0 suspect", exit 0. The same edge with deadbee gives "drifted -- recorded deadbee, current 5360cbe", exit 1. So the gate fires on a hash naming a state the tree does not contain, and does not fire on one that names the tree itself. fp-check.py:38 lists drifted, unbacked and deleted as failing and returns 1 for any of them; only drifted and deleted are this invariant's cases, unbacked belongs to MECH-FP-RELATION-LINT.
+
+Why reconstruction is a diagnostic and not a gate: a whole-project JSON export takes 2.06 s wall, and there is no cheaper unit -- strictdoc export against a single .sdoc fails with "error: '@repo'" because the grammar alias resolves only from the root strictdoc_config.py. A sweep of this branch's 61 sdoc-touching commits is therefore about 126 s, and after the squash the intermediate states it would search are gone anyway.
+
+PARENT_FP records 7 hex characters (sdoc_fp.HASH_LEN), 28 bits. If a payload store is ever built despite the rejection above, key it by the full digest and resolve the prefix the way git does; 28 bits reaches a birthday collision near 16k stored states.
+
+MECH-FP-PREMERGE-GC MAY be foldable here, and that is a recommendation rather than a retirement -- three other nodes (MECH-SIGNATURE-REVOCATION, MECH-FP-GIT-FLOW-HAZARDS twice) still treat it as live, and collection policy is deferred past milestone five by standing ruling, so retiring it is not this node's call. Its premise is that fingerprints referencing intermediate branch states become dangling references the instant the branch squashes; under this gate such fingerprints are drifted at the tip and cannot reach main, so there is nothing left to collect. MECH-FP-GIT-FLOW-HAZARDS stays separate: it is about whether a drift report is legitimate, not about whether the state it names survives, and the two overlap only in the sentence "squash is safe", which belongs there.
+
+SLICE-CHECKPOINT-WIRING anchors its CI checkpoint at the branch point and enumerates no merge-result checkpoint. This gate needs one: the tree that matters is the merge result, and a diff against the base cannot see it. Owed to that slice as a sixth checkpoint, not a criticism of the anchor it chose for the checks it does enumerate.
+
+Residual, not handled: a merge that bypasses the gate. Detecting one needs the same fp-check run on main after the fact, which is the same command against a different tree.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Severity of drifted/deleted at every surface other than the merge gate — command time, pre-commit, pre-push. Only the merge boundary is settled here, and only because the consequence there is permanent and no reader judgement is available. The per-checkpoint severity table is SLICE-CHECKPOINT-WIRING's surface and the operator's call.
+
+- Whether the reconstruction diagnostic is built at all. Its shape is fixed above; whether 2.06 s per candidate commit is worth spending, and whether a drift report citing two hashes is already enough, is a judgement about operator attention.
+
+- Who may re-sign after a legitimate drift. DEC-FP-ACCEPT-AUTHORITY is open and this node deliberately does not narrow it — it only rules out the gate re-anchoring on its own.
+
+- Whether main is swept periodically to catch a merge that bypassed the gate. The mechanism is identical (fp-check on a different tree); whether the bypass is worth guarding is a trust question.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Assumes

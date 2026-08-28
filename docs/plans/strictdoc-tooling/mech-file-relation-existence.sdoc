@@ -1,0 +1,131 @@
+[DOCUMENT]
+TITLE: File relations to nonexistent paths export clean
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-FILE-RELATION-EXISTENCE
+TITLE: File relations to nonexistent paths export clean
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Check every File relation against the repository tree in
+dev/scripts/file-check.py, built in cycle-check.py's shape: it reuses
+sdoc_fp's load_index and iter_nodes, prints every finding with its node UID
+and owning document title, and exits non-zero when there is one. Its argv is
+the export JSON plus the repository root, a second argument neither
+cycle-check.py nor fp-check.py takes, because the JSON export carries no path
+for anything and so offers nothing to resolve against.
+checks/strictdoc-file-check.nix runs it over the flake source beside the
+cycle and fingerprint checks, which puts it in nix flake check.
+
+A VALUE is well-formed in exactly one shape: a normalized POSIX path relative
+to the repository root, not absolute, with no leading ./ and no .. segment.
+Any other shape is a finding in its own right rather than a path to normalize
+and then resolve. The target must be an existing regular file; a directory is
+a finding. That rule is upstream's, not ours -- strictdoc's own
+file-traceability validation accepts precisely this shape and rejects ./x,
+../x, an absolute path and a directory with the same message -- so holding to
+it keeps the corpus able to turn that feature on later.
+
+The sdoc CLI checks only the VALUEs it is about to write, applying the same
+well-formedness rule plus one stat: microseconds, not a whole-graph pass. The
+corpus-wide gate stays alongside it, because a write-time check cannot see a
+file deleted or moved after its relation was written, and that is the
+direction the ghost problem actually runs.
+
+Two exclusions, both deliberate and both cheap to reverse. Targets outside
+the repository are not supported; no File relation names one today. Forward
+references are not supported either -- a node may not name a path its own
+unbuilt work will create. All three File relations in the corpus sit on
+implemented nodes, so the strict rule costs nothing now, and relaxing it
+later by gating existence on DEPTH is a one-line change, where tightening it
+later would not be.
+<<<
+RATIONALE: >>>
+This node's own earlier premise -- that the parser will not do it -- is
+refuted. StrictDoc validates File relations exactly this way, but only when
+REQUIREMENT_TO_SOURCE_TRACEABILITY is in project_features, which this project
+does not set. Enabling it is one config line, and it was rejected on three
+measurements rather than on taste. It costs 12.32 s against 1.52 s on this
+890-file tree, and that cost lands on every export, including the whole-graph
+validation the sdoc CLI runs per write, which is budgeted at about a second.
+It reports one broken relation per run, so N defects cost N runs of 12 s. And
+its predicate is "is an indexed source file", not "exists": a File relation
+naming a file that is present but binary is reported as not existing. A
+checker over the JSON export has the exact predicate, reports every finding
+in one pass, and costs 0.03 s.
+
+The defect itself is worth closing rather than tolerating because a design
+that claims code which no longer exists is the ghost problem the File role
+was adopted to catch.
+<<<
+NOTES: >>>
+Measured 2026-08-27 on a scratch copy of the tree, strictdoc 0.28.3
+(/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env), every export
+into a clean output directory.
+
+The defect, and a positive control for the same harness:
+
+- A File relation with VALUE packages/semble/lib/doesNotExist.nix exports
+  with exit 0, emits no warning line at all, and the dead path survives
+  verbatim into index.json.
+- Replacing it with a dangling NODE relation fails the identical export with
+  exit 1 and "references parent requirement which doesn't exist"
+  (traceability_index_builder.py:663). The export gate is alive; it just does
+  not cover File.
+- Prototype checker over the JSON export: 0.03 s, exit 1, all three injected
+  broken relations named in one run. Negative control on the unmodified
+  corpus: 3 File relations checked, 0 broken, exit 0 -- both on the scratch
+  copy and on the real graph.
+
+Upstream's own check, measured by adding
+project_features=["REQUIREMENT_TO_SOURCE_TRACEABILITY"] to the scratch
+strictdoc_config.py:
+
+- Broken path: exit 1, "Requirement MECH-FILE-RELATION-EXISTENCE references a
+  file that does not exist" (file_traceability_index.py:615).
+- Accepted forms, probed exhaustively: packages/semble/lib/withGrammars.nix
+  passes, while ./packages/semble/lib/withGrammars.nix,
+  packages/semble/lib/../lib/withGrammars.nix,
+  ../../../packages/semble/lib/withGrammars.nix, /etc/hostname, the directory
+  packages/semble, and a document-relative 01-tooling.sdoc all fail.
+  Resolution is a string lookup in the indexed-source-file map keyed by a
+  POSIX path relative to source_root_path -- not filesystem resolution --
+  which is why every non-normalized form fails while naming a real file.
+- A file that exists but is not indexed reports the same "does not exist":
+  measured on a .pyc and on a file containing a NUL byte, both skipped as
+  binary. A plain .txt passes.
+- Cost on the whole repo, 890 tracked files and 885 source tasks: 1.52 s off,
+  12.32 s on, 244 MB maxrss. Narrowing include_source_paths to
+  packages/semble/** drops it to 1.84 s and 16 tasks, but then
+  dev/scripts/cycle-check.py -- which exists -- is reported as not existing.
+  Narrowing trades cost for false positives and is not viable.
+- One error per run: three broken relations across two nodes produced one
+  error line, and it named the second node's.
+- The JSON export is byte-identical with the feature on and off, so enabling
+  it would not perturb cycle-check or fp-check.
+
+Two traps found while measuring, neither confined to this node:
+
+- ProjectConfig(project_features=[...]) REPLACES the defaults (TABLE_SCREEN,
+  TRACEABILITY_SCREEN, DEEP_TRACEABILITY_SCREEN, SEARCH) rather than adding
+  to them. The JSON export is unaffected -- measured identical -- but the
+  HTML screens would be lost.
+- StrictDoc's own grammar source calls this role experimental: "FileReference
+  is an early, experimental feature. Do not use yet."
+  (backend/sdoc/grammar/type_system.py:25).
+
+The check's repository-root argument comes from the flake source in the check
+derivation, following checks/strictdoc-cycle-check.nix's
+"strictdoc export ${self}". That is the git-tracked tree, so a File relation
+naming an untracked file passes locally and fails in CI -- correct behaviour,
+but the failure appears at a distance from the edit.
+
+sdoc_fp.iter_nodes walks only each document's top-level NODES and does not
+recurse into sections. A recursive walk finds the same 3 File relations on
+today's corpus, so the two are currently equivalent; use iter_nodes for
+consistency with the other two checkers and fix it in one place if sections
+ever nest nodes.
+<<<

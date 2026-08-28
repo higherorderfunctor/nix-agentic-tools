@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: Make a package with no description fail rather than vanish from the README
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-README-ROWS-FOLLOW-DESCRIPTIONS-NOT-PACKAGES
+TITLE: Make a package with no description fail rather than vanish from the README
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+dev/generate.nix's mkDescriptionRows maps over dev/data.nix's description
+attrsets, not over the overlay's package set, so a package with no description
+entry is silently absent from the generated README table. Nothing fails: not
+the generator, not nix flake check, not the drift check, which compares the
+generated file against the same incomplete input.
+
+Fix shape: derive the row set from the overlay group and look each description
+up, so a missing one throws with the package's name. That inverts the failure
+from a silent omission into an eval error naming exactly what to write.
+<<<
+RATIONALE: >>>
+Found while landing SLICE-STRICTDOC-OVERLAY: the package was registered in
+overlays/default.nix, config.update.targets and the cache-hit-parity registry
+-- three surfaces that DO fail when incomplete -- and would still have shipped
+absent from the public README, because the fourth surface is a lookup table
+nothing cross-checks. The three loud registries are why this was caught at all,
+and they are the model for the fix.
+
+Not scoped to this plan's subject. Recorded here because it was found here and
+there is no other parking lot; move it if the repo grows one.
+<<<
+NOTES: >>>
+Filed as issue #1266, self-contained, on 2026-08-25 -- the parking lot the
+rationale above asks for. That issue is the user-visible tracker; this node is
+the design-graph record of which slice found it. Close both together.
+<<<

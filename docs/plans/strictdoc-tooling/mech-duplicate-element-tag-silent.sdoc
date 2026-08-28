@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: Duplicate element TAG is a third silent grammar collision
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-DUPLICATE-ELEMENT-TAG-SILENT
+TITLE: Duplicate element TAG is a third silent grammar collision
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured on 0.28.3. Two grammar elements sharing a TAG parse clean and export
+exit 0. DocumentGrammar registers each element with an assignment into
+elements_by_type keyed on the tag, so the lookup keeps the LAST while
+grammar.elements still holds both. Verified directly: a two-element grammar with
+both elements tagged X reports elements X and X, registered_elements holding the
+single name X, and elements_by_type for X carrying the SECOND element's fields.
+
+That is the same class as the duplicate field title and duplicate relation role
+cases the implementation brief records, and the same direction as the field one.
+The brief says those two are the only checks that belong at Nix evaluation; that
+count is one short.
+
+packages/strictdoc-grammar/lib/emit.nix already guards it in its whole-file
+renderer alongside the other two. The open item is the brief's line, and the
+prior question of whether such checks belong to the emitter at all or to the
+type surface.
+<<<
+RATIONALE: >>>
+Found while proving the emitter, by asking whether the two documented collisions
+were the whole set rather than by happening to hit one.
+<<<

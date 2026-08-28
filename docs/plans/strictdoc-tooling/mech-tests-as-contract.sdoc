@@ -1,0 +1,70 @@
+[DOCUMENT]
+TITLE: Flows get tests as a contract once they settle
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-TESTS-AS-CONTRACT
+TITLE: Flows get tests as a contract once they settle
+DEPTH: interface-settled
+AUTHORED_BY: human
+STATEMENT: >>>
+Once a flow's mechanics are settled it gets tests that stand as its contract, and no regression is acceptable in this area afterwards. Concretely:
+
+What a test is. A scripted run of one flow through the sdoc tool against a throwaway project, asserting what the flow does rather than what any component says it does. One test is an ordered list of steps; a step names the move, its arguments, and exactly one expected outcome -- writes, giving the field values the move must leave on the node, or refused, naming the identifier of the gate that must have refused it. Assertions are on the gate identifier and on the resulting node fields, never on diagnostic wording. A test that pins prose turns a rewording into breakage, which is this node's own rationale arriving one layer later.
+
+Where it is declared. Beside the flow, in the behaviour model of SLICE-BEHAVIOUR-MODEL, as a tests list on the flow itself. Not as fixture files on disk: a second source for one expectation is the drift MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE records, and the milestone's premise is that one evaluation emits the model for the tool and the validators both.
+
+Which node type owns it. Neither a new node type nor a new grammar field. A test is data on a flow, so the MECHANISM or SLICE that declares the flow owns it and carries a File relation to the check that runs it.
+
+Where it runs. One generated harness executes every declared flow test and is registered in flake.nix's checks output as strictdoc-flow-contracts, beside strictdoc-fp-check and strictdoc-cycle-check, so nix flake check -- this repository's validation entrypoint -- is what runs it. Each flow gets its own throwaway project and its own --output-dir under the derivation's TMPDIR. No copy in dev/tasks/check.nix: where a working-tree fast path is wanted the task shells out to nix build .#checks.<system>.strictdoc-flow-contracts, which is the one arm of check:sdoc-grammar that already defers instead of restating.
+
+Positive control, per test rather than per suite. A step expecting refused is paired with the same flow run with that gate's precondition removed, which must be accepted. Without the pair, a harness broken in any way at all reports a clean sweep and every refusal in the file means nothing.
+
+The trigger, named in DEPTH. A flow may be built and land at implemented with no contract test. The node that declares it may not move to verified until each of its flows has a test that runs in the check and carries its positive control. That is what "once they settle" means here: implemented is where the mechanics stop moving, verified is the independent pass the ladder already draws, and the requirement needs no new state and no new field.
+
+After a test exists, the flow's declared outcome is the contract. A change to it is read as a contract change, and a test is never relaxed to make a change pass. Whether a flow carrying no test at all fails the evaluation or is only reported in the checkpoint table is SLICE-CHECKPOINT-WIRING's review question, not settled here.
+<<<
+RATIONALE: >>>
+Deliberately after settling, not before. Writing tests against mechanics still being played with pins the wrong thing and makes changing it feel like breakage.
+
+The shape follows from what a flow produces. Its observable product is a sequence of writes and refusals, both exactly reproducible from a fixed starting project, so a fixture run is sufficient; a property test would only re-describe the model that generated the flow, and a golden file over rendered output would assert the renderer. Asserting on gate identifiers rather than on diagnostics buys at the wording level the same freedom that waiting for settling buys at the mechanics level.
+
+Declaring the expectation in the model rather than on disk is this repository's own measured lesson. check:sdoc-grammar and checks/strictdoc-grammar-*.nix implement one acceptance list twice, in bash and in Nix, against the same fixtures; they agree today and nothing makes them agree tomorrow (MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE).
+
+The per-test positive control is INV-GUARDS-MUST-EXECUTE turned on the tests themselves. Every assertion in a refusal test has the form "this failed", and a broken harness fails everything identically.
+<<<
+NOTES: >>>
+Harness precedent: checks/strictdoc-grammar-negative-fixtures.nix. It builds a throwaway project per fixture outside the repository under TMPDIR, gives each export its own --output-dir, reads each fixture's expected layer out of fixtures/README.md rather than restating it, and carries two positive controls because every assertion in it is of the form "this failed". A flow-contract harness is that file with the fixture table replaced by the model's flow tests. The clean output directory is load-bearing rather than tidy: strictdoc export caches under its output dir, and a broken input exits 1 then 0 on re-run against a warm one.
+
+Corpus, measured 2026-08-27 over the JSON export: 139 nodes; 77 at sketch, 16 at implemented, 2 at verified (SLICE-GRAPH-CHECKS, SLICE-SDOC-IN-SEMBLE). Three File relations exist in the whole graph and all three name implementation files -- packages/semble/lib/withGrammars.nix twice and packages/semble/patches/extra-grammars.patch -- none a check. So scoping the verified requirement to flows is deliberate: no flow exists yet, so the rule is wired against an empty legacy instead of going red on day one, which is the corpus-first order MECH-RELATION-TARGET-TYPE-LINT records. The same rule applied to every node would invalidate both existing verified nodes on the day it landed.
+
+The File edge from a flow's node to its check is documentation, not enforcement. Measured in MECH-FILE-RELATION-EXISTENCE: a File relation whose VALUE names a path that does not exist exports with exit 0. The harness is the enforcement.
+
+The trigger is phrased against the DEPTH ladder as it stands today. If milestone five moves implemented and verified out of DEPTH -- an open instance decision listed in SLICE-INSTANCE-SEMANTICS-MIGRATION -- the trigger moves with them, because the condition it names is the independent review pass rather than the field that carries it.
+
+A flow whose gates read git cannot be exercised the way the existing strictdoc checks are. checks/strictdoc-fp-check.nix and checks/strictdoc-cycle-check.nix run over ${self}, a flake source store path with no .git, and neither dev/scripts/fp-check.py nor dev/scripts/cycle-check.py contains the string git or subprocess (0 matches each; the same grep returns 6 on checks/doubled-words.py and finds subprocess at line 116 of checks/strictdoc-grammar-negative-fixtures.nix, so the search works). SLICE-CHECKPOINT-WIRING's pre-commit checkpoint runs against the previous commit, so any flow reaching it needs a synthetic repository built inside the derivation. Logged as MECH-FLOW-TEST-GIT-CHECKPOINTS rather than solved here.
+
+AUTHORED_BY still reads human. The operator's two sentences are preserved -- the first opens the STATEMENT and the RATIONALE's first paragraph is theirs verbatim -- and everything after them was written by a model. Only the operator turns that key (MECH-AUTHORED-BY-GUARD), so it is left alone and flagged here rather than corrected.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Whether a flow carrying no contract test at all fails the evaluation or is only reported in the checkpoint table. SLICE-CHECKPOINT-WIRING already reserves that same fail-vs-report question for its own review; answering it here would settle a policy in two places.
+
+- Which flows are worth a contract test at all. The mechanism says how a test is declared and where it runs, and deliberately declares no minimum coverage.
+
+- Whether a change to a flow's declared outcome is a signing event. The statement says only that it is read as a contract change; whether it produces a fingerprint, a signature, or a revocation is SLICE-INSTANCE-SEMANTICS-MIGRATION's, and milestone 5's.
+
+- Whether implemented and verified stay in DEPTH at all. The trigger is written against the ladder as it stands and NOTES records that it follows the review pass rather than the field if milestone 5 moves them.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
+<<<

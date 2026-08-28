@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Extend the sdoc tree-sitter grammar to cover document-body content
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SGRA-BODY-COVERAGE
+TITLE: Extend the sdoc tree-sitter grammar to cover document-body content
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured while implementing SLICE-SDOC-IN-SEMBLE:
+checks/strictdoc-grammar-corpus.nix parses strictdoc-project/strictdoc's own
+docs/ (15 files, pinned rev 215cda2e) and gets 5/15 clean under the patched
+grammar, unchanged from baseline. The 10 failures are unrelated to
+DEC-GRAMMAR-PATCH-NOT-FORK's patch (root-rule choice + REVERSE_ROLE) -- they
+are document-body / FREETEXT coverage gaps in the upstream grammar itself,
+present before and after this patch.
+<<<
+RATIONALE: >>>
+Out of scope for the current patch, which targets exactly the two bugs this
+repository's own corpus hit. Worth a dedicated SPIKE to characterize the
+FREETEXT gap before deciding whether it is a small follow-up patch or a
+reason to look upstream harder.
+<<<

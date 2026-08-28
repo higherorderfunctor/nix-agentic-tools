@@ -1,0 +1,20 @@
+[DOCUMENT]
+TITLE: A PreToolUse deny cannot see a write made through Bash
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-PRETOOLUSE-BLIND-TO-BASH
+TITLE: A PreToolUse deny cannot see a write made through Bash
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A PreToolUse envelope carries `tool_name` and `tool_input` and nothing else, so a guard delivered as a tool-call hook binds a tool and never a path. Measured 2026-08-27 against this repository's own guard, `packages/claude-code/lib/memory-collision-guard.sh`: fed `{"tool_name":"Write","tool_input":{"file_path":"<guarded>/new.md"}}` it returns `permissionDecision: deny` with a populated reason; fed `{"tool_name":"Bash","tool_input":{"command":"echo x > <guarded>/new.md"}}` — the same file, the other channel — it produces empty stdout and exit 0, which is allow. A Bash matcher can only string-match the command text, so it catches an invocation by name and not a heredoc or a script the model just wrote. Any guard stated as protecting a path is therefore overstated, and the residue has to be caught by detection afterwards.
+<<<
+RATIONALE: >>>
+`MECH-RUNTIME-WRITE-GUARD` names this node in its NOTES as the home for the measurement, and its own design turns on it: the guarantee is the absence of a code path, not a hook in front of one. `packages/stacked-workflows/router.nix:27` records the same limit independently and rejected a matcher on those grounds, so this is a repository-wide fact about hook delivery rather than a fact about one guard.
+<<<
+NOTES: >>>
+Logged as the durable home for a measurement summarised in `MECH-RUNTIME-WRITE-GUARD`'s NOTES. Positive control is the pair itself: the same script, the same guarded directory, one run apart, denying one envelope and allowing the other.
+<<<

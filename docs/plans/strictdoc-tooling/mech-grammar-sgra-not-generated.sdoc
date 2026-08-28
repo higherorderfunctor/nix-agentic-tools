@@ -1,0 +1,58 @@
+[DOCUMENT]
+TITLE: docs/sdoc/grammar.sgra is generated from values.nix and CI-gated
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-GRAMMAR-SGRA-NOT-GENERATED
+TITLE: docs/sdoc/grammar.sgra is generated from values.nix and CI-gated
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+packages/strictdoc-grammar/values.nix renders docs/sdoc/grammar.sgra byte for
+byte, and the semantic comparison agrees, but nothing writes that file. The
+generation task deliberately stops at the two generated surfaces, and
+check:sdoc-grammar renders to a temporary file and diffs.
+
+So there are two sources for one artefact. Editing grammar.sgra by hand is
+still possible and reddens only a task nobody has to run; editing values.nix
+without running it changes nothing. Neither drift is caught anywhere near where
+it happens, and neither is caught in CI at all -- both tasks depend on
+interactive-only packages.
+
+Fix shape: the operator decides whether grammar.sgra becomes generated. If yes,
+generate:sdoc-grammar writes it and the drift check moves into `nix flake
+check`, which needs the strictdoc closure available to a check derivation --
+checks/strictdoc-fp-check.nix already pulls it via nativeBuildInputs, so the
+precedent exists.
+<<<
+RATIONALE: >>>
+Left as a deliberate stop rather than an oversight: making a hand-maintained
+contract file generated changes who owns it, and this milestone was told not to
+edit that file at all. Recorded so the half-wired state is legible as a
+decision rather than read as a missing task.
+<<<
+NOTES: >>>
+RULED by the operator 2026-08-26: yes, generate it. In this repository every
+sdoc grammar is generated, by way of the devenv module in
+MECH-STRICTDOC-DEVENV-MODULE. That is a local convention and is explicitly NOT
+imposed on anyone consuming the published surface -- a consumer may use the
+module, call the library directly, or hand-write the file.
+
+Implemented 2026-08-27. ai.strictdoc.grammars.repo in devenv.nix names
+docs/sdoc/grammar.sgra as its target, and the module's own generate:sgra task
+writes it. The file it wrote is byte-identical to the one that was committed,
+so the deliberate normalization commit acceptance item 5 allows for was not
+needed.
+
+Two things learned wiring it. The write CANNOT share an invocation with
+generate:sdoc-grammar: `rendered` is an evaluation-time string and devenv fixes
+every task's script before running any of them, so a chained write would emit
+the grammar rendered from the surface that existed when the run began -- in
+exactly the run that regenerated it. And the drift this node worried about is
+already gated in CI rather than only by an interactive task:
+checks/strictdoc-grammar-model-equal.nix renders values.nix inside `nix flake
+check` and diffs it against the committed bytes, so a hand edit to either side
+now reddens a required check.
+<<<
