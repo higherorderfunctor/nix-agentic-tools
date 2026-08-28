@@ -70,6 +70,14 @@
     strictdoc = cfg.package;
   };
 
+  # `sdoc` — SLICE-SDOC-CLI's entry point. Takes the runner above rather than
+  # deriving a second interpreter; see ../../lib/mkSdocCli.nix for why the
+  # script itself is resolved at run time instead of being baked in.
+  sdocCli = import ../../lib/mkSdocCli.nix {
+    inherit lib pkgs;
+    runner = extract;
+  };
+
   # Store paths rather than bare names: `generate:sgra` is a plain script and
   # must not depend on what happens to be on the caller's PATH. `cmp` ships in
   # diffutils, NOT coreutils — getting that wrong here would fail silently, in
@@ -200,6 +208,7 @@ in {
     packages = [
       cfg.package
       extract
+      sdocCli
     ];
 
     # Declared even when `grammars` is empty, so `devenv tasks list` shows the

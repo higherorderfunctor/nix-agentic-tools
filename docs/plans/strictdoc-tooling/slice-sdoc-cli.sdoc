@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [SLICE]
 UID: SLICE-SDOC-CLI
 TITLE: A command-line tool that is the only writer of sdoc files
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Build the command-line tool that produces and edits sdoc documents. Its option
@@ -85,6 +85,35 @@ working copy at a stable path; a fresh temporary copy pays the cold cost.
 
 Prefix-to-type agreement is unenforced today: a MECHANISM named SLICE-... exports
 exit 0 and lands in the JSON unremarked. The tool is where that closes.
+
+IMPLEMENTED 2026-08-27 as dev/scripts/sdoc_cli.py, reachable as `sdoc` in
+the dev shell through packages/strictdoc-grammar/lib/mkSdocCli.nix.
+
+The option surface is derived, and the asymmetry this slice's RATIONALE
+predicted is what comes out: `sdoc new DECISION --help` offers no --depth,
+no File role and STATUS as open|accepted|rejected|superseded, while `sdoc
+new SPIKE --help` offers both a --depth and a --status of
+unrun|run|blocked. Relation roles are per type too -- --role Crosses is
+rejected on a MECHANISM, which does not declare it.
+
+All nine verbs are exercised. Prefix-to-type agreement now closes: `new
+MECHANISM --uid SLICE-WRONG` exits 1, where strictdoc exports it clean.
+
+Deliberately NOT shipped, and each has a home: the harness denial before the
+edit tool runs (milestone four owns checkpoints), and whether deleting is
+legitimate, whether raising DEPTH is a lifecycle move and who may sign
+(milestone five owns instance semantics). `delete` exists and the sdoc skill
+does not teach it.
+
+Two judgement calls made under the operator's "you pick, I will tune later",
+both cheap to reverse. A File relation is written with the deprecated
+`VALUE:` spelling rather than `PATH:`, because all three in the corpus carry
+VALUE and file-check.py reads that key. And `--dry-run` prints a unified
+diff rather than the rendered node.
+
+The whole-graph reload after each write, which is what makes "a command that
+cannot validate does not write" true rather than intended, costs about 0.25 s
+against the warm cache.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -111,3 +140,5 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SPIKE-EXECUTABLE-RULES
   ROLE: Proven_By
+- TYPE: File
+  VALUE: dev/scripts/sdoc_cli.py

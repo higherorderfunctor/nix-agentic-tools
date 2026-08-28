@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SDOC-LEAN-FORMATS
 TITLE: Pin formats to SDoc and JSON in strictdoc_config.py
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 strictdoc_config.py registers exactly two formats, SDocFormat and JSONFormat,
@@ -162,4 +162,22 @@ strictdoc.core.project_config rather than strictdoc.api saves about 0.06 s
 and so drags openpyxl in even when no Excel format is registered. Under the
 stock format list it saves nothing, default_formats() importing the same modules
 a moment later.
+
+IMPLEMENTED 2026-08-27 in strictdoc_config.py. Two corrections to the
+statement above, both found by running it.
+
+formats takes INSTANCES, not classes. default_formats() returns constructed
+objects and the dispatcher calls read_grammar on the member, so
+formats=[SDocFormat, JSONFormat] raises a missing-self TypeError at load
+rather than registering anything.
+
+The pin buys one thing the statement did not predict, and SLICE-SDOC-CLI
+depends on it. html2pdf4doc, reached only through the default format stack,
+reassigns sys.stdout AT IMPORT TIME and needs a real file descriptor, so any
+caller holding stdout in a buffer got io.UnsupportedOperation before this
+landed. That is what lets the CLI keep strictdoc's progress narration out of
+a --dry-run diff.
 <<<
+RELATIONS:
+- TYPE: File
+  VALUE: strictdoc_config.py
