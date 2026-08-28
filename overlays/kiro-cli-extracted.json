@@ -19,7 +19,6 @@
     "c2s",
     "cloud_config",
     "infra_safety",
-    "kas",
     "lite",
     "memory",
     "remote_changelog",
@@ -30,6 +29,7 @@
     "test_nightly_only",
     "tui",
     "v2_non_interactive",
+    "v3_prompt",
     "voice",
     "workflows"
   ]
