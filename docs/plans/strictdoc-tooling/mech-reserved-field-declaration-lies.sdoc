@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: A reserved field name can be declared with a type that is then ignored
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-RESERVED-FIELD-DECLARATION-LIES
+TITLE: A reserved field name can be declared with a type that is then ignored
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Declaring UID as a choice type parses clean, and the document tokenizer then
+ignores the declared type entirely, matching UID with its own hardcoded
+expression. The declaration is a statement the grammar accepts and nothing
+honours. The same holds for MID.
+
+The operator's call was that this is not worth modelling in the Nix layer: the
+reserved names are ones we depend on rather than ones to ban, and the surface
+would be asserting a rule about a handful of names to catch a mistake nobody
+has made. Recorded so that it reads as a decision rather than an oversight, and
+so a later session does not spend the afternoon rediscovering it.
+<<<
+RATIONALE: >>>
+Five of this repository's ten field names are reserved, so the behaviour is not
+exotic. The reason to leave it alone is proportion, not ignorance of it.
+<<<

@@ -1,0 +1,49 @@
+[DOCUMENT]
+TITLE: The DSL and emitter value shape does not typecheck against the generated surface
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-DSL-SHAPE-DIVERGES-FROM-SURFACE
+TITLE: The DSL and emitter value shape does not typecheck against the generated surface
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Two incompatible field shapes are live at once in packages/strictdoc-grammar.
+
+The generated surface follows textx, which repeats TITLE inside every
+alternative, so a field is the union itself:
+
+  {singleChoice = {title = "STATUS"; options = ["Draft"]; required = true;};}
+
+lib/dsl.nix and lib/emit.nix follow the implementation brief's "shape, as
+designed", which hoists the title out and names the union `kind`, and which
+spells the vocabulary `choices`:
+
+  {title = "STATUS"; kind.singleChoice = {choices = ["Draft"];};}
+
+Both evaluate. They do not typecheck against each other: values built with the
+DSL are never checked by types.GrammarElementField, so the brief's acceptance
+item 3 -- "the DSL evaluates and cannot weaken the types" -- is not currently
+demonstrable, and item 4's round trip runs entirely on the emitter's own shape.
+
+Fix shape: one of the two moves. Either the emitter and DSL adopt the generated
+shape, or normalize.py grows a converter pair that rewrites the union into
+title-plus-kind and encodes back -- which is exactly what a converter pair is
+for, and would make the hoist a recorded decision rather than a divergence.
+
+RESOLVED by the integration step of the same milestone, by the FIRST move.
+lib/dsl.nix and lib/emit.nix now speak the generated shape, `kind` is gone, and
+lib/check.nix runs every value through types.DocumentGrammar before emit sees
+it. The vocabulary is spelled `choices` on both sides because the extractor
+renames it: `options` is unusable as a submodule CONFIG key -- the module system
+reads it as an option declaration. Left in place rather than deleted because
+removing a backlog node is the operator's call.
+<<<
+RATIONALE: >>>
+Noticed while checking that emit.nix consumes normalized.encoders: it does, but
+it reads `body.choices` off a value the normalized types would reject. Two
+shapes that both work in isolation are the kind of thing that only surfaces
+when someone finally wires the check that compares them.
+<<<

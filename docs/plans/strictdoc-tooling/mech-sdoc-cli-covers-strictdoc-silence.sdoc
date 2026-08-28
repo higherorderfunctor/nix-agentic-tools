@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: The tool must supply the two failure behaviours strictdoc's CLI does not have
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-CLI-COVERS-STRICTDOC-SILENCE
+TITLE: The tool must supply the two failure behaviours strictdoc's CLI does not have
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Two silent failures in strictdoc's own command line have to be closed by the wrapper, because neither can be closed upstream through configuration. First, asking for an output no registered format claims succeeds and writes nothing: with formats pinned, html, rst, markdown, excel and the bare default all exit 0 with zero non-cache files, and `--formats=html` additionally spends 0.53 s compiling Jinja templates first, because `ExportAction` gates template construction on the REQUESTED handle while dispatching on the REGISTERED one. The `--formats` allowlist is the hardcoded `EXPORT_FORMATS` list at `commands/export.py:17` and a project config can only append to it (`:88`), never remove, so no configuration makes an unregistered handle an argparse error. Second, strictdoc prints its parse and semantic errors to STDOUT beside the progress log, so the natural wrapper shape `strictdoc format . > /dev/null` exits 1 with no output at all. The tool `SLICE-SDOC-CLI` builds must refuse any handle the loaded config does not register, before invoking strictdoc, and must redirect strictdoc's stdout to stderr rather than discarding it.
+<<<
+RATIONALE: >>>
+`MECH-SDOC-LEAN-FORMATS` says of the first failure that "making that loud is owed and is not this node's to build", and names the tool as its home; this node is that owed work, with the stdout failure folded in because it is the same wrapper, the same invocation and the same class — a strictdoc command that fails usefully only if the caller does the work.
+<<<
+NOTES: >>>
+Both measurements are already recorded: the false green in `MECH-SDOC-LEAN-FORMATS`'s NOTES, the stdout behaviour in `MECH-TREEFMT-SDOC`'s NOTES under THE DIAGNOSTIC GOES TO STDOUT. Neither is live today — `strictdoc_config.py` currently registers no formats, so the stock list still renders html — so the first arms exactly when `MECH-SDOC-LEAN-FORMATS` lands. Exposure meanwhile is a human or agent running a documented recipe from memory without `--formats=json` and reading exit 0 as success; both existing gates read their index.json immediately after exporting and die on its absence, so neither can pass on an empty export.
+
+Absorbs the proposed `MECH-UNREGISTERED-HANDLE-MUST-FAIL` and `MECH-STRICTDOC-ERRORS-ON-STDOUT`.
+<<<

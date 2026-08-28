@@ -1,0 +1,45 @@
+[DOCUMENT]
+TITLE: Decide what keeps the inline reqif pin current
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-REQIF-PIN-HAS-NO-SWEEP
+TITLE: Decide what keeps the inline reqif pin current
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+overlays/dev-tools/strictdoc.nix pins reqif inline at 0.1.0, because
+mkUpdateScript rebuilds the sidecar from scratch on every write and would
+erase a second package's pin parked there. Nothing sweeps that pin.
+
+The failure is asymmetric and only half of it is loud. A strictdoc release
+that outgrows the pin fails the BUILD, because the release's own constraint is
+checked at build time -- that half is fine. But reqif moving on its own leaves
+the pin quietly behind, and once the nixpkgs pin reaches 0.1.x the override
+keeps shadowing it with an older release for no reason at all.
+
+Three shapes, none argued yet: give reqif its own tracked overlay row; branch
+on lib.versionOlder so the override disappears when nixpkgs catches up; or
+accept the staleness and say so in the overlay. The third is what is in force
+today by default rather than by decision.
+<<<
+RATIONALE: >>>
+This is the transitive-hash gap wearing different clothes -- the same
+"ghArchiveUpdateScript refreshes only the src hash" root cause that forces a
+Rust package to derive cargoDeps from the pinned src. A Python dependency is a
+separate derivation rather than a hash, so the Rust answer does not transfer
+and the question stays open.
+<<<
+NOTES: >>>
+MOOT 2026-08-27, by MECH-STRICTDOC-UPSTREAM-FLAKE. There is no inline reqif pin
+any more, and no sidecar for one to live in: overlays/dev-tools/strictdoc.nix
+re-exports upstream's flake package, and its uv2nix set resolves reqif from
+upstream's own uv.lock at the artifact the release was tested against. All three
+shapes offered above are answered by not having the problem.
+
+The ROOT CAUSE is not moot and is not this node's to carry: an update script
+that refreshes only the src hash still leaves a transitive pin unswept for every
+package that parks one, which is the standing transitive-hash gap.
+<<<

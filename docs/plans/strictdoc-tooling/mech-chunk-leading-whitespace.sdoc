@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: Chunks can begin on inter-node whitespace instead of the node header
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-CHUNK-LEADING-WHITESPACE
+TITLE: Chunks can begin on inter-node whitespace instead of the node header
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+Measured on an 8762-byte document: of 17 AST chunks, roughly five begin on a
+blank line between nodes rather than on the node header or field start that
+follows. Semble's sibling-merging walk treats whitespace tokens as ordinary
+children and folds them into the front of the next group.
+
+Cosmetic. The chunk still covers the right content and search results are
+correct; the leading blank lines waste a little of the embedding window and
+make a raw chunk read slightly worse.
+<<<
+RATIONALE: >>>
+Logged rather than fixed. Any fix lives upstream in semble's chunker or in a
+grammar change that stops emitting whitespace as a sibling, and neither is
+worth it for the observed cost. A good candidate to hand to an execution engine
+later rather than to spend design attention on now.
+<<<

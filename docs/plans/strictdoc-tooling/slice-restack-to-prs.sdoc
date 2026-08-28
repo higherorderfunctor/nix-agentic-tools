@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: Restack the long-lived branch into reviewable pull requests
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[SLICE]
+UID: SLICE-RESTACK-TO-PRS
+TITLE: Restack the long-lived branch into reviewable pull requests
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+Cut the accumulated branch into a series of pull requests ordered so each is
+independently reviewable, and land them.
+<<<
+RATIONALE: >>>
+Slotted as future work so the strategy is tracked rather than remembered. Not
+groomed: the cut points depend on what has accumulated by the milestone.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LONG-LIVED-BRANCH
+  ROLE: Governed_By

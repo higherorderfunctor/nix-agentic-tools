@@ -1,0 +1,32 @@
+[DOCUMENT]
+TITLE: Keep fingerprint lineage during development, collapse it before merge
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-FP-PREMERGE-GC
+TITLE: Keep fingerprint lineage during development, collapse it before merge
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+Permit fingerprints referencing states between the branch head and its common
+base with main while the branch is in development, then run a specialized
+garbage collection before merge that erases the ones the squash is about to
+make unreachable.
+<<<
+RATIONALE: >>>
+Full lineage across a multi-commit pull request is genuinely useful while
+working -- it is the trace of how a design was reasoned through. It becomes
+dangling references the instant the branch squashes. Collecting at the boundary
+keeps the value and pays the cost once.
+<<<
+NOTES: >>>
+Needs grooming, and possibly a plan revision rather than a mechanism: it may
+change how MECH-FP-CHECK reports rather than being a separate step. Not settled
+that a garbage collection is the right shape.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-FP-MAIN-LINEAGE
+  ROLE: Assumes

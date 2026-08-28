@@ -1,0 +1,32 @@
+[DOCUMENT]
+TITLE: Rendering to HTML should be a requirement, with a check that is not a full render
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-HTML-RENDER-MUST-PASS
+TITLE: Rendering to HTML should be a requirement, with a check that is not a full render
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Make it a requirement that this corpus renders to HTML, and gate it. The
+operator expects to use strictdoc's own site occasionally until their viewer
+exists, so a corpus that only survives the JSON path is not good enough even
+though JSON is the interface everything else uses.
+
+The gate does not have to be a full render. Two shapes, and the second is
+preferred: a light checker for the shapes known to break, or invoke the actual
+parser strictdoc uses on each field and fail on its diagnostics. The second
+avoids maintaining a corpus of known failures that will always lag what the
+renderer actually rejects.
+
+Matters more once a tool is the only writer of these documents, since that tool
+is where the check belongs -- rejecting the prose at authoring time rather than
+discovering it at export.
+<<<
+RATIONALE: >>>
+MECH-DEFAULT-EXPORT-IS-RED-ON-RST is the instance; this is the rule that would
+have caught it. A format nobody exercises decays silently, and this one decayed
+without a single failing check.
+<<<

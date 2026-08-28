@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: Groomed nodes were left in 99-backlog.sdoc instead of moving
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE
+TITLE: Groomed nodes were left in 99-backlog.sdoc instead of moving
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The backlog protocol says grooming means moving a node into a numbered document
+in the same plan and raising its DEPTH. The 2026-08-27 grooming pass raised
+DEPTH on eighteen nodes and moved none of them, so 99-backlog.sdoc now holds a
+large set of interface-settled nodes and its name no longer describes it.
+
+Nothing is broken by this. The ungroomed query is DEPTH == sketch scoped to the
+directory, so it still answers correctly, and UIDs never change, so nothing
+citing a node cares which file it sits in. What is lost is the file-level
+signal: opening 99-backlog.sdoc no longer tells you what is ungroomed.
+
+The work is deciding which numbered document each node belongs to -- 01-tooling,
+02-plan-lifecycle or 03-executable-rules -- and moving it.
+<<<
+RATIONALE: >>>
+Logged rather than done because the destination is a judgement per node and
+moving eighteen nodes between files in the same pass that rewrote their contents
+would make the diff unreviewable, on a branch whose whole review model is the
+carve-up into pull requests.
+<<<
+NOTES: >>>
+Rough split by subject at the time of logging: the readiness and predicate nodes
+belong with 01-tooling, the plan-refs and lifecycle nodes with
+02-plan-lifecycle, and the CLI, guard and signing nodes with
+03-executable-rules.
+<<<

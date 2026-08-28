@@ -1,0 +1,41 @@
+[DOCUMENT]
+TITLE: Drop the three strictdoc dependencies that cost closure and are unused
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-STRICTDOC-CLOSURE-TRIM
+TITLE: Drop the three strictdoc dependencies that cost closure and are unused
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+SPIKE-EXECUTABLE-RULES measured six dependencies in nixpkgs' strictdoc
+expression that upstream's pyproject.toml does not declare. Three of them --
+graphviz, pybtex and setuptools -- cost closure; the other three return
+through html2pdf4doc, so removing them buys nothing. Removing the three is a
+`dependencies` filter in overlays/dev-tools/strictdoc.nix.
+
+Deliberately NOT done as part of SLICE-STRICTDOC-OVERLAY, whose shape is a
+thin override that leaves the dependency set upstream-owned. Trimming it is a
+separate, arguable change: it makes this package diverge from nixpkgs in a way
+a version bump cannot re-converge, and the win is closure size on a package
+every session already has.
+<<<
+RATIONALE: >>>
+Recorded so the measurement is not re-run. If it is picked up, verify the
+six-and-three split against the release in the sidecar rather than trusting
+this node -- it was measured against 0.27.1 and the dependency list moved in
+0.28.
+<<<
+NOTES: >>>
+CHANGED SHAPE 2026-08-27, by MECH-STRICTDOC-UPSTREAM-FLAKE, and there is no
+sidecar to verify against any more. The measurement was taken against nixpkgs'
+strictdoc expression, and this repository no longer builds from it: the package
+is upstream's own uv2nix build from their uv.lock. There is no `dependencies`
+filter to apply and no first-party override to hang one on, so the six-and-three
+split describes a derivation nothing here evaluates.
+
+If closure size is still worth chasing it is now a question for upstream's own
+flake, which puts it outside this repository and probably outside this plan.
+<<<

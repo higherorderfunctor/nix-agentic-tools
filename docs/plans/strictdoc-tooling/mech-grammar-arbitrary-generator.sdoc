@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: Derive a value generator from the grammar surface rather than writing one
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-GRAMMAR-ARBITRARY-GENERATOR
+TITLE: Derive a value generator from the grammar surface rather than writing one
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Property testing for the grammar surface, deliberately deferred past milestone
+one. The shape worth building is a generator derived from the same model the
+surface is, the way a schema library derives one, so the generator and the type
+cannot drift apart.
+
+Point it at the ROUND TRIP -- generate a valid grammar, emit it, parse it with
+strictdoc, compare -- not at whether the type accepts what the generator made.
+The second proves almost nothing, because the generator was written from the
+type.
+
+Viable: lib.mod exists and builtins.fromTOML parses hexadecimal, so a seeded
+generator in pure Nix is available if that is where it should live.
+<<<
+RATIONALE: >>>
+The byte-identity gate covers one grammar. A round trip over generated ones
+covers the shapes nobody wrote a fixture for, which is where an emitter that
+handles our five node types and nothing else would still look correct.
+<<<

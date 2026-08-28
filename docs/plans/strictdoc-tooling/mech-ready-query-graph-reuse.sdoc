@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: MECH-READY-QUERY's closure walk can reuse cycle-check's graph builder
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-READY-QUERY-GRAPH-REUSE
+TITLE: MECH-READY-QUERY's closure walk can reuse cycle-check's graph builder
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+dev/scripts/cycle-check.py builds a UID -> [(target_uid, role)] adjacency map
+over every Parent-type relation via sdoc_fp.build_uid_index and a small
+RELATIONS walk. MECH-READY-QUERY needs the same shape of graph to walk a
+slice's transitive contract-dependency closure and test each node's DEPTH /
+STATUS against readiness. Building it should be factored into sdoc_fp.py (or
+a shared graph module) once MECH-READY-QUERY is implemented, rather than
+reimplemented.
+<<<
+RATIONALE: >>>
+Noticed while implementing SLICE-GRAPH-CHECKS: MECH-CYCLE-CHECK and
+MECH-READY-QUERY both start from "walk the relation graph from a node," and
+cycle-check.py already has a tested version of that walk (verified against
+synthetic fixtures, see MECH-CYCLE-CHECK's NOTES). Not acted on now --
+MECH-READY-QUERY is still needs-design and this is an implementation detail
+for whoever designs it, not a reason to touch it while implementing an
+unrelated slice.
+<<<
