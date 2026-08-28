@@ -39,10 +39,18 @@
   # inverting the index by hand.
   containedBy = rel.parent "Contained_By" "Contains";
 in [
+  # A body of work with an end. Everything under it is meant to be finished and
+  # then thrown away, so a plan is the unit you delete rather than the unit you
+  # maintain.
+  #
+  # Make one when there is a goal that will eventually stop being interesting.
+  # Do not make one for standing work that never completes -- that is a
+  # description of how things are done, and belongs with the durable nodes.
+  #
+  # A plan holds no knowledge of its own. Anything learned while working on it
+  # has to move out before the plan can be collected, and the edge from work to
+  # a durable node is what tells you whether it has.
   (el "PLAN" {prefix = "PLAN-";} {
-    # The root. One per plan, and the only node in this grammar with no
-    # containment edge — which is what makes "the roots" a query rather than a
-    # convention about where files live.
     fields = [
       uid
       title
@@ -51,24 +59,22 @@ in [
     ];
   })
 
+  # One thing that needs doing, at any size. The same node type covers the
+  # largest goal and the smallest step; they differ in altitude, not in shape,
+  # so the level is a field and the nesting is an edge.
+  #
+  # Make one whenever something needs doing and needs somewhere to hang.
+  #
+  # Work says what will be done. It never says what is true. The moment you
+  # find yourself writing down the reason a thing is done this way, that is
+  # knowledge, and it belongs in a durable node this one points at.
+  #
+  # The `finding` tier is a scratch bucket: something noticed in passing that is
+  # not the current task and should not derail it. Write it, hang it off
+  # whatever you were looking at, keep going. Sorting it out later means giving
+  # it a real tier and moving it. What separates the two is whether anyone has
+  # decided it should happen.
   (el "WORK" {prefix = "WORK-";} {
-    # ONE node type for the whole ladder, tiered by a field rather than split
-    # into MILESTONE / EPIC / TASK / STEP element types. The tiers differ in
-    # altitude, not in shape: every one of them has a title, a state and a
-    # parent, so five element types would be five copies of one field list.
-    #
-    # TIER IS DATA, DELIBERATELY REDUNDANT WITH NESTING DEPTH. Depth alone
-    # cannot distinguish an epic under a milestone from an epic under an epic,
-    # and a renderer would have to infer altitude by counting hops. The
-    # redundancy is the point: "TIER must descend along Contained_By" is the
-    # first illegal state the semantic layer gets to reject, and it is only
-    # decidable because the two representations exist to disagree.
-    #
-    # `finding` IS THE BACKLOG, and that is why no BACKLOG element type is
-    # declared. An item filed mid-session is a WORK node at TIER finding hanging
-    # off whatever it was noticed under; the backlog is then a query, and
-    # grooming is setting a real tier and re-parenting. Plan-global versus
-    # per-subtree stops being a question — it is wherever the finding hangs.
     fields = [
       uid
       title
@@ -78,16 +84,6 @@ in [
     ];
     relations = [
       containedBy
-
-      # THE ONLY CROSS-GRAMMAR EDGE, and the hinge of the whole design: it is
-      # what a collector consults before deleting a finished plan. A role is
-      # registered on the SOURCE element, so declaring it here is what makes it
-      # legal; the target only has to resolve somewhere in the index, which is
-      # built across every document regardless of which grammar each imports.
-      #
-      # UNVERIFIED. Nothing in this repository has yet exercised a relation
-      # whose two ends import different grammars. Prove it with a two-file
-      # fixture before anything leans on it.
       (rel.parent "Realizes" "Realized_By")
     ];
   })

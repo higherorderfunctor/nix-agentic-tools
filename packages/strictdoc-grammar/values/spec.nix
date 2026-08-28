@@ -51,9 +51,19 @@
   # its own role below.
   decidedBy = rel.parent "Decided_By" "Decides";
 in [
+  # Something that must be true, written down so the next person is handed it
+  # instead of working it out again.
+  #
+  # Make one when you notice you are explaining the same constraint for the
+  # second time. Write it in the present tense, about the world, not in the
+  # future tense about work.
+  #
+  # A requirement can be VIOLATED. If reality disagrees with it, reality is what
+  # is wrong and reality is what gets fixed. That is the test that separates it
+  # from a node describing how something works: ask what you would change on
+  # finding a counterexample tomorrow -- the world, or this node. The world
+  # means it is a requirement.
   (el "REQUIREMENT" {prefix = "REQ-";} {
-    # What must be true. The successor to an instruction or steering line: the
-    # settled, persisted context a session is handed rather than re-derives.
     fields = [
       uid
       title
@@ -66,10 +76,18 @@ in [
     ];
   })
 
+  # A choice, and the reason it was made rather than the alternative.
+  #
+  # Make one whenever a question had more than one defensible answer and
+  # somebody picked. If there was no alternative, there was no decision.
+  #
+  # The rejected options are the valuable part. An unrecorded rejection gets
+  # proposed again months later by someone with no way of knowing it was already
+  # weighed, and ending that is most of why this node type exists.
+  #
+  # Decisions stay durable even when made in passing during throwaway work,
+  # which is why they live here rather than with the work that produced them.
   (el "DECISION" {prefix = "DEC-";} {
-    # A choice and its reason. RATIONALE is the one optional field in either
-    # grammar, and optional rather than required on purpose: forcing a rationale
-    # produces a restated statement, which reads as a reason and is not one.
     fields = [
       uid
       title
@@ -77,19 +95,21 @@ in [
       statement
       (str "RATIONALE")
     ];
-    relations = [
-      # Supersession points FORWARD, from the retired decision to the one that
-      # replaced it, so a reader who arrives at a stale node is carried to the
-      # live one. The reverse direction would need the live node to know every
-      # thing it ever displaced.
-      (rel.parent "Superseded_By" "Supersedes")
-    ];
+    relations = [(rel.parent "Superseded_By" "Supersedes")];
   })
 
+  # How something actually works: the sequence, the wiring, the surprise that
+  # costs an afternoon to rediscover.
+  #
+  # Make one when you learn something non-obvious that is not visible from
+  # reading the code for ten seconds.
+  #
+  # A mechanism CANNOT be violated. It is a description, so if reality disagrees
+  # with it, the node is simply wrong and the node is what gets fixed. That is
+  # the exact opposite of a requirement, and it is why these go stale quietly:
+  # nothing fails when one becomes false, it just starts misleading whoever
+  # reads it next.
   (el "MECHANISM" {prefix = "MECH-";} {
-    # How something actually works. Distinct from REQUIREMENT because the two
-    # fail differently: a requirement is wrong when the world should be other
-    # than it says, a mechanism is wrong when the world already is.
     fields = [
       uid
       title
@@ -102,10 +122,17 @@ in [
     ];
   })
 
+  # One observation: what was actually done, and what came back.
+  #
+  # Make one when a claim would otherwise rest on sounding reasonable. Evidence
+  # is what lets a decision cite a result instead of an argument.
+  #
+  # It is never withdrawn, only overtaken -- the world moves and the observation
+  # stops describing it, which is a different kind of ending from being retired.
+  #
+  # One observation per node. A standing explanation resting on several of them
+  # is a mechanism, and these are what it points at.
   (el "EVIDENCE" {prefix = "EV-";} {
-    # A measurement or observation that backs something else. Carries FRESHNESS
-    # rather than LIFECYCLE because evidence is never retired by a decision —
-    # it stops describing the world, which is a different kind of ending.
     fields = [
       uid
       title
@@ -115,10 +142,18 @@ in [
     relations = [(rel.parent "Supports" "Supported_By")];
   })
 
+  # Assembled prose for a person to read start to finish, over nodes that were
+  # written to be queried rather than read.
+  #
+  # Make one when somebody needs the story and the graph only offers a pile.
+  #
+  # It CITES rather than restates, and that is the whole discipline. Prose that
+  # repeats its sources drifts from them without anything noticing; prose that
+  # points at them can be flagged for rewriting when they move.
+  #
+  # This is also the natural shape for anything generated for an outside reader
+  # -- a guide, an introduction, a page of instructions.
   (el "NARRATIVE" {prefix = "NAR-";} {
-    # Guided prose over the unit nodes: the assembled, human-readable form. It
-    # cites rather than restates, so its citations are what a later layer reads
-    # to decide it needs rewriting when something under it moves.
     fields = [
       uid
       title
