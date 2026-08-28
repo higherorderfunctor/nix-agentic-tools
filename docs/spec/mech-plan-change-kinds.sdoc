@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: Two kinds of change to a plan, only one of which ingest freezes
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-PLAN-CHANGE-KINDS
+TITLE: Two kinds of change to a plan, only one of which ingest freezes
+DEPTH: interface-settled
+AUTHORED_BY: human
+STATEMENT: >>>
+Execution state -- is this done, who holds it, what blocks it -- belongs to the
+execution engine from the moment a piece of the plan is handed over. The plan
+never tracks it.
+
+Design content -- the contract, the reasoning, what turned out to be true --
+belongs to the plan always, including after a partial handover. When
+implementation shows the design was wrong, the plan is corrected.
+
+Ingest therefore freezes the execution scope handed over, not the plan.
+<<<
+RATIONALE: >>>
+Conflating these two is what made the plan lifecycle feel unresolvable. "The
+plan is immutable after ingest" is right about execution state and wrong about
+design content, and holding both intuitions at once reads as indecision when it
+is actually two correct beliefs about different things.
+
+Partial handover makes the distinction unavoidable: send part of a plan to the
+engine, learn something while building it, and the plan must be correctable
+while the handed-over scope stays frozen.
+<<<
+NOTES: >>>
+Supersedes the earlier framing in MECH-PLAN-BEADS-SNAPSHOT, which said ingest
+freezes the plan outright. That would have caused friction at the first partial
+handover.
+<<<
