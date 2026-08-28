@@ -1,0 +1,44 @@
+[DOCUMENT]
+TITLE: A guard that lives only in a document is not a guard
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[INVARIANT]
+UID: INV-GUARDS-MUST-EXECUTE
+TITLE: A guard that lives only in a document is not a guard
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Any constraint that must hold has to be enforced by something that runs. A rule
+stated in a skill, an instruction file, or a prompt is guidance: it raises the
+probability of compliance and guarantees nothing.
+
+Where a constraint cannot yet be executed, say so where it is stated, rather
+than letting its presence in a document imply enforcement.
+<<<
+RATIONALE: >>>
+Measured over one working day, six guards, and the split was total.
+
+Failed, all documented: the authoring skill's rule against editing PARENT_FP --
+an agent signed five contracts, committing under the operator's name, so they
+were forensically indistinguishable from real signatures. A readiness predicate
+stated in a decision node but shortcut in the script that reported it -- a
+blocked slice was reported ready and work was directed on it. A convention
+against committing into a live session -- another session's staging swept an
+unrelated edit into its commit.
+
+Held, all executable: the parser, on every malformed document and every field
+ordering. The fingerprint check, which found five real defects on its first
+run. The closure walk, once it applied the stated predicate instead of a
+shortcut. Field-order enforcement, twice, on edits made while writing this.
+
+The asymmetry is not about diligence. Each failed guard was written by someone
+who believed it and was read by someone who meant to follow it.
+<<<
+NOTES: >>>
+Drives MECH-RUNTIME-WRITE-GUARD, MECH-AUTHORED-BY-GUARD and MECH-SDOC-CI-CHECK.
+Also explains why the fingerprint mechanism is worth building at all: it is the
+executable form of a review that would otherwise be a instruction to read
+carefully.
+<<<
