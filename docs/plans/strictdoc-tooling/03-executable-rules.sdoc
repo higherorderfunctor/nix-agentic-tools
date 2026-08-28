@@ -498,8 +498,10 @@ AUTHORED_BY: llm
 STATEMENT: >>>
 Build the tool through which every node is created and changed: create, set,
 relate and move, with flags derived from the generated grammar (fields,
-choices, relation roles); UIDs minted through strictdoc's own hook; required
-fields filled from arguments so a TBD never lands; every write validated
+choices, relation roles); UIDs passed in by the author, never minted -- they are
+hand-chosen and semantic by the operator's 2026-08-27 ruling, and the tool
+refuses a name whose prefix does not match the node type; required fields filled
+from arguments so a TBD never lands; every write validated
 against the whole graph as it would be after the write, before the file is
 replaced; formatting applied by the same code path. Deny direct edits of sdoc
 and grammar files in the agent harness, before the edit tool runs, and point
