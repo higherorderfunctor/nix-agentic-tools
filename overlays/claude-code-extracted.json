@@ -1152,6 +1152,9 @@
       "deniedMcpServers[].serverUrl": {
         "type": "string"
       },
+      "desktopSessionCleanupPeriodDays": {
+        "type": "integer"
+      },
       "dialogExpiry": {
         "enum": ["10m", "5m", "60s", "never"],
         "type": "string"
@@ -2595,11 +2598,26 @@
       "spinnerTipsOverride.excludeDefault": {
         "type": "boolean"
       },
+      "spinnerTipsOverride.label": {
+        "type": "string"
+      },
       "spinnerTipsOverride.tips": {
         "type": "array"
       },
-      "spinnerTipsOverride.tips[]": {
+      "spinnerTipsOverride.tipsFile": {
         "type": "string"
+      },
+      "spinnerTipsOverride.tips[]": {
+        "type": "anyOf"
+      },
+      "spinnerTipsOverride.tips[]|0": {
+        "type": "string"
+      },
+      "spinnerTipsOverride.tips[]|1": {
+        "type": "object"
+      },
+      "spinnerTipsOverride.tips[]|1.*": {
+        "type": "any"
       },
       "spinnerVerbs": {
         "type": "object"
@@ -2968,6 +2986,9 @@
       "switchModelsOnFlag": {
         "type": "boolean"
       },
+      "syncClaudeAiPlugins": {
+        "type": "boolean"
+      },
       "syncClaudeAiSkills": {
         "type": "boolean"
       },
@@ -3137,6 +3158,7 @@
       "defaultShell",
       "defaultView",
       "deniedMcpServers",
+      "desktopSessionCleanupPeriodDays",
       "dialogExpiry",
       "disableAgentView",
       "disableAllHooks",
@@ -3235,6 +3257,7 @@
       "subagentPromptCacheTtl",
       "subagentStatusLine",
       "switchModelsOnFlag",
+      "syncClaudeAiPlugins",
       "syncClaudeAiSkills",
       "syntaxHighlightingDisabled",
       "teammateMode",

@@ -24,12 +24,58 @@ const sortObj = (o) =>
   Object.fromEntries(sortC(Object.keys(o)).map((k) => [k, o[k]]));
 
 // ---------------------------------------------------------------------------
+// Bun's `import.meta.require` — a SYNCHRONOUS require with no Node ESM
+// equivalent. Node throws `(intermediate value).require is not a function`
+// while EVALUATING the module, so it fires before any located symbol is
+// reachable and looks like a locator failure when it is not one.
+//
+// Upstream went from ONE call site at 2.1.245 to 357 across 65 modules at
+// 2.1.250. Only one of those sits inside the settings closure, but it is a
+// top-level statement, so it is fatal.
+//
+// The rewrite is to a STATIC namespace import. `import * as N from "SPEC"` is
+// hoisted and fully evaluated BEFORE the module body runs, so substituting `N`
+// for the call is synchronous in exactly the way the original was. Neither
+// alternative works here: dynamic `import()` returns a promise, and top-level
+// await would change evaluation order for every importer of the module.
+//
+// A NON-LITERAL specifier is a hard failure rather than a pass-through. Left
+// alone it would throw the same opaque TypeError later, at a point that reads
+// as an anchor problem; refusing here keeps the diagnosis attached to its
+// cause.
+// ---------------------------------------------------------------------------
+const BUN_REQUIRE_RE = /import\.meta\.require\(\s*(["'])([^"'\\]+)\1\s*\)/g;
+
+export function rewriteBunRequire(src) {
+  if (!src.includes("import.meta.require(")) return { src, specs: 0, sites: 0 };
+  const specs = new Map();
+  let sites = 0;
+  const out = src.replace(BUN_REQUIRE_RE, (_m, _q, spec) => {
+    if (!specs.has(spec)) specs.set(spec, `__c_bunRequire${specs.size}`);
+    sites++;
+    return specs.get(spec);
+  });
+  if (out.includes("import.meta.require(")) {
+    throw new Error(
+      "census: a non-literal `import.meta.require(...)` specifier is present — " +
+        "it cannot be rewritten to a static import, and leaving it would fail " +
+        "later as an opaque TypeError",
+    );
+  }
+  const prelude = [...specs]
+    .map(([spec, name]) => `import * as ${name} from ${JSON.stringify(spec)};`)
+    .join("");
+  return { src: prelude + out, specs: specs.size, sites };
+}
+
+// ---------------------------------------------------------------------------
 // Topology 1: post-code-split (>= 2.1.245). The settings module is its own ESM
 // chunk with no top-level side effects, so it can simply be imported.
 // ---------------------------------------------------------------------------
 let hooksRegistered = false;
 
 async function loadSplit(root, info) {
+  const bunRequire = { modules: 0, sites: 0 };
   const url = pathToFileURL(info.settingsPath).href;
   const shim =
     ";export{" +
@@ -60,12 +106,33 @@ async function loadSplit(root, info) {
     // binding in this module; ESM lets an import be re-exported by local name,
     // which is how the re-export chain gets resolved without naming a chunk.
     load(u, ctx, next) {
-      if (u === url)
+      if (u === url) {
+        const r = rewriteBunRequire(info.src);
+        if (r.specs) {
+          bunRequire.modules++;
+          bunRequire.sites += r.sites;
+        }
         return {
           format: "module",
-          source: info.src + shim,
+          source: r.src + shim,
           shortCircuit: true,
         };
+      }
+      // Every OTHER module in the closure is passed through untouched unless
+      // it carries a Bun-only sync require; see rewriteBunRequire.
+      if (u.startsWith("file:") && u.endsWith(".js")) {
+        let src;
+        try {
+          src = fs.readFileSync(new URL(u), "utf8");
+        } catch {
+          return next(u, ctx);
+        }
+        if (!src.includes("import.meta.require(")) return next(u, ctx);
+        const r = rewriteBunRequire(src);
+        bunRequire.modules++;
+        bunRequire.sites += r.sites;
+        return { format: "module", source: r.src, shortCircuit: true };
+      }
       return next(u, ctx);
     },
   });
@@ -88,7 +155,7 @@ async function loadSplit(root, info) {
       initErrors.push(String(e && e.message).slice(0, 120));
     }
   }
-  return { mod, ran, total, initErrors, topology: "split" };
+  return { mod, ran, total, initErrors, topology: "split", bunRequire };
 }
 
 // ---------------------------------------------------------------------------
@@ -373,6 +440,12 @@ export async function census(
     diagnostics: {
       topology: loaded.topology,
       settingsModule: path.basename(info.settingsPath),
+      // The settings anchors sit in ONE module through 2.1.245 and in TWO from
+      // 2.1.248; report both so a re-chunk is visible in the diagnostics rather
+      // than only as a build failure.
+      settingsLayout: info.layout,
+      schemaModule: path.basename(info.schemaPath),
+      bunRequireRewrites: `${loaded.bunRequire?.modules ?? 0} module(s), ${loaded.bunRequire?.sites ?? 0} site(s)`,
       locatedVia: info.via,
       alternateAnchorsAgree:
         info.alternates.build === info.symbols.build &&
