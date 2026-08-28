@@ -21,6 +21,11 @@ them.
 | `docs/spec/*.sdoc`         | the plan model itself — the nodes describing how plans work                |
 | `**/.sdoc/*.sdoc`          | settled architecture about the package it sits beside                      |
 
+**A file is named for the node it holds: the UID, lowercased, plus `.sdoc`.**
+`MECH-FP-CHECK` lives in `mech-fp-check.sdoc`. The document's `TITLE` is the
+node's own `TITLE`. There is no numbered-document convention any more — `01-`,
+`02-`, `99-` prefixes ordered nodes within a file, and a file holds one node.
+
 `grammar.sgra` is rendered from `packages/strictdoc-grammar/values.nix` by
 `devenv tasks run generate:sgra`. A hand edit reddens
 `strictdoc-grammar-model-equal`, which is inside `nix flake check`. To change
@@ -97,10 +102,11 @@ is read and never written, so it is not the grammar's formatter.
 ## Hard rules
 
 1. **UIDs are hand-chosen and semantic.** `MECH-SDOC-LEAN-FORMATS`, not
-   `MECH-7`. All 139 nodes are named this way, by the operator's 2026-08-27
-   ruling: they read rendered views, and an index is a handle they cannot
-   dereference. **Do not run `strictdoc manage auto-uid`** — it mints
-   prefix-plus-counter, which is the form nobody here keeps.
+   `MECH-7`. All 161 nodes are named this way — and since each is its own file,
+   the UID is also the filename — by the operator's 2026-08-27 ruling: they read
+   rendered views, and an index is a handle they cannot dereference. **Do not
+   run `strictdoc manage auto-uid`** — it mints prefix-plus-counter, which is
+   the form nobody here keeps.
 2. **Never hand-write a node from memory.** Copy a neighbouring node of the same
    type and edit it: field order and blank-line rules are what get subtly wrong.
    `strictdoc manage new` _does_ work here — pass `--document-path <file>` and
@@ -192,19 +198,21 @@ unspoken.
 You may add backlog nodes **on your own initiative, without asking.** You
 should.
 
-- **One node per file.** One requirement, one plan step, one milestone, one
-  backlog item, one decision — one. The graph is pulled in along edges, so the
-  unit a reader fetches has to be the unit the graph addresses. Measured
-  2026-08-27: the corpus averages 2.7 KB per node, but reading one node out of
-  `99-backlog.sdoc` costs 279 KB, because that one file holds 110 of them. Give
-  a new node its own file; do not add to that one. See `MECH-ONE-NODE-PER-FILE`.
-- Several plan directories still hold a legacy `99-backlog.sdoc`. Those are the
-  migration target, not the pattern to copy.
+- **One node per file, and the file is named for the UID.** One requirement, one
+  plan step, one milestone, one backlog item, one decision — one. The graph is
+  pulled in along edges, so the unit a reader fetches has to be the unit the
+  graph addresses. Write the new node to
+  `docs/plans/<plan>/<uid-lowercased>.sdoc`. See `MECH-ONE-NODE-PER-FILE`.
+- The corpus was carved to this shape on 2026-08-27; no `99-backlog.sdoc`
+  survives. What it cost while it existed, since that is the argument for not
+  rebuilding it: the corpus averaged 2.7 KB per node, and reading one node out
+  of `99-backlog.sdoc` cost 279 KB, because that one file held 110 of them.
 - An ungroomed item is an ordinary node at `DEPTH: sketch` — a `MECHANISM` to
   build, a `DECISION` to make, a `SPIKE` to run. **There is no `BACKLOG` node
   type**, deliberately: the existing types already say what kind of work it is.
-- Grooming means moving the node into a numbered document in the same plan and
-  raising its `DEPTH`. The UID never changes, so nothing citing it breaks.
+- **Grooming no longer moves a file.** It raises the node's `DEPTH` where the
+  node already sits. Moving between documents was how a node left the backlog
+  when the backlog was a file; it is now a query.
 - A plan's ungroomed set is the query `DEPTH == sketch` scoped to its directory.
 
 The operator's judgment budget is the scarce resource. A logged finding is not
