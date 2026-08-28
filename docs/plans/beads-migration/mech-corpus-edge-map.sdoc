@@ -1,0 +1,45 @@
+[DOCUMENT]
+TITLE: Which dependencies become which relation roles
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-CORPUS-EDGE-MAP
+TITLE: Which dependencies become which relation roles
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Six roles, derived from real dependencies rather than a taxonomy.
+
+| role | from to | forced by | count |
+| --- | --- | --- | --- |
+| Crosses | SLICE to MECHANISM | the cast tables' "defined in" column | ~223 |
+| Governed_By | MECHANISM to DECISION | the register's "blocks" column | ~130 |
+| Guarantees | MECHANISM to INVARIANT | grain rules sit beside their mechanism | 127 |
+| Assumes | MECHANISM to DECISION | 108 blast-radius statements | ~108 |
+| Proven_By | MECHANISM or INVARIANT to SPIKE | the grain index's rule-to-evidence table | ~34 |
+| Superseded_By | DECISION to DECISION | provenance corrections and one reopened rejection | ~8 |
+
+Horizontal, meaning architectural-layer neighbours, is Crosses plus
+Serialized_By. Vertical, meaning execution and gating, is Governed_By plus
+Assumes. The split falls out of the cast table and the register respectively.
+
+Serialized_By is deferred: it is forced only by the locks document. Add it when
+that slice converts.
+<<<
+RATIONALE: >>>
+Constrain Assumes to MECHANISM to DECISION rather than any to any. All 108
+blast-radius statements already fit that shape, and any-to-any is a cycle
+generator. Keeping MECHANISM and INVARIANT leaf-ward makes the graph acyclic by
+construction, which matters because cycles among role-carrying relations are not
+detected by the parser.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-CYCLE-CHECK
+  ROLE: Assumes
