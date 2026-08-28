@@ -24,3 +24,7 @@ repository's own corpus hit. Worth a dedicated SPIKE to characterize the
 FREETEXT gap before deciding whether it is a small follow-up patch or a
 reason to look upstream harder.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

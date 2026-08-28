@@ -34,3 +34,7 @@ refutation is that Nix derivation identity makes the duplication invisible, and
 the counter is that invisibility is a property of the arguments currently
 agreeing rather than of anything checking that they do.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

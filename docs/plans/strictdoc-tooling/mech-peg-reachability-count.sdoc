@@ -29,3 +29,7 @@ Both numbers are right about their own walk. Recorded so a later session
 checking the surface for completeness against the brief's 25 does not go
 looking for six missing rules that are not rules of this grammar.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

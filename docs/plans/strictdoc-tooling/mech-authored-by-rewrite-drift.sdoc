@@ -18,3 +18,7 @@ Which shape applies depends on whether the key claims the words or the origin of
 NOTES: >>>
 Measured 2026-08-27 by replaying `git log --reverse -- '*.sdoc'` and diffing each node's STATEMENT between consecutive revisions; the same walk detects the 26 llm-node rewrites, so a zero for human nodes would have been a real absence. The guard `MECH-AUTHORED-BY-GUARD` builds sees this case and passes it: it classifies by what the baseline said about the key, and the key did not move.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

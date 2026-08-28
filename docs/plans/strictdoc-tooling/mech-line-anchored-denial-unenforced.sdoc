@@ -82,3 +82,7 @@ is the enforcement; what this node is TITLED for -- deriving FieldName's two
 answers from the document grammar instead of registering them -- is unbuilt and
 has no design yet. Raising DEPTH here would report the residual as done.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

@@ -38,3 +38,7 @@ kind. Worth knowing before any consumer compares an option vocabulary against a
 field value, and before anyone treats strictdoc's writer as the byte-identity
 oracle for a grammar that uses MultipleChoice.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

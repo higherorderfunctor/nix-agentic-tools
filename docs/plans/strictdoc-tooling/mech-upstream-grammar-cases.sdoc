@@ -25,3 +25,7 @@ Our fixtures test what we thought of. Theirs test what broke. The two sets
 overlap less than either author would guess, and the conversion is a morning's
 reading rather than a tool to maintain.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

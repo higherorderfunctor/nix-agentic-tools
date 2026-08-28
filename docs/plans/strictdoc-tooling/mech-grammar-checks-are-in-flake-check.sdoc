@@ -37,3 +37,7 @@ Recorded because the milestone brief says CI wiring is not required, and this is
 the one place where "buildable locally by name" and "not in CI" cannot both be
 true. Better legible as a consequence than discovered from a CI bill.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

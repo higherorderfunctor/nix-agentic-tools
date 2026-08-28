@@ -45,3 +45,7 @@ repository's own corpus -- the check did exactly its job. Recorded rather than
 fixed because a charset is the wrong lever and the right one is a grammar
 restructure in another slice.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

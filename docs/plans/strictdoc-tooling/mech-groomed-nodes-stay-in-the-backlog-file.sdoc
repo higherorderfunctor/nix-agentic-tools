@@ -22,8 +22,9 @@ them.
 The carve dissolved it rather than doing it. Every node is its own file now, so
 there is no backlog document to be misnamed, no numbered document to move into,
 and no file-level signal to lose: opening a file tells you about exactly one
-node, and what is ungroomed is the DEPTH == sketch query over the directory.
-DEC-NODE-FILE-NAMING records that as the settled shape.
+node. What replaced the file-level signal is an edge -- an item carries
+Backlogged_In to its plan's register, per DEC-BACKLOG-IS-A-REGISTER-NODE -- so
+the backlog is readable by traversal rather than by opening a directory.
 <<<
 RATIONALE: >>>
 Kept rather than deleted, per DEC-NO-DELETES-YET, and rewritten in place rather
@@ -54,3 +55,7 @@ document -- has no destinations left to name. It is kept only as evidence that
 the grouping was a judgement per node, which is part of why a flat directory
 plus edges was the cheaper answer.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

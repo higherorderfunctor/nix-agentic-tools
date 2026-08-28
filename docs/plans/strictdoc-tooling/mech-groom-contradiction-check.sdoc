@@ -27,3 +27,7 @@ uncaught in its own graph. The author's stated reason for building this is
 returning to a conclusion having forgotten the reasoning; a contradiction with
 no edge between its two halves is exactly that, made durable.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

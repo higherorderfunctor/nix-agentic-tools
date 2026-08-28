@@ -36,3 +36,7 @@ nothing to do with strictdoc: it is a property of how devenv builds its task
 graph. The next session to chain a generator behind a regeneration pays the same
 cost, and pays it as a wrong output rather than as an error.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

@@ -28,3 +28,7 @@ Noticed while iterating on the choice_option widening above, where the node
 count was the only signal available and had to be cross-checked by hand against
 the spans before the verdict could be trusted.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

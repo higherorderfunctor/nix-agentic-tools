@@ -47,3 +47,7 @@ it reads `body.choices` off a value the normalized types would reject. Two
 shapes that both work in isolation are the kind of thing that only surfaces
 when someone finally wires the check that compares them.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

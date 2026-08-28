@@ -1,0 +1,53 @@
+[DOCUMENT]
+TITLE: The strictdoc-tooling plan's backlog register
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-BACKLOG-STRICTDOC-TOOLING
+TITLE: The strictdoc-tooling plan's backlog register
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The linchpin every ungroomed item in this plan points at. An item is in the
+backlog when it carries Backlogged_In to this node, and the plan's backlog is
+the inbound Backlogs set.
+
+This node holds no list. The edges are the list, which is what lets an item sit
+in its own file, carry its own other edges, and still be findable as backlog
+without anything scanning a directory.
+<<<
+RATIONALE: >>>
+Containment used to be by file: a 99-backlog document held the items, so opening
+it was how you saw them. The one-node-per-file carve dissolved that file and
+left the ungroomed set as a DEPTH == sketch query over a directory, which works
+but is not part of the graph -- it is a fact about where bytes sit, invisible to
+anything traversing edges.
+
+DEC-PLAN-SCOPED-BACKLOG anticipated exactly this and named the successor in its
+own retirement condition: an item needing to be tracked while living outside the
+plan's backlog document is the point at which an explicit register node and a
+Backlogged_In role become the cheaper answer. The carve made every item live
+outside it, so the condition fired.
+
+An edge also composes where a file did not. An item can be Backlogged_In here
+AND carry Governed_By, Assumes or Crosses to whatever it actually relates to,
+which is the web the graph is for. A file forced one containment and a directory
+query forces one more.
+<<<
+NOTES: >>>
+Created 2026-08-27 on the operator's instruction, after the carve: "having the
+99 is fine, but its the lynchpin node. every issue under it parents that. issues
+may parent other nodes that are related, but thats the idea, a web."
+
+Deliberately thin. Full item semantics -- what kinds there are, what grooming
+promotes, what closes -- are milestone five's, not this node's. This is the
+intermediate shape that makes one-node-per-file work without deciding any of it.
+
+The DEPTH == sketch query still answers and is worth keeping as a CROSS-CHECK:
+an item at sketch with no Backlogged_In edge is one somebody filed without
+attaching, and an item carrying the edge at a higher DEPTH is one that was
+groomed without being detached. Neither is enforced yet;
+MECH-SDOC-LAYOUT-CHECK is the natural home for both once it exists.
+<<<

@@ -38,3 +38,7 @@ Held rather than acted on, because the boundary it depends on is not written
 down anywhere -- see MECH-CHECK-SYSTEM-BOUNDARY, which is the repo-wide version
 and interacts with the standing intention to move checks into packages/.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

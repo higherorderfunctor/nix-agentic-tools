@@ -47,3 +47,7 @@ a plain attrset extension of upstream's flake package
 example, the gap in dev/fragments/overlays/overlay-pattern.md is unchanged, and
 #1267 is still the tracker -- the finding lost a citation, not its subject.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In
