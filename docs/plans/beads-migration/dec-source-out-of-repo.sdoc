@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: The authoritative source of the fleet plan is outside this repository
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SOURCE-OUT-OF-REPO
+TITLE: The authoritative source of the fleet plan is outside this repository
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: >>>
+The corpus is converted to sdoc in this repository, or the operator confirms the
+markdown carve-out supersedes the original entirely.
+<<<
+STATEMENT: >>>
+The original plan exists as a published HTML artifact outside this repository.
+The markdown under private/strict-doc/design is a carve-out from it, produced to
+strip reader-facing duplication and prepare for sdoc conversion. Which of the
+two is authoritative where they disagree has not been decided, and the carve-out
+is not human signed off.
+<<<
+RATIONALE: >>>
+Recorded as a node so that a conversion session does not silently pick one.
+<<<
+NOTES: >>>
+Human acceptance needed. This node points at content this graph cannot validate.
+<<<

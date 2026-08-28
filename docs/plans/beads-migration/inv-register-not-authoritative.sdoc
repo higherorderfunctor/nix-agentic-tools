@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: The register is not the source of truth it claims to be
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[INVARIANT]
+UID: INV-REGISTER-NOT-AUTHORITATIVE
+TITLE: The register is not the source of truth it claims to be
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Seven open-card identifiers appear in section bodies with no register row at
+all. One of them states a hard blocker cited by four sections and therefore
+carries no retirement condition. Two register rows named as pointer-only appear
+as no card anywhere.
+<<<
+RATIONALE: >>>
+The register asserts that review state lives nowhere else. It does. Any
+conversion that trusts the register as the complete decision set will silently
+drop seven decisions.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By
