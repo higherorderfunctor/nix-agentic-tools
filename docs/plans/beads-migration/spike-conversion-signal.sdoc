@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: Does converting 426 lines surface an unknown contradiction
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[SPIKE]
+UID: SPIKE-CONVERSION-SIGNAL
+TITLE: Does converting 426 lines surface an unknown contradiction
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATUS: unrun
+RETIRES_ON: >>>
+The first slice is converted and either surfaces at least one contradiction the
+author did not know about, or does not.
+<<<
+STATEMENT: >>>
+Convert the lane-iteration cluster and count contradictions discovered that were
+not known beforehand. A null result falsifies the approach for the cost of one
+day.
+<<<
+RATIONALE: >>>
+A fresh reader found several in an afternoon without looking hard, so a null
+result would be surprising and therefore informative.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: SLICE-FIRST-CONVERSION
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By

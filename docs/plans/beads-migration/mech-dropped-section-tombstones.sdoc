@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: Tombstone the nine dropped sections before converting past the first slice
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-DROPPED-SECTION-TOMBSTONES
+TITLE: Tombstone the nine dropped sections before converting past the first slice
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Create nine DECISION nodes with STATUS superseded, one per dropped section, each
+recording its pending citation count and retiring on the first slice that needs
+the content restored.
+<<<
+RATIONALE: >>>
+123 references across 9 dropped sections would otherwise become 123 hard export
+errors at once, and resolving them means deciding whether four subsystems are
+restored or their citations rewritten. That is a design decision on four
+subsystems gated behind a tooling migration, and it is where the conversion
+would stall. Tombstones convert a hard block into nine tracked debts. The first
+slice needs only two of them.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By
