@@ -1,7 +1,7 @@
 # The INNER EMITTER of MECH-EMIT-LAYER-BOUNDARY
-# (docs/plans/strictdoc-tooling/99-backlog.sdoc): it takes values that are
-# already all strings, knows the FILE FORMAT, and does no encoding at all. A
-# pure renderer.
+# (docs/plans/strictdoc-tooling/mech-emit-layer-boundary.sdoc): it takes values
+# that are already all strings, knows the FILE FORMAT, and does no encoding at
+# all. A pure renderer.
 #
 # It therefore takes no `normalized` and holds no encoder. That is the whole
 # test of the split, and it is machine-checkable: an encoder appearing here

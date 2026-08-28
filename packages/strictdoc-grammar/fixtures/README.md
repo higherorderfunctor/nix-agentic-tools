@@ -36,7 +36,8 @@ valid in the current state and a wider `choice_option` out-competes the narrow
 ones. The QUOTED arm, which is what actually buys the parenthesis this fixture
 exists to exercise, costs nothing and was added in the same patch. A dot in an
 unquoted option is a tracked gap in the editor grammar, not a surface feature
-this fixture ever claimed — see `docs/plans/strictdoc-tooling/99-backlog.sdoc`.
+this fixture ever claimed — see
+`docs/plans/strictdoc-tooling/mech-tree-sitter-choice-option-cannot-lex-a-dot.sdoc`.
 
 `negative/` holds one file per case that must fail, named for what it proves,
 split by the layer that owns the rejection. The two `.nix` files are **ours, at

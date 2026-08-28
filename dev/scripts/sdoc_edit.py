@@ -10,7 +10,7 @@ sole caller of (DEC-FINGERPRINT-IN-NODE: "the only thing that writes them").
 Field-block boundaries are found structurally (tag lines, field-name lines,
 `>>>`/`<<<` markers) rather than by splitting on blank lines, because a
 multiline field's own prose can contain blank lines (paragraph breaks) --
-see e.g. SPIKE-SGRA-PARSE's NOTES in 01-tooling.sdoc.
+see e.g. SPIKE-SGRA-PARSE's NOTES in spike-sgra-parse.sdoc.
 """
 
 from __future__ import annotations

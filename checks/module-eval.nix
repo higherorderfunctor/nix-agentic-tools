@@ -3881,10 +3881,10 @@ in {
       && cfg.rendered == builtins.readFile ./../docs/sdoc/grammar.sgra
   );
 
-  # SLICE-SDOC-IN-SEMBLE (docs/plans/strictdoc-tooling/01-tooling.sdoc): the
-  # custom (non-nixpkgs) grammar load path, exercised through the exact same
-  # production entry point as module-semble-extra-grammars-load above, and a
-  # real .sdoc sample rather than a synthetic snippet.
+  # SLICE-SDOC-IN-SEMBLE (docs/plans/strictdoc-tooling/slice-sdoc-in-semble.sdoc):
+  # the custom (non-nixpkgs) grammar load path, exercised through the exact same
+  # production entry point as module-semble-extra-grammars-load above, and a real
+  # .sdoc sample rather than a synthetic snippet.
   module-semble-strictdoc-grammar-load = let
     customizePackage = import ../packages/semble/lib/withGrammars.nix {inherit lib pkgs;};
     pathMappings = [
