@@ -17,7 +17,7 @@ them.
 | -------------------------- | -------------------------------------------------------------------------- |
 | `strictdoc_config.py`      | project root config: the `@repo` grammar alias and the markdown exclusion  |
 | `docs/sdoc/grammar.sgra`   | the one grammar, shared by every document. **GENERATED — never hand-edit** |
-| `docs/plans/<plan>/*.sdoc` | a named plan. One directory per plan, many files per plan. Decays.         |
+| `docs/plans/<plan>/*.sdoc` | a named plan. One directory per plan, **one node per file**. Decays.       |
 | `docs/spec/*.sdoc`         | the plan model itself — the nodes describing how plans work                |
 | `**/.sdoc/*.sdoc`          | settled architecture about the package it sits beside                      |
 
@@ -192,7 +192,14 @@ unspoken.
 You may add backlog nodes **on your own initiative, without asking.** You
 should.
 
-- Each plan directory may hold a `99-backlog.sdoc`.
+- **One node per file.** One requirement, one plan step, one milestone, one
+  backlog item, one decision — one. The graph is pulled in along edges, so the
+  unit a reader fetches has to be the unit the graph addresses. Measured
+  2026-08-27: the corpus averages 2.7 KB per node, but reading one node out of
+  `99-backlog.sdoc` costs 279 KB, because that one file holds 110 of them. Give
+  a new node its own file; do not add to that one. See `MECH-ONE-NODE-PER-FILE`.
+- Several plan directories still hold a legacy `99-backlog.sdoc`. Those are the
+  migration target, not the pattern to copy.
 - An ungroomed item is an ordinary node at `DEPTH: sketch` — a `MECHANISM` to
   build, a `DECISION` to make, a `SPIKE` to run. **There is no `BACKLOG` node
   type**, deliberately: the existing types already say what kind of work it is.
