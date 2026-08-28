@@ -1,6 +1,6 @@
 # cspell:ignore uids
 """Shared fingerprint logic for fp-check / fp-accept (SLICE-FP-DETECTOR,
-docs/plans/strictdoc-tooling/01-tooling.sdoc).
+docs/plans/strictdoc-tooling/slice-fp-detector.sdoc).
 
 Contract-bearing fields, the placeholder value, and the readiness predicate
 all live here so the two CLIs cannot drift against each other. Consumes the
@@ -25,8 +25,8 @@ HASH_LEN = 7
 # must not re-suspect this node's dependents.
 #
 # This selection is a prototype choice, not a settled answer -- see
-# MECH-FP-FIELD-TUNING (docs/plans/strictdoc-tooling/99-backlog.sdoc), which
-# is deliberately left for after the Nix option surface in
+# MECH-FP-FIELD-TUNING (docs/plans/strictdoc-tooling/mech-fp-field-tuning.sdoc),
+# which is deliberately left for after the Nix option surface in
 # DEC-FP-FIELDS-CONFIGURABLE exists. Do not tune this without reading that
 # node first.
 EXCLUDED_FIELDS = {"RATIONALE", "NOTES", "PARENT_FP"}

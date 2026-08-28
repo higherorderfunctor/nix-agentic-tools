@@ -1,5 +1,5 @@
 # checks/strictdoc-fp-check.nix -- SLICE-FP-DETECTOR's CI gate
-# (docs/plans/strictdoc-tooling/01-tooling.sdoc). Exports the whole design
+# (docs/plans/strictdoc-tooling/slice-fp-detector.sdoc). Exports the whole design
 # graph and runs dev/scripts/fp-check.py over it, failing the build on any
 # drifted, unbacked, or deleted-parent PARENT_FP entry.
 #

@@ -271,8 +271,9 @@ Local invocation is enough. CI wiring is not required for this milestone.
   under their name.
 - **Never set `AUTHORED_BY: human`.**
 - Commit as you go, and update the node you are working on in the same commit.
-- Log incidental findings to `docs/plans/strictdoc-tooling/99-backlog.sdoc` as
-  nodes at `DEPTH: sketch`. Do not narrate them.
+- Log incidental findings to `docs/plans/strictdoc-tooling/` as nodes at
+  `DEPTH: sketch` — one node per file, named for its UID lowercased. Do not
+  narrate them.
 - `strictdoc format` and `export` write a cache into `./output/` unless given
   `--output-dir`; `format` has no such flag, so run it with the worktree as cwd
   where `output/` is gitignored.

@@ -1,8 +1,8 @@
 # tree-sitter-strictdoc — patched upstream grammar for StrictDoc's .sdoc/.sgra
 # format, packaged as a flake output per DEC-GRAMMAR-PATCH-NOT-FORK
-# (packages/semble/.sdoc/01-grammar-injection.sdoc): the grammar DEFINITION is
-# patched in this overlay, never forked, and the build regenerates the parser
-# from it.
+# (packages/semble/.sdoc/dec-grammar-patch-not-fork.sdoc): the grammar
+# DEFINITION is patched in this overlay, never forked, and the build
+# regenerates the parser from it.
 #
 # Cache-hit parity: every build input comes from THIS repo's nixpkgs pin, never
 # the consumer's `final` — see dev/fragments/overlays/overlay-pattern.md.

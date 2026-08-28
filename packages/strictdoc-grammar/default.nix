@@ -1,5 +1,6 @@
 # Per-package barrel for the typed `.sgra` grammar surface
-# (SLICE-GRAMMAR-FROM-NIX, docs/plans/strictdoc-tooling/03-executable-rules.sdoc).
+# (SLICE-GRAMMAR-FROM-NIX,
+# docs/plans/strictdoc-tooling/slice-grammar-from-nix.sdoc).
 # The design of record is docs/implementation-brief.md, co-located here.
 #
 # Three layers, and the layering is real rather than a reasoning aid — an error

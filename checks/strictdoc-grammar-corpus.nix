@@ -2,7 +2,7 @@
 # regression suite for the patched tree-sitter-strictdoc grammar
 # (overlays/generic/tree-sitter-strictdoc.nix). Upstream ships zero tests for
 # this grammar, and DEC-GRAMMAR-PATCH-NOT-FORK
-# (packages/semble/.sdoc/01-grammar-injection.sdoc) requires one to live in
+# (packages/semble/.sdoc/dec-grammar-patch-not-fork.sdoc) requires one to live in
 # this repository as a check rather than in the grammar source.
 #
 # Builds the grammar TWICE from the identical pinned source — once through

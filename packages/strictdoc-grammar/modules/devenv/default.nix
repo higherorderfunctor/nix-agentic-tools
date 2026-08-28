@@ -1,6 +1,7 @@
 # `ai.strictdoc` — the devenv module that owns strictdoc's wrapping and, through
 # `grammars`, the generation of a project's `.sgra` files.
-# (MECH-STRICTDOC-DEVENV-MODULE, docs/plans/strictdoc-tooling/99-backlog.sdoc.)
+# (MECH-STRICTDOC-DEVENV-MODULE,
+# docs/plans/strictdoc-tooling/mech-strictdoc-devenv-module.sdoc.)
 #
 # Named for the TOOL, not the milestone: `ai.strictdoc`, never
 # `ai.strictdocGrammar`. The grammar surface is one thing this module
