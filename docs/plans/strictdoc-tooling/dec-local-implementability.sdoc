@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Implementability is a property of a closure, not of the project
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-LOCAL-IMPLEMENTABILITY
+TITLE: Implementability is a property of a closure, not of the project
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: >>>
+A release needs a single project-wide readiness answer, which no per-slice
+query can supply.
+<<<
+STATEMENT: >>>
+A slice is implementable when its own transitive contract-dependency closure is
+settled and carries no suspect edges. There is no global readiness gate. The
+count of open decisions in that closure is the slice's degrees of freedom, and
+handoff is that count reaching zero.
+<<<
+RATIONALE: >>>
+A global fail-closed gate is waterfall by construction: nothing is implementable
+until everything is designed. A closure-local predicate lets a mature slice ship
+while the rest of the graph stays deliberately fuzzy.
+<<<

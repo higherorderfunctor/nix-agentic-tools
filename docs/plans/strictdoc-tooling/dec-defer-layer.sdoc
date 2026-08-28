@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: Omit the LAYER node type until a corpus with layers arrives
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-DEFER-LAYER
+TITLE: Omit the LAYER node type until a corpus with layers arrives
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: >>>
+The first document whose mechanisms sit in distinct architectural layers, at
+which point the cast tables' locus column becomes the LAYER assignment.
+<<<
+STATEMENT: >>>
+The grammar ships without LAYER. Horizontal position is therefore unmodelled;
+only the vertical axis, a SLICE and the mechanisms it Crosses, is expressible.
+<<<
+RATIONALE: >>>
+No content in this document sits in a layer. Adding LAYER now would make every
+MECHANISM carry a field with one possible value.
+<<<
+NOTES: >>>
+This is a real gap, not a cost-free deferral: half the horizontal-and-vertical
+tracking the operator asked for is absent until it is closed.
+<<<
