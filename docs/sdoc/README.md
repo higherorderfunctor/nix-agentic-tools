@@ -42,7 +42,14 @@ does not need it: the prek hooks resolve their config from the primary checkout,
 so a worktree that has never entered a shell validates exactly like one that
 has.
 
-## Where this stands — 2026-08-27 (end of session 2)
+## Where this stands — 2026-08-27 (end of session 3)
+
+**The corpus is one node per file.** 163 nodes, 163 files, each named for its
+node's UID lowercased. The ten multi-node documents are gone, the numbered-file
+convention with them. No UID changed, so no edge moved and no citation broke —
+proved rather than asserted: a per-node dump of the JSON export is identical
+across the carve, and 0 of 161 contract hashes moved. Reading one backlog item
+used to cost 279 KB; it now costs the node.
 
 **Milestones two and three are READY. Nothing in either closure waits on the
 operator.** Hand either to an implementation session by slice UID.
@@ -68,15 +75,35 @@ denial given it is absent in eleven of twenty-three worktrees. `delete` exists
 in the tool and the skill deliberately does not teach it. Denying direct edits
 in the harness moved to milestone four, which owns checkpoints.
 
-Graph at close: 160 nodes, 0 suspect fingerprints, 0 cycles, 35
-interface-settled, 80 sketch.
+Graph at close: 163 nodes, 0 suspect fingerprints, 0 cycles, 36
+interface-settled, 81 sketch. Two of those nodes are new this session —
+`DEC-NODE-FILE-NAMING` and `MECH-SDOC-LAYOUT-CHECK` — and the count read 160
+before, which was already wrong by one against the same export.
 
-### The one thing still open for the operator
+### What is open for the operator
 
-The roadmap's frozen statement promises milestone one delivers a gate at commit
-time and in CI. Only CI exists. Its STATEMENT is fingerprinted, so correcting it
-is either a supersession of an accepted decision or a contract change that makes
-five nodes suspect and gets signed at pull-request review.
+**The roadmap's unmet promise.** Its frozen statement promises milestone one
+delivers a gate at commit time and in CI. Only CI exists. Its STATEMENT is
+fingerprinted, so correcting it is either a supersession of an accepted decision
+or a contract change that makes five nodes suspect and gets signed at
+pull-request review.
+
+**The carve's three questions, applied but not ratified.** The naming
+convention, the fate of the numbered-document convention, and what a per-plan
+backlog becomes were all reserved for you — and the carve had to answer all
+three to run at all. They are recorded as applied in `DEC-NODE-FILE-NAMING`,
+left at `STATUS: open` so ratification is still yours. Render it and rule.
+
+**One conflict an agent may not resolve.** `DEC-PLAN-SCOPED-BACKLOG` is
+accepted, and its statement still says every plan directory may hold a
+99-backlog document and that grooming means moving a node into a numbered
+document. Both are now false. An accepted decision's statement is frozen, and
+`DEC-SUPERSESSION-RULE` classifies this as a description going stale rather than
+work being abandoned — the one case it sends to a rewrite, and the one rewrite
+that node type forbids. So it is untouched, and it is your key: supersede it, or
+rule that its containment half was mechanism rather than contract. Its substance
+is unaffected either way — the ungroomed set is still `DEPTH == sketch` scoped
+to a plan directory, exactly as it says.
 
 ## Teeing up a session
 
@@ -122,49 +149,6 @@ It writes nodes and edges. It does not write code, and it does not sign.
 
 Give it a slice UID, not a description. The slice's closure is the brief, and
 the graph already says whether it is ready.
-
-### A carve-up session — split the corpus to one node per file
-
-> Carve the strictdoc corpus to **one node per file**. Branch
-> `feat/strictdoc-trial`, worktree at `<worktree path>`. Invoke the `sdoc` skill
-> — it states the rule; `MECH-ONE-NODE-PER-FILE` carries the measurement and
-> what is deliberately unsettled.
->
-> The rule is the operator's and it is not up for discussion: one requirement,
-> one plan step, one plan, one milestone, one backlog item, one decision — one.
-> The graph is pulled in along edges, so the unit a reader fetches has to be the
-> unit the graph addresses.
->
-> Why, so you do not re-derive it: the corpus is 421 KB across 156 nodes in 8
-> files. An average node is 2.7 KB. Reading one node out of `99-backlog.sdoc`
-> costs 279 KB, because that file holds 110 of them. Every agent that opens it
-> takes the whole backlog into context, on every re-read.
->
-> Order: `99-backlog.sdoc` first, 110 nodes and by far the worst. Then
-> `03-executable-rules.sdoc` — only 7 nodes but 74 KB, 10.5 KB apiece. Then
-> `01-tooling.sdoc` and `02-plan-lifecycle.sdoc`. The `beads-migration` and
-> `docs/spec` files are already close to the rule; leave them last or alone.
->
-> **The UID never changes, so nothing citing a node breaks when it moves.** That
-> is what makes this mechanical. Script the split at node boundaries rather than
-> hand-cutting 156 files, and run the validation loop after each file so a
-> failure names the file that caused it.
->
-> `MECH-ONE-NODE-PER-FILE` says the migration wants the writing tool from
-> `SLICE-SDOC-CLI`. That is a preference, not a gate — the export IS the
-> validator, so a script plus a clean-directory export per step is sufficient.
-> Decide which you are doing and say so in the first commit.
->
-> **Three things the operator has NOT settled. Bring them back as plain-language
-> cards; do not pick for them.** The naming convention for 156 single-node
-> files. What happens to the numbered-document convention (`01-`, `02-`, `03-`)
-> once a file is one node. And what a per-plan backlog becomes when it is a
-> directory query rather than a file.
->
-> Standing rules: **never run `fp-accept`**, never set `AUTHORED_BY: human`,
-> never edit an accepted `DECISION`'s `STATEMENT`. Commit as you go — one commit
-> per file carved up, not one at the end. Log incidental findings to the plan
-> backlog rather than telling the operator.
 
 ### What a fresh session loads, and what it does not
 
