@@ -29,20 +29,34 @@ const sortObj = (o) =>
 // while EVALUATING the module, so it fires before any located symbol is
 // reachable and looks like a locator failure when it is not one.
 //
-// Upstream went from ONE call site at 2.1.245 to 357 across 65 modules at
-// 2.1.250. Only one of those sits inside the settings closure, but it is a
-// top-level statement, so it is fatal.
+// Counted properly: 2.1.245 has ZERO call sites; 2.1.250 has 356 across 64
+// modules. Only ONE of those sits inside the settings closure, but it is a
+// top-level statement, so it is fatal. (An earlier revision said "1 site ->
+// 357 across 65", which conflated the call sites with the ALIAS form below —
+// it compared two different things and inflated both ends.)
 //
 // The rewrite is to a STATIC namespace import. `import * as N from "SPEC"` is
 // hoisted and fully evaluated BEFORE the module body runs, so substituting `N`
-// for the call is synchronous in exactly the way the original was. Neither
-// alternative works here: dynamic `import()` returns a promise, and top-level
-// await would change evaluation order for every importer of the module.
+// for the call is synchronous, which a dynamic `import()` is not. It is NOT
+// order-preserving, though: the prelude goes at position 0, so the target is
+// evaluated ahead of the module's other imports rather than at the statement
+// it replaced. That is a real difference and the reason to prefer it is only
+// that the alternatives are worse — top-level await would make the module and
+// every importer of it async. A cycle through the promoted spec surfaces as a
+// TDZ ReferenceError, loudly; ESM has no synchronous-cycle deadlock.
 //
-// A NON-LITERAL specifier is a hard failure rather than a pass-through. Left
-// alone it would throw the same opaque TypeError later, at a point that reads
-// as an anchor problem; refusing here keeps the diagnosis attached to its
-// cause.
+// A NON-LITERAL specifier in the CALL form is a hard failure rather than a
+// pass-through, so the diagnosis stays attached to its cause instead of
+// resurfacing later as an opaque TypeError.
+//
+// KNOWN GAP, deliberately not closed: only the CALL form is detected. The
+// alias form — `var ee=import.meta.require;` in the react-sentinel chunk — is
+// passed through, and under Node it binds `undefined`. That chunk IS in the
+// settings closure today and is harmless there because nothing in this path
+// calls `ee`. If something ever does, the failure is `ee is not a function`,
+// which reads like an anchor problem and is not one. Rewriting the alias would
+// mean widening this hook over a module it currently never touches, for a
+// caller that does not exist; the honest trade is to name the gap here.
 // ---------------------------------------------------------------------------
 const BUN_REQUIRE_RE = /import\.meta\.require\(\s*(["'])([^"'\\]+)\1\s*\)/g;
 
@@ -112,6 +126,8 @@ async function loadSplit(root, info) {
           bunRequire.modules++;
           bunRequire.sites += r.sites;
         }
+        // (guarded because this branch runs for the settings module whether or
+        // not it carries the call form; the branch below only runs when it does)
         return {
           format: "module",
           source: r.src + shim,
@@ -445,13 +461,18 @@ export async function census(
       // than only as a build failure.
       settingsLayout: info.layout,
       schemaModule: path.basename(info.schemaPath),
-      bunRequireRewrites: `${loaded.bunRequire?.modules ?? 0} module(s), ${loaded.bunRequire?.sites ?? 0} site(s)`,
+      bunRequireRewrites: `${loaded.bunRequire.modules} module(s), ${loaded.bunRequire.sites} site(s)`,
       locatedVia: info.via,
       alternateAnchorsAgree:
         info.alternates.build === info.symbols.build &&
         info.alternates.convert === info.symbols.convert &&
         info.alternates.filter === info.symbols.filter,
       features: info.features,
+      // Both memoizer mechanisms are live upstream, so a module could use
+      // more than one. locateMemoizerLocal unions them; surface the count so a
+      // second family shows up here rather than only as a thunk total that
+      // silently shrank.
+      memoizerFamilies: (info.memo.all ?? [info.memo]).length,
       initThunksRun: `${loaded.ran}/${loaded.total}`,
       distinctInitErrors: [...new Set(loaded.initErrors)],
       aliasesApplied: applied,

@@ -37,21 +37,25 @@
 //     keys and permission modes, so removing one removes user-visible keys.
 //
 //  6. The lazy-thunk memoizer
-//     The one anchor NOT tied to upstream behavior. Unavoidable — the module
-//     graph is lazily initialized and the only other way to run the
+//     The one anchor not anchored in the SETTINGS schema. Unavoidable — the
+//     module graph is lazily initialized and the only other way to run the
 //     initializers is to import the CLI entry point, which starts Claude Code.
 //     It is confirmed structurally: the candidate must be the callee this
 //     module wraps its own thunks with AND must be the export whose defining
 //     module matches a memoizer body.
 //
-//     TWO mechanisms are recognised, because this stopped being bundler
-//     runtime at 2.1.248. Through 2.1.245 it was bun's `__esm` ESM lowering,
-//     `(a,b)=>()=>(a&&(b=a(a=0)),b)`, and the note here read "it is bundler
-//     runtime … it changes when Bun changes its ESM lowering". Upstream then
-//     replaced it with their OWN ~800-byte helper module exporting a
-//     resettable lazy registry. So this anchor now tracks APPLICATION code
-//     that merely looks like bundler plumbing — which means it can move for
-//     product reasons, not just on a Bun upgrade. See MEMO_LAZY_METHOD_RE.
+//     This note used to call it "the one anchor NOT tied to upstream
+//     behavior … it is bundler runtime". That is wrong, and the correction
+//     matters more than the wording: TWO mechanisms exist — bun's `__esm`
+//     lowering `(a,b)=>()=>(a&&(b=a(a=0)),b)`, and an Anthropic-authored
+//     ~800-byte module exporting a resettable lazy registry — and BOTH are
+//     present in every version measured, 2.1.245 and 2.1.250 alike. Neither
+//     replaced the other. What moved is only which one the SETTINGS chunk
+//     imports. So this anchor can track application code, and it can move for
+//     product reasons rather than only on a Bun upgrade.
+//
+//     Do NOT delete either branch on the theory that a version threshold has
+//     passed. Both are live; see MEMO_LAZY_METHOD_RE and MEMO_DECL_RE.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -90,10 +94,16 @@ export function bunfsToPath(root, spec) {
 // Through 2.1.245 upstream shipped all three anchors in ONE chunk. 2.1.248
 // SPLIT them: the `$schema` description and the feature-gate registry stayed
 // with the schema, while `unrepresentable:"any"` and `/^@internal` moved to a
-// separate emitter chunk that imports the builder back. (Measured 2.1.250:
-// chunk-a891q37t.js 152 K schema side, chunk-8v512hc9.js 60 K emitter side,
-// alongside a 392 MB -> 224 MB binary and `// @bun @bytecode` headers — i.e.
-// upstream turned on Bun bytecode compilation and re-chunked.)
+// separate emitter chunk that imports the builder back. Measured across the
+// change: the embedded Bun went 1.4.0 -> 1.4.1, module count 1387 -> 1946, and
+// the binary SHRANK 392 MB -> 224 MB.
+//
+// Bytecode compilation is NOT the cause, though it is the first thing the
+// chunk headers suggest. An earlier revision of this comment asserted that
+// upstream "turned on Bun bytecode compilation"; counting both versions
+// refutes it — every chunk in 2.1.245 already carries `// @bun @bytecode`
+// (1375/1375), as does every chunk in 2.1.250 (1768/1768). Reading the marker
+// in the version in front of you proves nothing; count it in BOTH.
 //
 // That is a BUNDLER change, not a behavior change, so it must not be fatal.
 // What still has to hold is that each side is unambiguous: exactly one module
@@ -104,7 +114,9 @@ export function bunfsToPath(root, spec) {
 //
 // The builder is deliberately NOT resolved here — it is cross-checked in
 // `locate()` from both sides, and those two answers agreeing across the split
-// is what proves the split was re-chunking rather than a reshape.
+// is what proves the split was re-chunking rather than a reshape. `locate()`
+// resolves the schema-side name through the emitter module's import list
+// first, because the two names live in different namespaces once minified.
 // ---------------------------------------------------------------------------
 export function findSettingsModules(root) {
   const schemaAnchor = Buffer.from(ANCHORS.schemaKeyDescription, "utf8");
@@ -178,6 +190,17 @@ export function parseImports(src) {
     }
   }
   return map;
+}
+
+// Given an EXPORTED name and a predicate on the module specifier, return the
+// LOCAL name this module binds it to. A minifier renames across chunk
+// boundaries, so an identifier is only meaningful together with the namespace
+// it was read from; this is what carries a name from one into another.
+export function importedLocalFor(src, exported, specMatches) {
+  for (const [local, info] of parseImports(src)) {
+    if (info.exported === exported && specMatches(info.spec)) return local;
+  }
+  return null;
 }
 
 // `export{local as ALIAS,...}` — resolve minified export aliases statically.
@@ -403,25 +426,30 @@ export function locateFeatureList(src) {
 // we can initialise the graph WITHOUT importing the CLI entry point (which
 // would run Claude Code).
 //
-// TWO shapes are recognised, because upstream replaced the mechanism at
-// 2.1.248 and both must keep working:
+// TWO shapes are recognised, and NEITHER is version-gated:
 //
-//  BUN (<= 2.1.245) — bun's own `__esm` ESM lowering:
+//  BUN — bun's own `__esm` ESM lowering:
 //      M=(a,b)=>()=>(a&&(b=a(a=0)),b)
 //
-//  LAZY REGISTRY (>= 2.1.248) — Anthropic's OWN helper module, ~800 bytes,
-//  whose whole body is a resettable lazy registry:
+//  LAZY REGISTRY — an Anthropic-authored helper module, ~800 bytes, whose
+//  whole body is a resettable lazy registry:
 //      class R{resetters=[];lazy(e){let t;return this.resetters.push(
 //        ()=>{t=void 0}),()=>t??=e()}reset(){…}}
 //      var S=new R;function h(e){return S.lazy(e)}export{h};
 //
-// Note what changed in KIND, not just in syntax: this anchor's justification
-// in the header called it "the one anchor NOT tied to upstream behavior … it
-// is bundler runtime". That is no longer true — the memoizer is now upstream
-// application code with a `reset()` affordance. It is still confirmed
-// structurally (backreferences only, no identifier is written down), and the
-// two shapes are tried in order against the DEFINING module, so a match is
-// never taken on the strength of the call site alone.
+// An earlier revision labelled these "BUN (<= 2.1.245)" and "LAZY REGISTRY
+// (>= 2.1.248)", which is wrong and actively dangerous: it invites a future
+// reader to delete the bun branch once versions advance. BOTH mechanisms are
+// present in BOTH versions measured — bun's `__esm` in 2 modules of each, the
+// lazy registry in 1 module of each. Upstream replaced nothing; what changed
+// is only which one the SETTINGS chunk happens to import (2.1.245: 35 thunk
+// sites through the bun helper, 2.1.250: 1 through the registry).
+//
+// Both are confirmed structurally (backreferences only, no identifier is
+// written down) against the DEFINING module, so a match is never taken on the
+// strength of the call site alone. And because both are live, a module could
+// legitimately use BOTH at once — see locateMemoizerLocal, which unions every
+// confirming family rather than returning the first.
 // ---------------------------------------------------------------------------
 const MEMO_DECL_RE =
   /(?:var|let|const)\s+([A-Za-z0-9_$]+)=\(([A-Za-z0-9_$]+),([A-Za-z0-9_$]+)\)=>\(\)=>\(\2&&\(\3=\2\(\2=0\)\),\3\)/;
@@ -470,22 +498,40 @@ export function locateMemoizerLocal(settingsSrc, readSpec) {
     if (n >= 1) candidates.push({ local, info, n });
   }
   candidates.sort((x, y) => y.n - x.n);
+  // Collect EVERY confirming candidate, not the first one. The structural
+  // confirmation below is a sound gate on IDENTITY — anything that passes it
+  // really is a memoizer — but it says nothing about COMPLETENESS, and both
+  // mechanisms are present in every version measured so far. A module that
+  // wrapped some thunks with one and some with the other (the ordinary state
+  // of a mid-flight migration) would, under a first-match return, have half
+  // its graph left uninitialized: `initErrors` stays empty, `ran === total`,
+  // and the census emits a schema quietly missing whatever the un-run modules
+  // contributed. Union the families instead, and report how many were found.
+  const confirmed = [];
   for (const c of candidates) {
     const src2 = readSpec ? readSpec(c.info.spec) : null;
     if (!src2) continue;
     const declName = memoDeclName(src2);
     if (!declName) continue;
     if (parseExports(src2).get(declName) !== c.info.exported) continue;
-    return {
-      local: c.local,
-      source: "import",
-      spec: c.info.spec,
-      thunkSites: c.n,
-    };
+    confirmed.push({ local: c.local, spec: c.info.spec, thunkSites: c.n });
   }
+  if (confirmed.length)
+    return {
+      local: confirmed[0].local,
+      source: "import",
+      spec: confirmed[0].spec,
+      thunkSites: confirmed[0].thunkSites,
+      all: confirmed,
+    };
   // single-file topology: the memoizer is declared in the same file
   const inline = memoDeclName(settingsSrc);
-  if (inline) return { local: inline, source: "inline" };
+  if (inline)
+    return {
+      local: inline,
+      source: "inline",
+      all: [{ local: inline, spec: null, thunkSites: null }],
+    };
   return null;
 }
 
@@ -515,19 +561,46 @@ export function locate(root) {
   const split = emitterPath !== schemaPath;
   const src = fs.readFileSync(settingsPath, "utf8");
   const schemaSrc = split ? fs.readFileSync(schemaPath, "utf8") : src;
-  const readSpec = (spec) => {
-    const p = isBunfs(spec)
+  const specToPath = (spec) =>
+    isBunfs(spec)
       ? bunfsToPath(root, spec)
       : path.resolve(path.dirname(settingsPath), spec);
+  const readSpec = (spec) => {
     try {
-      return fs.readFileSync(p, "utf8");
+      return fs.readFileSync(specToPath(spec), "utf8");
     } catch {
       return null;
     }
   };
 
   const emitter = locateEmitter(src);
-  const builderAlt = locateBuilderByDescription(schemaSrc);
+
+  // `locateBuilderByDescription` answers in the SCHEMA module's namespace,
+  // while `emitter.build` is a local in THIS one. In the two-module layout
+  // those are different namespaces, so comparing them directly is only
+  // accidentally right — it holds at 2.1.250 solely because that build does no
+  // import renaming. At 2.1.245 every one of ~50k cross-chunk bindings IS
+  // renamed, so a build that is both SPLIT and alias-minified would either
+  // report a bundler alias as an anchor disagreement, or — on the fallback
+  // path, where there is no cross-check at all — hand census a name to export
+  // from the wrong namespace. Minified names are heavily recycled across
+  // chunks, so that resolves to an unrelated local rather than failing.
+  // Resolve through the import so both answers are expressed in one namespace.
+  let builderAlt = locateBuilderByDescription(schemaSrc);
+  if (split && builderAlt) {
+    const localName = importedLocalFor(
+      src,
+      builderAlt,
+      (spec) => specToPath(spec) === schemaPath,
+    );
+    if (!localName)
+      throw new Error(
+        `the settings builder (${builderAlt} in the schema module) is not ` +
+          "imported by the emitter module — the two anchors no longer describe " +
+          "one pipeline",
+      );
+    builderAlt = localName;
+  }
   const converterAlt = locateConverterByOption(src);
   const filterAlt = locateFilterByMarker(src);
 
@@ -562,8 +635,15 @@ export function locate(root) {
   if (!features) throw new Error("could not locate the feature-gate registry");
 
   const memo = locateMemoizerLocal(src, readSpec);
-  if (!memo) throw new Error("could not locate the bun __esm memoizer");
-  const thunks = locateInitThunks(src, memo.local);
+  if (!memo)
+    throw new Error(
+      "could not locate the lazy-thunk memoizer (neither bun's __esm lowering " +
+        "nor the lazy-registry helper matched a module this one imports)",
+    );
+  const memoLocals = (memo.all ?? [{ local: memo.local }]).map((m) => m.local);
+  const thunks = [
+    ...new Set(memoLocals.flatMap((l) => locateInitThunks(src, l))),
+  ];
 
   return {
     settingsPath,
