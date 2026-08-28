@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-RUNTIME-WRITE-GUARD
 TITLE: Enforce field ownership at the runtime rather than in a document
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: human
 STATEMENT: >>>
 Two fields are the operator's and the tool never writes them: PARENT_FP and AUTHORED_BY. What enforces that is the absence of a code path, not a check placed in front of one. The sdoc CLI derives its field flags from the grammar it loads, minus a named guarded set, so create and set carry no flag for either field; naming one anyway exits non-zero saying who owns it. There is no override flag, because a flag the model can pass is a document rule wearing a different hat.
@@ -47,4 +47,23 @@ almost none of its wording. The field was left alone because only the operator
 turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
 exactly this, and this pass produced eight instances of it while the question of
 what the mark means was still open.
+
+IMPLEMENTED 2026-08-27. The enforcement is the absence of a code path, as
+this node requires: dev/scripts/sdoc_cli.py derives its field flags from the
+grammar minus GUARDED_FIELDS, so neither --authored-by nor --parent-fp
+exists to pass, and `new` writes AUTHORED_BY: llm unconditionally because
+the grammar makes it REQUIRED on all five types.
+
+One thing had to be spoken rather than merely absent. argparse answers an
+undeclared flag with "unrecognized arguments", which reads as a typo rather
+than as a refusal, so reject_guarded scans argv before parsing and names the
+owner. Measured: `sdoc set MECH-... --authored-by human` exits 1 saying
+AUTHORED_BY is the operator's. There is no override flag.
+
+PARENT_FP is not emitted by the CLI at all. fp-accept.py reaches it through
+the same Graph.set_field, which is why the guarded set is enforced at the
+CLI's flag surface rather than inside the model.
 <<<
+RELATIONS:
+- TYPE: File
+  VALUE: dev/scripts/sdoc_cli.py
