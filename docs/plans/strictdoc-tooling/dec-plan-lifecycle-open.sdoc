@@ -1,0 +1,71 @@
+[DOCUMENT]
+TITLE: What a plan node's retention is, and what collects it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-PLAN-LIFECYCLE-OPEN
+TITLE: What a plan node's retention is, and what collects it
+AUTHORED_BY: human
+STATUS: open
+RETIRES_ON: >>>
+Beads is running and one plan has reached the point where it would either
+settle into durable specification or be collected -- the first real observation
+of what a finished plan leaves behind.
+<<<
+STATEMENT: >>>
+The current lean, held loosely: plans may not belong in main at all. They may be
+working artifacts, or examples a model generates from, with only the durable
+specification -- what was actually done -- committed.
+
+Once beads exists a plan is a launch point, not a record. No plan survives
+reality. Execution state lives in beads, which is not shared, and the plan is an
+immutable snapshot taken at ingest.
+
+An intermediate position, also unsettled: commit only the snapshot that led to
+the work, for lineage, and never an in-progress plan. Then no plan changes
+underneath anyone.
+
+NARROWED. Plans are not structurally different from specifications -- same
+nodes, same edges, same fingerprints, same machinery. The only open question is
+RETENTION: how long a plan node lives, and what collects it. That is answerable
+from one observation rather than from argument, and it is the same shape as the
+question MECH-FP-PREMERGE-GC asks about what survives between commits on a
+feature branch. One mechanism may serve both.
+<<<
+RATIONALE: >>>
+Recorded as open rather than decided because the author does not yet have a
+sharp opinion, and the observation that would settle it does not exist yet. It
+is the kind of decision that gets made badly if forced early and cheaply if
+left until the evidence arrives.
+<<<
+NOTES: >>>
+OPERATOR LEAN, 2026-08-27, recorded but NOT closing this decision: drop garbage
+collection, use supersession, and make collection a separate feature after
+milestone five. "feels nice and what I want but its bloating scope complexity
+with garbage collection."
+
+This does not retire the decision, and the reason is this node's own RETIRES_ON:
+beads is not running and no plan has yet reached the point where it would settle
+or be collected. Its RATIONALE says the decision "gets made badly if forced
+early and cheaply if left until the evidence arrives", so choosing collection
+now would force exactly what it warns against.
+
+Two arguments worth keeping so they are not re-derived. Collection and
+supersession are not alternatives: collection answers how the graph stops
+growing, supersession answers how a reader learns X was replaced by Y, and
+deleting destroys the second because the graph cannot query git while
+DEC-SYSTEM-PURPOSE optimizes for a reader with no memory of yesterday. And
+supersession does not foreclose collection -- a superseded node is precisely the
+candidate set a collector would later operate on, which is a sharper signal than
+age plus absence of inbound fingerprints.
+
+Measured the same day: of 139 nodes, 64 are sketch and ZERO are superseded. A
+collector aimed at retired nodes would collect nothing today; the growth
+pressure is entirely at the ungroomed end. See DEC-SUPERSESSION-RULE.
+
+Milestones three and four were floated for combination the same day and the
+operator dropped it -- "just an observation". They stay separate: three is the
+surface, four is the implementation.
+<<<
