@@ -1,0 +1,55 @@
+[DOCUMENT]
+TITLE: Authorship is one monotonic field, and it governs reversal rather than credit
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-AUTHORSHIP-LADDER
+TITLE: Authorship is one monotonic field, and it governs reversal rather than credit
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A reversal case appears that the four values cannot distinguish, or the ladder needs to run backwards.
+STATEMENT: >>>
+Authorship is tracked on every node, as ONE field on a MONOTONIC ladder, and
+what it governs is REVERSAL rather than credit.
+
+  llm            written by a model, not looked at
+  llm-accepted   a human has seen it and let it stand
+  llm-adopted    a human has taken it on as their own
+  human          written by a human
+
+The treatment reads off the value, three classes over four values:
+
+  llm                          FREE. A model may reverse it without asking.
+  llm-accepted                 SOFT. Undoing it is not a light choice, and an
+                               undo has to surface in the report that closes
+                               the work, so the human learns it changed.
+  llm-adopted, human           HARD. A model may not reverse it. Being unable
+                               to meet it is a STOP condition: raise it with
+                               the human rather than working around it.
+
+llm-adopted and human differ only in LINEAGE, which is why they share a
+treatment. The ladder is one-directional: a value may rise and never fall, so
+there is no reachability question and no way to launder a human commitment back
+into a free one.
+
+WHAT THIS IS NOT. It is not attribution and not credit. It is the guard on the
+reverse edge -- the answer to "who is allowed to undo this, and what do they owe
+if they do." That is why it costs one field rather than an actor model: it
+parameterises an undo that already exists instead of adding an axis.
+<<<
+RATIONALE: >>>
+The operator asked for authorship to be tracked even where nothing consumes it
+yet, on the grounds that a view over it is interesting on its own and carrying
+an unused field costs nothing. That is cheap to honour and expensive to
+retrofit, since the value has to be recorded when the node is written and cannot
+be recovered afterwards.
+
+One field rather than two -- provenance plus a separate human stance -- because
+only four of the combinations mean anything and they form a ladder. Two fields
+would be a product with unreachable corners.
+<<<
+NOTES: >>>
+The grammar today carries AUTHORED_BY with values llm and human only, and the sdoc writer refuses to set it at all -- MECH-RUNTIME-WRITE-GUARD makes it the operator's key. Extending the word list and deciding who may raise a value are both open, and the second is the harder one: raising to llm-accepted is a human act with no natural place to happen yet. The stop-condition and report-on-undo behaviour is semantic and belongs in L3, not in the field.
+<<<

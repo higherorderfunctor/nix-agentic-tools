@@ -80,8 +80,21 @@ name.
 
 The files carry plain-language descriptions of each node type's intended use,
 and deliberately no design rationale -- that is what this node holds.
+
+UPDATED 2026-08-28. Three of the held items are now ruled elsewhere and are
+struck from the list above rather than restated: the two-grammar split itself
+falls to DEC-ONE-GRAMMAR, the state-field-per-type question is answered by
+DEC-NODE-TYPE-GRID's separation of claims from work, and DECISION's open state
+by DEC-OPEN-IS-THE-QUESTION. What remains genuinely held is the tier-versus-
+depth redundancy, whether an ungroomed item is a tier or a type, RATIONALE's
+optionality, supersession direction, File relations, and the unverified
+cross-grammar relation -- which the one-grammar ruling makes moot unless a
+second grammar ever returns.
 <<<
 RELATIONS:
 - TYPE: Parent
   VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
   ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: DEC-ONE-GRAMMAR
+  ROLE: Governed_By
