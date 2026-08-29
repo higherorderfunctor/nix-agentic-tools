@@ -1,0 +1,54 @@
+[DOCUMENT]
+TITLE: Stay in your lane is two requirements, and the Crosses edge is the lane
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-LANE-DISCIPLINE-IS-A-REQUIREMENT
+TITLE: Stay in your lane is two requirements, and the Crosses edge is the lane
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The motivation behind SLICE is SCOPE DISCIPLINE, and it is two rules rather than
+a type:
+
+  If you are NOT working a slice, stay inside one horizontal layer.
+  If you ARE working a slice, stay inside the crossings that slice declared.
+
+Both are normative and universal, so under DEC-NODE-TYPE-GRID both are
+REQUIREMENTS -- and neither needs a node type to carry it.
+
+PROPOSED, and not ruled: SLICE does not survive as a type either. It is WORK
+that DECLARES ITS CROSSINGS, and the Crosses edge IS the lane. Slice-ness then
+becomes derived -- work that crosses more than one layer -- rather than
+announced by a prefix, which is the same move the grid made everywhere else:
+prefer a property read off the edges to a type asserted up front.
+
+What that buys is a rule with somewhere to live. "Work does not touch what it
+did not declare" is checkable: the changes a piece of work lands should fall
+inside what it declared it crosses. That is an L3 rule sitting on L2 hooks, not
+a concept to be remembered, and it cannot be written at all while the discipline
+exists only as a name.
+
+NO FORCING FUNCTION TODAY. Nothing checks lane discipline, and nothing will
+until L3 has somewhere to put the rule, so leaving this fuzzy costs nothing in
+the meantime. It is recorded rather than decided so that the concept is not lost
+between now and then.
+<<<
+RATIONALE: >>>
+The operator recalled on 2026-08-28 that SLICE exists as a scope-discipline device -- stay in your horizontal layer unless you are a slice, and do not veer outside your slice when implementing across layers -- and was unsure whether that warrants a node. Written down because a discipline carried only as a name is one session away from being forgotten, and because naming it as normative gives the migration a pre-classified node rather than another to test by hand.
+<<<
+NOTES: >>>
+NORMATIVE, pre-classified. When the grid's vocabulary lands this becomes a REQUIREMENT, not a MECHANISM; it is written as a mechanism only because REQUIREMENT is not in the grammar yet. Recorded as a proposal at the operator's invitation, with the alternative -- leave it a fuzzy concept until a forcing function makes it real -- explicitly still live.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NODE-TYPE-GRID
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-SLICE-IS-WORK-NOT-A-USE-CASE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In
