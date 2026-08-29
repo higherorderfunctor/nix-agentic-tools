@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: The m4 work node claims a registered plugin and a diff-less tool; both are false
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-M4-CLAIMS-REFUTED-AGAINST-THE-TREE
+TITLE: The m4 work node claims a registered plugin and a diff-less tool; both are false
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Two claims in the m4 work node (SLICE-CHECKPOINT-WIRING) are false against the
+tree, measured 2026-08-28. It says strictdoc's index-build hook is "registered
+as ProjectConfig(user_plugin=...) in strictdoc_config.py"; the config passes
+project_title, grammars, exclude_doc_paths, formats and dir_for_sdoc_cache
+only, and no plugin class exists anywhere (strictdoc_config.py:80-87). It says
+the tool "sees the whole graph as it would be after the write, never a diff";
+--dry-run prints a unified diff from the disk pre-image and finish() holds
+both images per file (sdoc_cli.py:571-582, :650-653) -- what is NOT retained
+is the field-level old value (sdoc_model.py:264). Also measured: the plugin
+hook, once registered, fires inside every scribe load -- twice per write,
+three times per `new` -- and cannot tell a pre-write load from a post-write
+verify. The work node's statement is to be corrected when it is rewritten for
+the hook layer, not patched here.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In
