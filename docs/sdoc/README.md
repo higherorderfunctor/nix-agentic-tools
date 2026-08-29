@@ -42,6 +42,21 @@ does not need it: the prek hooks resolve their config from the primary checkout,
 so a worktree that has never entered a shell validates exactly like one that
 has.
 
+## Settled, not yet applied — read before citing any node
+
+The grid rulings of 2026-08-28 changed what three grammar types MEAN, and the
+corpus has not been migrated onto them. The read-through table lives in ONE
+place, the `sdoc` skill ("The grammar lags the rulings"); the graph's own entry
+point is `MECH-GRID-MIGRATION-UNCOSTED`, reachable from each ruling by its
+`Governs` edge. The short form: a `SLICE-` UID is WORK that declares its
+crossings, an `INV-` UID is a REQUIREMENT, and a `SPIKE-` UID is a pipeline to a
+decision. A session that cites a slice "as a slice" has not read this.
+
+**Vocabulary for the hook layer (session 6):** a place logic could attach is a
+**join point** — "joint" in conversation. Not "surface", which this repo already
+uses for option and grammar surfaces. Time-based joints (commit, CI) keep the
+name **checkpoint**.
+
 ## Where this stands — 2026-08-28 (end of session 5)
 
 **The vocabulary has a shape now, and the layers have numbers.** Six decisions

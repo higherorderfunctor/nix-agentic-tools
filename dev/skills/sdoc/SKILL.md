@@ -54,6 +54,24 @@ IMPORT_FROM_FILE: @repo
 | `INVARIANT` | `INV-`   | a rule that must hold               | "interface satisfied, rule violated"        |
 | `SPIKE`     | `SPIKE-` | a probe that decides something      | carries `STATUS` and `RETIRES_ON`           |
 
+**The grammar lags the rulings, and the corpus has not been migrated.**
+`DEC-NODE-TYPE-GRID` (2026-08-28) re-derived the vocabulary from two axes, and
+the migration is uncosted and deliberately unapplied
+(`MECH-GRID-MIGRATION-UNCOSTED` — do not half-apply it). Until it lands, WRITE
+the five grammar types above and READ them through the rulings:
+
+| grammar says | read it as                                                                                   | ruling                                                          |
+| ------------ | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `INVARIANT`  | a REQUIREMENT                                                                                | `DEC-INVARIANT-IS-A-REQUIREMENT` (accepted)                     |
+| `MECHANISM`  | descriptive + universal only; a MECH enforced by a check is normative under the wrong prefix | `DEC-NODE-TYPE-GRID` (accepted)                                 |
+| `SLICE`      | WORK that declares its crossings; the `Crosses` edge IS the lane; slice-ness is derived      | `DEC-SLICE-DECOMPOSES-TO-WORK` (accepted)                       |
+| `SPIKE`      | a pipeline — work, then evidence, then the decision it exists to settle                      | `MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION` (a reading, not ruled) |
+
+Cite a `SLICE-` UID as work under a legacy prefix, never as "a slice type". A
+new node still takes the grammar's type: the migration is one move, not a drift,
+and a session that mints a `WORK-` or `REQ-` UID ahead of it has half-applied
+the grid.
+
 `STATUS` is polymorphic and both spellings are required on their node type:
 `DECISION` takes `open` / `accepted` / `rejected` / `superseded`, `SPIKE` takes
 `unrun` / `run` / `blocked`.
