@@ -256,8 +256,9 @@ jobs:
           #     kiro-patched (x86_64-linux, ubuntu-latest),
           #     kiro-patched (aarch64-darwin, macos-latest), test, and
           #     gitleaks. A red check leaves the PR sitting armed and unmerged.
-          #     `devenv-test` is NOT among them: it was required 2026-08-03 and
-          #     demoted 2026-08-05, so it runs and reports but never gates.
+          #     The full Devenv Diagnostic is NOT among them: after its
+          #     2026-08-05 demotion, it became workflow_dispatch-only on
+          #     2026-08-29 when deterministic contracts moved into `test`.
           #     Read the ruleset before trusting this list — it is the safety
           #     rationale for unattended auto-merge, so a wrong count here is
           #     the one that actually matters:

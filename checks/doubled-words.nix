@@ -24,11 +24,10 @@
 # review with all three of those green. That is the measured justification
 # for the gate, and it is a thin one — see #877.
 #
-# This is a `nix flake check` rather than a prek hook on purpose. The prek
-# hooks are `lib.optionalAttrs (!isCI)` in devenv.nix — local-only and
-# `--no-verify`-skippable — and the one measured instance of this defect
-# entered through a PR, which is the path a local-only hook does not
-# cover. It also propagates: a doubled word in a source fragment is copied
+# This is a `nix flake check` rather than a prek hook on purpose. Local hooks
+# are `--no-verify`-skippable, and the one measured instance of this defect
+# entered through a PR, which local feedback does not cover. It also
+# propagates: a doubled word in a source fragment is copied
 # into every generated projection of it, so the cheap moment to stop it is
 # before main, not before a commit.
 #

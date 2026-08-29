@@ -5,19 +5,15 @@
 # very different guarantees:
 #
 #   * GITIGNORED (.claude/rules/*, .kiro/steering/*) — materialized on
-#     devenv shell entry and gated by devenv.nix's enterTest, which
-#     asserts they land as REAL files rather than store symlinks.
+#     devenv shell entry. checks.instruction-materialization executes that
+#     exact copier in a temporary repository and asserts real-file delivery.
 #   * TRACKED (the four files plus the instructions/ tree below) —
 #     committed by hand, and until this check nothing anywhere
 #     asserted they matched their source.
 #
-# Nothing covered the second group. Pre-commit is deliberately narrow
-# (formatting and secrets only). enterTest checks that AGENTS.md exists
-# and is not a symlink, which a stale AGENTS.md satisfies perfectly.
-# devenv-test would not help either: it gates the gitignored population,
-# and its path filter lists dev/generate.nix and dev/instructions.nix —
-# the registration and the renderer — but not dev/fragments/**, so a
-# fragment-content edit never triggered it at all.
+# Nothing covered the second group. A real-file materialization check proves
+# delivery behavior, but a stale tracked AGENTS.md satisfies it perfectly; byte
+# drift therefore remains this check's separate responsibility.
 #
 # The consequence was not theoretical. Both repo-root documents drifted
 # far enough to be wrong: README.md's install example set `ai.enable`,
@@ -32,11 +28,10 @@
 #
 # Scope: TRACKED files only. The gitignored rules/ and steering/ trees
 # that instructions-claude and instructions-kiro also emit are out of
-# scope here — enterTest owns those. CLAUDE.md is likewise gitignored
-# (it is a 24-byte `@AGENTS.md` pointer materialized on shell entry),
-# so it is deliberately absent below: a flake check cannot read an
-# untracked file, and enterTest already asserts it lands as a real
-# file.
+# scope here — instruction-materialization owns delivery. CLAUDE.md is likewise
+# gitignored (it is a 24-byte `@AGENTS.md` pointer materialized on shell entry),
+# so it is deliberately absent below: there is no tracked byte population to
+# compare.
 {
   pkgs,
   self,

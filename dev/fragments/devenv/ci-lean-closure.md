@@ -1,15 +1,19 @@
-# CI-lean closure taxonomy
+# Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-08-17 (commit pending — the staged Codex named-profile
-> migration now receives the canonical Git common directory automatically,
-> including from linked worktrees, while this repository's still-legacy config
-> retains its existing `.git` workspace root until the separate migration).
-> Prior: 2026-08-17 (commit pending — enabled treefmt now contributes its
-> effective cache through the same permission-model-aware Codex root pool;
-> enterTest expects five local roots and four in CI). Prior: 2026-08-17 (commit
-> pending — named Codex permission tables are enabled at the module boundary,
-> but this repository deliberately remains on legacy workspace-write until its
-> Home Manager user layer migrates first; Codex does not compose the two models
+> **Last verified:** 2026-08-29 (commit pending — `devenv test` is now an
+> on-demand diagnostic instead of an automatic PR/push workflow. Deterministic
+> instruction-copy, shared-hook-isolation, and validation-projection contracts
+> moved under `nix flake check`; `$CI` no longer removes validation hooks).
+> Prior: 2026-08-17 (commit pending — the staged Codex named-profile migration
+> now receives the canonical Git common directory automatically, including from
+> linked worktrees, while this repository's still-legacy config retains its
+> existing `.git` workspace root until the separate migration). Prior:
+> 2026-08-17 (commit pending — enabled treefmt now contributes its effective
+> cache through the same permission-model-aware Codex root pool; enterTest
+> expects five local roots and four in CI). Prior: 2026-08-17 (commit pending —
+> named Codex permission tables are enabled at the module boundary, but this
+> repository deliberately remains on legacy workspace-write until its Home
+> Manager user layer migrates first; Codex does not compose the two models
 > across config layers). Prior: 2026-08-15 (commit pending — the
 > interactive-only Semble gate moved unchanged to
 > `ai.codex.programs.semble.enable`; grammar and path customization now follow
@@ -53,46 +57,41 @@
 > install CLI wrappers, or the `devenv-test.yml` cache wiring, re-verify this
 > and bump the marker.
 
-The `devenv-test` CI gate (`.github/workflows/devenv-test.yml`) runs
-`devenv test` on ephemeral runners, so **everything in the shell closure is
-download cost on every cold run** and feeds the `cache-nix-action` cache size.
-`devenv.nix` therefore evaluates an `isCI` branch (see the comment block at its
-`isCI` binding — EVAL-time, distinct from the RUNTIME `$CI` guard in
-`processes.docs.exec`).
+The Devenv Diagnostic workflow (`.github/workflows/devenv-test.yml`) runs only
+on `workflow_dispatch`. Its cold interactive shell closure is therefore an
+operator-chosen diagnostic cost, not an automatic merge-path cost. The required
+`test` context runs `nix flake check` and owns the deterministic invariants that
+previously justified the runtime workflow:
 
-The job reports on every pull request rather than carrying a
-`pull_request.paths` filter: its first step queries the changed files and every
-closure-producing step is conditional on the same path set. An irrelevant pull
-request therefore reports success after one API call; a relevant one still pays
-for and waits on the runtime gate. Pushes to `main` retain the workflow-level
-path filter because they are not merge gates.
+- `instruction-materialization` executes the exact shell-entry copier against a
+  temporary repository and proves byte equality, real-file type, mode,
+  idempotence, repair, and stale-file pruning;
+- `isolate-prek-hooks` executes the exact shared-hook rewriter in primary and
+  linked worktrees;
+- `repo-validation-policy`, `repo-lints`, and `shellcheck-corpus` prove
+  lifecycle selection and scan the complete tracked validator corpus.
 
-**The constraint that FORCED this shape is gone, but the shape remains.** It was
-built because branch protection required the `devenv-test` context, and GitHub
-leaves a required context pending forever when its workflow never starts — so a
-paths filter would have deadlocked every unrelated PR. `devenv-test` was
-un-required on 2026-08-05 (see the git-workflow fragment), so a workflow-level
-paths filter is now _possible_ again. It has not been reinstated, and the
-always-report shape is still the cheaper thing to reason about. If you do
-reinstate one, re-check the ruleset first — putting the context back under
-branch protection while a paths filter is live would resurrect exactly the
-deadlock this design was built to avoid.
+`devenv.nix` still evaluates an `isCI` branch for the manual diagnostic. It
+omits tooling that enterTest never invokes, but it does not alter repository
+validation declarations. A developer exporting `CI=1` gets fewer interactive
+packages, never fewer guards.
 
-## The four buckets
+## The five buckets
 
-| Bucket                   | Examples                                                                  | CI closure?                                                                                                                                            | Where decided                                                                                                         |
-| ------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| Gate dependencies        | generation pipeline, coreutils-class tools, `check-jsonschema`, `cspell`… | YES — unconditional `packages`                                                                                                                         | the gate runs materialize tasks + enterTest; these feed them                                                          |
-| Interactive-only dev UX  | LSPs (`nixd`→llvm, `marksman`→dotnet, `taplo`), git-hooks suite           | NO — `lib.optionals (!isCI)` / `lib.optionalAttrs (!isCI)`                                                                                             | humans use them; CI never invokes them                                                                                |
-| Factory CLI wrappers     | kiro-cli-wrapped (~693 MB), copilot-cli (~219 MB)                         | YES (currently) — ride in via `mkKiro`/`mkCopilot` whenever `ai.*` modules are enabled, and enterTest needs the modules enabled for their files fanout | gating the PACKAGE needs a factory-level option (HM-parity implications) — open decision, deliberately not improvised |
-| Consumer overlay exports | `pkgs.ai.devTools.*`, MCP server packages                                 | NEVER in the shell                                                                                                                                     | they are shipped artifacts: built by the CI `build` matrix (`.#packages`) and `cache-hit-parity`, not shell members   |
+| Bucket                   | Examples                                               | Manual diagnostic closure?             | Automatic CI treatment                                |
+| ------------------------ | ------------------------------------------------------ | -------------------------------------- | ----------------------------------------------------- |
+| Diagnostic dependencies  | generation pipeline, coreutils-class tools, validators | yes                                    | narrow flake checks realize only their declared tools |
+| Interactive-only dev UX  | LSPs (`nixd`→llvm, `marksman`→dotnet, `taplo`), Semble | no — `lib.optionals (!isCI)`           | not invoked                                           |
+| Validation hooks         | prek plus declared hook tools                          | yes — policy is unconditional          | validator-only projection; commit lifecycle excluded  |
+| Factory CLI wrappers     | kiro-cli-wrapped, copilot-cli                          | yes — enterTest exercises files fanout | package/build checks remain separate                  |
+| Consumer overlay exports | `pkgs.ai.devTools.*`, MCP server packages              | never unless explicitly selected       | CI build matrix and cache-hit-parity                  |
 
 ## The decision rule
 
-Adding a package to `devenv.nix`? Ask: **does the CI gate (materialize tasks +
-enterTest assertions) invoke it?** If not, it goes in the `!isCI` list. When in
-doubt, `CI=1 devenv test` locally is the oracle — green means the gate never
-needed it.
+Adding a package to `devenv.nix`? Ask whether the on-demand diagnostic invokes
+it. If not, put interactive-only tooling in the `!isCI` list. Do not use that
+branch for validation policy: automatic guards belong in flake checks with their
+own narrow closures.
 
 ### Codex ships unwrapped, with its permission migration staged
 
@@ -121,16 +120,17 @@ the old lockout prevented. Two measurements constrain the eventual profile:
 
 `devenv.nix` declares only the worktree collection root the factory cannot infer
 (work spans sibling worktrees of one clone, so a session started in any of them
-must write the others). The repository enables Semble only outside CI, pins it
-to this flake, adds AWK and jq Tree-sitter grammars, and maps its non-standard
-Bash, Gitignore, JSON, and Markdown paths. Its devenv facet contributes
-`${config.devenv.state}/semble-cache` automatically and invalidates indexes in
-that scoped root when the effective package changes. Its instruction facet stays
-off because the tracked, fragment-generated `AGENTS.md` already carries the same
-search workflow and devenv cannot replace that real file with a `files.*`
-symlink. The user-global cache is no longer in play for this shell. Keeping
-`ai.codex.programs.semble.enable = !isCI` is load-bearing: the CI gate does not
-invoke Semble and must not realize its model, MCP, or grammar closure.
+must write the others). The repository enables Semble only outside diagnostic
+mode, pins it to this flake, adds AWK and jq Tree-sitter grammars, and maps its
+non-standard Bash, Gitignore, JSON, and Markdown paths. Its devenv facet
+contributes `${config.devenv.state}/semble-cache` automatically and invalidates
+indexes in that scoped root when the effective package changes. Its instruction
+facet stays off because the tracked, fragment-generated `AGENTS.md` already
+carries the same search workflow and devenv cannot replace that real file with a
+`files.*` symlink. The user-global cache is no longer in play for this shell.
+Keeping `ai.codex.programs.semble.enable = !isCI` is load-bearing: the manual
+diagnostic does not invoke Semble and must not realize its model, MCP, or
+grammar closure.
 
 The effective Nix and treefmt cache roots and the scoped Semble cache are
 contributed by their owning devenv modules and must not be hand-written. Legacy
@@ -143,24 +143,24 @@ workspace-write with no named permission keys, that no stale whole-file profile
 remains in `CODEX_HOME`, and that all five local roots are present (the
 interactive-only Semble root is deliberately absent, leaving four, in CI).
 
-Two proofs to preserve when touching the gates: with `CI` unset the shell must
-contain grammar/path-customized Semble and its scoped cache root, while
-`CI=1 devenv test` must stay green without either in the CI closure.
+Two proofs to preserve when touching the diagnostic: with `CI` unset the shell
+must contain grammar/path-customized Semble and its scoped cache root, while an
+on-demand `CI=1 devenv test` must stay green without either in that closure.
 
-## The job also carries always-on #821 telemetry
+## The manual diagnostic carries #821 telemetry
 
-`devenv-test.yml` records a run-context file before `devenv test`, runs devenv
-with `--no-tui --trace-to json:file:… --verbose`, takes a forensic snapshot on
-any non-success outcome, and uploads all of it as one 7-day artifact. It is
-diagnostics for issue #821 (an intermittent
+The manual `devenv-test.yml` workflow records a run-context file before
+`devenv test`, runs devenv with `--no-tui --trace-to json:file:… --verbose`,
+takes a forensic snapshot on any non-success outcome, and uploads all of it as
+one 7-day artifact. It is diagnostics for issue #821 (an intermittent
 `path '/nix/store/…-references' is not valid` during shell configuration), not a
 fix, and it changes nothing about the shell closure.
 
-Why each individual choice is the way it is — uploading on success, the compound
-scope gate, the cancellation arm on the snapshot's `if:`, the strict-mode header
-alongside a `probe` helper that turns exit status into data, the tiered
-store-path parse — is commented at the site in `devenv-test.yml`. Read it there;
-it is not restated here.
+Why each individual choice is the way it is — uploading on success, the shared
+telemetry directory, the cancellation arm on the snapshot's `if:`, the
+strict-mode header alongside a `probe` helper that turns exit status into data,
+and the tiered store-path parse — is commented at the site in `devenv-test.yml`.
+Read it there; it is not restated here.
 
 One coupling is invisible from either end, which is the only reason it is
 written down at all: **the cache step's `id: nix-cache` is load-bearing.** The

@@ -17,15 +17,15 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   git config --global user.email a@b.c; git config --global user.name a
   git config --global init.defaultBranch main
 
-  # --- stub prek: `prek run <id> [--config <cfg>] --files ...` ---
-  #   id == treefmt         -> strip trailing WS on the given files, exit 0
+  # --- stub prek: `prek run <id> --hook-stage manual --config <cfg> --files ...` ---
+  #   id == treefmt         -> strip trailing WS; exit 1 on change, then 0
+  #   id == treefmt-BAD     -> persistent formatter failure
   #   id == cspell-BAD      -> print a finding, exit 1
   #   id == missingfails    -> fail if any given file does not exist on disk
   #   id == echo-env        -> print the resolved config + PREK_HOME, exit 1
   #   anything else         -> exit 0
-  # The stub asserts the argv SHAPE by construction: `--config` is parsed
-  # positionally, so dropping the flag from validate-at-stop would leave `cfg`
-  # empty and fail the echo-env probe.
+  # The stub asserts the argv SHAPE by construction: the stage is mandatory,
+  # and dropping --config leaves `cfg` empty and fails the echo-env probe.
   mkdir -p stub
   cat > stub/prek <<'STUB'
   #!${pkgs.bash}/bin/bash
@@ -33,11 +33,26 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   shopt -s inherit_errexit 2>/dev/null || :
   [ "$1" = run ] || exit 0
   id="$2"; shift 2
-  cfg=""
-  if [ "''${1:-}" = --config ]; then cfg="$2"; shift 2; fi
-  [ "''${1:-}" = --files ] && shift
+  cfg=""; stage=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --hook-stage) stage="$2"; shift 2 ;;
+      --config) cfg="$2"; shift 2 ;;
+      --files) shift; break ;;
+      *) echo "unexpected prek argument: $1" >&2; exit 2 ;;
+    esac
+  done
+  [ "$stage" = manual ] || { echo "missing manual hook stage" >&2; exit 2; }
   case "$id" in
-    treefmt) for f in "$@"; do sed -i 's/[[:space:]]\{1,\}$//' "$f"; done; exit 0 ;;
+    treefmt)
+      changed=0
+      for f in "$@"; do
+        if grep -q '[[:space:]]$' "$f"; then changed=1; fi
+        sed -i 's/[[:space:]]\{1,\}$//' "$f"
+      done
+      exit "$changed"
+      ;;
+    treefmt-BAD) echo "treefmt: configuration failed"; exit 1 ;;
     cspell-BAD) echo "cspell: unknown word 'wibble' in $*"; exit 1 ;;
     missingfails) for f in "$@"; do [ -e "$f" ] || { echo "no such file: $f"; exit 1; }; done; exit 0 ;;
     echo-env) echo "CFG=$cfg"; echo "PREKHOME=''${PREK_HOME:-}"; exit 1 ;;
@@ -46,6 +61,7 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   STUB
   chmod +x stub/prek
   export PATH="$PWD/stub:$PATH"
+  export FORMATTER_HOOK_ID_OVERRIDE=treefmt
 
   cp "$src" validate.sh; chmod +x validate.sh
   shellcheck -x validate.sh   # lint gate (matches the -x pre-commit standard)
@@ -79,12 +95,17 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   reset; out="$(payload false | bash validate.sh)"; rc=$?
   ok '[ "$rc" -eq 0 ]' "T1 rc"; ok '[ -z "$out" ]' "T1 silent"
 
-  # T2 trailing WS -> auto-fixed via stub treefmt, no block
-  reset; printf 'hi   \n' > "$repo/foo.txt"
+  # T2 trailing WS -> auto-fixed via stub treefmt, no block, and the Stop hook
+  # leaves a deliberately different staged snapshot untouched.
+  reset
+  printf 'staged   \n' > "$repo/README"; ( cd "$repo"; git add README )
+  cached_before="$(cd "$repo"; git show :README)"
+  printf 'working   \n' > "$repo/README"
   out="$(payload false | JUDGMENT_HOOKS_OVERRIDE=cspell bash validate.sh)"; rc=$?
   ok '[ "$rc" -eq 0 ]' "T2 rc"
   ok '! grep -q decision <<<"$out"' "T2 no block"
-  ok '! grep -nP "[ ]+\$" "$repo/foo.txt"' "T2 WS removed"
+  ok '! grep -nP "[ ]+\$" "$repo/README"' "T2 WS removed"
+  ok '[ "$(cd "$repo"; git show :README)" = "$cached_before" ]' "T2 index untouched"
 
   # T3 judgment failure (stub cspell-BAD) first pass -> block w/ reason
   reset; printf 'wibble\n' > "$repo/bar.txt"
@@ -133,6 +154,14 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   ok '! grep -q "\"decision\"" <<<"$out"' "T7 no block on missing config"
   ok 'grep -q systemMessage <<<"$out"' "T7 advisory"
   ok 'grep -q "devenv shell true" <<<"$out"' "T7 advisory names the fix"
+
+  # T8 a formatter that still fails after the convergence pass is a finding,
+  # not a swallowed error. It uses the same block channel as judgment lint.
+  reset; printf 'broken\n' > "$repo/formatter.txt"
+  out="$(payload false | FORMATTER_HOOK_ID_OVERRIDE=treefmt-BAD JUDGMENT_HOOKS_OVERRIDE=cspell bash validate.sh)"; rc=$?
+  ok '[ "$rc" -eq 0 ]' "T8 rc"
+  ok 'grep -q "\"decision\": \"block\"" <<<"$out"' "T8 block"
+  ok 'grep -q "treefmt: configuration failed" <<<"$out"' "T8 formatter error reported"
 
   echo "validate-at-stop: $pass passed, $fail failed"
   [ "$fail" -eq 0 ]

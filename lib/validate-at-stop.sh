@@ -111,17 +111,26 @@ PY
   exit 0
 fi
 
-# (2) auto-fix formatting SILENTLY (reuse git-hooks treefmt config). Never blocks.
-prek run treefmt --config "$prek_config" --files "${files[@]}" >/dev/null 2>&1 || true
-git add -u -- "${files[@]}" >/dev/null 2>&1 || true
-
-# (3) judgment lint over the same changeset, reusing git-hooks config/excludes.
-# Keep this id list in sync with the judgment hooks in devenv.nix `git-hooks.hooks`
-# (treefmt is the auto-fix above; gitleaks/convco are commit-time only).
-read -r -a judgment <<<"${JUDGMENT_HOOKS_OVERRIDE:-cspell deadnix shellcheck statix}"
+# (2) auto-fix formatting SILENTLY (reuse the manual-stage hook projection).
+# treefmt intentionally reports non-zero when its first pass changes files, so
+# run it once more: a clean second pass proves the rewrite converged, while a
+# persistent tool/configuration error becomes a real finding. Stop validation
+# never stages; staging is a commit-lifecycle concern and mutating the index at
+# hand-back made partial staging impossible to trust.
+formatter="${FORMATTER_HOOK_ID_OVERRIDE:-${FORMATTER_HOOK_ID:?FORMATTER_HOOK_ID is not configured}}"
 report=""
+if ! prek run "$formatter" --hook-stage manual --config "$prek_config" --files "${files[@]}" >/dev/null 2>&1; then
+  if ! out="$(prek run "$formatter" --hook-stage manual --config "$prek_config" --files "${files[@]}" 2>&1)"; then
+    report="${report}### ${formatter}"$'\n'"${out}"$'\n\n'
+  fi
+fi
+
+# (3) judgment lint over the same changeset, reusing the manual-stage hook
+# projection and its config/excludes. The ordered IDs are injected from the
+# repository validation registry; the override exists only for hermetic tests.
+read -r -a judgment <<<"${JUDGMENT_HOOKS_OVERRIDE:-${JUDGMENT_HOOKS:?JUDGMENT_HOOKS is not configured}}"
 for id in "${judgment[@]}"; do
-  if ! out="$(prek run "$id" --config "$prek_config" --files "${files[@]}" 2>&1)"; then
+  if ! out="$(prek run "$id" --hook-stage manual --config "$prek_config" --files "${files[@]}" 2>&1)"; then
     report="${report}### ${id}"$'\n'"${out}"$'\n\n'
   fi
 done

@@ -1,10 +1,13 @@
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-08-17 (commit pending — Codex's devenv backend now
-> resolves linked-worktree Git metadata into a direct named-profile permission;
-> like the existing cache-root fanout, this evaluation-only settings effect
-> creates no `files.*` artifact). Prior: 2026-08-17 (commit pending — Codex
-> deliberately uses devenv's one-entry directory symlink behavior because
+> **Last verified:** 2026-08-29 (commit pending — repository instruction copies
+> now use one packaged materializer from both shell-entry tasks and a flake
+> contract test; the helper also repairs symlinks/modes and rejects an empty
+> source before pruning). Prior: 2026-08-17 (commit pending — Codex's devenv
+> backend now resolves linked-worktree Git metadata into a direct named-profile
+> permission; like the existing cache-root fanout, this evaluation-only settings
+> effect creates no `files.*` artifact). Prior: 2026-08-17 (commit pending —
+> Codex deliberately uses devenv's one-entry directory symlink behavior because
 > 0.147.0 discovers that layout but ignores a real skill directory containing
 > symlinked leaves; a pre-files migration validates ownership and moves the
 > legacy directory intact to a recoverable state backup). Prior: 2026-08-16
@@ -202,12 +205,13 @@ instr = import ./dev/instructions.nix {
 };
 ```
 
-`dev/tasks/generate.nix` defines `generate:instructions:materialize` with
-`before = ["devenv:enterShell"]`, so every `devenv shell`, `direnv reload`,
-`devenv up`, `devenv reload` and `devenv test` copies `CLAUDE.md`,
-`.claude/rules/*.md`, `AGENTS.md`, `.github/copilot-instructions.md`,
-`.github/instructions/*.md` and `.kiro/steering/*.md` into place as **real
-files**.
+`lib/materialize-repo-instructions.nix` packages the copier.
+`dev/tasks/generate.nix` invokes that helper from
+`generate:instructions:materialize` with `before = ["devenv:enterShell"]`, so
+every `devenv shell`, `direnv reload`, `devenv up`, `devenv reload`, and manual
+`devenv test` copies `CLAUDE.md`, `.claude/rules/*.md`, `AGENTS.md`,
+`.github/copilot-instructions.md`, `.github/instructions/*.md` and
+`.kiro/steering/*.md` into place as **real files**.
 
 Why copies rather than `files.*`:
 
@@ -223,10 +227,14 @@ ordinary backend symlink sink. Kiro hooks retain real-file materialization
 because the steering probes did not revalidate hook loading or its ownership
 lifecycle.
 
-The materializer is idempotent (`cmp` before writing, so mtimes do not churn on
-reload), atomic (`mktemp` + `mv`, so a concurrent agent session never reads a
-partial file), and prunes generated files whose fragment was renamed or removed
-— which neither of the previous two mechanisms did.
+The materializer is idempotent (same bytes, real-file type, and mode leave the
+mtime alone), atomic (`mktemp` + `mv`, so a concurrent agent session never reads
+a partial file), and prunes generated files whose fragment was renamed or
+removed — including dangling symlinks. It refuses to prune when a generated
+source directory is unexpectedly empty. `checks/instruction-materialization.nix`
+runs this exact executable against a temporary repository and gates all of those
+properties under `nix flake check`; CI does not need a full devenv shell to test
+them.
 
 `devenv`'s own `files.<name>.copyMode = "copy"` was considered and rejected: it
 `rm -rf`s and re-`cp`s unconditionally on every entry (a read race plus mtime

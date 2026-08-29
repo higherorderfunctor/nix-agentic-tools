@@ -334,12 +334,13 @@ runs an aggregate without its dependency leaves.
 
 ```bash
 nix flake show                # List all outputs
-nix flake check               # The CI gate: formatting, structural checks, module eval
-                              # (does NOT build packages, and does NOT run the
-                              # prek linters — those are local-only)
+nix flake check               # The CI gate: formatting, structural/module eval,
+                              # runtime contracts, and validator corpus scans
+                              # (does NOT build the package output set)
 nix build .#<package>         # Build a specific package
 devenv shell                  # Enter devShell with all tools
 treefmt                       # Format all files (formats only — lints nothing)
+devenv tasks run devenv:git-hooks:run # Manual-stage local all-files diagnostic
 
 # Regenerate instruction files from fragments. `--mode before` is load-bearing:
 # without it devenv runs the aggregate and skips the leaves. Use generate:all,
@@ -373,41 +374,45 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-19 (commit pending — the rebase backup advice
-> recommended a local TAG, reasoning that `--update-refs` moves branches but not
-> tags. True, but incomplete: tags are refs in the COMMON git dir, so a fetch
-> from ANY worktree can prune them all in one shot when `fetch.pruneTags` is
-> set, which is a global (not per-repo) git config setting — measured twice on
-> 2026-08-15, the second time by the same session's own fetch. Neither a local
-> tag nor a local branch survives both hazards; only a ref actually pushed to
-> `origin` does. Backup guidance now says
-> `git push origin refs/heads/archive/<slug>`, created and pushed in the same
-> sequence as the rebase rather than verified afterward, since verifying is
-> itself a fetch that can destroy the thing being verified. Also adds local tags
-> to the shared-across-worktrees list, since the root cause is that tags are
-> common-dir refs, not anything about rebasing specifically.) Prior: 2026-08-18
-> (commit pending — the per-worktree bootstrap requirement is GONE. The shared
-> prek hooks now resolve `.pre-commit-config.yaml` from the PRIMARY CHECKOUT,
-> derived from the shared common git dir, so a linked worktree that has never
-> entered `devenv shell` commits fine. `PREK_HOME` stays anchored to the
-> committing worktree, because under the agent sandbox the primary checkout is a
-> read-only bind. Written for the sandbox-stack pivot's "devenv is never
-> activated in a worktree" topology (#1106), under which the old model rejected
-> every worktree commit by design. Do NOT re-add a `devenv shell` step to the
-> worktree recipe below.) Prior: 2026-08-17 (commit pending — shared prek hooks
-> now derive `PREK_HOME` from the committing worktree, so commits launched
-> outside a devenv shell retain isolated project-local state instead of falling
-> back to the user-global XDG cache; the bootstrap diagnostic now names shell
-> entry as the only materialization path, and shared-hook rewrites serialize and
-> publish by atomic rename). Prior: 2026-08-15 (commit pending — adds the
-> adversarial subagent-review protocol that SUBSTITUTES for the Copilot loop
-> while its quota is exhausted, roughly two weeks from 2026-08-15. Written
-> because an agent cannot review its own output, and because the operator had
-> been having to ask for an independent reviewer by hand each time. Includes the
-> refuter+defender pairing and the never-self-adjudicate rule, both of which
-> exist because refute-by-default on your own work is a second discard filter
-> rather than a check). Prior: 2026-08-14 (commit pending — TWO corrections. (1)
-> The required-status-check list said FOUR; there are SIX, both `kiro-patched`
+> **Last verified:** 2026-08-29 (commit pending — `devenv-test` no longer runs
+> automatically; its full shell smoke suite is an on-demand diagnostic, while
+> extracted runtime contracts and all code-validator corpora now run inside the
+> existing required `test` context. The six-context ruleset is unchanged).
+> Prior: 2026-08-19 (commit pending — the rebase backup advice recommended a
+> local TAG, reasoning that `--update-refs` moves branches but not tags. True,
+> but incomplete: tags are refs in the COMMON git dir, so a fetch from ANY
+> worktree can prune them all in one shot when `fetch.pruneTags` is set, which
+> is a global (not per-repo) git config setting — measured twice on 2026-08-15,
+> the second time by the same session's own fetch. Neither a local tag nor a
+> local branch survives both hazards; only a ref actually pushed to `origin`
+> does. Backup guidance now says `git push origin refs/heads/archive/<slug>`,
+> created and pushed in the same sequence as the rebase rather than verified
+> afterward, since verifying is itself a fetch that can destroy the thing being
+> verified. Also adds local tags to the shared-across-worktrees list, since the
+> root cause is that tags are common-dir refs, not anything about rebasing
+> specifically.) Prior: 2026-08-18 (commit pending — the per-worktree bootstrap
+> requirement is GONE. The shared prek hooks now resolve
+> `.pre-commit-config.yaml` from the PRIMARY CHECKOUT, derived from the shared
+> common git dir, so a linked worktree that has never entered `devenv shell`
+> commits fine. `PREK_HOME` stays anchored to the committing worktree, because
+> under the agent sandbox the primary checkout is a read-only bind. Written for
+> the sandbox-stack pivot's "devenv is never activated in a worktree" topology
+> (#1106), under which the old model rejected every worktree commit by design.
+> Do NOT re-add a `devenv shell` step to the worktree recipe below.) Prior:
+> 2026-08-17 (commit pending — shared prek hooks now derive `PREK_HOME` from the
+> committing worktree, so commits launched outside a devenv shell retain
+> isolated project-local state instead of falling back to the user-global XDG
+> cache; the bootstrap diagnostic now names shell entry as the only
+> materialization path, and shared-hook rewrites serialize and publish by atomic
+> rename). Prior: 2026-08-15 (commit pending — adds the adversarial
+> subagent-review protocol that SUBSTITUTES for the Copilot loop while its quota
+> is exhausted, roughly two weeks from 2026-08-15. Written because an agent
+> cannot review its own output, and because the operator had been having to ask
+> for an independent reviewer by hand each time. Includes the refuter+defender
+> pairing and the never-self-adjudicate rule, both of which exist because
+> refute-by-default on your own work is a second discard filter rather than a
+> check). Prior: 2026-08-14 (commit pending — TWO corrections. (1) The
+> required-status-check list said FOUR; there are SIX, both `kiro-patched`
 > contexts having been promoted 2026-08-13 with PR #895. This file was wrong in
 > two places, `ci-update-workflow.md` was wrong in two more, and
 > `.github/workflows/update.yml` was wrong a third way — "five", including the
@@ -503,12 +508,12 @@ force-push, no deletion, and six required status checks —
 require **every review thread to be resolved**
 (`required_review_thread_resolution`, enabled 2026-07-29).
 
-`devenv-test` still RUNS on every PR and is still worth reading, but it is no
-longer required and does not block a merge. It was promoted to a required check
-on 2026-08-03 and demoted on 2026-08-05, having aged badly enough in two days to
-be a merge-blocking liability rather than a signal; the resulting risk is
-accepted deliberately. Do not "restore" it to the list to make this fragment
-match the older prose — read the ruleset:
+The full Devenv Diagnostic is now `workflow_dispatch` only. It was promoted to a
+required check on 2026-08-03, demoted on 2026-08-05 after becoming a
+merge-blocking liability, and removed from automatic PR/push execution on
+2026-08-29 after its deterministic contracts moved under `nix flake check`. Do
+not "restore" its old context to make this fragment match historical prose —
+read the ruleset:
 
 ```bash
 gh api "repos/OWNER/REPO/rulesets" --jq '.[] | "\(.id)  \(.name)"'
@@ -1117,13 +1122,35 @@ the merged `flake.nix` / `devenv.yaml`.
 
 ## Linting
 
-`nix flake check` is the CI gate. The prek pre-commit hooks are a fast local
-subset: they are `lib.optionalAttrs (!isCI)` in `devenv.nix`, so they do NOT run
-in CI and are not part of `nix flake check`. They can also be skipped with
-`--no-verify`.
+> **Last verified:** 2026-08-29 (commit pending — repository hooks now declare
+> their local, Stop, and CI lifecycles once in `config/repo-validation.nix`;
+> every code validator has a merge-blocking whole-corpus gate).
 
-Formatters and linters are separate here — treefmt runs formatters only and
-lints nothing.
+`nix flake check` is the authoritative CI gate. Local hooks provide earlier
+feedback, but neither a successful changeset scan nor a `--no-verify` commit is
+evidence that the tracked corpus is clean.
+
+The source of truth is `config/repo-validation.nix`. Every hook declaration must
+name its role, Stop participation, and CI backend (including an explicit `null`
+for local-only commit-lifecycle hooks). Evaluation rejects a validator,
+formatter, or security hook without CI coverage, and rejects a validator that
+does not participate in Stop feedback. From that table the repo derives:
+
+| Surface                    | Selection                                           | Scope                                                       | Authority                        |
+| -------------------------- | --------------------------------------------------- | ----------------------------------------------------------- | -------------------------------- |
+| Git hooks                  | each declaration's real Git stages                  | staged files / commit message                               | fast local feedback; bypassable  |
+| Claude Stop                | `stop = "formatter"` or `"judgment"` → manual stage | unstaged ∪ staged ∪ untracked changes                       | agent feedback; not a merge gate |
+| `checks.repo-lints`        | validators with `ci.backend = "git-hooks"`          | every matching tracked file                                 | required `test` context          |
+| `checks.shellcheck-corpus` | validator with the specialized corpus backend       | every tracked extension- or shebang-identified shell script | required `test` context          |
+
+The manual stage is a lifecycle boundary, not a synonym for pre-commit. It
+contains treefmt plus the four code validators and therefore excludes convco,
+gitleaks, treefmt-restage, and `reject-default-branch-commit`. Devenv
+diagnostics and the Stop hook always request that stage explicitly; an unscoped
+`prek run` must not be used for either. Stop may rewrite working-tree files but
+never stages them. Index mutation belongs only to the pre-commit restager.
+
+Formatters and linters remain separate — treefmt formats and lints nothing.
 
 **Formatters — treefmt, all write in place:**
 
@@ -1134,20 +1161,20 @@ lints nothing.
   extensionless script, shell embedded in a `.nix` string, or a heredoc body)
 - **TOML:** taplo
 
-**Linters — prek hooks, not treefmt, not `nix flake check`:**
+**Code validators — local changeset feedback plus CI corpus gates:**
 
 - **Nix:** deadnix (dead code), statix (anti-patterns)
-- **Shell:** `shellcheck -x`, on files prek tags `shell` — which needs a `.sh` /
-  `.bash` extension OR the executable bit. Shell embedded in `.nix` strings is
-  linted by nothing except `writeShellApplication`'s own build-time checkPhase.
+- **Shell:** `shellcheck -x` with the shared opt-in flags from
+  `config/shell-strict.nix`. The specialized CI scanner deliberately covers a
+  superset of prek's file tagging and hard-fails an empty corpus.
 - **Spelling:** cspell
 
-**Commit gates — prek hooks that block the commit:**
+**Commit-only hooks:**
 
 - convco (commit message shape)
-- gitleaks (staged secrets)
+- gitleaks (staged secrets; mirrored by its standalone CI job)
 - reject-default-branch-commit
-- treefmt `--fail-on-change`, plus treefmt-restage to re-add reformatted files
+- treefmt-restage (re-adds formatter changes only during pre-commit)
 
 **Available in the devShell, wired to no gate:** agnix (agent config linting) —
 run it by hand or via the agnix MCP server.

@@ -7,14 +7,16 @@ applyTo: ".github/workflows/update.yml,config/fragment-categories.nix,config/gen
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-08-25 (commit pending —
-> `overlays/claude-code-extracted.json` now carries the binary's whole settings
-> schema and is ~3.2k lines, so the `update-pkg.sh` formatter pass over a
-> bot-regenerated sidecar went from a cosmetic array reflow to something
-> `checks.formatting` will actually fail on). Prior: 2026-08-14 (commit pending
-> — the required-context count was stale in BOTH places it appeared here: there
-> are SIX, not four, because both `kiro-patched` contexts were promoted
-> 2026-08-13 with PR #895. Found while landing PR #946;
+> **Last verified:** 2026-08-29 (commit pending — update PRs no longer trigger
+> the costly, non-required devenv workflow; its deterministic contracts moved
+> into the required flake-check path and the full diagnostic is manual). Prior:
+> 2026-08-25 (commit pending — `overlays/claude-code-extracted.json` now carries
+> the binary's whole settings schema and is ~3.2k lines, so the `update-pkg.sh`
+> formatter pass over a bot-regenerated sidecar went from a cosmetic array
+> reflow to something `checks.formatting` will actually fail on). Prior:
+> 2026-08-14 (commit pending — the required-context count was stale in BOTH
+> places it appeared here: there are SIX, not four, because both `kiro-patched`
+> contexts were promoted 2026-08-13 with PR #895. Found while landing PR #946;
 > `.github/workflows/update.yml` disagreed a third way, saying "five" and naming
 > the demoted `devenv-test` inside the safety rationale for unattended
 > auto-merge. Three surfaces, three different wrong answers, none of them
@@ -130,13 +132,14 @@ to "some dependencies landed" instead of "none", which is the point.
 
 **Phase 3 — Validation** (triggered automatically):
 
-PRs trigger ci.yml's `pull_request` event, which runs builds on both linux and
-darwin runners, plus the always-reporting `devenv-test` workflow. That runtime
-gate performs its expensive work only when the pull request touches a relevant
-path; otherwise it succeeds after a changed-files API query. It is not a merge
-gate; PRs can merge only after the six required status contexts pass — `build`
-and `kiro-patched` on both systems, plus `test` and `gitleaks`. Do not take that
-list on trust; read it back, because it has been wrong here before:
+PRs trigger ci.yml's `pull_request` event, which runs builds on both Linux and
+Darwin plus the required flake and secret gates. The full Devenv Diagnostic is
+`workflow_dispatch` only and is not part of update-PR validation. Its extracted
+instruction-materialization, shared-hook-isolation, validation-policy, and
+corpus-lint contracts run inside `test` instead. PRs can merge only after the
+six required status contexts pass — `build` and `kiro-patched` on both systems,
+plus `test` and `gitleaks`. Do not take that list on trust; read it back,
+because it has been wrong here before:
 
 ```bash
 gh api "repos/OWNER/REPO/rulesets/<id>" \
@@ -857,7 +860,9 @@ validation.
 
 ## Generation Architecture
 
-> **Last verified:** 2026-08-16 (commit pending — generated repository
+> **Last verified:** 2026-08-29 (commit pending — instruction tasks and the
+> merge-blocking materialization contract now execute the same packaged
+> real-file copier). Prior: 2026-08-16 (commit pending — generated repository
 > instruction projections remain real copies for Git portability, while consumer
 > runtime instructions now traverse `ai.<runtime>.files`; Kiro 2.18.1 follows
 > the resulting steering symlinks).
@@ -871,8 +876,11 @@ scope:
   fragments + nix-evaluated data
 - `generate:all` — runs all scopes
 
-Each task wraps a `nix build .#<derivation>` and copies output to the working
-tree. Nix store caching means unchanged inputs skip rebuild.
+The Nix derivations own the rendered bytes. Repository-document tasks build a
+named flake package and copy its output. Instruction tasks receive their
+already-realized derivation paths from devenv evaluation and invoke
+`lib/materialize-repo-instructions.nix`; unchanged bytes, file type, and mode
+are a no-op.
 
 ### Source Layout
 
@@ -913,6 +921,11 @@ normalized runtime context/rules enter `ai.<runtime>.files` and lower to
 ordinary backend symlinks. A 2.18.1 live spike confirmed Kiro steering now loads
 through that path. See the devenv files-internals fragment.
 
+`checks/instruction-materialization.nix` runs the exact packaged copier in a
+temporary repository. It covers portability and lifecycle behavior without
+building the full interactive devenv shell, so the on-demand Devenv Diagnostic
+is no longer an automatic CI dependency.
+
 ### Running Generation
 
 ```bash
@@ -929,24 +942,27 @@ aggregate but skips its dependency leaves.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-08-24 (commit pending — makes the existing Beads
-> binary target a grouped owner: its compound update script independently checks
-> the Beads and paired Dolt release sidecars, then commits either or both onto
-> the one `update/beads` branch without changing Ninja, Cachix warming, build
-> verification, or PR publication). Prior: 2026-08-15 (commit pending —
-> registers the sidecar-owned stable Beads release as a binary update target
-> without introducing a second source tracker). Prior: 2026-08-03 (commit
-> pending — adds reverse package-to-target completeness coverage using
-> derivation, source, update-script, flake-input, package-exemption, and
-> registry-exemption properties). Prior: 2026-08-03 (commit pending — limits
-> package DAG edges to initialization plus explicit target-specific constraints
-> and removes base-checkout finalizers that could not observe isolated update
-> branches). Prior: 2026-08-03 (commit pending — repairs the always-uploaded
-> hidden update-report artifact and makes its absence fail loudly). Prior:
-> 2026-08-03 (commit pending — records the fifth required `devenv-test` context
-> in the update workflow's auto-merge contract). Prior: 2026-08-03 (commit
-> pending — moves the `gh` and `glab` update targets with their overlay files
-> from `generic/` to `dev-tools/`). Prior: 2026-08-02 (commit pending — the
+> **Last verified:** 2026-08-29 (commit pending — update PR auto-merge still
+> waits on the same six required contexts; the non-required full devenv run is
+> now manual and its deterministic contracts are part of `test`). Prior:
+> 2026-08-24 (commit pending — makes the existing Beads binary target a grouped
+> owner: its compound update script independently checks the Beads and paired
+> Dolt release sidecars, then commits either or both onto the one `update/beads`
+> branch without changing Ninja, Cachix warming, build verification, or PR
+> publication). Prior: 2026-08-15 (commit pending — registers the sidecar-owned
+> stable Beads release as a binary update target without introducing a second
+> source tracker). Prior: 2026-08-03 (commit pending — adds reverse
+> package-to-target completeness coverage using derivation, source,
+> update-script, flake-input, package-exemption, and registry-exemption
+> properties). Prior: 2026-08-03 (commit pending — limits package DAG edges to
+> initialization plus explicit target-specific constraints and removes
+> base-checkout finalizers that could not observe isolated update branches).
+> Prior: 2026-08-03 (commit pending — repairs the always-uploaded hidden
+> update-report artifact and makes its absence fail loudly). Prior: 2026-08-03
+> (commit pending — records the fifth required `devenv-test` context in the
+> update workflow's auto-merge contract). Prior: 2026-08-03 (commit pending —
+> moves the `gh` and `glab` update targets with their overlay files from
+> `generic/` to `dev-tools/`). Prior: 2026-08-02 (commit pending — the
 > `llm-agents` input update regenerates Semble's upstream-template snapshot
 > through its separate extraction derivation, while human-reviewed content
 > hashes intentionally remain manual and make CI stop on unreviewed drift).
