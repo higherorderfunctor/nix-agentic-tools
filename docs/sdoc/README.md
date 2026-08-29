@@ -58,6 +58,42 @@ beads — the table is in the `sdoc` skill, the rulings are
 `DEC-CANON-NAMES-THE-COMMITTED-CONTENTS`. "Surface" and "graph" are the two
 words NOT to use.
 
+## Where this stands — 2026-08-29 (end of session 6)
+
+**Explored, nothing settled.** The session worked the hook layer and then
+climbed to the semantic layer, and everything above the glossary is a sketch or
+an open decision. 204 nodes, check clean.
+
+What is durable from it:
+
+- **Glossary rulings** (accepted, the operator's): `DEC-JOINT-NOT-SURFACE`,
+  `DEC-SCRIBE-NAMES-THE-WRITER`, `DEC-CANON-NAMES-THE-COMMITTED-CONTENTS`. The
+  table is in the `sdoc` skill.
+- **Contributor-communication requirements** in `docs/spec/`, four `INV-` nodes:
+  cards, lists, file-do-not-narrate, settled-stays-visible.
+- **The hook layer as a snapshot:** `SLICE-HOOK-LAYER` →
+  `MECH-HOOK-MIDDLEWARE-INTERFACE` → three open decisions
+  (`DEC-HOOK-GRANULARITY`, `DEC-HOOK-SETTINGS-NAMESPACE`,
+  `DEC-HOOK-TRIGGER-REPRESENTATION`). Scope the operator fixed: joints are CRUD
+  through scribe, git through a normalized interface with prek as the shipped
+  target, strictdoc's one hook, and devenv as the place hooks are declared.
+  Harness-specific joints and CI are OUT.
+- **The semantic layer, explored:** `SLICE-WORKFLOW-DSL` crosses
+  `SPIKE-DSL-PRIOR-ART` (concept set, scope boundary, reading list), three
+  candidate DSL shapes (`MECH-DSL-CANDIDATE-*`, same worked example each),
+  `MECH-DSL-CONDITION-LANGUAGE`, and `MECH-SEMANTIC-LAYER-WHITEBOARD` — a
+  one-sheet of every semantic the canon describes, each line tagged works /
+  falls out / unaddressed / gap / open. `DEC-DSL-SHAPE` and
+  `DEC-DSL-LAYER-COUNT` are open; layer count is deferred on purpose.
+- **A lesson, filed as work:** `SLICE-SEMANTIC-LAYER-RENDER`. Three attempts to
+  present the semantic layer as text failed — a graph does not survive being
+  flattened. The next session renders it instead.
+
+### What is open for the operator
+
+Nothing that needs ruling before the render exists. Read the render, then the
+open decisions come as cards one at a time.
+
 ## Where this stands — 2026-08-28 (end of session 5)
 
 **The vocabulary has a shape now, and the layers have numbers.** Six decisions
@@ -225,34 +261,30 @@ It writes nodes and edges. It does not write code, and it does not sign.
 Give it a slice UID, not a description. The slice's closure is the brief, and
 the graph already says whether it is ready.
 
-### The NEXT session — the hook layer (L2)
+### The NEXT session — render the semantic layer (start here)
 
-> Designing **L2, the hook machinery**, on the strictdoc design graph. Branch
-> `feat/strictdoc-trial`, worktree at `<worktree path>`. Invoke the `sdoc`
-> skill. Read `DEC-LAYER-STACK` first, then `DEC-NODE-TYPE-GRID`, then
-> `MECH-MILESTONE-TWO-SEMANTICS-MISPLACED`.
+> Rendering session on the strictdoc design graph. Branch
+> `feat/strictdoc-trial`, worktree at `<worktree path>`. Invoke the `sdoc` skill
+> and read its glossary and its "grammar lags the rulings" table first. Then
+> read `SLICE-SEMANTIC-LAYER-RENDER` — it is the brief — and
+> `MECH-SEMANTIC-LAYER-WHITEBOARD`, which is the input.
 >
-> **The task is to find every place logic could attach, and design the option
-> surface for wiring it.** What fires when a node is created, read, updated or
-> deleted; what a handler is handed; what it may return; where the seams are in
-> the writer, in strictdoc's own hooks, in the checks and at commit time.
+> **Build an HTML artifact, not text.** Use the harness's artifact tool to
+> publish a self-contained, mobile-first, theme-aware page that presents the
+> semantic layer for the operator to reason over and judge: one screen per node
+> type with fields separate from edges; the edges as a diagram; status as colour
+> with a legend; the five top gaps on their own screen with the nodes they touch
+> linked; every UID shown with its title. Only the ruled vocabulary
+> (REQUIREMENT, USE CASE, MECHANISM, EVIDENCE, DECISION, NARRATIVE, WORK) —
+> never the dissolved names. Nothing in it is settled; say so on the page.
 >
-> **It must be SEMANTIC-FREE AND UNOPINIONATED.** It says where a rule COULD
-> run. It never says what any rule is. No lifecycle, no gate, no fingerprint, no
-> readiness, no authorship authority — every one of those is L3 and lands on
-> this machinery later. If you find yourself writing a rule, you are in the
-> wrong layer.
->
-> Bring the operator the option surface before implementing. Implementation may
-> follow in the same session or may not; that is their call, not yours.
->
-> `MECH-MILESTONE-TWO-SEMANTICS-MISPLACED` is the worked example of getting this
-> wrong, and its notes carry the test: ask whether a grammar change could change
-> the answer. If yes it is derived and belongs here; if the answer is fixed in a
-> script, it is semantics and does not.
->
-> **Never run `fp-accept`.** Log incidental findings to the plan backlog rather
-> than telling the operator.
+> Do not present the semantic layer in chat. Hand over the link, then stop.
+> Decisions come afterwards, as cards, one per turn, only for what the operator
+> asks to settle. **Never run `fp-accept`.** Log incidental findings to the plan
+> backlog rather than telling the operator.
+
+The previous session's L2 brief is superseded by the snapshot it produced
+(`MECH-HOOK-MIDDLEWARE-INTERFACE`); do not redo it.
 
 ### What a fresh session loads, and what it does not
 
