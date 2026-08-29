@@ -58,6 +58,16 @@ beads — the table is in the `sdoc` skill, the rulings are
 `DEC-CANON-NAMES-THE-COMMITTED-CONTENTS`. "Surface" and "graph" are the two
 words NOT to use.
 
+## Where this stands — 2026-08-29 (session 7: the render exists)
+
+**The semantic layer is rendered.** `SLICE-SEMANTIC-LAYER-RENDER` is at
+`implemented`; its NOTES carry the artifact link, the page's shape, the
+measurements and the review that ran before hand-over. Nothing was settled — the
+page says so on every screen — and no decision was brought. The next step is the
+operator's: read the render, then ask for decisions as cards, one per turn. Do
+not re-run the render prompt below; it is done. The generator lives outside the
+repository (`MECH-RENDER-GENERATOR-OUTSIDE-REPO`, backlog).
+
 ## Where this stands — 2026-08-29 (end of session 6)
 
 **Explored, nothing settled.** The session worked the hook layer and then
@@ -261,7 +271,7 @@ It writes nodes and edges. It does not write code, and it does not sign.
 Give it a slice UID, not a description. The slice's closure is the brief, and
 the graph already says whether it is ready.
 
-### The NEXT session — render the semantic layer (start here)
+### The render session — DONE 2026-08-29 (kept for the record)
 
 > Rendering session on the strictdoc design graph. Branch
 > `feat/strictdoc-trial`, worktree at `<worktree path>`. Invoke the `sdoc` skill
