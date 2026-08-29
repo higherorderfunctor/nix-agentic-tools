@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: scribe new writes its skeleton to disk before validation, even under --dry-run
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-NEW-TOUCHES-DISK-UNDER-DRY-RUN
+TITLE: scribe new writes its skeleton to disk before validation, even under --dry-run
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+`sdoc new` writes a header-only skeleton to DISK and reloads the canon before
+the node is validated, and it does so under --dry-run too: the skeleton is
+unlinked again at the end of the dry run (sdoc_cli.py:416-426, :647-648). A
+create is therefore never a pure in-memory proposal, and a joint fired "before
+the write" on `new` has already seen a file appear. Measured 2026-08-28 while
+inventorying scribe's phases for the hook layer.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In
