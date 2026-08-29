@@ -1,0 +1,86 @@
+[DOCUMENT]
+TITLE: Node types are derived from two axes: normative or descriptive, universal or particular
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-NODE-TYPE-GRID
+TITLE: Node types are derived from two axes: normative or descriptive, universal or particular
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A durable claim is found that fits no cell and is neither a decision nor a narrative, or a cell proves empty after real use.
+STATEMENT: >>>
+The node types of the design graph are DERIVED from two binary axes, not
+enumerated by taste. Cross them and four of the six types fall out; the
+remaining two sit outside the grid because they operate on it.
+
+AXIS ONE, normative or descriptive. Does the node say how the world OUGHT to
+be, or how it IS? The test is what you change on finding a counterexample
+tomorrow: the world means normative, this node means descriptive. A normative
+node can be VIOLATED. A descriptive node cannot be violated, only be WRONG.
+
+AXIS TWO, universal or particular. Is it a claim about every case, or about one
+concrete case?
+
+                universal                     particular
+  normative     REQUIREMENT                   USE CASE
+                what must always be true      one path that must work
+  descriptive   MECHANISM                     EVIDENCE
+                how it always behaves         what happened this once
+
+DECISION and NARRATIVE are outside the grid and act on it: a decision CHANGES
+what the norms are, and a narrative ASSEMBLES the grid for a person to read
+start to finish.
+
+THREE CONSEQUENCES, each of which was an open question before the grid and is
+answered by it rather than by argument.
+
+A DESIGN PRINCIPLE IS A REQUIREMENT. Normative, universal. It differs from an
+ordinary requirement only in having unbounded scope -- it constrains work not
+yet conceived -- and that difference lives in its statement, not in machinery.
+The one mechanical change it asks for is that Governed_By admit a REQUIREMENT
+target, so a node can cite the principle it serves.
+
+A USE CASE IS ITS OWN TYPE, and it was the empty cell rather than an addition.
+A requirement quantifies over everything; a use case is one trace the design
+must survive. That is the shape of a fitness test: describe a slice in prose,
+hold the design against it, and a conflict becomes findable rather than felt.
+
+AN IMPERATIVE STEP IS NOT IN THE GRID AT ALL. "Run exactly this command" is
+neither mood -- it makes no claim about the world. It is WORK, and it dies with
+the plan that held it. So variable planning granularity needs no new vocabulary:
+high trust is few coarse work nodes, low trust is many fine ones, same type
+either way.
+
+WHAT THE GRID ALSO SETTLES BY OMISSION. There is no separate node for a
+question, a rationale, a constraint or a note. A question is a DECISION at
+STATUS open. A rationale is a field. A constraint is a REQUIREMENT. A note is
+either evidence, or it is not durable.
+<<<
+RATIONALE: >>>
+The types were being added one at a time, each justified on its own, which is
+how a vocabulary grows to a dozen entries that overlap at the edges and leave
+gaps nobody notices. Two axes generate the same four types, predict the one that
+was missing, and give a mechanical test for the next candidate: name its mood
+and its quantifier, and it either lands in a cell or it is not a claim.
+
+It also makes the boundary between the disposable and the durable halves
+legible without a second vocabulary. Everything in the grid is a claim and
+therefore outlives the work that produced it; everything imperative is work and
+does not.
+<<<
+NOTES: >>>
+Arrived at 2026-08-28 while the operator was trying to decide, one at a time,
+whether a design principle warranted a node type and where review feedback
+belonged. Both questions dissolved once the axes were named, which is the
+argument for the grid over a list.
+
+STILL OPEN and deliberately not settled here: whether PLAN and WORK survive as
+node types once beads owns execution. That is DEC-PLAN-LIFECYCLE-OPEN's, and the
+grid does not answer it -- the grid says what a CLAIM is, and work is not a
+claim.
+
+USE CASE and NARRATIVE are not in the grammar yet. Adding them is a values.nix
+edit and a regenerate, not a change to this decision.
+<<<

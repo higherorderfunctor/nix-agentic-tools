@@ -1,0 +1,55 @@
+[DOCUMENT]
+TITLE: One grammar, not one per plan and one per specification
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-ONE-GRAMMAR
+TITLE: One grammar, not one per plan and one per specification
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A consumer needs a vocabulary this repository's grammar cannot express without weakening it for everyone else.
+STATEMENT: >>>
+There is ONE grammar. A plan and a specification share a vocabulary; they are
+not two languages.
+
+A sketch on this branch split them in two -- a `plan` grammar of PLAN and WORK
+beside a `spec` grammar of the content types -- on the reasoning that plans are
+disposable and specifications are durable, so a finished plan could be collected
+without losing what it produced. That reasoning does not survive contact with
+two facts already settled here.
+
+FIRST, building a plan PRODUCES content nodes. "Implement this mechanism", "we
+decided this", "here is the evidence for that design" -- the durable types
+appear inside the planning work, not only after it. DEC-PLAN-LIFECYCLE-OPEN
+already narrowed to exactly this: plans are not structurally different from
+specifications, and the only open question is retention.
+
+SECOND, with one node per file and containment carried by an edge, there are no
+documents to belong to. Which plan a node belongs to is already a relation. So
+the split was never about where a node lives; it was about which vocabulary
+exists, and there is only one.
+
+The payoff is that collection gets SIMPLER rather than harder. Dropping a
+finished plan removes the plan node and its work nodes; the content nodes lose
+one edge and remain. DISSOLUTION IS EDGE REMOVAL, NOT FILE MOVEMENT -- nothing
+migrates, no identity has to survive a move, and there is no moment where a node
+exists in two places.
+
+Two grammars would also have made a node's grammar its home, reintroducing the
+location concept that one-node-per-file removed.
+<<<
+RATIONALE: >>>
+Neither shape has been used yet, so the tie is broken on the standing
+preference: simpler until a forcing function appears. None does. Variable
+planning granularity, the one candidate, is a question of how many work nodes
+get written and not of which vocabulary exists.
+
+The distinction the split was reaching for is real, but it is between the
+IMPERATIVE and a CLAIM, which DEC-NODE-TYPE-GRID already draws with two node
+types instead of two grammars.
+<<<
+NOTES: >>>
+The two-grammar sketch is committed at packages/strictdoc-grammar/values/plan.nix and values/spec.nix, wired to nothing, with its devenv block commented out. It stays as a written-out alternative rather than being deleted, and MECH-LAYER-ZERO-GRAMMAR-ADOPTION carries what it held open. PLAN and WORK still have to be added to the one grammar, and whether both survive beads is DEC-PLAN-LIFECYCLE-OPEN's.
+<<<

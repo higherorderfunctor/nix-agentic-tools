@@ -42,7 +42,60 @@ does not need it: the prek hooks resolve their config from the primary checkout,
 so a worktree that has never entered a shell validates exactly like one that
 has.
 
-## Where this stands — 2026-08-27 (end of session 3)
+## Where this stands — 2026-08-28 (end of session 5)
+
+**The vocabulary has a shape now, and the layers have numbers.** Six decisions
+and one classification landed today; nothing was implemented. 173 nodes, 0
+cycles, 0 suspect fingerprints, export clean.
+
+**`DEC-NODE-TYPE-GRID` is the one to read first.** Node types are derived from
+two binary axes — normative or descriptive, universal or particular — and four
+of the six fall out of the cross product. `DECISION` and `NARRATIVE` sit outside
+because they act on the grid. It answers three questions that were being argued
+one at a time: a design principle is a `REQUIREMENT`, a use case is its own type
+and was the empty cell, and an imperative step is `WORK` and is not a claim at
+all.
+
+**`DEC-LAYER-STACK` numbers the layers and names the rule that was violated.**
+L0 grammar machinery, L1 the grammar spec, L2 hook machinery, L3 semantics. Each
+may use only what is beneath it, and **semantics are never written directly into
+a tool**. Vertical slices cut across; a slice is how work ships, a layer is how
+the system is reasoned about.
+
+**The other four rulings.** One grammar, not two (`DEC-ONE-GRAMMAR`) — the
+two-grammar sketch stays on disk, wired to nothing, as a written-out
+alternative. Authorship is one monotonic four-value field governing reversal
+rather than credit (`DEC-AUTHORSHIP-LADDER`). An open decision _is_ a question
+(`DEC-OPEN-IS-THE-QUESTION`), flagged for re-evaluation because where contention
+lives is still unproven. And `MECH-MILESTONE-TWO-SEMANTICS-MISPLACED` records
+that milestone two's fingerprinting and readiness logic sits in the tool rather
+than in L3 — **classification only, judgement on the logic deliberately
+pending.**
+
+That last node carries the worked example: of the four refusals milestone two
+advertised, two are read off the grammar and are the layering working, and two
+are rules baked into the script. The tell is whether a grammar change could
+change the answer.
+
+### What is open for the operator
+
+**Everything the previous session left open is still open** — the roadmap's
+unmet promise, and `DEC-NODE-FILE-NAMING` awaiting ratification.
+
+**New, and the one that gates the most:** `DEC-PLAN-LIFECYCLE-OPEN` is narrowed
+to retention only and still unratified. Its lean — once beads exists a plan is a
+launch point rather than a record, execution lives in beads, and the committed
+plan is an immutable snapshot taken at ingest — decides whether `PLAN` and
+`WORK` survive as node types at all.
+
+**Owed and not yet done:** `PLAN`, `WORK`, `USE CASE` and `NARRATIVE` are ruled
+in but not in the grammar. Adding them is a `values.nix` edit and a regenerate.
+`DEC-AUTHORSHIP-LADDER` likewise extends `AUTHORED_BY`'s word list, and who may
+raise a value is unanswered — raising to `llm-accepted` is a human act with no
+place to happen yet.
+
+<details>
+<summary>Prior — 2026-08-27 (end of session 3)</summary>
 
 **The corpus is one node per file, and the backlog is a node rather than a
 file.** 166 nodes, 166 files, each named for its node's UID lowercased. Every
@@ -109,6 +162,8 @@ register node and a `Backlogged_In` role. The condition fired, so it is
 `superseded` with its statement untouched, and `DEC-BACKLOG-IS-A-REGISTER-NODE`
 is the successor it asked for.
 
+</details>
+
 ## Teeing up a session
 
 Both prompts assume cwd is the **primary checkout**. You do not need to `cd` to
@@ -153,6 +208,35 @@ It writes nodes and edges. It does not write code, and it does not sign.
 
 Give it a slice UID, not a description. The slice's closure is the brief, and
 the graph already says whether it is ready.
+
+### The NEXT session — the hook layer (L2)
+
+> Designing **L2, the hook machinery**, on the strictdoc design graph. Branch
+> `feat/strictdoc-trial`, worktree at `<worktree path>`. Invoke the `sdoc`
+> skill. Read `DEC-LAYER-STACK` first, then `DEC-NODE-TYPE-GRID`, then
+> `MECH-MILESTONE-TWO-SEMANTICS-MISPLACED`.
+>
+> **The task is to find every place logic could attach, and design the option
+> surface for wiring it.** What fires when a node is created, read, updated or
+> deleted; what a handler is handed; what it may return; where the seams are in
+> the writer, in strictdoc's own hooks, in the checks and at commit time.
+>
+> **It must be SEMANTIC-FREE AND UNOPINIONATED.** It says where a rule COULD
+> run. It never says what any rule is. No lifecycle, no gate, no fingerprint, no
+> readiness, no authorship authority — every one of those is L3 and lands on
+> this machinery later. If you find yourself writing a rule, you are in the
+> wrong layer.
+>
+> Bring the operator the option surface before implementing. Implementation may
+> follow in the same session or may not; that is their call, not yours.
+>
+> `MECH-MILESTONE-TWO-SEMANTICS-MISPLACED` is the worked example of getting this
+> wrong, and its notes carry the test: ask whether a grammar change could change
+> the answer. If yes it is derived and belongs here; if the answer is fixed in a
+> script, it is semantics and does not.
+>
+> **Never run `fp-accept`.** Log incidental findings to the plan backlog rather
+> than telling the operator.
 
 ### What a fresh session loads, and what it does not
 

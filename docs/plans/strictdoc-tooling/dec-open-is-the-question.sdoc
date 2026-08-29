@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: An open decision is how a question exists before it has an answer
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-OPEN-IS-THE-QUESTION
+TITLE: An open decision is how a question exists before it has an answer
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: Real use shows a question that cannot be phrased as a decision, or shows contention living somewhere an open decision cannot express.
+STATEMENT: >>>
+A DECISION carries an `open` state, and that state IS the question. A question
+posed but not answered is a decision node at STATUS open; answering it is a
+transition to accepted or rejected.
+
+There is therefore no separate node type for a question, an issue or an open
+point, and no need for one. The degrees of freedom in a body of work are the
+count of open decisions in its closure, which is a query rather than a field.
+<<<
+RATIONALE: >>>
+A layer-zero grammar sketch on this branch dropped the open state, running proposed to accepted, which presumes an answer already exists and leaves a posed question with nowhere to live. Restoring it costs one word in a list and removes the argument for a question node type entirely.
+<<<
+NOTES: >>>
+FLAGGED FOR RE-EVALUATION under real use, at the operator's request 2026-08-28: the concern is that it is not yet clear where CONTENTION lives in this model -- an open decision holds the question, but what holds two parties disagreeing about it is unproven. Revisit when the graph has been used in anger rather than authored.
+<<<

@@ -1,0 +1,65 @@
+[DOCUMENT]
+TITLE: Four layers, built bottom-up, and semantics never live in a tool
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-LAYER-STACK
+TITLE: Four layers, built bottom-up, and semantics never live in a tool
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A layer is found to need something from a layer above it, or the four collapse to fewer in practice.
+STATEMENT: >>>
+The system is built in horizontal layers, one at a time, and each layer may use
+only the layers beneath it. Vertical slices cut across them; a slice is how work
+is delivered, a layer is how the system is reasoned about. The two axes are not
+interchangeable and neither replaces the other.
+
+  L0  GRAMMAR MACHINERY.  The typed Nix option surface, the consumer DSL, the
+      check step and the emitter that render a .sgra file. Generic, knows
+      nothing about this repository's node types. Delivered by milestone one.
+
+  L1  THE GRAMMAR SPEC.  This repository's own vocabulary expressed through L0:
+      which node types exist, what fields they carry, which relation roles they
+      may make. Opinionated about node types, silent about behaviour.
+      DEC-NODE-TYPE-GRID governs what belongs here.
+
+  L2  HOOK MACHINERY.  Every place logic can attach, and how it is wired --
+      what fires when a node is created, read, updated or deleted, and what a
+      handler is handed. SEMANTIC-FREE AND UNOPINIONATED: it says where a rule
+      could run, never what any rule is.
+
+  L3  THE SEMANTIC LAYER.  Lifecycles, gates, ripple, signing, readiness. It is
+      expressed as a DSL that DECOMPOSES into an L1 grammar plus L2 hooks, and
+      it introduces no machinery of its own.
+
+THE HARD RULE, and it has been violated once already: SEMANTICS ARE NEVER
+WRITTEN DIRECTLY INTO A TOOL. A rule that lives in the body of a script rather
+than in an L3 definition that decomposes onto L2 has skipped the layering, and
+it is a violation regardless of whether the rule itself is correct. Correct
+logic in the wrong layer is still the wrong layer; the judgement about the logic
+is separate and comes later.
+<<<
+RATIONALE: >>>
+The operator's stated way of working: build one axis at a time, trust the layer
+beneath, and do not reason about several axes at once. The value is not tidiness
+-- it is that a layer with a clean boundary can be replaced, and a layer whose
+semantics leaked into the layer below cannot.
+
+Naming the layers explicitly also gives the violation a name. Without the
+numbering, "you wired semantics into the tool" is a matter of taste and gets
+relitigated every session; with it, the claim is checkable against a boundary
+that was written down first.
+<<<
+NOTES: >>>
+Numbering settled 2026-08-28. Earlier sessions in this activity used "layer 0"
+for the grammar SPEC and "layer 1" for node state machines. That numbering
+predates recognising the Nix machinery as a layer of its own and is superseded
+by the ladder above -- the old "layer 0" is L1 here, and the old "layer 1" is
+part of L3, because a state machine is an opinion and opinions are semantic.
+
+The milestone numbering in DEC-EXECUTABLE-RULES-ROADMAP is a DELIVERY order and
+is not this. Milestones one and two delivered L0 and a writer over it; the next
+session is L2; L3 is where the roadmap's milestones three through five live.
+<<<

@@ -1,0 +1,83 @@
+[DOCUMENT]
+TITLE: Milestone two's semantics sit in the tool, which is the wrong layer
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-MILESTONE-TWO-SEMANTICS-MISPLACED
+TITLE: Milestone two's semantics sit in the tool, which is the wrong layer
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Milestone two shipped a writer for the graph, and with it a body of SEMANTIC
+logic that DEC-LAYER-STACK places in L3: fingerprinting, contract hashing,
+readiness and the rules around signing. That logic lives in the tool's own
+scripts rather than in a semantic definition that decomposes onto grammar and
+hooks.
+
+THIS NODE MAKES THE CLASSIFICATION ONLY, and deliberately makes no judgement
+about the logic itself. The placement is wrong; whether the logic is right is a
+separate question that stays open. The logic may well be adopted wholesale when
+L3 is defined, or it may be replaced -- neither outcome changes the placement
+finding, and neither should be decided by whether the code happens to work.
+
+What is affected, named so the eventual judgement has a list rather than a
+search: dev/scripts/sdoc_fp.py, dev/scripts/fp-check.py, dev/scripts/fp-accept.py,
+docs/sdoc/status.py's readiness walk, and the parts of dev/scripts/sdoc_model.py
+and sdoc_cli.py that know what a fingerprint means. The grammar-derived option
+surface is NOT in scope: deriving flags from the grammar is L1 consuming L0,
+which is the layering working.
+<<<
+RATIONALE: >>>
+Recording the placement now, separately from any judgement of the logic, is what
+keeps the two from being decided together. If the finding waits until L3 is
+designed, the argument becomes "the code works, why move it", which is an answer
+to a question nobody asked -- correct logic in the wrong layer is still the
+wrong layer.
+
+It also protects the logic. Classified now and judged later, good rules can be
+lifted into L3 on their merits. Left unclassified, they become the de facto
+semantic layer by accretion, and nothing ever decides they should be.
+<<<
+NOTES: >>>
+Classification made 2026-08-28 by the operator. Judgement on the logic is
+explicitly PENDING and is not this node's to make. Nothing is being reverted,
+and milestone two's DEPTH is not lowered by this: it shipped what it was asked
+for, and the layering rule it crossed was not written down until afterwards.
+
+FOUR REFUSALS THE MILESTONE'S OWN CLOSING SUMMARY OFFERED AS FEATURES, and they
+do not classify together. Two are the layering working and two are the leak, so
+the summary reads as one achievement where there are two different things.
+
+DERIVED, and therefore correct. A wrong prefix ("SLICE-WRONG is not a MECHANISM
+name: the grammar gives MECHANISM the prefix MECH-") and an undeclared role
+("--role Crosses: invalid choice") are both read straight off the grammar. That
+is L1 consuming L0, which is the shape the layering asks for. If the grammar
+changes, both refusals change with it and nobody edits the tool.
+
+BAKED IN, and therefore the leak. The authorship write guard ("--authored-by is
+not a flag of this tool ... there is no override") encodes WHO MAY WRITE A
+FIELD, which is a rule about authority and belongs in L3. The tool enforces it
+by not having a flag, so the rule cannot be read, cited, overridden or changed
+without editing the tool. The File path rule ("has a './' segment") is the same
+shape and smaller: a convention about form that no grammar declares.
+
+The tell that separates them: ask whether the grammar could change the answer.
+If yes it is derived; if the answer is fixed in the script, it is semantics
+wearing a validator's clothes.
+
+THE GUARD BIT THIS SESSION, which is worth recording as a positive control
+rather than a complaint. Two of the decisions written on 2026-08-28 carry rules
+the operator authored, and neither could be marked as theirs, because the tool
+has no flag for it. The refusal is behaving exactly as designed and the design
+is in the wrong layer -- the correct fix is not an override flag, it is that
+authorship authority is an L3 rule the tool consumes rather than one it holds.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In
