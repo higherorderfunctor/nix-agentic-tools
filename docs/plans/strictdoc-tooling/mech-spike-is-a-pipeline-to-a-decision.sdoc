@@ -1,0 +1,50 @@
+[DOCUMENT]
+TITLE: A spike is work, then evidence, then a decision, which is why it fits no single cell
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION
+TITLE: A spike is work, then evidence, then a decision, which is why it fits no single cell
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A SPIKE is not one thing, which is why it fits no cell of DEC-NODE-TYPE-GRID. It
+is a PIPELINE across three parts of the model:
+
+  the work        imperative -- run the probe. Outside the grid, like a slice.
+  the evidence    descriptive and particular -- what came back this once.
+  the decision    what the evidence was gathered to settle.
+
+So a spike EXISTS TO MAKE A DECISION. That is its purpose and its terminus, and
+a spike with no decision downstream of it was a prototype, not a probe.
+
+THE STRUCTURAL TELL, and nobody had a reason for it before now. SPIKE is the
+only node type carrying TWO state fields, a DEPTH and a STATUS whose word list
+differs from every other STATUS in the grammar. Every other type carries one. It
+carries two because it IS two -- the doing and the finding -- and the second
+field is the evidence half wearing the same node.
+
+WHAT IT PROVES is not fixed to one type. A spike may establish that a MECHANISM
+behaves as claimed, or that a USE CASE is viable, or that a REQUIREMENT can be
+met at all. The subject varies; the terminus does not.
+
+ITS OUTPUT MAY OUTLIVE IT. What a spike builds can convert into settled
+implementation as a starter reference, which is a third thing again -- an
+artifact, not a claim and not work. The migration should not assume a spike
+leaves nothing behind when it closes.
+<<<
+RATIONALE: >>>
+The second of the three types DEC-NODE-TYPE-GRID left unruled. Reading it as a pipeline rather than a type explains the two state fields it has always carried, and gives the migration a decomposition instead of a cell to force it into.
+<<<
+NOTES: >>>
+The operator's reading, 2026-08-28, offered with the caveat that on any prior day they would have called a spike an ordinary prototype card. The purpose-built reading is what this session's axes produced, and it is recorded as a reading rather than a ruling: it is not ratified, and how a spike decomposes at migration time is still open.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NODE-TYPE-GRID
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In
