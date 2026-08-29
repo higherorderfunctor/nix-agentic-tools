@@ -1,0 +1,73 @@
+[DOCUMENT]
+TITLE: Candidate shape: XState-style machines with guards bound by name
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-DSL-CANDIDATE-XSTATE-MACHINES
+TITLE: Candidate shape: XState-style machines with guards bound by name
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+PROPOSED SHAPE, one of three, from the 2026-08-29 prior-art spike
+(SPIKE-DSL-PRIOR-ART). Not chosen. All three show the SAME worked example so
+they compare by eye: a DECISION whose STATUS moves from open to accepted only
+when a guard holds, a dirty-edge rule over one relation role, one gate CI can
+call, and one actor primitive keyed on an ssh identity.
+
+WHAT IT BORROWS. XState statecharts: a machine per node type with states, events and NAMED guards; guard bodies are bound by name outside the machine (XState setup()/provide()), so a higher layer swaps a body without touching the machine.
+
+THE SHAPE.
+
+  { c, lib, ... }: {
+    canon.machines.DECISION = {
+      stateField = "STATUS";  initial = "open";
+      states.open.on.accept = { target = "accepted"; guard = "governorsSettled"; };
+      states.accepted.type = "final";                       # no transition may leave it
+    };
+    canon.guards.governorsSettled = c.and [                 # bodies bound by NAME
+      (c.eq (c.var "actor.class") "human")
+      (c.every "Governed_By"
+        (c.inList (c.var "target.DEPTH") [ "interface-settled" "implemented" "verified" ]))
+    ];
+    # a higher layer swaps one body, machine untouched (XState machine.provide):
+    # canon.guards.governorsSettled = lib.mkForce (c.eq (c.var "actor.class") "human");
+    canon.relations.Governed_By.ripple = { onFields = [ "STATEMENT" ]; clearedBy = [ "human" ]; };
+    canon.actors = {
+      extractor = "ssh-signing-key";
+      classes.human = [ "SHA256:AbCd..." ];
+      default = "agent";
+    };
+    canon.gates.merge.require = [ "no-stale-edges" "lifecycle-consistent" ];
+    # `scribe transition DECISION-7 accept` fires the event; CI runs `scribe check --gate merge`
+  }
+
+HOW IT DECOMPOSES ONTO THE HOOK LAYER (MECH-HOOK-MIDDLEWARE-INTERFACE).
+states.<s>.on.<event> -> PRE hook on scribe.change.set for STATUS with to = target; the guard NAME is resolved at Nix eval (assertion: declared) and its body inlined into the hook settings.
+type = "final" -> PRE hook denying any set of STATUS away from that value.
+ripple, actors, gates -> exactly as in the Jira-style candidate.
+<<<
+NOTES: >>>
+STRENGTHS.
+- Named guards give the cleanest overshadow: mkForce one body, every transition that names it follows; XState calls this provide().
+- The machine is pure structure, so Nix can render a state diagram and check reachability from the same eval.
+- Event names double as a scribe verb (`scribe transition <uid> <event>`), so a raw set of STATUS can be refused as 'not a transition'.
+
+WEAKNESSES.
+- Needs one more scribe verb (transition) or a rule that set-of-STATUS is the event; either is a new L2 surface.
+- Two files to read to understand one transition (machine + guards); a novice sees an indirection with no payoff on a small canon.
+- XState's guard sees only its own machine; here every guard body needs the one-hop neighbour data, so the resemblance is to the config half only.
+
+Recorded from the spike's synthesis without endorsement; the operator weighs the three by reading the shapes.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-DSL-SHAPE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: SPIKE-DSL-PRIOR-ART
+  ROLE: Proven_By
