@@ -52,10 +52,11 @@ point is `MECH-GRID-MIGRATION-UNCOSTED`, reachable from each ruling by its
 crossings, an `INV-` UID is a REQUIREMENT, and a `SPIKE-` UID is a pipeline to a
 decision. A session that cites a slice "as a slice" has not read this.
 
-**Vocabulary for the hook layer (session 6):** a place logic could attach is a
-**join point** — "joint" in conversation. Not "surface", which this repo already
-uses for option and grammar surfaces. Time-based joints (commit, CI) keep the
-name **checkpoint**.
+**Glossary (session 6):** joint, checkpoint, scribe, sdoc, strictdoc, canon,
+beads — the table is in the `sdoc` skill, the rulings are
+`DEC-JOINT-NOT-SURFACE`, `DEC-SCRIBE-NAMES-THE-WRITER` and
+`DEC-CANON-NAMES-THE-COMMITTED-CONTENTS`. "Surface" and "graph" are the two
+words NOT to use.
 
 ## Where this stands — 2026-08-28 (end of session 5)
 

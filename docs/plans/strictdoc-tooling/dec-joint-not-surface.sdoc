@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: A place logic can attach is a join point; a time-based one is a checkpoint
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-JOINT-NOT-SURFACE
+TITLE: A place logic can attach is a join point; a time-based one is a checkpoint
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: The hook machinery ships under a different name in its published interface, or joint proves to collide with a term a consumer already uses.
+STATEMENT: >>>
+A place where logic COULD attach to the sdoc machinery is a JOIN POINT --
+"joint" in conversation. A joint that fires on a moment in a workflow (a
+commit, a push, a check) rather than on an operation over the canon is a
+CHECKPOINT; a checkpoint is a kind of joint, not a second concept.
+
+"Surface" is NOT used for this. The repository already means option surfaces
+and grammar surfaces by it, and a third meaning would make every sentence
+about the hook layer ambiguous.
+
+The aspect-oriented split behind the term is kept whole: a join point is
+WHERE, a pointcut is WHICH, and advice is WHAT. Advice is never part of the
+hook machinery; it is what a higher layer attaches.
+<<<
+RATIONALE: >>>
+Ruled by the operator on 2026-08-28. Two candidates were on the table: the
+operator's own placeholder "surface", and the industry term. The industry term
+won because it arrives with a where/which/what split that maps exactly onto
+the layering rule -- the machinery owns where, a higher layer owns what.
+<<<
+NOTES: >>>
+The operator asked that the term be reinforced and their own drift corrected
+on sight, which INV-SETTLED-STAYS-VISIBLE now requires generally. AUTHORED_BY
+reads llm because the writer has no flag for the other value.
+<<<

@@ -44,6 +44,18 @@ TITLE: <title>
 IMPORT_FROM_FILE: @repo
 ```
 
+## Glossary — ruled terms, use them and correct drift on sight
+
+| term       | means                                                                              | ruling                                   |
+| ---------- | ---------------------------------------------------------------------------------- | ---------------------------------------- |
+| beads      | the LLM's working graph: private, one per user per repo, NOT part of the canon     | `DEC-CANON-NAMES-THE-COMMITTED-CONTENTS` |
+| canon      | the committed, human-reviewed `.sdoc` contents; never "graph"                      | `DEC-CANON-NAMES-THE-COMMITTED-CONTENTS` |
+| checkpoint | a joint that fires on a workflow moment (commit, push, check)                      | `DEC-JOINT-NOT-SURFACE`                  |
+| joint      | join point: a place logic COULD attach; never "surface"                            | `DEC-JOINT-NOT-SURFACE`                  |
+| scribe     | the writer of the canon, CLI and library alike; the binary is still spelled `sdoc` | `DEC-SCRIBE-NAMES-THE-WRITER`            |
+| sdoc       | the file format and its grammar, nothing else                                      | `DEC-SCRIBE-NAMES-THE-WRITER`            |
+| strictdoc  | the upstream package                                                               | `DEC-SCRIBE-NAMES-THE-WRITER`            |
+
 ## Node types
 
 | tag         | prefix   | use for                             | notes                                       |
