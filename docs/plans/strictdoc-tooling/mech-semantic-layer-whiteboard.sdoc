@@ -1,0 +1,209 @@
+[DOCUMENT]
+TITLE: Whiteboard: the semantic layer as the canon describes it, tagged against the current direction
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SEMANTIC-LAYER-WHITEBOARD
+TITLE: Whiteboard: the semantic layer as the canon describes it, tagged against the current direction
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+WHITEBOARD SNAPSHOT, 2026-08-29. A one-sheet of the semantic layer as the canon
+describes it, every line tagged against the current direction: WORKS (stands),
+FALLS OUT (dissolved, by what), UNADDRESSED (the direction is silent), GAP
+(needed, nobody wrote it), OPEN (an open DECISION owns it). Counts: 45 works,
+17 fall out, 20 unaddressed, 45 gaps, 18 open. Produced by three readers over
+the canon and one synthesizer (workflow wf_182997e9-02c); pasted, not
+paraphrased. This is a NARRATIVE by the grid, filed as a MECHANISM because the
+grammar has no NARRATIVE yet. Re-cut it rather than edit it: it is a snapshot.
+
+NODE STRUCT
+- grammar = values.nix -> generated .sgra; DECISION|MECHANISM|SLICE|INVARIANT|SPIKE; all: UID, TITLE, AUTHORED_BY: llm|human, STATEMENT; RATIONALE, NOTES optional; field order enforced [WORKS]
+- DECISION (41): +STATUS: open|accepted|rejected|superseded, +RETIRES_ON; no DEPTH, no PARENT_FP; rels Superseded_By, Backlogged_In [WORKS]
+- MECHANISM (129): +DEPTH, +PARENT_FP?; rels Governed_By|Guarantees|Serialized_By|Proven_By|Assumes|File|Backlogged_In; grid cell descriptive x universal [WORKS]
+- MECHANISM per-node mood test ("can it be violated?") over 129 nodes: unwritten; the two check-backed Guarantees sources are normative, not MECHANISM [GAP]
+- INVARIANT (8): fields as MECHANISM; rels Governed_By|Proven_By|Backlogged_In -> REQUIREMENT [FALLS OUT: DEC-INVARIANT-IS-A-REQUIREMENT]
+- INV-REGISTER-NOT-AUTHORITATIVE, INV-VOCABULARIES-UNBOUNDED are measurements (EVIDENCE cell); that trips the ruling's own RETIRES_ON, unnoticed [GAP]
+- SLICE (13): fields as MECHANISM; rels Governed_By|Crosses|Assumes|Proven_By|File|Backlogged_In -> WORK carrying Crosses [FALLS OUT: DEC-SLICE-DECOMPOSES-TO-WORK]
+- SPIKE (11): +STATUS: unrun|run|blocked, +RETIRES_ON beside DEPTH; rels Governed_By|File|Backlogged_In; reading = WORK -> EVIDENCE -> DECISION; no DECISION owns it [GAP]
+- REQUIREMENT, USE CASE, EVIDENCE, WORK, NARRATIVE, PLAN: absent from grammar; per type its fields, state field, DEPTH?, PARENT_FP?, may it name a File?: unwritten [GAP]
+- NARRATIVE (assembles the grid for a person, start to finish) vs DEC-SYSTEM-PURPOSE (reader = a model with bounded context) [UNADDRESSED]
+- DEPTH: sketch|needs-design|needs-spike|interface-settled|implemented|verified; live 98|1|0|36|23|3; one word list shared by the four typed nodes [WORKS]
+- DEPTH: may it regress; per-type settled cut; "needs-spike" names a dissolved type. STATUS: one name, two word lists; is every state field called STATUS? [UNADDRESSED]
+- AUTHORED_BY ladder llm < llm-accepted < llm-adopted < human, rises only; governs undo by the writer's class: FREE | SOFT (report the undo) | HARD (stop, ask) [WORKS]
+- identity:human | identity:llm = the class read off the ssh key that makes a write; ladder spelling: values.nix has llm|human, scribe stamps llm, no raise move [GAP]
+- identity:llm rewrote 10 of 31 identity:human STATEMENTs, key unchanged; hash-into-key | drop | forbid unpicked; the ladder forecloses drop [UNADDRESSED]
+- PARENT_FP: entries UID:hash7 (fingerprint = 7 hex of the parent's contract fields = all but RATIONALE|NOTES|PARENT_FP|RELATIONS); 0000000 = unsigned; 31 live, all 0000000 [UNADDRESSED]
+- contract-field list and owner-only list (PARENT_FP, AUTHORED_BY) are Python lists inside scribe [FALLS OUT: DEC-LAYER-STACK, L3 (semantic-layer) data; DEC-FP-FIELDS-CONFIGURABLE]
+- RETIRES_ON (DECISION, SPIKE): prose, time-based, so unevaluable at a joint (a place logic can attach); SPIKE's copy homeless under the pipeline reading [UNADDRESSED]
+- backlog register (one MECHANISM node per plan; ungroomed items point at it; holds no list) asserts nothing, so the grid gives it no cell [UNADDRESSED]
+- UID is the only identity (strictdoc's MID is per-parse); the prefix carries type, so a retype re-mints the UID and moves every relation and PARENT_FP entry [GAP]
+
+ALLOWED EDGES
+- strictdoc checks: ROLE registered on SOURCE type (fatal), Parent VALUE resolves (fatal); never target type, direction, cycles. Live: 18 (type, role) pairs + File on MECHANISM|SLICE|SPIKE [WORKS]
+- target-type lint (source type, role) -> legal targets: 13 rows, unbuilt, 5 short of the 18 pairs; two settled tables disagree; no table for grid types exists [GAP]
+- Governed_By: MECHANISM|SLICE|INVARIANT|SPIKE -> DECISION (65); grid adds a REQUIREMENT target; 2 miscast edges still live [GAP]
+- Crosses: SLICE -> MECHANISM (35) = the lane; no node carries LAYER, so "crosses more than one layer" has no input [OPEN: DEC-DEFER-LAYER]
+- Assumes: MECHANISM -> DECISION|MECHANISM, SLICE -> DECISION|SLICE (17 live, 0 fingerprinted); contract-bearing? blocks like Crosses? [OPEN: DEC-ASSUMES-CONTRACT-BEARING]
+- Guarantees: MECHANISM -> INVARIANT (2), read as -> REQUIREMENT [WORKS]
+- Superseded_By: DECISION -> DECISION (2), written on the retired node; extend at the second prose instance; who may supersede: unstated [OPEN: DEC-SUPERSESSION-RULE]
+- that extension list names SLICE, INVARIANT and omits REQUIREMENT|USE CASE|EVIDENCE [FALLS OUT: DEC-NODE-TYPE-GRID]
+- prose-supersession ledger reads 0; MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE and MECH-PLAN-BEADS-SNAPSHOT are prose-superseded [GAP]
+- Backlogged_In: any -> register (90); "sketch <=> edge" already broken: 8 sketch nodes lack it, 0 of 41 DECISIONs carry it, DECISION has no DEPTH to query [GAP]
+- direction: no Parent or PARENT_FP into docs/plans/<P>/ from outside (plan-to-plan counts); keyed on file; 2 live violations; check unbuilt [WORKS]
+- fingerprint ladder DECISION -> MECHANISM -> SLICE strictly down; live INV->D, SPIKE->D, M->M sit off it [UNADDRESSED]
+- cycles over roled Parent edges: MECH-CYCLE-CHECK in nix flake check [WORKS]
+
+PARENT/CHILD
+- strictdoc: "TYPE: Parent, VALUE: B" on A = A traces to B; B's child link derived; ROLE/REVERSE_ROLE are labels; all 8 roles are Parent, 0 reverse uses, JSON export drops REVERSE_ROLE [WORKS]
+- our overload: parent = "what I depend on"; closure (all Parent edges any role + all PARENT_FP) weighs SPIKE, successor and register alike [UNADDRESSED]
+- no Child relation declared, 0 uses; readiness filters TYPE == Parent so a future Child is never a dependency [WORKS]
+- wanted Child use: code -> its layer via boundary nodes in docs/spec; no boundary node, no layer relation exists [GAP]
+- Superseded_By makes the successor the retired node's parent; does a superseded parent block a closure? [OPEN: DEC-SUPERSESSION-RULE]
+- docs/spec bounds: reader pulls in by edge (DEC-SYSTEM-PURPOSE); one owning identity per plan; a rule must run (INV-GUARDS-MUST-EXECUTE) [WORKS]
+
+FILES AND RETENTION
+- one node per file; basename = UID lowercased; document TITLE = node TITLE; flat plan dirs; 202/202 names hold, 1 title mismatch [OPEN: DEC-NODE-FILE-NAMING]
+- three retention classes keyed on FILE not type: docs/plans/<P>/ collectable (190); docs/spec/ durable (8); packages/*/.sdoc/ moves with package (4) [WORKS]
+- spec vs .sdoc: one durable class or two ranked (may arch depend on spec?); 1 plan->spec edge, 0 arch<->spec [UNADDRESSED]
+- plan retention (what collects a plan, when) and promotion out of a plan: no rule; lean = supersede first, collect later, no deletes [OPEN: DEC-PLAN-LIFECYCLE-OPEN]
+- plan membership = directory; DEC-ONE-GRAMMAR says "already a relation", but 112 groomed plan nodes carry no plan edge to remove [GAP]
+- settled architecture beside code, each node File-linked; retires when a source-comment extractor exists [OPEN: DEC-ARCH-COLOCATION]
+- backlog = register node per plan; items carry Backlogged_In; grooming raises DEPTH in place, drops the edge, UID unchanged; which class may groom: unstated [WORKS]
+- beads = LLM's private working graph, one store per identity; canon vs beads = authority, not shape; execution state (done? holder? blocker?) lives in beads from ingest (handover) [WORKS]
+- one identity:human owns a plan (recorded nowhere); WORK is multi-identity; ingest freezes the handed-over scope, not the plan; identity:llm may file sketch nodes unasked [WORKS]
+- split: an identity:llm key is a second writer on every plan; owner vs delegate unwritten; RETIRES_ON "two people edit one plan" ambiguous [GAP]
+
+LIFECYCLES
+- DEPTH raise: which identity class, which steps legal: blank in every node [GAP]
+- verified gate: a flow's node reaches verified only with a contract test + positive control (a case known to fail) in nix flake check [WORKS]
+- DECISION open -> accepted: identity:human, in conversation, no gate; the model must express a gateless move [WORKS]
+- split: that write lands under the identity:llm key today; either identity:human writes STATUS via scribe under its own key, or an L3 class rule allows it [GAP]
+- DECISION open -> rejected: never observed; who, and what a rejected or superseded parent does to a closure; per-type cut; dirty edge inside ready or a side report [GAP]
+- DECISION -> superseded when RETIRES_ON fires (2x, by hand): no mark, no move, no class; "expired" must be materialized [GAP]
+- accepted STATEMENT frozen: needs the old value at scribe.change pre; that L2 (hook-machinery) enabler is unbuilt [GAP]
+- SPIKE STATUS: no gate consults it (SPIKE-CONVERSION-SIGNAL unrun yet settled) [FALLS OUT: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION, run = an EVIDENCE node exists]
+- AUTHORED_BY raise (llm -> llm-accepted|llm-adopted): identity:human act with no place to happen [GAP]
+- readiness predicate (settled = DEPTH >= interface-settled, or DECISION accepted) lives in sdoc_fp.py [FALLS OUT: DEC-LAYER-STACK, an L3 gate at scribe.change pre and scribe.read]
+- closure stops at a settled node, or an open ancestor blocks far downstream (SLICE-SDOC-IN-SEMBLE verified yet blocked) [OPEN: DEC-CLOSURE-STOPS-AT-SETTLED]
+- MECH-READY-QUERY record: own state, frontier (unsettled deps whose deps are settled), hop distance, degrees of freedom (= open DECISIONs in closure, i.e. questions), dirty edges; advisory [WORKS]
+- split: the traversal stands, its predicate table is L3 data [FALLS OUT: DEC-LAYER-STACK]
+- delete: supersede, never delete = "no class may delete", a pre handler on scribe.change(delete) [OPEN: DEC-NO-DELETES-YET]
+- grid migration: SLICE|INVARIANT|SPIKE out, REQUIREMENT|USE CASE|EVIDENCE|WORK|NARRATIVE|PLAN in; uncosted, no WORK node, gated on DEC-PLAN-LIFECYCLE-OPEN, never half-applied [GAP]
+- held from the two-grammar sketch: TIER vs containment depth; ungroomed as tier or type; RATIONALE optional on DECISION; PLAN without an edge [UNADDRESSED]
+
+IDENTITY
+- identity = the acting ssh key; class = a table key-fingerprint -> human|llm with a default; canon.actors = {extractor; classes; default}; scribe writes under that authority [WORKS]
+- class table: where it lives, which class may edit it, finer vocabulary than human|llm [GAP]
+- channel discriminators: harness hook fires only in an agent session; CLI cannot tell who; PreToolUse deny; Stop hook [FALLS OUT: class check at the joint; canon check catches edits around scribe]
+- Acted-By trailer from env vars; "per-agent keys buy nothing"; no trailer = unattributed; "override token is forgeable" [FALLS OUT: identity:llm holds its own key in a VM; unknown key -> default class]
+- per-node class (AUTHORED_BY = class of the statement's author) + per-act identity (the key): two things, keep both [WORKS]
+- ladder treatment by class: FREE identity:llm may undo; SOFT undo must be reported; HARD identity:llm stops and asks [WORKS]
+- relayed rulings: ~10 nodes "ruled by the operator, AUTHORED_BY llm"; human authority carried by an llm write has no form [GAP]
+- clearing a dirty edge (child's fingerprint stale vs parent): identity:llm if both ends' AUTHORED_BY < llm-accepted, else identity:human; whose key decides, parent's or child's? [OPEN: DEC-FP-ACCEPT-AUTHORITY]
+- signer independence: signer key != author key of the contract [GAP]
+- does a spawned agent share the VM's key? after squash main records the merger's key, not the signer's; does that suffice? [UNADDRESSED]
+- "only identity:human signs" checkable at scribe.change and git.push pre, never at merge [WORKS]
+- contributor-communication REQUIREMENTs (cards, file-do-not-narrate, lists, settled-stays-visible) = how identity:llm addresses identity:human [WORKS]
+
+DIRTY RIPPLE
+- dirty edge = child's PARENT_FP hash != parent's current contract hash, or parent gone; 0000000 is not dirty; every entry needs a backing Parent relation (unbacked fails) [WORKS]
+- detector = fp-check.py + sdoc_fp.py; its traversal IS the ripple [FALLS OUT: DEC-LAYER-STACK, L3 rule per role (a per-role field list), post handler marks, scribe.read(check) reports]
+- contract-bearing fields = per-project option; re-selecting re-suspects every signed edge [WORKS]
+- ripple shape: per-field flag | selector AST (SPIKE-RIPPLE-SELECTOR-AST unrun) | per-role field list + stored hash; no DECISION picks [UNADDRESSED]
+- clear = sign (rewrite to current hash), refused while the parent is unsettled; today identity:human at PR review [OPEN: DEC-FP-ACCEPT-AUTHORITY]
+- revocation: revoked:<hash> slot; refuse revoke-on-placeholder and sign-over-revoked; who = the key; rebase: auto re-accept? warn or block? who re-signs own conflict? [OPEN: DEC-FP-ACCEPT-AUTHORITY]
+- a hand-restored signature reads as current; nothing proves a PARENT_FP change went through scribe [GAP]
+- where dirty blocks: nix flake check only (drifted|unbacked|deleted fail); 0000000 and revoked tolerated everywhere; nothing at commit or push [WORKS]
+- per-joint severity (legal in canon, warn at git.commit, deny at push and merge) [UNADDRESSED]
+- git hazards: rebase drift detected; conflict inside PARENT_FP not detected; git rerere replays silently; git absorb misroutes [WORKS]
+- PR atomicity: a contract change and every acceptance it invalidates land in one PR [WORKS]
+- MECH-FP-PREMERGE-GC [FALLS OUT: MECH-FP-MAIN-LINEAGE, nothing survives to collect]
+- PARENT_FP entry retirement when parent or relation is gone: no post handler on scribe.change(unrelate|delete) [GAP]
+- a File target changing should dirty the node; no file contract hash defined [GAP]
+
+GATES BEYOND THE FSM
+- never: a roled cycle (MECH-CYCLE-CHECK) [WORKS]
+- never: Parent or PARENT_FP into a plan from outside (INV-NO-EXTERNAL-PLAN-REFS; MECH-PLAN-REFS-CHECK) [WORKS]
+- split: MECH-PLAN-REFS-CHECK is a retention rule in a script; the leak list omits it and the cycle, file, target checks [UNADDRESSED]
+- source-comment arm: 59-61 UID citations in code become violations the day an extractor reads them; at implemented a File edge required (3 of 15) [GAP]
+- never: target type outside its (source, role) row; rule shape stands, lint unbuilt, tables disagree [GAP]
+- never: File naming a missing or non-normalized path; dangling Parent; PARENT_FP to a deleted parent; UID prefix != element type (scribe refuses) [WORKS]
+- never layout: >1 node per file, name != UID, TITLE mismatch, sketch <-> Backlogged_In pair; MECH-SDOC-LAYOUT-CHECK unbuilt; must be an L3 rule on a joint [GAP]
+- AUTHORED_BY flip guard + diff-relative class (PARENT_FP, accepted STATEMENT, human flip) as CI diffs vs merge base [FALLS OUT: scribe.change pre with key + old value; CI only for edits around scribe]
+- lane discipline (2 REQUIREMENTs): files a WORK touches fall inside its Crosses; needs LAYER and a file -> layer map [GAP]
+- grooming must surface a contradicting edge (3 nodes assert human-only signing, none edged to DEC-FP-ACCEPT-AUTHORITY) [UNADDRESSED]
+- strictdoc.index fires inside every scribe load, 2-3x per write; post-only backstop; no plugin registered [WORKS]
+- two joint lists compete (5 checkpoints vs scribe.*|git.*|strictdoc.index); nix flake check, the only unbypassable one, is in neither [GAP]
+- a gate that reads git is untestable in nix flake check without a synthetic repository [UNADDRESSED]
+
+ON-DISK MOVES
+- a node changes class only by moving its file; UID never changes; 13 relocations held; dangling Parent = fatal, dangling PARENT_FP = silent, both scanned [WORKS]
+- grid says WHAT survives collection (claims), never WHERE a surviving claim lives [UNADDRESSED]
+- DEC-PLAN-LIFECYCLE-OPEN STATEMENT and MECH-PLAN-BEADS-SNAPSHOT still say "ingest freezes the plan" [FALLS OUT: MECH-PLAN-CHANGE-KINDS]
+- a backlog item: canon (reviewed) or beads (private)? an unreviewed sketch node on the branch is neither [GAP]
+- beads-migration plan's source = an artifact + private markdown, neither in repo; which wins [OPEN: DEC-SOURCE-OUT-OF-REPO]
+- DEC-ARCH-COLOCATION's reason ("plans decay and are collected") is the dropped lean; placement stands [OPEN: DEC-ARCH-COLOCATION]
+- scribe move renames outside load|change|save, so no joint fires; the library form has no move [GAP]
+
+PLANS IN REFS
+- only a lean: "plans may not belong in main"; "commit only the snapshot that led to work"; no ref, tag or branch named [OPEN: DEC-PLAN-LIFECYCLE-OPEN]
+- counter: the canon cannot query git; DEC-SYSTEM-PURPOSE's reader has no memory of yesterday [WORKS]
+- canon = committed + reviewed + ratified by merge, yet origin/main holds 0 .sdoc; which ref is never said [GAP]
+- DEC-LONG-LIVED-BRANCH: no PR during development; cut the branch into PRs at a milestone, cut points bound by PR atomicity; acceptance at the second review [WORKS]
+- squash keeps the tree (hash safe), destroys per-commit attribution; PR = durable unit; MECH-FP-MAIN-LINEAGE fail safe = fp-check on the tree about to become main [WORKS]
+- the merge boundary has no PRE joint: git.merge|rewrite post-only, git.push pre bypassable, CI not a joint; merge-time rules have nowhere to attach [GAP]
+
+MULTI-STEP WORK
+- SLICE = WORK declaring Crosses; slice-ness derived (crosses > 1 layer); slice says BUILD THIS and dies, use case says THIS PATH MUST WORK and outlives it [WORKS]
+- handoff: DEC-LOCAL-IMPLEMENTABILITY = degrees of freedom 0; MECH-PLAN-CHANGE-KINDS = "from handover"; no verb, edge or joint is named [GAP]
+- packet (ready.py --packet, the dependency-first brief for an implementing session): unbounded (57% of corpus); NOTES|RATIONALE in or out; = the ingest payload [UNADDRESSED]
+- completion: 6 SLICE at implemented|verified keep proof in NOTES; no rule moves it to EVIDENCE before collection [GAP]
+- implemented|verified: execution state (beads) or evidence (canon)? DEPTH is design maturity yet its top rungs record delivery [GAP]
+- Proven_By from durable nodes into SPIKE (12): the spike's work half dies -> dangling, fatal; one UID for both halves; which part lands it [GAP]
+- beads readers/writers under identity: private to the llm key, or to the human it acts for? [GAP]
+- milestones 3-5 (SLICE-BEHAVIOUR-MODEL, SLICE-CHECKPOINT-WIRING, SLICE-INSTANCE-SEMANTICS-MIGRATION), gate placement by what a gate "sees" [FALLS OUT: DEC-LAYER-STACK; MECH-HOOK-MIDDLEWARE-INTERFACE]
+- split: SLICE-INSTANCE-SEMANTICS-MIGRATION's seven-unit container stands; each unit re-derived with the key at the joint; SLICE-HOOK-LAYER, SLICE-WORKFLOW-DSL already "read as WORK" [WORKS]
+- MECH-FP-ACCEPT-READINESS (fp-accept refuses an unsettled parent) [FALLS OUT: the L3 worked example in every DSL candidate]
+- flow tests: in the model (MECH-TESTS-AS-CONTRACT) vs USE CASE nodes + fixtures (SPIKE-DSL-PRIOR-ART); grid favours the second [GAP]
+
+FLOWS
+- L2 ops: scribe.command|load|change(create|delete|set|unset|relate|unrelate|move)|write|reload|read; git.commit pre|msg|post; git.push pre; git.rewrite|merge|checkout post; strictdoc.index post [WORKS]
+- handler in: op, phase, actor (if extractor), payload (uid, kind, field, old, new | ref range); out: 0 = watch, 1|Refuse = stop, else bug [WORKS]
+- three L2 enablers unbuilt: actor slot, old value on field change, typed refusal [GAP]
+- hook layer waits on granularity, settings namespace, trigger representation [OPEN: DEC-HOOK-GRANULARITY, DEC-HOOK-SETTINGS-NAMESPACE, DEC-HOOK-TRIGGER-REPRESENTATION]
+- DSL shape (Jira transitions | XState | admission rules) and layer count [OPEN: DEC-DSL-SHAPE, DEC-DSL-LAYER-COUNT]
+- condition language: JsonLogic trees typed by a Nix tagged union, evaluated in Python at the joint over node + one-hop + acting identity [WORKS]
+- flow create: scribe new touches disk under --dry-run; a "before the write" joint already sees a file [GAP]
+- flow sign: fp-accept.py, sole PARENT_FP writer, no scribe verb [FALLS OUT: a scribe move on PARENT_FP + L3 gate (readiness + class)]
+- flow check --gate <name>: CI's one command; automatic transitions reported as due, never fired [WORKS]
+- flow ingest to beads + board: board over the engine, not the plan; viewer = TUI (terminal) or web, direction presumes TUI [OPEN: DEC-TUI-BOARD-SUBJECT, DEC-VIEWER-FORM-UNDECIDED]
+- post-only merge|rewrite: a textual merge yields a state no transition produced; the gate catches it, cannot name the transition [WORKS]
+- emitted model JSON versions: compared to what, what fails on mismatch [GAP]
+- ai.strictdoc.hooks.* mounts under ai.strictdoc, which cannot export as a devenv facet [UNADDRESSED]
+
+UNPLACED
+- MECH-CHECK-SYSTEM-BOUNDARY: flake checks vs devenv tasks; 5 grammar arms written twice; neither is a joint [UNADDRESSED]
+- MECH-SDOC-VOCABULARY-SINGLE-SOURCE (DEPTH ladder, placeholder, PARENT_FP parse each 3x in Python) and MECH-MILESTONE-TWO-SEMANTICS-MISPLACED (judgement PENDING): no owner, no WORK node [GAP]
+- MECH-SEMANTICS-DEFINITION-BOUNDARY [FALLS OUT: DEC-LAYER-STACK draws it; code -> layer edge unplaced]
+- SPIKE-EXECUTABLE-RULES: run; the evidence behind DEC-EXECUTABLE-RULES-ROADMAP; RETIRES_ON unmet [WORKS]
+
+TOP GAPS
+- Identity has no carrier: the L2 actor slot, the key->class table and its guard are unbuilt and unowned, so every authority rule (sign, flip AUTHORED_BY, accept a DECISION, groom, delete) has nothing to read; ~10 relayed rulings and the accept flow already write human authority under an llm key.
+- The grammar cannot spell the ruled vocabulary: REQUIREMENT|USE CASE|EVIDENCE|WORK|NARRATIVE|PLAN absent, SLICE|INVARIANT|SPIKE dissolved, UID prefixes carry type so every retype re-mints UIDs; the migration is uncosted, has no WORK node, and is gated on DEC-PLAN-LIFECYCLE-OPEN, which retires only after a plan finishes under a beads that does not run.
+- The merge boundary is not a joint: nix flake check is the only unbypassable gate and appears in neither joint list, git.merge|rewrite are post-only, so every merge-time rule (fp-check on the merge ref, plan refs, flip detection, per-joint severity) has nowhere to attach.
+- Plan membership and collection contradict: retention is keyed on directory while DEC-ONE-GRAMMAR says membership is an edge that 112 groomed nodes lack; WORK 'dies with its plan' yet 6 SLICE hold their proof in NOTES and 12 Proven_By edges point into SPIKE whose work half would die, so collecting a plan today either breaks the export or deletes evidence.
+- Semantics still live in tools with no owner: readiness predicate, fp-check ripple, fp-accept gate, MECH-PLAN-REFS-CHECK and the layout rules are all L3 rules in Python (MECH-MILESTONE-TWO-SEMANTICS-MISPLACED pending, no WORK node), and DEC-DEFER-LAYER leaves the lane rule -- the one thing DEC-SLICE-DECOMPOSES-TO-WORK gained -- with no LAYER input to check against.
+<<<
+NOTES: >>>
+Requested by the operator on 2026-08-29 to reason about the destination from working memory after days at the lower layers. The five top gaps are the last section. A condensed reading was presented in conversation; this node holds the full sheet.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-NODE-TYPE-GRID
+  ROLE: Governed_By
