@@ -27,3 +27,6 @@ automatic graph-wide transitions, because termination and ordering then become
 concerns of their own. Both are recommended out of scope, so the second layer
 is unearned until one of them is admitted.
 <<<
+NOTES: >>>
+Brought to the operator 2026-08-29 as a card with the one-layer recommendation. DEFERRED: the operator is still brainstorming the semantic layer and does not want to rule while the destination is fuzzy. Stays open; the RETIRES_ON names the forcing functions (recursion in conditions, automatic graph-wide transitions) that would force it.
+<<<
