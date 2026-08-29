@@ -1,0 +1,119 @@
+[DOCUMENT]
+TITLE: Prior art for a Nix workflow DSL over the canon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[SPIKE]
+UID: SPIKE-DSL-PRIOR-ART
+TITLE: Prior art for a Nix workflow DSL over the canon
+DEPTH: sketch
+AUTHORED_BY: llm
+STATUS: run
+RETIRES_ON: DEC-DSL-SHAPE and DEC-DSL-LAYER-COUNT are both ruled.
+STATEMENT: >>>
+Assess prior art for the DSL that sits above the hook layer: a Nix option
+surface a project fills in to express a document-workflow engine over the
+canon, decomposing into the grammar (L1) and the hooks (L2). Four lenses,
+run 2026-08-29 as a light workflow: Nix DSLs that decompose into another
+runtime (terranix, kubenix, arion, nixvim, devenv's own options, the module
+system's merge and override idiom); workflow and state-machine DSLs (XState,
+Jira workflow schemes, Redux middleware, Kubernetes admission and reconcile,
+GitHub rulesets, build-system invalidation); condition languages authored as
+data and evaluated in Python (JsonLogic, CEL, Rego, jq, flat clause lists);
+and the scope boundary and layer count.
+
+Assessment only. It picks no shape; DEC-DSL-SHAPE and DEC-DSL-LAYER-COUNT are
+the decisions it exists to feed, and the three candidate shapes are recorded
+as their own mechanisms.
+
+THE MINIMAL CONCEPT SET the research converged on, each tied to the use case
+that forces it:
+
+- **Lifecycle** — A node type's state is the value of one of its existing single-choice fields (for DECISION, STATUS), with a declared starting value and final values; no new field is added.
+  forced by: "Node types have a lifecycle, almost a finite state machine."
+  from: XState machine config (states as plain data) and the slice document's rule that state is a tuple over fields the grammar already has.
+- **Transition** — A named move from one state value to another that a person or agent asks for explicitly, refused unless its guard holds.
+  forced by: "A transition is explicit and its checks must pass."
+  from: Jira's transition with its three slots (condition = who may, validator = is the data right, post function = what runs after) and XState's event-fired transition.
+- **Condition** — A yes/no rule written as data over one node's fields, its one-hop neighbours through a named relation role, and the acting identity, with an error message beside it.
+  forced by: "Field STATUS equals accepted AND every relation of role X points at a node whose DEPTH is at least Y."
+  from: JsonLogic (a rule is one JSON object {operator: [operands]}) and Terraform's precondition, which carries error_message next to every condition.
+- **Site** — The joint and phase a condition is checked at (the slice document's word for that pair), and whether failing there refuses the operation, warns, or is only recorded.
+  forced by: "Dirty must not block being in that state; it may block committing and probably blocks merging."
+  from: Kubernetes ValidatingAdmissionPolicy validationActions (Deny | Warn | Audit) and GitHub rulesets' enforcement (active | evaluate).
+- **Ripple rule** — Per relation role: which fields on the far node, when changed, mark this edge stale (the edge stores a hash of those fields, so stale = stored hash differs from current), and which actor class may re-stamp it.
+  forced by: The dirty-edge use case: a node changes, its edges go dirty, each neighbour needs a check, a change repeats the marking.
+  from: IBM DOORS suspect links (a link is flagged when its far end changes, cleared after review) and the 'verifying traces' rebuilder from Build Systems a la Carte.
+- **Actor class** — A map from what an identity extractor (an L2 handler that reports who is acting, e.g. the ssh signing-key fingerprint) returns to a class name, with a default class for everything else.
+  forced by: "This ssh identity is the human; anything else is an agent."
+  from: git's allowed-signers file (principal + ssh public key), GitHub ruleset bypass actors, and clan-core roles filled by name or tag.
+- **Gate** — A named set of conditions that one command, scribe check --gate <name>, evaluates over the whole loaded canon, exiting non-zero and listing every failure.
+  forced by: "The DSL need not configure CI; it provides one simple call CI can run."
+  from: devenv's task status (a condition as an exit code) and scribe's existing read-class check operation.
+- **Augment / overshadow** — Every DSL entity is an attribute keyed by name, so a later module adds entries (attribute sets union), replaces one with lib.mkForce, or retires one with enable = false.
+  forced by: "Higher layers may augment lower layers or overshadow them."
+  from: The NixOS module system's mkDefault/mkForce priorities and its enable = false idiom (nothing in the ecosystem removes a lower layer's entry).
+<<<
+NOTES: >>>
+SCOPE OUT -- what lives outside the DSL, and why:
+
+- Condition evaluation: Python, one generic function shipped with scribe. Nix cannot run at hook time, so Nix emits the rule as JSON and Python runs it; meaning lives in Python, only shape in Nix.
+- Identity extraction and signature verification: Python and git at the joint. Verifying a signature is computation, not comparison; the DSL holds only fingerprint -> class.
+- The dirty marks themselves: runtime state written by scribe into a node field (an sdoc relation carries only TYPE, VALUE, ROLE, so an edge cannot carry a mark). Nix has no state; it declares which roles carry staleness.
+- Clearing a mark ('I read the neighbour, it is fine'): the TUI for a human, a skill for an LLM. Judgement has no rule form; the DSL says only which actor class may re-stamp.
+- CI wiring: the forge ruleset or workflow YAML. git-hooks stages end at pre-push and no Nix DSL reaches a merge decision; the DSL emits `scribe check --gate merge` and nothing more.
+- Multi-hop and whole-canon questions ('everything under me is verified', 'at most one accepted DECISION governs X'): plain Python over the loaded graph (a ten-line worklist). The condition language sees one node plus one hop.
+- Firing automatic transitions ('when conditions are met, transition'): nothing runs between invocations, so `scribe check` reports them as due; no per-edit graph-wide re-evaluation.
+- Building the snapshot a condition reads (before, after, actor class, relations with their target's fields, edge marks): Python at each joint. The DSL names what a rule reads; Python supplies it.
+- Flows and use cases: USE CASE nodes in the canon and package test fixtures, not DSL entities. A flow's expected refusal is a test, not a rule.
+
+WHERE MODELLING IN NIX PAYS FOR ITSELF, AND WHERE IT DOES NOT:
+
+- PAYS: finite sets and shapes. State values exist in the grammar's enum, roles exist in L1, transition targets are declared, guard names resolve, every state is reachable, initial and terminal exist; measured at 0.05 s as assertions.
+- PAYS: layering. Augment and overshadow cost zero DSL vocabulary if every entity is attrsOf submodule keyed by name (lists concatenate and cannot be overridden); add enable = false per entry for removal.
+- PAYS: the actor table. Small, static, reviewed in a PR; fingerprint -> class is data and nothing more is needed at eval.
+- PAYS: condition shape. A recursive attrTag rejects an unknown operator or wrong arity at nix eval with the option path; a string language cannot give this.
+- PAYS: one readable file that renders. The same eval that validates the lifecycle can emit a state diagram and the docs, which is the 'easy to read and reason about' aspiration.
+- DOES NOT PAY: condition meaning. Python evaluates; each new operator is two edits (a Nix type arm and a Python arm) and Nix can check arity but never truth.
+- DOES NOT PAY: anything runtime. The dirty set, the actor at the keyboard, the git diff, the merged tree; Nix ships only a description and modelling more just duplicates Python.
+- DOES NOT PAY: graph queries. Multi-hop or whole-canon joins are a ten-line Python worklist; a Nix encoding would be slower to write and impossible to check.
+- DOES NOT PAY: generated per-node-type submodules from the grammar (the kubenix pattern). Bloat and drift for a small grammar; generate only the enums (field names, choice values, roles) as assertion inputs.
+
+FLOWS THAT CANNOT BE MODELLED WELL:
+
+- The review act that clears a mark (a human in the TUI, or an LLM, judging a neighbour fine): only its outcome is modellable, a stored hash re-stamped by an actor whose class is allowed.
+- Automatic graph-wide transitions ('when conditions are met, transition'): N machines triggering each other have no declared order or termination in any system studied; keep transitions explicit and report 'due' at check.
+- Where a mark lives: an sdoc relation carries only TYPE, VALUE and ROLE, so the stale/signed state must be a node field or sidecar that scribe owns; the DSL cannot place it in the canon.
+- Dirty blocking git.commit as stated: the resolver needs commits to checkpoint a multi-step cleanup, so deny-at-commit blocks the very work that clears the mark; every system studied blocks at the boundary. Warn at commit, deny at push and merge.
+- git.merge and git.rewrite: both are POST-only joints; a textual merge of two branches that each moved STATUS, or each re-stamped one edge against different hashes, yields a state no transition produced. The gate catches it but cannot name the skipped transition.
+- Counters or commit ids as the ripple record: they die under rebase and amend; only a content hash of the reviewed fields survives, which also forces the record into the .sdoc file, not git metadata.
+- Actor identity at the merge site: a squash-merge rewrites the committer, so 'only a human signs' is checkable at git.push PRE and at scribe.change, never at merge.
+- Agent-ness: an LLM launched from the human's session signs and pushes as that identity, so every actor model studied calls it human; agent-ness is a self-declared claim (env var, commit trailer) a PRE cannot verify.
+- Time-based conditions (RETIRES_ON has passed, stale after 30 days): nothing runs between invocations, and the hook and CI would evaluate at different times and disagree; materialize 'expired' as a mark, never recompute it.
+- Conditions over history or over main from a branch ('accepted by a human commit', 'landed on main'): the joint must feed {before, after} or a git base ref, and only CI's merge ref sees the merged tree, so these are check-site conditions only.
+- Whole-canon constraints ('at most one accepted DECISION governs X'): a join over every node; JsonLogic, CEL and jq see one node, so this is Python or SQL with the full graph as input.
+- Removing a STATE from a lower layer's set: no mkRemove exists, and Jira shows removing a status needs a migration of every node in it; overshadow transitions and conditions freely, retire states only with an explicit migration step.
+
+LAYER COUNT, the research's argument (recorded here; the ruling is
+DEC-DSL-LAYER-COUNT's):
+
+forcing: The only reasoning-level split the research found is Rego's termination rule: a condition is a total function of one snapshot (always terminates, no effects), a hook has effects. That justifies exactly one piece of DATA between the DSL and the hooks, the rule JSON, and that data rides in the hook's own settings slot; it is not machinery and not a layer. The ecosystem constant agrees: NixOS systemd sugar (script -> serviceConfig), arion (service -> out.service) and git-hooks.nix (options -> raw) each have ONE intermediate, a freeform layer in the runtime's vocabulary that typed sugar writes into under mkIf so a consumer can still mkForce the low layer. No three-tier precedent exists. What WOULD earn a second layer is recursion in conditions (multi-hop, repeat-until-stable) or automatic graph-wide transitions, because termination and ordering then become concerns of their own that Nix cannot check; both are recommended out of scope, so the second layer stays unearned. The split between package TYPES (what a lifecycle can be, for any grammar) and this repo's VALUES (DEPTH, signing) is real but lives inside the DSL as options versus config, exactly like any NixOS module, not between L2 and the DSL.
+holds: The DSL holds lifecycles, transitions, conditions, sites, ripple rules, actor classes and gates, typed and keyed by name, validated by eval-time assertions (state values in the grammar enum, roles in L1, guard names declared, reachability). It compiles straight into L2 entries: hooks.<name> = { on; phase; python = "scribe.rules:evaluate"; settings = { rule = <JSON>; from; to; message; }; }. That hook JSON is the one intermediate and it is already L2's vocabulary. L2 gains one generic handler (the evaluator) and one extractor kind (who is acting), nothing else. L1 is untouched: state fields, choice values and relation roles are read from it, never written, and separate evalModules pools keep a DSL module from mkForce-ing a grammar field.
+
+READING LIST, at most six:
+
+- https://jsonlogic.com/operations.html — the rule format in one page; the one line that matters: none is true on an empty array, all and some are false, which is why c.every is 'none of the counterexamples'.
+- https://github.com/panzi/panzi-json-logic — the Python evaluator: pass { **BUILTINS, 'rank': fn } as the third argument for domain operators; and, or, all, some, none cannot be overridden.
+- https://stately.ai/docs/guards — XState named guards with and/or/not, bodies bound by setup() and swapped by provide(): the precedent for overshadowing a condition by name.
+- https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/ — rule text authored once, bound per site as Deny, Warn or Audit: the precedent for 'dirty is legal here, fatal at merge'.
+- https://www.microsoft.com/en-us/research/uploads/prod/2018/03/build-systems.pdf — Build Systems a la Carte: why a dirty bit cannot do early cutoff and a stored hash (verifying trace) can; read section 2 and Table 2.
+- https://github.com/NixOS/nixpkgs/blob/master/lib/types.nix — types.attrTag and the self-referencing let that builds types.json: the two pieces the recursive condition type copies.
+
+Run as workflow wf_3c742ab0-9d7, five agents, 2026-08-29. The synthesis was
+pasted, not paraphrased, so the operator can hold it against the sources.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Governed_By

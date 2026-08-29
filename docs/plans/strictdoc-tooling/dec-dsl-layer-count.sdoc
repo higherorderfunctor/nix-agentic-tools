@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: One layer or two between the hooks and the DSL
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-DSL-LAYER-COUNT
+TITLE: One layer or two between the hooks and the DSL
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: The operator rules, or a construct is admitted that needs recursion or automatic graph-wide transitions.
+STATEMENT: >>>
+Is there ONE layer between the hook machinery (L2) and the DSL, or TWO? The
+operator's rule: a second layer exists only if there is a forcing function at
+the reasoning level -- a concern that cannot be thought about correctly while
+also thinking about the other.
+<<<
+RATIONALE: >>>
+The spike found no such forcing function today. A condition is a total
+function of one snapshot (always terminates, no effects); a hook has effects.
+That justifies one piece of DATA between them -- the rule as JSON, riding in
+the hook's own settings -- not a layer. Every Nix precedent studied (systemd
+sugar, arion, git-hooks.nix) has exactly one intermediate. What WOULD earn a
+second layer: recursion in conditions (multi-hop, repeat-until-stable) or
+automatic graph-wide transitions, because termination and ordering then become
+concerns of their own. Both are recommended out of scope, so the second layer
+is unearned until one of them is admitted.
+<<<
