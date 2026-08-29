@@ -40,7 +40,15 @@ RATIONALE: >>>
 The operator recalled on 2026-08-28 that SLICE exists as a scope-discipline device -- stay in your horizontal layer unless you are a slice, and do not veer outside your slice when implementing across layers -- and was unsure whether that warrants a node. Written down because a discipline carried only as a name is one session away from being forgotten, and because naming it as normative gives the migration a pre-classified node rather than another to test by hand.
 <<<
 NOTES: >>>
-NORMATIVE, pre-classified. When the grid's vocabulary lands this becomes a REQUIREMENT, not a MECHANISM; it is written as a mechanism only because REQUIREMENT is not in the grammar yet. Recorded as a proposal at the operator's invitation, with the alternative -- leave it a fuzzy concept until a forcing function makes it real -- explicitly still live.
+NORMATIVE, pre-classified. When the grid's vocabulary lands this becomes a
+REQUIREMENT, not a MECHANISM; it is written as a mechanism only because
+REQUIREMENT is not in the grammar yet.
+
+RULED 2026-08-28, shortly after being written. The proposal this node carried
+was accepted as DEC-SLICE-DECOMPOSES-TO-WORK, so the alternative it recorded as
+still live -- leaving the discipline a fuzzy concept until a forcing function
+appeared -- is no longer. What remains here is the pair of rules themselves,
+awaiting the vocabulary that can express them.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -52,3 +60,6 @@ RELATIONS:
 - TYPE: Parent
   VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
   ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: DEC-SLICE-DECOMPOSES-TO-WORK
+  ROLE: Governed_By

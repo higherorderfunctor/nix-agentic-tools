@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: SLICE decomposes into work that declares its crossings, plus two requirements
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SLICE-DECOMPOSES-TO-WORK
+TITLE: SLICE decomposes into work that declares its crossings, plus two requirements
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A slice is found that cannot be expressed as work plus its crossings, or deriving slice-ness from the edges proves ambiguous in practice.
+STATEMENT: >>>
+SLICE does not survive as a node type. It DECOMPOSES into what already exists:
+
+  the thing itself   WORK that declares its crossings. The Crosses edge IS the
+                     lane, so slice-ness is DERIVED -- work crossing more than
+                     one layer -- rather than announced by a type prefix.
+  the discipline     two REQUIREMENTS. Stay inside one horizontal layer when
+                     the work is not a slice; stay inside the declared
+                     crossings when it is.
+
+Nothing is lost and one thing is gained. The concept was doing two jobs at once
+-- naming a shape of work, and carrying a rule about scope -- and a type can
+only ever assert the first. Split, the rule becomes checkable: WORK DOES NOT
+TOUCH WHAT IT DID NOT DECLARE, tested against the declaration the work already
+carries. That is an L3 rule landing on L2 hooks, which is somewhere a discipline
+can actually live, rather than a name everyone has to remember.
+
+It is also the move the grid made everywhere else: prefer a property read off
+the edges to a type asserted up front.
+<<<
+RATIONALE: >>>
+Less machinery for the same meaning. A type that asserts a shape cannot enforce the rule that motivated it, and the rule was the valuable half -- so removing the type and keeping the rule loses nothing and makes the rule testable for the first time.
+<<<
+NOTES: >>>
+Ruled by the operator on 2026-08-28; AUTHORED_BY reads llm because the writer has no flag for that key. Eleven SLICE nodes exist today and the Crosses role is declared on SLICE alone, so the migration moves both -- the nodes to WORK and the role with them. That cost is MECH-GRID-MIGRATION-UNCOSTED's, and this ruling makes it smaller rather than larger, since a type removed is a type nobody has to re-test.
+<<<
