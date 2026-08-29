@@ -1,11 +1,3 @@
-APFS
-EEXIST
-FREETEXT
-GOARCH
-GOOS
-GOTOOLCHAIN
-GOWORK
-Patchelf
 aclose
 addy
 adoc
@@ -18,6 +10,7 @@ agentsmd
 agnix
 aihubmix
 anthropics
+APFS
 applyto
 argjson
 argstr
@@ -25,9 +18,9 @@ aristocratos
 arkenfox
 arpeggio
 arxanas
-attrTag
 attrset
 attrsets
+attrTag
 aubut
 autologin
 automemory
@@ -115,6 +108,7 @@ drainedness
 drvs
 dsolve
 dunder
+EEXIST
 elicitations
 emnapi
 endgroup
@@ -144,6 +138,7 @@ fixpoint
 foldl
 footgun
 formedness
+FREETEXT
 frepo
 frontloaded
 frontmatter
@@ -162,13 +157,17 @@ gluetun
 gnugrep
 gnused
 gnutar
+GOARCH
 gocache
 godebug
 goflags
 gofont
 gomono
+GOOS
 gopls
 goproxy
+GOTOOLCHAIN
+GOWORK
 gpgsign
 headlessly
 heredocs
@@ -303,6 +302,7 @@ passthroughs
 passthru
 passwordless
 pasteable
+Patchelf
 pathlib
 pathspec
 pdsolve
@@ -436,6 +436,7 @@ ultracode
 unapprove
 unbuildable
 uncacheable
+uncosted
 undimensioned
 undmg
 unexecutable

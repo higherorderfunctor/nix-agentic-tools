@@ -6,7 +6,7 @@ IMPORT_FROM_FILE: @repo
 
 [MECHANISM]
 UID: MECH-GRID-MIGRATION-UNCOSTED
-TITLE: Applying the node-type grid is a corpus migration, and three existing types have no ruling
+TITLE: Applying the node-type grid is a corpus migration, not yet costed or applied
 DEPTH: sketch
 AUTHORED_BY: llm
 STATEMENT: >>>
@@ -57,7 +57,26 @@ RATIONALE: >>>
 The grid was accepted as a description of the target vocabulary and reads as though it were a grammar change. It is not. Recording the distance now keeps a later session from discovering mid-edit that a retype moves every citation, and keeps the three unaddressed types from being decided by whoever happens to touch them first.
 <<<
 NOTES: >>>
-Raised 2026-08-28, in the same session that wrote DEC-NODE-TYPE-GRID, on the operator asking whether the rulings had been applied. They had not, and the question surfaced that the grid is silent on SLICE, INVARIANT and SPIKE. The grid's STATEMENT is not amended here: it describes the target correctly and its omission is about migration, which is this node's subject.
+Raised 2026-08-28, in the same session that wrote DEC-NODE-TYPE-GRID, on the
+operator asking whether the rulings had been applied. They had not, and the
+question surfaced that the grid is silent on SLICE, INVARIANT and SPIKE. The
+grid's STATEMENT is not amended here: it describes the target correctly and its
+omission is about migration, which is this node's subject.
+
+UPDATED LATER THE SAME DAY. Two of the three are now RULED rather than read:
+DEC-SLICE-DECOMPOSES-TO-WORK (SLICE is work that declares its crossings, and
+the Crosses edge is the lane) and DEC-INVARIANT-IS-A-REQUIREMENT. SPIKE stays a
+reading, MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION. Both rulings are wired in
+below as Governed_By, so the migration is reachable from either ruling by
+traversal rather than by remembering this node exists.
+
+NOTHING IS APPLIED, and that is the point of keeping this node loud. Eleven
+SLICE nodes, four INVARIANT nodes and the Crosses role still carry the old
+grammar, so every session citing a SLICE- UID is citing WORK under a legacy
+prefix. The operator's concern on 2026-08-28 (session 6) was exactly this: a
+settled ruling going invisible behind a corpus that still spells the old
+vocabulary. The sdoc skill carries the read-through table; docs/sdoc/README.md
+points at it before the session log.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -69,3 +88,9 @@ RELATIONS:
 - TYPE: Parent
   VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
   ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: DEC-SLICE-DECOMPOSES-TO-WORK
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-INVARIANT-IS-A-REQUIREMENT
+  ROLE: Governed_By
