@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: What the operator need not judge now is filed where it resurfaces, not narrated
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[INVARIANT]
+UID: INV-FILE-DO-NOT-NARRATE
+TITLE: What the operator need not judge now is filed where it resurfaces, not narrated
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Whatever the operator does not need to judge NOW is FILED, not narrated. The
+contributor makes the best-educated call on how to record it and places it
+where it will resurface at the right time: a backlog register node, an open
+DECISION carrying a RETIRES_ON, or a NOTES paragraph on the node it affects.
+
+Session output carries only what changes a decision in front of the operator
+or blocks the work in hand. Everything in the class of "one more thing you
+should know" is logged and left unspoken.
+<<<
+RATIONALE: >>>
+A logged finding is not lost; mentioning it costs attention, logging it costs
+nothing. Filing also forces the contributor to decide WHERE a thing resurfaces,
+which is the part narration skips -- a thing said in passing has no trigger
+and is therefore forgotten, not deferred.
+<<<
+NOTES: >>>
+Recorded 2026-08-28 at the operator's request, as one of four contributor-communication requirements (INV-DECISIONS-ARRIVE-AS-CARDS, INV-LISTS-WHERE-THE-READER-UNPACKS, INV-FILE-DO-NOT-NARRATE, INV-SETTLED-STAYS-VISIBLE). The rule is the operator's; AUTHORED_BY reads llm because the writer has no flag for the other value. An INVARIANT is read as a REQUIREMENT under DEC-INVARIANT-IS-A-REQUIREMENT; the grammar type is kept so the grid is not half-applied. The sdoc skill's backlog protocol is the procedure these four are the requirement for.
+<<<

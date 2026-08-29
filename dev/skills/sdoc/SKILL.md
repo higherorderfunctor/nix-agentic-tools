@@ -255,6 +255,11 @@ thing it checks and watch it fail.
 
 ## Backlog protocol — applies to planning AND implementation sessions
 
+The requirement this protocol implements, and its three siblings on how to bring
+anything to the operator, live in `docs/spec/`: `INV-DECISIONS-ARRIVE-AS-CARDS`,
+`INV-FILE-DO-NOT-NARRATE`, `INV-LISTS-WHERE-THE-READER-UNPACKS`,
+`INV-SETTLED-STAYS-VISIBLE`. Read them once; they are short.
+
 **Log incidental findings; do not narrate them.** Raise something in session
 output only when it matters **soon** — it changes the decision in front of the
 operator, or it blocks the work in hand. Everything else, the whole class of
