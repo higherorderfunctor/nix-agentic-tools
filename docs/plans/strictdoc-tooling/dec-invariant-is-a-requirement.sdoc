@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: INVARIANT is a requirement and does not survive as its own type
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-INVARIANT-IS-A-REQUIREMENT
+TITLE: INVARIANT is a requirement and does not survive as its own type
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: An invariant is found that is not normative, or not universal.
+STATEMENT: >>>
+INVARIANT is a REQUIREMENT. The type does not survive the migration to
+DEC-NODE-TYPE-GRID's vocabulary; its four nodes become requirements.
+
+It falls out of the axes with nothing left over. An invariant is normative --
+it can be violated, and when reality disagrees the world is what gets fixed --
+and it is universal, holding across every case rather than describing one. That
+is the requirement cell exactly. The grid already said as much by omission, in
+ruling that a constraint is a requirement rather than a type of its own; this
+states it rather than leaving it to be read.
+
+Nothing is lost. The distinguishing flavour of an invariant -- that it is the
+rule rather than the interface, so it can be violated while every interface is
+satisfied -- is a property of its statement, not of its type.
+<<<
+RATIONALE: >>>
+The third and last of the types DEC-NODE-TYPE-GRID left unsaid, and the cheapest: four nodes, and the axes give one answer with no residue. Settling it now means the migration inherits three rulings rather than three arguments.
+<<<
+NOTES: >>>
+Ruled by the operator on 2026-08-28. AUTHORED_BY reads llm because the writer has no flag for it -- MECH-RUNTIME-WRITE-GUARD makes that key the operator's, which is itself recorded as misplaced in MECH-MILESTONE-TWO-SEMANTICS-MISPLACED. The other two types are read, not ruled: MECH-SLICE-IS-WORK-NOT-A-USE-CASE and MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION.
+<<<
