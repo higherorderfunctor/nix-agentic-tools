@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [SLICE]
 UID: SLICE-SEMANTIC-LAYER-RENDER
 TITLE: Render the semantic layer as an HTML artifact to judge from, not as text
-DEPTH: sketch
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Render the semantic layer as an HTML artifact the operator can read on a phone
@@ -42,7 +42,36 @@ as a self-contained page, mobile-first, theme-aware. Do not present the
 semantic layer in chat text again.
 <<<
 NOTES: >>>
-Filed 2026-08-29 after three failed text presentations in one session. The operator's words: 'we aren't aligned on what it means to generate something for human consumption'. The next session starts here, via docs/sdoc/README.md.
+Filed 2026-08-29 after three failed text presentations in one session. The
+operator's words: 'we aren't aligned on what it means to generate something for
+human consumption'. The next session starts here, via docs/sdoc/README.md.
+
+DELIVERED 2026-08-29 (session 7), private artifact:
+https://claude.ai/code/artifact/9cdae156-301a-4baa-8d20-585dd6125d4e
+
+Shape: a Start screen (colour legend, a per-topic bar of the five tags, the
+node-type grid, the four layers, the five top gaps); one screen per ruled type
+with fields, state ladders and relations shown separately; an Edges screen
+with a diagram of every live (source, role, target) combination and the
+fingerprint pairs; thirteen topic screens with a plain-language headline per
+line and the sheet's own wording one tap below; five gap screens with the nodes
+each touches and the lines that feed it; a screen per cited node with its
+neighbours; a Words screen. Every UID is shown with its title. Nothing is
+presented as settled.
+
+Measured: 145 tagged lines plus the five top gaps; the sheet's tag counts
+reproduce exactly from the parse; 59 UIDs cited, 95 nodes on the page with
+one-hop neighbours; every cited UID resolved against the export at bbcc0060.
+The five tag colours pass the colour-vision validator in both themes.
+
+Reviewed before hand-over by five independent readers (three for headline
+fidelity, one for vocabulary, one mechanical) with contested findings argued
+both ways: 37 raised, 23 confirmed and fixed, 6 split (resolved by falling
+back to the sheet's own wording; listed in the hand-over for the operator to
+overrule), 4 refuted, 4 nits fixed. Screenshot passes at phone and desktop
+width caught three layout defects before review.
+
+The generator is not in the repository: MECH-RENDER-GENERATOR-OUTSIDE-REPO.
 <<<
 RELATIONS:
 - TYPE: Parent
