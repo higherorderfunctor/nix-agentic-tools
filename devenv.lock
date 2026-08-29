@@ -458,17 +458,17 @@
         "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
-        "lastModified": 1787983408,
-        "narHash": "sha256-QCDkT6LBEzqReD+iBSmCxGIdfPzcMs/T5om/evO5u4c=",
+        "lastModified": 1788005869,
+        "narHash": "sha256-foshGfEHz403BgdaEij+wH7ihDV4BcweHCD3CgdYPXE=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "d74e7e77d9f221bead75bf74f85c77626d213983",
+        "rev": "e948101e80b32c1035f2bd4891f5539e49d5f884",
         "type": "github"
       },
       "original": {
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "d74e7e77d9f221bead75bf74f85c77626d213983",
+        "rev": "e948101e80b32c1035f2bd4891f5539e49d5f884",
         "type": "github"
       }
     },
