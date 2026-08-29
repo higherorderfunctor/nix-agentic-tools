@@ -1,0 +1,56 @@
+[DOCUMENT]
+TITLE: Render the semantic layer as an HTML artifact to judge from, not as text
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[SLICE]
+UID: SLICE-SEMANTIC-LAYER-RENDER
+TITLE: Render the semantic layer as an HTML artifact to judge from, not as text
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Render the semantic layer as an HTML artifact the operator can read on a phone
+and judge from, instead of as linear text. Read as WORK under
+DEC-SLICE-DECOMPOSES-TO-WORK.
+
+THE INPUT is MECH-SEMANTIC-LAYER-WHITEBOARD (the tagged one-sheet), the
+collapsed vocabulary (REQUIREMENT, USE CASE, MECHANISM, EVIDENCE, DECISION,
+NARRATIVE, WORK -- never the dissolved names), and the nodes it cites. Nothing
+in it is settled; the render shows what was EXPLORED so the operator can
+decide what to settle.
+
+WHAT THE RENDER MUST DO, learned by failing three times on 2026-08-29:
+
+- A graph cannot be read as a flat list. Each attempt to linearize the sheet
+  got denser, not clearer, and on a phone node names and field names landed
+  in one column with nothing to tell them apart. Render structure as
+  structure: one screen per node type, fields separate from edges, edges as a
+  diagram, status as colour with a legend.
+- Show one thing at a time. The operator reads a node plus its neighbours
+  (docs/sdoc/render.py --uid is the precedent), never the whole canon.
+  Navigation between screens, not scrolling through everything.
+- No coined terms. Only the ruled glossary and plain words; every UID shown
+  with its title.
+- The five top gaps from the whiteboard's last section get their own screen,
+  each with the nodes it touches linked.
+- Then decisions come as cards, one per turn, AFTER the operator has read
+  the render -- not before, and not inside it.
+
+THE TOOL is the harness's HTML artifact (a private rendered page). Build it
+as a self-contained page, mobile-first, theme-aware. Do not present the
+semantic layer in chat text again.
+<<<
+NOTES: >>>
+Filed 2026-08-29 after three failed text presentations in one session. The operator's words: 'we aren't aligned on what it means to generate something for human consumption'. The next session starts here, via docs/sdoc/README.md.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-SEMANTIC-LAYER-WHITEBOARD
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: SLICE-WORKFLOW-DSL
+  ROLE: Assumes
