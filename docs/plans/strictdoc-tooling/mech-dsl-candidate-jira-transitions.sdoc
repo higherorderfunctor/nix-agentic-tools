@@ -1,0 +1,75 @@
+[DOCUMENT]
+TITLE: Candidate shape: lifecycles with Jira-style transitions (who may, what must hold, what it says)
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-DSL-CANDIDATE-JIRA-TRANSITIONS
+TITLE: Candidate shape: lifecycles with Jira-style transitions (who may, what must hold, what it says)
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+PROPOSED SHAPE, one of three, from the 2026-08-29 prior-art spike
+(SPIKE-DSL-PRIOR-ART). Not chosen. All three show the SAME worked example so
+they compare by eye: a DECISION whose STATUS moves from open to accepted only
+when a guard holds, a dirty-edge rule over one relation role, one gate CI can
+call, and one actor primitive keyed on an ssh identity.
+
+WHAT IT BORROWS. Jira workflows: one lifecycle per node type, each transition carrying a who-may slot (Jira condition), a data slot (Jira validator) and an error message; ripple and gates are separate records.
+
+THE SHAPE.
+
+  { c, ... }: {                    # c = the DSL's JsonLogic helpers (see condition language)
+    canon.lifecycles.DECISION = {
+      stateField = "STATUS";  initial = "open";  terminal = [ "accepted" "retired" ];
+      transitions.accept = {
+        from = "open";  to = "accepted";
+        who = [ "human" ];                                  # Jira "condition": actor gate
+        when = c.every "Governed_By"                        # Jira "validator": data gate
+          (c.inList (c.var "target.DEPTH") [ "interface-settled" "implemented" "verified" ]);
+        message = "every governing node must be at least interface-settled";
+      };
+    };
+    canon.relations.Governed_By.ripple = {
+      onFields = [ "STATEMENT" ];                           # a change here marks the edge stale
+      clearedBy = [ "human" ];                              # who may re-stamp it
+    };
+    canon.actors = {
+      extractor = "ssh-signing-key";                        # an L2 extractor name
+      classes.human = [ "SHA256:AbCd..." ];
+      default = "agent";
+    };
+    canon.gates.merge.require = [ "no-stale-edges" "lifecycle-consistent" ];
+    # CI runs:  scribe check --gate merge
+  }
+
+HOW IT DECOMPOSES ONTO THE HOOK LAYER (MECH-HOOK-MIDDLEWARE-INTERFACE).
+transitions.accept -> one PRE hook on scribe.change.set for DECISION.STATUS, python = the generic evaluator, settings = { from; to; who; when; message }.
+relations.X.ripple -> POST hook on scribe.change.set of onFields (re-stamps neighbours' stored hash to stale) plus a PRE hook on the re-stamp field checking actor.class in clearedBy.
+gates.merge -> the `scribe check --gate merge` command, also wired as a PRE hook on git.push.
+<<<
+NOTES: >>>
+STRENGTHS.
+- Reads like the operator's own sentence: who may, what must hold, what it says when it fails.
+- Nix checks the lifecycle at eval: from/to values in the grammar enum, every state reachable, initial and terminal present, no two transitions on one (from, to).
+- Actor gating is a plain list, so the augment case (add a class) is one line and needs no condition edit.
+
+WEAKNESSES.
+- Two ways to say 'who': the who list and an actor clause inside when; pick one or Nix must assert they agree.
+- Sites are fixed by construct kind (transition = PRE change, ripple = POST change, gate = check); a rule that wants warn-at-commit and deny-at-check has no home here.
+- Automatic transitions have no slot; they become gate conditions reported as due.
+
+
+Recorded from the spike's synthesis without endorsement; the operator weighs the three by reading the shapes.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-DSL-SHAPE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: SPIKE-DSL-PRIOR-ART
+  ROLE: Proven_By

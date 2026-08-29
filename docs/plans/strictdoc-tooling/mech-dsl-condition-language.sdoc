@@ -1,0 +1,40 @@
+[DOCUMENT]
+TITLE: Conditions as JsonLogic trees typed by a recursive attrTag, evaluated in Python
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-DSL-CONDITION-LANGUAGE
+TITLE: Conditions as JsonLogic trees typed by a recursive attrTag, evaluated in Python
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The condition language is how a Nix author writes a yes/no rule over one
+node's fields, its one-hop neighbours through a named relation role, and the
+acting identity -- and how Python evaluates that same rule at a joint. Nix
+cannot run at hook time, so the rule must serialize (JSON) and be evaluated
+in Python.
+
+RECOMMENDED (from SPIKE-DSL-PRIOR-ART, not yet ruled): JsonLogic typed by a recursive attrTag, authored through helpers (c.and, c.eq, c.var, c.inList, c.every), with one raw escape tag and domain operators registered in Python the way flagd does (panzi-json-logic takes an operations dict as its third argument).
+
+WHY. It is the only option Nix can shape-check: an unknown operator or a non-list `and` fails at nix eval naming the option path, and every string language fails first at the hook. It serializes unchanged (the attrset IS the JSON; builtins.toJSON emits it). The evaluator is one import, or about a hundred lines to own if the port goes stale. Lists of conditions merge as AND (augment) and mkForce replaces one (overshadow), so layering costs nothing. Two traps are hidden in the helpers once, not per rule: jsonlogic.com states `none` is true on an empty array while `all` and `some` are false, so c.every is 'none of the counterexamples'; and a missing field reads as null, not an error, which is what a DECISION with no DEPTH needs (CEL would raise no_such_field). Enum order (DEPTH at least Y) is either an in-list, as in the snippets, or a `rank` operator registered in Python. Limits to accept: one hop only (scribe pre-resolves each relation's target fields into the data), and whole-canon joins go to Python. Runner-up is CEL if long guards become unreadable as attrsets; keep it out until a rule actually needs it.
+<<<
+NOTES: >>>
+OPTIONS WEIGHED.
+- JsonLogic tree as a Nix attribute set, typed with types.attrTag (the NixOS tagged-union type: one key names the operator), built through a handful of pure helper functions, evaluated by panzi-json-logic in Python.
+- CEL string (Google's one-line expression language) evaluated by cel-python; Nix sees only types.str, a flake check can run the parser.
+- jq filter string: `jq -e '<filter>'` on the hook's stdin JSON is a complete PRE handler with zero Python; text, needs jq at hook time.
+- Rego (Open Policy Agent) text: has `every` and reachability built in but needs a Go binary or wasm; longest to write.
+- Flat clause list, LaunchDarkly-style ({ attribute; op; values; negate }): fully typed at eval, but cannot express 'every relation' at all.
+- Raw escape hatch as one more tag ({ __command = [ ... ]; } or { __python = "..."; }), nixvim's { __raw } idiom, beside any typed form.
+
+Recorded 2026-08-29 from the spike's synthesis.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: SPIKE-DSL-PRIOR-ART
+  ROLE: Proven_By
