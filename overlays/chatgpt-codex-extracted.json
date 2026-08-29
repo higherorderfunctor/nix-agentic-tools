@@ -1831,6 +1831,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Only show grouped check rows and the final count summary",
             "names": ["--summary"],
             "valueName": null
@@ -1842,14 +1850,6 @@
             "help": "Expand long lists in detailed human output",
             "names": ["--all"],
             "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
-            "names": ["--disable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -5367,6 +5367,11 @@
       "name": "background_paginated_rollout_migration"
     },
     {
+      "default": false,
+      "maturity": "under development",
+      "name": "bedrock_setup_wizard"
+    },
+    {
       "default": true,
       "maturity": "stable",
       "name": "browser_use"
@@ -5413,6 +5418,11 @@
     },
     {
       "default": false,
+      "maturity": "under development",
+      "name": "code_mode_prewarm"
+    },
+    {
+      "default": false,
       "maturity": "removed",
       "name": "codex_git_commit"
     },
@@ -5437,8 +5447,8 @@
       "name": "concurrent_reasoning_summaries"
     },
     {
-      "default": false,
-      "maturity": "under development",
+      "default": true,
+      "maturity": "stable",
       "name": "content_item_kinds"
     },
     {
@@ -5817,6 +5827,11 @@
       "name": "skill_search"
     },
     {
+      "default": false,
+      "maturity": "under development",
+      "name": "skip_host_skill_discovery"
+    },
+    {
       "default": true,
       "maturity": "removed",
       "name": "sqlite"
@@ -5830,6 +5845,11 @@
       "default": true,
       "maturity": "removed",
       "name": "steer"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "step_model_switching"
     },
     {
       "default": true,
@@ -5945,6 +5965,11 @@
       "default": false,
       "maturity": "removed",
       "name": "workspace_owner_usage_nudge"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "write_stdin_approval"
     }
   ],
   "models": [
@@ -6010,7 +6035,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.150.1",
+    "codexVersion": "0.151.0",
     "extractorSchema": 1
   }
 }
