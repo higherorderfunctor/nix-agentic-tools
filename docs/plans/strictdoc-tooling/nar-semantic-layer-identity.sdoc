@@ -1,0 +1,63 @@
+[DOCUMENT]
+TITLE: Who is acting
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-IDENTITY
+TITLE: Who is acting
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+STATEMENT: >>>
+The ssh key, its class (human or agent), and what authority each class has.
+
+- Identity is the ssh key that made the write. How that key is read, a table mapping key fingerprints to a class — human or agent — and a default for unknown keys all live in one config block. Scribe writes under that authority. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [WORKS]
+- Where the key-to-class table lives, which class — human or agent — may edit it, and whether two classes are enough — all unwritten. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [GAP]
+- Telling human from agent by which channel the edit came through — harness hooks, the CLI, a hook that refuses before a tool runs (PreToolUse), the Stop hook — is dissolved. The class is checked at the joint, and a canon check catches edits made around scribe. [FALLS OUT: class check at the joint; canon check catches edits around scribe]
+- Attributing writes through a commit trailer read from environment variables is dissolved. The agent holds its own key in its sandbox; an unknown key falls to the default class. [FALLS OUT: identity:llm holds its own key in a VM; unknown key -> default class]
+- Two distinct things, both kept: the class of whoever wrote a node's statement (AUTHORED_BY), and the identity of whoever performs each act (the key). [WORKS]
+- How an agent may treat a node depends on the writer's rung: undo freely at the bottom, undo but report above that, and stop to ask at the top. [WORKS]
+- About ten nodes say 'ruled by the operator' yet read AUTHORED_BY: llm. A human ruling carried by an agent's write has no form in the model. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [GAP]
+- Who may clear a dirty edge — accept that a parent's contract changed — depends on the rungs of both ends: an agent if both are below llm-accepted, otherwise a human. Which end's authorship decides is undecided. See [LINK: DEC-FP-ACCEPT-AUTHORITY]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [OPEN: DEC-FP-ACCEPT-AUTHORITY]
+- Whoever signs a contract should not be whoever wrote it. Nothing enforces that. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [GAP]
+- Whether a spawned sub-agent shares the sandbox's key is unsaid. After a squash merge, main records the merger's key, not the signer's; whether that is enough is unsaid too. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER] and [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]. [UNADDRESSED]
+- 'Only a human signs' can be checked before a scribe write or before a push — never at merge, where there is no joint. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]. [WORKS]
+- The four contributor-communication requirements — cards, lists, file-do-not-narrate, settled-stays-visible — are the rules for how an agent addresses a human. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]. [WORKS]
+<<<
+PARENT_FP: >>>
+DEC-FP-ACCEPT-AUTHORITY:0000000
+NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER:0000000
+NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT:0000000
+NAR-SEMANTIC-LAYER-TYPE-DECISION:0000000
+NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT:0000000
+NAR-TERM-CANON:0000000
+NAR-TERM-JOINT:0000000
+NAR-TERM-SCRIBE:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-FP-ACCEPT-AUTHORITY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-DECISION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-JOINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-SCRIBE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites

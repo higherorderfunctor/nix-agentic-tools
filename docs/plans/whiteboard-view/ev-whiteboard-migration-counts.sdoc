@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: What the whiteboard migration produced, counted from the export
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-WHITEBOARD-MIGRATION-COUNTS
+TITLE: What the whiteboard migration produced, counted from the export
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: strictdoc export --formats=json; sdoc check; dev/scripts/fp-check.py, cycle-check.py, file-check.py
+STATEMENT: >>>
+What the migration of the whiteboard sheet into narratives produced, measured on 2026-08-30 from the JSON export after the tree was built through the scribe.
+
+The tree under [LINK: NAR-SEMANTIC-LAYER] in the strictdoc-tooling plan: 32 new narratives (the root, a legend, a tally tab with seven type cards, a topics tab with thirteen sections, a gaps tab with five cards, an edges tab and a glossary), plus the seven term narratives of the spec that the glossary contains and the retyped sheet [LINK: MECH-SEMANTIC-LAYER-WHITEBOARD] kept as the last tab: 40 narratives in all. 145 rows across the thirteen sections carry the sheet's lines under five legend words; the sheet itself keeps its 150. 28 working terms in the glossary. 244 Cites from the new narratives, every one with a placeholder fingerprint entry; nothing is signed.
+
+The canon after the migration and the view work, from a fresh export that exits 0, with this node and the five WORK and EVIDENCE nodes the view work itself left in place: sdoc check 276 nodes, 0 findings, one note (the sheet's retype); fp-check 328 entries, 0 signed, 328 never signed, 0 suspect; cycle-check 549 role-carrying edges, 0 cycles; file-check 14 File relations, 0 findings.
+<<<
+NOTES: >>>
+The canon counts were first taken before this node and its five siblings ([LINK: WORK-VIEW-PIPELINE], [LINK: WORK-VIEW-SELF-HOSTED], [LINK: WORK-WHITEBOARD-AS-NARRATIVES], [LINK: EV-VIEW-PIPELINE-FIRST-RENDER], [LINK: EV-VIEW-SELF-HOST-RENDER]) existed, and read 270 nodes, 321 entries and 542 edges; those six nodes carry seven Cites and fingerprint entries between them, which is the whole difference. Re-taken on 2026-08-30 with all six in the export.
+<<<

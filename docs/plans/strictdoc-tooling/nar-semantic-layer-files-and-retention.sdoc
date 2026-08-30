@@ -1,0 +1,73 @@
+[DOCUMENT]
+TITLE: Files, plans and how long a node lives
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-FILES-AND-RETENTION
+TITLE: Files, plans and how long a node lives
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+STATEMENT: >>>
+One node per file; retention keyed on directory; plans, backlogs, beads and ownership.
+
+- One node per file, named for its UID in lowercase, with the document title equal to the node title, in flat plan directories. All 202 names hold; one title mismatches. Applied, but not yet ratified. See [LINK: DEC-NODE-FILE-NAMING]. [OPEN: DEC-NODE-FILE-NAMING]
+- How long a node lives is decided by where its file sits, not by its type: plan nodes are collectable (190), spec nodes are durable (8), and nodes beside a package move with that package (4). Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]. [WORKS]
+- Whether spec nodes and package-side nodes are one durable class or two ranked ones — and whether architecture may depend on the spec — is unsaid. One plan-to-spec edge exists; no architecture-to-spec edges. [UNADDRESSED]
+- No rule says what collects a plan, when, or how a node is promoted out of one. The lean: supersede first, collect later, never delete. See [LINK: DEC-PLAN-LIFECYCLE-OPEN]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] and [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]. [OPEN: DEC-PLAN-LIFECYCLE-OPEN]
+- A node belongs to a plan by sitting in its directory. The one-grammar ruling says membership is already a relation — but 112 groomed plan nodes carry no such edge, so there is nothing to remove when a plan dissolves. See [LINK: DEC-ONE-GRAMMAR]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]. [GAP]
+- Settled architecture lives in a directory beside the code it describes, each node linked to a file. That placement retires when a tool can extract the same content from source comments. See [LINK: DEC-ARCH-COLOCATION]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. [OPEN: DEC-ARCH-COLOCATION]
+- A plan's backlog is one register node; ungroomed items point at it. Grooming raises DEPTH in place and drops that edge; the UID never changes. Who may groom is unstated. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [WORKS]
+- Beads is the agent's private working store, one per identity. Canon and beads differ in authority, not shape. From the moment a plan is handed over, execution state — done, who holds it, what blocks it — lives in beads. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. [WORKS]
+- One human owns a plan (though it is recorded nowhere); work can involve many identities; handover freezes the scope handed over, not the whole plan; and an agent may file sketch nodes without asking. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. [WORKS]
+- An agent's key is a second writer on every plan, but the difference between an owner and a delegate is unwritten. The retirement condition 'two people edit one plan' can be read more than one way, and nothing says which. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [GAP]
+<<<
+PARENT_FP: >>>
+DEC-ARCH-COLOCATION:0000000
+DEC-NODE-FILE-NAMING:0000000
+DEC-ONE-GRAMMAR:0000000
+DEC-PLAN-LIFECYCLE-OPEN:0000000
+NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER:0000000
+NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT:0000000
+NAR-SEMANTIC-LAYER-TYPE-DECISION:0000000
+NAR-SEMANTIC-LAYER-TYPE-MECHANISM:0000000
+NAR-SEMANTIC-LAYER-TYPE-WORK:0000000
+NAR-TERM-BEADS:0000000
+NAR-TERM-CANON:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NODE-FILE-NAMING
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-PLAN-LIFECYCLE-OPEN
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-DECISION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-WORK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-ONE-GRAMMAR
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-ARCH-COLOCATION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-MECHANISM
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-BEADS
+  ROLE: Cites

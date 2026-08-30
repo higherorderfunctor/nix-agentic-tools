@@ -7,20 +7,33 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-VIEW-TASK
 TITLE: One devenv task renders a root: export, view-check, wireline, render
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
-devenv tasks run --mode before view:render -- --root UID runs the strictdoc
-export into a clean directory, the view check, the wireline and the
-renderer, and leaves the page and the payload under output/view/, which is
-gitignored: the canon is the source and the page is regenerable. Flipping
-the view is passing a different root. The published artifact is a copy of
-that page, republished by hand or by a task, never edited.
+devenv tasks run --mode before view:render --input root=UID runs the
+strictdoc export into a clean directory, the view check, the wireline and
+the renderer, and leaves the page and the payload under output/view/, which
+is gitignored: the canon is the source and the page is regenerable. Flipping
+the view is passing a different root. The root travels through devenv's
+task-input channel, because devenv tasks run has no argument passthrough. A
+view-check finding does not stop the render: the findings are in the payload
+and on the page's start screen; a bad root does. The published artifact is a
+copy of that page, republished by hand or by a task, never edited.
 <<<
 RATIONALE: >>>
 The task is the only sanctioned way to regenerate (the repo's generate:* convention); a page nobody can regenerate is the one-off render again.
+<<<
+NOTES: >>>
+Built 2026-08-30 in dev/tasks/generate.nix, beside the generate:* tasks.
+The statement first read "-- --root UID"; measured that day, devenv tasks
+run reads a "-- --root X" as a task named "--root" and refuses it, so the
+root goes through --input root=UID and the task reads it from
+DEVENV_TASK_INPUT. Measured wall time for --input root=NAR-SEMANTIC-LAYER:
+about 19 s, of which devenv's own evaluation is the bulk.
 <<<
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-VIEWS-ARE-REGENERABLE
   ROLE: Governed_By
+- TYPE: File
+  VALUE: dev/tasks/generate.nix

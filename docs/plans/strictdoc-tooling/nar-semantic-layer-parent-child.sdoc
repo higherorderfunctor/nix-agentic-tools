@@ -1,0 +1,53 @@
+[DOCUMENT]
+TITLE: What 'parent' means
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-PARENT-CHILD
+TITLE: What 'parent' means
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+STATEMENT: >>>
+strictdoc's trace direction, this repo's reading of it as 'depends on', and the closure walk.
+
+- In strictdoc, writing 'Parent: B' on node A means A traces to B, and B's child link is derived. Role names are labels only. All eight roles here are Parent links; the reverse names are never used, and the JSON export drops them. [WORKS]
+- This repo reads 'parent' as 'what I depend on', and the closure walk — a node plus everything it depends on, transitively — treats a probe, a superseding decision and a backlog register all as dependencies alike. [UNADDRESSED]
+- No Child relation is declared or used. The readiness query only follows Parent links, so a future Child link would never count as a dependency. [WORKS]
+- The one wanted use of a Child link — tying code to its layer through boundary nodes in the spec — has no boundary node and no layer relation to hang on. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]. [GAP]
+- Because Superseded_By is a Parent link, the successor becomes the retired decision's parent. Whether depending on a superseded decision blocks readiness is undecided. See [LINK: DEC-SUPERSESSION-RULE]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [OPEN: DEC-SUPERSESSION-RULE]
+- Three things the spec fixes: a reader pulls context in along edges rather than reading everything; each plan has one owner; and a rule that lives only in a document is not a rule. See [LINK: DEC-SYSTEM-PURPOSE] and [LINK: INV-GUARDS-MUST-EXECUTE]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT] and [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [WORKS]
+<<<
+PARENT_FP: >>>
+DEC-SUPERSESSION-RULE:0000000
+DEC-SYSTEM-PURPOSE:0000000
+INV-GUARDS-MUST-EXECUTE:0000000
+NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER:0000000
+NAR-SEMANTIC-LAYER-TYPE-DECISION:0000000
+NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT:0000000
+NAR-TERM-STRICTDOC:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-SUPERSESSION-RULE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-DECISION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-PURPOSE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: INV-GUARDS-MUST-EXECUTE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-STRICTDOC
+  ROLE: Cites

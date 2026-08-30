@@ -1,0 +1,69 @@
+[DOCUMENT]
+TITLE: Plans and git refs
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-PLANS-IN-REFS
+TITLE: Plans and git refs
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+STATEMENT: >>>
+Which ref the canon lives on, the long-lived branch, squash merges, and the missing merge joint.
+
+- Only a lean exists: plans may not belong on main; commit only the snapshot that led to work. No ref, tag or branch is named. See [LINK: DEC-PLAN-LIFECYCLE-OPEN]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]. [OPEN: DEC-PLAN-LIFECYCLE-OPEN]
+- The counter-argument: the canon cannot query git, and its intended reader has no memory of yesterday. See [LINK: DEC-SYSTEM-PURPOSE]. [WORKS]
+- Canon means committed, reviewed and ratified by merge — yet origin/main holds zero .sdoc files. Which ref the canon lives on is never said. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT] and [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]. [GAP]
+- Work accumulates on one long-lived branch with no pull request during development. At a milestone it is cut into pull requests, each cut bounded by atomicity; acceptance happens at that second review. See [LINK: DEC-LONG-LIVED-BRANCH]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [WORKS]
+- A squash merge keeps the tree, so hashes stay valid, but destroys per-commit attribution. The pull request is the durable unit, and the fail-safe is running the fingerprint check on the tree about to become main. See [LINK: MECH-FP-MAIN-LINEAGE]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]. [WORKS]
+- There is no joint before a merge: merge and rewrite fire only after the fact, the pre-push joint can be bypassed, and CI is not a joint. Every merge-time rule has nowhere to attach. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]. [GAP]
+<<<
+PARENT_FP: >>>
+DEC-LONG-LIVED-BRANCH:0000000
+DEC-PLAN-LIFECYCLE-OPEN:0000000
+DEC-SYSTEM-PURPOSE:0000000
+MECH-FP-MAIN-LINEAGE:0000000
+NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT:0000000
+NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT:0000000
+NAR-SEMANTIC-LAYER-TYPE-DECISION:0000000
+NAR-SEMANTIC-LAYER-TYPE-MECHANISM:0000000
+NAR-TERM-CANON:0000000
+NAR-TERM-JOINT:0000000
+NAR-TERM-SDOC:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-PLAN-LIFECYCLE-OPEN
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-DECISION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-PURPOSE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-LONG-LIVED-BRANCH
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FP-MAIN-LINEAGE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-MECHANISM
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-JOINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-SDOC
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites

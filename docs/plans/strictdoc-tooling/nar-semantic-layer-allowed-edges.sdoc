@@ -1,0 +1,100 @@
+[DOCUMENT]
+TITLE: Which relations are allowed
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-ALLOWED-EDGES
+TITLE: Which relations are allowed
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+STATEMENT: >>>
+Each role, what it may point at, how many are live, and what nothing checks.
+
+- strictdoc checks only that a relation's role is registered on the source type and that its target exists. It never checks the target's type, the direction, or cycles. Eighteen (source type, role) pairs are live, plus File links on three types. [WORKS]
+- A check that each role points at a legal target type was designed with 13 rows, is unbuilt, and is five rows short of the 18 pairs actually in use. Two settled nodes give different tables, and neither covers the ruled types. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY]. [GAP]
+- Governed_By points at a decision (65 live edges from mechanisms, work, requirements and probes). The grid adds a requirement as a legal target, and two edges still point at the wrong kind of node. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] and [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]. [GAP]
+- Crosses (35 live edges, work to mechanism) is the lane a piece of work declares. But no node records which layer it belongs to, so 'crosses more than one layer' — what used to make a piece of work a 'slice' — has nothing to read. See [LINK: DEC-DEFER-LAYER]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]. [OPEN: DEC-DEFER-LAYER]
+- Assumes (17 live edges, none fingerprinted) is undecided: does it carry a contract like the other roles, and does an unsettled target block readiness the way Crosses does? See [LINK: DEC-ASSUMES-CONTRACT-BEARING]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM], [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [OPEN: DEC-ASSUMES-CONTRACT-BEARING]
+- Guarantees (2 live edges) points from a mechanism at the rule it upholds — read as a requirement. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM] and [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]. [WORKS]
+- Superseded_By (2 live) is written on the retired decision, pointing at its successor. The plan is to extend it to other types once a second case appears in prose. Who may supersede is unstated. See [LINK: DEC-SUPERSESSION-RULE]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [OPEN: DEC-SUPERSESSION-RULE]
+- That extension list still names two of the dissolved types (what the grammar spells SLICE and INVARIANT) and omits requirement, use case and evidence. See [LINK: DEC-NODE-TYPE-GRID]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION], [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT], [LINK: NAR-SEMANTIC-LAYER-TYPE-USE-CASE] and [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY]. [FALLS OUT: DEC-NODE-TYPE-GRID]
+- Two mechanisms have been superseded in prose only, so the count that is supposed to trigger the extension reads zero. See [LINK: MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE] and [LINK: MECH-PLAN-BEADS-SNAPSHOT]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. [GAP]
+- Backlogged_In (90 live edges) is meant to pair with DEPTH: sketch. The pairing is already broken — 8 sketch nodes lack the edge, none of the 41 decisions carry it, and a decision has no DEPTH to check against anyway. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] and [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. [GAP]
+- Nothing outside a plan may depend on a node inside it, and another plan counts as outside. The rule is keyed on file location. Two live edges violate it, and the check is unbuilt. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]. [WORKS]
+- Fingerprints are supposed to point strictly downward — decision to mechanism to work. Live entries from requirements to decisions, probes to decisions, and mechanism to mechanism sit off that ladder, and the direction has not said what to do with them. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION], [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM], [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK], [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT] and [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE]. [UNADDRESSED]
+- Cycles among relations are caught by the repo's own check, run in nix flake check; strictdoc has no cycle check of its own. See [LINK: MECH-CYCLE-CHECK]. [WORKS]
+<<<
+PARENT_FP: >>>
+DEC-ASSUMES-CONTRACT-BEARING:0000000
+DEC-DEFER-LAYER:0000000
+DEC-NODE-TYPE-GRID:0000000
+DEC-SUPERSESSION-RULE:0000000
+MECH-CYCLE-CHECK:0000000
+MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE:0000000
+MECH-PLAN-BEADS-SNAPSHOT:0000000
+NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY:0000000
+NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT:0000000
+NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER:0000000
+NAR-SEMANTIC-LAYER-TYPE-DECISION:0000000
+NAR-SEMANTIC-LAYER-TYPE-EVIDENCE:0000000
+NAR-SEMANTIC-LAYER-TYPE-MECHANISM:0000000
+NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT:0000000
+NAR-SEMANTIC-LAYER-TYPE-USE-CASE:0000000
+NAR-SEMANTIC-LAYER-TYPE-WORK:0000000
+NAR-TERM-STRICTDOC:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-DECISION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-DEFER-LAYER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-WORK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-MECHANISM
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-ASSUMES-CONTRACT-BEARING
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-SUPERSESSION-RULE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-NODE-TYPE-GRID
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-USE-CASE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-PLAN-BEADS-SNAPSHOT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-CYCLE-CHECK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-STRICTDOC
+  ROLE: Cites

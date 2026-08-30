@@ -1,0 +1,107 @@
+[DOCUMENT]
+TITLE: What a node is
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-NODE-STRUCT
+TITLE: What a node is
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+STATEMENT: >>>
+The types, the fields every node carries, and the two ladders (DEPTH, AUTHORED_BY).
+
+- The grammar is generated from one Nix file. Every node carries a UID, a TITLE, who wrote it (AUTHORED_BY: llm or human) and a STATEMENT; RATIONALE and NOTES are optional, and the parser enforces the field order. [WORKS]
+- A decision (41 on the sheet's day) carries a STATUS of open, accepted, rejected or superseded, and a RETIRES_ON condition. It has no DEPTH and no fingerprint of its own; its only relations are Superseded_By and Backlogged_In. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [WORKS]
+- A mechanism (129) carries DEPTH and may carry fingerprints, and can make seven kinds of relation. In the grid it is the descriptive-and-universal cell: how the system always behaves. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. [WORKS]
+- Nobody has asked, node by node, whether each of the 129 mechanisms describes behaviour or imposes a rule. The two that a check enforces are rules — requirements wearing a mechanism prefix. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM] and [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY]. [GAP]
+- The grammar's INVARIANT type (8 nodes, same fields as a mechanism) is dissolved: each one is a requirement. See [LINK: DEC-INVARIANT-IS-A-REQUIREMENT]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY]. [FALLS OUT: DEC-INVARIANT-IS-A-REQUIREMENT]
+- Two of those eight are not rules at all but measurements — evidence, not requirements. That is exactly the condition under which the ruling says it retires, and nobody has noticed. See [LINK: INV-REGISTER-NOT-AUTHORITATIVE] and [LINK: INV-VOCABULARIES-UNBOUNDED]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT] and [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY]. [GAP]
+- The grammar's SLICE type (13 nodes, same fields as a mechanism) is dissolved: each one is work that declares what it crosses. See [LINK: DEC-SLICE-DECOMPOSES-TO-WORK]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY]. [FALLS OUT: DEC-SLICE-DECOMPOSES-TO-WORK]
+- The grammar's SPIKE type (11 nodes) carries two state fields: DEPTH and a STATUS of unrun, run or blocked. It is read as a pipeline — work, then evidence, then the decision it settles — but no decision has ruled that reading. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK], [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE] and [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY]. [GAP]
+- Six of the ruled types are absent from the grammar: requirement, use case, evidence, work, narrative and plan (today only a directory). For each, nobody has written which fields it carries, what its state field is, whether it has DEPTH or fingerprints, or whether it may name a file. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT], [LINK: NAR-SEMANTIC-LAYER-TYPE-USE-CASE], [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE], [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-NARRATIVE]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY]. [GAP]
+- A narrative assembles the grid — the claims about the system — for a person to read start to finish, yet the system's stated purpose names a model with a bounded context as the reader. The direction has not reconciled the two. See [LINK: DEC-SYSTEM-PURPOSE]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-NARRATIVE]. [UNADDRESSED]
+- DEPTH is a six-step ladder — sketch, needs-design, needs-spike, interface-settled, implemented, verified — with one word list shared by every type that carries it. Live counts on the sheet's day: 98, 1, 0, 36, 23, 3. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM], [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT], [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE]. [WORKS]
+- Unsaid: whether DEPTH may go back down, where each type's 'settled' line sits, and that 'needs-spike' names a type that no longer exists. STATUS is one field name with two different word lists, and nobody has said whether every state field should be called STATUS. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM], [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION], [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE]. [UNADDRESSED]
+- AUTHORED_BY is a four-rung ladder — llm, llm-accepted, llm-adopted, human — that only rises. It governs whether an agent may undo a change: freely at the bottom rung, with a report above it, and only by stopping to ask at the top. [WORKS]
+- Who made a write is read off the ssh key: a human or an agent. But the grammar still spells only llm and human, scribe always stamps llm, and there is no move by which a human raises a node up the ladder. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [GAP]
+- An agent has rewritten 10 of the 31 statements marked human-authored, and the mark did not change. Three remedies were listed — hash the text into the mark, drop the mark, or forbid the edit — and none was chosen; the ladder rules out dropping it. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [UNADDRESSED]
+- A fingerprint is seven hex characters hashed from a parent's contract fields (everything but RATIONALE, NOTES, PARENT_FP and RELATIONS), recorded on the child as PARENT_FP. 0000000 means unsigned. All 31 live entries read 0000000: nothing has ever been signed. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM], [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]. [UNADDRESSED]
+- Which fields count toward a fingerprint, and which fields are reserved to their owner (PARENT_FP and AUTHORED_BY), are hard-coded lists inside scribe. Under the layer stack they are semantic-layer data, and a ruling already says they are configuration. See [LINK: DEC-FP-FIELDS-CONFIGURABLE] and [LINK: DEC-LAYER-STACK]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]. [FALLS OUT: DEC-LAYER-STACK, L3 (semantic-layer) data; DEC-FP-FIELDS-CONFIGURABLE]
+- RETIRES_ON is prose about a future condition, so no joint — a place logic could attach — can evaluate it. And if a probe (grammar: SPIKE) is really work, then evidence, then a decision, its RETIRES_ON has no node to live on. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION], [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE] and [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. [UNADDRESSED]
+- Each plan's backlog is one register node that ungroomed items point at. It asserts nothing about the world, so the grid gives it no cell to sit in. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. [UNADDRESSED]
+- A node's UID is its only stable identity, and the UID's prefix spells its type. So changing a node's type mints a new UID and moves every relation and fingerprint that named the old one. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY]. [GAP]
+<<<
+PARENT_FP: >>>
+DEC-FP-FIELDS-CONFIGURABLE:0000000
+DEC-INVARIANT-IS-A-REQUIREMENT:0000000
+DEC-LAYER-STACK:0000000
+DEC-SLICE-DECOMPOSES-TO-WORK:0000000
+DEC-SYSTEM-PURPOSE:0000000
+NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY:0000000
+NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER:0000000
+NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER:0000000
+NAR-SEMANTIC-LAYER-TYPE-DECISION:0000000
+NAR-SEMANTIC-LAYER-TYPE-EVIDENCE:0000000
+NAR-SEMANTIC-LAYER-TYPE-MECHANISM:0000000
+NAR-SEMANTIC-LAYER-TYPE-NARRATIVE:0000000
+NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT:0000000
+NAR-SEMANTIC-LAYER-TYPE-USE-CASE:0000000
+NAR-SEMANTIC-LAYER-TYPE-WORK:0000000
+NAR-TERM-JOINT:0000000
+NAR-TERM-SCRIBE:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-DECISION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-MECHANISM
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-INVARIANT-IS-A-REQUIREMENT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-SLICE-DECOMPOSES-TO-WORK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-WORK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-USE-CASE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-NARRATIVE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-PURPOSE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-FP-FIELDS-CONFIGURABLE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-JOINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-SCRIBE
+  ROLE: Cites

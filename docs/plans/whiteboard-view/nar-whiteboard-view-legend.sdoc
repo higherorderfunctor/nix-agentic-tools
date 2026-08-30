@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: How to read the colours
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-WHITEBOARD-VIEW-LEGEND
+TITLE: How to read the colours
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: legend
+STATEMENT: >>>
+Colour is only ever a legend word, and the word is always written out beside it. The first four words say how settled a ruling or a program is; the last three belong to the rules tab and say who enforces a rule today.
+
+- ACCEPTED: green: in force
+- OPEN: blue: a question
+- SETTLED: teal: designed, not built
+- BUILT: green: code landed
+- STRICTDOC: slate: strictdoc already refuses it
+- SCRIPT: amber: a rule in a script, indexed here
+- UNBUILT: red: nobody enforces it
+<<<
+PARENT_FP: >>>
+NAR-TERM-STRICTDOC:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-TERM-STRICTDOC
+  ROLE: Cites

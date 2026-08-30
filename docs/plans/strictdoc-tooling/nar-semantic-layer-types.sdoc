@@ -1,0 +1,47 @@
+[DOCUMENT]
+TITLE: The seven kinds of node
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-TYPES
+TITLE: The seven kinds of node
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: tally
+STATEMENT: >>>
+Node types come in four families, and only the first is a grid ([LINK: DEC-NODE-FAMILIES]). Definition holds the claims the canon asserts, on two axes -- normative or descriptive, universal or particular -- so a requirement is what must always hold, a decision what was chosen here, a mechanism how the system always behaves, and evidence what was observed once. Coverage is the use case, covered or uncovered. Representation is the narrative, which presents and is never presented. Work is something to do, and dies with its plan. The bars below count the rows of the sheet that speak about each kind, by verdict word.
+<<<
+PARENT_FP: >>>
+DEC-NODE-FAMILIES:0000000
+NAR-TERM-CANON:0000000
+<<<
+RELATIONS:
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-USE-CASE
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-MECHANISM
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-DECISION
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-NARRATIVE
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-WORK
+  ROLE: Contains
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites

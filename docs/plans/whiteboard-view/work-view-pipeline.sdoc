@@ -1,0 +1,40 @@
+[DOCUMENT]
+TITLE: Build the view pipeline: wireline, check, renderer, task
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-VIEW-PIPELINE
+TITLE: Build the view pipeline: wireline, check, renderer, task
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+Build the four programs of the view -- the wireline, the check, the renderer with its template, and the devenv task that runs them in order -- register each program as a File relation on its mechanism, and raise each mechanism to implemented. Done 2026-08-30; what the first render measured is the evidence this work produces.
+<<<
+PARENT_FP: >>>
+DEC-VIEWS-ARE-REGENERABLE:0000000
+MECH-VIEW-CHECK:0000000
+MECH-VIEW-RENDERER:0000000
+MECH-VIEW-TASK:0000000
+MECH-VIEW-WIRELINE:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-VIEWS-ARE-REGENERABLE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-VIEW-WIRELINE
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-VIEW-RENDERER
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-VIEW-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-VIEW-TASK
+  ROLE: Crosses
+- TYPE: Child
+  VALUE: EV-VIEW-PIPELINE-FIRST-RENDER
+  ROLE: Produces

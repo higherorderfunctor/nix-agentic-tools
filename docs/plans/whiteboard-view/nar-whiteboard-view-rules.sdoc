@@ -1,0 +1,42 @@
+[DOCUMENT]
+TITLE: The rules, and who enforces each
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-WHITEBOARD-VIEW-RULES
+TITLE: The rules, and who enforces each
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+STATEMENT: >>>
+The porting inventory: every rule a rendered view relies on, with who enforces it today. Some the parser refuses at export, some a script catches and is listed here for it, and two have no enforcer yet. A rule in a script is allowed for now on the operator's ruling that validation need not be modelled on join points yet, provided each such rule is indexed on this screen.
+
+- A Cites that names a node not in the export refuses the export. [STRICTDOC]
+- An inline link token in a STATEMENT whose UID does not exist refuses the export. [STRICTDOC]
+- A relation role the source type does not register refuses the export. [STRICTDOC]
+- A field out of grammar order refuses the export. [STRICTDOC]
+- contains-is-a-tree: a narrative is contained at most once from the root, and Contains never closes a cycle. [LINK: MECH-VIEW-CHECK] [SCRIPT]
+- contains-target-is-narrative: a Contains target is a NARRATIVE. [LINK: MECH-VIEW-CHECK] [SCRIPT]
+- legend-word: every row bracket word is in the root's legend child, and rows without any legend child is one finding at the root. [LINK: MECH-VIEW-CHECK] [SCRIPT]
+- widget-shape: a STATEMENT has the shape its WIDGET says: rows has items, glossary rows split on the first colon, legend rows on two and name a colour from the vocabulary, a table has a header row with pipes. [LINK: MECH-VIEW-CHECK] [SCRIPT]
+- cited-node-superseded: a cited node is not superseded. [LINK: MECH-VIEW-CHECK] [SCRIPT]
+- nothing-depends-on-a-narrative: no node outside the representation family points a Parent relation or a fingerprint entry at a narrative in the tree. [LINK: MECH-VIEW-CHECK] [SCRIPT]
+- title-holds-a-link: a TITLE holds no inline link token, which is inert there. [LINK: MECH-VIEW-CHECK] [SCRIPT]
+- A recorded fingerprint that no longer matches its parent's current contract is reported as drifted, and a placeholder as never signed. [LINK: MECH-FP-CHECK] [SCRIPT]
+- Role-carrying relations close no cycle, which the parser's own cycle check never sees. [LINK: MECH-CYCLE-CHECK] [SCRIPT]
+- A relation's target has the type its role expects, across the whole export and not only inside a view's tree. [LINK: MECH-RELATION-TARGET-TYPE-LINT] [UNBUILT]
+- No Parent relation crosses from one plan directory into another, and Cites is one. [LINK: MECH-PLAN-REFS-CHECK] [UNBUILT]
+<<<
+PARENT_FP: >>>
+MECH-VIEW-CHECK:0000000
+NAR-TERM-JOINT:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-VIEW-CHECK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-JOINT
+  ROLE: Cites

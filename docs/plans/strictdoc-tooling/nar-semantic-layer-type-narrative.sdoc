@@ -1,0 +1,35 @@
+[DOCUMENT]
+TITLE: narrative
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-TYPE-NARRATIVE
+TITLE: narrative
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: prose
+TAGS: NARRATIVE
+STATEMENT: >>>
+A maintained projection for a reader: it presents parts of the canon, start to finish, and depends on their wording.
+
+Also: the representation family ([LINK: DEC-NODE-FAMILIES]). It Cites what it presents, may fingerprint each citation so the edge goes dirty when a cited node changes, and nothing in the grid may depend on one. On the sheet's day the grammar had no such type and the whiteboard was a narrative filed as a mechanism; since 2026-08-30 the grammar spells it with WIDGET and TAGS, this page is a tree of them, and the whiteboard was retyped in place under [LINK: DEC-UID-OUTLIVES-TYPE] -- the first retype between two live prefixes. How a tree of narratives becomes a page is [LINK: DEC-NARRATIVE-IS-THE-VIEW-NODE], in the whiteboard-view plan.
+
+State: DEPTH -- sketch for a draft, interface-settled once the operator has read it and let it stand.
+<<<
+PARENT_FP: >>>
+DEC-NODE-FAMILIES:0000000
+DEC-UID-OUTLIVES-TYPE:0000000
+NAR-TERM-CANON:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-UID-OUTLIVES-TYPE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites

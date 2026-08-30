@@ -1,0 +1,88 @@
+[DOCUMENT]
+TITLE: Words used on this page
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-WORDS
+TITLE: Words used on this page
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: glossary
+STATEMENT: >>>
+The ruled words are the seven term narratives this tab contains, each citing the decision that ruled it. The field names and working terms below are the sheet's own and rule nothing; where a word is the sheet's, the sheet's wording in the last tab shows it in use.
+
+- node: One claim, decision, narrative or piece of work, in one file named for its UID.
+- UID: A node's hand-chosen name, such as DEC-LAYER-STACK. Its prefix spells the type the node was born with; the element tag is the type it is ([LINK: DEC-UID-OUTLIVES-TYPE]).
+- relation / edge / role: A link from one node to another. The role (Governed_By, Crosses, ...) says what kind of link it is. A Parent role is written on the node that depends and is a dependency; a Child role (Contains, Produces) is written on the owner and never is.
+- closure: A node plus everything it depends on, transitively.
+- lane: What a piece of work declares it crosses — the mechanisms and, once layers exist, the files it may touch.
+- flow: One operation the canon supports end to end — create, sign, check, ingest — with joints before and after it.
+- readiness: Whether a piece of work can start: every decision in its closure accepted, every mechanism settled, no dirty edge.
+- degrees of freedom: The number of open decisions in a closure — the questions still standing between work and starting it.
+- settled: DEPTH at interface-settled or above, or a decision accepted.
+- DEPTH: A six-rung ladder of design maturity: sketch, needs-design, needs-spike, interface-settled, implemented, verified.
+- STATUS: A decision's state: open, accepted, rejected, superseded. Only a decision carries it since the SPIKE type dissolved; every other type carries DEPTH.
+- AUTHORED_BY: Who wrote a node's statement: a four-rung ladder -- llm, llm-accepted, llm-adopted, human -- that only rises. The writer stamps llm; the other rungs are a human's acts.
+- RETIRES_ON: The condition under which a decision expires. Required, and prose.
+- contract: A node's fingerprinted fields — everything but RATIONALE, NOTES, PARENT_FP and RELATIONS.
+- fingerprint / PARENT_FP: Seven hex characters hashed from a parent's contract, recorded on the child, one entry per line. 0000000 means never signed, and nothing has ever been signed.
+- dirty edge: A child whose recorded fingerprint no longer matches its parent's current contract, or whose parent is gone.
+- ripple: When a parent's contract changes, every child depending on it becomes dirty.
+- sign / accept: Rewrite a child's recorded hash to the parent's current one, accepting the change. Nothing has ever been signed.
+- identity / class: The ssh key that made a write, and the class read off it: human or agent (llm).
+- plan: A directory of nodes under docs/plans/; its nodes are the collectable class, but what collects a plan, and when, is still an open decision ([LINK: DEC-PLAN-LIFECYCLE-OPEN]). PLAN is the one ruled name still absent from the grammar; whether a plan becomes a node type of its own is that decision's too.
+- collect: What eventually happens to a plan: its nodes go with it unless promoted out. What triggers it, and when, is unwritten; for now nothing is deleted — supersede instead.
+- groom: Raise a node from sketch and drop its backlog edge, in place.
+- register: A plan's backlog: one node that ungroomed items point at. It holds no list; the edges are the list.
+- handover / ingest: Hand a piece of work to beads to execute. From then on execution state lives in beads.
+- probe: What the grammar used to spell SPIKE: work that gathers evidence to settle a decision. Since 2026-08-30 a run probe is EVIDENCE and an unrun one is WORK, each keeping its SPIKE- prefix.
+- layer L0–L3: L0 grammar machinery, L1 this repo's grammar, L2 hook machinery (semantic-free), L3 the semantic layer. Semantics never live in a tool.
+- the grid: Two axes -- normative or descriptive, universal or particular -- that place REQUIREMENT, DECISION, MECHANISM and EVIDENCE. USE_CASE is the coverage family, NARRATIVE the representation family, WORK the work family; none of the three is in the grid.
+- dissolved: A type or mechanism the direction has replaced with something already in the model. Marked 'falls out' on this page.
+<<<
+PARENT_FP: >>>
+DEC-PLAN-LIFECYCLE-OPEN:0000000
+DEC-UID-OUTLIVES-TYPE:0000000
+NAR-TERM-BEADS:0000000
+NAR-TERM-CANON:0000000
+NAR-TERM-JOINT:0000000
+<<<
+RELATIONS:
+- TYPE: Child
+  VALUE: NAR-TERM-JOINT
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-TERM-CHECKPOINT
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-TERM-SCRIBE
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-TERM-SDOC
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-TERM-STRICTDOC
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-TERM-CANON
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-TERM-BEADS
+  ROLE: Contains
+- TYPE: Parent
+  VALUE: DEC-UID-OUTLIVES-TYPE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-PLAN-LIFECYCLE-OPEN
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-JOINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-BEADS
+  ROLE: Cites

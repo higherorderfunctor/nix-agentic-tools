@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: Carry the whiteboard sheet into a tree of narratives
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-WHITEBOARD-AS-NARRATIVES
+TITLE: Carry the whiteboard sheet into a tree of narratives
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+Carry the semantic-layer whiteboard sheet into a tree of narratives, one per screen, with the sheet's lines as rows and its verdicts as legend words, written through the scribe. The tree lives in the strictdoc-tooling plan under [LINK: NAR-SEMANTIC-LAYER], because Cites is a Parent relation and the sheet's lines cite that plan's nodes; the work item sits here because the migration is the view system's first customer. Done 2026-08-30. It crosses no mechanism of this plan: the programs consume the tree, they did not build it.
+<<<
+PARENT_FP: >>>
+DEC-VIEWS-ARE-REGENERABLE:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-VIEWS-ARE-REGENERABLE
+  ROLE: Governed_By
+- TYPE: Child
+  VALUE: EV-WHITEBOARD-MIGRATION-COUNTS
+  ROLE: Produces

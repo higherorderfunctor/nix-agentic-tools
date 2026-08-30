@@ -1,0 +1,35 @@
+[DOCUMENT]
+TITLE: requirement
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT
+TITLE: requirement
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: prose
+TAGS: REQUIREMENT
+STATEMENT: >>>
+What must always be true. It can be violated; when it is, you fix the world, not the node.
+
+Also: design principles are requirements too. Normative and universal in the grid ([LINK: DEC-NODE-FAMILIES]). The eight nodes born under the INVARIANT prefix were retyped on 2026-08-30: six are REQUIREMENT now and two, which record measurements, are EVIDENCE -- [LINK: DEC-INVARIANT-IS-A-REQUIREMENT] ruled the reading and [LINK: DEC-UID-OUTLIVES-TYPE] let each keep its INV- prefix. The two mechanisms a check enforces today read as requirements wearing a mechanism prefix; the rest have never been asked "can it be violated?". A node may name the requirement it serves: Governed_By admits a requirement as a target, a rule for the target-type lint when it is built.
+
+State: DEPTH, the ladder every type but a decision carries.
+<<<
+PARENT_FP: >>>
+DEC-INVARIANT-IS-A-REQUIREMENT:0000000
+DEC-NODE-FAMILIES:0000000
+DEC-UID-OUTLIVES-TYPE:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-INVARIANT-IS-A-REQUIREMENT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-UID-OUTLIVES-TYPE
+  ROLE: Cites

@@ -1,0 +1,34 @@
+[DOCUMENT]
+TITLE: The paths that must work
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-WHITEBOARD-VIEW-PATHS
+TITLE: The paths that must work
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+STATEMENT: >>>
+Three use cases, each covered by the rulings and programs it points at with Covered_By. Each is designed; none has yet been walked end to end against the built programs and recorded as evidence.
+
+- The operator chooses a different word for a ruled term, and every narrative that used it shows a drifted citation. [LINK: UC-RENAME-A-TERM] [SETTLED]
+- A ruling lands, the sections that cite it show drift, and only those are re-read, re-cut and re-signed. [LINK: UC-RECUT-AFTER-A-RULING] [SETTLED]
+- The view renders its own design from this root through the same programs, with no renderer change. [LINK: UC-FLIP-THE-VIEW] [SETTLED]
+<<<
+PARENT_FP: >>>
+UC-FLIP-THE-VIEW:0000000
+UC-RECUT-AFTER-A-RULING:0000000
+UC-RENAME-A-TERM:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: UC-RENAME-A-TERM
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: UC-RECUT-AFTER-A-RULING
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: UC-FLIP-THE-VIEW
+  ROLE: Cites
