@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: The renderer: a content-blind page over one payload, keyed on tree shape and widget words
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-VIEW-RENDERER
+TITLE: The renderer: a content-blind page over one payload, keyed on tree shape and widget words
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+render.py takes one payload and one template and writes one self-contained
+page; it refuses any payload whose schema it was not built for. The page:
+Start shows the root's own prose, the legend and the check findings, count
+first; one tab per child of the root, in order; a tab with children shows
+them as sections in order and a section with children shows cards; a
+narrative without children draws its own widget; a last tab, Nodes, lists
+every cited node grouped by type with its state, its backlinks and its
+relations, and gives each node a screen of its own with its neighbours.
+Widgets: prose, rows (with the legend's colour on the bracket word and the
+count of rows per word above the list), table, glossary (term cards),
+legend, tally (bars of backlink counts per child, totals first), edges
+(the pairs as a diagram, counts on the arrows). Every UID is shown with its
+title. Colour is only ever a legend word and is always written out beside
+it. The page renders in both themes.
+<<<
+RATIONALE: >>>
+The screens are an opinion about shape, allowed by REQ-VIEW-RENDERER-IS-CONTENT-BLIND; a project whose root has no legend simply has no colours.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-VIEWS-ARE-REGENERABLE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: REQ-VIEW-RENDERER-IS-CONTENT-BLIND
+  ROLE: Guarantees

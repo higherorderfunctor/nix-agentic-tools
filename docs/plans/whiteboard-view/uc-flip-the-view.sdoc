@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: The view renders its own design from its own root with no renderer change
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[USE_CASE]
+UID: UC-FLIP-THE-VIEW
+TITLE: The view renders its own design from its own root with no renderer change
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The operator runs the task with --root NAR-WHITEBOARD-VIEW and reads the
+view system's decisions, mechanisms, rules and work in the same page shape
+as the semantic-layer whiteboard, combs them, and edits by changing rows or
+filing nodes in this plan. The renderer, the wireline and the check are the
+same programs that rendered the whiteboard.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-VIEW-RENDERER-IS-CONTENT-BLIND
+  ROLE: Covered_By
+- TYPE: Parent
+  VALUE: MECH-VIEW-RENDERER
+  ROLE: Covered_By

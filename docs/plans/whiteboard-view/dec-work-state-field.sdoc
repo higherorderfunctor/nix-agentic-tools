@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: What DEPTH means on a WORK node: design maturity or delivery
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-WORK-STATE-FIELD
+TITLE: What DEPTH means on a WORK node: design maturity or delivery
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: Beads runs and holds execution state for at least one plan, so the canon can say which of the two DEPTH never was.
+STATEMENT: >>>
+WORK carries DEPTH because the migration gave it MECHANISM's field run, so
+that readiness and signing need no special case. But DEPTH is a design
+maturity ladder, and on a WORK node its top rungs -- implemented, verified
+-- record delivery, which is execution state. The handoff model gives work
+one state: complete or incomplete. Whether WORK keeps DEPTH, takes a state
+of its own, or carries no state at all once beads owns execution is open.
+<<<
+RATIONALE: >>>
+Recorded so the conflation is a named question rather than a habit; the whiteboard listed it as a gap.
+<<<
+NOTES: >>>
+Opened 2026-08-30 by the migration session. Lean: WORK keeps DEPTH until beads runs, then loses its top two rungs to beads.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-WHITEBOARD-VIEW
+  ROLE: Backlogged_In
