@@ -1,0 +1,44 @@
+[DOCUMENT]
+TITLE: Where this comes from
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-START-SOURCE
+TITLE: Where this comes from
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: facts
+PLACE: section
+STATEMENT: >>>
+- input: [LINK: MECH-SEMANTIC-LAYER-WHITEBOARD]
+- brief: [LINK: SLICE-SEMANTIC-LAYER-RENDER]
+- canon: export at 44493bce, 2026-08-30
+- wording: every line has a plain-language headline written for the page and the sheet's own wording one tap below; where they disagree, the sheet is the source
+- verdicts: a verdict is the sheet's opinion on its day, not a node's state; read a node's state on the node
+- dated: the sheet was cut on 2026-08-29 against the grammar of that day; on 2026-08-30 the ruled types entered the grammar and every node was retyped in place under [LINK: DEC-NODE-FAMILIES], keeping its UID under [LINK: DEC-UID-OUTLIVES-TYPE], so a row that says a type is absent, or that a retype re-mints a UID, describes the day before; the Types tab says what holds now, and rows are re-cut, never edited
+<<<
+PARENT_FP: >>>
+DEC-NODE-FAMILIES:0000000
+DEC-UID-OUTLIVES-TYPE:0000000
+MECH-SEMANTIC-LAYER-WHITEBOARD:0000000
+NAR-TERM-CANON:0000000
+SLICE-SEMANTIC-LAYER-RENDER:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SEMANTIC-LAYER-WHITEBOARD
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: SLICE-SEMANTIC-LAYER-RENDER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-UID-OUTLIVES-TYPE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites

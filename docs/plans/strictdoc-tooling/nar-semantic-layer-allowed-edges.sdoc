@@ -10,22 +10,48 @@ TITLE: Which relations are allowed
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: rows
+PLACE: screen
 STATEMENT: >>>
 Each role, what it may point at, how many are live, and what nothing checks.
 
-- strictdoc checks only that a relation's role is registered on the source type and that its target exists. It never checks the target's type, the direction, or cycles. Eighteen (source type, role) pairs are live, plus File links on three types. [WORKS]
-- A check that each role points at a legal target type was designed with 13 rows, is unbuilt, and is five rows short of the 18 pairs actually in use. Two settled nodes give different tables, and neither covers the ruled types. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY]. [GAP]
-- Governed_By points at a decision (65 live edges from mechanisms, work, requirements and probes). The grid adds a requirement as a legal target, and two edges still point at the wrong kind of node. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] and [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]. [GAP]
-- Crosses (35 live edges, work to mechanism) is the lane a piece of work declares. But no node records which layer it belongs to, so 'crosses more than one layer' — what used to make a piece of work a 'slice' — has nothing to read. See [LINK: DEC-DEFER-LAYER]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]. [OPEN: DEC-DEFER-LAYER]
-- Assumes (17 live edges, none fingerprinted) is undecided: does it carry a contract like the other roles, and does an unsettled target block readiness the way Crosses does? See [LINK: DEC-ASSUMES-CONTRACT-BEARING]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM], [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [OPEN: DEC-ASSUMES-CONTRACT-BEARING]
-- Guarantees (2 live edges) points from a mechanism at the rule it upholds — read as a requirement. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM] and [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]. [WORKS]
-- Superseded_By (2 live) is written on the retired decision, pointing at its successor. The plan is to extend it to other types once a second case appears in prose. Who may supersede is unstated. See [LINK: DEC-SUPERSESSION-RULE]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [OPEN: DEC-SUPERSESSION-RULE]
-- That extension list still names two of the dissolved types (what the grammar spells SLICE and INVARIANT) and omits requirement, use case and evidence. See [LINK: DEC-NODE-TYPE-GRID]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION], [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT], [LINK: NAR-SEMANTIC-LAYER-TYPE-USE-CASE] and [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY]. [FALLS OUT: DEC-NODE-TYPE-GRID]
-- Two mechanisms have been superseded in prose only, so the count that is supposed to trigger the extension reads zero. See [LINK: MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE] and [LINK: MECH-PLAN-BEADS-SNAPSHOT]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. [GAP]
-- Backlogged_In (90 live edges) is meant to pair with DEPTH: sketch. The pairing is already broken — 8 sketch nodes lack the edge, none of the 41 decisions carry it, and a decision has no DEPTH to check against anyway. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] and [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. [GAP]
-- Nothing outside a plan may depend on a node inside it, and another plan counts as outside. The rule is keyed on file location. Two live edges violate it, and the check is unbuilt. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]. [WORKS]
-- Fingerprints are supposed to point strictly downward — decision to mechanism to work. Live entries from requirements to decisions, probes to decisions, and mechanism to mechanism sit off that ladder, and the direction has not said what to do with them. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION], [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM], [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK], [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT] and [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE]. [UNADDRESSED]
-- Cycles among relations are caught by the repo's own check, run in nix flake check; strictdoc has no cycle check of its own. See [LINK: MECH-CYCLE-CHECK]. [WORKS]
+- strictdoc checks only that a relation's role is registered on the source type and that its target exists. It never checks the target's type, the direction, or cycles. Eighteen (source type, role) pairs are live, plus File links on three types.
+> strictdoc checks: ROLE registered on SOURCE type (fatal), Parent VALUE resolves (fatal); never target type, direction, cycles. Live: 18 (type, role) pairs + File on MECHANISM|SLICE|SPIKE [WORKS]
+- A check that each role points at a legal target type was designed with 13 rows, is unbuilt, and is five rows short of the 18 pairs actually in use. Two settled nodes give different tables, and neither covers the ruled types.
+[LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY]
+> target-type lint (source type, role) -> legal targets: 13 rows, unbuilt, 5 short of the 18 pairs; two settled tables disagree; no table for grid types exists [GAP]
+- Governed_By points at a decision (65 live edges from mechanisms, work, requirements and probes). The grid adds a requirement as a legal target, and two edges still point at the wrong kind of node.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]
+> Governed_By: MECHANISM|SLICE|INVARIANT|SPIKE -> DECISION (65); grid adds a REQUIREMENT target; 2 miscast edges still live [GAP]
+- Crosses (35 live edges, work to mechanism) is the lane a piece of work declares. But no node records which layer it belongs to, so 'crosses more than one layer' — what used to make a piece of work a 'slice' — has nothing to read.
+[LINK: DEC-DEFER-LAYER] [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM] [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]
+> Crosses: SLICE -> MECHANISM (35) = the lane; no node carries LAYER, so "crosses more than one layer" has no input [OPEN: DEC-DEFER-LAYER]
+- Assumes (17 live edges, none fingerprinted) is undecided: does it carry a contract like the other roles, and does an unsettled target block readiness the way Crosses does?
+[LINK: DEC-ASSUMES-CONTRACT-BEARING] [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM] [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]
+> Assumes: MECHANISM -> DECISION|MECHANISM, SLICE -> DECISION|SLICE (17 live, 0 fingerprinted); contract-bearing? blocks like Crosses? [OPEN: DEC-ASSUMES-CONTRACT-BEARING]
+- Guarantees (2 live edges) points from a mechanism at the rule it upholds — read as a requirement.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM] [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]
+> Guarantees: MECHANISM -> INVARIANT (2), read as -> REQUIREMENT [WORKS]
+- Superseded_By (2 live) is written on the retired decision, pointing at its successor. The plan is to extend it to other types once a second case appears in prose. Who may supersede is unstated.
+[LINK: DEC-SUPERSESSION-RULE] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]
+> Superseded_By: DECISION -> DECISION (2), written on the retired node; extend at the second prose instance; who may supersede: unstated [OPEN: DEC-SUPERSESSION-RULE]
+- That extension list still names two of the dissolved types (what the grammar spells SLICE and INVARIANT) and omits requirement, use case and evidence.
+[LINK: DEC-NODE-TYPE-GRID] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT] [LINK: NAR-SEMANTIC-LAYER-TYPE-USE-CASE] [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE] [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY]
+> that extension list names SLICE, INVARIANT and omits REQUIREMENT|USE CASE|EVIDENCE [FALLS OUT: DEC-NODE-TYPE-GRID]
+- Two mechanisms have been superseded in prose only, so the count that is supposed to trigger the extension reads zero.
+[LINK: MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE] [LINK: MECH-PLAN-BEADS-SNAPSHOT] [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]
+> prose-supersession ledger reads 0; MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE and MECH-PLAN-BEADS-SNAPSHOT are prose-superseded [GAP]
+- Backlogged_In (90 live edges) is meant to pair with DEPTH: sketch. The pairing is already broken — 8 sketch nodes lack the edge, none of the 41 decisions carry it, and a decision has no DEPTH to check against anyway.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]
+> Backlogged_In: any -> register (90); "sketch <=> edge" already broken: 8 sketch nodes lack it, 0 of 41 DECISIONs carry it, DECISION has no DEPTH to query [GAP]
+- Nothing outside a plan may depend on a node inside it, and another plan counts as outside. The rule is keyed on file location. Two live edges violate it, and the check is unbuilt.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT] [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]
+> direction: no Parent or PARENT_FP into docs/plans/<P>/ from outside (plan-to-plan counts); keyed on file; 2 live violations; check unbuilt [WORKS]
+- Fingerprints are supposed to point strictly downward — decision to mechanism to work. Live entries from requirements to decisions, probes to decisions, and mechanism to mechanism sit off that ladder, and the direction has not said what to do with them.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM] [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT] [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE]
+> fingerprint ladder DECISION -> MECHANISM -> SLICE strictly down; live INV->D, SPIKE->D, M->M sit off it [UNADDRESSED]
+- Cycles among relations are caught by the repo's own check, run in nix flake check; strictdoc has no cycle check of its own.
+[LINK: MECH-CYCLE-CHECK]
+> cycles over roled Parent edges: MECH-CYCLE-CHECK in nix flake check [WORKS]
 <<<
 PARENT_FP: >>>
 DEC-ASSUMES-CONTRACT-BEARING:0000000

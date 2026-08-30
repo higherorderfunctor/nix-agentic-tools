@@ -1,0 +1,57 @@
+[DOCUMENT]
+TITLE: First whole-canon render of the view organization: counts, checks, sizes, timings
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-VIEW-ORGANIZATION-FIRST-RENDER
+TITLE: First whole-canon render of the view organization: counts, checks, sizes, timings
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: /tmp/claude-1000/-home-caubut-Documents-projects-nix-agentic-tools/3dc654a0-2cd2-4447-a890-5bfe23555a4b/scratchpad/wf5/integrate/shots
+STATEMENT: >>>
+First whole-canon render of the view organization, 2026-08-30, from a
+fresh export of the worktree at commit 44493bce plus the uncommitted
+migration, backend, renderer and task work. The payload, schema
+whiteboard-view/2: 4 roots (NAR-CANON, NAR-MECHANISM-MOOD-REVIEW,
+NAR-SEMANTIC-LAYER, NAR-WHITEBOARD-VIEW), 72 narratives, 329 nodes, 831
+edges, 476 rows of which 117 carry a reference line (279 references in
+all) and 145 a source line; backlinks on 220 nodes; 16 widget words in
+use. Checks on that export: sdoc check 329 nodes, 0 findings; fp-check
+491 entries, 491 never signed, 0 suspect; cycle-check 757 role-carrying
+edges, 0 cycles; file-check 0 findings; view-check 7 findings, every one
+cited-node-superseded and pre-existing (three citations of
+DEC-NODE-TYPE-GRID under the semantic layer, four of
+DEC-NARRATIVE-IS-THE-VIEW-NODE and DEC-LEGEND-IS-DATA under the
+whiteboard view), 0 canon-wide. Page sizes: canon.html 1,560,146 bytes,
+canon.artifact.html 1,559,991 bytes, canon.json 1,973,933 bytes -- a tenth
+of the artifact cap. Task timings, warm: view:render 2.77 s and 2.45 s
+wall (export, four per-root checks, wireline, two renders); view:serve
+answered canon.html with HTTP 200 on 127.0.0.1:8791 and stopped cleanly.
+Screenshots at 390 px in both themes, 22 screens (the canon's Start,
+Types, Edges, Words, Whiteboards; the semantic layer's Start, Types, a
+type, Edges, Topics, a topic with a word preselected, Gaps, a gap, Words,
+Sheet; the whiteboard view's Start and data model; a node; Nodes; and the
+canon's Start, Edges and Nodes with whiteboard switched off), compared
+screen by screen against the v1 page's 82-element inventory.
+<<<
+NOTES: >>>
+What the comparison changed, all in docs/sdoc/view/template.html and the
+canon, none in the backend: the top tab strip clamps a label to two lines
+at 9rem instead of one line at 14rem, so a root's title reads instead of
+ellipsizing at its fourth word; the sub strip is tighter so seven one-word
+tabs fit a phone; tables drop to 0.82rem under 480 px so the live-count
+column stays in view; the edges figure spaces its boxes wider and tries
+more label positions; a tab whose data is narratives, and a root other
+than the canon's, leave the strip when their system is off, and a route
+into a switched-off root lands on a note; a glossary tagged with a query
+word draws the backend's computed table (the canon's Words tab drew "no
+terms" before). In the canon: PLACE on the whiteboard-view and mood-review
+children (legend card, screens, an Edges tab retitled Edges), and a strip
+section under the semantic layer's Topics tab for v1's rows-by-topic bar.
+Left alone: the seven cited-node-superseded findings (the sheet is a
+snapshot, re-cut rather than edited), the semantic layer's edges figure,
+which still overlaps labels among six types at 390 px and scrolls, and the
+systems table's meaning column, which scrolls off a phone.
+<<<

@@ -10,10 +10,11 @@ TITLE: Plan membership and collection contradict
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: prose
+PLACE: screen
 STATEMENT: >>>
 A node belongs to a plan by directory, while the one-grammar ruling says membership is an edge that 112 groomed nodes lack. Work 'dies with its plan', yet six pieces of work hold their proof in NOTES and twelve durable nodes point at probes whose work half would die. Collecting a plan today either breaks the export or deletes evidence.
 
-Nodes it touches: [LINK: DEC-ONE-GRAMMAR], [LINK: DEC-PLAN-LIFECYCLE-OPEN], [LINK: MECH-PLAN-CHANGE-KINDS], [LINK: MECH-PLAN-BEADS-SNAPSHOT], [LINK: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION] and [LINK: SLICE-SDOC-IN-SEMBLE].
+> Plan membership and collection contradict: retention is keyed on directory while DEC-ONE-GRAMMAR says membership is an edge that 112 groomed nodes lack; WORK 'dies with its plan' yet 6 SLICE hold their proof in NOTES and 12 Proven_By edges point into SPIKE whose work half would die, so collecting a plan today either breaks the export or deletes evidence.
 <<<
 PARENT_FP: >>>
 DEC-ONE-GRAMMAR:0000000

@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-VIEW-SERVE
 TITLE: The task renders the whole canon by default, writes both wrappers, and a second task serves the page on loopback
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 view:render with no root renders every root into output/view/canon.html
@@ -22,3 +22,5 @@ RELATIONS:
 - TYPE: Parent
   VALUE: REQ-VIEW-SERVES-LOCALLY-AND-AS-AN-ARTIFACT
   ROLE: Governed_By
+- TYPE: File
+  VALUE: dev/tasks/generate.nix

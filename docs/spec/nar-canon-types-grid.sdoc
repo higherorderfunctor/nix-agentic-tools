@@ -1,0 +1,63 @@
+[DOCUMENT]
+TITLE: The grid
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-CANON-TYPES-GRID
+TITLE: The grid
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: grid
+PLACE: card
+STATEMENT: >>>
+Two questions place a claim: does it say how the world ought to be or how it is, and is it about every case or one case. The decision sits inside the grid, the use case outside it as coverage, and the narrative and work outside it as representation and work ([LINK: DEC-NODE-FAMILIES]). Each cell links the type's own screen. Tap a cell.
+
+- normative: can be violated
+- descriptive: can only be wrong
+- universal: every case
+- particular: one case
+- [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]: normative: universal
+- [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]: normative: particular
+- [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]: descriptive: universal
+- [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE]: descriptive: particular
+- [LINK: NAR-SEMANTIC-LAYER-TYPE-USE-CASE]: outside
+- [LINK: NAR-SEMANTIC-LAYER-TYPE-NARRATIVE]: outside
+- [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]: outside
+<<<
+PARENT_FP: >>>
+DEC-NODE-FAMILIES:0000000
+NAR-SEMANTIC-LAYER-TYPE-DECISION:0000000
+NAR-SEMANTIC-LAYER-TYPE-EVIDENCE:0000000
+NAR-SEMANTIC-LAYER-TYPE-MECHANISM:0000000
+NAR-SEMANTIC-LAYER-TYPE-NARRATIVE:0000000
+NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT:0000000
+NAR-SEMANTIC-LAYER-TYPE-USE-CASE:0000000
+NAR-SEMANTIC-LAYER-TYPE-WORK:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-DECISION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-MECHANISM
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-USE-CASE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-NARRATIVE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-WORK
+  ROLE: Cites

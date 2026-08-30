@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-VIEW-PLACE-MIGRATION
 TITLE: The scripted pass that gives the existing narratives their PLACE, the Start cards, the reference and source lines, and short tab titles
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 One script over the semantic-layer tree, through the scribe: PLACE on the
@@ -29,3 +29,5 @@ RELATIONS:
 - TYPE: Parent
   VALUE: DEC-ROW-REFERENCE-LINES
   ROLE: Governed_By
+- TYPE: File
+  VALUE: docs/sdoc/view/migrations/migrate_places.py

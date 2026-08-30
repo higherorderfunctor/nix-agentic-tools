@@ -1,15 +1,16 @@
 [DOCUMENT]
-TITLE: Whiteboard: the semantic layer as the canon describes it, tagged against the current direction
+TITLE: Sheet
 
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
 [NARRATIVE]
 UID: MECH-SEMANTIC-LAYER-WHITEBOARD
-TITLE: Whiteboard: the semantic layer as the canon describes it, tagged against the current direction
+TITLE: Sheet
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: rows
+PLACE: tab
 STATEMENT: >>>
 WHITEBOARD SNAPSHOT, 2026-08-29. A one-sheet of the semantic layer as the canon
 describes it, every line tagged against the current direction: WORKS (stands),

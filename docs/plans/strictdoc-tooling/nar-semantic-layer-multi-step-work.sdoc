@@ -10,20 +10,43 @@ TITLE: Work, handover and completion
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: rows
+PLACE: screen
 STATEMENT: >>>
 Work versus use case, handover, the packet, where proof of completion goes, and probes.
 
-- Work declares what it crosses; crossing more than one layer is what used to be called a slice. Work says 'build this' and dies with its plan. A use case says 'this path must work' and outlives it. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-USE-CASE]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]. [WORKS]
-- Work is implementable when it has zero open decisions in its closure, and handover is the moment its scope freezes. But no verb, edge or joint marks the handover. See [LINK: DEC-LOCAL-IMPLEMENTABILITY] and [LINK: MECH-PLAN-CHANGE-KINDS]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. [GAP]
-- The packet — the dependency-first brief handed to an implementing session — is unbounded: one measured 57% of the corpus. Whether NOTES and RATIONALE belong in it is unsaid. It is also what beads would ingest. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. [UNADDRESSED]
-- Six pieces of work at implemented or verified keep their proof in NOTES. No rule moves that proof into an evidence node before the plan is collected — so collection would delete it. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]. [GAP]
-- DEPTH measures design maturity, yet its top two rungs — implemented, verified — record delivery. Is that execution state (beads) or evidence (canon)? Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK], [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE] and [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]. [GAP]
-- Twelve durable nodes point Proven_By at a probe. If the probe's work half dies with its plan, those links dangle — a fatal error. The work and the evidence share one UID, and nobody has said which half the link should land on. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE] and [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]. [GAP]
-- Is a beads store private to the agent's key, or to the human the agent acts for? Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [GAP]
-- Milestones three to five as written — placing gates by what each gate can see — are dissolved by the layer stack and the hook-layer interface. See [LINK: DEC-LAYER-STACK], [LINK: MECH-HOOK-MIDDLEWARE-INTERFACE], [LINK: SLICE-BEHAVIOUR-MODEL], [LINK: SLICE-CHECKPOINT-WIRING] and [LINK: SLICE-INSTANCE-SEMANTICS-MIGRATION]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. [FALLS OUT: DEC-LAYER-STACK; MECH-HOOK-MIDDLEWARE-INTERFACE]
-- The seven-unit container of the semantics-migration work stands; each unit is re-derived with the acting key available at the joint. The hook-layer and DSL work nodes already read as work. See [LINK: SLICE-HOOK-LAYER], [LINK: SLICE-INSTANCE-SEMANTICS-MIGRATION] and [LINK: SLICE-WORKFLOW-DSL]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. [WORKS]
-- 'Refuse to sign against an unsettled parent' as a mechanism is dissolved — it is the worked example every DSL candidate expresses as a semantic-layer rule. See [LINK: MECH-FP-ACCEPT-READINESS]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]. [FALLS OUT: the L3 worked example in every DSL candidate]
-- Where flow tests live — inside the model, or as use-case nodes with fixtures — is unresolved. The grid favours use cases. See [LINK: MECH-TESTS-AS-CONTRACT] and [LINK: SPIKE-DSL-PRIOR-ART]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-USE-CASE]. [GAP]
+- Work declares what it crosses; crossing more than one layer is what used to be called a slice. Work says 'build this' and dies with its plan. A use case says 'this path must work' and outlives it.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] [LINK: NAR-SEMANTIC-LAYER-TYPE-USE-CASE] [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]
+> SLICE = WORK declaring Crosses; slice-ness derived (crosses > 1 layer); slice says BUILD THIS and dies, use case says THIS PATH MUST WORK and outlives it [WORKS]
+- Work is implementable when it has zero open decisions in its closure, and handover is the moment its scope freezes. But no verb, edge or joint marks the handover.
+[LINK: DEC-LOCAL-IMPLEMENTABILITY] [LINK: MECH-PLAN-CHANGE-KINDS] [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]
+> handoff: DEC-LOCAL-IMPLEMENTABILITY = degrees of freedom 0; MECH-PLAN-CHANGE-KINDS = "from handover"; no verb, edge or joint is named [GAP]
+- The packet — the dependency-first brief handed to an implementing session — is unbounded: one measured 57% of the corpus. Whether NOTES and RATIONALE belong in it is unsaid. It is also what beads would ingest.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]
+> packet (ready.py --packet, the dependency-first brief for an implementing session): unbounded (57% of corpus); NOTES|RATIONALE in or out; = the ingest payload [UNADDRESSED]
+- Six pieces of work at implemented or verified keep their proof in NOTES. No rule moves that proof into an evidence node before the plan is collected — so collection would delete it.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE] [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]
+> completion: 6 SLICE at implemented|verified keep proof in NOTES; no rule moves it to EVIDENCE before collection [GAP]
+- DEPTH measures design maturity, yet its top two rungs — implemented, verified — record delivery. Is that execution state (beads) or evidence (canon)?
+[LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE] [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM] [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]
+> implemented|verified: execution state (beads) or evidence (canon)? DEPTH is design maturity yet its top rungs record delivery [GAP]
+- Twelve durable nodes point Proven_By at a probe. If the probe's work half dies with its plan, those links dangle — a fatal error. The work and the evidence share one UID, and nobody has said which half the link should land on.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE] [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]
+> Proven_By from durable nodes into SPIKE (12): the spike's work half dies -> dangling, fatal; one UID for both halves; which part lands it [GAP]
+- Is a beads store private to the agent's key, or to the human the agent acts for?
+[LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> beads readers/writers under identity: private to the llm key, or to the human it acts for? [GAP]
+- Milestones three to five as written — placing gates by what each gate can see — are dissolved by the layer stack and the hook-layer interface.
+[LINK: DEC-LAYER-STACK] [LINK: MECH-HOOK-MIDDLEWARE-INTERFACE] [LINK: SLICE-BEHAVIOUR-MODEL] [LINK: SLICE-CHECKPOINT-WIRING] [LINK: SLICE-INSTANCE-SEMANTICS-MIGRATION] [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]
+> milestones 3-5 (SLICE-BEHAVIOUR-MODEL, SLICE-CHECKPOINT-WIRING, SLICE-INSTANCE-SEMANTICS-MIGRATION), gate placement by what a gate "sees" [FALLS OUT: DEC-LAYER-STACK; MECH-HOOK-MIDDLEWARE-INTERFACE]
+- The seven-unit container of the semantics-migration work stands; each unit is re-derived with the acting key available at the joint. The hook-layer and DSL work nodes already read as work.
+[LINK: SLICE-HOOK-LAYER] [LINK: SLICE-INSTANCE-SEMANTICS-MIGRATION] [LINK: SLICE-WORKFLOW-DSL] [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]
+> split: SLICE-INSTANCE-SEMANTICS-MIGRATION's seven-unit container stands; each unit re-derived with the key at the joint; SLICE-HOOK-LAYER, SLICE-WORKFLOW-DSL already "read as WORK" [WORKS]
+- 'Refuse to sign against an unsettled parent' as a mechanism is dissolved — it is the worked example every DSL candidate expresses as a semantic-layer rule.
+[LINK: MECH-FP-ACCEPT-READINESS] [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM] [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]
+> MECH-FP-ACCEPT-READINESS (fp-accept refuses an unsettled parent) [FALLS OUT: the L3 worked example in every DSL candidate]
+- Where flow tests live — inside the model, or as use-case nodes with fixtures — is unresolved. The grid favours use cases.
+[LINK: MECH-TESTS-AS-CONTRACT] [LINK: SPIKE-DSL-PRIOR-ART] [LINK: NAR-SEMANTIC-LAYER-TYPE-USE-CASE]
+> flow tests: in the model (MECH-TESTS-AS-CONTRACT) vs USE CASE nodes + fixtures (SPIKE-DSL-PRIOR-ART); grid favours the second [GAP]
 <<<
 PARENT_FP: >>>
 DEC-LAYER-STACK:0000000

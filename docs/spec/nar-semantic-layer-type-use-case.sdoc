@@ -10,6 +10,7 @@ TITLE: use case
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: prose
+PLACE: screen
 TAGS: USE_CASE
 STATEMENT: >>>
 One path that must work. A fitness test: hold the design against it and a conflict becomes findable rather than felt.

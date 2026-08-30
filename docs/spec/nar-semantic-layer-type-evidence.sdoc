@@ -10,6 +10,7 @@ TITLE: evidence
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: prose
+PLACE: screen
 TAGS: EVIDENCE
 STATEMENT: >>>
 What happened this once. A measurement, a probe's finding, a proof that something was delivered.
@@ -21,7 +22,6 @@ State: DEPTH. An optional SOURCE names where the observation came from.
 PARENT_FP: >>>
 DEC-NODE-FAMILIES:0000000
 DEC-UID-OUTLIVES-TYPE:0000000
-MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION:0000000
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -29,7 +29,4 @@ RELATIONS:
   ROLE: Cites
 - TYPE: Parent
   VALUE: DEC-UID-OUTLIVES-TYPE
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION
   ROLE: Cites

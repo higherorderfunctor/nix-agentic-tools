@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-VIEW-CHECK
 TITLE: The view check: the rules a tree of narratives must satisfy that strictdoc does not check
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 view-check.py --root UID walks the tree and reports, count first, exit 1

@@ -1,23 +1,18 @@
 [DOCUMENT]
-TITLE: The semantic layer: what the canon describes, tagged against the direction of 2026-08-29
+TITLE: Semantic layer
 
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
 [NARRATIVE]
 UID: NAR-SEMANTIC-LAYER
-TITLE: The semantic layer: what the canon describes, tagged against the direction of 2026-08-29
+TITLE: Semantic layer
 DEPTH: sketch
 AUTHORED_BY: llm
-WIDGET: prose
+WIDGET: callout
+TAGS: explored, not settled
 STATEMENT: >>>
-Nothing on this page is settled. It shows what the session of 2026-08-29 explored -- every semantic the canon describes, tagged against the direction of that day -- so the operator can decide what to settle. Decisions come afterwards, one at a time, and only for what they ask to settle.
-
-What the page is: a tree of narratives over this plan. This root, then a legend, then one tab per child in order -- the seven kinds of node, the sheet's thirteen topics, the five top gaps, the live relations among the nodes the page cites, the words used, and last the sheet itself, [LINK: MECH-SEMANTIC-LAYER-WHITEBOARD], kept untouched as the snapshot. The brief the first render answered is [LINK: SLICE-SEMANTIC-LAYER-RENDER].
-
-How to read it: colour is only ever a legend word, and the word is always written out beside it. Each topic row carries a plain-language headline written for the page, then links to the nodes the sheet's line cited, to the kinds of node the line speaks about, and to the top gaps it feeds, then the sheet's verdict on that line. The sheet's own wording for the same line is in the last tab, and where the two disagree the sheet is the source. A verdict is the sheet's opinion on its day, not a node's state; read a node's state on the node.
-
-The sheet was cut on 2026-08-29 against the grammar of that day. On 2026-08-30 the ruled types entered the grammar and every node was retyped in place under [LINK: DEC-NODE-FAMILIES], keeping its UID under [LINK: DEC-UID-OUTLIVES-TYPE], so a row that says a type is absent, or that a retype re-mints a UID, describes the day before. The kinds-of-node tab says what holds now; rows are re-cut, never edited.
+What the canon describes, tagged against the direction of 2026-08-29. Nothing on this page is settled: it shows what the session of that day explored -- every semantic the canon describes, tagged against its direction -- so the operator can decide what to settle. Decisions come afterwards, one at a time, and only for what they ask to settle.
 <<<
 PARENT_FP: >>>
 DEC-NODE-FAMILIES:0000000
@@ -30,8 +25,38 @@ NOTES: >>>
 Built on 2026-08-30 by migrate_whiteboard.py from the sheet's lines and the reviewed headlines of the 2026-08-29 render, through the scribe. Every PARENT_FP entry is a 0000000 declaration; nothing here is signed.
 <<<
 RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SEMANTIC-LAYER-WHITEBOARD
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: SLICE-SEMANTIC-LAYER-RENDER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-UID-OUTLIVES-TYPE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites
 - TYPE: Child
   VALUE: NAR-SEMANTIC-LAYER-LEGEND
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-START-SOLID
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-START-KINDS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-START-LAYERS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-START-GAPS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-START-SOURCE
   ROLE: Contains
 - TYPE: Child
   VALUE: NAR-SEMANTIC-LAYER-TYPES
@@ -51,18 +76,3 @@ RELATIONS:
 - TYPE: Child
   VALUE: MECH-SEMANTIC-LAYER-WHITEBOARD
   ROLE: Contains
-- TYPE: Parent
-  VALUE: MECH-SEMANTIC-LAYER-WHITEBOARD
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: SLICE-SEMANTIC-LAYER-RENDER
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: DEC-NODE-FAMILIES
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: DEC-UID-OUTLIVES-TYPE
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: NAR-TERM-CANON
-  ROLE: Cites

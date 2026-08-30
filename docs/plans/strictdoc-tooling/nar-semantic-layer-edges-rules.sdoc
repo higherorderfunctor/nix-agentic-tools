@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: Which relations are allowed
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-EDGES-RULES
+TITLE: Which relations are allowed
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: facts
+PLACE: section
+STATEMENT: >>>
+Each role and the kinds of node it may point at, read from the grammar's comments and the sheet's allowed-edges lines. The parser checks none of this; a live pair off the rule is flagged on the figure above.
+
+- Governed_By: DECISION, REQUIREMENT
+- Crosses: MECHANISM
+- Proven_By: EVIDENCE
+- Covered_By: REQUIREMENT, DECISION, MECHANISM
+- Cites: REQUIREMENT, DECISION, MECHANISM, EVIDENCE, USE_CASE, NARRATIVE, WORK
+- Contains: NARRATIVE
+- Over: NARRATIVE
+- Guarantees: REQUIREMENT
+- Assumes: DECISION, MECHANISM, WORK
+- Superseded_By: DECISION
+- Produces: EVIDENCE
+- Backlogged_In: MECHANISM
+<<<

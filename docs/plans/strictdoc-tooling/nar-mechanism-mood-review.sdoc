@@ -1,25 +1,26 @@
 [DOCUMENT]
-TITLE: The mechanism mood test: which mechanisms were rules or observations, and which are held for a ruling
+TITLE: Mechanism mood
 
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
 [NARRATIVE]
 UID: NAR-MECHANISM-MOOD-REVIEW
-TITLE: The mechanism mood test: which mechanisms were rules or observations, and which are held for a ruling
+TITLE: Mechanism mood
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: prose
 STATEMENT: >>>
-Every node born as a MECHANISM was sorted on 2026-08-30 by the definition
-grid's test ([LINK: DEC-NODE-FAMILIES]): if the world did something this
-node says it does not, would you fix the world -- a rule, which can be
-violated -- or fix the node -- a description, which can only be wrong? And
-does it speak of every case, or record one observation? Ten classifiers
-sorted 135 nodes; a second opinion argued both sides of every proposed
-retype. 27 were retyped in place, keeping their UIDs
-([LINK: DEC-UID-OUTLIVES-TYPE]); 4 are held at low confidence for
-the operator, each wanting a split into a rule and a design rather than a
+Which mechanisms were rules or observations, and which are held for a
+ruling. Every node born as a MECHANISM was sorted on 2026-08-30 by the
+definition grid's test ([LINK: DEC-NODE-FAMILIES]): if the world did
+something this node says it does not, would you fix the world -- a rule,
+which can be violated -- or fix the node -- a description, which can only
+be wrong? And does it speak of every case, or record one observation? Ten
+classifiers sorted 135 nodes; a second opinion argued both sides of every
+proposed retype. 27 were retyped in place, keeping their UIDs
+([LINK: DEC-UID-OUTLIVES-TYPE]); 4 are held at low confidence for the
+operator, each wanting a split into a rule and a design rather than a
 retype; 104 stayed mechanisms. The ledger is
 [LINK: EV-GRID-MIGRATION-LEDGER]. Nothing here is signed; a verdict is the
 test's reading, recorded in each node's NOTES.

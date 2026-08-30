@@ -1,0 +1,40 @@
+[DOCUMENT]
+TITLE: From the canon to the page
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-WHITEBOARD-VIEW-PIPELINE
+TITLE: From the canon to the page
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: stack
+PLACE: section
+STATEMENT: >>>
+Four steps, top to bottom, run by one task; each reads only what the step above it wrote.
+
+- export: strictdoc export: every .sdoc under the repository, parsed and validated into one JSON export in a clean directory; the task that runs it is [LINK: MECH-VIEW-TASK] [BUILT]
+- check: view-check: the rules a tree of narratives must satisfy that the parser does not check, per root, count first; a finding lands on the page and a bad root stops the task ([LINK: MECH-VIEW-CHECK]) [BUILT]
+- wireline: one payload: every root's tree with each statement parsed per its widget, a card per node, every edge, every backlink, the grammar and the check findings ([LINK: MECH-VIEW-WIRELINE]) [BUILT]
+- render: one page: the payload spliced into a content-blind template, written twice -- a standalone page and the artifact host's shape ([LINK: MECH-VIEW-RENDERER]) [BUILT]
+<<<
+PARENT_FP: >>>
+MECH-VIEW-CHECK:0000000
+MECH-VIEW-RENDERER:0000000
+MECH-VIEW-TASK:0000000
+MECH-VIEW-WIRELINE:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-VIEW-TASK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-VIEW-CHECK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-VIEW-WIRELINE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-VIEW-RENDERER
+  ROLE: Cites

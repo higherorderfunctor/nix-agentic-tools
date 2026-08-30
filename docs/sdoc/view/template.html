@@ -1,4 +1,4 @@
-<title>Canon View</title>
+<title>Canon</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link
@@ -6,10 +6,13 @@
   href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Spline+Sans+Mono:wght@400;600&display=swap"
 />
 <style>
-  /* A content-blind page over one payload (schema whiteboard-view/1).
-   The only vocabularies written into this file are the schema's keys, the seven
-   widget words, the eight legend colour names and the fixed screens keyed on
-   tree shape. Every other word on the page arrives in the payload. */
+  /* A content-blind page over one payload (schema whiteboard-view/2).
+   The only vocabularies written into this file are the schema's keys, the
+   sixteen widget words, the four place words, the five query words, the eight
+   legend colour names and the layout rules (a root's Start with its check
+   findings, the Nodes index, an index of screen children, the rows that link
+   a screen, prev/next, crumbs, routes). Every other word on the page arrives
+   in the payload. */
   :root {
     --ground: #f5f6f4;
     --surface: #ffffff;
@@ -155,6 +158,12 @@
     color: var(--ink3);
     overflow-wrap: anywhere;
   }
+  a.kicker {
+    text-decoration: none;
+  }
+  a.kicker:hover {
+    text-decoration: underline;
+  }
 
   /* colour classes: a legend colour name maps to one token, nothing else */
   .c-green {
@@ -195,17 +204,67 @@
   }
   .brand {
     display: flex;
-    align-items: baseline;
-    gap: 10px;
+    align-items: center;
+    gap: 8px 12px;
     padding: 10px 16px 6px;
     flex-wrap: wrap;
   }
-  .brand a {
+  .brand a.name {
     font-family: var(--display);
     font-weight: 700;
     font-size: 1.05rem;
     text-decoration: none;
     overflow-wrap: anywhere;
+  }
+  .pill {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--c-amber);
+    color: var(--c-amber);
+    white-space: nowrap;
+  }
+  .switches {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-left: auto;
+  }
+  .switches button,
+  .switch {
+    font: inherit;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink3);
+    cursor: pointer;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .switches button[aria-pressed="true"],
+  .switch[aria-pressed="true"] {
+    color: var(--ink);
+    border-color: var(--ink2);
+    background: var(--surface2);
+  }
+  .switches button i,
+  .switch i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--line);
+  }
+  .switches button[aria-pressed="true"] i,
+  .switch[aria-pressed="true"] i {
+    background: var(--c-green);
   }
   .tabs {
     display: flex;
@@ -213,6 +272,7 @@
     overflow-x: auto;
     padding: 0 10px;
     scrollbar-width: none;
+    align-items: flex-end;
   }
   .tabs::-webkit-scrollbar {
     display: none;
@@ -222,28 +282,41 @@
   }
   .tabs a {
     flex: 0 0 auto;
-    padding: 8px 10px 10px;
+    padding: 8px 10px 8px;
     text-decoration: none;
     font-size: 0.92rem;
     color: var(--ink2);
     border-bottom: 3px solid transparent;
     font-family: var(--display);
     font-weight: 500;
-    max-width: 14rem;
-    white-space: nowrap;
+    max-width: 9rem;
+    line-height: 1.15;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    max-height: calc(2.3em + 16px);
     overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
   .tabs a[aria-current="page"] {
     color: var(--ink);
     border-bottom-color: var(--ink);
   }
+  .tabs.sub {
+    padding: 0;
+    margin: -6px 0 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  .tabs.sub a {
+    font-size: 0.84rem;
+    padding: 6px 7px 6px;
+    max-height: calc(2.3em + 12px);
+  }
 
   /* horizontal scrollers: a shadow on whichever edge hides more content.
      The two covering layers scroll with the content (background-attachment:
      local) and slide off the edge as it is reached; the two shadow layers
-     stay put, so a shadow shows exactly while there is more to scroll to.
-     Pure CSS, so it needs no measuring and cannot go stale on resize. */
+     stay put, so a shadow shows exactly while there is more to scroll to. */
   .scrollx {
     --scroll-bg: var(--surface);
     background:
@@ -275,22 +348,34 @@
     border: 1px solid var(--line);
     border-radius: 10px;
     padding: 14px 16px;
-    scroll-margin-top: 110px;
+    scroll-margin-top: 120px;
   }
   .card > * + * {
     margin-top: 10px;
   }
   section.sec {
-    scroll-margin-top: 110px;
+    scroll-margin-top: 120px;
   }
   section.sec > * + * {
     margin-top: 10px;
+  }
+  .banner {
+    background: color-mix(in oklab, var(--c-amber) 12%, var(--surface));
+    border: 1px solid color-mix(in oklab, var(--c-amber) 45%, var(--line));
+    border-radius: 10px;
+    padding: 12px 16px;
+  }
+  .banner > * + * {
+    margin-top: 8px;
   }
   .row {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
     align-items: center;
+  }
+  .between {
+    justify-content: space-between;
   }
   .grid2 {
     display: grid;
@@ -322,6 +407,16 @@
   }
   .hit {
     box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 55%, transparent);
+  }
+  .off {
+    color: var(--ink3);
+    font-style: italic;
+  }
+  .clamp {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   /* word chips (legend words) and swatches */
@@ -379,6 +474,14 @@
     color: var(--ink2);
     white-space: nowrap;
   }
+  .flag.warn {
+    border-color: var(--c-red);
+  }
+  .count {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--ink3);
+  }
 
   /* node links: block form puts the title on its own line under the id */
   a.node {
@@ -388,8 +491,7 @@
     line-height: 1.45;
   }
   a.node code {
-    display: block;
-    width: max-content;
+    display: inline-block;
     max-width: 100%;
     font-size: 0.78rem;
     color: var(--ink);
@@ -397,9 +499,10 @@
     padding: 1px 6px;
     border-radius: 5px;
     overflow-wrap: anywhere;
+    margin-right: 8px;
+    vertical-align: baseline;
   }
   a.node .t {
-    display: block;
     color: var(--ink2);
     font-size: 0.92rem;
   }
@@ -412,13 +515,10 @@
   }
   a.node.inline code {
     display: inline;
-    width: auto;
     font-size: 0.8em;
+    margin: 0;
   }
-  a.node.inline .t {
-    display: inline;
-  }
-  span.node.dead code {
+  span.node code {
     font-size: 0.78rem;
     background: var(--surface2);
     padding: 1px 6px;
@@ -426,16 +526,45 @@
   }
 
   /* rows widget */
+  .filters {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .filters button {
+    font: inherit;
+    font-size: 0.82rem;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink2);
+    cursor: pointer;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .filters button[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--ground);
+    border-color: var(--ink);
+  }
+  .filters button i {
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    background: var(--tagc, var(--ink3));
+  }
   .line {
     background: var(--surface);
     border: 1px solid var(--line);
     border-left: 5px solid var(--tagc, var(--ink3));
     border-radius: 10px;
-    padding: 10px 14px 10px;
-    scroll-margin-top: 110px;
+    padding: 12px 14px 10px;
+    scroll-margin-top: 120px;
   }
   .line > * + * {
-    margin-top: 6px;
+    margin-top: 8px;
   }
   .line-head {
     display: flex;
@@ -461,14 +590,52 @@
     font-size: 0.72rem;
     color: var(--ink3);
   }
-  .counts {
-    display: flex;
-    gap: 6px 14px;
-    flex-wrap: wrap;
-    align-items: center;
+  .crumb {
+    font-size: 0.8rem;
+    color: var(--ink3);
+    text-decoration: none;
+  }
+  .crumb:hover {
+    text-decoration: underline;
+  }
+  .refs {
+    list-style: none;
+    padding: 6px 0 0;
+    margin: 0;
+    border-top: 1px dashed var(--line);
+  }
+  .refs li {
+    margin: 0;
+  }
+  .refs .kicker {
+    margin-top: 4px;
+  }
+  details.orig summary {
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--ink3);
+    list-style: none;
+  }
+  details.orig summary::before {
+    content: "▸ ";
+  }
+  details.orig[open] summary::before {
+    content: "▾ ";
+  }
+  details.orig p {
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--ink2);
+    overflow-wrap: anywhere;
+    background: var(--surface2);
+    padding: 8px 10px;
+    border-radius: 6px;
+    white-space: pre-wrap;
   }
 
-  /* tally widget */
+  /* strip and tally */
   .heat {
     display: grid;
     grid-template-columns: minmax(120px, 38%) 1fr;
@@ -517,7 +684,7 @@
   .legend {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 6px 12px;
+    gap: 8px 12px;
     align-items: baseline;
   }
   .legend .meaning {
@@ -528,9 +695,10 @@
     font-size: 0.72rem;
     color: var(--ink3);
     font-family: var(--mono);
+    white-space: nowrap;
   }
 
-  /* glossary widget */
+  /* definition lists: glossary, facts, fields */
   dl {
     margin: 0;
     display: grid;
@@ -551,7 +719,6 @@
     min-width: 0;
     margin: 0;
     overflow-wrap: anywhere;
-    white-space: pre-wrap;
   }
   dl.words dt {
     padding-top: 0;
@@ -565,16 +732,159 @@
   dl.words {
     grid-template-columns: minmax(100px, 30%) 1fr;
   }
+  dl.words dt a {
+    text-decoration: none;
+  }
+  dl.words dt a:hover {
+    text-decoration: underline;
+  }
+  dl.facts {
+    grid-template-columns: minmax(80px, 24%) 1fr;
+  }
   dl.fields {
     grid-template-columns: minmax(90px, 24%) 1fr;
   }
   @media (max-width: 480px) {
-    dl.fields {
+    dl.fields,
+    dl.facts {
       grid-template-columns: 1fr;
     }
-    dl.fields dt {
+    dl.fields dt,
+    dl.facts dt {
       padding-top: 6px;
     }
+  }
+
+  /* grid figure */
+  .gridfig {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr;
+    gap: 6px;
+    align-items: stretch;
+  }
+  .gridfig .ax {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--ink3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    align-self: center;
+    padding: 4px;
+  }
+  .gridfig .ax.left {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    text-align: center;
+  }
+  .cell {
+    display: block;
+    text-decoration: none;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 10px 12px;
+    min-height: 74px;
+  }
+  a.cell:hover {
+    border-color: var(--ink2);
+  }
+  .cell b {
+    font-family: var(--display);
+    font-size: 1rem;
+    display: block;
+    overflow-wrap: anywhere;
+  }
+  .cell span {
+    font-size: 0.82rem;
+    color: var(--ink2);
+  }
+  .cell.empty {
+    border-style: dashed;
+  }
+  .outside {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  @media (min-width: 560px) {
+    .outside {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+  }
+  .cellbadge {
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    color: var(--ink2);
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .cellbadge i {
+    width: 10px;
+    height: 10px;
+    border: 1px solid var(--ink2);
+    border-radius: 2px;
+  }
+  .cellbadge i.f {
+    background: var(--ink2);
+  }
+
+  /* ladders */
+  .ladder {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .ladder .rung {
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    padding: 4px 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface2);
+  }
+  .ladder .rung b {
+    font-weight: 600;
+  }
+  .ladder .rung.ghost {
+    border-style: dashed;
+    background: transparent;
+    color: var(--ink3);
+  }
+  .ladder .arrow {
+    color: var(--ink3);
+    font-size: 0.9rem;
+  }
+
+  /* layer stack */
+  .layers {
+    display: grid;
+    gap: 4px;
+  }
+  .layer {
+    display: grid;
+    grid-template-columns: minmax(44px, max-content) 1fr;
+    gap: 10px;
+    border: 1px solid var(--line);
+    border-left: 5px solid var(--tagc, var(--line));
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: var(--surface);
+  }
+  .layer .l {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 1rem;
+    max-width: 7rem;
+    overflow-wrap: anywhere;
+  }
+  .layer .d {
+    font-size: 0.9rem;
+    color: var(--ink2);
+  }
+  .layer.marked {
+    background: var(--surface2);
   }
 
   /* tables */
@@ -606,7 +916,49 @@
     font-family: var(--mono);
   }
   td.opts {
-    min-width: 14rem;
+    min-width: 12rem;
+  }
+  @media (max-width: 480px) {
+    table {
+      font-size: 0.82rem;
+    }
+    th,
+    td {
+      padding: 5px 5px;
+    }
+    td.opts {
+      min-width: 9rem;
+    }
+    /* a wide table stacks: one block per row, each cell under its header */
+    table.rowwise,
+    table.rowwise tbody,
+    table.rowwise tr,
+    table.rowwise td {
+      display: block;
+    }
+    table.rowwise thead {
+      display: none;
+    }
+    table.rowwise tr {
+      border-bottom: 1px solid var(--line);
+      padding: 6px 0;
+    }
+    table.rowwise td {
+      border: 0;
+      padding: 2px 0;
+    }
+    table.rowwise td::before {
+      content: attr(data-th);
+      display: block;
+      font-family: var(--mono);
+      font-size: 0.66rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ink3);
+    }
+  }
+  ul.plain > li > p.dim {
+    margin-top: 2px;
   }
   .warn {
     color: var(--c-red);
@@ -661,6 +1013,18 @@
     margin-right: 4px;
   }
 
+  /* index cards */
+  a.icard {
+    display: block;
+    text-decoration: none;
+  }
+  a.icard:hover h3 {
+    text-decoration: underline;
+  }
+  a.icard p {
+    margin-top: 4px;
+  }
+
   /* node screen */
   .nodehead code {
     font-size: 0.9rem;
@@ -681,10 +1045,33 @@
     background: var(--surface);
     color: var(--ink);
   }
-  .count {
+  .facets > * + * {
+    margin-top: 6px;
+  }
+  .facet {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .facet .kicker {
+    min-width: 5rem;
+  }
+  .facet button {
+    font: inherit;
     font-family: var(--mono);
-    font-size: 0.78rem;
-    color: var(--ink3);
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink2);
+    cursor: pointer;
+  }
+  .facet button[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--ground);
+    border-color: var(--ink);
   }
   .field {
     overflow-wrap: anywhere;
@@ -701,14 +1088,6 @@
     font-family: var(--mono);
     font-size: 0.8rem;
   }
-  .crumb {
-    font-size: 0.8rem;
-    color: var(--ink3);
-    text-decoration: none;
-  }
-  .crumb:hover {
-    text-decoration: underline;
-  }
   .checks li {
     padding: 8px 0;
     border-top: 1px dashed var(--line);
@@ -716,8 +1095,20 @@
   .checks li > * + * {
     margin-top: 4px;
   }
-  .checks li > span.text {
-    display: block;
+  .prevnext {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+  }
+  .prevnext a {
+    text-decoration: none;
+    font-size: 0.92rem;
+    max-width: 48%;
+  }
+  .prevnext a:hover {
+    text-decoration: underline;
   }
   @media (prefers-reduced-motion: no-preference) {
     html {
@@ -725,12 +1116,13 @@
     }
   }
 </style>
-
+<!--BODY-->
 <div id="app">
   <header class="top">
     <div class="brand">
-      <a id="brand" href="#/start"></a
-      ><span id="brandsub" class="kicker"></span>
+      <a id="brand" class="name" href="#/start"></a>
+      <span id="pills" class="row"></span>
+      <span id="hswitches" class="switches" aria-label="systems"></span>
     </div>
     <nav class="tabs scrollx" id="tabs" aria-label="Screens"></nav>
   </header>
@@ -741,9 +1133,12 @@
 <script>
   const DATA = /*DATA*/;
 
-  const SCHEMA="whiteboard-view/1";
+  const SCHEMA="whiteboard-view/2";
   const COLOURS=["green","slate","amber","blue","red","teal","violet","grey"];
-  const WIDGETS=["prose","rows","table","glossary","legend","tally","edges"];
+  const WIDGETS=["prose","callout","rows","table","facts","glossary","legend","stack","grid","ladder","strip","tally","index","list","edges","fingerprints"];
+  const PLACES=["tab","screen","section","card"];
+  const QUERIES=["roots","nodes","grammar","systems","terms"];
+  const LISTING=["index","list","strip","tally"];
   const FPMARK={undeclared:"◌",unsigned:"○",signed:"●",drifted:"◐"};
 
   function h(tag, attrs={}, ...kids){
@@ -764,40 +1159,85 @@
     for(const k of kids.flat(Infinity)){ if(k==null||k===false) continue; e.append(k.nodeType?k:document.createTextNode(String(k))); }
     return e;
   }
+  const plural=(n,one,many)=>`${n} ${n===1?one:(many||one+"s")}`;
 
   /* ---------- indexes over the payload ---------- */
   const NODES=DATA.nodes||{};
-  const LEGEND=Array.isArray(DATA.legend)?DATA.legend:[];
-  const LEGW=Object.fromEntries(LEGEND.map(l=>[l.word,l]));
-  const LADDERS=DATA.ladders||{};
-  const GRAMMAR=DATA.grammar||{};
   const BACK=DATA.backlinks||{};
-  const ROOT=DATA.tree;
-  const NAR={}, PARENT={}, TAB={};
-  (function index(n,parent,tab){ NAR[n.uid]=n; PARENT[n.uid]=parent; TAB[n.uid]=tab; (n.children||[]).forEach(c=>index(c,n.uid,tab||c.uid)); })(ROOT,null,null);
-  const TABS=ROOT.children||[];
+  const GRAMMAR=DATA.grammar||{};
+  const LADDERS=DATA.ladders||{};
+  const SYSTEMS=Array.isArray(DATA.systems)?DATA.systems:[];
+  const ROOTS=Array.isArray(DATA.roots)?DATA.roots:[];
+  const EDGES=Array.isArray(DATA.edges)?DATA.edges:[];
+  const CHECKS=Array.isArray(DATA.checks)?DATA.checks:[];
+  const NAR={}, PARENT={}, ROOTOF={}, LC={};
+  ROOTS.forEach(r=>(function index(n,parent){ NAR[n.uid]=n; PARENT[n.uid]=parent; ROOTOF[n.uid]=r.uid; (n.children||[]).forEach(c=>index(c,n.uid)); })(r,null));
+  Object.keys(NODES).forEach(u=>LC[u.toLowerCase()]=u);
+  Object.keys(NAR).forEach(u=>LC[u.toLowerCase()]=u);
+  // the canon root is the first root: the payload orders roots with the canon's own first
+  const CANON=ROOTS[0]||null;
+  // the legend of a root: the first narrative anywhere in its tree whose widget is legend
+  const LEGENDOF={};
+  ROOTS.forEach(r=>{ let found=null; (function walk(n){ if(found) return; if(n.widget==="legend"&&Array.isArray(n.legend)) found=n.legend; else (n.children||[]).forEach(walk); })(r); LEGENDOF[r.uid]=found||[]; });
+  const legendFor=uid=>LEGENDOF[ROOTOF[uid]]||[];
+  const legendRow=(uid,word)=>word==null?null:(legendFor(uid).find(l=>l.word===word)||null);
 
-  const colourOf=word=>{ const l=word!=null?LEGW[word]:null; return l&&COLOURS.includes(l.colour)?l.colour:null; };
-  const cls=word=>"c-"+(colourOf(word)||"none");
+  const enc=u=>encodeURIComponent(String(u).toLowerCase());
+  const narHref=(uid,extra)=>`#/n/${enc(uid)}${extra||""}`;
+  const nodeHref=uid=>`#/nodes/${enc(uid)}`;
+  const hrefOf=uid=>NAR[uid]?narHref(uid):(NODES[uid]?nodeHref(uid):null);
   const titleOf=uid=>NAR[uid]?NAR[uid].title:(NODES[uid]?NODES[uid].title:null);
-  const hrefOf=uid=>NAR[uid]?`#/n/${enc(uid)}`:(NODES[uid]?`#/nodes/${enc(uid)}`:null);
-  const enc=encodeURIComponent;
+  const colourOf=(uid,word)=>{ const l=legendRow(uid,word); return l&&COLOURS.includes(l.colour)?l.colour:null; };
+  const cls=(uid,word)=>"c-"+(colourOf(uid,word)||"none");
   const rank=(field,value)=>{ const l=LADDERS[field]; if(!Array.isArray(l)) return null; const i=l.indexOf(value); return i<0?null:[i+1,l.length]; };
-  const plural=(n,one,many)=>`${n} ${n===1?one:(many||one+"s")}`;
+
+  /* ---------- the selection: systems switched on, carried in ?on= ---------- */
+  function readSelection(){
+    const q=new URLSearchParams(location.search).get("on");
+    if(q==null||!SYSTEMS.length) return new Set(SYSTEMS.map(x=>x.name));
+    return new Set(q.split(",").map(x=>x.trim()).filter(Boolean));
+  }
+  let ON=readSelection();
+  const typeOn=t=>!SYSTEMS.length||SYSTEMS.some(x=>ON.has(x.name)&&(x.types||[]).includes(t));
+  const roleOn=r=>!SYSTEMS.length||SYSTEMS.some(x=>ON.has(x.name)&&(x.roles||[]).includes(r));
+  const nodeOn=uid=>{ const nd=NODES[uid]; return nd?typeOn(nd.type):true; };
+  const systemsOfType=t=>SYSTEMS.filter(x=>(x.types||[]).includes(t)).map(x=>x.name);
+  const systemsOf=uid=>{ const nd=NODES[uid]; return nd?(Array.isArray(nd.systems)&&nd.systems.length?nd.systems:systemsOfType(nd.type)):[]; };
+  const edgeOn=e=>nodeOn(e.from)&&nodeOn(e.to)&&roleOn(e.role);
+  const selectedNodes=()=>Object.values(NODES).filter(nd=>typeOn(nd.type));
+  const selectedEdges=()=>EDGES.filter(edgeOn);
+  function setSelection(next){
+    ON=next;
+    const url=`?on=${encodeURIComponent([...ON].join(","))}${location.hash}`;
+    history.replaceState(null,"",url);
+    renderHeader(); route();
+  }
+  function switchRow(compact){
+    if(!SYSTEMS.length) return null;
+    const wrap=h("div",{class:compact?"switches":"row",role:"group","aria-label":"systems"});
+    SYSTEMS.forEach(x=>{
+      const on=ON.has(x.name);
+      wrap.append(h("button",{class:compact?null:"switch","aria-pressed":String(on),title:x.meaning||undefined,onclick:()=>{ const n=new Set(ON); if(n.has(x.name)) n.delete(x.name); else n.add(x.name); setSelection(n); }},h("i"),x.name));
+    });
+    return wrap;
+  }
+  function offNote(uid){
+    const holders=systemsOf(uid);
+    return h("span",{class:"off"},"(switched off: ",holders.length?holders.join(", "):"—",")");
+  }
 
   /* ---------- small components ---------- */
   function nodeLink(uid, inline){
     const t=titleOf(uid);
     const href=hrefOf(uid);
-    if(!href) return h("span",{class:"node dead"+(inline?" inline":"")},h("code",{},uid),inline?" ":null,h("span",{class:"muted small"},inline?"(not in this payload)":" not in this payload"));
-    // Inline, the title rides in the tooltip: spliced into a sentence it
-    // makes the sentence unreadable, and the cites list below every
-    // narrative shows each cited UID with its title in full.
+    if(!href) return h("span",{class:"node"},h("code",{},uid)," ",h("span",{class:"muted small"},"(not in the canon)"));
+    if(!nodeOn(uid)) return h("span",{class:"node"},h("code",{},uid)," ",offNote(uid));
     const a=h("a",{class:"node"+(inline?" inline":""),href,title:inline&&t!=null?t:undefined},h("code",{},uid));
     if(t!=null&&!inline) a.append(h("span",{class:"t"},t));
     return a;
   }
   function spans(list){ return (list||[]).map(sp=> sp&&sp.link!=null ? nodeLink(sp.link,true) : String(sp&&sp.t!=null?sp.t:"")); }
+  const spanText=list=>(list||[]).map(sp=>sp&&sp.link!=null?sp.link:String(sp&&sp.t!=null?sp.t:"")).join("");
   const LINKTOKEN=/\[LINK:\s*([^\]\s]+)\s*\]/g;
   function linkifyText(text){
     const out=[]; let last=0; const str=String(text);
@@ -815,51 +1255,113 @@
       return figure?h("pre",{class:"figure scrollx"},linkifyText(par)):h("p",{},linkifyText(lines.map(l=>l.trim()).join(" ")));
     });
   }
-  function wordChip(word,n,big){
+  function wordChip(uid,word,n,big){
     if(word==null) return h("span",{class:"word c-none"+(big?" big":"")},h("i"),h("span",{class:"muted"},"no word"),n!=null?h("span",{class:"n"},n):null);
-    const l=LEGW[word];
-    return h("span",{class:`word ${cls(word)}${big?" big":""}`,title:l?`${l.colour}: ${l.meaning}`:undefined},h("i"),word,n!=null?h("span",{class:"n"},n):null);
+    const l=legendRow(uid,word);
+    return h("span",{class:`word ${cls(uid,word)}${big?" big":""}`,title:l?`${l.colour}: ${l.meaning}`:undefined},h("i"),word,n!=null?h("span",{class:"n"},n):null);
   }
   function stateChips(state){
     if(!state) return [];
-    return Object.entries(state).map(([k,v])=>{ const r=rank(k,v); return h("span",{class:"chip"},k," · ",h("b",{},String(v)),r?h("small",{},`${r[0]}/${r[1]}`):null); });
+    return Object.entries(state).filter(([,v])=>v!=null).map(([k,v])=>{ const r=rank(k,v); return h("span",{class:"chip"},k," · ",h("b",{},String(v)),r?h("small",{},`${r[0]}/${r[1]}`):null); });
   }
-  function narChips(n){ return stateChips({DEPTH:n.depth,AUTHORED_BY:n.authored}); }
+  // a narrative's state chips come from its node card, which names the fields;
+  // without a card the schema keys stand in
+  const narChips=n=>stateChips(NODES[n.uid]&&NODES[n.uid].state?NODES[n.uid].state:{depth:n.depth,authored:n.authored});
+  const sysChips=uid=>systemsOf(uid).map(x=>h("span",{class:"flag"},x));
   function tagRow(n){
     const tags=(n.tags||[]);
-    if(!tags.length && !n.widget) return null;
-    return h("div",{class:"row"},n.widget?h("span",{class:"flag"},n.widget):null,tags.map(t=>h("span",{class:"flag"},t)));
+    if(!tags.length) return null;
+    return h("div",{class:"row"},tags.map(t=>h("span",{class:"flag"},t)));
   }
-  function prose(n){ return (n.prose||[]).map(p=>h("p",{},spans(p))); }
-  function citesList(n){
-    const c=n.cites||[]; if(!c.length) return null;
+  // a paragraph that opens with "> " is source wording: a collapsed disclosure
+  const isSource=p=>p&&p[0]&&p[0].t!=null&&/^>\s/.test(String(p[0].t));
+  const sourceOf=p=>[{t:String(p[0].t).replace(/^>\s+/,"")},...p.slice(1)];
+  const prose=n=>(n.prose||[]).map(p=>isSource(p)?h("details",{class:"orig"},h("summary",{},"the source wording"),h("p",{},spans(sourceOf(p)))):h("p",{},spans(p)));
+  const firstPara=n=>{ const p=(n.prose||[])[0]; return p?h("p",{class:"dim small clamp"},spans(p)):null; };
+  // the nodes a narrative's own widget already links: a cites entry for one
+  // of them would say the same thing twice, so the list leaves it out
+  function widgetLinked(n){
+    const s=new Set(), d=subjectOf(n);
+    const add=u=>{ if(u!=null) s.add(u); };
+    const fromSpans=list=>(list||[]).forEach(sp=>{ if(sp&&sp.link!=null) add(sp.link); });
+    (d.rows||[]).forEach(r=>{ fromSpans(r.spans); (r.refs||[]).forEach(add); add(r.by_uid); });
+    (d.facts||[]).forEach(f=>fromSpans(f.spans));
+    (d.stack||[]).forEach(r=>fromSpans(r.spans));
+    (n.terms||[]).forEach(t=>fromSpans(t.spans));
+    if(d.grid){ (d.grid.cells||[]).forEach(c=>add(c.uid)); (d.grid.outside||[]).forEach(add); }
+    if(d.table) (d.table.rows||[]).forEach(r=>r.forEach(c=>{ String(c).replace(LINKTOKEN,(m,u)=>{ add(u); return m; }); }));
+    if(LISTING.includes(n.widget)) (entriesFor(n)||[]).forEach(e=>add(e.uid));
+    if(n.widget==="glossary") (n.query!=null?(queryNarratives(n.query)||[]):stackKids(n)).forEach(c=>add(c.uid));
+    return s;
+  }
+  // what a narrative cites, each with its fingerprint state and the node's
+  // own state chips; entries the widget already linked are left out
+  function citesList(n,except){
+    const linked=widgetLinked(n);
+    const c=(n.cites||[]).filter(x=>!linked.has(x.uid)&&!(except&&except.has(x.uid))); if(!c.length) return null;
     return h("ul",{class:"cites","aria-label":"cites"},c.map(x=>{
       const st=FPMARK[x.fp]?x.fp:"undeclared";
-      return h("li",{},nodeLink(x.uid),h("span",{class:"fp"},h("span",{class:"mark","aria-hidden":"true"},FPMARK[st]),st,x.superseded?[" ",h("span",{class:"flag warn"},"superseded")]:null));
+      const nd=NODES[x.uid];
+      return h("li",{},h("div",{},nodeLink(x.uid),nd&&nodeOn(x.uid)?h("div",{class:"row"},stateChips(nd.state)):null),h("span",{class:"fp"},h("span",{class:"mark","aria-hidden":"true"},FPMARK[st]),st,x.superseded?[" ",h("span",{class:"flag warn"},"superseded")]:null));
     }));
   }
+  function crumbTrail(uid){
+    const trail=[]; let p=PARENT[uid];
+    while(p){ trail.unshift(p); p=PARENT[p]; }
+    if(!trail.length) return null;
+    return h("p",{class:"row"},trail.map((u,i)=>[i?h("span",{class:"muted"},"›"):null,h("a",{class:"crumb",href:narHref(u)},NAR[u].title)]));
+  }
+  const containerTitle=uid=>PARENT[uid]?NAR[PARENT[uid]].title:(NAR[uid]?NAR[uid].title:null);
 
-  /* ---------- widgets ---------- */
-  function widgetRows(n){
-    const rows=n.rows||[];
-    const counts=new Map(); LEGEND.forEach(l=>counts.set(l.word,0)); let none=0;
-    rows.forEach(r=>{ if(r.word==null) none++; else counts.set(r.word,(counts.get(r.word)||0)+1); });
-    const head=h("div",{class:"counts"},h("span",{class:"count"},plural(rows.length,"row")),
-      [...counts].filter(([,c])=>c>0).map(([w,c])=>wordChip(w,c)), none?wordChip(null,none):null);
-    const list=h("div",{class:"stack"},rows.map(r=>rowCard(n,r)));
-    return [head,list];
+  /* ---------- tree shape helpers (place words only) ---------- */
+  const isRoot=n=>!PARENT[n.uid];
+  const ownsScreen=n=>isRoot(n)||n.place==="tab"||n.place==="screen";
+  const tabKids=n=>(n.children||[]).filter(c=>c.place==="tab");
+  const screenKids=n=>(n.children||[]).filter(c=>c.place==="screen");
+  const stackKids=n=>(n.children||[]).filter(c=>c.place!=="tab"&&c.place!=="screen"&&!(n.widget==="glossary"&&c.place==null));
+  // a glossary's terms: the narratives it contains that declare no place
+  const termKids=n=>(n.children||[]).filter(c=>c.place==null);
+  function screenOf(uid){ let u=uid; while(NAR[u]&&!ownsScreen(NAR[u])) u=PARENT[u]; return u; }
+  const subjectOf=n=>(n.over!=null&&NAR[n.over])?NAR[n.over]:n;
+  const rowCount=n=>(n.rows||[]).length;
+  // the rows that link a node: backlinks whose via is a link or a reference
+  // line and whose home narrative has that row (a grid cell, a glossary
+  // term or a fact also carries a row number, but no line card); one per
+  // (home, row), so a headline link and a reference line count once
+  const isRowVia=b=>b.via==="link"||b.via==="reference";
+  const rowOf=b=>b.row!=null&&NAR[b.from]?((NAR[b.from].rows||[])[b.row-1]||null):null;
+  function rowBacklinks(uid){
+    const seen=new Set();
+    return (BACK[uid]||[]).filter(b=>{ if(!isRowVia(b)||!rowOf(b)||!nodeOn(b.from)) return false; const k=b.from+"\t"+b.row; if(seen.has(k)) return false; seen.add(k); return true; });
   }
-  function rowCard(n,r){
-    const by = r.by!=null ? h("p",{class:"by"},h("b",{},"by: "), r.by_uid&&hrefOf(r.by_uid) ? byWithLink(r.by,r.by_uid) : String(r.by)) : null;
-    return h("article",{class:`line ${cls(r.word)}`,id:`row-${n.uid}-${r.n}`},
-      h("div",{class:"line-head"},wordChip(r.word),h("span",{class:"idx"},"#"+r.n)),
+  // the nodes a root's tree cites: what a per-view figure draws over
+  const REACH={};
+  ROOTS.forEach(r=>{ const s=new Set(); (function walk(n){ (n.cites||[]).forEach(c=>s.add(c.uid)); (n.children||[]).forEach(walk); })(r); REACH[r.uid]=s; });
+  const reachOf=uid=>REACH[ROOTOF[uid]]||new Set();
+
+  /* ---------- the rows widget: filter chips + line cards ---------- */
+  function rowCard(home,r,opts={}){
+    const label=(legendRow(home.uid,r.word)||{}).by_label;
+    const by = r.by!=null ? h("p",{class:"by"},h("b",{},(label!=null&&label!==""?label:"by")+": "), r.by_uid&&hrefOf(r.by_uid) ? byWithLink(r.by,r.by_uid) : String(r.by)) : null;
+    // references grouped by the container of what they link: narratives of
+    // this page as one line of titles per group, canon nodes with their
+    // ids; the screen being viewed is not named on its own cards
+    const groups=new Map();
+    (r.refs||[]).forEach(u=>{ if(u===opts.viewing) return; const g=NAR[u]?(containerTitle(u)||""):null; if(!groups.has(g)) groups.set(g,[]); groups.get(g).push(u); });
+    const titleLink=u=>nodeOn(u)?h("a",{href:narHref(u)},NAR[u].title):[NAR[u].title," ",offNote(u)];
+    const refs=groups.size?h("ul",{class:"refs"},[...groups].map(([g,uids])=>g==null
+      ?[h("li",{},h("p",{class:"kicker"},"nodes")),uids.map(u=>h("li",{},nodeLink(u)))]
+      :h("li",{class:"small"},h("span",{class:"kicker"},g," "),uids.map((u,i)=>[i?", ":"",titleLink(u)])))):null;
+    const source=r.source!=null&&r.source!==""?h("details",{class:"orig"},h("summary",{},"the source wording"),h("p",{},String(r.source),r.word!=null?`  [${r.word}${r.by!=null?": "+r.by:""}]`:"")):null;
+    return h("article",{class:`line ${cls(home.uid,r.word)}`,id:opts.home?`row-${home.uid}-${r.n}`:null},
+      h("div",{class:"line-head"},wordChip(home.uid,r.word),
+        opts.crumb?h("a",{class:"crumb",href:narHref(home.uid,`/row/${r.n}`)},home.title):h("span",{class:"idx"},"#"+r.n)),
       h("p",{class:"h"},spans(r.spans)),
-      by);
+      by, refs, source);
   }
-  // The "by" text is split on its by_uid as a whole UID-shaped token -- the
-  // same tokenizer the wireline chose it with (UID_TOKEN_RE) -- so a longer
-  // UID that merely contains it, such as WORK-BUILD-NAR-ROOT-STEP-1 around
-  // NAR-ROOT, is skipped and the standalone mention is the one linked.
+  // The "by" text is split on its by_uid as a whole id-shaped token, so a
+  // longer id that merely contains it is skipped and the standalone mention
+  // is the one linked.
   const UIDTOKEN=/[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+/g;
   function byWithLink(by,uid){
     const str=String(by); let i=-1, m;
@@ -868,247 +1370,622 @@
     if(i<0) return [str," ",nodeLink(uid,true)];
     return [str.slice(0,i),nodeLink(uid,true),str.slice(i+uid.length)];
   }
-  function segBar(by_word,total,href,height){
+  // lines = [{home, row}]; initial = a legend word to preselect
+  function filteredLines(lines, legendUid, initial, opts={}){
+    // words in legend order; lines may come from several roots, so each
+    // word's colour is read off the legend of the first line that carries it
+    const words=[]; const homeOf={};
+    [legendUid,...lines.map(l=>l.home.uid)].forEach(u=>legendFor(u).forEach(l=>{ if(!words.includes(l.word)) words.push(l.word); }));
+    lines.forEach(({home,row})=>{ if(row.word!=null&&!(row.word in homeOf)) homeOf[row.word]=home.uid; });
+    const norm=w=>w==null?null:String(w).toLowerCase();
+    let cur=initial!=null?(words.find(w=>norm(w)===norm(initial))||null):null;
+    const wrap=h("div",{class:"stack"});
+    const list=h("div",{class:"stack"});
+    const bar=()=>{
+      const counts=new Map(); let none=0;
+      lines.forEach(({row})=>{ if(row.word==null) none++; else counts.set(row.word,(counts.get(row.word)||0)+1); });
+      const b=h("div",{class:"filters",role:"group","aria-label":"filter by word"});
+      b.append(h("button",{"aria-pressed":String(cur==null),onclick:()=>pick(null)},"all ",h("span",{class:"count"},lines.length)));
+      const order=[...words,...[...counts.keys()].filter(w=>!words.includes(w))];
+      order.forEach(w=>{ const c=counts.get(w); if(!c) return; b.append(h("button",{class:cls(homeOf[w]||legendUid,w),"aria-pressed":String(cur===w),onclick:()=>pick(w)},h("i"),w," ",h("span",{class:"count"},c))); });
+      if(none&&lines.length!==none) b.append(h("button",{class:"c-none","aria-pressed":String(cur==="")},h("i"),"no word ",h("span",{class:"count"},none)));
+      return b;
+    };
+    let filters=bar();
+    const render=()=>{ list.replaceChildren(...lines.filter(({row})=>cur==null||row.word===cur).map(({home,row})=>rowCard(home,row,opts))); const nb=bar(); filters.replaceWith(nb); filters=nb; };
+    const pick=w=>{ cur=w; render(); };
+    wrap.append(filters,list); render();
+    return wrap;
+  }
+  function widgetRows(n,ctx){
+    const subject=subjectOf(n);
+    const rows=subject.rows||[];
+    if(!rows.length) return h("p",{class:"muted"},"no rows");
+    const lines=rows.map(row=>({home:subject,row}));
+    const mirror=subject!==n;
+    return filteredLines(lines, subject.uid, ctx.word, {home:!mirror, crumb:mirror});
+  }
+
+  /* ---------- strip and tally ---------- */
+  function segBar(homeUid,by_word,hrefFor,height){
     const bar=h("div",{class:"bar",style:height?`height:${height}px`:null,role:"img","aria-label":Object.entries(by_word).map(([w,c])=>`${c} ${w}`).join(", ")||"empty"});
-    const order=[...LEGEND.map(l=>l.word),...Object.keys(by_word).filter(w=>!LEGW[w])];
-    order.forEach(w=>{ const c=by_word[w]; if(!c) return; const seg=h(href?"a":"span",{class:`seg ${cls(w)}`,style:`flex:${c}`,href,title:`${c} ${w}`},c); bar.append(seg); });
+    const words=legendFor(homeUid).map(l=>l.word);
+    const order=[...words,...Object.keys(by_word).filter(w=>!words.includes(w))];
+    order.forEach(w=>{ const c=by_word[w]; if(!c) return; const href=hrefFor?hrefFor(w):null; bar.append(h(href?"a":"span",{class:`seg ${cls(homeUid,w)}`,style:`flex:${c}`,href,title:`${c} ${w}`},c>=2?c:"")); });
     return bar;
   }
-  function widgetTally(n){
-    const entries=n.tally||[];
+  function stripLike(n, entries){
+    // entries = [{uid,title,by_word,total}]
     const totals={}; entries.forEach(e=>Object.entries(e.by_word||{}).forEach(([w,c])=>totals[w]=(totals[w]||0)+c));
-    const all=Object.values(totals).reduce((a,b)=>a+b,0);
+    const all=entries.reduce((a,e)=>a+(e.total||0),0);
     const max=Math.max(1,...entries.map(e=>e.total||0));
-    const tot=h("div",{class:"totals"},segBar(totals,all,null,28),
-      h("p",{class:"muted small",style:"margin-top:6px"},plural(all,"row"),all?": ":"",Object.entries(totals).map(([w,c],i)=>[i?", ":"",`${c} ${w}`])));
+    const words=legendFor(n.uid).map(l=>l.word);
+    const order=[...words.filter(w=>totals[w]),...Object.keys(totals).filter(w=>!words.includes(w))];
+    const tot=h("div",{class:"totals"},segBar(n.uid,totals,null,28),
+      h("p",{class:"muted small",style:"margin-top:6px"},plural(all,"row"),all?": ":"",order.map((w,i)=>[i?", ":"",`${totals[w]} ${w}`])));
     const g=h("div",{class:"heat"});
     entries.forEach(e=>{
       const href=hrefOf(e.uid);
       g.append(h(href?"a":"span",{class:"heat-label",href},e.title!=null?e.title:e.uid," ",h("span",{class:"n"},e.total)),
-        h("div",{style:`width:${((e.total||0)/max*100).toFixed(1)}%`},segBar(e.by_word||{},e.total,href)));
+        h("div",{style:`width:${((e.total||0)/max*100).toFixed(1)}%`},segBar(n.uid,e.by_word||{},w=>narHref(e.uid,"/"+encodeURIComponent(w)),null)));
     });
     return [tot,g];
   }
+  // what a counting widget counts: the subject's screen-owning children when
+  // it has any (its cards and sections are furniture), else all of them
+  const counted=subject=>{ const kids=subject.children||[]; const own=kids.filter(ownsScreen); return own.length?own:kids; };
+  function widgetStrip(n){
+    const subject=subjectOf(n);
+    const entries=counted(subject).filter(c=>rowCount(c)>0&&nodeOn(c.uid)).map(c=>{
+      const by_word={}; c.rows.forEach(r=>{ if(r.word!=null) by_word[r.word]=(by_word[r.word]||0)+1; });
+      return {uid:c.uid,title:c.title,by_word,total:c.rows.length};
+    });
+    if(!entries.length) return h("p",{class:"muted"},"nothing to count");
+    return stripLike(n,entries);
+  }
+  function widgetTally(n){
+    const subject=subjectOf(n);
+    const entries=counted(subject).filter(c=>nodeOn(c.uid)).map(c=>{
+      const by_word={}; let total=0;
+      rowBacklinks(c.uid).forEach(b=>{ total++; if(b.word!=null) by_word[b.word]=(by_word[b.word]||0)+1; });
+      return {uid:c.uid,title:c.title,by_word,total};
+    });
+    if(!entries.length) return h("p",{class:"muted"},"nothing to count");
+    return stripLike(n,entries);
+  }
+
+  /* ---------- legend, glossary, table, facts, stack, grid, ladder ---------- */
   function widgetLegend(n){
-    const rows=(n.legend&&n.legend.length)?n.legend:LEGEND;
+    const rows=(n.legend&&n.legend.length)?n.legend:legendFor(n.uid);
     if(!rows.length) return h("p",{class:"muted"},"no legend");
-    return h("div",{class:"legend"},rows.flatMap(l=>[wordChip(l.word,null,true),h("span",{class:"meaning"},l.meaning," ",h("span",{class:"cn"},"("+l.colour+")"))]));
+    return h("div",{class:"legend"},rows.flatMap(l=>[wordChip(n.uid,l.word,null,true),h("span",{class:"meaning"},l.meaning," ",h("span",{class:"cn"},"("+l.colour+(l.by_label?" · "+l.by_label:"")+")"))]));
   }
   function widgetGlossary(n){
-    const terms=n.terms||[]; if(!terms.length) return null;
-    return h("dl",{class:"words"},terms.flatMap(t=>[h("dt",{id:`row-${n.uid}-${t.n}`},t.term),h("dd",{},spans(t.spans))]));
+    const terms=n.terms||[];
+    // a glossary that names a query word draws that table's narratives;
+    // else the narratives it contains that declare no place are its terms
+    // (a child with a place stacks on the screen like any other)
+    const kids=n.query!=null?(queryNarratives(n.query)||[]):termKids(n);
+    if(!terms.length&&!kids.length) return h("p",{class:"muted"},"no terms");
+    // a term whose text is a contained narrative's title carries that
+    // narrative's body under its definition and anchors its route
+    const childOf=t=>kids.find(c=>(c.title||"").trim()===String(t.term).trim());
+    const dl=h("dl",{class:"words"},terms.flatMap(t=>{ const c=childOf(t); return [h("dt",{id:c?`nar-${c.uid}`:`row-${n.uid}-${t.n}`},c?h("a",{href:narHref(c.uid)},t.term):t.term),h("dd",{},h("p",{},spans(t.spans)),c?[prose(c),citesList(c)]:null)]; }));
+    const extra=kids.filter(c=>!terms.some(t=>String(t.term).trim()===(c.title||"").trim()));
+    const dl2=extra.length?h("dl",{class:"words"},extra.flatMap(c=>[h("dt",{id:`nar-${c.uid}`},nodeOn(c.uid)?(hrefOf(c.uid)?h("a",{href:hrefOf(c.uid)},c.title):c.title):[c.title," ",offNote(c.uid)]),h("dd",{},prose(c),citesList(c))])):null;
+    // the narratives the glossary contains or its query names come first,
+    // then the terms of its own statement, in Contains order
+    return [dl2,terms.length?dl:null];
   }
+  // a table; one of three or more columns stacks its cells under 480px, each
+  // labelled by its header. The table that names the systems query carries
+  // the switches above its rows: that table is the switches.
   function widgetTable(n){
     const t=n.table; if(!t) return h("p",{class:"muted"},"no table");
-    return h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},(t.header||[]).map(c=>h("th",{},c)))),h("tbody",{},(t.rows||[]).map(r=>h("tr",{},r.map(c=>h("td",{},c)))))));
+    const head=t.header||[];
+    const table=h("table",{class:head.length>=3?"rowwise":null},h("thead",{},h("tr",{},head.map(c=>h("th",{},c)))),h("tbody",{},(t.rows||[]).map(r=>h("tr",{},r.map((c,i)=>h("td",{"data-th":head[i]!=null?head[i]:""},linkifyText(c)))))));
+    return [n.query==="systems"?switchRow(false):null,h("div",{class:"tbl scrollx"},table)];
   }
-  function widgetEdges(n){
-    const pairs=DATA.pairs||[];
-    if(!pairs.length) return h("p",{class:"muted"},"no pairs");
-    return [h("figure",{},h("div",{class:"figwrap scrollx"},edgesSvg(pairs)),h("figcaption",{},"Arrows run from the source to the target, labelled with the role and the live count.")),
-      h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"from"),h("th",{},"role"),h("th",{},"to"),h("th",{class:"num"},"count"))),
-        h("tbody",{},pairs.map(p=>h("tr",{},h("td",{},p[0]),h("td",{},h("code",{},p[1])),h("td",{},p[2]),h("td",{class:"num"},p[3]))))))];
+  function widgetFacts(n){
+    const subject=subjectOf(n);
+    const facts=subject.facts||[]; if(!facts.length) return h("p",{class:"muted"},"no facts");
+    return h("dl",{class:"facts"},facts.flatMap(f=>[h("dt",{id:`row-${subject.uid}-${f.n}`},f.label),h("dd",{},spans(f.spans))]));
   }
-  function edgesSvg(pairs){
-    const types=[]; pairs.forEach(p=>{ [p[0],p[2]].forEach(t=>{ if(!types.includes(t)) types.push(t); }); });
-    const N=types.length, cols=Math.ceil(Math.sqrt(N)), rows=Math.ceil(N/cols);
-    const W=180,H=54,CW=320,CH=190,M=70;
-    const width=M*2+(cols-1)*CW+W, height=M*2+(rows-1)*CH+H;
-    const pos={}; types.forEach((t,i)=>{ const c=i%cols,r=Math.floor(i/cols); pos[t]={x:M+c*CW,y:M+r*CH,cx:M+c*CW+W/2,cy:M+r*CH+H/2}; });
-    const svg=s("svg",{viewBox:`0 0 ${width} ${height}`,role:"img","aria-label":"which kinds of node point at which","font-family":"var(--body)","font-size":"12"});
-    svg.append(s("defs",{},s("marker",{id:"arr",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"7",markerHeight:"7",orient:"auto-start-reverse"},s("path",{d:"M0 0L10 5L0 10z",fill:"currentColor"}))));
-    const groups=new Map();
-    pairs.forEach(([a,role,b,c])=>{ const k=a+" "+b; if(!groups.has(k)) groups.set(k,{a,b,labels:[]}); groups.get(k).labels.push(`${role} ${c}`); });
-    const lines=s("g",{fill:"none",stroke:"currentColor","stroke-width":"1.5","marker-end":"url(#arr)"});
-    const texts=s("g",{fill:"currentColor",style:"paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round"});
-    const placed=[]; // label boxes already on the sheet, so a new one can dodge them
-    const boxOf=(x,y,labels)=>{ const w=Math.max(...labels.map(l=>l.length))*6.6+8, hh=labels.length*14+4; return {x:x-w/2,y:y-12,w,h:hh}; };
-    const hits=b=>placed.some(o=>b.x<o.x+o.w&&o.x<b.x+b.w&&b.y<o.y+o.h&&o.y<b.y+b.h) || types.some(t=>{ const P=pos[t]; return b.x<P.x+W&&P.x<b.x+b.w&&b.y<P.y+H&&P.y<b.y+b.h; });
-    const label=(x,y,labels)=>{ placed.push(boxOf(x,y,labels)); labels.forEach((l,i)=>texts.append(s("text",{x,y:y+i*14,"text-anchor":"middle"},l))); };
-    for(const {a,b,labels} of groups.values()){
-      const A=pos[a],B=pos[b];
-      if(a===b){
-        const x0=A.x+8,y0=A.y+10,x1=A.x+34,y1=A.y;
-        lines.append(s("path",{d:`M${x0} ${y0} C ${x0-50} ${y0-30}, ${x1-20} ${y1-60}, ${x1} ${y1}`}));
-        label(A.x-10,A.y-46-(labels.length-1)*14,labels);
-        continue;
-      }
-      const reverse=groups.has(b+" "+a);
-      let dx=B.cx-A.cx, dy=B.cy-A.cy; const len=Math.hypot(dx,dy)||1; dx/=len; dy/=len;
-      const off=reverse?12:0, ox=-dy*off, oy=dx*off;
-      const p1=clip(A,dx,dy,W,H), p2=clip(B,-dx,-dy,W,H);
-      lines.append(s("line",{x1:p1.x+ox,y1:p1.y+oy,x2:p2.x+ox,y2:p2.y+oy}));
-      const side=reverse?16:10;
-      let best=null;
-      for(const t of [0.5,0.35,0.65,0.25,0.75,0.42,0.58]){
-        const mx=p1.x+(p2.x-p1.x)*t+ox-dy*side, my=p1.y+(p2.y-p1.y)*t+oy+dx*side;
-        const y=my-((labels.length-1)*14)/2+4;
-        if(best===null) best=[mx,y];
-        if(!hits(boxOf(mx,y,labels))){ best=[mx,y]; break; }
-      }
-      label(best[0],best[1],labels);
-    }
-    svg.append(lines,texts);
-    types.forEach(t=>{ const P=pos[t]; svg.append(s("g",{},
-      s("rect",{x:P.x,y:P.y,width:W,height:H,rx:"8",style:"fill:var(--surface);stroke:var(--ink2)","stroke-width":"1.5"}),
-      s("text",{x:P.cx,y:P.y+33,"text-anchor":"middle","font-size":"14","font-weight":"700",style:"fill:var(--ink);font-family:var(--display)"},t))); });
-    return svg;
+  function widgetStack(n){
+    const subject=subjectOf(n);
+    const rows=subject.stack||[]; if(!rows.length) return h("p",{class:"muted"},"no layers");
+    return h("div",{class:"layers"},rows.map(r=>h("div",{class:`layer ${cls(subject.uid,r.word)}${r.word!=null?" marked":""}`,id:`row-${subject.uid}-${r.n}`},
+      h("div",{class:"l"},r.name),h("div",{},h("div",{class:"row"},h("b",{},r.label),r.word!=null?wordChip(subject.uid,r.word):null),h("div",{class:"d"},spans(r.spans))))));
   }
-  function clip(P,dx,dy,W,H){
-    const tx=dx!==0?(W/2)/Math.abs(dx):Infinity, ty=dy!==0?(H/2)/Math.abs(dy):Infinity, t=Math.min(tx,ty)+2;
-    return {x:P.cx+dx*t,y:P.cy+dy*t};
+  const firstSentence=uid=>{ const n=NAR[uid]; if(!n) return null; const p=(n.prose||[])[0]; if(!p) return null; const t=spanText(p); const m=t.match(/^.*?[.!?](\s|$)/); return (m?m[0]:t).trim(); };
+  function gridCell(uid){
+    if(uid==null) return h("span",{class:"cell empty"},h("span",{class:"muted"},"—"));
+    const t=titleOf(uid)!=null?titleOf(uid):uid;
+    if(!nodeOn(uid)) return h("span",{class:"cell"},h("b",{},t));
+    return h("a",{class:"cell",href:hrefOf(uid)||"#"},h("b",{},t),h("span",{},firstSentence(uid)||""));
   }
-  function grammarTables(type){
-    const g=GRAMMAR[type]; if(!g) return null;
-    return h("div",{class:"stack"},
-      h("div",{class:"row"},h("h4",{},"fields"),g.prefix?h("span",{class:"chip"},"prefix · ",h("b",{},g.prefix)):null),
-      h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"name"),h("th",{},"kind"),h("th",{},"options"),h("th",{},"required"))),
-        h("tbody",{},(g.fields||[]).map(f=>h("tr",{},h("td",{},h("code",{},f.name)),h("td",{},f.kind),h("td",{class:"dim opts"},(f.options||[]).join(", ")),h("td",{},f.required?"yes":"no")))))),
-      h("h4",{},"relations it may make"),
-      h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"type"),h("th",{},"role"))),
-        h("tbody",{},(g.roles||[]).map(r=>h("tr",{},h("td",{},r.type),h("td",{},r.role!=null?h("code",{},r.role):h("span",{class:"muted"},"—"))))))));
+  const gridOff=g=>{ const u=[...(g.cells||[]).map(c=>c.uid),...(g.outside||[])].find(x=>x!=null&&!nodeOn(x)); return u!=null?h("p",{class:"small"},offNote(u)," — the cells do not link"):null; };
+  function widgetGrid(n){
+    const subject=subjectOf(n);
+    const g=subject.grid; if(!g) return h("p",{class:"muted"},"no grid");
+    const rows=(g.axes&&g.axes.row)||[], cols=(g.axes&&g.axes.col)||[];
+    const fig=h("div",{class:"gridfig",style:`grid-template-columns:auto repeat(${Math.max(1,cols.length)},1fr)`});
+    fig.append(h("span"));
+    cols.forEach(c=>fig.append(h("span",{class:"ax"},c.word,c.caption?" — "+c.caption:"")));
+    rows.forEach(r=>{
+      fig.append(h("span",{class:"ax left"},r.word,r.caption?" — "+r.caption:""));
+      cols.forEach(c=>{ const cell=(g.cells||[]).find(x=>x.row===r.word&&x.col===c.word); fig.append(gridCell(cell?cell.uid:null)); });
+    });
+    const outside=(g.outside||[]);
+    return h("div",{class:"stack"},fig,outside.length?[h("p",{class:"kicker"},"outside"),h("div",{class:"outside"},outside.map(gridCell))]:null,gridOff(g));
   }
-  function widgetBody(n){
-    switch(n.widget){
-      case "rows": return widgetRows(n);
-      case "tally": return widgetTally(n);
-      case "legend": return widgetLegend(n);
-      case "glossary": return widgetGlossary(n);
-      case "table": return widgetTable(n);
-      case "edges": return widgetEdges(n);
-      case "prose": case undefined: case null: return null;
-      default: return h("p",{class:"muted small"},"unknown widget: ",h("code",{},String(n.widget)));
-    }
+  // which grid cell (if any) links a narrative: the badge on its own screen
+  function cellBadge(uid){
+    for(const r of ROOTS){ let hit=null; (function walk(n){ if(hit) return; if(n.grid){ const c=(n.grid.cells||[]).find(x=>x.uid===uid); if(c) hit=h("span",{class:"cellbadge"},h("i",{class:"f"}),`${c.row} × ${c.col}`); else if((n.grid.outside||[]).includes(uid)) hit=h("span",{class:"cellbadge"},h("i"),"outside"); } (n.children||[]).forEach(walk); })(r); if(hit) return hit; }
+    return null;
+  }
+  function valueOf(nd,field){ if(nd.state&&nd.state[field]!=null) return nd.state[field]; if(nd.fields&&nd.fields[field]!=null) return nd.fields[field]; return null; }
+  function ladderEl(field,rungs,note,type){
+    const pool=selectedNodes().filter(nd=>type==null||nd.type===type);
+    const known=Array.isArray(LADDERS[field])?LADDERS[field]:null;
+    const list=rungs&&rungs.length?rungs:(known||[]);
+    const el=h("div",{class:"ladder"});
+    list.forEach((r,i)=>{ if(i) el.append(h("span",{class:"arrow"},"→")); const c=pool.filter(nd=>valueOf(nd,field)===r).length; const ghost=!known||!known.includes(r); el.append(h("span",{class:"rung"+(ghost?" ghost":""),title:ghost?"not in the grammar":undefined},r," ",h("b",{},c))); });
+    if(!list.length) el.append(h("span",{class:"muted small"},"no rungs"));
+    return h("div",{class:"stack"},h("div",{class:"row"},h("code",{},field),note?h("span",{class:"muted small"},note):null),el);
+  }
+  function widgetLadder(n){
+    const subject=subjectOf(n);
+    const rows=subject.ladder||[]; if(!rows.length) return h("p",{class:"muted"},"no ladders");
+    const type=n.grammar_of!=null?n.grammar_of:(subject.grammar_of!=null?subject.grammar_of:null);
+    return h("div",{class:"stack"},rows.map(l=>ladderEl(l.field,l.rungs,l.note,type)));
   }
 
-  /* ---------- a narrative at a level of the tree ---------- */
-  function crumb(n){
-    const trail=[]; let p=PARENT[n.uid];
-    while(p&&p!==ROOT.uid){ trail.unshift(p); p=PARENT[p]; }
-    if(!trail.length) return null;
-    return h("p",{class:"row"},trail.map((u,i)=>[i?h("span",{class:"muted"},"›"):null,h("a",{class:"crumb",href:hrefOf(u)},NAR[u].title)]));
+  /* ---------- index and list: over children or over a query ---------- */
+  function childEntry(c){
+    const rows=rowCount(c), back=rowBacklinks(c.uid).length, cites=(c.cites||[]).length;
+    const bits=[]; if(rows) bits.push(plural(rows,"row")); else if(back) bits.push(`${back} that link it`); if(cites) bits.push(plural(cites,"cite"));
+    return {uid:c.uid,title:c.title,blurb:firstPara(c),bits,href:narHref(c.uid),on:nodeOn(c.uid)};
   }
-  function narBody(n){
-    return [prose(n), widgetBody(n), n.grammar_of!=null?grammarTables(n.grammar_of):null, citesList(n)];
+  // the narratives a query word names: the table the backend computed under
+  // DATA.queries when it is there (each row a uid), drawn as the narrative on
+  // this page where it is one, else as its node card; without the table, the
+  // narratives any glossary widget holds plus those tagged the word's singular
+  function queryNarratives(word){
+    const table=DATA.queries&&Array.isArray(DATA.queries[word])?DATA.queries[word]:null;
+    if(table) return table.map(x=>NAR[x.uid]||Object.assign({prose:[],children:[],cites:[]},NODES[x.uid]||{},{uid:x.uid,title:x.title!=null?x.title:(NODES[x.uid]||{}).title||x.uid}));
+    const seen=new Set(), out=[]; const single=word.replace(/s$/,"");
+    ROOTS.forEach(r=>(function walk(n){ if(n.widget==="glossary") stackKids(n).forEach(c=>{ if(!seen.has(c.uid)){ seen.add(c.uid); out.push(c); } }); if((n.tags||[]).includes(single)&&!seen.has(n.uid)){ seen.add(n.uid); out.push(n); } (n.children||[]).forEach(walk); })(r));
+    return out;
   }
-  function renderNar(n, level, forceCards){
-    const kids=n.children||[];
-    const asCards = forceCards || n.widget==="glossary";
-    const children = kids.length ? h("div",{class:asCards?"grid2":"stack"},kids.map(c=>renderNar(c, asCards?2:level+1, asCards))) : null;
-    if(level===0){
-      return [h("div",{class:"stack",id:`nar-${n.uid}`},h("p",{class:"kicker"},n.uid),h("h1",{},n.title),h("div",{class:"row"},narChips(n)),tagRow(n)),
-        ...narBody(n).flat().filter(Boolean), children];
+  function queryEntries(word){
+    switch(word){
+      case "roots": return ROOTS.map(r=>({uid:r.uid,title:r.title,blurb:firstPara(r),bits:[r.dir_class,plural((r.children||[]).length,"part")],href:narHref(r.uid),on:nodeOn(r.uid)}));
+      case "grammar": return Object.entries(GRAMMAR).map(([t,g])=>({uid:t,title:t,blurb:null,bits:[g.prefix?`prefix ${g.prefix}`:null,plural((g.fields||[]).length,"field"),plural((g.roles||[]).length,"role"),plural(selectedNodes().filter(nd=>nd.type===t).length,"node")].filter(Boolean),href:null,on:typeOn(t)}));
+      case "systems": return SYSTEMS.map(x=>({uid:x.name,title:x.name,blurb:x.meaning?h("p",{class:"dim small"},x.meaning):null,bits:[(x.types||[]).join(", "),(x.roles||[]).join(", ")],href:null,on:ON.has(x.name)}));
+      case "terms": return queryNarratives(word).map(childEntry);
+      default: return null;
     }
-    if(level===1){
-      return h("section",{class:"sec",id:`nar-${n.uid}`},h("div",{class:"row"},h("h2",{},n.title),narChips(n)),h("p",{class:"kicker"},n.uid),tagRow(n),...narBody(n).flat().filter(Boolean),children);
-    }
-    return h("article",{class:"card",id:`nar-${n.uid}`},h("h3",{},n.title),h("div",{class:"row"},h("span",{class:"kicker"},n.uid),narChips(n)),tagRow(n),...narBody(n).flat().filter(Boolean),children);
+  }
+  function entriesFor(n){
+    if(n.query!=null&&n.query!=="nodes"){ const q=queryEntries(n.query); if(q) return q; }
+    const subject=subjectOf(n);
+    return (subject.children||[]).filter(c=>c.place!=="tab").map(childEntry);
+  }
+  // the nodes query on a stacked card or section is the counts, type by
+  // directory class, each linking to the Nodes index; the list itself is
+  // drawn only where the widget owns a screen
+  function widgetIndex(n){
+    if(n.query==="nodes") return ownsScreen(n)?nodesIndex():nodesTally();
+    const entries=entriesFor(n); if(!entries.length) return h("p",{class:"muted"},"nothing to list");
+    return h("div",{class:"stack"},entries.map(e=>{
+      const inner=[h("h3",{},e.title),e.blurb,e.bits.length?h("p",{class:"muted small",style:"margin-top:6px"},e.bits.join(" · ")):null];
+      if(!e.on) return h("div",{class:"card"},inner,offNote(e.uid));
+      return e.href?h("a",{class:"card icard",href:e.href},inner):h("div",{class:"card"},inner);
+    }));
+  }
+  // one line per entry: its title, its counts, and its first sentence
+  function widgetList(n){
+    if(n.query==="nodes") return ownsScreen(n)?nodesIndex():nodesTally();
+    const entries=entriesFor(n); if(!entries.length) return h("p",{class:"muted"},"nothing to list");
+    return h("ul",{class:"plain"},entries.map(e=>{ const one=NAR[e.uid]?firstSentence(e.uid):null; return h("li",{},e.on?(e.href?h("a",{href:e.href},e.title):e.title):[e.title," ",offNote(e.uid)],e.bits.length?h("span",{class:"muted small"}," · ",e.bits.join(" · ")):null,one?h("p",{class:"dim small"},one):null); }));
+  }
+  function nodesTally(){
+    const all=selectedNodes();
+    if(!all.length) return h("p",{class:"muted"},"nothing in the selection");
+    const classes=[...new Set(all.map(nd=>nd.dir_class).filter(Boolean))].sort();
+    const rows=typeOrder().map(t=>{ const pool=all.filter(nd=>nd.type===t); if(!pool.length) return null;
+      return h("div",{class:"row between"},h("a",{class:"heat-label",href:"#/nodes"},t," ",h("span",{class:"n"},pool.length)),
+        h("span",{class:"row"},classes.map(c=>{ const k=pool.filter(nd=>nd.dir_class===c).length; return k?h("span",{class:"chip"},c," ",h("b",{},k)):null; }))); }).filter(Boolean);
+    return h("div",{class:"stack"},h("p",{class:"dim small"},h("a",{href:"#/nodes"},plural(all.length,"node"))," in the selection: ",classes.map((c,i)=>[i?", ":"",`${all.filter(nd=>nd.dir_class===c).length} ${c}`]),"."),rows);
   }
 
-  /* ---------- screens ---------- */
-  function screenStart(){
-    const checks=Array.isArray(DATA.checks)?DATA.checks:[];
-    const gen=DATA.generated||{};
-    return [
-      h("div",{class:"stack",id:`nar-${ROOT.uid}`},h("p",{class:"kicker"},ROOT.uid),h("h1",{},ROOT.title),h("div",{class:"row"},narChips(ROOT)),tagRow(ROOT)),
-      h("section",{class:"card"},prose(ROOT),widgetBody(ROOT),ROOT.grammar_of!=null?grammarTables(ROOT.grammar_of):null,citesList(ROOT)),
-      h("section",{class:"card"},h("h2",{},"legend"),LEGEND.length?widgetLegend({legend:LEGEND}):h("p",{class:"muted"},"no legend: rows carry no colour"),
-        LEGEND.length?h("p",{class:"muted small"},"Colour is only ever a legend word, and the word is always printed beside it."):null),
-      h("section",{class:"card"},h("h2",{},plural(checks.length,"finding")),
-        checks.length?h("ul",{class:"plain checks"},checks.map(c=>h("li",{},h("div",{},h("span",{class:"chip"},h("b",{},c.rule))),nodeLink(c.at),h("span",{class:"text"},c.text)))):h("p",{class:"muted"},"the check found nothing")),
-      h("section",{class:"card"},h("h2",{},"screens"),h("ul",{class:"plain"},TABS.map(t=>h("li",{},h("a",{href:hrefOf(t.uid)},t.title),h("span",{class:"muted small"}," · ",t.widget,(t.children||[]).length?` · ${plural(t.children.length,"part")}`:""))),
-        h("li",{},h("a",{href:"#/nodes"},"nodes"),h("span",{class:"muted small"}," · ",plural(Object.keys(NODES).length,"node"))))),
-      h("section",{class:"card"},h("h2",{},"generated"),h("dl",{class:"fields"},
-        h("dt",{},"root"),h("dd",{},gen.root!=null?nodeLink(gen.root):"—"),
-        h("dt",{},"canon commit"),h("dd",{},h("code",{},gen.canon_commit!=null?gen.canon_commit:"—")),
-        h("dt",{},"export sha256"),h("dd",{},h("code",{},gen.export_sha256!=null?gen.export_sha256:"—")),
-        h("dt",{},"at"),h("dd",{},gen.at!=null?gen.at:"—"))),
-    ];
-  }
-  function screenTab(uid){
-    const n=NAR[uid]; if(!n) return [h("p",{},"No such screen."),h("a",{href:"#/start"},"start")];
-    return renderNar(n,0,false);
-  }
+  /* ---------- the node index: search + facets, grouped by type ---------- */
   function typeOrder(){
     const order=Object.keys(GRAMMAR);
     const seen=new Set(order);
     Object.values(NODES).forEach(nd=>{ if(!seen.has(nd.type)){ seen.add(nd.type); order.push(nd.type); } });
     return order;
   }
-  function screenNodes(){
+  function nodesIndex(){
     const input=h("input",{class:"search",type:"search",placeholder:"filter by id or title","aria-label":"filter nodes"});
     const list=h("div",{class:"stack"});
-    const all=Object.values(NODES);
+    const facets=h("div",{class:"facets"});
+    const all=selectedNodes();
+    const picked={type:null,system:null,dir_class:null,state:null,reach:null};
+    const stateKey=nd=>Object.entries(nd.state||{}).filter(([,v])=>v!=null).map(([k,v])=>`${k}=${v}`);
+    // how the whiteboard reaches a node: a row links it, a narrative cites
+    // or links it in prose, or nothing on the page reaches it
+    const REACHWORDS=["row-linked","cited","unreached"];
+    const reach=nd=>{ if(rowBacklinks(nd.uid).length) return "row-linked"; return (BACK[nd.uid]||[]).some(b=>NAR[b.from]&&nodeOn(b.from)&&(b.via==="cites"||b.via==="link"))?"cited":"unreached"; };
+    const values={
+      type:typeOrder().filter(t=>all.some(nd=>nd.type===t)),
+      system:SYSTEMS.map(x=>x.name).filter(x=>ON.has(x)),
+      dir_class:[...new Set(all.map(nd=>nd.dir_class).filter(Boolean))].sort(),
+      state:[...new Set(all.flatMap(stateKey))].sort(),
+      reach:REACHWORDS.filter(w=>all.some(nd=>reach(nd)===w)),
+    };
+    const has=(nd,k,v)=>k==="type"?nd.type===v:k==="system"?systemsOf(nd.uid).includes(v):k==="dir_class"?nd.dir_class===v:k==="reach"?reach(nd)===v:stateKey(nd).includes(v);
+    const matchExcept=(nd,skip)=>Object.keys(picked).every(k=>k===skip||picked[k]==null||has(nd,k,picked[k]));
+    const match=nd=>matchExcept(nd,null);
     const sortKey=nd=>{ const st=nd.state||{}; for(const k of Object.keys(st)){ const r=rank(k,st[k]); if(r) return r[0]; } return 0; };
+    const drawFacets=()=>{
+      facets.replaceChildren(...Object.entries(values).map(([k,vals])=>vals.length?h("div",{class:"facet"},h("span",{class:"kicker"},k),vals.map(v=>h("button",{"aria-pressed":String(picked[k]===v),onclick:()=>{ picked[k]=picked[k]===v?null:v; render(); }},v," ",h("span",{class:"count"},all.filter(nd=>matchExcept(nd,k)&&has(nd,k,v)).length)))):null));
+    };
     const render=()=>{
       const q=input.value.trim().toLowerCase();
-      const shown=all.filter(nd=>!q||`${nd.uid} ${nd.title||""}`.toLowerCase().includes(q));
-      list.replaceChildren(...typeOrder().map(t=>{
+      const shown=all.filter(nd=>match(nd)&&(!q||`${nd.uid} ${nd.title||""}`.toLowerCase().includes(q)));
+      drawFacets();
+      list.replaceChildren(h("p",{class:"count"},plural(shown.length,"node"),shown.length!==all.length?` of ${all.length}`:""),...typeOrder().map(t=>{
         const rows=shown.filter(nd=>nd.type===t).sort((a,b)=>sortKey(a)-sortKey(b)||a.uid.localeCompare(b.uid));
         if(!rows.length) return null;
         return h("section",{class:"card"},h("div",{class:"row"},h("h3",{},t),h("span",{class:"count"},rows.length)),
-          h("ul",{class:"plain"},rows.map(nd=>h("li",{},nodeLink(nd.uid),h("div",{class:"row"},stateChips(nd.state),
-            (BACK[nd.uid]||[]).length?h("span",{class:"count"},plural(BACK[nd.uid].length,"backlink")):null,
-            NAR[nd.uid]?h("a",{class:"crumb",href:`#/n/${enc(nd.uid)}`},"in the view"):null)))));
+          h("ul",{class:"plain"},rows.map(nd=>h("li",{},nodeLink(nd.uid),h("div",{class:"row"},stateChips(nd.state),sysChips(nd.uid),
+            rowBacklinks(nd.uid).length?h("span",{class:"count"},plural(rowBacklinks(nd.uid).length,"row")):null)))));
       }).filter(Boolean), shown.length?null:h("p",{class:"muted"},"nothing matches"));
     };
     input.addEventListener("input",render); render();
-    return [h("h1",{},"nodes"),h("p",{class:"dim small"},plural(all.length,"node")," in this payload, grouped by type."),input,list];
+    return [h("p",{class:"dim small"},plural(all.length,"node")," in the selection, grouped by type."),input,facets,list];
   }
+
+  /* ---------- edges and fingerprints over the selection ---------- */
+  // the rule rows an edges or fingerprints widget reads: its subject's
+  // facts ("- Role: TYPE, TYPE" as label and value) or its subject's rows
+  function ruleRows(n){
+    const d=subjectOf(n);
+    if((d.facts||[]).length) return d.facts.map(f=>`${f.label}: ${spanText(f.spans)}`.trim());
+    return (d.rows||[]).map(r=>spanText(r.spans).trim()).filter(Boolean);
+  }
+  // the edges a widget draws over: the whole selection when its query is
+  // the nodes of the canon, else the selection among the nodes its root's
+  // tree cites
+  function edgeScope(n){
+    if(n.query==="nodes") return selectedEdges();
+    const reach=reachOf(n.uid);
+    return selectedEdges().filter(e=>reach.has(e.from)&&reach.has(e.to));
+  }
+  function livePairs(edges){
+    const counts=new Map();
+    edges.forEach(e=>{ const a=NODES[e.from],b=NODES[e.to]; if(!a||!b) return; const k=`${a.type}\t${e.role}\t${b.type}`; counts.set(k,(counts.get(k)||0)+1); });
+    return [...counts].map(([k,c])=>{ const [a,role,b]=k.split("\t"); return {from:a,role,to:b,count:c}; }).sort((x,y)=>(x.from+x.role+x.to).localeCompare(y.from+y.role+y.to));
+  }
+  function edgeRules(n){
+    // "- Role: TYPE, TYPE" rows state the allowed targets of a role
+    const rules=new Map();
+    ruleRows(n).forEach(t=>{ const [role,rest]=t.split(/:\s*/,2); if(role&&rest) rules.set(role.trim(),rest.split(",").map(x=>x.trim()).filter(Boolean)); });
+    return rules;
+  }
+  function widgetEdges(n){
+    const edges=edgeScope(n);
+    const pairs=livePairs(edges);
+    const rules=edgeRules(n);
+    const broken=p=>rules.has(p.role)&&!rules.get(p.role).includes(p.to);
+    if(!pairs.length) return h("p",{class:"muted"},"no pairs in the selection");
+    const nodeCount=new Set(edges.flatMap(e=>[e.from,e.to])).size;
+    const loops=pairs.filter(p=>p.from===p.to), arrows=pairs.filter(p=>p.from!==p.to);
+    const flag=p=>broken(p)?h("span",{class:"warn"}," · breaks the rule"):null;
+    return [h("figure",{},h("div",{class:"figwrap scrollx"},edgesSvg(arrows,broken)),h("figcaption",{},`${plural(pairs.length,"pair")} among ${plural(nodeCount,"node")}. Arrows run from the source to the target, labelled with the role and the live count.`,rules.size?" A dashed red arrow is a pair off a rule row.":null,loops.length?" A kind that points at its own kind is listed beneath the figure.":null)),
+      loops.length?h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"points at its own kind"),h("th",{},"role"),h("th",{class:"num"},"live"))),
+        h("tbody",{},loops.map(p=>h("tr",{},h("td",{},p.from),h("td",{},h("code",{},p.role),flag(p)),h("td",{class:"num"},p.count)))))):null,
+      h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"from"),h("th",{},"role"),h("th",{},"to"),h("th",{class:"num"},"live"))),
+        h("tbody",{},pairs.map(p=>h("tr",{},h("td",{},p.from),h("td",{},h("code",{},p.role)),h("td",{},p.to,flag(p)),h("td",{class:"num"},p.count)))))),
+      rules.size&&subjectOf(n)===n?h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"role"),h("th",{},"may point at"))),h("tbody",{},[...rules].map(([role,targets])=>h("tr",{},h("td",{},h("code",{},role)),h("td",{},targets.join(", "))))))):null];
+  }
+  // the type boxes on a ring (a row for two, a square for four), one
+  // arrow per ordered pair with its roles stacked on the label, labels
+  // pushed off the line until they overlap nothing; self-loops are not
+  // drawn (the widget lists them)
+  function edgesSvg(pairs,broken){
+    const types=[]; pairs.forEach(p=>{ [p.from,p.to].forEach(t=>{ if(!types.includes(t)) types.push(t); }); });
+    const N=types.length;
+    const W=150,H=48;
+    const width=N<=2?W*2+200:720, height=N<=2?H+80:(N<=4?440:600);
+    const cx=width/2, cy=height/2, rx=(width-W)/2-30, ry=(height-H)/2-30;
+    const pos={}; types.forEach((t,i)=>{ const a=-Math.PI/2+i*2*Math.PI/N; const x=N<=2?(i?width-W-30:30):cx+rx*Math.cos(a)-W/2, y=N<=2?(height-H)/2:cy+ry*Math.sin(a)-H/2; pos[t]={x,y,cx:x+W/2,cy:y+H/2}; });
+    const svg=s("svg",{viewBox:`0 0 ${width} ${height}`,role:"img","aria-label":"which kinds of node point at which","font-family":"var(--body)","font-size":"12"});
+    svg.append(s("defs",{},s("marker",{id:"arr",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"7",markerHeight:"7",orient:"auto-start-reverse"},s("path",{d:"M0 0L10 5L0 10z",fill:"currentColor"})),
+      s("marker",{id:"arrw",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"7",markerHeight:"7",orient:"auto-start-reverse"},s("path",{d:"M0 0L10 5L0 10z",style:"fill:var(--c-red)"}))));
+    const groups=new Map();
+    pairs.forEach(p=>{ const k=p.from+" "+p.to; if(!groups.has(k)) groups.set(k,{a:p.from,b:p.to,labels:[],bad:false}); const g=groups.get(k); g.labels.push(`${p.role} ${p.count}${broken(p)?" · breaks the rule":""}`); if(broken(p)) g.bad=true; });
+    const lines=s("g",{fill:"none",stroke:"currentColor","stroke-width":"1.5"});
+    const texts=s("g",{fill:"currentColor",style:"paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round"});
+    const placed=[];
+    const boxOf=(x,y,labels)=>{ const w=Math.max(...labels.map(l=>l.length))*6.6+8, hh=labels.length*14+4; return {x:x-w/2,y:y-12,w,h:hh}; };
+    const hits=b=>placed.some(o=>b.x<o.x+o.w&&o.x<b.x+b.w&&b.y<o.y+o.h&&o.y<b.y+b.h) || types.some(t=>{ const P=pos[t]; return b.x<P.x+W&&P.x<b.x+b.w&&b.y<P.y+H&&P.y<b.y+b.h; });
+    const label=(x,y,labels,bad)=>{ placed.push(boxOf(x,y,labels)); labels.forEach((l,i)=>texts.append(s("text",{x,y:y+i*14,"text-anchor":"middle",style:bad&&/breaks the rule/.test(l)?"fill:var(--c-red)":null},l))); };
+    const strokeAttrs=bad=>bad?{style:"stroke:var(--c-red)","stroke-dasharray":"5 4","marker-end":"url(#arrw)"}:{"marker-end":"url(#arr)"};
+    // longer arrows first, so the short ones (whose labels have less room) pick last among the free spots
+    const order=[...groups.values()].sort((g1,g2)=>Math.hypot(pos[g2.b].cx-pos[g2.a].cx,pos[g2.b].cy-pos[g2.a].cy)-Math.hypot(pos[g1.b].cx-pos[g1.a].cx,pos[g1.b].cy-pos[g1.a].cy));
+    for(const {a,b,labels,bad} of order){
+      const A=pos[a],B=pos[b];
+      const reverse=groups.has(b+" "+a);
+      let dx=B.cx-A.cx, dy=B.cy-A.cy; const len=Math.hypot(dx,dy)||1; dx/=len; dy/=len;
+      const off=reverse?10:0, ox=-dy*off, oy=dx*off;
+      const p1=clip(A,dx,dy,W,H), p2=clip(B,-dx,-dy,W,H);
+      lines.append(s("line",{x1:p1.x+ox,y1:p1.y+oy,x2:p2.x+ox,y2:p2.y+oy,...strokeAttrs(bad)}));
+      const base=reverse?14:10;
+      let best=null, found=false;
+      for(const side of [base,base+16,-base-6,base+32,-base-22,base+48,-base-38]){
+        for(const t of [0.5,0.38,0.62,0.28,0.72,0.2,0.8,0.44,0.56]){
+          const mx=p1.x+(p2.x-p1.x)*t+ox-dy*side, my=p1.y+(p2.y-p1.y)*t+oy+dx*side;
+          const y=my-((labels.length-1)*14)/2+4;
+          if(best===null) best=[mx,y];
+          if(!hits(boxOf(mx,y,labels))){ best=[mx,y]; found=true; break; }
+        }
+        if(found) break;
+      }
+      label(best[0],best[1],labels,bad);
+    }
+    svg.append(lines,texts);
+    types.forEach(t=>{ const P=pos[t]; const cnt=selectedNodes().filter(nd=>nd.type===t).length; svg.append(s("g",{},
+      s("rect",{x:P.x,y:P.y,width:W,height:H,rx:"8",style:"fill:var(--surface);stroke:var(--ink2)","stroke-width":"1.5"}),
+      s("text",{x:P.cx,y:P.y+21,"text-anchor":"middle","font-size":"13","font-weight":"700",style:"fill:var(--ink);font-family:var(--display)"},t),
+      s("text",{x:P.cx,y:P.y+38,"text-anchor":"middle","font-size":"11",style:"fill:var(--ink3);font-family:var(--mono)"},plural(cnt,"node")))); });
+    return svg;
+  }
+  function clip(P,dx,dy,W,H){
+    const tx=dx!==0?(W/2)/Math.abs(dx):Infinity, ty=dy!==0?(H/2)/Math.abs(dy):Infinity, t=Math.min(tx,ty)+2;
+    return {x:P.cx+dx*t,y:P.cy+dy*t};
+  }
+  const unsignedHash=hsh=>/^0+$/.test(String(hsh||""));
+  function widgetFingerprints(n){
+    // a row "A > B > C" states the ladder: an entry may point only up it
+    const ladderRow=ruleRows(n).find(t=>t.includes(">"));
+    const ladder=ladderRow?ladderRow.split(">").map(x=>x.trim()).filter(Boolean):null;
+    const counts=new Map(); let total=0, placeholders=0;
+    selectedNodes().forEach(nd=>(nd.fp||[]).forEach(f=>{ const p=NODES[f.uid]; if(!p||!typeOn(p.type)) return; total++; if(unsignedHash(f.hash)) placeholders++; const k=`${nd.type}\t${p.type}`; counts.set(k,(counts.get(k)||0)+1); }));
+    const off=(child,parent)=>{ if(!ladder) return false; const a=ladder.indexOf(child), b=ladder.indexOf(parent); return a<0||b<0||b>=a; };
+    const rows=[...counts].map(([k,c])=>{ const [child,parent]=k.split("\t"); return {child,parent,count:c,off:off(child,parent)}; }).sort((x,y)=>(x.child+x.parent).localeCompare(y.child+y.parent));
+    return [h("p",{class:"dim"},`${plural(total,"entry","entries")} live in the selection, ${placeholders} never signed.`,ladder?[" The ladder: ",ladder.map((t,i)=>[i?" → ":"",h("code",{},t)])]:null),
+      rows.length?h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"child"),h("th",{},"parent"),h("th",{class:"num"},"entries"))),
+        h("tbody",{},rows.map(r=>h("tr",{},h("td",{},r.child),h("td",{},r.parent,r.off?h("span",{class:"warn"}," · off the ladder"):null),h("td",{class:"num"},r.count)))))):h("p",{class:"muted"},"no entries in the selection")];
+  }
+
+  /* ---------- grammar tables for a narrative about a type ---------- */
+  function grammarTables(type){
+    const g=GRAMMAR[type]; if(!g) return h("p",{class:"muted small"},"no such type in the grammar: ",h("code",{},type));
+    const pool=selectedNodes().filter(nd=>nd.type===type);
+    const out=selectedEdges().filter(e=>NODES[e.from]&&NODES[e.from].type===type);
+    const inn=selectedEdges().filter(e=>NODES[e.to]&&NODES[e.to].type===type);
+    const files=pool.reduce((a,nd)=>a+((nd.files||[]).length),0);
+    const outRows=[];
+    (g.roles||[]).forEach(r=>{
+      if(r.role==null){ outRows.push(h("tr",{},h("td",{},h("code",{},r.type)),h("td",{class:"muted"},"a file path"),h("td",{class:"num"},files))); return; }
+      const byTarget=new Map(); out.filter(e=>e.role===r.role).forEach(e=>{ const t=NODES[e.to].type; byTarget.set(t,(byTarget.get(t)||0)+1); });
+      if(!byTarget.size){ outRows.push(h("tr",{},h("td",{},h("code",{},r.role),h("span",{class:"muted small"}," · ",r.type)),h("td",{class:"muted"},"—"),h("td",{class:"num muted"},"0"))); return; }
+      [...byTarget].forEach(([t,c])=>outRows.push(h("tr",{},h("td",{},h("code",{},r.role),h("span",{class:"muted small"}," · ",r.type)),h("td",{},t),h("td",{class:"num"},c))));
+    });
+    const inMap=new Map(); inn.forEach(e=>{ const k=`${NODES[e.from].type}\t${e.role}`; inMap.set(k,(inMap.get(k)||0)+1); });
+    const singles=(g.fields||[]).filter(f=>f.kind==="SingleChoice");
+    return h("div",{class:"stack"},
+      h("div",{class:"row"},h("h4",{},"fields"),g.prefix?h("span",{class:"chip"},"prefix · ",h("b",{},g.prefix)):null,h("span",{class:"chip"},h("b",{},pool.length)," in the selection")),
+      h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"field"),h("th",{},"kind"),h("th",{},"options"),h("th",{},"required"))),
+        h("tbody",{},(g.fields||[]).map(f=>h("tr",{},h("td",{},h("code",{},f.name)),h("td",{},f.kind),h("td",{class:"dim opts"},(f.options||[]).join(", ")),h("td",{},f.required?"required":"optional")))))),
+      h("h4",{},"relations it may make"),
+      h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"role"),h("th",{},"points at"),h("th",{class:"num"},"live"))),h("tbody",{},outRows))),
+      inMap.size?[h("h4",{},"relations that point at it"),h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"from"),h("th",{},"role"),h("th",{class:"num"},"live"))),
+        h("tbody",{},[...inMap].map(([k,c])=>{ const [t,role]=k.split("\t"); return h("tr",{},h("td",{},t),h("td",{},h("code",{},role)),h("td",{class:"num"},c)); }))))]:null,
+      singles.length?[h("h4",{},"state"),singles.map(f=>ladderEl(f.name,f.options,null,type))]:null);
+  }
+
+  /* ---------- a narrative's body, by its widget ---------- */
+  // widgets whose data is narratives (rows, children, terms) go dark when the
+  // system holding narratives is switched off; the canon-data widgets stay
+  const NARRATIVE_DATA=["rows","strip","tally","index","list","glossary"];
+  // the query words whose table is narratives (the other three are canon data)
+  const NARRATIVE_QUERIES=["roots","terms"];
+  function widgetBody(n,ctx){
+    if(NARRATIVE_DATA.includes(n.widget)&&n.query==null&&!nodeOn(subjectOf(n).uid)) return h("p",{},offNote(subjectOf(n).uid));
+    switch(n.widget){
+      case "rows": return widgetRows(n,ctx);
+      case "strip": return widgetStrip(n);
+      case "tally": return widgetTally(n);
+      case "legend": return widgetLegend(n);
+      case "glossary": return widgetGlossary(n);
+      case "table": return widgetTable(n);
+      case "facts": return widgetFacts(n);
+      case "stack": return widgetStack(n);
+      case "grid": return widgetGrid(n);
+      case "ladder": return widgetLadder(n);
+      case "index": return widgetIndex(n);
+      case "list": return widgetList(n);
+      case "edges": return widgetEdges(n);
+      case "fingerprints": return widgetFingerprints(n);
+      case "prose": case "callout": case undefined: case null: return null;
+      default: return h("p",{class:"muted small"},"unknown widget: ",h("code",{},String(n.widget)));
+    }
+  }
+  // a narrative's body: its prose, its widget and, for a narrative about a
+  // grammar element, that element's tables. What it cites comes after its
+  // stacked children (citesAfter), so provenance closes a screen
+  function narBody(n,ctx={}){
+    const overMissing=n.over!=null&&!NAR[n.over]?h("p",{class:"muted small"},"drawn over ",h("code",{},n.over),", which is not a narrative on this page"):null;
+    const intro=n.widget==="callout"?h("div",{class:"banner"},prose(n)):prose(n);
+    return [intro, overMissing, widgetBody(n,ctx), n.grammar_of!=null?grammarTables(n.grammar_of):null];
+  }
+  // a section or card child stacked on its container's screen
+  function stacked(n,ctx){
+    const kids=stackKids(n);
+    const inner=[...narBody(n,ctx).flat().filter(Boolean),kids.map(c=>stacked(c,ctx)),autoIndex(n),citesList(n)];
+    if(n.place==="card") return h("article",{class:"card",id:`nar-${n.uid}`},h("h3",{},n.title),tagRow(n),inner);
+    return h("section",{class:"sec",id:`nar-${n.uid}`},h("div",{class:"row"},h("h2",{},n.title)),tagRow(n),inner);
+  }
+  // the rows anywhere on the page that link this narrative, as line cards
+  // with crumbs home, under a screen that is not itself a rows widget
+  function linkingRows(uid){
+    const lines=rowBacklinks(uid).map(b=>({home:NAR[b.from],row:rowOf(b)}));
+    if(!lines.length) return null;
+    return h("section",{class:"sec"},h("h2",{},plural(lines.length,"row"),lines.length===1?" that links it":" that link it"),filteredLines(lines,lines[0].home.uid,null,{crumb:true,viewing:uid}));
+  }
+  function autoIndex(n){
+    if(LISTING.includes(n.widget)) return null;
+    const kids=screenKids(n); if(!kids.length) return null;
+    if(!nodeOn(n.uid)) return h("p",{},offNote(n.uid));
+    return h("div",{class:"stack"},kids.map(c=>{ const e=childEntry(c); const inner=[h("h3",{},e.title),e.blurb,e.bits.length?h("p",{class:"muted small",style:"margin-top:6px"},e.bits.join(" · ")):null]; return e.on?h("a",{class:"card icard",href:e.href},inner):h("div",{class:"card"},inner,offNote(e.uid)); }));
+  }
+  function prevNext(n){
+    if(n.place!=="screen"||!PARENT[n.uid]) return null;
+    const sibs=screenKids(NAR[PARENT[n.uid]]); const i=sibs.findIndex(x=>x.uid===n.uid);
+    const prev=sibs[i-1], next=sibs[i+1];
+    if(!prev&&!next) return null;
+    return h("div",{class:"prevnext"},prev?h("a",{href:narHref(prev.uid)},"← ",prev.title):h("span"),next?h("a",{href:narHref(next.uid)},next.title," →"):h("span"));
+  }
+  // the strip of tabs that frames a narrative: the nearest ancestor-or-self
+  // with tab children, unless that is the canon root (whose tabs are the page's)
+  function tabOwner(uid){
+    let u=uid;
+    while(u){ if(CANON&&u===CANON.uid) return null; if(tabKids(NAR[u]).length) return u; u=PARENT[u]; }
+    return null;
+  }
+  function subStrip(uid){
+    const owner=tabOwner(uid); if(!owner) return null;
+    const own=NAR[owner];
+    const entries=[{uid:owner,label:isRoot(own)?"Start":own.title},...tabKids(own).filter(tabShown).map(t=>({uid:t.uid,label:t.title}))];
+    let active=owner; for(let u=uid;u;u=PARENT[u]){ if(u!==owner&&tabKids(own).some(t=>t.uid===u)){ active=u; break; } }
+    const nav=h("nav",{class:"tabs sub scrollx","aria-label":"screens of "+own.title},entries.map(e=>h("a",{href:narHref(e.uid),"aria-current":e.uid===active?"page":null,title:e.label},e.label)));
+    return nav;
+  }
+  function screenNar(uid,ctx={}){
+    const n=NAR[uid];
+    const head=[subStrip(uid),
+      h("div",{class:"stack",id:`nar-${n.uid}`},crumbTrail(uid),h("h1",{},n.title),h("div",{class:"row"},narChips(n),cellBadge(uid),isRoot(n)?h("span",{class:"chip"},n.dir_class):null),tagRow(n))];
+    const kids=stackKids(n);
+    const out=[...head,...narBody(n,ctx).flat().filter(Boolean),...kids.map(c=>stacked(c,ctx))];
+    // a screen names a cited node once: what a stacked child already cites is left off the container's list
+    const below=new Set(); (function walk(k){ (k.cites||[]).forEach(x=>below.add(x.uid)); stackKids(k).forEach(walk); })({cites:[],children:kids});
+    const cites=citesList(n,below); if(cites) out.push(cites);
+    if(n.widget!=="rows"&&!isRoot(n)){ const lr=linkingRows(uid); if(lr) out.push(lr); }
+    if(isRoot(n)){
+      // the check findings under this root; the canon-wide ones go on the canon root's Start
+      const checks=CHECKS.filter(c=>c.root===n.uid||(c.root==null&&CANON&&n.uid===CANON.uid));
+      if(checks.length) out.push(h("section",{class:"card"},h("h2",{},plural(checks.length,"finding")),h("ul",{class:"plain checks"},checks.map(c=>h("li",{},h("div",{},h("span",{class:"chip"},h("b",{},c.rule))),nodeLink(c.at),h("span",{class:"text"},c.text))))));
+    }
+    const idx=autoIndex(n); if(idx) out.push(h("section",{class:"sec"},h("h2",{},plural(screenKids(n).length,"screen")),idx));
+    const pn=prevNext(n); if(pn) out.push(pn);
+    return out;
+  }
+
+  /* ---------- the node screen ---------- */
   function relList(items,dir){
     if(!items||!items.length) return h("p",{class:"muted"},"none");
-    return h("ul",{class:"plain"},items.map(r=>h("li",{},h("div",{class:"row"},h("code",{class:"muted"},r.role!=null?r.role:"File"),h("span",{class:"muted"},dir==="out"?"→":"←"),r.type?h("span",{class:"flag"},r.type):null),nodeLink(r.uid))));
+    return h("ul",{class:"plain"},items.map(r=>h("li",{},h("div",{class:"row"},h("code",{class:"muted"},r.role!=null?r.role:"File"),h("span",{class:"muted"},dir==="out"?"→":"←"),roleOn(r.role)?null:h("span",{class:"muted small"},"(role switched off)")),nodeLink(r.uid))));
   }
   function screenNode(uid){
     const nd=NODES[uid];
     const nar=NAR[uid];
-    if(!nd&&!nar) return [h("p",{},"That node is not in this payload."),h("a",{href:"#/nodes"},"nodes")];
-    const type=nd?nd.type:"", title=nd?nd.title:nar.title, state=nd?nd.state:{DEPTH:nar.depth,AUTHORED_BY:nar.authored}, path=nd?nd.path:nar.path;
+    if(!nd&&!nar) return [h("p",{},"That node is not in the canon."),h("a",{href:"#/nodes"},"nodes")];
+    if(!nodeOn(uid)) return [h("div",{class:"nodehead stack"},h("code",{},uid),h("h1",{},titleOf(uid)),h("p",{},offNote(uid)))];
+    const type=nd?nd.type:"", title=nd?nd.title:nar.title, state=nd?nd.state:{depth:nar.depth,authored:nar.authored}, path=nd?nd.path:nar.path;
     const back=BACK[uid]||[];
     const fields=nd?Object.entries(nd.fields||{}):[];
+    const outP=nd?nd.out.filter(r=>r.type!=="Child"):[], outC=nd?nd.out.filter(r=>r.type==="Child"):[];
+    const rowLines=rowBacklinks(uid).map(b=>({home:NAR[b.from],row:rowOf(b)}));
+    // the other backlinks, one per (narrative, via, row)
+    const seenOther=new Set();
+    const other=back.filter(b=>{ if(isRowVia(b)&&rowOf(b)) return false; const k=`${b.from}\t${b.via}\t${b.row}`; if(seenOther.has(k)) return false; seenOther.add(k); return true; });
     return [
       h("div",{class:"nodehead stack"},h("p",{class:"kicker"},type),h("code",{},uid),h("h1",{},title),
-        h("div",{class:"row"},stateChips(state)),
-        nar?h("p",{class:"small"},h("a",{href:`#/n/${enc(uid)}`},"shown in the view")):null),
+        h("div",{class:"row"},stateChips(state),sysChips(uid),cellBadge(uid)),
+        nar?h("p",{class:"small"},h("a",{href:narHref(uid)},"shown as a narrative")):null),
       fields.length?h("section",{class:"card"},h("h2",{},"fields"),h("dl",{class:"fields"},fields.flatMap(([k,v])=>[h("dt",{},k),h("dd",{class:"field"},fieldText(v))]))):null,
-      h("section",{class:"card"},h("h2",{},"out"),relList(nd?nd.out:[],"out")),
-      h("section",{class:"card"},h("h2",{},"in"),relList(nd?nd.in:[],"in")),
+      h("section",{class:"card"},h("h2",{},"depends on"),relList(outP,"out")),
+      outC.length?h("section",{class:"card"},h("h2",{},"holds"),relList(outC,"out")):null,
+      h("section",{class:"card"},h("h2",{},"depended on by"),relList(nd?nd.in:[],"in")),
+      nd&&nd.fp&&nd.fp.length?h("section",{class:"card"},h("h2",{},"fingerprints"),h("ul",{class:"plain"},nd.fp.map(f=>h("li",{},nodeLink(f.uid),h("span",{class:"muted small"},unsignedHash(f.hash)?"never signed":["signed ",h("code",{},f.hash)]))))):null,
       nd&&nd.files&&nd.files.length?h("section",{class:"card"},h("h2",{},"files"),h("ul",{class:"plain"},nd.files.map(f=>h("li",{},h("code",{},f))))):null,
-      nd&&nd.fp&&nd.fp.length?h("section",{class:"card"},h("h2",{},"fingerprints"),h("ul",{class:"plain"},nd.fp.map(f=>h("li",{},nodeLink(f.uid),h("span",{class:"muted small"},"hash ",h("code",{},f.hash)))))):null,
-      h("section",{class:"card"},h("h2",{},plural(back.length,"backlink")),back.length?h("ul",{class:"plain"},back.map(b=>{
-        const href=b.row!=null&&NAR[b.from]?`#/n/${enc(b.from)}/r/${enc(b.row)}`:hrefOf(b.from);
-        return h("li",{},h("div",{class:"row"},h("span",{class:"flag"},b.via),b.row!=null?h("span",{class:"muted small"},"row #"+b.row):null,b.word!=null?wordChip(b.word):null),
-          href?h("a",{class:"node",href},h("code",{},b.from),h("span",{class:"t"},titleOf(b.from))):h("span",{class:"node dead"},h("code",{},b.from)));
-      })):h("p",{class:"muted"},"nothing points here")),
+      rowLines.length?h("section",{class:"sec"},h("h2",{},plural(rowLines.length,"row"),rowLines.length===1?" that links it":" that link it"),filteredLines(rowLines,rowLines[0].home.uid,null,{crumb:true,viewing:uid})):null,
+      other.length?h("section",{class:"card"},h("h2",{},plural(other.length,"backlink")),h("ul",{class:"plain"},other.map(b=>h("li",{},h("div",{class:"row"},h("span",{class:"flag"},b.via),b.word!=null?wordChip(b.from,b.word):null),nodeLink(b.from))))):null,
       path?h("p",{class:"muted small"},"file: ",h("code",{},path)):null,
     ];
   }
 
-  /* ---------- router ---------- */
+  /* ---------- the header and the router ---------- */
+  // a tab drops out of the strip when what it draws is switched off: a root
+  // other than the canon's, or a tab whose widget's data is narratives
+  const narrativeData=n=>NARRATIVE_DATA.includes(n.widget)&&(n.query==null||NARRATIVE_QUERIES.includes(n.query));
+  const tabShown=t=>!(narrativeData(t)&&!nodeOn(subjectOf(t).uid));
+  function topEntries(){
+    const out=[{key:"start",label:"Start",href:"#/start"}];
+    if(CANON) tabKids(CANON).filter(tabShown).forEach(t=>out.push({key:t.uid,label:t.title,href:narHref(t.uid)}));
+    ROOTS.filter(r=>r!==CANON&&nodeOn(r.uid)).forEach(r=>out.push({key:r.uid,label:r.title,href:narHref(r.uid)}));
+    out.push({key:"nodes",label:"Nodes",href:"#/nodes"});
+    return out;
+  }
+  function topKeyFor(uid){
+    const root=ROOTOF[uid]; if(!root) return "nodes";
+    if(CANON&&root===CANON.uid){ for(let u=uid;u;u=PARENT[u]){ if(tabKids(CANON).some(t=>t.uid===u)) return u; } return "start"; }
+    return root;
+  }
+  function renderHeader(){
+    const brand=document.getElementById("brand");
+    brand.textContent=CANON?CANON.title:"Canon";
+    document.getElementById("hswitches").replaceChildren(switchRow(true)||"");
+    const tabs=document.getElementById("tabs");
+    tabs.replaceChildren(...topEntries().map(e=>h("a",{href:e.href,"data-key":e.key,title:e.label},e.label)));
+  }
+  function setPills(rootUid){
+    const r=NAR[rootUid]&&isRoot(NAR[rootUid])?NAR[rootUid]:CANON;
+    document.getElementById("pills").replaceChildren(...((r&&r.tags)||[]).map(t=>h("span",{class:"pill"},t)));
+  }
+  const miss=(text,href,label)=>[h("p",{},text),h("a",{href},label)];
   function route(){
+    ON=readSelection();
     const raw=location.hash.replace(/^#\/?/,"");
     const parts=raw.split("/").filter(Boolean).map(decodeURIComponent);
     const top=parts[0]||"start";
     const main=document.getElementById("main");
-    let out, current=top, target=null;
+    let out, current=top, target=null, rootUid=CANON?CANON.uid:null;
     try{
       switch(top){
-        case "start": out=screenStart(); break;
+        case "start": out=CANON?screenNar(CANON.uid):[h("p",{},"No roots in this payload.")]; current="start"; break;
         case "n": {
-          const uid=parts[1]; const tab=TAB[uid];
-          if(uid===ROOT.uid||!NAR[uid]){ out=uid===ROOT.uid?screenStart():[h("p",{},"No such screen."),h("a",{href:"#/start"},"start")]; current="start"; }
-          else { out=screenTab(tab); current="n:"+tab; target = parts[2]==="r"&&parts[3]!=null ? `row-${uid}-${parts[3]}` : (uid!==tab?`nar-${uid}`:null); }
+          const uid=LC[(parts[1]||"").toLowerCase()];
+          if(!uid||!NAR[uid]){ out=miss("No such screen.","#/start","start"); current="start"; break; }
+          rootUid=ROOTOF[uid];
+          if(!nodeOn(uid)){ out=[h("h1",{},NAR[uid].title),h("p",{},offNote(uid)),h("a",{href:"#/start"},"start")]; current=topKeyFor(uid); break; }
+          const owner=screenOf(uid);
+          const ctx={};
+          if(parts[2]==="row"&&parts[3]!=null) target=`row-${uid}-${parts[3]}`;
+          else if(parts[2]!=null) ctx.word=parts[2];
+          if(owner!==uid&&!target) target=`nar-${uid}`;
+          if(CANON&&owner===CANON.uid){ out=screenNar(CANON.uid,ctx); current="start"; }
+          else { out=screenNar(owner,ctx); current=topKeyFor(owner); }
           break; }
-        case "nodes": out=parts[1]?screenNode(parts[1]):screenNodes(); current="nodes"; break;
-        default: out=[h("p",{},"No such screen."),h("a",{href:"#/start"},"start")];
+        case "nodes": {
+          if(parts[1]){ const uid=LC[parts[1].toLowerCase()]||parts[1]; out=screenNode(uid); }
+          else out=[h("h1",{},"Nodes"),nodesIndex()];
+          current="nodes"; break; }
+        default: out=miss("No such screen.","#/start","start");
       }
     }catch(e){ out=[h("p",{class:"warn"},"This screen failed to render: "+e.message)]; console.error(e); }
     main.replaceChildren(...out.flat(Infinity).filter(Boolean));
+    setPills(rootUid);
+    const r=rootUid&&NAR[rootUid]?NAR[rootUid]:CANON;
+    document.title=r?r.title:"Canon";
     document.querySelectorAll("#tabs a").forEach(a=>{ if(a.dataset.key===current) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current"); });
-    // The strip scrolls and hides its scrollbar, so on a narrow screen the
-    // active tab is centred in it by hand; only the strip moves, never the page.
-    const tabs=document.getElementById("tabs"), cur=tabs.querySelector('a[aria-current="page"]');
-    if(cur){ const tb=tabs.getBoundingClientRect(), cb=cur.getBoundingClientRect(); tabs.scrollLeft+=cb.left-tb.left-(tabs.clientWidth-cb.width)/2; }
+    // The strips scroll and hide their scrollbars, so the active tab is
+    // centred by hand; only the strip moves, never the page.
+    document.querySelectorAll("nav.tabs").forEach(tabs=>{ const cur=tabs.querySelector('a[aria-current="page"]'); if(cur){ const tb=tabs.getBoundingClientRect(), cb=cur.getBoundingClientRect(); tabs.scrollLeft+=cb.left-tb.left-(tabs.clientWidth-cb.width)/2; } });
     if(target){ const el=document.getElementById(target); if(el){ el.classList.add("hit"); el.scrollIntoView({block:"start"}); return; } }
     window.scrollTo(0,0);
   }
@@ -1117,17 +1994,11 @@
       document.getElementById("main").append(h("p",{class:"warn"},"This page was built for schema ",h("code",{},SCHEMA)," and the payload says ",h("code",{},String(DATA.schema))," -- refusing to render."));
       return;
     }
-    document.title=ROOT.title;
-    const brand=document.getElementById("brand"); brand.textContent=ROOT.title;
-    document.getElementById("brandsub").textContent=(DATA.generated&&DATA.generated.at)||"";
-    const tabs=document.getElementById("tabs");
-    tabs.append(h("a",{href:"#/start","data-key":"start"},"start"));
-    TABS.forEach(t=>tabs.append(h("a",{href:`#/n/${enc(t.uid)}`,"data-key":"n:"+t.uid,title:t.title},t.title)));
-    tabs.append(h("a",{href:"#/nodes","data-key":"nodes"},"nodes"));
+    renderHeader();
     const gen=DATA.generated||{};
-    document.getElementById("foot").append(h("p",{},"Generated ",gen.at||"",gen.canon_commit?[" from commit ",h("code",{},String(gen.canon_commit).slice(0,12))]:null,". Every word on this page comes from the payload; the page itself knows only its shape."));
+    document.getElementById("foot").append(h("p",{},"Generated ",gen.at||"",gen.canon_commit?[" from commit ",h("code",{},String(gen.canon_commit).slice(0,12))]:null,gen.export_sha256?[", export ",h("code",{},String(gen.export_sha256).slice(0,12))]:null,"; ",plural(ROOTS.length,"root"),", ",plural(Object.keys(NODES).length,"node"),". Every word on this page comes from the payload; the page itself knows only its shape."));
     window.addEventListener("hashchange",route);
-    if(!location.hash) history.replaceState(null,"","#/start");
+    if(!location.hash) history.replaceState(null,"",location.search+"#/start");
     route();
   }
   init();

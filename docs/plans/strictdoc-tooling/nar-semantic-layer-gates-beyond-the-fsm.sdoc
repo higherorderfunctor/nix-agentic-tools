@@ -10,22 +10,46 @@ TITLE: Rules that are not state transitions
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: rows
+PLACE: screen
 STATEMENT: >>>
 The 'never' rules: cycles, plan references, target types, layout, lanes — and which have checks.
 
-- Never a cycle among relations — checked. See [LINK: MECH-CYCLE-CHECK]. [WORKS]
-- Never a dependency into a plan from outside it — a requirement, with a check. See [LINK: INV-NO-EXTERNAL-PLAN-REFS] and [LINK: MECH-PLAN-REFS-CHECK]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]. [WORKS]
-- That check is a retention rule living in a script — a semantics-in-a-tool leak. The list of such leaks omits it, and omits the cycle, file and target-type checks as well. See [LINK: MECH-PLAN-REFS-CHECK]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]. [UNADDRESSED]
-- Code cites node UIDs in comments about 60 times. The day an extractor reads those comments they become violations. A node at implemented is supposed to link its file — only 3 of 15 do. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. [GAP]
-- Never a relation to the wrong kind of target — the rule's shape is agreed, the check is unbuilt, and the two tables it would read disagree. [GAP]
-- Checked today: a file link must name a real, normalized path; a relation must resolve; a fingerprint must not point at a deleted parent; and a UID's prefix must match its type (scribe refuses otherwise). [WORKS]
-- The layout rules — one node per file, file named for its UID, title matching, sketch paired with a backlog edge — have no check. When built, they must be a semantic-layer rule on a joint, not a script. See [LINK: MECH-SDOC-LAYOUT-CHECK]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]. [GAP]
-- Guarding fingerprint, accepted-statement and authorship changes by diffing against the merge base in CI is dissolved: the check moves to the moment before scribe writes, with the key and the old value in hand. CI only catches edits made around scribe. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER] and [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]. [FALLS OUT: scribe.change pre with key + old value; CI only for edits around scribe]
-- The two lane requirements — work touches only what it declared — need each node to know its layer and a map from files to layers. Neither exists. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT] and [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]. [GAP]
-- Grooming should surface a node that contradicts an open decision. Three nodes assert that only a human signs; none is linked to the decision that questions it. See [LINK: DEC-FP-ACCEPT-AUTHORITY]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [UNADDRESSED]
-- strictdoc's one native hook fires after every index build, which happens two or three times per scribe write. It can only run after the fact, and no plugin is registered on it yet. [WORKS]
-- Two lists of joints compete: five named checkpoints from earlier work, and the operation-based list (scribe, git, strictdoc's index). nix flake check — the only gate nobody can bypass — is in neither. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]. [GAP]
-- A gate that reads git cannot be tested inside nix flake check without building a synthetic repository. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]. [UNADDRESSED]
+- Never a cycle among relations — checked.
+[LINK: MECH-CYCLE-CHECK]
+> never: a roled cycle (MECH-CYCLE-CHECK) [WORKS]
+- Never a dependency into a plan from outside it — a requirement, with a check.
+[LINK: INV-NO-EXTERNAL-PLAN-REFS] [LINK: MECH-PLAN-REFS-CHECK] [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT] [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]
+> never: Parent or PARENT_FP into a plan from outside (INV-NO-EXTERNAL-PLAN-REFS; MECH-PLAN-REFS-CHECK) [WORKS]
+- That check is a retention rule living in a script — a semantics-in-a-tool leak. The list of such leaks omits it, and omits the cycle, file and target-type checks as well.
+[LINK: MECH-PLAN-REFS-CHECK] [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]
+> split: MECH-PLAN-REFS-CHECK is a retention rule in a script; the leak list omits it and the cycle, file, target checks [UNADDRESSED]
+- Code cites node UIDs in comments about 60 times. The day an extractor reads those comments they become violations. A node at implemented is supposed to link its file — only 3 of 15 do.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]
+> source-comment arm: 59-61 UID citations in code become violations the day an extractor reads them; at implemented a File edge required (3 of 15) [GAP]
+- Never a relation to the wrong kind of target — the rule's shape is agreed, the check is unbuilt, and the two tables it would read disagree.
+> never: target type outside its (source, role) row; rule shape stands, lint unbuilt, tables disagree [GAP]
+- Checked today: a file link must name a real, normalized path; a relation must resolve; a fingerprint must not point at a deleted parent; and a UID's prefix must match its type (scribe refuses otherwise).
+> never: File naming a missing or non-normalized path; dangling Parent; PARENT_FP to a deleted parent; UID prefix != element type (scribe refuses) [WORKS]
+- The layout rules — one node per file, file named for its UID, title matching, sketch paired with a backlog edge — have no check. When built, they must be a semantic-layer rule on a joint, not a script.
+[LINK: MECH-SDOC-LAYOUT-CHECK] [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]
+> never layout: >1 node per file, name != UID, TITLE mismatch, sketch <-> Backlogged_In pair; MECH-SDOC-LAYOUT-CHECK unbuilt; must be an L3 rule on a joint [GAP]
+- Guarding fingerprint, accepted-statement and authorship changes by diffing against the merge base in CI is dissolved: the check moves to the moment before scribe writes, with the key and the old value in hand. CI only catches edits made around scribe.
+[LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER] [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]
+> AUTHORED_BY flip guard + diff-relative class (PARENT_FP, accepted STATEMENT, human flip) as CI diffs vs merge base [FALLS OUT: scribe.change pre with key + old value; CI only for edits around scribe]
+- The two lane requirements — work touches only what it declared — need each node to know its layer and a map from files to layers. Neither exists.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT] [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]
+> lane discipline (2 REQUIREMENTs): files a WORK touches fall inside its Crosses; needs LAYER and a file -> layer map [GAP]
+- Grooming should surface a node that contradicts an open decision. Three nodes assert that only a human signs; none is linked to the decision that questions it.
+[LINK: DEC-FP-ACCEPT-AUTHORITY] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]
+> grooming must surface a contradicting edge (3 nodes assert human-only signing, none edged to DEC-FP-ACCEPT-AUTHORITY) [UNADDRESSED]
+- strictdoc's one native hook fires after every index build, which happens two or three times per scribe write. It can only run after the fact, and no plugin is registered on it yet.
+> strictdoc.index fires inside every scribe load, 2-3x per write; post-only backstop; no plugin registered [WORKS]
+- Two lists of joints compete: five named checkpoints from earlier work, and the operation-based list (scribe, git, strictdoc's index). nix flake check — the only gate nobody can bypass — is in neither.
+[LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]
+> two joint lists compete (5 checkpoints vs scribe.*|git.*|strictdoc.index); nix flake check, the only unbypassable one, is in neither [GAP]
+- A gate that reads git cannot be tested inside nix flake check without building a synthetic repository.
+[LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]
+> a gate that reads git is untestable in nix flake check without a synthetic repository [UNADDRESSED]
 <<<
 PARENT_FP: >>>
 DEC-FP-ACCEPT-AUTHORITY:0000000

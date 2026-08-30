@@ -10,6 +10,7 @@ TITLE: Retyped by the test
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: rows
+PLACE: screen
 STATEMENT: >>>
 Each row: the node, the reason the test gave, and the verdict with its confidence.
 

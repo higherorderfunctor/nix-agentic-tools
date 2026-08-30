@@ -1,0 +1,20 @@
+[DOCUMENT]
+TITLE: The five top gaps
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-START-GAPS
+TITLE: The five top gaps
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: list
+PLACE: section
+STATEMENT: >>>
+The sheet's own closing section -- the places where the direction has no answer at all. Each line carries how many rows feed the gap and how many nodes it touches.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAPS
+  ROLE: Over
