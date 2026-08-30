@@ -1,0 +1,21 @@
+[DOCUMENT]
+TITLE: The board server owns one immutable in-memory snapshot
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-SERVER
+TITLE: The board server owns one immutable in-memory snapshot
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+server.py loads the snapshot before it binds loopback, serializes it once, and serves only GET and HEAD routes for the board, its assets, health, and /api/graph. StrictDoc cache files live in a temporary directory outside the project. SnapshotStore is the single indirection a later file watcher and WebSocket broadcaster replace atomically; the MVP performs no reload.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-SERVER-OWNS-SNAPSHOT
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: REQ-SDOC-BOARD-MVP-READS-WHOLE-CANON
+  ROLE: Guarantees

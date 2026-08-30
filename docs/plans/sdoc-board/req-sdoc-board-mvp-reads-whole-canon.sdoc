@@ -1,0 +1,14 @@
+[DOCUMENT]
+TITLE: The board MVP reads the whole canon and cannot mutate it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-SDOC-BOARD-MVP-READS-WHOLE-CANON
+TITLE: The board MVP reads the whole canon and cannot mutate it
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The first board presents every node and every resolved Parent or Child relation loaded from the canon. It offers no filter, editor, mutation endpoint, or write-back path. Selection, pan, zoom and inspection are reading actions only.
+<<<

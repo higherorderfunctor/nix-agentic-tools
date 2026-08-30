@@ -1,0 +1,18 @@
+[DOCUMENT]
+TITLE: The board spike uses the native web platform behind replaceable seams
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+TITLE: The board spike uses the native web platform behind replaceable seams
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: Measured board usage requires a component, layout, or rendering library whose benefit exceeds the spike's build and dependency cost.
+STATEMENT: >>>
+The MVP browser is dependency-free HTML, CSS and JavaScript over SVG. Snapshot compilation, layout and rendering remain separate modules and communicate through application-owned plain objects, so a later React Flow and ELK implementation can replace the canvas without replacing the StrictDoc loader, server, or snapshot schema.
+<<<
+RATIONALE: >>>
+The operator asked first to see the whole canon with no filtering or mutation and expects to reshape the result. A zero-build client reaches that probe directly while preserving the research handoff's durable boundary: StrictDoc source, owned snapshot, view projection, layout, renderer.
+<<<

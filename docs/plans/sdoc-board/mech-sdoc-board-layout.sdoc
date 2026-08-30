@@ -1,0 +1,18 @@
+[DOCUMENT]
+TITLE: The board layout condenses cycles before assigning stable layers
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-LAYOUT
+TITLE: The board layout condenses cycles before assigning stable layers
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+layout.js treats the snapshot as a directed multigraph. It condenses strongly connected components, ranks the resulting acyclic projection from left to right, orders each rank with deterministic barycentric sweeps, and keeps every original node and edge for rendering. The layout consumes and returns application-owned objects so Dagre or ELK can replace it later.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+  ROLE: Governed_By

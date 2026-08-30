@@ -1,0 +1,21 @@
+[DOCUMENT]
+TITLE: The board snapshot preserves StrictDoc nodes and declared relations
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-SNAPSHOT
+TITLE: The board snapshot preserves StrictDoc nodes and declared relations
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+snapshot.py loads the project with ProjectConfigLoader and TraceabilityIndexBuilder from strictdoc.api. It emits schema sdoc-board/1: project metadata; one node per StrictDoc node with stable UID identity, generated MID alias, type, fields and source location; every resolved Parent and Child declaration with role, reverse role and declaration direction; and the grammar's fields and relation vocabulary. Unresolved targets remain diagnostics rather than disappearing.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-SERVER-OWNS-SNAPSHOT
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: REQ-SDOC-BOARD-MVP-READS-WHOLE-CANON
+  ROLE: Guarantees

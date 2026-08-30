@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: Build the read-only StrictDoc board MVP
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SDOC-BOARD-MVP
+TITLE: Build the read-only StrictDoc board MVP
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Build the StrictDoc-backed snapshot compiler, loopback server, deterministic layered layout, Beadboard-like read-only canvas and focused tests. Exercise the server against this worktree's real canon, prove the response contains every loaded node and resolved Parent or Child relation, and capture the first browser render as evidence. WebSockets, file watching, filters, mutations and daemon lifecycle are outside this work.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-SERVER-OWNS-SNAPSHOT
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-SNAPSHOT
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-SERVER
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-LAYOUT
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-CANVAS
+  ROLE: Crosses

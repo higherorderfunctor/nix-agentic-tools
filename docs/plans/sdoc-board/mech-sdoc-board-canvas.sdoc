@@ -1,0 +1,21 @@
+[DOCUMENT]
+TITLE: The board canvas renders compact cards over a pan-and-zoom scene
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-CANVAS
+TITLE: The board canvas renders compact cards over a pan-and-zoom scene
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+board.js requests /api/graph, asks the layout module for positions, and renders the complete snapshot as SVG paths and foreign-object-free card groups. Cards show type, UID, title and the node's state; edges show the declared role and arrow. Pointer and wheel transforms provide pan, zoom and fit. Clicking a card emphasizes its immediate incoming and outgoing relations and fills a read-only inspector with every field and relation.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: REQ-SDOC-BOARD-MVP-READS-WHOLE-CANON
+  ROLE: Guarantees

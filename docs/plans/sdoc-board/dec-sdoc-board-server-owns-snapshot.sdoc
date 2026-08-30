@@ -1,0 +1,18 @@
+[DOCUMENT]
+TITLE: A board server loads StrictDoc once and owns the browser snapshot
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SDOC-BOARD-SERVER-OWNS-SNAPSHOT
+TITLE: A board server loads StrictDoc once and owns the browser snapshot
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: The board becomes a StrictDoc Feature with an equivalent long-lived index, or a browser must consume StrictDoc objects directly.
+STATEMENT: >>>
+A separate read-only server process loads the project through strictdoc.api, keeps the resulting TraceabilityIndex alive, compiles an application-owned JSON snapshot, and serves that snapshot with the board assets. The process is the future change-notification boundary: reload and WebSocket delivery may replace the snapshot atomically without changing the browser's source contract.
+<<<
+RATIONALE: >>>
+A one-shot export would prove the drawing but discard the loaded database the live view will need. A process boundary proves the intended ownership now without daemon lifecycle, file watching, or WebSockets.
+<<<
