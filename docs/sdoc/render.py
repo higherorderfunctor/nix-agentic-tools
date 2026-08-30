@@ -19,7 +19,7 @@ import json
 import sys
 import textwrap
 
-PREFIXES = ("DEC", "MECH", "SLICE", "SPIKE", "INV")
+NOT_NODES = {"DOCUMENT", "SECTION", "TEXT"}
 BODY = ("STATEMENT", "RATIONALE", "RETIRES_ON", "NOTES")
 BADGE = ("DEPTH", "STATUS", "AUTHORED_BY")
 
@@ -27,8 +27,8 @@ BADGE = ("DEPTH", "STATUS", "AUTHORED_BY")
 def nodes(obj, path=None):
     if isinstance(obj, dict):
         here = obj.get("RELATIVE_PATH") or obj.get("PATH") or path
-        uid = obj.get("UID")
-        if isinstance(uid, str) and uid.split("-")[0] in PREFIXES:
+        node_type = obj.get("_NODE_TYPE")
+        if isinstance(node_type, str) and node_type not in NOT_NODES and isinstance(obj.get("UID"), str):
             yield obj, here
         for value in obj.values():
             yield from nodes(value, here)
@@ -57,11 +57,17 @@ def render(node, titles, inbound):
             print(wrap(node[field]))
 
     out = [(r.get("ROLE") or r.get("TYPE"), r.get("VALUE"))
-           for r in (node.get("RELATIONS") or []) if r.get("VALUE")]
+           for r in (node.get("RELATIONS") or []) if r.get("VALUE") and r.get("TYPE") != "Child"]
     if out:
         print("\n**Depends on**\n")
         for role, target in out:
             print(f"- {role} → {titles.get(target, target + '  (file)')}")
+    held = [(r.get("ROLE"), r.get("VALUE"))
+            for r in (node.get("RELATIONS") or []) if r.get("VALUE") and r.get("TYPE") == "Child"]
+    if held:
+        print("\n**Holds** (in order)\n")
+        for role, target in held:
+            print(f"- {role} → {titles.get(target, target)}")
 
     fps = [e.rsplit(":", 1) for e in str(node.get("PARENT_FP") or "").split() if ":" in e]
     if fps:

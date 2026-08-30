@@ -58,40 +58,55 @@ IMPORT_FROM_FILE: @repo
 
 ## Node types
 
-| tag         | prefix   | use for                             | notes                                       |
-| ----------- | -------- | ----------------------------------- | ------------------------------------------- |
-| `DECISION`  | `DEC-`   | a choice, open or closed            | immutable roots: no `DEPTH`, no `PARENT_FP` |
-| `MECHANISM` | `MECH-`  | a thing that exists or will         | the workhorse                               |
-| `SLICE`     | `SLICE-` | a vertical unit of deliverable work | `Crosses` the mechanisms it needs           |
-| `INVARIANT` | `INV-`   | a rule that must hold               | "interface satisfied, rule violated"        |
-| `SPIKE`     | `SPIKE-` | a probe that decides something      | carries `STATUS` and `RETIRES_ON`           |
+Ruled by `DEC-NODE-FAMILIES` (docs/spec): four families, and only the first is a
+grid.
 
-**The grammar lags the rulings, and the corpus has not been migrated.**
-`DEC-NODE-TYPE-GRID` (2026-08-28) re-derived the vocabulary from two axes, and
-the migration is uncosted and deliberately unapplied
-(`MECH-GRID-MIGRATION-UNCOSTED` — do not half-apply it). Until it lands, WRITE
-the five grammar types above and READ them through the rulings:
+| tag           | prefix  | family                        | use for                                                                      |
+| ------------- | ------- | ----------------------------- | ---------------------------------------------------------------------------- |
+| `REQUIREMENT` | `REQ-`  | definition, normative x all   | what must always hold; can be violated                                       |
+| `DECISION`    | `DEC-`  | definition, normative x one   | a choice, open or closed; in force once accepted; no `DEPTH`, no `PARENT_FP` |
+| `MECHANISM`   | `MECH-` | definition, descriptive x all | how the system always behaves; can only be wrong                             |
+| `EVIDENCE`    | `EV-`   | definition, descriptive x one | one observation: a probe's finding, a measurement, a log, an external source |
+| `USE_CASE`    | `UC-`   | coverage                      | a path the specification must enable; covered or uncovered                   |
+| `NARRATIVE`   | `NAR-`  | representation                | a maintained projection for a reader; its `Cites` edges go dirty             |
+| `WORK`        | `WORK-` | work                          | something to do; `Crosses` its lane, `Produces` evidence, dies with its plan |
 
-| grammar says | read it as                                                                                   | ruling                                                          |
-| ------------ | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `INVARIANT`  | a REQUIREMENT                                                                                | `DEC-INVARIANT-IS-A-REQUIREMENT` (accepted)                     |
-| `MECHANISM`  | descriptive + universal only; a MECH enforced by a check is normative under the wrong prefix | `DEC-NODE-TYPE-GRID` (accepted)                                 |
-| `SLICE`      | WORK that declares its crossings; the `Crosses` edge IS the lane; slice-ness is derived      | `DEC-SLICE-DECOMPOSES-TO-WORK` (accepted)                       |
-| `SPIKE`      | a pipeline — work, then evidence, then the decision it exists to settle                      | `MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION` (a reading, not ruled) |
+**A UID's prefix names the type a node was BORN with, not the type it is**
+(`DEC-UID-OUTLIVES-TYPE`). The migration of 2026-08-30 retyped every `SLICE-`
+node to WORK, `INV-` to REQUIREMENT (two measurements to EVIDENCE) and `SPIKE-`
+to EVIDENCE when run or WORK when unrun, changing only the element tag; those
+prefixes are retired history, and a MECHANISM re-read as a REQUIREMENT keeps
+`MECH-`. Read the tag (`_NODE_TYPE` in the export), never the prefix. `sdoc new`
+requires the current prefix on a NEW node; `sdoc check` prints a `NOTE` per
+retyped node and never fails on one. A retype records itself in the node's
+NOTES.
 
-Cite a `SLICE-` UID as work under a legacy prefix, never as "a slice type". A
-new node still takes the grammar's type: the migration is one move, not a drift,
-and a session that mints a `WORK-` or `REQ-` UID ahead of it has half-applied
-the grid.
+`STATUS` lives on DECISION only (`open` / `accepted` / `rejected` /
+`superseded`). Every other type carries `DEPTH`.
 
-`STATUS` is polymorphic and both spellings are required on their node type:
-`DECISION` takes `open` / `accepted` / `rejected` / `superseded`, `SPIKE` takes
-`unrun` / `run` / `blocked`.
+Relation roles, and the direction they are written: a **Parent** role is written
+on the node that DEPENDS -- `Governed_By` (→ a DECISION), `Guarantees` (→ a
+REQUIREMENT), `Serialized_By`, `Proven_By` (→ EVIDENCE, from any type),
+`Assumes`, `Crosses` (WORK → MECHANISM, the lane), `Covered_By` (USE_CASE → what
+enables it), `Cites` (NARRATIVE → what it presents), `Superseded_By` (DECISION →
+DECISION, on the retired one), `Backlogged_In` (→ a plan's backlog register),
+and `File`. A **Child** role is written on the node that OWNS, pointing down,
+and is never a dependency: `Contains` (NARRATIVE → its parts, in RELATIONS
+order) and `Produces` (WORK → the EVIDENCE it left).
 
-Relation roles: `Governed_By` (→ a `DECISION`), `Crosses` (`SLICE` →
-`MECHANISM`), `Guarantees` (→ an `INVARIANT`), `Proven_By` (→ a `SPIKE`),
-`Assumes`, `Serialized_By`, `Superseded_By` (`DECISION` → `DECISION`),
-`Backlogged_In` (→ a plan's backlog register), and `File`.
+## Narratives and views
+
+A NARRATIVE is how the canon is read by a person; the view system that renders
+it lives in `docs/plans/whiteboard-view/`. Its `WIDGET` (`prose`, `rows`,
+`table`, `glossary`, `legend`, `tally`, `edges`) says how to draw its STATEMENT;
+`TAGS` are free facet words. Under `rows`, a STATEMENT holds `- ` items with an
+optional trailing `[WORD]` or `[WORD: by]` bracket whose words come from the
+root's `legend` child, never from the renderer. Cross references inside any
+STATEMENT are `[LINK: UID]`, which strictdoc resolves and refuses if dangling; a
+link in a TITLE is inert text, so never put one there. A narrative that presents
+nodes of a plan lives in that plan's directory (`Cites` is a Parent relation,
+and `INV-NO-EXTERNAL-PLAN-REFS` forbids one into another plan); cite other
+plans' nodes with `[LINK:]` only.
 
 ## The four governance fields
 
@@ -101,13 +116,17 @@ Relation roles: `Governed_By` (→ a `DECISION`), `Crosses` (`SLICE` →
   `verified` means an independent session checked the code against the node.
   **The gap between them is the review queue** — `DEPTH == implemented` is the
   query.
-- **`AUTHORED_BY`** — `llm` / `human`. Who wrote the statement. Starts mostly
-  `llm` by design; the point is that it grows.
+- **`AUTHORED_BY`** — `llm` / `llm-accepted` / `llm-adopted` / `human`, a ladder
+  that only rises (`DEC-AUTHORSHIP-LADDER`). Who wrote the statement, and how
+  far a human has taken it on. The writer stamps `llm`; the other rungs are a
+  human's acts.
 - **`PARENT_FP`** — `<PARENT-UID>:<hash>` per parent whose contract this node
   depends on. Fingerprints point strictly **downward**: `DECISION` → `MECHANISM`
-  → `SLICE`, so a collectable node never has an inbound fingerprint to strand.
-- **`RETIRES_ON`** — required on `DECISION` and `SPIKE`. The forcing function. A
-  deferred decision with no retirement condition is avoidance, not deferral.
+  → `WORK` → `NARRATIVE`, so a collectable node never has an inbound fingerprint
+  to strand. A `0000000` entry DECLARES a dependency for later signing and may
+  be written by the node's author; a hash is a signature and is the operator's.
+- **`RETIRES_ON`** — required on `DECISION`. The forcing function. A deferred
+  decision with no retirement condition is avoidance, not deferral.
 
 Readiness is **not** a field. It is a query: a slice is implementable when every
 mechanism in its closure is `interface-settled` or better, every decision in it
@@ -119,8 +138,8 @@ closure is the slice's degrees of freedom.
 `sdoc` is this repository's writer for the graph (SLICE-SDOC-CLI). **Its option
 surface is DERIVED from the grammar** — one flag per field a node type declares,
 one per relation role it may make, and every choice flag's word list read off
-that field — so `sdoc new DECISION --help` and `sdoc new SPIKE --help` print two
-different surfaces, and neither can be got wrong from memory.
+that field — so `sdoc new DECISION --help` and `sdoc new NARRATIVE --help` print
+two different surfaces, and neither can be got wrong from memory.
 
 ```bash
 sdoc new MECHANISM --help          # the flags MECHANISM actually declares
@@ -129,7 +148,7 @@ sdoc new MECHANISM --uid MECH-THING --title "..." --depth sketch \
 sdoc set MECH-THING --depth implemented --notes @notes.md
 sdoc relate MECH-THING --role Governed_By --target DEC-SOMETHING
 sdoc show MECH-THING               # the node, with relations resolved to titles
-sdoc list --type SPIKE --depth sketch
+sdoc list --type WORK --depth sketch
 sdoc check                         # every node, relation and File path
 ```
 
@@ -186,9 +205,10 @@ is read and never written, so it is not the grammar's formatter.
    `strictdoc manage new` works in this tree but do not use it: it mints a
    `MECH-1`-style UID that rule 1 forbids, and fills every required field with
    `TBD`, which parses clean.
-3. **Never edit `PARENT_FP`.** Only a human accepts a contract change; the hash
-   transition in a commit is the signature. An agent that clears its own
-   fingerprints is a rubber stamp.
+3. **Never change a `PARENT_FP` hash.** Only a human accepts a contract change;
+   the hash transition in a commit is the signature. An agent that clears its
+   own fingerprints is a rubber stamp. Adding a `0000000` entry for a parent a
+   node you author cites is a declaration, not a signature.
 4. **Never edit an accepted `DECISION`'s `STATEMENT`.** Set its `STATUS` to
    `superseded`, add `Superseded_By`, and write a new decision.
 5. **Always `format` before hashing** — unless `sdoc` did the write, which
@@ -203,7 +223,8 @@ is read and never written, so it is not the grammar's formatter.
    end and not only when asked. The branch is long-lived and gets restacked into
    pull requests later, so commit boundaries are what make that restack legible.
    Update the node you are working on in the same commit: raise its `DEPTH`, set
-   a `SPIKE`'s `STATUS`, and record measured numbers in `NOTES`.
+   record measured numbers in `NOTES`, and file what a probe found as
+   `EVIDENCE`.
 
 ## Gotchas that fail closed
 
@@ -298,7 +319,7 @@ should.
   `Crosses`, `Assumes` to whatever it actually relates to as well. Containment
   by edge composes; containment by file did not. A web is the point.
 - An ungroomed item is an ordinary node at `DEPTH: sketch` — a `MECHANISM` to
-  build, a `DECISION` to make, a `SPIKE` to run. **There is no `BACKLOG` node
+  build, a `DECISION` to make, a `WORK` item to do. **There is no `BACKLOG` node
   type**, deliberately: the existing types already say what kind of work it is.
 - **Grooming no longer moves a file.** It raises the node's `DEPTH` where the
   node already sits, and drops the `Backlogged_In` edge. Moving between

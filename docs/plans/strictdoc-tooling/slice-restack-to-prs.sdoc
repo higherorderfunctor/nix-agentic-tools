@@ -4,7 +4,7 @@ TITLE: Restack the long-lived branch into reviewable pull requests
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SLICE]
+[WORK]
 UID: SLICE-RESTACK-TO-PRS
 TITLE: Restack the long-lived branch into reviewable pull requests
 DEPTH: sketch
@@ -16,6 +16,9 @@ independently reviewable, and land them.
 RATIONALE: >>>
 Slotted as future work so the strategy is tracked rather than remembered. Not
 groomed: the cut points depend on what has accumulated by the milestone.
+<<<
+NOTES: >>>
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

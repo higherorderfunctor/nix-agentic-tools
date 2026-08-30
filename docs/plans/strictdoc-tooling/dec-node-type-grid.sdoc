@@ -8,7 +8,7 @@ IMPORT_FROM_FILE: @repo
 UID: DEC-NODE-TYPE-GRID
 TITLE: Node types are derived from two axes: normative or descriptive, universal or particular
 AUTHORED_BY: llm
-STATUS: accepted
+STATUS: superseded
 RETIRES_ON: A durable claim is found that fits no cell and is neither a decision nor a narrative, or a cell proves empty after real use.
 STATEMENT: >>>
 The node types of the design graph are DERIVED from two binary axes, not
@@ -84,3 +84,7 @@ claim.
 USE CASE and NARRATIVE are not in the grammar yet. Adding them is a values.nix
 edit and a regenerate, not a change to this decision.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Superseded_By

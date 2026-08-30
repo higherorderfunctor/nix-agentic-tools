@@ -4,20 +4,11 @@ TITLE: How much of the design system's rules can run rather than be read
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SPIKE]
+[EVIDENCE]
 UID: SPIKE-EXECUTABLE-RULES
 TITLE: How much of the design system's rules can run rather than be read
 DEPTH: interface-settled
 AUTHORED_BY: llm
-STATUS: run
-RETIRES_ON: >>>
-An assessment the operator has reviewed answers all four questions -- a grammar
-generated from a typed Nix option surface, the state machine and flows that
-gate an sdoc's creation and change, validation tiers with measured costs, and
-whether the strictdoc package needs a first-party overlay -- and each finding
-is either carved into a slice or explicitly declined. A question the assessment
-cannot answer is recorded as a node rather than left implicit.
-<<<
 STATEMENT: >>>
 INV-GUARDS-MUST-EXECUTE records a measured split: every constraint that lived
 in a document failed and every executable one held. This spike assesses how
@@ -89,6 +80,8 @@ Seed facts held except: the version delta needs a reqif override plus a
 pygments relax; of the six unused nixpkgs-only dependencies only graphviz,
 pybtex and setuptools cost closure, the other three return through
 html2pdf4doc; the three-derivation claim was found nowhere.
+
+Retyped from SPIKE to EVIDENCE on 2026-08-30: a probe is work, then evidence, then a decision (MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION; DEC-NODE-FAMILIES). Its STATUS was 'run'. Its RETIRES_ON read: An assessment the operator has reviewed answers all four questions -- a grammar generated from a typed Nix option surface, the state machine and flows that gate an sdoc's creation and change, validation tiers with measured costs, and whether the strictdoc package needs a first-party overlay -- and each finding is either carved into a slice or explicitly declined. A question the assessment cannot answer is recorded as a node rather than left implicit. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

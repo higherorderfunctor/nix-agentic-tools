@@ -4,7 +4,7 @@ TITLE: A command-line tool that is the only writer of sdoc files
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SLICE]
+[WORK]
 UID: SLICE-SDOC-CLI
 TITLE: A command-line tool that is the only writer of sdoc files
 DEPTH: implemented
@@ -139,6 +139,8 @@ now actually validated against the loaded grammar, which
 MECH-RUNTIME-WRITE-GUARD's STATEMENT already promised and the first cut did
 not do; a guard built out of an absence is exactly the kind that dies
 silently when a field is renamed.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

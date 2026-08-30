@@ -4,7 +4,7 @@ TITLE: Define the behaviour model in Nix and render it for review
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SLICE]
+[WORK]
 UID: SLICE-BEHAVIOUR-MODEL
 TITLE: Define the behaviour model in Nix and render it for review
 DEPTH: interface-settled
@@ -257,6 +257,8 @@ where they get written.
 - The checkpoint list itself. The derivation (a gate runs where its needs fit what a checkpoint sees) is definitional; which checkpoints exist is harness data the instance supplies.
 
 - The behaviour values shipped with this milestone are a transcription of what the corpus does today, taken from the spike's measurement. They carry no endorsement and exist only so the diagrams render and the negatives reject.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

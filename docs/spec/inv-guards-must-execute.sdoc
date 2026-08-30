@@ -4,7 +4,7 @@ TITLE: A guard that lives only in a document is not a guard
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[INVARIANT]
+[REQUIREMENT]
 UID: INV-GUARDS-MUST-EXECUTE
 TITLE: A guard that lives only in a document is not a guard
 DEPTH: interface-settled
@@ -41,4 +41,6 @@ Drives MECH-RUNTIME-WRITE-GUARD, MECH-AUTHORED-BY-GUARD and MECH-SDOC-CI-CHECK.
 Also explains why the fingerprint mechanism is worth building at all: it is the
 executable form of a review that would otherwise be a instruction to read
 carefully.
+
+Retyped from INVARIANT to REQUIREMENT on 2026-08-30 (DEC-INVARIANT-IS-A-REQUIREMENT; DEC-NODE-FAMILIES). The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<

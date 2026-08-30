@@ -1,0 +1,78 @@
+[DOCUMENT]
+TITLE: Node types come in four families: the definition grid, coverage, representation and work
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-NODE-FAMILIES
+TITLE: Node types come in four families: the definition grid, coverage, representation and work
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A durable claim is found that fits none of the four families, or a family proves to have no node after real use.
+STATEMENT: >>>
+The canon's node types are organised in four families, and only the first is
+a grid.
+
+DEFINITION -- the claims the canon asserts. Two axes: normative or descriptive
+(can it be violated, or only be wrong?), and universal or particular (every
+case, or one case?).
+
+                  universal                    particular
+  normative       REQUIREMENT                  DECISION
+                  what must always hold        what was chosen here
+  descriptive     MECHANISM                    EVIDENCE
+                  how it always behaves        what was observed once
+
+COVERAGE -- USE_CASE. A path the specification must enable. It is neither
+violated nor wrong; it is covered or uncovered, by the requirements, decisions
+and mechanisms it points at with Covered_By.
+
+REPRESENTATION -- NARRATIVE today; code samples, diagrams and other maintained
+projections later. A representation presents parts of the canon to a reader
+and depends on their wording: it Cites what it presents, may fingerprint each
+citation, and those edges go dirty when a cited node changes. A representation
+is never itself a claim, and nothing in the definition grid may depend on one.
+
+WORK -- something to do. Not a claim; it Crosses the mechanisms it builds on,
+Produces the evidence it leaves behind, and dies with its plan.
+
+Two placements change from DEC-NODE-TYPE-GRID, which this decision supersedes.
+A DECISION sits inside the grid as normative and particular: once accepted it
+is a choice the specification must follow, so it can be violated like a
+requirement; while open it is not yet in force, which keeps
+DEC-OPEN-IS-THE-QUESTION intact. A USE CASE leaves the grid for its own family,
+because its failure state -- uncovered -- is neither of the grid's two. The
+grid thereby stops predicting a missing type and becomes a classification of
+four; that loss of self-justification is accepted and stated here so nobody
+rediscovers it.
+
+Each family fails differently, and that is what its validators are for:
+requirement satisfied or violated; decision followed or violated; mechanism
+correct or wrong; evidence valid, wrong or outdated; use case covered or
+uncovered; a representation's edge clean or dirty; work complete or incomplete.
+These name validator families, not fields: only the last two can be computed
+today, and a field nothing can set is a field nobody trusts. Each type keeps
+its own state field and its own name (DEPTH, STATUS); there is no shared STATUS.
+<<<
+RATIONALE: >>>
+Offered by the operator from a fresh-lens session on 2026-08-30 and reconciled
+against the canon. The machinery already treated a decision as a norm: 65
+Governed_By edges point at decisions exactly as they would at requirements, and
+the grid ruling itself asked Governed_By to admit a requirement, so "outside the
+grid" survived only in prose. A use case's failure was already described as "the
+design does not survive it", which is uncovered, not violated. The grid's own
+RETIRES_ON -- a durable claim that fits no cell -- fired on that argument, so
+this is the grid retiring by its own terms.
+<<<
+NOTES: >>>
+Ruled 2026-08-30 as a first-pass decision under the operator's delegation of
+that day ("I'll trust you to take first pass at making decisions"); the operator
+overrules by superseding. AUTHORED_BY reads llm because the writer has no flag
+for the human rungs. The concrete type set is unchanged from the grid, so the
+retype of existing nodes is identical under both placements; five nodes cite
+the grid by Governed_By and none had signed it, so nothing went dirty. Whether
+code samples, diagrams and other representation types join the family is
+DEC-INLINE-CODE-TYPE's, open in the whiteboard-view plan. PLAN as a type is
+still DEC-PLAN-LIFECYCLE-OPEN's.
+<<<

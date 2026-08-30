@@ -4,7 +4,7 @@ TITLE: Migrate this system's own semantics onto the plumbing
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SLICE]
+[WORK]
 UID: SLICE-INSTANCE-SEMANTICS-MIGRATION
 TITLE: Migrate this system's own semantics onto the plumbing
 DEPTH: interface-settled
@@ -188,6 +188,8 @@ where they get written.
 - Whether the open-to-accepted DECISION move stays ungated past dogfooding. The operator's 2026-08-27 ruling is recorded as an observation, not encoded as the rule; what the slice takes from it is only that the model must be able to express a gateless move.
 
 - What supersession means for this instance, and when a node is collected. Deferred past this milestone by the operator's 2026-08-27 ruling; the draft classification rule stays outside the repository and outside this slice.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

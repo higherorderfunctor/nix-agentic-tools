@@ -1,0 +1,41 @@
+[DOCUMENT]
+TITLE: A rendered view of the canon is a regenerable deliverable, not an in-session expansion
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-VIEWS-ARE-REGENERABLE
+TITLE: A rendered view of the canon is a regenerable deliverable, not an in-session expansion
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A reader of the canon exists that is neither a model nor a person reading a rendered view.
+STATEMENT: >>>
+A person reads the canon through rendered views: pages generated from the
+export by scripts that are themselves registered in the canon with File
+relations, over narratives that are themselves nodes. A view is regenerated
+whenever the canon changes; it is never hand-edited and never the source. Its
+wireline -- a versioned JSON payload -- is the contract between the canon and
+any reader of it, so the viewer's FORM stays open (DEC-VIEWER-FORM-UNDECIDED):
+a terminal client, a web page and a published artifact are all readers of the
+same payload.
+
+DEC-HITL-IS-THE-VIEWER said human reading is served by in-session expansion by
+a model, not by a rendered artifact. That held until the semantic-layer render
+of 2026-08-29 showed the operator reads rendered structure and cannot read the
+same content as prose, and they asked for the view to be permanent and
+iterable. This decision supersedes it.
+<<<
+RATIONALE: >>>
+Three text presentations of one sheet failed in a single session before a
+rendered page succeeded (SLICE-SEMANTIC-LAYER-RENDER). A view that only exists
+while a session is open cannot be iterated on, reviewed, or combed for
+decisions; one generated from the canon can.
+<<<
+NOTES: >>>
+Ruled 2026-08-30 as a first-pass decision under the operator's delegation;
+overrule by superseding. Their words: "what would it take to build this as a
+permanent view to iterate on" and "ideally I could flip the view to the
+whiteboard design and enhance it that way". The view system itself is the
+whiteboard-view plan.
+<<<

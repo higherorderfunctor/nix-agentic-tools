@@ -47,6 +47,7 @@ from strictdoc.backend.sdoc.models.document import SDocDocument
 from strictdoc.backend.sdoc.models.grammar_element import GrammarElement
 from strictdoc.backend.sdoc.models.node import SDocNode, SDocNodeField
 from strictdoc.backend.sdoc.models.reference import (
+    ChildReqReference,
     FileEntry,
     FileReference,
     ParentReqReference,
@@ -62,7 +63,7 @@ from strictdoc.helpers.parallelizer import NullParallelizer
 # sdoc_cli derives its field flags from the grammar MINUS this set, so no
 # flag for either exists to pass. There is deliberately no override.
 #
-# AUTHORED_BY is REQUIRED on all five element types, so `new` cannot omit it
+# AUTHORED_BY is REQUIRED on every element type, so `new` cannot omit it
 # and writes `llm` unconditionally; the operator records their own authorship
 # by an edit outside the tool. PARENT_FP is optional everywhere it appears
 # and absent from DECISION, so the CLI never emits it at all -- fp-accept.py
@@ -290,9 +291,15 @@ class Graph:
         fresh one -- were the same fifteen lines twice, which is how the File
         branch and the Parent branch drift apart.
         """
-        if self._relation_type_for_role(element, role) != "File":
+        relation_type = self._relation_type_for_role(element, role)
+        if relation_type != "File":
             if not self.has_node(target):
                 raise SdocError(f"relation target {target!r} is not a node in the graph")
+            # A Child role points DOWN at something this node owns or produced
+            # (Contains, Produces): no dependency, no fingerprint, and the
+            # RELATIONS order on this node is the order of its parts.
+            if relation_type == "Child":
+                return ChildReqReference(parent=node, ref_uid=target, role=role)
             return ParentReqReference(parent=node, ref_uid=target, role=role)
 
         normalize_file_value(target)
@@ -491,7 +498,7 @@ def field_value(node: SDocNode, name: str) -> str | None:
     """A field's text, or None when the node does not carry it.
 
     get_field_by_name raises on an absent field, and absence is ordinary
-    here: DEPTH is on four of the five types and STATUS on two, so every
+    here: DEPTH is on every type but DECISION and STATUS on DECISION alone, so every
     caller iterating over both needs this guard.
     """
     if name not in node.ordered_fields_lookup:

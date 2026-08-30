@@ -4,13 +4,11 @@ TITLE: Prior art for a Nix workflow DSL over the canon
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SPIKE]
+[EVIDENCE]
 UID: SPIKE-DSL-PRIOR-ART
 TITLE: Prior art for a Nix workflow DSL over the canon
 DEPTH: sketch
 AUTHORED_BY: llm
-STATUS: run
-RETIRES_ON: DEC-DSL-SHAPE and DEC-DSL-LAYER-COUNT are both ruled.
 STATEMENT: >>>
 Assess prior art for the DSL that sits above the hook layer: a Nix option
 surface a project fills in to express a document-workflow engine over the
@@ -112,6 +110,8 @@ READING LIST, at most six:
 
 Run as workflow wf_3c742ab0-9d7, five agents, 2026-08-29. The synthesis was
 pasted, not paraphrased, so the operator can hold it against the sources.
+
+Retyped from SPIKE to EVIDENCE on 2026-08-30: a probe is work, then evidence, then a decision (MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION; DEC-NODE-FAMILIES). Its STATUS was 'run'. Its RETIRES_ON read: DEC-DSL-SHAPE and DEC-DSL-LAYER-COUNT are both ruled. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

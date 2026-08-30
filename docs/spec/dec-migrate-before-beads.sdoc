@@ -1,0 +1,34 @@
+[DOCUMENT]
+TITLE: The node-type migration proceeds now, with WORK as a type, without waiting for beads
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-MIGRATE-BEFORE-BEADS
+TITLE: The node-type migration proceeds now, with WORK as a type, without waiting for beads
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: Beads runs and takes WORK nodes themselves, not only their state, out of the canon.
+STATEMENT: >>>
+The node-type migration proceeds now, and WORK is a node type.
+MECH-GRID-MIGRATION-UNCOSTED had gated it on DEC-PLAN-LIFECYCLE-OPEN, on the
+argument that if execution lives in beads then work and probes might leave the
+canon rather than become WORK. The operator ruled on 2026-08-30 that the
+migration does not wait: probes become WORK when unrun and EVIDENCE when run;
+beads, when it runs, may take execution STATE out of the canon, but not the
+WORK nodes that declare what is to be built and what it crosses. What DEPTH
+means on a WORK node -- design maturity or delivery -- stays open as
+DEC-WORK-STATE-FIELD.
+<<<
+RATIONALE: >>>
+The operator's words: "the migration was the one question I care to answer" and
+"beads isn't ready yet, which is fine". Waiting on beads to decide the shape of
+work items delayed every ruling that depends on the vocabulary being spelled.
+<<<
+NOTES: >>>
+Ruled by the operator in conversation on 2026-08-30. AUTHORED_BY reads llm
+because the writer has no flag for it -- the relayed-ruling gap the whiteboard
+names. This decision lifts the gate; it does not supersede
+DEC-PLAN-LIFECYCLE-OPEN, which stays open on retention.
+<<<

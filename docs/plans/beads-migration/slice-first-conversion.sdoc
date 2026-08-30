@@ -4,7 +4,7 @@ TITLE: First conversion target is the lane-iteration cluster
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SLICE]
+[WORK]
 UID: SLICE-FIRST-CONVERSION
 TITLE: First conversion target is the lane-iteration cluster
 DEPTH: needs-design
@@ -24,6 +24,9 @@ Two of its own open items dissolve rather than transfer if it is built host-side
 first, which the corpus already offers as an escape hatch.
 <<<
 PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+NOTES: >>>
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-CONVERT-IS-ADJUDICATION

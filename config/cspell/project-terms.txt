@@ -102,6 +102,7 @@ direnv
 direnvrc
 docnix
 docsite
+docstrings
 dogfood
 dogfooding
 doubao
@@ -135,6 +136,7 @@ fetchzip
 fhsenv
 fileset
 findutils
+fingerprintable
 fixpoint
 foldl
 footgun
@@ -457,6 +459,7 @@ unresumable
 unreviewed
 unrun
 unscanned
+unsettable
 unskipped
 unstages
 unstarted

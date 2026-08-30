@@ -4,7 +4,7 @@ TITLE: Make the graph fail loud on cycles and on an unvalidated export
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SLICE]
+[WORK]
 UID: SLICE-GRAPH-CHECKS
 TITLE: Make the graph fail loud on cycles and on an unvalidated export
 DEPTH: verified
@@ -31,6 +31,8 @@ Cycle detection: MECH-CYCLE-CHECK. Export gate: determined already satisfied
 as a byproduct of checks/strictdoc-fp-check.nix and, now, also of
 checks/strictdoc-cycle-check.nix -- see MECH-SDOC-CI-CHECK's NOTES for the
 determination. No second export-only binary added.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

@@ -4,16 +4,11 @@ TITLE: Who moves a DECISION from open to accepted, and how
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SPIKE]
+[EVIDENCE]
 UID: SPIKE-DECISION-ACCEPTANCE-PATH
 TITLE: Who moves a DECISION from open to accepted, and how
 DEPTH: sketch
 AUTHORED_BY: llm
-STATUS: run
-RETIRES_ON: >>>
-The first open-to-accepted transition is made on this branch with its actor
-and its trigger recorded, or the README states the path outright.
-<<<
 STATEMENT: >>>
 No open-to-accepted transition has ever occurred on this branch: every
 accepted decision was born accepted, and the one exit from open was
@@ -47,6 +42,8 @@ line -- DEC-LONG-LIVED-BRANCH's acceptance language is about signing, not STATUS
 usability and flow, the pull requests reviewed for implementation choices, and
 operator acceptance turned at the second of these, never before. STATUS is
 conversational; signing waits for the pull request.
+
+Retyped from SPIKE to EVIDENCE on 2026-08-30: a probe is work, then evidence, then a decision (MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION; DEC-NODE-FAMILIES). Its STATUS was 'run'. Its RETIRES_ON read: The first open-to-accepted transition is made on this branch with its actor and its trigger recorded, or the README states the path outright. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

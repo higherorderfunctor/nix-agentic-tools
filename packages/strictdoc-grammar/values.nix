@@ -1,13 +1,31 @@
 # cspell:ignore unrun
-# This repository's five design-graph node types, written against the consumer
-# DSL in ./lib/dsl.nix. Renders to ../../docs/sdoc/grammar.sgra.
+# This repository's design-graph node types, written against the consumer DSL
+# in ./lib/dsl.nix. Renders to ../../docs/sdoc/grammar.sgra.
 #
 # THIS FILE IS A CONSUMER, NOT PART OF THE PACKAGE. `packages/strictdoc-grammar`
-# is general purpose and intended for publication; these five node types are one
-# thing somebody built with it. They exercise about half the surface — no
-# composite element, no view style, no human title, no child relation, no `Tag`
-# or `MultipleChoice` field — which is exactly why `fixtures/foreign.sgra`
-# exists alongside them.
+# is general purpose and intended for publication; these node types are one
+# thing somebody built with it. `fixtures/foreign.sgra` exists alongside them to
+# exercise the parts of the surface they leave alone.
+#
+# THE VOCABULARY IS RULED, NOT ENUMERATED. DEC-NODE-FAMILIES (docs/spec) derives
+# it from four families:
+#
+#   Definition      the claims the canon asserts, in a 2x2 —
+#                   normative x universal   REQUIREMENT   can be violated
+#                   normative x particular  DECISION      can be violated
+#                   descriptive x universal MECHANISM     can only be wrong
+#                   descriptive x particular EVIDENCE     can be wrong or outdated
+#   Coverage        USE_CASE   a path the specification must enable; covered or not
+#   Representation  NARRATIVE  a maintained projection for a reader; its edges go
+#                              dirty when what it presents changes
+#   Work            WORK       something to do; not a claim; dies with its plan
+#
+# UID PREFIXES NAME THE TYPE A NODE WAS BORN WITH, NOT THE TYPE IT IS.
+# DEC-UID-OUTLIVES-TYPE: a UID never changes, so the node-type migration of
+# 2026-08-30 retyped SLICE-, INV- and SPIKE- nodes in place and those prefixes
+# are retired history. The element tag is the type. `sdoc new` still requires
+# the current prefix on a NEW node; `sdoc check` tolerates a prefix no element
+# declares and reports only a prefix that belongs to a DIFFERENT element.
 #
 # ORDER IS LOAD-BEARING, though not uniformly, and the difference was measured
 # 2026-08-27 rather than assumed. StrictDoc enforces element and FIELD order: a
@@ -17,10 +35,11 @@
 # an unknown one fails with "Requirement relation type/role is not registered".
 #
 # The surface still uses lists and the emitter still renders them as given, and
-# a new relation role should still be APPENDED rather than inserted, because the
-# order here is the committed file's order line for line and reordering it
-# rewrites `docs/sdoc/grammar.sgra` for no reason. That is a diff-hygiene
-# argument, not a parser one.
+# a new field or relation role should still be APPENDED rather than inserted,
+# because the order here is the committed file's order line for line and
+# reordering it rewrites `docs/sdoc/grammar.sgra` for no reason. For FIELDS it
+# is also a corpus argument: inserting one mid-list means repositioning it in
+# every existing node of that type.
 #
 # Rendered with:
 #
@@ -35,11 +54,11 @@
 # `checks/strictdoc-grammar-model-equal.nix` is what notices.
 {dsl}: let
   inherit (dsl) el field rel;
-  inherit (field) one required str;
+  inherit (field) one required str tag;
 
-  # The three vocabularies the five node types share. Written once because they
-  # ARE one vocabulary each — a DEPTH that meant different things on a MECHANISM
-  # and on a SLICE would be a different field, not a repeated one.
+  # The vocabularies the node types share. Written once because they ARE one
+  # vocabulary each — a DEPTH that meant different things on two types would be
+  # a different field, not a repeated one.
   depths = [
     "sketch"
     "needs-design"
@@ -48,12 +67,15 @@
     "implemented"
     "verified"
   ];
-  authors = ["llm" "human"];
+  # DEC-AUTHORSHIP-LADDER: one monotonic ladder that only rises. The middle two
+  # rungs are a human's acts (seen and let stand; adopted as their own); the
+  # writer stamps the bottom rung and has no flag for the others.
+  authors = ["llm" "llm-accepted" "llm-adopted" "human"];
 
-  # The field run every node type but DECISION carries, in this order. DECISION
-  # has no DEPTH and no PARENT_FP, so it is spelled out on its own below rather
-  # than assembled by subtraction — subtraction reads as "the same thing, minus"
-  # when the truth is that a decision is not a thing that has a depth.
+  # The field run every claim-bearing type carries, in this order. DECISION has
+  # no DEPTH and no PARENT_FP, so it is spelled out on its own below rather than
+  # assembled by subtraction — subtraction reads as "the same thing, minus" when
+  # the truth is that a decision is not a thing that has a depth.
   uid = required (str "UID");
   title = required (str "TITLE");
   depth = required (one "DEPTH" depths);
@@ -63,10 +85,22 @@
   parentFp = str "PARENT_FP";
   notes = str "NOTES";
 
-  # The relation every node type carries back to the decision that governs it.
+  # Roles. Every Parent role is a dependency: the node that carries it depends
+  # on the target's wording, may fingerprint it in PARENT_FP, and is walked by
+  # readiness and the cycle check. A Child role is the opposite: the node that
+  # carries it points DOWN at something it owns or produced, with no dependency
+  # and no fingerprint, so a collectable node can point at a durable one and
+  # collection never strands a reference.
   governedBy = rel.parent "Governed_By" "Governs";
   provenBy = rel.parent "Proven_By" "Proves";
   assumes = rel.parent "Assumes" "Assumed_By";
+  guarantees = rel.parent "Guarantees" "Guaranteed_By";
+  serializedBy = rel.parent "Serialized_By" "Serializes";
+  crosses = rel.parent "Crosses" "Crossed_By";
+  coveredBy = rel.parent "Covered_By" "Covers";
+  cites = rel.parent "Cites" "Cited_By";
+  contains = rel.child "Contains" "Contained_In";
+  produces = rel.child "Produces" "Produced_By";
 
   # Containment by EDGE rather than by file. A plan's backlog is a register
   # node, and an ungroomed item points at it. Carried by every type because
@@ -74,7 +108,21 @@
   # relation list rather than slotted in beside the roles it reads like, per the
   # ORDER note above.
   backloggedIn = rel.parent "Backlogged_In" "Backlogs";
+
+  # The relation run the four Definition types and WORK share: what rules it,
+  # what it upholds, what serializes it, what evidence backs it, what it takes
+  # as given, the file it lives in, and its backlog register.
+  claimRelations = [
+    governedBy
+    guarantees
+    serializedBy
+    provenBy
+    assumes
+    rel.file
+    backloggedIn
+  ];
 in [
+  # ----------------------------------------------------------------- Definition
   (el "DECISION" {prefix = "DEC-";} {
     fields = [
       uid
@@ -89,6 +137,7 @@ in [
     relations = [
       (rel.parent "Superseded_By" "Supersedes")
       backloggedIn
+      provenBy
     ];
   })
 
@@ -103,71 +152,112 @@ in [
       parentFp
       notes
     ];
+    relations = claimRelations;
+  })
+
+  (el "REQUIREMENT" {prefix = "REQ-";} {
+    fields = [
+      uid
+      title
+      depth
+      authoredBy
+      statement
+      rationale
+      parentFp
+      notes
+    ];
+    relations = claimRelations;
+  })
+
+  # SOURCE is where the observation came from when it is not this repository:
+  # a URL, a paper, a vendor document, a log path, the command that produced
+  # it. An observation with no SOURCE was made here.
+  (el "EVIDENCE" {prefix = "EV-";} {
+    fields = [
+      uid
+      title
+      depth
+      authoredBy
+      (str "SOURCE")
+      statement
+      rationale
+      parentFp
+      notes
+    ];
+    relations = claimRelations;
+  })
+
+  # ------------------------------------------------------------------- Coverage
+  # A use case is covered by the requirements, decisions and mechanisms that
+  # together enable it; it depends on their wording, so Covered_By is a Parent
+  # role and may be fingerprinted.
+  (el "USE_CASE" {prefix = "UC-";} {
+    fields = [
+      uid
+      title
+      depth
+      authoredBy
+      statement
+      rationale
+      parentFp
+      notes
+    ];
     relations = [
       governedBy
-      (rel.parent "Guarantees" "Guaranteed_By")
-      (rel.parent "Serialized_By" "Serializes")
+      coveredBy
       provenBy
+      backloggedIn
+    ];
+  })
+
+  # ------------------------------------------------------------- Representation
+  # WIDGET is the author's preferred way to draw this node's STATEMENT; the
+  # renderer knows the widget words and nothing else. TAGS are free facet words
+  # a renderer may show as chips and never interprets. A narrative Cites what it
+  # presents (dependency, fingerprintable) and Contains the narratives it is
+  # composed of, in the order the RELATIONS block lists them.
+  (el "NARRATIVE" {prefix = "NAR-";} {
+    fields = [
+      uid
+      title
+      depth
+      authoredBy
+      (one "WIDGET" ["prose" "rows" "table" "glossary" "legend" "tally" "edges"])
+      (tag "TAGS")
+      statement
+      rationale
+      parentFp
+      notes
+    ];
+    relations = [
+      cites
+      contains
+      backloggedIn
+    ];
+  })
+
+  # ----------------------------------------------------------------------- Work
+  # Work declares what it crosses (the lane), what it assumes, and what it
+  # Produces — the evidence it leaves behind, pointed at downward so the
+  # evidence outlives the work. DEPTH on WORK conflates design maturity with
+  # delivery; DEC-WORK-STATE-FIELD holds that open until beads runs.
+  (el "WORK" {prefix = "WORK-";} {
+    fields = [
+      uid
+      title
+      depth
+      authoredBy
+      statement
+      rationale
+      parentFp
+      notes
+    ];
+    relations = [
+      governedBy
+      crosses
       assumes
-      rel.file
-      backloggedIn
-    ];
-  })
-
-  (el "SLICE" {prefix = "SLICE-";} {
-    fields = [
-      uid
-      title
-      depth
-      authoredBy
-      statement
-      rationale
-      parentFp
-      notes
-    ];
-    relations = [
-      governedBy
-      (rel.parent "Crosses" "Crossed_By")
-      assumes
       provenBy
-      rel.file
-      backloggedIn
-    ];
-  })
-
-  (el "INVARIANT" {prefix = "INV-";} {
-    fields = [
-      uid
-      title
-      depth
-      authoredBy
-      statement
-      rationale
-      parentFp
-      notes
-    ];
-    relations = [
-      governedBy
-      provenBy
-      backloggedIn
-    ];
-  })
-
-  (el "SPIKE" {prefix = "SPIKE-";} {
-    fields = [
-      uid
-      title
-      depth
-      authoredBy
-      (required (one "STATUS" ["unrun" "run" "blocked"]))
-      (required (str "RETIRES_ON"))
-      statement
-      rationale
-      parentFp
-      notes
-    ];
-    relations = [
-      governedBy
+      produces
       rel.file
       backloggedIn
     ];

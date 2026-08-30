@@ -4,7 +4,7 @@ TITLE: Nothing outside a plan may depend on a plan node
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[INVARIANT]
+[REQUIREMENT]
 UID: INV-NO-EXTERNAL-PLAN-REFS
 TITLE: Nothing outside a plan may depend on a plan node
 DEPTH: interface-settled
@@ -145,6 +145,8 @@ almost none of its wording. The field was left alone because only the operator
 turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
 exactly this, and this pass produced eight instances of it while the question of
 what the mark means was still open.
+
+Retyped from INVARIANT to REQUIREMENT on 2026-08-30 (DEC-INVARIANT-IS-A-REQUIREMENT; DEC-NODE-FAMILIES). The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent
