@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: Import the beads design from outside the canon once canon and whiteboard have shipped
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-IMPORT-BEADS-DESIGN
+TITLE: Import the beads design from outside the canon once canon and whiteboard have shipped
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Import the beads design into the canon once the canon and the whiteboard are
+shippable and merged to main. What the canon holds about beads today is a
+small fraction of the design -- a tenth at best, by the operator's estimate on
+2026-08-30. The rest lives outside the system: GitHub issues, markdown
+documents and rendered artifacts. Until this work runs, the work/beads system
+in any render is a stub built from the canon's WORK and EVIDENCE nodes and
+nothing more; nobody designs beads beyond that, and nobody goes looking for
+the outside material ahead of the import.
+<<<
+NOTES: >>>
+Filed 2026-08-30 on the operator's instruction so the gap is discoverable; the import is a mass move, not a trickle.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-BEADS-MIGRATION
+  ROLE: Backlogged_In
