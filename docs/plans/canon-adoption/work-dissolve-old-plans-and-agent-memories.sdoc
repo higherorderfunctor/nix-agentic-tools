@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: Dissolve the markdown plans and the agent memories into the canon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-DISSOLVE-OLD-PLANS-AND-AGENT-MEMORIES
+TITLE: Dissolve the markdown plans and the agent memories into the canon
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Dissolve the old plans and the agent memories. The markdown plans under
+docs/plans and the memory files agent sessions keep for themselves hold
+decisions, mechanisms and evidence that belong in the canon, and contradict it
+where they have gone stale. Each is read once, its durable claims filed as
+nodes, and the file retired -- superseded, never silently deleted.
+<<<
+NOTES: >>>
+Filed 2026-08-30 from the operator's list of things to do before they forget, restated under the ruled vocabulary; some restate earlier items.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-CANON-ADOPTION
+  ROLE: Backlogged_In
