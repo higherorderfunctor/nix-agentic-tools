@@ -4,7 +4,7 @@ TITLE: Index sdoc documents in semble
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SLICE]
+[WORK]
 UID: SLICE-SDOC-IN-SEMBLE
 TITLE: Index sdoc documents in semble
 DEPTH: verified
@@ -34,6 +34,8 @@ chunker returns 17 chunks against line chunking's 12, and the boundaries land
 on node headers and on field starts, so a node larger than the 750-character
 target splits into its own fields. chunk() returning a list rather than None is
 the proof the parser loaded; a fallback would have been a log warning only.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

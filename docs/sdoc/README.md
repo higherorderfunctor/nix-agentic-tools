@@ -42,21 +42,31 @@ does not need it: the prek hooks resolve their config from the primary checkout,
 so a worktree that has never entered a shell validates exactly like one that
 has.
 
-## Settled, not yet applied — read before citing any node
+## The vocabulary is migrated — read the tag, not the prefix
 
-The grid rulings of 2026-08-28 changed what three grammar types MEAN, and the
-corpus has not been migrated onto them. The read-through table lives in ONE
-place, the `sdoc` skill ("The grammar lags the rulings"); the graph's own entry
-point is `MECH-GRID-MIGRATION-UNCOSTED`, reachable from each ruling by its
-`Governs` edge. The short form: a `SLICE-` UID is WORK that declares its
-crossings, an `INV-` UID is a REQUIREMENT, and a `SPIKE-` UID is a pipeline to a
-decision. A session that cites a slice "as a slice" has not read this.
+On 2026-08-30 the node-type families landed (`DEC-NODE-FAMILIES`, docs/spec):
+REQUIREMENT, DECISION, MECHANISM, EVIDENCE in the definition grid; USE_CASE for
+coverage; NARRATIVE for representation; WORK for work. Every legacy node was
+retyped in place under `DEC-UID-OUTLIVES-TYPE`: the element tag changed, the UID
+did not, so `SLICE-`, `INV-` and `SPIKE-` prefixes are history and a node's type
+is its tag. The MECHANISM mood test (which of the 130 are rules) is the next
+pass. The `sdoc` skill carries the table.
 
-**Glossary (session 6):** joint, checkpoint, scribe, sdoc, strictdoc, canon,
-beads — the table is in the `sdoc` skill, the rulings are
-`DEC-JOINT-NOT-SURFACE`, `DEC-SCRIBE-NAMES-THE-WRITER` and
-`DEC-CANON-NAMES-THE-COMMITTED-CONTENTS`. "Surface" and "graph" are the two
-words NOT to use.
+**Glossary:** joint, checkpoint, scribe, sdoc, strictdoc, canon, beads — the
+table is in the `sdoc` skill. "Surface" and "graph" are the two words NOT to
+use.
+
+## Where this stands — 2026-08-30 (session 8: the view system)
+
+The operator read the render, approved a permanent view system and the grid
+migration, and delegated first-pass decisions. Landed: the grammar (seven types,
+`Cites` / `Contains` / `Covered_By` / `Produces`, the four-rung authorship
+ladder), the in-place retype of 34 nodes, the scribe reading a node's type from
+its tag, and four rulings in `docs/spec/` — `DEC-NODE-FAMILIES` (supersedes the
+grid), `DEC-UID-OUTLIVES-TYPE`, `DEC-MIGRATE-BEFORE-BEADS`,
+`DEC-VIEWS-ARE-REGENERABLE` (supersedes the in-session-viewer ruling). The view
+system's own plan is `docs/plans/whiteboard-view/`; its root narrative is the
+place to read next.
 
 ## Where this stands — 2026-08-29 (session 7: the render exists)
 
@@ -259,7 +269,7 @@ It writes nodes and edges. It does not write code, and it does not sign.
 
 ### An implementation session
 
-> Implementing `<SLICE-UID>` from the strictdoc design graph. Branch
+> Implementing `<WORK-UID>` from the strictdoc design graph. Branch
 > `feat/strictdoc-trial`, worktree at `<worktree path>`. Invoke the `sdoc`
 > skill. Read that slice and everything it `Crosses` before starting. **Never
 > run `fp-accept`** — signing a contract is the operator's key, and an agent
@@ -268,8 +278,8 @@ It writes nodes and edges. It does not write code, and it does not sign.
 > update the nodes in the same commit. Log incidental findings to the plan
 > backlog rather than telling me.
 
-Give it a slice UID, not a description. The slice's closure is the brief, and
-the graph already says whether it is ready.
+Give it a WORK UID, not a description. The work's closure is the brief, and the
+graph already says whether it is ready.
 
 ### The render session — DONE 2026-08-29 (kept for the record)
 

@@ -4,16 +4,11 @@ TITLE: What looks stale on a first reading
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SPIKE]
+[EVIDENCE]
 UID: SPIKE-CORPUS-STALE-INVENTORY
 TITLE: What looks stale on a first reading
 DEPTH: interface-settled
 AUTHORED_BY: llm
-STATUS: run
-RETIRES_ON: >>>
-Each item is confirmed or dismissed by the operator, or the section holding it
-is converted and the question resolved in the process.
-<<<
 STATEMENT: >>>
 Ordered by how much each would mislead an implementing model. This is a reading
 pass by a fresh reader, NOT an audit, and no item is confirmed.
@@ -45,6 +40,9 @@ these one at a time. Items 1 and 4 are the dangerous ones, because both present
 as complete and neither is flagged anywhere in the corpus.
 <<<
 PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+NOTES: >>>
+Retyped from SPIKE to EVIDENCE on 2026-08-30: a probe is work, then evidence, then a decision (MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION; DEC-NODE-FAMILIES). Its STATUS was 'run'. Its RETIRES_ON read: Each item is confirmed or dismissed by the operator, or the section holding it is converted and the question resolved in the process. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-CONVERT-IS-ADJUDICATION

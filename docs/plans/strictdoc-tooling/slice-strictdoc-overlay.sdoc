@@ -4,7 +4,7 @@ TITLE: Step zero -- an overlay that keeps strictdoc current from upstream's flak
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SLICE]
+[WORK]
 UID: SLICE-STRICTDOC-OVERLAY
 TITLE: Step zero -- an overlay that keeps strictdoc current from upstream's flake
 DEPTH: implemented
@@ -138,6 +138,8 @@ See MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY.
 MEASURED: upstream's interpreter is 3.14.6 against ourPkgs' 3.14.7, the splice
 imports clean, and the grammar builder returns the same 4adcdb05... grammar the
 implementation brief records.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

@@ -4,7 +4,7 @@ TITLE: Suspect-link detection and acceptance over the design graph
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SLICE]
+[WORK]
 UID: SLICE-FP-DETECTOR
 TITLE: Suspect-link detection and acceptance over the design graph
 DEPTH: implemented
@@ -61,6 +61,8 @@ node) and on MECH-FP-CHECK and MECH-FP-ACCEPT-READINESS, producing the
 PARENT_FP entries above and below -- the multi-entry block form is this
 node's own three-parent write, exercised for real rather than only in the
 synthetic fixture.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

@@ -4,11 +4,12 @@ TITLE: Whiteboard: the semantic layer as the canon describes it, tagged against 
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[NARRATIVE]
 UID: MECH-SEMANTIC-LAYER-WHITEBOARD
 TITLE: Whiteboard: the semantic layer as the canon describes it, tagged against the current direction
 DEPTH: sketch
 AUTHORED_BY: llm
+WIDGET: rows
 STATEMENT: >>>
 WHITEBOARD SNAPSHOT, 2026-08-29. A one-sheet of the semantic layer as the canon
 describes it, every line tagged against the current direction: WORKS (stands),
@@ -199,11 +200,13 @@ TOP GAPS
 <<<
 NOTES: >>>
 Requested by the operator on 2026-08-29 to reason about the destination from working memory after days at the lower layers. The five top gaps are the last section. A condensed reading was presented in conversation; this node holds the full sheet.
+
+Retyped from MECHANISM to NARRATIVE on 2026-08-30 under DEC-NODE-FAMILIES: this node said of itself that it was a narrative filed as a mechanism for lack of the type. Its Governed_By edges became Cites. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-LAYER-STACK
-  ROLE: Governed_By
+  ROLE: Cites
 - TYPE: Parent
   VALUE: DEC-NODE-TYPE-GRID
-  ROLE: Governed_By
+  ROLE: Cites

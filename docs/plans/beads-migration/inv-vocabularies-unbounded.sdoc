@@ -4,7 +4,7 @@ TITLE: Two declared-bounded vocabularies are unbounded in practice
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[INVARIANT]
+[EVIDENCE]
 UID: INV-VOCABULARIES-UNBOUNDED
 TITLE: Two declared-bounded vocabularies are unbounded in practice
 DEPTH: interface-settled
@@ -21,6 +21,9 @@ Neither should become a SingleChoice on conversion. The grain vocabulary
 dissolves entirely if rules bind to a mechanism by edge rather than by label.
 <<<
 PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+NOTES: >>>
+Retyped from INVARIANT to EVIDENCE on 2026-08-30 (it records a measurement, not a rule; DEC-NODE-FAMILIES). The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-CONVERT-IS-ADJUDICATION

@@ -4,7 +4,7 @@ TITLE: Render the semantic layer as an HTML artifact to judge from, not as text
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SLICE]
+[WORK]
 UID: SLICE-SEMANTIC-LAYER-RENDER
 TITLE: Render the semantic layer as an HTML artifact to judge from, not as text
 DEPTH: implemented
@@ -72,6 +72,8 @@ overrule), 4 refuted, 4 nits fixed. Screenshot passes at phone and desktop
 width caught three layout defects before review.
 
 The generator is not in the repository: MECH-RENDER-GENERATOR-OUTSIDE-REPO.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

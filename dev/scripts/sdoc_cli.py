@@ -5,12 +5,12 @@ docs/plans/strictdoc-tooling/slice-sdoc-cli.sdoc).
 
 THE OPTION SURFACE IS DERIVED FROM THE GRAMMAR, not typed by a person. One
 flag per field a node type declares, one per relation role it may make, and
-every choice flag's word list read off that field. The five types are
+every choice flag's word list read off that field. The types are
 genuinely asymmetric -- a DECISION carries no DEPTH and no File relation, a
-SPIKE is the only type with both a DEPTH and a STATUS whose word list differs
+DECISION is the only type with a STATUS; the rest carry DEPTH, so the surface differs
 under the same name, an INVARIANT cannot point at a file -- and that
 asymmetry is exactly what gets hand-written wrong. Run
-`sdoc new SPIKE --help` and `sdoc new DECISION --help` to see two different
+`sdoc new NARRATIVE --help` and `sdoc new DECISION --help` to see two different
 surfaces come out of one grammar.
 
     writing   new  set  relate  unrelate  move  delete
@@ -176,6 +176,11 @@ def resolve_type_from_argv(argv: list[str], graph) -> tuple[str | None, str | No
     if verb == "new":
         return verb, following
     if verb in UID_FIRST_VERBS and following and not following.startswith("-"):
+        # DEC-UID-OUTLIVES-TYPE: an existing node's type is its element tag,
+        # never its prefix -- retyped nodes keep the prefix they were born
+        # with. The prefix decides only when the UID is not (yet) in the graph.
+        if graph.has_node(following):
+            return verb, graph.node(following).node_type
         for tag in graph.tags():
             if following.startswith(graph.element(tag).property_prefix):
                 return verb, tag
@@ -183,12 +188,25 @@ def resolve_type_from_argv(argv: list[str], graph) -> tuple[str | None, str | No
 
 
 def check_prefix(graph, tag: str, uid: str) -> None:
+    """A NEW node must carry its element's current prefix."""
     prefix = graph.element(tag).property_prefix
     if not uid.startswith(prefix):
         raise SdocError(
             f"{uid!r} is not a {tag} name: the grammar gives {tag} the prefix "
             f"{prefix!r}. UIDs are hand-chosen and semantic; nothing here mints one."
         )
+
+
+def prefix_owner(graph, uid: str):
+    """The element whose current prefix this UID carries, or None.
+
+    None covers a retired prefix (SLICE-, INV-, SPIKE- after the 2026-08-30
+    migration), which is history and not a mismatch.
+    """
+    for tag in graph.tags():
+        if uid.startswith(graph.element(tag).property_prefix):
+            return tag
+    return None
 
 
 # --------------------------------------------------------------------------
@@ -268,7 +286,7 @@ def build_parser(graph, verb: str | None, tag: str | None) -> argparse.ArgumentP
     for candidate in graph.tags():
         if tag is not None and candidate != tag:
             # Only the requested type is built out. Every type is still
-            # listed, so `sdoc new` with no type prints the five choices.
+            # listed, so `sdoc new` with no type prints every element as a choice.
             type_parsers.add_parser(candidate, help=f"Create a {candidate}")
             continue
         element = graph.element(candidate)
@@ -533,16 +551,18 @@ def do_check(graph, _args, root: Path) -> int:
     this catches what a write-time check structurally cannot, which is a
     file deleted or moved after its relation was written."""
     findings = []
+    retyped = []
     for node in graph.iter_nodes():
         uid = node.reserved_uid
         try:
             graph.validate(node)
         except SdocError as exc:
             findings.append(f"{uid}: {exc}")
-        try:
-            check_prefix(graph, node.node_type, uid)
-        except SdocError as exc:
-            findings.append(f"{uid}: {exc}")
+        # DEC-UID-OUTLIVES-TYPE: a prefix names the type a node was BORN with.
+        # A node retyped in place keeps it, so this is a note, never a finding.
+        owner = prefix_owner(graph, uid)
+        if owner is not None and owner != node.node_type:
+            retyped.append(f"{uid}: born {owner}, now {node.node_type}")
         for relation in node.relations:
             target_uid = getattr(relation, "ref_uid", None)
             if target_uid is None:
@@ -556,6 +576,8 @@ def do_check(graph, _args, root: Path) -> int:
                     findings.append(f"{uid}: File relation {value!r} names no existing file")
             elif not graph.has_node(target_uid):
                 findings.append(f"{uid}: relation to {target_uid!r}, which is not in the graph")
+    for note in retyped:
+        print(f"NOTE {note}", file=sys.stderr)
     for finding in findings:
         print(f"FAIL {finding}", file=sys.stderr)
     total = sum(1 for _ in graph.iter_nodes())
@@ -684,7 +706,7 @@ def main(argv: list[str] | None = None) -> int:
         parser = build_parser(graph, verb, tag)
         args = parser.parse_args(argv)
         if verb in UID_FIRST_VERBS and tag is None and getattr(args, "uid", None):
-            check_prefix(graph, graph.node(args.uid).node_type, args.uid)
+            graph.node(args.uid)  # raises for an unknown UID; the prefix is history
         return DISPATCH[args.verb](graph, args, root)
     except SdocError as exc:
         print(f"sdoc: {exc}", file=sys.stderr)

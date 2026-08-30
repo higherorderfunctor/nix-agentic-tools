@@ -4,7 +4,7 @@ TITLE: The register is not the source of truth it claims to be
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[INVARIANT]
+[EVIDENCE]
 UID: INV-REGISTER-NOT-AUTHORITATIVE
 TITLE: The register is not the source of truth it claims to be
 DEPTH: interface-settled
@@ -21,6 +21,9 @@ conversion that trusts the register as the complete decision set will silently
 drop seven decisions.
 <<<
 PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+NOTES: >>>
+Retyped from INVARIANT to EVIDENCE on 2026-08-30 (it records a measurement, not a rule; DEC-NODE-FAMILIES). The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-CONVERT-IS-ADJUDICATION

@@ -8,7 +8,7 @@ IMPORT_FROM_FILE: @repo
 UID: DEC-HITL-IS-THE-VIEWER
 TITLE: An LLM renders for human reading until a viewer exists
 AUTHORED_BY: human
-STATUS: accepted
+STATUS: superseded
 RETIRES_ON: >>>
 A working beads sandbox exists and the viewer that follows it is in use.
 <<<
@@ -25,3 +25,7 @@ Readability is not the near-term bottleneck. Deciding what is safe to build is.
 The single-source-of-truth property and well-defined edges to that truth are
 what matter in the early hours; the render is downstream of both and can wait.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-VIEWS-ARE-REGENERABLE
+  ROLE: Superseded_By

@@ -4,7 +4,7 @@ TITLE: Generate the grammar from a typed Nix option surface, and gate it
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SLICE]
+[WORK]
 UID: SLICE-GRAMMAR-FROM-NIX
 TITLE: Generate the grammar from a typed Nix option surface, and gate it
 DEPTH: verified
@@ -263,6 +263,8 @@ One promise in the governing decision is still unmet and is tracked separately:
 DEC-EXECUTABLE-RULES-ROADMAP says milestone one delivers a validation gate at
 commit time AND in CI. The CI half exists. devenv.nix declares no strictdoc
 hook, so the commit-time half does not.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

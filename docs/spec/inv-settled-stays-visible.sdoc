@@ -4,7 +4,7 @@ TITLE: A settled ruling stays visible at every entry point until the corpus is m
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[INVARIANT]
+[REQUIREMENT]
 UID: INV-SETTLED-STAYS-VISIBLE
 TITLE: A settled ruling stays visible at every entry point until the corpus is migrated, and drift is corrected on sight
 DEPTH: interface-settled
@@ -29,4 +29,6 @@ aloud is what stops a term from decaying back into the old one.
 <<<
 NOTES: >>>
 Recorded 2026-08-28 at the operator's request, as one of four contributor-communication requirements (INV-DECISIONS-ARRIVE-AS-CARDS, INV-LISTS-WHERE-THE-READER-UNPACKS, INV-FILE-DO-NOT-NARRATE, INV-SETTLED-STAYS-VISIBLE). The rule is the operator's; AUTHORED_BY reads llm because the writer has no flag for the other value. An INVARIANT is read as a REQUIREMENT under DEC-INVARIANT-IS-A-REQUIREMENT; the grammar type is kept so the grid is not half-applied. The sdoc skill's backlog protocol is the procedure these four are the requirement for.
+
+Retyped from INVARIANT to REQUIREMENT on 2026-08-30 (DEC-INVARIANT-IS-A-REQUIREMENT; DEC-NODE-FAMILIES). The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<

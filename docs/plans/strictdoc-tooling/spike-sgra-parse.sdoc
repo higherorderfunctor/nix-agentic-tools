@@ -4,16 +4,11 @@ TITLE: Make the tree-sitter grammar parse standalone .sgra files
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SPIKE]
+[EVIDENCE]
 UID: SPIKE-SGRA-PARSE
 TITLE: Make the tree-sitter grammar parse standalone .sgra files
 DEPTH: implemented
 AUTHORED_BY: llm
-STATUS: run
-RETIRES_ON: >>>
-A three-rule patch is applied and the two .sgra files parse with no regression
-across the sdoc corpus.
-<<<
 STATEMENT: >>>
 The upstream tree-sitter grammar parses all sdoc documents but fails every
 standalone .sgra grammar file, because its root rule requires a DOCUMENT header.
@@ -33,4 +28,6 @@ the other 10 fail on pre-existing document-body/FREETEXT coverage gaps this
 patch never targeted (out of DEC-GRAMMAR-PATCH-NOT-FORK's scope; logged as
 MECH-SGRA-BODY-COVERAGE in the plan backlog). checks/strictdoc-grammar-corpus.nix
 is the standing regression gate against both corpora.
+
+Retyped from SPIKE to EVIDENCE on 2026-08-30: a probe is work, then evidence, then a decision (MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION; DEC-NODE-FAMILIES). Its STATUS was 'run'. Its RETIRES_ON read: A three-rule patch is applied and the two .sgra files parse with no regression across the sdoc corpus. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<

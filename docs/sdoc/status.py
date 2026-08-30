@@ -14,14 +14,16 @@ import json
 import sys
 from collections import Counter
 
-NODE_PREFIXES = ("DEC", "MECH", "SLICE", "SPIKE", "INV")
+# A design node is anything the export types with an element tag of its own;
+# DEC-UID-OUTLIVES-TYPE retired prefix-keyed discovery on 2026-08-30.
+NOT_NODES = {"DOCUMENT", "SECTION", "TEXT"}
 
 
 def nodes(obj):
     """Yield every design node in the export, at any nesting depth."""
     if isinstance(obj, dict):
-        uid = obj.get("UID")
-        if isinstance(uid, str) and uid.split("-")[0] in NODE_PREFIXES:
+        node_type = obj.get("_NODE_TYPE")
+        if isinstance(node_type, str) and node_type not in NOT_NODES and isinstance(obj.get("UID"), str):
             yield obj
         for value in obj.values():
             yield from nodes(value)
@@ -38,6 +40,8 @@ def dependencies(node):
     parents.
 
     File relations are skipped: their VALUE is a repository path, not a UID.
+    Child relations are skipped too: Contains and Produces point DOWN at
+    something the node owns, which is not a dependency.
 
     PARENT_FP entries DO count. A node can record a fingerprint for a parent
     without carrying an edge to it -- nothing enforces the pair yet (see
@@ -47,7 +51,7 @@ def dependencies(node):
     out = {
         r.get("VALUE")
         for r in (node.get("RELATIONS") or [])
-        if r.get("VALUE") and r.get("TYPE") != "File"
+        if r.get("VALUE") and r.get("TYPE") not in ("File", "Child")
     }
     for entry in str(node.get("PARENT_FP") or "").split():
         if ":" in entry:
@@ -67,7 +71,7 @@ def closure_verdict(root, by_uid):
         if node is None:
             blockers.append(f"{uid} (no such node)")
             continue
-        if uid.startswith("DEC"):
+        if node.get("_NODE_TYPE") == "DECISION":
             status = node.get("STATUS")
             if status == "open":
                 freedoms += 1
@@ -88,7 +92,7 @@ def show(label, rows):
 def main(path: str) -> int:
     found = list(nodes(json.load(open(path))))
     print(f"nodes: {len(found)}")
-    print(f"  type:     {dict(Counter(n['UID'].split('-')[0] for n in found))}")
+    print(f"  type:     {dict(Counter(n['_NODE_TYPE'] for n in found))}")
     print(f"  depth:    {dict(Counter(str(n.get('DEPTH') or '-') for n in found))}")
     print(f"  authored: {dict(Counter(n.get('AUTHORED_BY') for n in found))}")
 
@@ -97,9 +101,9 @@ def main(path: str) -> int:
     show("Needs design or a spike",
          [n for n in found if str(n.get("DEPTH", "")).startswith("needs")])
     show("Backlog - ungroomed",
-         [n for n in found if n.get("DEPTH") == "sketch"])
+         [n for n in found if n.get("DEPTH") == "sketch" and n["_NODE_TYPE"] != "NARRATIVE"])
     by_uid = {n["UID"]: n for n in found}
-    for slice_node in (n for n in found if n["UID"].startswith("SLICE")):
+    for slice_node in (n for n in found if n["_NODE_TYPE"] == "WORK"):
         ready, blockers, freedoms = closure_verdict(slice_node, by_uid)
         state = "READY" if ready else "BLOCKED"
         print(f"\n{state}  {slice_node['UID']}  (degrees of freedom: {freedoms})")

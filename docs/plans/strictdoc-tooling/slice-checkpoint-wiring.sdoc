@@ -4,7 +4,7 @@ TITLE: Wire the behaviour model into the tool and the checkpoints
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[SLICE]
+[WORK]
 UID: SLICE-CHECKPOINT-WIRING
 TITLE: Wire the behaviour model into the tool and the checkpoints
 DEPTH: interface-settled
@@ -72,6 +72,8 @@ where they get written.
 - The authorization half of the authorship guard: how a legitimate operator flip is discharged past a guard that cannot recognise them. Left blank deliberately -- it is an authorization rule, and every mechanism available today (a trailer, a label, a flag) is equally available to an agent, so choosing one now would encode a policy the plumbing cannot back.
 
 - Which of this system's own rules are worth wiring first. The checkpoint table is built from whatever the model declares; this node fixes the table's shape, not its rows.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent
