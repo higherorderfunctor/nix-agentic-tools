@@ -4,7 +4,7 @@ TITLE: Drop the three strictdoc dependencies that cost closure and are unused
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-STRICTDOC-CLOSURE-TRIM
 TITLE: Drop the three strictdoc dependencies that cost closure and are unused
 DEPTH: sketch
@@ -38,6 +38,8 @@ split describes a derivation nothing here evaluates.
 
 If closure size is still worth chasing it is now a question for upstream's own
 flake, which puts it outside this repository and probably outside this plan.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: The proposal half ('Removing the three is a dependencies filter in overlays/dev-tools/strictdoc.nix'; deliberately not done in SLICE-STRICTDOC-OVERLAY) is work, declared dead by NOTES after MECH-STRICTDOC-UPSTREAM-FLAKE; splitting would leave the six-and-three measurement as EVIDENCE and retire the proposal. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

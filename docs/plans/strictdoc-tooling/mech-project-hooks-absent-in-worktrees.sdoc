@@ -4,7 +4,7 @@ TITLE: Project-level Claude hooks are missing from about half this clone's workt
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-PROJECT-HOOKS-ABSENT-IN-WORKTREES
 TITLE: Project-level Claude hooks are missing from about half this clone's worktrees
 DEPTH: sketch
@@ -17,6 +17,8 @@ A hook that was never installed looks exactly like a hook that found nothing. Th
 <<<
 NOTES: >>>
 Logged as the durable home for the delivery measurement behind `MECH-RUNTIME-WRITE-GUARD`'s RATIONALE. That node reads it as an argument for making the writer incapable of the write; this node is about the eleven worktrees currently running with no Stop validator, which is a repository defect independent of that design.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with high confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: The delivery mechanism explaining the count -- .claude/settings.json is a /nix/store symlink written on devenv shell entry, gitignored, never written under the sandbox-stack topology, and the user-level settings carry no backstop -- is a universal description that could split into its own mechanism, along with 'any future guard delivered as a project hook inherits this'. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

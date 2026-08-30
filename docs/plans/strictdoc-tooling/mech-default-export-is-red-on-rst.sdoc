@@ -4,7 +4,7 @@ TITLE: The default export format fails on this corpus, so only --formats=json is
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-DEFAULT-EXPORT-IS-RED-ON-RST
 TITLE: The default export format fails on this corpus, so only --formats=json is ever green
 DEPTH: sketch
@@ -59,6 +59,8 @@ The requirement it implies is separate and is tracked as
 MECH-HTML-RENDER-MUST-PASS: whatever the fix, either repair the prose or make it
 error loudly, but the operator does not want this to become a blocker on work
 that has nothing to do with HTML.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: 'an asterisk that opens emphasis needs a closing asterisk that ENDS a word, and a glob never supplies one' (docutils behaviour, universal) and 'Every documented loop in this repository passes --formats=json ... so the RST writer never runs and the breakage is invisible' (repo mechanism); the NOTES' operator ruling (tech debt, LOW priority) is a decision. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

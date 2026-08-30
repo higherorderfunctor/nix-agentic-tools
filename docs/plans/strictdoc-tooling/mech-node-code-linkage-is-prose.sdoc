@@ -4,7 +4,7 @@ TITLE: The link between a node and its code is prose in both directions, and unc
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-NODE-CODE-LINKAGE-IS-PROSE
 TITLE: The link between a node and its code is prose in both directions, and unchecked in both
 DEPTH: sketch
@@ -19,6 +19,8 @@ NOTES: >>>
 Measured 2026-08-27. `MECH-PLAN-REFS-CHECK` puts the source-annotation arm explicitly out of scope with a reason — strictdoc_config.py sets no source root and `@relation` comments never reach the JSON export — so this is unowned rather than deferred. `MECH-TESTS-AS-CONTRACT` scopes its verified requirement to flows deliberately, noting that the same rule applied to every node would invalidate both then-verified nodes on the day it landed; the same corpus-first order applies here. Not decided here: whether the 61 existing citations are remediated or grandfathered until the extractor lands.
 
 Absorbs the proposed `MECH-ANNOTATION-TARGET-DURABILITY` and `MECH-NODE-TO-CODE-EDGE-COVERAGE`.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: The closing sentence names two mechanisms wanted, one of them a requirement to be written: 'require a File edge to the implementing file or check at implemented', plus a lint of source-comment citations against the UID-to-file map. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

@@ -4,7 +4,7 @@ TITLE: An agent rewriting a human-authored statement leaves the key on words the
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-AUTHORED-BY-REWRITE-DRIFT
 TITLE: An agent rewriting a human-authored statement leaves the key on words the operator did not write
 DEPTH: sketch
@@ -17,6 +17,8 @@ Which shape applies depends on whether the key claims the words or the origin of
 <<<
 NOTES: >>>
 Measured 2026-08-27 by replaying `git log --reverse -- '*.sdoc'` and diffing each node's STATEMENT between consecutive revisions; the same walk detects the 26 llm-node rewrites, so a zero for human nodes would have been a real absence. The guard `MECH-AUTHORED-BY-GUARD` builds sees this case and passes it: it classifies by what the baseline said about the key, and the key did not move.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with high confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: The opening sentence ('MECH-AUTHORED-BY-GUARD watches the human value appearing on a node. Nothing watches the statement underneath an existing human value changing') describes the guard's behaviour universally and is a small MECHANISM fragment; it frames the measurement rather than displacing it. The heuristic's 'guard' hits are all UID names and its 'forbid' is one of the three options. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

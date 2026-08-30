@@ -4,7 +4,7 @@ TITLE: A node whose inputs changed should go dirty rather than quietly stale
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[REQUIREMENT]
 UID: MECH-DIRTY-EDGE-ON-OPTION-CHANGE
 TITLE: A node whose inputs changed should go dirty rather than quietly stale
 DEPTH: sketch
@@ -24,6 +24,9 @@ RATIONALE: >>>
 This is the point of the dirty-edge idea in the operator's semantics rather
 than an incidental feature: staleness that announces itself is the difference
 between a graph that decays and one that asks to be repaired.
+<<<
+NOTES: >>>
+Retyped from MECHANISM to REQUIREMENT on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it can be violated: a counterexample would be fixed in the world, not in this node. Noted for a later split: 'The fingerprint machinery already does this for node-to-node contracts. What it does not cover is a relation pointing at a file, which today resolves to a path that nothing checks for existence, let alone for change.' -- a description of the existing mechanism and its gap; 'Scope this where the behaviour model lands' is WORK. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

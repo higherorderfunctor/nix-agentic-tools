@@ -4,7 +4,7 @@ TITLE: The Python side hand-copies every vocabulary and every walk, and the copi
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-SDOC-VOCABULARY-SINGLE-SOURCE
 TITLE: The Python side hand-copies every vocabulary and every walk, and the copies are about to disagree
 DEPTH: sketch
@@ -19,6 +19,8 @@ NOTES: >>>
 Measured 2026-08-27 against a clean export of 144 nodes. `MECH-READINESS-PREDICATE-RECONCILE`'s NOTES logs the three discovery walks and says they are out of scope there and logged separately; this is that node, widened to the three constants and the two parsers, because the fix is one import in each of two directories and splitting it into three nodes would produce three edits to the same two files. The revocation divergence was confirmed by running both parser forms over the exact string `MECH-SIGNATURE-REVOCATION` specifies.
 
 Absorbs the proposed `MECH-NODE-DISCOVERY-SINGLE-SOURCE`, `MECH-FP-VOCABULARY-DUPLICATED` and `MECH-STATE-VOCABULARY-FROM-GRAMMAR`.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: Design sentence: "Fold all five into the shared module MECH-READINESS-PREDICATE-RECONCILE creates, deriving the vocabularies from the generated grammar rather than restating them." A reader could weigh the Backlogged_In work item as the centre and keep it MECHANISM; the RATIONALE's predicted divergences are descriptive of scheduled changes, not rules. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

@@ -4,7 +4,7 @@ TITLE: Milestone two's semantics sit in the tool, which is the wrong layer
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-MILESTONE-TWO-SEMANTICS-MISPLACED
 TITLE: Milestone two's semantics sit in the tool, which is the wrong layer
 DEPTH: sketch
@@ -73,6 +73,8 @@ the operator authored, and neither could be marked as theirs, because the tool
 has no flag for it. The refusal is behaving exactly as designed and the design
 is in the wrong layer -- the correct fix is not an override flag, it is that
 authorship authority is an L3 rule the tool consumes rather than one it holds.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: NOTES carry a universal heuristic ('ask whether the grammar could change the answer: if yes it is derived; if fixed in the script it is semantics') and a rule sentence ('authorship authority is an L3 rule the tool consumes rather than one it holds'). The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

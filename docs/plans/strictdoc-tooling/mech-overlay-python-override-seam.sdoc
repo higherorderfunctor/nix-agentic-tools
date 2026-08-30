@@ -4,7 +4,7 @@ TITLE: Record overridePythonAttrs as the third override seam in the overlay frag
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-OVERLAY-PYTHON-OVERRIDE-SEAM
 TITLE: Record overridePythonAttrs as the third override seam in the overlay fragment
 DEPTH: sketch
@@ -46,6 +46,8 @@ a plain attrset extension of upstream's flake package
 (MECH-STRICTDOC-UPSTREAM-FLAKE). overlays/git-tools/git-revise.nix is still the
 example, the gap in dev/fragments/overlays/overlay-pattern.md is unchanged, and
 #1267 is still the tracker -- the finding lost a citation, not its subject.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: 'overridePythonAttrs is the correct seam for a buildPythonPackage ... buildPythonPackage consumes dependencies and pythonRelaxDeps as arguments, so overrideAttrs lands them as dead attrs' -- a universal mechanism of nixpkgs, and a convention sentence the fragment's existing INPUT-versus-OUTPUT rule already governs. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

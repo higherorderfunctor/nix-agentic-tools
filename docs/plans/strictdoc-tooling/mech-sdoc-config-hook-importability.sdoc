@@ -4,7 +4,7 @@ TITLE: strictdoc_config.py must put itself on sys.path before defining a hook cl
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-SDOC-CONFIG-HOOK-IMPORTABILITY
 TITLE: strictdoc_config.py must put itself on sys.path before defining a hook class
 DEPTH: sketch
@@ -28,6 +28,9 @@ Measured by SPIKE-EXECUTABLE-RULES. Any plugin or Format-seam guard is dead on
 arrival without it, and the failure presents as a crash in a worker rather than
 as a config error. The upstream fix is the same line moved into the tool, so a
 version bump is a convenience here, not a capability.
+<<<
+NOTES: >>>
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: Title "must put itself on sys.path before defining a hook class" and "Put the line in the config and in the skill's gotcha list" read as a rule / work instruction but are a version-bound workaround. A reader could sort the crash description (helpers/module.py loads by path without touching sys.path; forkserver workers unpickle the hook) as a mechanism of 0.27.1. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

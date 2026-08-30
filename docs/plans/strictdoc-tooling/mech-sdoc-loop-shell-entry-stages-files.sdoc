@@ -4,7 +4,7 @@ TITLE: devenv shell -- strictdoc runs the enterTest DAG and stages the working t
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-SDOC-LOOP-SHELL-ENTRY-STAGES-FILES
 TITLE: devenv shell -- strictdoc runs the enterTest DAG and stages the working tree
 DEPTH: sketch
@@ -30,6 +30,9 @@ RATIONALE: >>>
 Hit while running the loop for the grammar-write wiring. Recorded because the
 skill names the two commands and says nothing about how to reach them from a
 worktree, which is the only place work happens here.
+<<<
+NOTES: >>>
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: "Fix shape: reach the binary rather than the environment ... so the validation loop never depends on entering a shell" is a mechanism sketch (the heuristic's "never" hit is a design goal, not a rule). A reader could read "that form runs devenv:enterTest first" as how devenv always behaves and keep it MECHANISM. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

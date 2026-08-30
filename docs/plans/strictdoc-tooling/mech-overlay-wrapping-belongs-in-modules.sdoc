@@ -4,7 +4,7 @@ TITLE: Move package wrapping out of overlays and into modules, repo-wide
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[REQUIREMENT]
 UID: MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES
 TITLE: Move package wrapping out of overlays and into modules, repo-wide
 DEPTH: sketch
@@ -30,6 +30,9 @@ RATIONALE: >>>
 Overlays that wrap are the reason a consumer cannot take the package plainly,
 and the reason an agent reading the tree infers the wrong convention from the
 nearest example. Both showed up during milestone one.
+<<<
+NOTES: >>>
+Retyped from MECHANISM to REQUIREMENT on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it can be violated: a counterexample would be fixed in the world, not in this node. Noted for a later split: The sweep ('list what wraps rather than converts, and move each into its module', HITL at the point of sweeping) is work, and the open question about whether devenv and home-manager modules can share one wrapped derivation is a design question. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

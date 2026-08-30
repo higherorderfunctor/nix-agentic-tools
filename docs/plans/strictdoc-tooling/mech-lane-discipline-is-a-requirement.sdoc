@@ -4,7 +4,7 @@ TITLE: Stay in your lane is two requirements, and the Crosses edge is the lane
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[REQUIREMENT]
 UID: MECH-LANE-DISCIPLINE-IS-A-REQUIREMENT
 TITLE: Stay in your lane is two requirements, and the Crosses edge is the lane
 DEPTH: sketch
@@ -49,6 +49,8 @@ was accepted as DEC-SLICE-DECOMPOSES-TO-WORK, so the alternative it recorded as
 still live -- leaving the discipline a fuzzy concept until a forcing function
 appeared -- is no longer. What remains here is the pair of rules themselves,
 awaiting the vocabulary that can express them.
+
+Retyped from MECHANISM to REQUIREMENT on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with high confidence after a second opinion: it can be violated: a counterexample would be fixed in the world, not in this node. Noted for a later split: It is TWO rules, so a split yields two REQUIREMENT nodes. The 'PROPOSED, and not ruled: SLICE does not survive as a type' paragraph is a design proposal since ruled as DEC-SLICE-DECOMPOSES-TO-WORK, and 'NO FORCING FUNCTION TODAY. Nothing checks lane discipline' is a descriptive state note; neither is the centre. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

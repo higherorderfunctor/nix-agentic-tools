@@ -4,7 +4,7 @@ TITLE: The m4 work node claims a registered plugin and a diff-less tool; both ar
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-M4-CLAIMS-REFUTED-AGAINST-THE-TREE
 TITLE: The m4 work node claims a registered plugin and a diff-less tool; both are false
 DEPTH: sketch
@@ -23,6 +23,9 @@ hook, once registered, fires inside every scribe load -- twice per write,
 three times per `new` -- and cannot tell a pre-write load from a post-write
 verify. The work node's statement is to be corrected when it is rewritten for
 the hook layer, not patched here.
+<<<
+NOTES: >>>
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with high confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: One universal behaviour sentence a later pass could lift to a MECHANISM: 'the plugin hook, once registered, fires inside every scribe load -- twice per write, three times per new -- and cannot tell a pre-write load from a post-write verify'. 'The work node's statement is to be corrected when it is rewritten' is a work note. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent
