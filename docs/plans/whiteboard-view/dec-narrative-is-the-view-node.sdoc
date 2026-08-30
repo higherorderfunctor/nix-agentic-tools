@@ -1,0 +1,59 @@
+[DOCUMENT]
+TITLE: A view is a tree of narratives: rows in a statement, Cites for what it presents, Contains for its parts
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-NARRATIVE-IS-THE-VIEW-NODE
+TITLE: A view is a tree of narratives: rows in a statement, Cites for what it presents, Contains for its parts
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A view needs a unit smaller than a narrative that must be addressable by UID, and promoting the row to its own narrative proves too costly in practice.
+STATEMENT: >>>
+A rendered view is a tree of NARRATIVE nodes and nothing else.
+
+THE ROOT is a narrative nothing Contains. Its children, in the order its
+RELATIONS block lists them, are the view's tabs; a tab's children are its
+sections; a section's children are cards. Contains is a Child relation
+written on the container, so the parts stay untouched, order lives in one
+place, and a narrative is never a dependency of anything.
+
+A LINE of the view is a ROW inside a narrative whose WIDGET is rows: a "- "
+item in the STATEMENT, optionally ending in a bracket "[WORD]" or
+"[WORD: by]" whose word comes from the root's legend. A row is not a node.
+It is promoted to a narrative of its own by hand when it needs an identity
+-- to be cited, fingerprinted, or contained elsewhere -- and not before.
+
+WHAT A NARRATIVE PRESENTS it Cites: a Parent relation, written on the
+narrative, to each node whose wording it depends on, with a PARENT_FP entry
+per citation so the edge goes dirty when the cited node changes. A narrative
+that is rewritten to present different nodes changes its own edges; the
+presented nodes never change. Links inside prose are strictdoc's own
+inline link token (LINK, in square brackets, then the UID), in a STATEMENT and never in a TITLE, so a dangling one
+refuses the export.
+
+WHERE A NARRATIVE LIVES is where what it cites lives: Cites is a Parent
+relation, so INV-NO-EXTERNAL-PLAN-REFS forbids one into another plan. A view
+over a plan sits in that plan's directory and is collected with it; a view
+over the spec is durable; a view that must mention another plan's nodes does
+so with inline links only.
+
+A narrative carries DEPTH and PARENT_FP like the claim types, so readiness,
+signing and the fingerprint check need no special case; DEPTH on a narrative
+reads sketch for a draft and interface-settled once the operator has read it
+and let it stand.
+<<<
+RATIONALE: >>>
+Three designs were judged against the operator's priorities and a skeptic's
+attack on 2026-08-30. Lines as nodes (one file per line) was rejected as the
+five-times-effort design; lines as rows carries the existing whiteboard
+verbatim and keeps the file count at one per screen. Child on the container
+was chosen over Parent on each part because the export preserves RELATIONS
+order, so no ORDER counter exists anywhere, and because nothing then depends
+on a narrative. Parent for citation was chosen because a fingerprint must be
+backed by a Parent relation on the node that carries it.
+<<<
+NOTES: >>>
+Ruled 2026-08-30 as a first-pass decision under the operator's delegation of that day ("I'll trust you to take first pass at making decisions"); overrule by superseding. AUTHORED_BY reads llm because the writer has no flag for the human rungs. The strictdoc measurements this rests on: RELATIONS order is preserved in the JSON export; a Child written on A registers a derived parent link on the target in strictdoc's own index (harmless within one plan); an inline link inside a multiline field is resolved and refused if dangling, while one inside TITLE is inert text.
+<<<

@@ -1,0 +1,35 @@
+[DOCUMENT]
+TITLE: Each ruled term is a narrative in the spec that cites its ruling, and every narrative that uses the term cites it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-TERMS-ARE-NARRATIVES
+TITLE: Each ruled term is a narrative in the spec that cites its ruling, and every narrative that uses the term cites it
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A term needs fields a narrative cannot carry, or the per-term files prove too many to keep.
+STATEMENT: >>>
+Every ruled term of the glossary -- joint, checkpoint, scribe, sdoc,
+strictdoc, canon, beads -- is one NARRATIVE in docs/spec/, TAGS term, whose
+TITLE is the word and whose STATEMENT is its ruled meaning. It Cites the
+DECISION that ruled it, with a PARENT_FP entry, so a changed ruling dirties
+the term. The three glossary rulings move to docs/spec/ with it, because the
+vocabulary outlives any plan and a term in the spec may not depend into a
+plan.
+
+Any narrative that uses a term Cites the term narrative, with a PARENT_FP
+entry, so choosing a different word -- retitling the term -- dirties every
+narrative that used it, at the granularity of the narrative that carries the
+edge. The glossary a view shows is a narrative whose WIDGET is glossary and
+which Contains the terms.
+<<<
+RATIONALE: >>>
+The operator asked for the glossary to take advantage of dirty edges when
+they choose a different word. A term that is only a row in a glossary
+cannot be cited, so nothing could depend on it; a term that is a node can.
+<<<
+NOTES: >>>
+Ruled 2026-08-30 as a first-pass decision under the operator's delegation of that day ("I'll trust you to take first pass at making decisions"); overrule by superseding. AUTHORED_BY reads llm because the writer has no flag for the human rungs. The skill's glossary table and the README stay as projections of these nodes (INV-SETTLED-STAYS-VISIBLE); generating the table from the nodes is MECH-SDOC-VOCABULARY-SINGLE-SOURCE's, still open.
+<<<

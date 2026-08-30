@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: No node outside the representation family may carry a Parent relation to a narrative
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-NOTHING-DEPENDS-ON-A-NARRATIVE
+TITLE: No node outside the representation family may carry a Parent relation to a narrative
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+A narrative presents; it is never presented. No REQUIREMENT, DECISION,
+MECHANISM, EVIDENCE, USE_CASE or WORK may carry a Parent relation -- of any
+role -- or a PARENT_FP entry to a NARRATIVE. A narrative may Cites anything
+and Contains only narratives. This keeps every narrative a pure sink:
+outside every readiness closure, never signed against, never able to close
+a cycle, and collectable with its plan without stranding a fingerprint.
+<<<
+RATIONALE: >>>
+The grammar cannot say it -- roles are registered on the source, and the target's type is never checked -- so it is a rule for the relation-target lint when that is built and for the view check until then.
+<<<
+NOTES: >>>
+Nothing enforces this yet; MECH-VIEW-CHECK covers it for narratives in the trees it walks, and MECH-RELATION-TARGET-TYPE-LINT would cover the corpus.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NARRATIVE-IS-THE-VIEW-NODE
+  ROLE: Governed_By

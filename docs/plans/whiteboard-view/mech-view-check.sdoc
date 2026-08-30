@@ -1,0 +1,34 @@
+[DOCUMENT]
+TITLE: The view check: the rules a tree of narratives must satisfy that strictdoc does not check
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-VIEW-CHECK
+TITLE: The view check: the rules a tree of narratives must satisfy that strictdoc does not check
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+view-check.py --root UID walks the tree and reports, count first, exit 1
+on any finding: Contains forms a tree (each narrative contained at most
+once, no cycle -- strictdoc exits 0 on one); a Contains target is a
+NARRATIVE; every row bracket word is in the root's legend; a narrative's
+WIDGET agrees with its STATEMENT (rows has "- " items, glossary rows split
+on the first ": ", legend rows on two, table rows on pipes); a cited node
+is not superseded (a query, per DEC-SUPERSESSION-RULE); no node outside the
+representation family points a Parent at a narrative in the tree. What
+strictdoc already refuses -- a dangling Cites, a dangling inline link, an
+unregistered role, a field out of order -- is not repeated here. Its
+findings are also embedded in the payload so the page lists them.
+<<<
+RATIONALE: >>>
+These are semantic-layer rules in a script (DEC-LAYER-STACK). They are allowed there for now on the operator's ruling that validation need not be modelled on joints yet, provided each is INDEXED -- which NAR-WHITEBOARD-VIEW-RULES does, so the porting inventory is a screen of the view.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NARRATIVE-IS-THE-VIEW-NODE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: REQ-NOTHING-DEPENDS-ON-A-NARRATIVE
+  ROLE: Guarantees

@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: canon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-TERM-CANON
+TITLE: canon
+DEPTH: interface-settled
+AUTHORED_BY: llm
+WIDGET: prose
+TAGS: term
+STATEMENT: >>>
+The committed, human-reviewed .sdoc contents. Never "graph": beads is also a graph, so the word distinguished nothing.
+
+Ruled by [LINK: DEC-CANON-NAMES-THE-COMMITTED-CONTENTS].
+<<<
+PARENT_FP: DEC-CANON-NAMES-THE-COMMITTED-CONTENTS:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-CANON-NAMES-THE-COMMITTED-CONTENTS
+  ROLE: Cites

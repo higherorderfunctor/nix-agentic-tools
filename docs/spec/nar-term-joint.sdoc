@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: joint
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-TERM-JOINT
+TITLE: joint
+DEPTH: interface-settled
+AUTHORED_BY: llm
+WIDGET: prose
+TAGS: term
+STATEMENT: >>>
+A join point: a place logic could attach. Never "surface", which the option and grammar surfaces already own. The aspect-oriented split holds: a joint is where, a pointcut is which, advice is what, and advice is never the hook layer's.
+
+Ruled by [LINK: DEC-JOINT-NOT-SURFACE].
+<<<
+PARENT_FP: DEC-JOINT-NOT-SURFACE:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-JOINT-NOT-SURFACE
+  ROLE: Cites

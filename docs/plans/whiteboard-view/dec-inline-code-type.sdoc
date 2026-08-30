@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: Whether code samples, diagrams and other maintained projections join the representation family as types of their own
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-INLINE-CODE-TYPE
+TITLE: Whether code samples, diagrams and other maintained projections join the representation family as types of their own
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: A second kind of maintained projection is needed -- a code sample, a diagram, a generated reference -- and must be kept honest against the canon.
+STATEMENT: >>>
+The representation family has one member, NARRATIVE. The handoff model names
+others: a code sample held in a node so the contract hash catches it going
+stale, a diagram, a configuration snippet. Each would be a new element with
+its own WIDGET-like field. Whether they are types of their own or narratives
+with a widget is open; nothing needs them yet.
+<<<
+RATIONALE: >>>
+A code sample held in the canon is a second copy of code the repository also holds, which is the drift this repo has been bitten by before; that cost is weighed when the need is real, not before.
+<<<
+NOTES: >>>
+Opened 2026-08-30 from the reconciliation of the handoff model with the canon.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-WHITEBOARD-VIEW
+  ROLE: Backlogged_In
