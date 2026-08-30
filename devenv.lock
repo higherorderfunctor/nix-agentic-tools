@@ -248,11 +248,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1785627969,
-        "narHash": "sha256-4dtXQk/NMePegK/nWp5NSeuZKLATItOq61lpEvmXqGw=",
+        "lastModified": 1787559586,
+        "narHash": "sha256-onL0VLf9vPllmT0H/OlURIU5r5t5WIEl7t4tVNKT0Nw=",
         "owner": "hercules-ci",
         "repo": "flake-parts",
-        "rev": "427bf4bd9435fdf21321c8cc628c24efc14c0f7a",
+        "rev": "9d0d87172c374f89da73c1cfe6d81ae62feac1f1",
         "type": "github"
       },
       "original": {
@@ -544,17 +544,17 @@
         "treefmt-nix": "treefmt-nix_3"
       },
       "locked": {
-        "lastModified": 1787902664,
-        "narHash": "sha256-VOzpaf8Si/c7B5xXwxZi+i34LKoDaMgPNZbSMZkpXP4=",
+        "lastModified": 1788093475,
+        "narHash": "sha256-nrtqnBKhZHcXn4jdEQEbm8yM4gE0TIk/8KOq7AtPDNE=",
         "owner": "Mic92",
         "repo": "nix-fast-build",
-        "rev": "a7217fc192e2cbb3ee6809b1a00604b24ac12152",
+        "rev": "6d2dd14d2b7ae436c3f1c7f96e932b2dda738973",
         "type": "github"
       },
       "original": {
         "owner": "Mic92",
         "repo": "nix-fast-build",
-        "rev": "a7217fc192e2cbb3ee6809b1a00604b24ac12152",
+        "rev": "6d2dd14d2b7ae436c3f1c7f96e932b2dda738973",
         "type": "github"
       }
     },
