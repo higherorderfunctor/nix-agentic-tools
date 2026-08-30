@@ -10,10 +10,11 @@ TITLE: Semantics still live in tools with no owner
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: prose
+PLACE: screen
 STATEMENT: >>>
 The readiness predicate, the fingerprint ripple, the signing gate, the plan-reference check and the layout rules are all semantic-layer rules written in Python. The node that records the misplacement has its judgement deliberately pending and no work node. And the lane rule — the one thing the ruling that decomposed SLICE into work ([LINK: DEC-SLICE-DECOMPOSES-TO-WORK]) gained — has no layer information to check against.
 
-Nodes it touches: [LINK: DEC-LAYER-STACK], [LINK: MECH-MILESTONE-TWO-SEMANTICS-MISPLACED], [LINK: MECH-READY-QUERY], [LINK: MECH-FP-ACCEPT-READINESS], [LINK: MECH-PLAN-REFS-CHECK], [LINK: MECH-SDOC-LAYOUT-CHECK], [LINK: MECH-SDOC-VOCABULARY-SINGLE-SOURCE], [LINK: DEC-DEFER-LAYER] and [LINK: DEC-SLICE-DECOMPOSES-TO-WORK].
+> Semantics still live in tools with no owner: readiness predicate, fp-check ripple, fp-accept gate, MECH-PLAN-REFS-CHECK and the layout rules are all L3 rules in Python (MECH-MILESTONE-TWO-SEMANTICS-MISPLACED pending, no WORK node), and DEC-DEFER-LAYER leaves the lane rule -- the one thing DEC-SLICE-DECOMPOSES-TO-WORK gained -- with no LAYER input to check against.
 <<<
 PARENT_FP: >>>
 DEC-DEFER-LAYER:0000000

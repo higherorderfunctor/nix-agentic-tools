@@ -250,57 +250,125 @@ in {
       '';
     };
 
-    # ── The whiteboard view (MECH-VIEW-TASK) ─────────────────────────
+    # ── The whiteboard view (MECH-VIEW-TASK, MECH-VIEW-SERVE) ────────
     #
-    # Renders one root narrative: strictdoc export into a CLEAN directory
-    # (an incremental export can exit 0 on a broken input -- see the sdoc
-    # skill), then view-check, wireline and render from docs/sdoc/view/.
-    # The page and the payload land under output/view/, which is gitignored:
-    # the canon is the source and the page is regenerable.
+    # Renders the canon: strictdoc export into a CLEAN directory (an
+    # incremental export can exit 0 on a broken input -- see the sdoc
+    # skill), then view-check per root, wireline and render from
+    # docs/sdoc/view/. The page and the payload land under output/view/,
+    # which is gitignored: the canon is the source and the page is
+    # regenerable.
     #
-    # The root comes in through devenv's task-input channel, because
-    # `devenv tasks run` accepts no `--` passthrough (measured 2026-08-30:
-    # a `-- --root X` is read as a task named `--root`):
+    # With no input every root renders into ONE page
+    # (REQ-ONE-PAGE-RENDERS-THE-WHOLE-CANON), written twice from one
+    # payload: canon.html is the full document that opens from disk or from
+    # view:serve, and canon.artifact.html is the same content in the
+    # artifact host's shape -- no doctype/html/head/body, since the host
+    # wraps those. The two differ only in the wrapper bytes
+    # (REQ-VIEW-SERVES-LOCALLY-AND-AS-AN-ARTIFACT). A root narrows the
+    # render to that one root, for iterating on a view; it travels through
+    # devenv's task-input channel, because `devenv tasks run` accepts no
+    # `--` passthrough (measured 2026-08-30: a `-- --root X` is read as a
+    # task named `--root`):
     #
+    #   devenv tasks run --mode before view:render
     #   devenv tasks run --mode before view:render --input root=NAR-SEMANTIC-LAYER
     #
-    # A view-check FINDING (exit 1) does not stop the render: the findings
-    # are embedded in the payload and listed on the start screen, which is
-    # where a reader is meant to see them. A bad root (exit 2) does.
+    # A root is a NARRATIVE nothing Contains; the list is read off the
+    # export, so a fourth view appears by being written. A view-check
+    # FINDING (exit 1) does not stop the render: the findings are embedded
+    # in the payload and listed on the start screen, which is where a
+    # reader is meant to see them. A bad root (exit 2) does.
     #
     # PYTHONPATH and STRICTDOC_CACHE_DIR are unset for the same reason the
     # sdoc skill's recipes unset them: a shell-level PYTHONPATH shadows the
     # interpreter under test, and the cache dir would redirect the export.
     "view:render" = {
-      description = "Render one root narrative: export, view-check, wireline, render";
+      description = "Render the canon (or one root): export, view-check, wireline, render";
       exec = ''
         ${bashPreamble}
         ${log}
         cd "$DEVENV_ROOT"
         root=$(printf '%s' "''${DEVENV_TASK_INPUT:-null}" | jq -r '.root // empty')
-        if [ -z "$root" ]; then
-          echo "view:render: no root. Run: devenv tasks run --mode before view:render --input root=UID" >&2
-          exit 2
-        fi
         view=docs/sdoc/view
         out=output/view
         export_dir="$out/export"
         rm -rf "$export_dir"
         mkdir -p "$out"
-        slug=$(printf '%s' "$root" | tr '[:upper:]' '[:lower:]')
         log "Exporting the canon into $export_dir"
         env -u PYTHONPATH -u STRICTDOC_CACHE_DIR strictdoc export . --formats=json --output-dir "$export_dir" >/dev/null
         index="$export_dir/json/index.json"
-        log "Checking the tree under $root"
-        rc=0
-        # To stderr: devenv shows a task's stderr in its summary and hides stdout.
-        env -u PYTHONPATH python3 "$view/view-check.py" "$index" . --root "$root" >&2 || rc=$?
-        if [ "$rc" -gt 1 ]; then exit "$rc"; fi
-        log "Writing the payload and the page"
-        env -u PYTHONPATH python3 "$view/wireline.py" "$index" . --root "$root" --out "$out/$slug.json"
-        env -u PYTHONPATH python3 "$view/render.py" "$out/$slug.json" "$view/template.html" --out "$out/$slug.html" >/dev/null
-        log "wrote $out/$slug.html"
-        log "wrote $out/$slug.json"
+        if [ -n "$root" ]; then
+          roots="$root"
+          stem=$(printf '%s' "$root" | tr '[:upper:]' '[:lower:]')
+          scope=(--root "$root")
+        else
+          # Every NARRATIVE with no incoming Contains. Sorted only so the
+          # check order is stable; the wireline orders the roots itself.
+          roots=$(jq -r '
+            [.. | objects | select(._NODE_TYPE? == "NARRATIVE")] as $n
+            | [$n[] | .RELATIONS[]? | select(.ROLE == "Contains") | .VALUE] as $held
+            | [$n[] | .UID | select(. as $u | any($held[]; . == $u) | not)]
+            | sort[]' "$index")
+          if [ -z "$roots" ]; then
+            echo "view:render: the export holds no root narrative" >&2
+            exit 2
+          fi
+          stem=canon
+          scope=(--all-roots)
+        fi
+        # Word-split on purpose: one UID per line, and a UID holds no blanks.
+        for r in $roots; do
+          log "Checking the tree under $r"
+          rc=0
+          # To stderr: devenv shows a task's stderr in its summary and hides stdout.
+          env -u PYTHONPATH python3 "$view/view-check.py" "$index" . --root "$r" >&2 || rc=$?
+          if [ "$rc" -gt 1 ]; then exit "$rc"; fi
+        done
+        payload="$out/$stem.json"
+        log "Writing the payload"
+        env -u PYTHONPATH python3 "$view/wireline.py" "$index" . "''${scope[@]}" --out "$payload"
+        render() {
+          env -u PYTHONPATH python3 "$view/render.py" "$payload" "$view/template.html" --wrap "$1" --out "$2" >/dev/null
+          log "wrote $2"
+        }
+        render page "$out/$stem.html"
+        render artifact "$out/$stem.artifact.html"
+        log "wrote $payload"
+      '';
+    };
+
+    # Serves output/view on loopback so the page is reachable by URL, which
+    # is what a browser needs for hash routes to survive a reload and what
+    # a screenshot tool wants; the page itself is self-contained (no fetch,
+    # fonts with fallbacks, the payload inlined), so file://output/view/
+    # canon.html works without this. The port comes in through the same
+    # task-input channel as view:render's root:
+    #
+    #   devenv tasks run view:serve
+    #   devenv tasks run view:serve --input port=8080
+    #
+    # Foreground on purpose: Ctrl-C stops it. python3 is already in the
+    # shell for the pipeline, and http.server is in its standard library.
+    "view:serve" = {
+      description = "Serve output/view on 127.0.0.1 (input port, default 8765)";
+      exec = ''
+        ${bashPreamble}
+        ${log}
+        cd "$DEVENV_ROOT"
+        port=$(printf '%s' "''${DEVENV_TASK_INPUT:-null}" | jq -r '.port // 8765')
+        dir=output/view
+        if [ ! -d "$dir" ]; then
+          echo "view:serve: no $dir. Run: devenv tasks run --mode before view:render" >&2
+          exit 2
+        fi
+        if [ ! -f "$dir/canon.html" ]; then
+          log "no $dir/canon.html yet (single-root renders only); run: devenv tasks run --mode before view:render"
+        fi
+        url="http://127.0.0.1:$port/canon.html"
+        log "Serving $dir at $url (Ctrl-C stops it)"
+        echo "$url"
+        exec env -u PYTHONPATH python3 -m http.server --bind 127.0.0.1 --directory "$dir" "$port"
       '';
     };
 

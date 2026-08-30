@@ -11,6 +11,7 @@ DEPTH: interface-settled
 AUTHORED_BY: llm
 WIDGET: table
 PLACE: card
+TAGS: systems
 STATEMENT: >>>
 | system | types | roles | meaning |
 | canon | REQUIREMENT, DECISION, MECHANISM, EVIDENCE, USE_CASE | Governed_By, Guarantees, Serialized_By, Proven_By, Assumes, Superseded_By, Covered_By, Backlogged_In | the claims the canon asserts |

@@ -10,6 +10,7 @@ TITLE: narrative
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: prose
+PLACE: screen
 TAGS: NARRATIVE
 STATEMENT: >>>
 A maintained projection for a reader: it presents parts of the canon, start to finish, and depends on their wording.

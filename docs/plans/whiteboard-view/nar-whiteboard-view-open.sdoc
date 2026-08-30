@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: The open questions
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-WHITEBOARD-VIEW-OPEN
+TITLE: The open questions
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+PLACE: screen
+STATEMENT: >>>
+The decisions still open that shape what the view will show. Each row is one; its word is the node's own STATUS on the day of the render.
+
+- What DEPTH means on a WORK node: design maturity, delivery, or nothing once execution state lives in beads. Until it closes, a WORK node's DEPTH reads as the migration left it.
+[LINK: DEC-WORK-STATE-FIELD] [OPEN]
+- Whether code samples, diagrams and other maintained projections become types of their own or stay narratives with a widget. Nothing needs them yet.
+[LINK: DEC-INLINE-CODE-TYPE] [OPEN]
+- Whether the six non-narrative types gain TAGS so a node can name a system by hand -- a tooling mechanism that is really part of the future beads engine. Open until the beads import makes the need concrete.
+[LINK: DEC-SYSTEM-TAG-ON-EVERY-ELEMENT] [OPEN]
+<<<
+PARENT_FP: >>>
+DEC-INLINE-CODE-TYPE:0000000
+DEC-SYSTEM-TAG-ON-EVERY-ELEMENT:0000000
+DEC-WORK-STATE-FIELD:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-WORK-STATE-FIELD
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-INLINE-CODE-TYPE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-TAG-ON-EVERY-ELEMENT
+  ROLE: Cites

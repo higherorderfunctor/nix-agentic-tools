@@ -334,6 +334,29 @@ graph already says whether it is ready.
 The previous session's L2 brief is superseded by the snapshot it produced
 (`MECH-HOOK-MIDDLEWARE-INTERFACE`); do not redo it.
 
+### A side session in another agent (Codex, or any agent that reads AGENTS.md)
+
+`AGENTS.md` knows nothing about this branch, so hand the bootstrap over in the
+prompt. Give the session its own worktree first:
+
+```bash
+git worktree add -b feat/<slug> "$worktrees/<slug>" feat/strictdoc-trial
+```
+
+Then, in the prompt: read this file, the `sdoc` skill
+(`dev/skills/sdoc/SKILL.md`: types, roles and their direction, the glossary, the
+hard rules, the parser gotchas), `docs/sdoc/grammar.sgra`, and the rulings in
+`docs/spec/`. Read the canon through the export, never by parsing files; one
+node with its neighbours is `docs/sdoc/render.py --uid`; a whole view as JSON is
+`docs/sdoc/view/wireline.py <index.json> <worktree> --all-roots` (nodes, edges,
+backlinks, grammar, systems). The strictdoc and `sdoc` binaries live in this
+worktree's `.devenv/profile/bin/`; another worktree can call them by absolute
+path. The rules that bind every agent: write only your own plan directory,
+register first; never a Parent relation into another plan; never `fp-accept`,
+never a `PARENT_FP` hash, never `AUTHORED_BY`; supersede, never edit, an
+accepted decision. The whole canon is not meant to be in a session's context:
+`MECH-PARTIAL-VIEWS-FOR-A-BOUNDED-CONTEXT` is the gap.
+
 ### What a fresh session loads, and what it does not
 
 **Automatic:** `CLAUDE.md`, `AGENTS.md`, the `MEMORY.md` index, and every

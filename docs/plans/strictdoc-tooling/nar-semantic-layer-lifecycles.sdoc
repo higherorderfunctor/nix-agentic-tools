@@ -10,25 +10,58 @@ TITLE: How a node changes state
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: rows
+PLACE: screen
 STATEMENT: >>>
 Raising DEPTH, accepting and superseding decisions, readiness, deletion and the migration.
 
-- Who may raise DEPTH, and which steps are legal, is written nowhere. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM], [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT], [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [GAP]
-- A node that describes a flow — one of the operations the canon supports end to end, such as create, sign, check or ingest — reaches verified only when nix flake check carries a contract test for it plus a positive control, a case known to fail. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM] and [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. [WORKS]
-- A decision goes from open to accepted by a human, in conversation, with no gate. The semantic model has to be able to express a transition that nothing checks. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [WORKS]
-- Today that acceptance is written under the agent's key. Either the human writes the STATUS through scribe under their own key, or a semantic-layer rule has to allow an agent to write it on a human's behalf. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [GAP]
-- A decision has never been rejected. Who may reject one, what a rejected or superseded decision does to the readiness of work depending on it, and whether that answer is the same for every node type, is unwritten — as is whether a dirty edge blocks readiness or is only reported alongside it. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [GAP]
-- When a decision's retirement condition fires it becomes superseded — done twice so far, by hand. There is no mark for 'expired', no transition, and no rule about who may do it. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [GAP]
-- An accepted decision's statement is frozen. Enforcing that needs the old value at the moment before scribe writes — a hook-layer capability that is not built. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [GAP]
-- No gate reads a probe's STATUS — one probe is unrun yet counted settled. Under the pipeline reading the field dissolves: 'run' simply means an evidence node exists. See [LINK: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION] and [LINK: SPIKE-CONVERSION-SIGNAL]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE] and [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. [FALLS OUT: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION, run = an EVIDENCE node exists]
-- Raising AUTHORED_BY from llm to llm-accepted or llm-adopted is a human act with no place to happen: no verb, no joint. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [GAP]
-- 'Settled' means DEPTH at interface-settled or above, or a decision accepted. That predicate lives in a Python file today; under the layer stack it is a semantic-layer gate at the write and read joints. See [LINK: DEC-LAYER-STACK]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM] and [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]. [FALLS OUT: DEC-LAYER-STACK, an L3 gate at scribe.change pre and scribe.read]
-- Does the readiness walk stop at a settled node, or does an open decision far upstream block everything downstream? Today one piece of work is verified yet reads as blocked. See [LINK: DEC-CLOSURE-STOPS-AT-SETTLED] and [LINK: SLICE-SDOC-IN-SEMBLE]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [OPEN: DEC-CLOSURE-STOPS-AT-SETTLED]
-- The ready query reports, for a piece of work: its own state, the frontier (unsettled dependencies whose own dependencies are settled), hop distance, degrees of freedom (open decisions in its closure — the questions), and dirty edges. It advises; it does not block. See [LINK: MECH-READY-QUERY]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. [WORKS]
-- The walk itself stands; the table of what counts as settled is semantic-layer data and does not belong in the script. See [LINK: DEC-LAYER-STACK]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]. [FALLS OUT: DEC-LAYER-STACK]
-- 'Supersede, never delete' is the rule for now. Expressed in the model it is 'no class may delete' — a handler refusing before scribe deletes. See [LINK: DEC-NO-DELETES-YET]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [OPEN: DEC-NO-DELETES-YET]
-- Moving the canon onto the ruled types — three out, six in — is uncosted, has no work node, and waits on the plan-lifecycle decision. It must be done in one move, never half. See [LINK: DEC-PLAN-LIFECYCLE-OPEN]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT], [LINK: NAR-SEMANTIC-LAYER-TYPE-USE-CASE], [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE], [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-NARRATIVE]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY] and [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]. [GAP]
-- Four questions left over from the abandoned two-grammar sketch: a tier field versus nesting depth; whether 'ungroomed' is a tier or a type; whether RATIONALE stays optional on a decision; and a plan with no edge to its members. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [UNADDRESSED]
+- Who may raise DEPTH, and which steps are legal, is written nowhere.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM] [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT] [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE] [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> DEPTH raise: which identity class, which steps legal: blank in every node [GAP]
+- A node that describes a flow — one of the operations the canon supports end to end, such as create, sign, check or ingest — reaches verified only when nix flake check carries a contract test for it plus a positive control, a case known to fail.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM] [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]
+> verified gate: a flow's node reaches verified only with a contract test + positive control (a case known to fail) in nix flake check [WORKS]
+- A decision goes from open to accepted by a human, in conversation, with no gate. The semantic model has to be able to express a transition that nothing checks.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> DECISION open -> accepted: identity:human, in conversation, no gate; the model must express a gateless move [WORKS]
+- Today that acceptance is written under the agent's key. Either the human writes the STATUS through scribe under their own key, or a semantic-layer rule has to allow an agent to write it on a human's behalf.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> split: that write lands under the identity:llm key today; either identity:human writes STATUS via scribe under its own key, or an L3 class rule allows it [GAP]
+- A decision has never been rejected. Who may reject one, what a rejected or superseded decision does to the readiness of work depending on it, and whether that answer is the same for every node type, is unwritten — as is whether a dirty edge blocks readiness or is only reported alongside it.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]
+> DECISION open -> rejected: never observed; who, and what a rejected or superseded parent does to a closure; per-type cut; dirty edge inside ready or a side report [GAP]
+- When a decision's retirement condition fires it becomes superseded — done twice so far, by hand. There is no mark for 'expired', no transition, and no rule about who may do it.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]
+> DECISION -> superseded when RETIRES_ON fires (2x, by hand): no mark, no move, no class; "expired" must be materialized [GAP]
+- An accepted decision's statement is frozen. Enforcing that needs the old value at the moment before scribe writes — a hook-layer capability that is not built.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]
+> accepted STATEMENT frozen: needs the old value at scribe.change pre; that L2 (hook-machinery) enabler is unbuilt [GAP]
+- No gate reads a probe's STATUS — one probe is unrun yet counted settled. Under the pipeline reading the field dissolves: 'run' simply means an evidence node exists.
+[LINK: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION] [LINK: SPIKE-CONVERSION-SIGNAL] [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE] [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]
+> SPIKE STATUS: no gate consults it (SPIKE-CONVERSION-SIGNAL unrun yet settled) [FALLS OUT: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION, run = an EVIDENCE node exists]
+- Raising AUTHORED_BY from llm to llm-accepted or llm-adopted is a human act with no place to happen: no verb, no joint.
+[LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> AUTHORED_BY raise (llm -> llm-accepted|llm-adopted): identity:human act with no place to happen [GAP]
+- 'Settled' means DEPTH at interface-settled or above, or a decision accepted. That predicate lives in a Python file today; under the layer stack it is a semantic-layer gate at the write and read joints.
+[LINK: DEC-LAYER-STACK] [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]
+> readiness predicate (settled = DEPTH >= interface-settled, or DECISION accepted) lives in sdoc_fp.py [FALLS OUT: DEC-LAYER-STACK, an L3 gate at scribe.change pre and scribe.read]
+- Does the readiness walk stop at a settled node, or does an open decision far upstream block everything downstream? Today one piece of work is verified yet reads as blocked.
+[LINK: DEC-CLOSURE-STOPS-AT-SETTLED] [LINK: SLICE-SDOC-IN-SEMBLE] [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]
+> closure stops at a settled node, or an open ancestor blocks far downstream (SLICE-SDOC-IN-SEMBLE verified yet blocked) [OPEN: DEC-CLOSURE-STOPS-AT-SETTLED]
+- The ready query reports, for a piece of work: its own state, the frontier (unsettled dependencies whose own dependencies are settled), hop distance, degrees of freedom (open decisions in its closure — the questions), and dirty edges. It advises; it does not block.
+[LINK: MECH-READY-QUERY] [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]
+> MECH-READY-QUERY record: own state, frontier (unsettled deps whose deps are settled), hop distance, degrees of freedom (= open DECISIONs in closure, i.e. questions), dirty edges; advisory [WORKS]
+- The walk itself stands; the table of what counts as settled is semantic-layer data and does not belong in the script.
+[LINK: DEC-LAYER-STACK] [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]
+> split: the traversal stands, its predicate table is L3 data [FALLS OUT: DEC-LAYER-STACK]
+- 'Supersede, never delete' is the rule for now. Expressed in the model it is 'no class may delete' — a handler refusing before scribe deletes.
+[LINK: DEC-NO-DELETES-YET] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> delete: supersede, never delete = "no class may delete", a pre handler on scribe.change(delete) [OPEN: DEC-NO-DELETES-YET]
+- Moving the canon onto the ruled types — three out, six in — is uncosted, has no work node, and waits on the plan-lifecycle decision. It must be done in one move, never half.
+[LINK: DEC-PLAN-LIFECYCLE-OPEN] [LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT] [LINK: NAR-SEMANTIC-LAYER-TYPE-USE-CASE] [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE] [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] [LINK: NAR-SEMANTIC-LAYER-TYPE-NARRATIVE] [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY] [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]
+> grid migration: SLICE|INVARIANT|SPIKE out, REQUIREMENT|USE CASE|EVIDENCE|WORK|NARRATIVE|PLAN in; uncosted, no WORK node, gated on DEC-PLAN-LIFECYCLE-OPEN, never half-applied [GAP]
+- Four questions left over from the abandoned two-grammar sketch: a tier field versus nesting depth; whether 'ungroomed' is a tier or a type; whether RATIONALE stays optional on a decision; and a plan with no edge to its members.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]
+> held from the two-grammar sketch: TIER vs containment depth; ungroomed as tier or type; RATIONALE optional on DECISION; PLAN without an edge [UNADDRESSED]
 <<<
 PARENT_FP: >>>
 DEC-CLOSURE-STOPS-AT-SETTLED:0000000

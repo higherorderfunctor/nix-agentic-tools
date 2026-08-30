@@ -10,10 +10,11 @@ TITLE: Identity has no carrier
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: prose
+PLACE: screen
 STATEMENT: >>>
 Every rule about who may do something — sign a contract, raise authorship, accept a decision, groom, delete — needs to know who is acting. The three things that would tell it (the hook layer's actor slot — the field in a handler's payload that would say who is acting; the table mapping keys to human-or-agent; and the guard that reads it) are unbuilt and nobody owns them. Meanwhile about ten rulings, and the acceptance flow itself, already carry human authority under an agent's key.
 
-Nodes it touches: [LINK: MECH-HOOK-MIDDLEWARE-INTERFACE], [LINK: DEC-FP-ACCEPT-AUTHORITY], [LINK: DEC-NO-DELETES-YET] and [LINK: SLICE-HOOK-LAYER].
+> Identity has no carrier: the L2 actor slot, the key->class table and its guard are unbuilt and unowned, so every authority rule (sign, flip AUTHORED_BY, accept a DECISION, groom, delete) has nothing to read; ~10 relayed rulings and the accept flow already write human authority under an llm key.
 <<<
 PARENT_FP: >>>
 DEC-FP-ACCEPT-AUTHORITY:0000000

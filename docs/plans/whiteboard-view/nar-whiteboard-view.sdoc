@@ -1,111 +1,47 @@
 [DOCUMENT]
-TITLE: The whiteboard view: how the canon is rendered for a person, and how to keep the render honest
+TITLE: Whiteboard view
 
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
 [NARRATIVE]
 UID: NAR-WHITEBOARD-VIEW
-TITLE: The whiteboard view: how the canon is rendered for a person, and how to keep the render honest
+TITLE: Whiteboard view
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: prose
 STATEMENT: >>>
+How the canon is rendered for a person, and how to keep the render honest.
 This is the root of the view system's own design, rendered by the same
-programs that render the semantic-layer whiteboard. Nothing here is more
-settled than its node says: an accepted decision is in force, an open one
-is a question, a mechanism at interface-settled is designed and not yet
-built.
+programs that render the semantic-layer whiteboard, so what a screen here
+shows is what those programs do. Nothing here is more settled than its node
+says: an accepted decision is in force, an open one is a question, a
+mechanism at interface-settled is designed and not yet built, and a use
+case is a path that must work.
 
-The data model is [LINK: DEC-NARRATIVE-IS-THE-VIEW-NODE] with
-[LINK: DEC-LEGEND-IS-DATA] and [LINK: DEC-TERMS-ARE-NARRATIVES]; the
-programs are [LINK: MECH-VIEW-WIRELINE], [LINK: MECH-VIEW-RENDERER],
-[LINK: MECH-VIEW-CHECK] and [LINK: MECH-VIEW-TASK]; the rules they answer
-to are [LINK: REQ-VIEW-RENDERER-IS-CONTENT-BLIND] and
-[LINK: REQ-NOTHING-DEPENDS-ON-A-NARRATIVE]; the paths that must work are
-[LINK: UC-RENAME-A-TERM], [LINK: UC-RECUT-AFTER-A-RULING] and
-[LINK: UC-FLIP-THE-VIEW]. The vocabulary it renders is
-[LINK: DEC-NODE-FAMILIES], and the identity rule the migration rests on is
-[LINK: DEC-UID-OUTLIVES-TYPE]. What a rendered page is, is ruled by
-[LINK: DEC-VIEWS-ARE-REGENERABLE]: a regenerable deliverable, never the
-source. Two questions still open shape what the view will show:
-[LINK: DEC-WORK-STATE-FIELD], what DEPTH means on a WORK node, and
-[LINK: DEC-INLINE-CODE-TYPE], whether code samples and diagrams become
-types of their own or stay narratives with a widget.
+The strip beneath says how settled each screen's rows are, and the stack
+says what the pipeline does from the export to the page. The data model
+lists the rulings the view rests on, the programs list the code that
+carries them out, the rules say who enforces each, and the paths are the
+use cases; the questions still open have a screen of their own. What a
+rendered page is, is ruled by [LINK: DEC-VIEWS-ARE-REGENERABLE]: a
+regenerable deliverable, never the source.
 <<<
 PARENT_FP: >>>
-DEC-INLINE-CODE-TYPE:0000000
-DEC-LEGEND-IS-DATA:0000000
-DEC-NARRATIVE-IS-THE-VIEW-NODE:0000000
-DEC-NODE-FAMILIES:0000000
-DEC-TERMS-ARE-NARRATIVES:0000000
-DEC-UID-OUTLIVES-TYPE:0000000
 DEC-VIEWS-ARE-REGENERABLE:0000000
-DEC-WORK-STATE-FIELD:0000000
-MECH-VIEW-CHECK:0000000
-MECH-VIEW-RENDERER:0000000
-MECH-VIEW-TASK:0000000
-MECH-VIEW-WIRELINE:0000000
-REQ-NOTHING-DEPENDS-ON-A-NARRATIVE:0000000
-REQ-VIEW-RENDERER-IS-CONTENT-BLIND:0000000
-UC-FLIP-THE-VIEW:0000000
-UC-RECUT-AFTER-A-RULING:0000000
-UC-RENAME-A-TERM:0000000
 <<<
 RELATIONS:
-- TYPE: Parent
-  VALUE: DEC-NARRATIVE-IS-THE-VIEW-NODE
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: DEC-LEGEND-IS-DATA
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: DEC-TERMS-ARE-NARRATIVES
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: DEC-WORK-STATE-FIELD
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: DEC-INLINE-CODE-TYPE
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: REQ-VIEW-RENDERER-IS-CONTENT-BLIND
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: REQ-NOTHING-DEPENDS-ON-A-NARRATIVE
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: MECH-VIEW-WIRELINE
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: MECH-VIEW-RENDERER
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: MECH-VIEW-CHECK
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: MECH-VIEW-TASK
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: UC-RENAME-A-TERM
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: UC-RECUT-AFTER-A-RULING
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: UC-FLIP-THE-VIEW
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: DEC-NODE-FAMILIES
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: DEC-UID-OUTLIVES-TYPE
-  ROLE: Cites
 - TYPE: Parent
   VALUE: DEC-VIEWS-ARE-REGENERABLE
   ROLE: Cites
 - TYPE: Child
   VALUE: NAR-WHITEBOARD-VIEW-LEGEND
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-WHITEBOARD-VIEW-START-COUNTS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-WHITEBOARD-VIEW-PIPELINE
   ROLE: Contains
 - TYPE: Child
   VALUE: NAR-WHITEBOARD-VIEW-DATA-MODEL
@@ -118,6 +54,9 @@ RELATIONS:
   ROLE: Contains
 - TYPE: Child
   VALUE: NAR-WHITEBOARD-VIEW-PATHS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-WHITEBOARD-VIEW-OPEN
   ROLE: Contains
 - TYPE: Child
   VALUE: NAR-WHITEBOARD-VIEW-EDGES

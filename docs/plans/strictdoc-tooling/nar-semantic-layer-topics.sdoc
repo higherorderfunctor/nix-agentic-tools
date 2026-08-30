@@ -1,15 +1,16 @@
 [DOCUMENT]
-TITLE: The sheet, topic by topic
+TITLE: Topics
 
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
 [NARRATIVE]
 UID: NAR-SEMANTIC-LAYER-TOPICS
-TITLE: The sheet, topic by topic
+TITLE: Topics
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: prose
+PLACE: tab
 STATEMENT: >>>
 The sheet's thirteen topics in the sheet's order, one section each. A row is one line of the sheet: the headline, the nodes the line cited, the kinds of node it speaks about, the top gaps it feeds, and the verdict the sheet gave it. The sheet's closing section, the five top gaps, has a tab of its own.
 <<<
@@ -52,4 +53,7 @@ RELATIONS:
   ROLE: Contains
 - TYPE: Child
   VALUE: NAR-SEMANTIC-LAYER-UNPLACED
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-TOPICS-SOLID
   ROLE: Contains

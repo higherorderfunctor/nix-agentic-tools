@@ -1,15 +1,16 @@
 [DOCUMENT]
-TITLE: Words used on this page
+TITLE: Words
 
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
 [NARRATIVE]
 UID: NAR-SEMANTIC-LAYER-WORDS
-TITLE: Words used on this page
+TITLE: Words
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: glossary
+PLACE: tab
 STATEMENT: >>>
 The ruled words are the seven term narratives this tab contains, each citing the decision that ruled it. The field names and working terms below are the sheet's own and rule nothing; where a word is the sheet's, the sheet's wording in the last tab shows it in use.
 
@@ -86,3 +87,6 @@ RELATIONS:
 - TYPE: Parent
   VALUE: NAR-TERM-BEADS
   ROLE: Cites
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-WORDS-TYPES
+  ROLE: Contains

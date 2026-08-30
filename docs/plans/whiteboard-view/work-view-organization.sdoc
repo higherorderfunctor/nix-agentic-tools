@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-VIEW-ORGANIZATION
 TITLE: Rebuild the view so its organization comes from the canon and it reads like v1
-DEPTH: sketch
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Land the grammar (PLACE, Over, the widget vocabulary), migrate the
@@ -60,4 +60,7 @@ RELATIONS:
   ROLE: Produces
 - TYPE: Child
   VALUE: EV-COMPOSITE-NARRATIVE-COSTS
+  ROLE: Produces
+- TYPE: Child
+  VALUE: EV-VIEW-ORGANIZATION-FIRST-RENDER
   ROLE: Produces

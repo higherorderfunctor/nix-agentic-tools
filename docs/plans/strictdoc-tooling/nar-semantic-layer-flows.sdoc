@@ -10,22 +10,42 @@ TITLE: The joints and the language over them
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: rows
+PLACE: screen
 STATEMENT: >>>
 The operations logic can attach to, what a handler sees, and the open decisions on shape.
 
-- The hook layer's joints are the before and after of each operation: scribe's command, load, change (create, delete, set, unset, relate, unrelate, move), write, reload and read; git's commit (before, message, after), push (before), and rewrite, merge and checkout (after); and strictdoc's index (after). [WORKS]
-- A handler receives the operation, its phase, the actor when known, and a payload (node, kind, field, old and new value — or a ref range for git). It returns 0 to let the operation proceed, 1 or a refusal to stop it; any other return value is a bug. [WORKS]
-- Three hook-layer capabilities are unbuilt: the actor slot, the old value on a field change, and a typed refusal. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [GAP]
-- The hook layer waits on three decisions: how fine-grained the joints are, where non-hook settings live, and whether triggers are strings or typed. See [LINK: DEC-HOOK-GRANULARITY], [LINK: DEC-HOOK-SETTINGS-NAMESPACE] and [LINK: DEC-HOOK-TRIGGER-REPRESENTATION]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [OPEN: DEC-HOOK-GRANULARITY, DEC-HOOK-SETTINGS-NAMESPACE, DEC-HOOK-TRIGGER-REPRESENTATION]
-- The semantic layer's language waits on two decisions: its shape — Jira-style transitions, XState-style machines, or admission rules — and whether one or two layers sit between the hooks and the language. See [LINK: DEC-DSL-LAYER-COUNT] and [LINK: DEC-DSL-SHAPE]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [OPEN: DEC-DSL-SHAPE, DEC-DSL-LAYER-COUNT]
-- Conditions are JsonLogic trees, typed in Nix, evaluated in Python at the joint over the node, its one-hop neighbours and the acting identity. [WORKS]
-- Creating a node touches disk even under dry-run, so a 'before the write' joint already sees a file. [GAP]
-- Signing is a standalone script today, the only thing that writes fingerprints, with no scribe verb. Dissolved into a scribe operation on the fingerprint field plus a semantic-layer gate on readiness and class. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER] and [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [FALLS OUT: a scribe move on PARENT_FP + L3 gate (readiness + class)]
-- CI runs one command, a named gate. Automatic transitions are reported as due, never fired. [WORKS]
-- Handover to beads and a board over it: the board sits over the execution engine, not the plan. Whether the board shows plans or work, and whether the viewer is a terminal or the web, are undecided — the direction presumes a terminal. See [LINK: DEC-TUI-BOARD-SUBJECT] and [LINK: DEC-VIEWER-FORM-UNDECIDED]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]. [OPEN: DEC-TUI-BOARD-SUBJECT, DEC-VIEWER-FORM-UNDECIDED]
-- Merge and rewrite fire only afterwards, and a textual merge can produce a state no transition would have. The gate catches that state but cannot name the transition that should have happened. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]. [WORKS]
-- The emitted model carries a version. What it is compared to, and what fails on a mismatch, is unwritten. [GAP]
-- Hook settings would mount under the strictdoc option tree, which cannot be exported as a devenv facet. [UNADDRESSED]
+- The hook layer's joints are the before and after of each operation: scribe's command, load, change (create, delete, set, unset, relate, unrelate, move), write, reload and read; git's commit (before, message, after), push (before), and rewrite, merge and checkout (after); and strictdoc's index (after).
+> L2 ops: scribe.command|load|change(create|delete|set|unset|relate|unrelate|move)|write|reload|read; git.commit pre|msg|post; git.push pre; git.rewrite|merge|checkout post; strictdoc.index post [WORKS]
+- A handler receives the operation, its phase, the actor when known, and a payload (node, kind, field, old and new value — or a ref range for git). It returns 0 to let the operation proceed, 1 or a refusal to stop it; any other return value is a bug.
+> handler in: op, phase, actor (if extractor), payload (uid, kind, field, old, new | ref range); out: 0 = watch, 1|Refuse = stop, else bug [WORKS]
+- Three hook-layer capabilities are unbuilt: the actor slot, the old value on a field change, and a typed refusal.
+[LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> three L2 enablers unbuilt: actor slot, old value on field change, typed refusal [GAP]
+- The hook layer waits on three decisions: how fine-grained the joints are, where non-hook settings live, and whether triggers are strings or typed.
+[LINK: DEC-HOOK-GRANULARITY] [LINK: DEC-HOOK-SETTINGS-NAMESPACE] [LINK: DEC-HOOK-TRIGGER-REPRESENTATION] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]
+> hook layer waits on granularity, settings namespace, trigger representation [OPEN: DEC-HOOK-GRANULARITY, DEC-HOOK-SETTINGS-NAMESPACE, DEC-HOOK-TRIGGER-REPRESENTATION]
+- The semantic layer's language waits on two decisions: its shape — Jira-style transitions, XState-style machines, or admission rules — and whether one or two layers sit between the hooks and the language.
+[LINK: DEC-DSL-LAYER-COUNT] [LINK: DEC-DSL-SHAPE] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]
+> DSL shape (Jira transitions | XState | admission rules) and layer count [OPEN: DEC-DSL-SHAPE, DEC-DSL-LAYER-COUNT]
+- Conditions are JsonLogic trees, typed in Nix, evaluated in Python at the joint over the node, its one-hop neighbours and the acting identity.
+> condition language: JsonLogic trees typed by a Nix tagged union, evaluated in Python at the joint over node + one-hop + acting identity [WORKS]
+- Creating a node touches disk even under dry-run, so a 'before the write' joint already sees a file.
+> flow create: scribe new touches disk under --dry-run; a "before the write" joint already sees a file [GAP]
+- Signing is a standalone script today, the only thing that writes fingerprints, with no scribe verb. Dissolved into a scribe operation on the fingerprint field plus a semantic-layer gate on readiness and class.
+[LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER] [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> flow sign: fp-accept.py, sole PARENT_FP writer, no scribe verb [FALLS OUT: a scribe move on PARENT_FP + L3 gate (readiness + class)]
+- CI runs one command, a named gate. Automatic transitions are reported as due, never fired.
+> flow check --gate <name>: CI's one command; automatic transitions reported as due, never fired [WORKS]
+- Handover to beads and a board over it: the board sits over the execution engine, not the plan. Whether the board shows plans or work, and whether the viewer is a terminal or the web, are undecided — the direction presumes a terminal.
+[LINK: DEC-TUI-BOARD-SUBJECT] [LINK: DEC-VIEWER-FORM-UNDECIDED] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]
+> flow ingest to beads + board: board over the engine, not the plan; viewer = TUI (terminal) or web, direction presumes TUI [OPEN: DEC-TUI-BOARD-SUBJECT, DEC-VIEWER-FORM-UNDECIDED]
+- Merge and rewrite fire only afterwards, and a textual merge can produce a state no transition would have. The gate catches that state but cannot name the transition that should have happened.
+[LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]
+> post-only merge|rewrite: a textual merge yields a state no transition produced; the gate catches it, cannot name the transition [WORKS]
+- The emitted model carries a version. What it is compared to, and what fails on a mismatch, is unwritten.
+> emitted model JSON versions: compared to what, what fails on mismatch [GAP]
+- Hook settings would mount under the strictdoc option tree, which cannot be exported as a devenv facet.
+> ai.strictdoc.hooks.* mounts under ai.strictdoc, which cannot export as a devenv facet [UNADDRESSED]
 <<<
 PARENT_FP: >>>
 DEC-DSL-LAYER-COUNT:0000000

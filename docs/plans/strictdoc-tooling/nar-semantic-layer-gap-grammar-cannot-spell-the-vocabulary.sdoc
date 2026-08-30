@@ -10,10 +10,11 @@ TITLE: The grammar cannot spell the ruled vocabulary
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: prose
+PLACE: screen
 STATEMENT: >>>
 Six ruled types are absent from the grammar and three grammar types are dissolved. Because a UID's prefix spells its type, every retype mints a new UID. The migration is uncosted, has no work node, and waits on the plan-lifecycle decision — which retires only after a plan finishes under a beads that does not yet run.
 
-Nodes it touches: [LINK: DEC-NODE-TYPE-GRID], [LINK: DEC-INVARIANT-IS-A-REQUIREMENT], [LINK: DEC-SLICE-DECOMPOSES-TO-WORK], [LINK: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION], [LINK: DEC-PLAN-LIFECYCLE-OPEN], [LINK: INV-REGISTER-NOT-AUTHORITATIVE] and [LINK: INV-VOCABULARIES-UNBOUNDED].
+> The grammar cannot spell the ruled vocabulary: REQUIREMENT|USE CASE|EVIDENCE|WORK|NARRATIVE|PLAN absent, SLICE|INVARIANT|SPIKE dissolved, UID prefixes carry type so every retype re-mints UIDs; the migration is uncosted, has no WORK node, and is gated on DEC-PLAN-LIFECYCLE-OPEN, which retires only after a plan finishes under a beads that does not run.
 
 Since the sheet: the ruled types entered the grammar on 2026-08-30 and every node was retyped in place under [LINK: DEC-NODE-FAMILIES], each keeping its UID under [LINK: DEC-UID-OUTLIVES-TYPE]; the wait on [LINK: DEC-PLAN-LIFECYCLE-OPEN] did not hold. PLAN alone is still absent from the grammar.
 <<<

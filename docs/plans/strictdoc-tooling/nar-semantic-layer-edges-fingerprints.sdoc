@@ -1,0 +1,18 @@
+[DOCUMENT]
+TITLE: Where fingerprints may point
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-EDGES-FINGERPRINTS
+TITLE: Where fingerprints may point
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: fingerprints
+PLACE: section
+STATEMENT: >>>
+Fingerprints point strictly down the ladder, so a collectable node never has an inbound fingerprint to strand; a live pair off the ladder is flagged.
+
+- DECISION > MECHANISM > WORK > NARRATIVE
+<<<

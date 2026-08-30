@@ -10,6 +10,7 @@ TITLE: requirement
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: prose
+PLACE: screen
 TAGS: REQUIREMENT
 STATEMENT: >>>
 What must always be true. It can be violated; when it is, you fix the world, not the node.
@@ -19,16 +20,12 @@ Also: design principles are requirements too. Normative and universal in the gri
 State: DEPTH, the ladder every type but a decision carries.
 <<<
 PARENT_FP: >>>
-DEC-INVARIANT-IS-A-REQUIREMENT:0000000
 DEC-NODE-FAMILIES:0000000
 DEC-UID-OUTLIVES-TYPE:0000000
 <<<
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-NODE-FAMILIES
-  ROLE: Cites
-- TYPE: Parent
-  VALUE: DEC-INVARIANT-IS-A-REQUIREMENT
   ROLE: Cites
 - TYPE: Parent
   VALUE: DEC-UID-OUTLIVES-TYPE

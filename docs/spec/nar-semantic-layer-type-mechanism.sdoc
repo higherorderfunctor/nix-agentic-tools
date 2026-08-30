@@ -10,6 +10,7 @@ TITLE: mechanism
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: prose
+PLACE: screen
 TAGS: MECHANISM
 STATEMENT: >>>
 How the system always behaves. It cannot be violated, only wrong -- a counterexample means the node is fixed.

@@ -10,9 +10,10 @@ TITLE: How to read the verdicts
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: legend
+PLACE: card
 STATEMENT: >>>
-- REQUIREMENT: green: retyped to a requirement; it can be violated
-- EVIDENCE: teal: retyped to evidence; it records what was observed once
-- HELD: amber: low confidence; the operator rules, and a split is the likely answer
-- MECHANISM: slate: stayed a mechanism; how something always behaves
+- REQUIREMENT: green: retyped to a requirement; it can be violated: Confidence
+- EVIDENCE: teal: retyped to evidence; it records what was observed once: Confidence
+- HELD: amber: low confidence; the operator rules, and a split is the likely answer: Proposed retype
+- MECHANISM: slate: stayed a mechanism; how something always behaves: Confidence
 <<<

@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-ROW-SOURCE-LINE
 TITLE: The row parser reads link-only continuation lines as references and a quoted continuation line as the source wording
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 In view-check.py's row parser: a continuation line that holds nothing but
@@ -24,3 +24,5 @@ RELATIONS:
 - TYPE: Parent
   VALUE: DEC-LEGEND-IS-DATA-WHERE-PLACED
   ROLE: Governed_By
+- TYPE: File
+  VALUE: docs/sdoc/view/view-check.py
