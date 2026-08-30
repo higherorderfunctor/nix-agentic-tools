@@ -1,7 +1,10 @@
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-08-29 (commit pending — `devenv test` is now an
-> on-demand diagnostic instead of an automatic PR/push workflow. Deterministic
+> **Last verified:** 2026-08-30 (commit pending — the Home Manager layer has
+> migrated to named permissions, while this repository temporarily selects
+> `danger-full-access`; the obsolete workspace-write roots and diagnostic
+> assertions are gone). Prior: 2026-08-29 (`devenv test` is now an on-demand
+> diagnostic instead of an automatic PR/push workflow. Deterministic
 > instruction-copy, shared-hook-isolation, and validation-projection contracts
 > moved under `nix flake check`; `$CI` no longer removes validation hooks).
 > Prior: 2026-08-17 (commit pending — the staged Codex named-profile migration
@@ -93,21 +96,25 @@ it. If not, put interactive-only tooling in the `!isCI` list. Do not use that
 branch for validation policy: automatic guards belong in flake checks with their
 own narrow closures.
 
-### Codex ships unwrapped, with its permission migration staged
+### Codex uses an unrestricted project override
 
 This repository used to supply a `codexForRepository` wrapper through
 `ai.codex.package`, injecting `--cd` and `--profile nix-agentic-tools` for
-runtime command families only. The wrapper remains gone: Codex is the plain
-package, and the selected permission policy lives in the normal user/project
-config stack rather than a separate `--profile` config layer.
+runtime command families only. That argument-injecting wrapper remains gone.
+Codex may still have an environment-only wrapper for `SHELL` and the
+sandbox-safe Git SSH command, but the selected permission policy lives in the
+normal user/project config stack rather than a separate `--profile` config
+layer.
 
 Named permission tables are now supported by the module and same-named tables
 merge across user and project layers. They do not compose with legacy
-`sandbox_mode` settings anywhere in the loaded stack, however. The current Home
-Manager user layer is still legacy, so this project must remain legacy too. The
-rollout order is module support, user-layer migration, then project-layer
-migration; changing the project first recreates the silent cross-layer conflict
-the old lockout prevented. Two measurements constrain the eventual profile:
+`sandbox_mode` settings anywhere in the loaded stack, however. The Home Manager
+user layer has migrated to `default_permissions = "user-default"`; this project
+nevertheless selects `sandbox_mode = "danger-full-access"` as a temporary,
+explicit override while unrestricted execution is needed here. With
+`approval_policy = "never"`, Codex 0.151.0's doctor reports an unrestricted
+filesystem sandbox and no approval prompts. Two earlier measurements still
+constrain any future return to a project permission profile:
 
 - **The old mixed model denied `~/.cache/nix`.** Automatic integration roots now
   lower into a selected custom permission profile as direct filesystem writes,
@@ -118,30 +125,22 @@ the old lockout prevented. Two measurements constrain the eventual profile:
   `:workspace_roots."." = "write"` made that false from the start. The stated
   security property never existed.
 
-`devenv.nix` declares only the worktree collection root the factory cannot infer
-(work spans sibling worktrees of one clone, so a session started in any of them
-must write the others). The repository enables Semble only outside diagnostic
-mode, pins it to this flake, adds AWK and jq Tree-sitter grammars, and maps its
-non-standard Bash, Gitignore, JSON, and Markdown paths. Its devenv facet
-contributes `${config.devenv.state}/semble-cache` automatically and invalidates
-indexes in that scoped root when the effective package changes. Its instruction
-facet stays off because the tracked, fragment-generated `AGENTS.md` already
-carries the same search workflow and devenv cannot replace that real file with a
-`files.*` symlink. The user-global cache is no longer in play for this shell.
-Keeping `ai.codex.programs.semble.enable = !isCI` is load-bearing: the manual
-diagnostic does not invoke Semble and must not realize its model, MCP, or
-grammar closure.
+The unrestricted override needs no writable-root declarations. The repository
+enables Semble only outside diagnostic mode, pins it to this flake, adds AWK and
+jq Tree-sitter grammars, and maps its non-standard Bash, Gitignore, JSON, and
+Markdown paths. Its devenv facet still owns and invalidates
+`${config.devenv.state}/semble-cache`; its instruction facet stays off because
+the tracked, fragment-generated `AGENTS.md` already carries the same search
+workflow and devenv cannot replace that real file with a `files.*` symlink. The
+user-global cache is no longer in play for this shell. Keeping
+`ai.codex.programs.semble.enable = !isCI` is load-bearing: the manual diagnostic
+does not invoke Semble and must not realize its model, MCP, or grammar closure.
 
-The effective Nix and treefmt cache roots and the scoped Semble cache are
-contributed by their owning devenv modules and must not be hand-written. Legacy
-workspace-write also retains `${config.devenv.root}/.git`; after the staged
-named-profile migration, the Codex module instead resolves and directly grants
-the canonical Git common directory without promoting it to a workspace root. The
-worktree collection root remains explicit repository topology. enterTest asserts
-the wrapper injects no `--profile`, that the project config remains on
-workspace-write with no named permission keys, that no stale whole-file profile
-remains in `CODEX_HOME`, and that all five local roots are present (the
-interactive-only Semble root is deliberately absent, leaving four, in CI).
+Integration roots remain available to normal workspace-write and named-profile
+consumers, but this project override intentionally does not use them. enterTest
+asserts that the wrapper injects no `--profile`, the project config selects
+`danger-full-access` without workspace refinements or named permission keys, and
+no stale whole-file profile remains in `CODEX_HOME`.
 
 Two proofs to preserve when touching the diagnostic: with `CI` unset the shell
 must contain grammar/path-customized Semble and its scoped cache root, while an
