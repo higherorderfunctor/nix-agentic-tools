@@ -1200,7 +1200,10 @@
   let ON=readSelection();
   const typeOn=t=>!SYSTEMS.length||SYSTEMS.some(x=>ON.has(x.name)&&(x.types||[]).includes(t));
   const roleOn=r=>!SYSTEMS.length||SYSTEMS.some(x=>ON.has(x.name)&&(x.roles||[]).includes(r));
-  const nodeOn=uid=>{ const nd=NODES[uid]; return nd?typeOn(nd.type):true; };
+  // a narrative that belongs to the spec root is the canon's own chrome (its
+  // tabs, cards and screens) and never switches off; a plan root's narratives
+  // are the overlay and go with the system that holds narratives
+  const nodeOn=uid=>{ const nd=NODES[uid]; if(!nd) return true; if(nd.type==="NARRATIVE"&&CANON&&ROOTOF[uid]===CANON.uid) return true; return typeOn(nd.type); };
   const systemsOfType=t=>SYSTEMS.filter(x=>(x.types||[]).includes(t)).map(x=>x.name);
   const systemsOf=uid=>{ const nd=NODES[uid]; return nd?(Array.isArray(nd.systems)&&nd.systems.length?nd.systems:systemsOfType(nd.type)):[]; };
   const edgeOn=e=>nodeOn(e.from)&&nodeOn(e.to)&&roleOn(e.role);
