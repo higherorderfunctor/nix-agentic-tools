@@ -4,7 +4,7 @@ TITLE: Correct the sdoc skill and README where they are now false
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-SDOC-SKILL-CORRECTIONS
 TITLE: Correct the sdoc skill and README where they are now false
 DEPTH: implemented
@@ -47,6 +47,8 @@ split existing at all.
 Deliberately still open, and NOT part of this node: the skill says nothing about
 the sys.path line strictdoc_config.py needs, because SLICE-CHECKPOINT-WIRING
 measured that fixed upstream at 0.28.3.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with high confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: No rule sentence. The node is WORK-shaped (a completed slice) and this record is the evidence it left behind; its Guarantees edge to INV-GUARDS-MUST-EXECUTE is odd for evidence. A reader could sort "what the skill now says" as a description of the skill's current content and call it MECHANISM. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

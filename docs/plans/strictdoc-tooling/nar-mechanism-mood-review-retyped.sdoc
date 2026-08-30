@@ -1,0 +1,154 @@
+[DOCUMENT]
+TITLE: Retyped by the test
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-MECHANISM-MOOD-REVIEW-RETYPED
+TITLE: Retyped by the test
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+STATEMENT: >>>
+Each row: the node, the reason the test gave, and the verdict with its confidence.
+
+- [LINK: MECH-AUTHORED-BY-REWRITE-DRIFT] -- mixed_with: 'MECH-AUTHORED-BY-GUARD watches the human value appearing on a node. Nothing watches the statement underneath an existing human value changing.' -- a universal description of the guard's coverage… [EVIDENCE: high]
+- [LINK: MECH-DEFAULT-EXPORT-IS-RED-ON-RST] -- mixed_with: (a) docutils behaviour, universal MECHANISM fragment -- 'a glob inside a single backtick is CLEAN ... a bare glob warns ... an asterisk that opens emphasis needs a closing asterisk that ENDS a… [EVIDENCE: medium]
+- [LINK: MECH-DIRTY-EDGE-ON-OPTION-CHANGE] -- mixed_with: 'The fingerprint machinery already does this for node-to-node contracts. What it does not cover is a relation pointing at a file, which today resolves to a path that nothing checks for existence,… [REQUIREMENT: medium]
+- [LINK: MECH-EDGE-MAP-TABLE-RECONCILE] -- mixed_with: 'MECH-RELATION-TARGET-TYPE-LINT takes the union, reading MECH-CORPUS-EDGE-MAP as a forecast of how one unconverted corpus will be converted rather than as a graph-wide contract' -- description of… [EVIDENCE: high]
+- [LINK: MECH-FAITHFUL-IS-NOT-A-CONSUMER-WORD] -- mixed_with: paragraph 1 is a glossary definition of 'faithful' (descriptive; could become a small MECHANISM or stay as the rule's preamble). NOTES are a dated status record (partly closed 2026-08-27; file… [REQUIREMENT: high]
+- [LINK: MECH-FP-ACCEPT-READINESS] -- mixed_with: STATEMENT paragraph 2 ('No new field is needed. DEPTH already distinguishes ...') is the realisation design -- MECHANISM. NOTES ('Implemented as sdoc_fp.is_ready() ... Verified against a synthetic… [REQUIREMENT: high]
+- [LINK: MECH-FP-RELATION-LINT] -- mixed_with: STATEMENT sentence 'Nothing enforces that today, and several nodes in this graph already have a fingerprint with no corresponding relation' is a stale dated observation (EVIDENCE, now contradicted… [REQUIREMENT: high]
+- [LINK: MECH-GROOM-CONTRADICTION-CHECK] -- mixed_with: STATEMENT paragraph 2 ('A live example to test against: DEC-FP-ACCEPT-AUTHORITY holds ... At least three places currently assert human-only outright ... None of them cite ... and none is edged to… [REQUIREMENT: high]
+- [LINK: MECH-LANE-DISCIPLINE-IS-A-REQUIREMENT] -- mixed_with: two rules, so the split yields TWO REQUIREMENT nodes (layer discipline outside a slice; crossing discipline inside a slice). 'PROPOSED, and not ruled: SLICE does not survive as a type ... the… [REQUIREMENT: high]
+- [LINK: MECH-M4-CLAIMS-REFUTED-AGAINST-THE-TREE] -- mixed_with: 'the plugin hook, once registered, fires inside every scribe load -- twice per write, three times per `new` -- and cannot tell a pre-write load from a post-write verify' is a universal behaviour a… [EVIDENCE: high]
+- [LINK: MECH-MILESTONE-TWO-SEMANTICS-MISPLACED] -- mixed_with: NOTES heuristic 'The tell that separates them: ask whether the grammar could change the answer. If yes it is derived; if the answer is fixed in the script, it is semantics wearing a validator's… [EVIDENCE: medium]
+- [LINK: MECH-NODE-CODE-LINKAGE-IS-PROSE] -- mixed_with: (a) universal description 'Nothing joins a node to the code it describes ... the query DEPTH == implemented cannot be joined to what it implemented' -- could split into a MECHANISM about the… [EVIDENCE: medium]
+- [LINK: MECH-ONE-NODE-PER-FILE] -- mixed_with: NOTES carry the before/after measurements (421 KB across 156 nodes in 8 files; 279 KB to read one backlog item; 74 KB for 7 nodes; 161 nodes in 161 files, 447,724 bytes after; 0 of 161 contract… [REQUIREMENT: high]
+- [LINK: MECH-OVERLAY-PYTHON-OVERRIDE-SEAM] -- mixed_with: 'overridePythonAttrs ... is the correct seam for a buildPythonPackage ... buildPythonPackage consumes dependencies and pythonRelaxDeps as arguments, so overrideAttrs lands them as dead attrs… [EVIDENCE: medium]
+- [LINK: MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES] -- mixed_with: the sweep ('Sweep the overlays, list what wraps rather than converts, and move each into its module ... HITL at the point of sweeping') is work; the open question ('if the devenv module and the… [REQUIREMENT: medium]
+- [LINK: MECH-PEG-REACHABILITY-COUNT] -- mixed_with: the textx explanation ('_tx_attrs reports an attribute's declared class, and for a value that is an inline regex textx declares it STRING, which drags textx's synthesized base types ... into a… [EVIDENCE: high]
+- [LINK: MECH-PLAN-CHANGE-KINDS] -- mixed_with: 'Ingest therefore freezes the execution scope handed over, not the plan.' reads as a design property of ingest (MECHANISM fragment) derived from the two ownership rules; if split later, that… [REQUIREMENT: medium]
+- [LINK: MECH-PROJECT-HOOKS-ABSENT-IN-WORKTREES] -- mixed_with: the delivery mechanism -- '.claude/settings.json is a symlink into /nix/store written on devenv shell entry ... gitignored ... the sandbox-stack topology deliberately never enters a devenv shell in… [EVIDENCE: high]
+- [LINK: MECH-READY-PACKET-BUDGET] -- mixed_with: 'ready.py --packet renders a whole closure as one brief and nothing bounds it' is a universal behaviour sentence; the two 'Decide whether NOTES and RATIONALE belong in a packet at all ... and… [EVIDENCE: medium]
+- [LINK: MECH-RENDER-GENERATOR-OUTSIDE-REPO] -- mixed_with: the four-step pipeline paragraph ('(1) a strictdoc export to JSON; (2) a parser over MECH-SEMANTIC-LAYER-WHITEBOARD's STATEMENT ...; (3) a hand-authored layer ...; (4) a template that embeds the… [EVIDENCE: medium]
+- [LINK: MECH-SDOC-CLI-COVERS-STRICTDOC-SILENCE] -- Mixed. Rule sentence: 'The tool SLICE-SDOC-CLI builds must refuse any handle the loaded config does not register, before invoking strictdoc, and must redirect strictdoc's stdout to stderr rather than… [REQUIREMENT: medium]
+- [LINK: MECH-SDOC-CONFIG-HOOK-IMPORTABILITY] -- The version-bound mechanism reading is reasonable, hence medium. Practically the node is already dead (upstream fixed at 0.28.1, repo on 0.28.3, SKILL-CORRECTIONS deliberately omitted the line from the skill),… [EVIDENCE: medium]
+- [LINK: MECH-SDOC-LOOP-SHELL-ENTRY-STAGES-FILES] -- Design sentence for a later split: 'Fix shape: reach the binary rather than the environment ... so the validation loop never depends on entering a shell.' The devenv chain (shell -- cmd triggers enterTest,… [EVIDENCE: medium]
+- [LINK: MECH-SDOC-SKILL-CORRECTIONS] -- No rule sentence. The nearest correct type is WORK (a completed slice); if a later pass admits retyping into the work family, this node belongs there with the record kept as its produced evidence. The… [EVIDENCE: high]
+- [LINK: MECH-SDOC-VOCABULARY-SINGLE-SOURCE] -- Design sentence for a later split: 'Fold all five into the shared module MECH-READINESS-PREDICATE-RECONCILE creates, deriving the vocabularies from the generated grammar rather than restating them.' The… [EVIDENCE: medium]
+- [LINK: MECH-SGRA-BODY-COVERAGE] -- Split: keep the count here as EVIDENCE; file 'extend the grammar to cover document-body content' as WORK (the SPIKE the RATIONALE asks for). Title should change to name the finding, not the ask. [EVIDENCE: high]
+- [LINK: MECH-STRICTDOC-CLOSURE-TRIM] -- Split would leave the six-and-three measurement (against nixpkgs strictdoc 0.27.1, by SPIKE-EXECUTABLE-RULES) as EVIDENCE and retire the filter proposal outright, since MECH-STRICTDOC-UPSTREAM-FLAKE removed… [EVIDENCE: medium]
+<<<
+PARENT_FP: >>>
+MECH-AUTHORED-BY-REWRITE-DRIFT:0000000
+MECH-DEFAULT-EXPORT-IS-RED-ON-RST:0000000
+MECH-DIRTY-EDGE-ON-OPTION-CHANGE:0000000
+MECH-EDGE-MAP-TABLE-RECONCILE:0000000
+MECH-FAITHFUL-IS-NOT-A-CONSUMER-WORD:0000000
+MECH-FP-ACCEPT-READINESS:0000000
+MECH-FP-RELATION-LINT:0000000
+MECH-GROOM-CONTRADICTION-CHECK:0000000
+MECH-LANE-DISCIPLINE-IS-A-REQUIREMENT:0000000
+MECH-M4-CLAIMS-REFUTED-AGAINST-THE-TREE:0000000
+MECH-MILESTONE-TWO-SEMANTICS-MISPLACED:0000000
+MECH-NODE-CODE-LINKAGE-IS-PROSE:0000000
+MECH-ONE-NODE-PER-FILE:0000000
+MECH-OVERLAY-PYTHON-OVERRIDE-SEAM:0000000
+MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES:0000000
+MECH-PEG-REACHABILITY-COUNT:0000000
+MECH-PLAN-CHANGE-KINDS:0000000
+MECH-PROJECT-HOOKS-ABSENT-IN-WORKTREES:0000000
+MECH-READY-PACKET-BUDGET:0000000
+MECH-RENDER-GENERATOR-OUTSIDE-REPO:0000000
+MECH-SDOC-CLI-COVERS-STRICTDOC-SILENCE:0000000
+MECH-SDOC-CONFIG-HOOK-IMPORTABILITY:0000000
+MECH-SDOC-LOOP-SHELL-ENTRY-STAGES-FILES:0000000
+MECH-SDOC-SKILL-CORRECTIONS:0000000
+MECH-SDOC-VOCABULARY-SINGLE-SOURCE:0000000
+MECH-SGRA-BODY-COVERAGE:0000000
+MECH-STRICTDOC-CLOSURE-TRIM:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-AUTHORED-BY-REWRITE-DRIFT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-DEFAULT-EXPORT-IS-RED-ON-RST
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-DIRTY-EDGE-ON-OPTION-CHANGE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-EDGE-MAP-TABLE-RECONCILE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FAITHFUL-IS-NOT-A-CONSUMER-WORD
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FP-ACCEPT-READINESS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FP-RELATION-LINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-GROOM-CONTRADICTION-CHECK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-LANE-DISCIPLINE-IS-A-REQUIREMENT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-M4-CLAIMS-REFUTED-AGAINST-THE-TREE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-MILESTONE-TWO-SEMANTICS-MISPLACED
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-NODE-CODE-LINKAGE-IS-PROSE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-ONE-NODE-PER-FILE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-OVERLAY-PYTHON-OVERRIDE-SEAM
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-PEG-REACHABILITY-COUNT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-PLAN-CHANGE-KINDS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-PROJECT-HOOKS-ABSENT-IN-WORKTREES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-READY-PACKET-BUDGET
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-RENDER-GENERATOR-OUTSIDE-REPO
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SDOC-CLI-COVERS-STRICTDOC-SILENCE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SDOC-CONFIG-HOOK-IMPORTABILITY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SDOC-LOOP-SHELL-ENTRY-STAGES-FILES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SDOC-SKILL-CORRECTIONS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SDOC-VOCABULARY-SINGLE-SOURCE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SGRA-BODY-COVERAGE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-STRICTDOC-CLOSURE-TRIM
+  ROLE: Cites

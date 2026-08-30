@@ -4,7 +4,7 @@ TITLE: Two settled role tables disagree on three rows
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-EDGE-MAP-TABLE-RECONCILE
 TITLE: Two settled role tables disagree on three rows
 DEPTH: sketch
@@ -17,6 +17,8 @@ The reading is not free. The narrow Assumes rule was justified as cycle avoidanc
 <<<
 NOTES: >>>
 Cited by UID in `MECH-RELATION-TARGET-TYPE-LINT`'s NOTES and again in its LEFT TO THE OPERATOR list. Counts measured 2026-08-27 against a clean export of 144 nodes, 92 Parent relations.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with high confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: 'Decide whether that reading stands, and if it does, whether per-plan profiles are a thing the lint supports at all' is an open question for the operator (work/register), and 'MECH-RELATION-TARGET-TYPE-LINT takes the union, reading MECH-CORPUS-EDGE-MAP as a forecast' describes the lint's reading (mechanism); neither is a rule. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

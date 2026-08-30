@@ -4,7 +4,7 @@ TITLE: Nineteen rules are reachable from DocumentGrammarWrapper, not twenty-five
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-PEG-REACHABILITY-COUNT
 TITLE: Nineteen rules are reachable from DocumentGrammarWrapper, not twenty-five
 DEPTH: sketch
@@ -28,6 +28,9 @@ RATIONALE: >>>
 Both numbers are right about their own walk. Recorded so a later session
 checking the surface for completeness against the brief's 25 does not go
 looking for six missing rules that are not rules of this grammar.
+<<<
+NOTES: >>>
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with high confidence after a second opinion: it records what was observed once, not how something always behaves. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

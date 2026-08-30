@@ -4,7 +4,7 @@ TITLE: The tool must supply the two failure behaviours strictdoc's CLI does not 
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[REQUIREMENT]
 UID: MECH-SDOC-CLI-COVERS-STRICTDOC-SILENCE
 TITLE: The tool must supply the two failure behaviours strictdoc's CLI does not have
 DEPTH: sketch
@@ -19,6 +19,8 @@ NOTES: >>>
 Both measurements are already recorded: the false green in `MECH-SDOC-LEAN-FORMATS`'s NOTES, the stdout behaviour in `MECH-TREEFMT-SDOC`'s NOTES under THE DIAGNOSTIC GOES TO STDOUT. Neither is live today — `strictdoc_config.py` currently registers no formats, so the stock list still renders html — so the first arms exactly when `MECH-SDOC-LEAN-FORMATS` lands. Exposure meanwhile is a human or agent running a documented recipe from memory without `--formats=json` and reading exit 0 as success; both existing gates read their index.json immediately after exporting and die on its absence, so neither can pass on an empty export.
 
 Absorbs the proposed `MECH-UNREGISTERED-HANDLE-MUST-FAIL` and `MECH-STRICTDOC-ERRORS-ON-STDOUT`.
+
+Retyped from MECHANISM to REQUIREMENT on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it can be violated: a counterexample would be fixed in the world, not in this node. Noted for a later split: Rule sentence: "The tool SLICE-SDOC-CLI builds must refuse any handle the loaded config does not register, before invoking strictdoc, and must redirect strictdoc's stdout to stderr rather than discarding it." The first two-thirds of STATEMENT is descriptive of strictdoc itself (EXPORT_FORMATS allowlist at commands/export.py:17 that config can only append to, the 0.53 s Jinja compile, errors printed to STDOUT) — upstream mechanism/evidence a split could move out. A reader could read the whole as the CLI's interface design and keep it MECHANISM. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

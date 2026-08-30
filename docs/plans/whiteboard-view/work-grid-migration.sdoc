@@ -1,0 +1,36 @@
+[DOCUMENT]
+TITLE: Apply the node-type families to the corpus: retype by grammar type, then by the mechanism mood test
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-GRID-MIGRATION
+TITLE: Apply the node-type families to the corpus: retype by grammar type, then by the mechanism mood test
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+Retype every node of the retired grammar types by rule (SLICE to WORK,
+INVARIANT to REQUIREMENT or EVIDENCE, SPIKE to EVIDENCE when run and WORK
+when unrun), then sort every MECHANISM by the definition grid's test -- can
+it be violated, or only be wrong; does it speak of every case or of one --
+and retype the ones that are rules or observations. Keep every UID. Record
+each retype in the node's NOTES and the whole in a ledger.
+<<<
+PARENT_FP: >>>
+DEC-MIGRATE-BEFORE-BEADS:0000000
+DEC-UID-OUTLIVES-TYPE:0000000
+<<<
+NOTES: >>>
+Done 2026-08-30. The four low-confidence verdicts are held, not applied; they are the operator's, and each wants a split rather than a retype.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-MIGRATE-BEFORE-BEADS
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-UID-OUTLIVES-TYPE
+  ROLE: Governed_By
+- TYPE: Child
+  VALUE: EV-GRID-MIGRATION-LEDGER
+  ROLE: Produces

@@ -4,7 +4,7 @@ TITLE: Extend the sdoc tree-sitter grammar to cover document-body content
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[EVIDENCE]
 UID: MECH-SGRA-BODY-COVERAGE
 TITLE: Extend the sdoc tree-sitter grammar to cover document-body content
 DEPTH: sketch
@@ -23,6 +23,9 @@ Out of scope for the current patch, which targets exactly the two bugs this
 repository's own corpus hit. Worth a dedicated SPIKE to characterize the
 FREETEXT gap before deciding whether it is a small follow-up patch or a
 reason to look upstream harder.
+<<<
+NOTES: >>>
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with high confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: Title "Extend the sdoc tree-sitter grammar to cover document-body content" and RATIONALE's "Worth a dedicated SPIKE" are work asks, not claims; a split would leave the count here and file the extension as work. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent

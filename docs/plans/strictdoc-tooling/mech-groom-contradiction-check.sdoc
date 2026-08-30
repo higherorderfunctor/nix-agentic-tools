@@ -4,7 +4,7 @@ TITLE: Grooming must surface contradictions, not just missing edges
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
-[MECHANISM]
+[REQUIREMENT]
 UID: MECH-GROOM-CONTRADICTION-CHECK
 TITLE: Grooming must surface contradictions, not just missing edges
 DEPTH: sketch
@@ -26,6 +26,9 @@ This is the failure the whole system exists to catch, and it is currently
 uncaught in its own graph. The author's stated reason for building this is
 returning to a conclusion having forgotten the reasoning; a contradiction with
 no edge between its two halves is exactly that, made durable.
+<<<
+NOTES: >>>
+Retyped from MECHANISM to REQUIREMENT on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with high confidence after a second opinion: it can be violated: a counterexample would be fixed in the world, not in this node. Noted for a later split: EVIDENCE paragraph: 'At least three places currently assert human-only outright ... None of them cite DEC-FP-ACCEPT-AUTHORITY and none is edged to it' -- a dated finding used as the test case, separable from the rule. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
 <<<
 RELATIONS:
 - TYPE: Parent
