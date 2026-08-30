@@ -1,0 +1,19 @@
+[DOCUMENT]
+TITLE: The view rendering its own root through the same task
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-VIEW-SELF-HOST-RENDER
+TITLE: The view rendering its own root through the same task
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: devenv tasks run --mode before view:render --input root=NAR-WHITEBOARD-VIEW
+STATEMENT: >>>
+The view rendering its own design, measured on 2026-08-30: devenv tasks run --mode before view:render --input root=NAR-WHITEBOARD-VIEW exited 0 in 1.6 s wall on a warm evaluation.
+
+The payload for [LINK: NAR-WHITEBOARD-VIEW]: 7 narratives (the root and six tabs: legend, data model, programs, rules, paths, edges), 33 rows, 39 Cites all with placeholder fingerprints, 32 node cards, 82 backlinks, 13 live relation pairs, 0 findings and one note (the semantic-layer root is a tree of its own). Row words: ACCEPTED 9, SCRIPT 9, BUILT 4, STRICTDOC 4, SETTLED 3, OPEN 2, UNBUILT 2. The same wireline, check, renderer and template produced it as produced the semantic-layer page; no program changed between the two renders.
+
+The page: output/view/nar-whiteboard-view.html, about 147 KB. Screenshots at 390 px, viewed: /tmp/claude-1000/-home-caubut-Documents-projects-nix-agentic-tools/3dc654a0-2cd2-4447-a890-5bfe23555a4b/scratchpad/wf2/shots-final/wv-start.png, wv-words.png, wv-data-model.png, wv-rules.png, wv-edges.png, wv-node.png.
+<<<

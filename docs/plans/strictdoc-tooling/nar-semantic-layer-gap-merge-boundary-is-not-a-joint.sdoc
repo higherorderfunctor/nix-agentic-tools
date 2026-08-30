@@ -1,0 +1,44 @@
+[DOCUMENT]
+TITLE: The merge boundary is not a joint
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT
+TITLE: The merge boundary is not a joint
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: prose
+STATEMENT: >>>
+nix flake check is the only gate nobody can bypass, and it appears in neither list of joints. Merge and rewrite fire only after the fact. So every rule that belongs at merge time — the fingerprint check on the merge ref, plan-reference checks, catching authorship changes (an AUTHORED_BY flip), severity by joint — has nowhere to attach.
+
+Nodes it touches: [LINK: MECH-HOOK-MIDDLEWARE-INTERFACE], [LINK: MECH-FP-MAIN-LINEAGE], [LINK: MECH-PLAN-REFS-CHECK], [LINK: INV-NO-EXTERNAL-PLAN-REFS] and [LINK: DEC-LONG-LIVED-BRANCH].
+<<<
+PARENT_FP: >>>
+DEC-LONG-LIVED-BRANCH:0000000
+INV-NO-EXTERNAL-PLAN-REFS:0000000
+MECH-FP-MAIN-LINEAGE:0000000
+MECH-HOOK-MIDDLEWARE-INTERFACE:0000000
+MECH-PLAN-REFS-CHECK:0000000
+NAR-TERM-JOINT:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-HOOK-MIDDLEWARE-INTERFACE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FP-MAIN-LINEAGE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-PLAN-REFS-CHECK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: INV-NO-EXTERNAL-PLAN-REFS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-LONG-LIVED-BRANCH
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-JOINT
+  ROLE: Cites

@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-VIEW-RENDERER
 TITLE: The renderer: a content-blind page over one payload, keyed on tree shape and widget words
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 render.py takes one payload and one template and writes one self-contained
@@ -35,3 +35,7 @@ RELATIONS:
 - TYPE: Parent
   VALUE: REQ-VIEW-RENDERER-IS-CONTENT-BLIND
   ROLE: Guarantees
+- TYPE: File
+  VALUE: docs/sdoc/view/render.py
+- TYPE: File
+  VALUE: docs/sdoc/view/template.html

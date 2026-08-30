@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: mechanism
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-TYPE-MECHANISM
+TITLE: mechanism
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: prose
+TAGS: MECHANISM
+STATEMENT: >>>
+How the system always behaves. It cannot be violated, only wrong -- a counterexample means the node is fixed.
+
+Also: descriptive and universal only, the cell it kept when [LINK: DEC-NODE-FAMILIES] superseded the grid ruling. The mechanisms -- 129 on the sheet's day -- have never been tested one by one for whether they describe or impose. One MECH- node is a NARRATIVE now: the whiteboard this page carries as its last tab, filed as a mechanism for lack of the type and retyped in place under [LINK: DEC-UID-OUTLIVES-TYPE].
+
+State: DEPTH.
+<<<
+PARENT_FP: >>>
+DEC-NODE-FAMILIES:0000000
+DEC-UID-OUTLIVES-TYPE:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-UID-OUTLIVES-TYPE
+  ROLE: Cites

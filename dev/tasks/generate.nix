@@ -250,6 +250,60 @@ in {
       '';
     };
 
+    # ── The whiteboard view (MECH-VIEW-TASK) ─────────────────────────
+    #
+    # Renders one root narrative: strictdoc export into a CLEAN directory
+    # (an incremental export can exit 0 on a broken input -- see the sdoc
+    # skill), then view-check, wireline and render from docs/sdoc/view/.
+    # The page and the payload land under output/view/, which is gitignored:
+    # the canon is the source and the page is regenerable.
+    #
+    # The root comes in through devenv's task-input channel, because
+    # `devenv tasks run` accepts no `--` passthrough (measured 2026-08-30:
+    # a `-- --root X` is read as a task named `--root`):
+    #
+    #   devenv tasks run --mode before view:render --input root=NAR-SEMANTIC-LAYER
+    #
+    # A view-check FINDING (exit 1) does not stop the render: the findings
+    # are embedded in the payload and listed on the start screen, which is
+    # where a reader is meant to see them. A bad root (exit 2) does.
+    #
+    # PYTHONPATH and STRICTDOC_CACHE_DIR are unset for the same reason the
+    # sdoc skill's recipes unset them: a shell-level PYTHONPATH shadows the
+    # interpreter under test, and the cache dir would redirect the export.
+    "view:render" = {
+      description = "Render one root narrative: export, view-check, wireline, render";
+      exec = ''
+        ${bashPreamble}
+        ${log}
+        cd "$DEVENV_ROOT"
+        root=$(printf '%s' "''${DEVENV_TASK_INPUT:-null}" | jq -r '.root // empty')
+        if [ -z "$root" ]; then
+          echo "view:render: no root. Run: devenv tasks run --mode before view:render --input root=UID" >&2
+          exit 2
+        fi
+        view=docs/sdoc/view
+        out=output/view
+        export_dir="$out/export"
+        rm -rf "$export_dir"
+        mkdir -p "$out"
+        slug=$(printf '%s' "$root" | tr '[:upper:]' '[:lower:]')
+        log "Exporting the canon into $export_dir"
+        env -u PYTHONPATH -u STRICTDOC_CACHE_DIR strictdoc export . --formats=json --output-dir "$export_dir" >/dev/null
+        index="$export_dir/json/index.json"
+        log "Checking the tree under $root"
+        rc=0
+        # To stderr: devenv shows a task's stderr in its summary and hides stdout.
+        env -u PYTHONPATH python3 "$view/view-check.py" "$index" . --root "$root" >&2 || rc=$?
+        if [ "$rc" -gt 1 ]; then exit "$rc"; fi
+        log "Writing the payload and the page"
+        env -u PYTHONPATH python3 "$view/wireline.py" "$index" . --root "$root" --out "$out/$slug.json"
+        env -u PYTHONPATH python3 "$view/render.py" "$out/$slug.json" "$view/template.html" --out "$out/$slug.html" >/dev/null
+        log "wrote $out/$slug.html"
+        log "wrote $out/$slug.json"
+      '';
+    };
+
     "generate:all" = {
       description = "Generate all content (instructions + repo)";
       after = [

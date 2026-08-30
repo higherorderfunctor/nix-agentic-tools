@@ -1,0 +1,118 @@
+[DOCUMENT]
+TITLE: Work, handover and completion
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-MULTI-STEP-WORK
+TITLE: Work, handover and completion
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+STATEMENT: >>>
+Work versus use case, handover, the packet, where proof of completion goes, and probes.
+
+- Work declares what it crosses; crossing more than one layer is what used to be called a slice. Work says 'build this' and dies with its plan. A use case says 'this path must work' and outlives it. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-USE-CASE]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]. [WORKS]
+- Work is implementable when it has zero open decisions in its closure, and handover is the moment its scope freezes. But no verb, edge or joint marks the handover. See [LINK: DEC-LOCAL-IMPLEMENTABILITY] and [LINK: MECH-PLAN-CHANGE-KINDS]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. [GAP]
+- The packet — the dependency-first brief handed to an implementing session — is unbounded: one measured 57% of the corpus. Whether NOTES and RATIONALE belong in it is unsaid. It is also what beads would ingest. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. [UNADDRESSED]
+- Six pieces of work at implemented or verified keep their proof in NOTES. No rule moves that proof into an evidence node before the plan is collected — so collection would delete it. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK] and [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]. [GAP]
+- DEPTH measures design maturity, yet its top two rungs — implemented, verified — record delivery. Is that execution state (beads) or evidence (canon)? Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK], [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE] and [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]. [GAP]
+- Twelve durable nodes point Proven_By at a probe. If the probe's work half dies with its plan, those links dangle — a fatal error. The work and the evidence share one UID, and nobody has said which half the link should land on. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE] and [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]. [GAP]
+- Is a beads store private to the agent's key, or to the human the agent acts for? Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]. [GAP]
+- Milestones three to five as written — placing gates by what each gate can see — are dissolved by the layer stack and the hook-layer interface. See [LINK: DEC-LAYER-STACK], [LINK: MECH-HOOK-MIDDLEWARE-INTERFACE], [LINK: SLICE-BEHAVIOUR-MODEL], [LINK: SLICE-CHECKPOINT-WIRING] and [LINK: SLICE-INSTANCE-SEMANTICS-MIGRATION]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. [FALLS OUT: DEC-LAYER-STACK; MECH-HOOK-MIDDLEWARE-INTERFACE]
+- The seven-unit container of the semantics-migration work stands; each unit is re-derived with the acting key available at the joint. The hook-layer and DSL work nodes already read as work. See [LINK: SLICE-HOOK-LAYER], [LINK: SLICE-INSTANCE-SEMANTICS-MIGRATION] and [LINK: SLICE-WORKFLOW-DSL]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-WORK]. [WORKS]
+- 'Refuse to sign against an unsettled parent' as a mechanism is dissolved — it is the worked example every DSL candidate expresses as a semantic-layer rule. See [LINK: MECH-FP-ACCEPT-READINESS]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]. Feeds [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]. [FALLS OUT: the L3 worked example in every DSL candidate]
+- Where flow tests live — inside the model, or as use-case nodes with fixtures — is unresolved. The grid favours use cases. See [LINK: MECH-TESTS-AS-CONTRACT] and [LINK: SPIKE-DSL-PRIOR-ART]. Speaks about [LINK: NAR-SEMANTIC-LAYER-TYPE-USE-CASE]. [GAP]
+<<<
+PARENT_FP: >>>
+DEC-LAYER-STACK:0000000
+DEC-LOCAL-IMPLEMENTABILITY:0000000
+MECH-FP-ACCEPT-READINESS:0000000
+MECH-HOOK-MIDDLEWARE-INTERFACE:0000000
+MECH-PLAN-CHANGE-KINDS:0000000
+MECH-TESTS-AS-CONTRACT:0000000
+NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER:0000000
+NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT:0000000
+NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER:0000000
+NAR-SEMANTIC-LAYER-TYPE-EVIDENCE:0000000
+NAR-SEMANTIC-LAYER-TYPE-MECHANISM:0000000
+NAR-SEMANTIC-LAYER-TYPE-USE-CASE:0000000
+NAR-SEMANTIC-LAYER-TYPE-WORK:0000000
+NAR-TERM-BEADS:0000000
+NAR-TERM-CANON:0000000
+NAR-TERM-JOINT:0000000
+SLICE-BEHAVIOUR-MODEL:0000000
+SLICE-CHECKPOINT-WIRING:0000000
+SLICE-HOOK-LAYER:0000000
+SLICE-INSTANCE-SEMANTICS-MIGRATION:0000000
+SLICE-WORKFLOW-DSL:0000000
+SPIKE-DSL-PRIOR-ART:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-WORK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-USE-CASE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-LOCAL-IMPLEMENTABILITY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-PLAN-CHANGE-KINDS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-EVIDENCE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-MECHANISM
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-HOOK-MIDDLEWARE-INTERFACE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: SLICE-BEHAVIOUR-MODEL
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: SLICE-CHECKPOINT-WIRING
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: SLICE-INSTANCE-SEMANTICS-MIGRATION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: SLICE-HOOK-LAYER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: SLICE-WORKFLOW-DSL
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FP-ACCEPT-READINESS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-TESTS-AS-CONTRACT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: SPIKE-DSL-PRIOR-ART
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-JOINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-BEADS
+  ROLE: Cites

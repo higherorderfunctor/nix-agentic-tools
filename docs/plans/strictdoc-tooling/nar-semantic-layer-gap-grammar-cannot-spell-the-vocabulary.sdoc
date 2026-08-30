@@ -1,0 +1,54 @@
+[DOCUMENT]
+TITLE: The grammar cannot spell the ruled vocabulary
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY
+TITLE: The grammar cannot spell the ruled vocabulary
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: prose
+STATEMENT: >>>
+Six ruled types are absent from the grammar and three grammar types are dissolved. Because a UID's prefix spells its type, every retype mints a new UID. The migration is uncosted, has no work node, and waits on the plan-lifecycle decision — which retires only after a plan finishes under a beads that does not yet run.
+
+Nodes it touches: [LINK: DEC-NODE-TYPE-GRID], [LINK: DEC-INVARIANT-IS-A-REQUIREMENT], [LINK: DEC-SLICE-DECOMPOSES-TO-WORK], [LINK: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION], [LINK: DEC-PLAN-LIFECYCLE-OPEN], [LINK: INV-REGISTER-NOT-AUTHORITATIVE] and [LINK: INV-VOCABULARIES-UNBOUNDED].
+
+Since the sheet: the ruled types entered the grammar on 2026-08-30 and every node was retyped in place under [LINK: DEC-NODE-FAMILIES], each keeping its UID under [LINK: DEC-UID-OUTLIVES-TYPE]; the wait on [LINK: DEC-PLAN-LIFECYCLE-OPEN] did not hold. PLAN alone is still absent from the grammar.
+<<<
+PARENT_FP: >>>
+DEC-INVARIANT-IS-A-REQUIREMENT:0000000
+DEC-NODE-FAMILIES:0000000
+DEC-NODE-TYPE-GRID:0000000
+DEC-PLAN-LIFECYCLE-OPEN:0000000
+DEC-SLICE-DECOMPOSES-TO-WORK:0000000
+DEC-UID-OUTLIVES-TYPE:0000000
+MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION:0000000
+NAR-TERM-BEADS:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NODE-TYPE-GRID
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-INVARIANT-IS-A-REQUIREMENT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-SLICE-DECOMPOSES-TO-WORK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-PLAN-LIFECYCLE-OPEN
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-UID-OUTLIVES-TYPE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-BEADS
+  ROLE: Cites

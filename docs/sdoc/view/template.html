@@ -1,0 +1,1134 @@
+<title>Canon View</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Spline+Sans+Mono:wght@400;600&display=swap"
+/>
+<style>
+  /* A content-blind page over one payload (schema whiteboard-view/1).
+   The only vocabularies written into this file are the schema's keys, the seven
+   widget words, the eight legend colour names and the fixed screens keyed on
+   tree shape. Every other word on the page arrives in the payload. */
+  :root {
+    --ground: #f5f6f4;
+    --surface: #ffffff;
+    --surface2: #ebede9;
+    --ink: #1c2321;
+    --ink2: #4a544f;
+    --ink3: #6f7973;
+    --line: #d5d9d4;
+    --focus: #2f6fd6;
+    --edge: rgba(28, 35, 33, 0.3);
+    --c-green: #2e8b57;
+    --c-slate: #6a5acd;
+    --c-amber: #b8860b;
+    --c-blue: #2f6fd6;
+    --c-red: #c43d3d;
+    --c-teal: #1a7f7a;
+    --c-violet: #8b3fbf;
+    --c-grey: #66706b;
+    --display:
+      "Bricolage Grotesque", "Atkinson Hyperlegible", system-ui, sans-serif;
+    --body:
+      "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto,
+      sans-serif;
+    --mono:
+      "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+      monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #141816;
+      --surface: #1c2220;
+      --surface2: #242b28;
+      --ink: #e6eae7;
+      --ink2: #b3bbb6;
+      --ink3: #8a948e;
+      --line: #2f3834;
+      --focus: #5f8ce0;
+      --edge: rgba(0, 0, 0, 0.75);
+      --c-green: #37a366;
+      --c-slate: #8c7bde;
+      --c-amber: #b98d1f;
+      --c-blue: #5f8ce0;
+      --c-red: #dc665c;
+      --c-teal: #3fb3ad;
+      --c-violet: #b48ae6;
+      --c-grey: #98a29c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #141816;
+    --surface: #1c2220;
+    --surface2: #242b28;
+    --ink: #e6eae7;
+    --ink2: #b3bbb6;
+    --ink3: #8a948e;
+    --line: #2f3834;
+    --focus: #5f8ce0;
+    --edge: rgba(0, 0, 0, 0.75);
+    --c-green: #37a366;
+    --c-slate: #8c7bde;
+    --c-amber: #b98d1f;
+    --c-blue: #5f8ce0;
+    --c-red: #dc665c;
+    --c-teal: #3fb3ad;
+    --c-violet: #b48ae6;
+    --c-grey: #98a29c;
+  }
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+  a {
+    color: inherit;
+  }
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  code,
+  .mono {
+    font-family: var(--mono);
+    font-size: 0.86em;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--display);
+    font-weight: 700;
+    line-height: 1.15;
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+  }
+  h1 {
+    font-size: 1.6rem;
+  }
+  h2 {
+    font-size: 1.3rem;
+  }
+  h3 {
+    font-size: 1.05rem;
+  }
+  h4 {
+    font-size: 0.95rem;
+  }
+  p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  .muted {
+    color: var(--ink3);
+  }
+  .dim {
+    color: var(--ink2);
+  }
+  .small {
+    font-size: 0.88rem;
+  }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink3);
+    overflow-wrap: anywhere;
+  }
+
+  /* colour classes: a legend colour name maps to one token, nothing else */
+  .c-green {
+    --tagc: var(--c-green);
+  }
+  .c-slate {
+    --tagc: var(--c-slate);
+  }
+  .c-amber {
+    --tagc: var(--c-amber);
+  }
+  .c-blue {
+    --tagc: var(--c-blue);
+  }
+  .c-red {
+    --tagc: var(--c-red);
+  }
+  .c-teal {
+    --tagc: var(--c-teal);
+  }
+  .c-violet {
+    --tagc: var(--c-violet);
+  }
+  .c-grey {
+    --tagc: var(--c-grey);
+  }
+  .c-none {
+    --tagc: var(--ink3);
+  }
+
+  /* header */
+  .top {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--ground);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 10px 16px 6px;
+    flex-wrap: wrap;
+  }
+  .brand a {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 1.05rem;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+  .tabs {
+    display: flex;
+    gap: 2px;
+    overflow-x: auto;
+    padding: 0 10px;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .tabs.scrollx {
+    --scroll-bg: var(--ground);
+  }
+  .tabs a {
+    flex: 0 0 auto;
+    padding: 8px 10px 10px;
+    text-decoration: none;
+    font-size: 0.92rem;
+    color: var(--ink2);
+    border-bottom: 3px solid transparent;
+    font-family: var(--display);
+    font-weight: 500;
+    max-width: 14rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tabs a[aria-current="page"] {
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+  }
+
+  /* horizontal scrollers: a shadow on whichever edge hides more content.
+     The two covering layers scroll with the content (background-attachment:
+     local) and slide off the edge as it is reached; the two shadow layers
+     stay put, so a shadow shows exactly while there is more to scroll to.
+     Pure CSS, so it needs no measuring and cannot go stale on resize. */
+  .scrollx {
+    --scroll-bg: var(--surface);
+    background:
+      linear-gradient(90deg, var(--scroll-bg) 40%, transparent) left / 36px 100%,
+      linear-gradient(270deg, var(--scroll-bg) 40%, transparent) right / 36px
+        100%,
+      radial-gradient(farthest-side at 0 50%, var(--edge), transparent) left /
+        18px 100%,
+      radial-gradient(farthest-side at 100% 50%, var(--edge), transparent)
+        right / 18px 100%;
+    background-repeat: no-repeat;
+    background-attachment: local, local, scroll, scroll;
+  }
+
+  /* layout */
+  main {
+    padding: 16px 16px 72px;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .screen > * + * {
+    margin-top: 18px;
+  }
+  .stack > * + * {
+    margin-top: 10px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    scroll-margin-top: 110px;
+  }
+  .card > * + * {
+    margin-top: 10px;
+  }
+  section.sec {
+    scroll-margin-top: 110px;
+  }
+  section.sec > * + * {
+    margin-top: 10px;
+  }
+  .row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  @media (min-width: 640px) {
+    .grid2 {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  footer {
+    padding: 20px 16px 40px;
+    max-width: 760px;
+    margin: 0 auto;
+    color: var(--ink3);
+    font-size: 0.85rem;
+  }
+  footer code {
+    overflow-wrap: anywhere;
+  }
+  ul.plain {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  ul.plain > li + li {
+    margin-top: 6px;
+  }
+  .hit {
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 55%, transparent);
+  }
+
+  /* word chips (legend words) and swatches */
+  .word {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.03em;
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+  .word i {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: var(--tagc, var(--ink3));
+    flex: none;
+  }
+  .word.big {
+    font-size: 0.82rem;
+  }
+  .word .n {
+    color: var(--ink3);
+  }
+
+  /* chips */
+  .chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: var(--surface2);
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+  .chip b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .chip small {
+    font-size: 0.66rem;
+    color: var(--ink3);
+    margin-left: 4px;
+  }
+  .flag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+
+  /* node links: block form puts the title on its own line under the id */
+  a.node {
+    display: block;
+    text-decoration: none;
+    padding: 3px 0;
+    line-height: 1.45;
+  }
+  a.node code {
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    font-size: 0.78rem;
+    color: var(--ink);
+    background: var(--surface2);
+    padding: 1px 6px;
+    border-radius: 5px;
+    overflow-wrap: anywhere;
+  }
+  a.node .t {
+    display: block;
+    color: var(--ink2);
+    font-size: 0.92rem;
+  }
+  a.node:hover .t {
+    text-decoration: underline;
+  }
+  a.node.inline {
+    display: inline;
+    padding: 0;
+  }
+  a.node.inline code {
+    display: inline;
+    width: auto;
+    font-size: 0.8em;
+  }
+  a.node.inline .t {
+    display: inline;
+  }
+  span.node.dead code {
+    font-size: 0.78rem;
+    background: var(--surface2);
+    padding: 1px 6px;
+    border-radius: 5px;
+  }
+
+  /* rows widget */
+  .line {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 5px solid var(--tagc, var(--ink3));
+    border-radius: 10px;
+    padding: 10px 14px 10px;
+    scroll-margin-top: 110px;
+  }
+  .line > * + * {
+    margin-top: 6px;
+  }
+  .line-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .line .h {
+    font-size: 1rem;
+    line-height: 1.45;
+  }
+  .line .by {
+    font-size: 0.9rem;
+    color: var(--ink2);
+  }
+  .line .by b {
+    font-weight: 400;
+    color: var(--ink3);
+  }
+  .line .idx {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--ink3);
+  }
+  .counts {
+    display: flex;
+    gap: 6px 14px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  /* tally widget */
+  .heat {
+    display: grid;
+    grid-template-columns: minmax(120px, 38%) 1fr;
+    gap: 8px 12px;
+    align-items: center;
+  }
+  .heat-label {
+    text-decoration: none;
+    font-size: 0.9rem;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  .heat-label:hover {
+    text-decoration: underline;
+  }
+  .heat-label .n {
+    color: var(--ink3);
+    font-size: 0.8rem;
+  }
+  .bar {
+    display: flex;
+    gap: 2px;
+    height: 22px;
+  }
+  .seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--tagc);
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    text-decoration: none;
+    border-radius: 3px;
+    min-width: 6px;
+    overflow: hidden;
+  }
+  .seg:hover {
+    filter: brightness(1.12);
+  }
+  .totals .bar {
+    height: 28px;
+  }
+
+  /* legend widget */
+  .legend {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    align-items: baseline;
+  }
+  .legend .meaning {
+    font-size: 0.92rem;
+    color: var(--ink2);
+  }
+  .legend .cn {
+    font-size: 0.72rem;
+    color: var(--ink3);
+    font-family: var(--mono);
+  }
+
+  /* glossary widget */
+  dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 14px;
+    font-size: 0.92rem;
+  }
+  dt {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink3);
+    padding-top: 4px;
+    overflow-wrap: anywhere;
+  }
+  dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+  dl.words dt {
+    padding-top: 0;
+    font-size: 0.95rem;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--ink);
+    font-family: var(--body);
+    font-weight: 700;
+  }
+  dl.words {
+    grid-template-columns: minmax(100px, 30%) 1fr;
+  }
+  dl.fields {
+    grid-template-columns: minmax(90px, 24%) 1fr;
+  }
+  @media (max-width: 480px) {
+    dl.fields {
+      grid-template-columns: 1fr;
+    }
+    dl.fields dt {
+      padding-top: 6px;
+    }
+  }
+
+  /* tables */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.9rem;
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink3);
+    font-weight: 600;
+  }
+  .tbl {
+    overflow-x: auto;
+  }
+  td.num {
+    text-align: right;
+    font-family: var(--mono);
+  }
+  td.opts {
+    min-width: 14rem;
+  }
+  .warn {
+    color: var(--c-red);
+  }
+
+  /* edges widget */
+  figure {
+    margin: 0;
+  }
+  figure svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    color: var(--ink2);
+  }
+  figcaption {
+    font-size: 0.85rem;
+    color: var(--ink3);
+    margin-top: 8px;
+  }
+  .figwrap {
+    overflow-x: auto;
+  }
+  @media (max-width: 760px) {
+    .figwrap svg {
+      min-width: 720px;
+    }
+  }
+
+  /* cites */
+  ul.cites {
+    list-style: none;
+    padding: 8px 0 0;
+    margin: 0;
+    border-top: 1px dashed var(--line);
+  }
+  ul.cites li {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0 10px;
+    align-items: start;
+  }
+  .fp {
+    font-size: 0.8rem;
+    color: var(--ink2);
+    white-space: nowrap;
+    padding-top: 4px;
+    text-align: right;
+  }
+  .fp .mark {
+    font-family: var(--mono);
+    margin-right: 4px;
+  }
+
+  /* node screen */
+  .nodehead code {
+    font-size: 0.9rem;
+    background: var(--surface2);
+    padding: 2px 8px;
+    border-radius: 6px;
+    overflow-wrap: anywhere;
+    display: inline-block;
+    max-width: 100%;
+  }
+  input.search {
+    width: 100%;
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .count {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--ink3);
+  }
+  .field {
+    overflow-wrap: anywhere;
+    font-size: 0.92rem;
+  }
+  .field p + p,
+  .field pre + p,
+  .field p + pre {
+    margin-top: 0.6em;
+  }
+  .field pre.figure {
+    white-space: pre;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+  }
+  .crumb {
+    font-size: 0.8rem;
+    color: var(--ink3);
+    text-decoration: none;
+  }
+  .crumb:hover {
+    text-decoration: underline;
+  }
+  .checks li {
+    padding: 8px 0;
+    border-top: 1px dashed var(--line);
+  }
+  .checks li > * + * {
+    margin-top: 4px;
+  }
+  .checks li > span.text {
+    display: block;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+</style>
+
+<div id="app">
+  <header class="top">
+    <div class="brand">
+      <a id="brand" href="#/start"></a
+      ><span id="brandsub" class="kicker"></span>
+    </div>
+    <nav class="tabs scrollx" id="tabs" aria-label="Screens"></nav>
+  </header>
+  <main id="main" class="screen"></main>
+  <footer id="foot"></footer>
+</div>
+
+<script>
+  const DATA = /*DATA*/;
+
+  const SCHEMA="whiteboard-view/1";
+  const COLOURS=["green","slate","amber","blue","red","teal","violet","grey"];
+  const WIDGETS=["prose","rows","table","glossary","legend","tally","edges"];
+  const FPMARK={undeclared:"◌",unsigned:"○",signed:"●",drifted:"◐"};
+
+  function h(tag, attrs={}, ...kids){
+    const e=document.createElement(tag);
+    for(const [k,v] of Object.entries(attrs||{})){
+      if(v==null||v===false) continue;
+      if(k==="class") e.className=v;
+      else if(k.startsWith("on")) e.addEventListener(k.slice(2),v);
+      else e.setAttribute(k,v);
+    }
+    for(const k of kids.flat(Infinity)){ if(k==null||k===false) continue; e.append(k.nodeType?k:document.createTextNode(String(k))); }
+    return e;
+  }
+  const SVGNS="http://www.w3.org/2000/svg";
+  function s(tag, attrs={}, ...kids){
+    const e=document.createElementNS(SVGNS,tag);
+    for(const [k,v] of Object.entries(attrs||{})){ if(v==null) continue; e.setAttribute(k,v); }
+    for(const k of kids.flat(Infinity)){ if(k==null||k===false) continue; e.append(k.nodeType?k:document.createTextNode(String(k))); }
+    return e;
+  }
+
+  /* ---------- indexes over the payload ---------- */
+  const NODES=DATA.nodes||{};
+  const LEGEND=Array.isArray(DATA.legend)?DATA.legend:[];
+  const LEGW=Object.fromEntries(LEGEND.map(l=>[l.word,l]));
+  const LADDERS=DATA.ladders||{};
+  const GRAMMAR=DATA.grammar||{};
+  const BACK=DATA.backlinks||{};
+  const ROOT=DATA.tree;
+  const NAR={}, PARENT={}, TAB={};
+  (function index(n,parent,tab){ NAR[n.uid]=n; PARENT[n.uid]=parent; TAB[n.uid]=tab; (n.children||[]).forEach(c=>index(c,n.uid,tab||c.uid)); })(ROOT,null,null);
+  const TABS=ROOT.children||[];
+
+  const colourOf=word=>{ const l=word!=null?LEGW[word]:null; return l&&COLOURS.includes(l.colour)?l.colour:null; };
+  const cls=word=>"c-"+(colourOf(word)||"none");
+  const titleOf=uid=>NAR[uid]?NAR[uid].title:(NODES[uid]?NODES[uid].title:null);
+  const hrefOf=uid=>NAR[uid]?`#/n/${enc(uid)}`:(NODES[uid]?`#/nodes/${enc(uid)}`:null);
+  const enc=encodeURIComponent;
+  const rank=(field,value)=>{ const l=LADDERS[field]; if(!Array.isArray(l)) return null; const i=l.indexOf(value); return i<0?null:[i+1,l.length]; };
+  const plural=(n,one,many)=>`${n} ${n===1?one:(many||one+"s")}`;
+
+  /* ---------- small components ---------- */
+  function nodeLink(uid, inline){
+    const t=titleOf(uid);
+    const href=hrefOf(uid);
+    if(!href) return h("span",{class:"node dead"+(inline?" inline":"")},h("code",{},uid),inline?" ":null,h("span",{class:"muted small"},inline?"(not in this payload)":" not in this payload"));
+    // Inline, the title rides in the tooltip: spliced into a sentence it
+    // makes the sentence unreadable, and the cites list below every
+    // narrative shows each cited UID with its title in full.
+    const a=h("a",{class:"node"+(inline?" inline":""),href,title:inline&&t!=null?t:undefined},h("code",{},uid));
+    if(t!=null&&!inline) a.append(h("span",{class:"t"},t));
+    return a;
+  }
+  function spans(list){ return (list||[]).map(sp=> sp&&sp.link!=null ? nodeLink(sp.link,true) : String(sp&&sp.t!=null?sp.t:"")); }
+  const LINKTOKEN=/\[LINK:\s*([^\]\s]+)\s*\]/g;
+  function linkifyText(text){
+    const out=[]; let last=0; const str=String(text);
+    str.replace(LINKTOKEN,(m,uid,off)=>{ out.push(str.slice(last,off)); out.push(hrefOf(uid)?nodeLink(uid,true):m); last=off+m.length; return m; });
+    out.push(str.slice(last)); return out;
+  }
+  // A field's text, verbatim in content, reflowed in shape: a paragraph is
+  // joined into one run unless a line of it is indented or holds a run of
+  // spaces, which marks a figure laid out by hand and is kept as-is.
+  function fieldText(text){
+    const str=String(text);
+    return str.split(/\n[ \t]*\n/).map(par=>{
+      const lines=par.split("\n");
+      const figure=lines.some(l=>/^[ \t]/.test(l)||/\S {3,}\S/.test(l));
+      return figure?h("pre",{class:"figure scrollx"},linkifyText(par)):h("p",{},linkifyText(lines.map(l=>l.trim()).join(" ")));
+    });
+  }
+  function wordChip(word,n,big){
+    if(word==null) return h("span",{class:"word c-none"+(big?" big":"")},h("i"),h("span",{class:"muted"},"no word"),n!=null?h("span",{class:"n"},n):null);
+    const l=LEGW[word];
+    return h("span",{class:`word ${cls(word)}${big?" big":""}`,title:l?`${l.colour}: ${l.meaning}`:undefined},h("i"),word,n!=null?h("span",{class:"n"},n):null);
+  }
+  function stateChips(state){
+    if(!state) return [];
+    return Object.entries(state).map(([k,v])=>{ const r=rank(k,v); return h("span",{class:"chip"},k," · ",h("b",{},String(v)),r?h("small",{},`${r[0]}/${r[1]}`):null); });
+  }
+  function narChips(n){ return stateChips({DEPTH:n.depth,AUTHORED_BY:n.authored}); }
+  function tagRow(n){
+    const tags=(n.tags||[]);
+    if(!tags.length && !n.widget) return null;
+    return h("div",{class:"row"},n.widget?h("span",{class:"flag"},n.widget):null,tags.map(t=>h("span",{class:"flag"},t)));
+  }
+  function prose(n){ return (n.prose||[]).map(p=>h("p",{},spans(p))); }
+  function citesList(n){
+    const c=n.cites||[]; if(!c.length) return null;
+    return h("ul",{class:"cites","aria-label":"cites"},c.map(x=>{
+      const st=FPMARK[x.fp]?x.fp:"undeclared";
+      return h("li",{},nodeLink(x.uid),h("span",{class:"fp"},h("span",{class:"mark","aria-hidden":"true"},FPMARK[st]),st,x.superseded?[" ",h("span",{class:"flag warn"},"superseded")]:null));
+    }));
+  }
+
+  /* ---------- widgets ---------- */
+  function widgetRows(n){
+    const rows=n.rows||[];
+    const counts=new Map(); LEGEND.forEach(l=>counts.set(l.word,0)); let none=0;
+    rows.forEach(r=>{ if(r.word==null) none++; else counts.set(r.word,(counts.get(r.word)||0)+1); });
+    const head=h("div",{class:"counts"},h("span",{class:"count"},plural(rows.length,"row")),
+      [...counts].filter(([,c])=>c>0).map(([w,c])=>wordChip(w,c)), none?wordChip(null,none):null);
+    const list=h("div",{class:"stack"},rows.map(r=>rowCard(n,r)));
+    return [head,list];
+  }
+  function rowCard(n,r){
+    const by = r.by!=null ? h("p",{class:"by"},h("b",{},"by: "), r.by_uid&&hrefOf(r.by_uid) ? byWithLink(r.by,r.by_uid) : String(r.by)) : null;
+    return h("article",{class:`line ${cls(r.word)}`,id:`row-${n.uid}-${r.n}`},
+      h("div",{class:"line-head"},wordChip(r.word),h("span",{class:"idx"},"#"+r.n)),
+      h("p",{class:"h"},spans(r.spans)),
+      by);
+  }
+  // The "by" text is split on its by_uid as a whole UID-shaped token -- the
+  // same tokenizer the wireline chose it with (UID_TOKEN_RE) -- so a longer
+  // UID that merely contains it, such as WORK-BUILD-NAR-ROOT-STEP-1 around
+  // NAR-ROOT, is skipped and the standalone mention is the one linked.
+  const UIDTOKEN=/[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+/g;
+  function byWithLink(by,uid){
+    const str=String(by); let i=-1, m;
+    UIDTOKEN.lastIndex=0;
+    while((m=UIDTOKEN.exec(str))){ if(m[0]===uid){ i=m.index; break; } }
+    if(i<0) return [str," ",nodeLink(uid,true)];
+    return [str.slice(0,i),nodeLink(uid,true),str.slice(i+uid.length)];
+  }
+  function segBar(by_word,total,href,height){
+    const bar=h("div",{class:"bar",style:height?`height:${height}px`:null,role:"img","aria-label":Object.entries(by_word).map(([w,c])=>`${c} ${w}`).join(", ")||"empty"});
+    const order=[...LEGEND.map(l=>l.word),...Object.keys(by_word).filter(w=>!LEGW[w])];
+    order.forEach(w=>{ const c=by_word[w]; if(!c) return; const seg=h(href?"a":"span",{class:`seg ${cls(w)}`,style:`flex:${c}`,href,title:`${c} ${w}`},c); bar.append(seg); });
+    return bar;
+  }
+  function widgetTally(n){
+    const entries=n.tally||[];
+    const totals={}; entries.forEach(e=>Object.entries(e.by_word||{}).forEach(([w,c])=>totals[w]=(totals[w]||0)+c));
+    const all=Object.values(totals).reduce((a,b)=>a+b,0);
+    const max=Math.max(1,...entries.map(e=>e.total||0));
+    const tot=h("div",{class:"totals"},segBar(totals,all,null,28),
+      h("p",{class:"muted small",style:"margin-top:6px"},plural(all,"row"),all?": ":"",Object.entries(totals).map(([w,c],i)=>[i?", ":"",`${c} ${w}`])));
+    const g=h("div",{class:"heat"});
+    entries.forEach(e=>{
+      const href=hrefOf(e.uid);
+      g.append(h(href?"a":"span",{class:"heat-label",href},e.title!=null?e.title:e.uid," ",h("span",{class:"n"},e.total)),
+        h("div",{style:`width:${((e.total||0)/max*100).toFixed(1)}%`},segBar(e.by_word||{},e.total,href)));
+    });
+    return [tot,g];
+  }
+  function widgetLegend(n){
+    const rows=(n.legend&&n.legend.length)?n.legend:LEGEND;
+    if(!rows.length) return h("p",{class:"muted"},"no legend");
+    return h("div",{class:"legend"},rows.flatMap(l=>[wordChip(l.word,null,true),h("span",{class:"meaning"},l.meaning," ",h("span",{class:"cn"},"("+l.colour+")"))]));
+  }
+  function widgetGlossary(n){
+    const terms=n.terms||[]; if(!terms.length) return null;
+    return h("dl",{class:"words"},terms.flatMap(t=>[h("dt",{id:`row-${n.uid}-${t.n}`},t.term),h("dd",{},spans(t.spans))]));
+  }
+  function widgetTable(n){
+    const t=n.table; if(!t) return h("p",{class:"muted"},"no table");
+    return h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},(t.header||[]).map(c=>h("th",{},c)))),h("tbody",{},(t.rows||[]).map(r=>h("tr",{},r.map(c=>h("td",{},c)))))));
+  }
+  function widgetEdges(n){
+    const pairs=DATA.pairs||[];
+    if(!pairs.length) return h("p",{class:"muted"},"no pairs");
+    return [h("figure",{},h("div",{class:"figwrap scrollx"},edgesSvg(pairs)),h("figcaption",{},"Arrows run from the source to the target, labelled with the role and the live count.")),
+      h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"from"),h("th",{},"role"),h("th",{},"to"),h("th",{class:"num"},"count"))),
+        h("tbody",{},pairs.map(p=>h("tr",{},h("td",{},p[0]),h("td",{},h("code",{},p[1])),h("td",{},p[2]),h("td",{class:"num"},p[3]))))))];
+  }
+  function edgesSvg(pairs){
+    const types=[]; pairs.forEach(p=>{ [p[0],p[2]].forEach(t=>{ if(!types.includes(t)) types.push(t); }); });
+    const N=types.length, cols=Math.ceil(Math.sqrt(N)), rows=Math.ceil(N/cols);
+    const W=180,H=54,CW=320,CH=190,M=70;
+    const width=M*2+(cols-1)*CW+W, height=M*2+(rows-1)*CH+H;
+    const pos={}; types.forEach((t,i)=>{ const c=i%cols,r=Math.floor(i/cols); pos[t]={x:M+c*CW,y:M+r*CH,cx:M+c*CW+W/2,cy:M+r*CH+H/2}; });
+    const svg=s("svg",{viewBox:`0 0 ${width} ${height}`,role:"img","aria-label":"which kinds of node point at which","font-family":"var(--body)","font-size":"12"});
+    svg.append(s("defs",{},s("marker",{id:"arr",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"7",markerHeight:"7",orient:"auto-start-reverse"},s("path",{d:"M0 0L10 5L0 10z",fill:"currentColor"}))));
+    const groups=new Map();
+    pairs.forEach(([a,role,b,c])=>{ const k=a+" "+b; if(!groups.has(k)) groups.set(k,{a,b,labels:[]}); groups.get(k).labels.push(`${role} ${c}`); });
+    const lines=s("g",{fill:"none",stroke:"currentColor","stroke-width":"1.5","marker-end":"url(#arr)"});
+    const texts=s("g",{fill:"currentColor",style:"paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round"});
+    const placed=[]; // label boxes already on the sheet, so a new one can dodge them
+    const boxOf=(x,y,labels)=>{ const w=Math.max(...labels.map(l=>l.length))*6.6+8, hh=labels.length*14+4; return {x:x-w/2,y:y-12,w,h:hh}; };
+    const hits=b=>placed.some(o=>b.x<o.x+o.w&&o.x<b.x+b.w&&b.y<o.y+o.h&&o.y<b.y+b.h) || types.some(t=>{ const P=pos[t]; return b.x<P.x+W&&P.x<b.x+b.w&&b.y<P.y+H&&P.y<b.y+b.h; });
+    const label=(x,y,labels)=>{ placed.push(boxOf(x,y,labels)); labels.forEach((l,i)=>texts.append(s("text",{x,y:y+i*14,"text-anchor":"middle"},l))); };
+    for(const {a,b,labels} of groups.values()){
+      const A=pos[a],B=pos[b];
+      if(a===b){
+        const x0=A.x+8,y0=A.y+10,x1=A.x+34,y1=A.y;
+        lines.append(s("path",{d:`M${x0} ${y0} C ${x0-50} ${y0-30}, ${x1-20} ${y1-60}, ${x1} ${y1}`}));
+        label(A.x-10,A.y-46-(labels.length-1)*14,labels);
+        continue;
+      }
+      const reverse=groups.has(b+" "+a);
+      let dx=B.cx-A.cx, dy=B.cy-A.cy; const len=Math.hypot(dx,dy)||1; dx/=len; dy/=len;
+      const off=reverse?12:0, ox=-dy*off, oy=dx*off;
+      const p1=clip(A,dx,dy,W,H), p2=clip(B,-dx,-dy,W,H);
+      lines.append(s("line",{x1:p1.x+ox,y1:p1.y+oy,x2:p2.x+ox,y2:p2.y+oy}));
+      const side=reverse?16:10;
+      let best=null;
+      for(const t of [0.5,0.35,0.65,0.25,0.75,0.42,0.58]){
+        const mx=p1.x+(p2.x-p1.x)*t+ox-dy*side, my=p1.y+(p2.y-p1.y)*t+oy+dx*side;
+        const y=my-((labels.length-1)*14)/2+4;
+        if(best===null) best=[mx,y];
+        if(!hits(boxOf(mx,y,labels))){ best=[mx,y]; break; }
+      }
+      label(best[0],best[1],labels);
+    }
+    svg.append(lines,texts);
+    types.forEach(t=>{ const P=pos[t]; svg.append(s("g",{},
+      s("rect",{x:P.x,y:P.y,width:W,height:H,rx:"8",style:"fill:var(--surface);stroke:var(--ink2)","stroke-width":"1.5"}),
+      s("text",{x:P.cx,y:P.y+33,"text-anchor":"middle","font-size":"14","font-weight":"700",style:"fill:var(--ink);font-family:var(--display)"},t))); });
+    return svg;
+  }
+  function clip(P,dx,dy,W,H){
+    const tx=dx!==0?(W/2)/Math.abs(dx):Infinity, ty=dy!==0?(H/2)/Math.abs(dy):Infinity, t=Math.min(tx,ty)+2;
+    return {x:P.cx+dx*t,y:P.cy+dy*t};
+  }
+  function grammarTables(type){
+    const g=GRAMMAR[type]; if(!g) return null;
+    return h("div",{class:"stack"},
+      h("div",{class:"row"},h("h4",{},"fields"),g.prefix?h("span",{class:"chip"},"prefix · ",h("b",{},g.prefix)):null),
+      h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"name"),h("th",{},"kind"),h("th",{},"options"),h("th",{},"required"))),
+        h("tbody",{},(g.fields||[]).map(f=>h("tr",{},h("td",{},h("code",{},f.name)),h("td",{},f.kind),h("td",{class:"dim opts"},(f.options||[]).join(", ")),h("td",{},f.required?"yes":"no")))))),
+      h("h4",{},"relations it may make"),
+      h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"type"),h("th",{},"role"))),
+        h("tbody",{},(g.roles||[]).map(r=>h("tr",{},h("td",{},r.type),h("td",{},r.role!=null?h("code",{},r.role):h("span",{class:"muted"},"—"))))))));
+  }
+  function widgetBody(n){
+    switch(n.widget){
+      case "rows": return widgetRows(n);
+      case "tally": return widgetTally(n);
+      case "legend": return widgetLegend(n);
+      case "glossary": return widgetGlossary(n);
+      case "table": return widgetTable(n);
+      case "edges": return widgetEdges(n);
+      case "prose": case undefined: case null: return null;
+      default: return h("p",{class:"muted small"},"unknown widget: ",h("code",{},String(n.widget)));
+    }
+  }
+
+  /* ---------- a narrative at a level of the tree ---------- */
+  function crumb(n){
+    const trail=[]; let p=PARENT[n.uid];
+    while(p&&p!==ROOT.uid){ trail.unshift(p); p=PARENT[p]; }
+    if(!trail.length) return null;
+    return h("p",{class:"row"},trail.map((u,i)=>[i?h("span",{class:"muted"},"›"):null,h("a",{class:"crumb",href:hrefOf(u)},NAR[u].title)]));
+  }
+  function narBody(n){
+    return [prose(n), widgetBody(n), n.grammar_of!=null?grammarTables(n.grammar_of):null, citesList(n)];
+  }
+  function renderNar(n, level, forceCards){
+    const kids=n.children||[];
+    const asCards = forceCards || n.widget==="glossary";
+    const children = kids.length ? h("div",{class:asCards?"grid2":"stack"},kids.map(c=>renderNar(c, asCards?2:level+1, asCards))) : null;
+    if(level===0){
+      return [h("div",{class:"stack",id:`nar-${n.uid}`},h("p",{class:"kicker"},n.uid),h("h1",{},n.title),h("div",{class:"row"},narChips(n)),tagRow(n)),
+        ...narBody(n).flat().filter(Boolean), children];
+    }
+    if(level===1){
+      return h("section",{class:"sec",id:`nar-${n.uid}`},h("div",{class:"row"},h("h2",{},n.title),narChips(n)),h("p",{class:"kicker"},n.uid),tagRow(n),...narBody(n).flat().filter(Boolean),children);
+    }
+    return h("article",{class:"card",id:`nar-${n.uid}`},h("h3",{},n.title),h("div",{class:"row"},h("span",{class:"kicker"},n.uid),narChips(n)),tagRow(n),...narBody(n).flat().filter(Boolean),children);
+  }
+
+  /* ---------- screens ---------- */
+  function screenStart(){
+    const checks=Array.isArray(DATA.checks)?DATA.checks:[];
+    const gen=DATA.generated||{};
+    return [
+      h("div",{class:"stack",id:`nar-${ROOT.uid}`},h("p",{class:"kicker"},ROOT.uid),h("h1",{},ROOT.title),h("div",{class:"row"},narChips(ROOT)),tagRow(ROOT)),
+      h("section",{class:"card"},prose(ROOT),widgetBody(ROOT),ROOT.grammar_of!=null?grammarTables(ROOT.grammar_of):null,citesList(ROOT)),
+      h("section",{class:"card"},h("h2",{},"legend"),LEGEND.length?widgetLegend({legend:LEGEND}):h("p",{class:"muted"},"no legend: rows carry no colour"),
+        LEGEND.length?h("p",{class:"muted small"},"Colour is only ever a legend word, and the word is always printed beside it."):null),
+      h("section",{class:"card"},h("h2",{},plural(checks.length,"finding")),
+        checks.length?h("ul",{class:"plain checks"},checks.map(c=>h("li",{},h("div",{},h("span",{class:"chip"},h("b",{},c.rule))),nodeLink(c.at),h("span",{class:"text"},c.text)))):h("p",{class:"muted"},"the check found nothing")),
+      h("section",{class:"card"},h("h2",{},"screens"),h("ul",{class:"plain"},TABS.map(t=>h("li",{},h("a",{href:hrefOf(t.uid)},t.title),h("span",{class:"muted small"}," · ",t.widget,(t.children||[]).length?` · ${plural(t.children.length,"part")}`:""))),
+        h("li",{},h("a",{href:"#/nodes"},"nodes"),h("span",{class:"muted small"}," · ",plural(Object.keys(NODES).length,"node"))))),
+      h("section",{class:"card"},h("h2",{},"generated"),h("dl",{class:"fields"},
+        h("dt",{},"root"),h("dd",{},gen.root!=null?nodeLink(gen.root):"—"),
+        h("dt",{},"canon commit"),h("dd",{},h("code",{},gen.canon_commit!=null?gen.canon_commit:"—")),
+        h("dt",{},"export sha256"),h("dd",{},h("code",{},gen.export_sha256!=null?gen.export_sha256:"—")),
+        h("dt",{},"at"),h("dd",{},gen.at!=null?gen.at:"—"))),
+    ];
+  }
+  function screenTab(uid){
+    const n=NAR[uid]; if(!n) return [h("p",{},"No such screen."),h("a",{href:"#/start"},"start")];
+    return renderNar(n,0,false);
+  }
+  function typeOrder(){
+    const order=Object.keys(GRAMMAR);
+    const seen=new Set(order);
+    Object.values(NODES).forEach(nd=>{ if(!seen.has(nd.type)){ seen.add(nd.type); order.push(nd.type); } });
+    return order;
+  }
+  function screenNodes(){
+    const input=h("input",{class:"search",type:"search",placeholder:"filter by id or title","aria-label":"filter nodes"});
+    const list=h("div",{class:"stack"});
+    const all=Object.values(NODES);
+    const sortKey=nd=>{ const st=nd.state||{}; for(const k of Object.keys(st)){ const r=rank(k,st[k]); if(r) return r[0]; } return 0; };
+    const render=()=>{
+      const q=input.value.trim().toLowerCase();
+      const shown=all.filter(nd=>!q||`${nd.uid} ${nd.title||""}`.toLowerCase().includes(q));
+      list.replaceChildren(...typeOrder().map(t=>{
+        const rows=shown.filter(nd=>nd.type===t).sort((a,b)=>sortKey(a)-sortKey(b)||a.uid.localeCompare(b.uid));
+        if(!rows.length) return null;
+        return h("section",{class:"card"},h("div",{class:"row"},h("h3",{},t),h("span",{class:"count"},rows.length)),
+          h("ul",{class:"plain"},rows.map(nd=>h("li",{},nodeLink(nd.uid),h("div",{class:"row"},stateChips(nd.state),
+            (BACK[nd.uid]||[]).length?h("span",{class:"count"},plural(BACK[nd.uid].length,"backlink")):null,
+            NAR[nd.uid]?h("a",{class:"crumb",href:`#/n/${enc(nd.uid)}`},"in the view"):null)))));
+      }).filter(Boolean), shown.length?null:h("p",{class:"muted"},"nothing matches"));
+    };
+    input.addEventListener("input",render); render();
+    return [h("h1",{},"nodes"),h("p",{class:"dim small"},plural(all.length,"node")," in this payload, grouped by type."),input,list];
+  }
+  function relList(items,dir){
+    if(!items||!items.length) return h("p",{class:"muted"},"none");
+    return h("ul",{class:"plain"},items.map(r=>h("li",{},h("div",{class:"row"},h("code",{class:"muted"},r.role!=null?r.role:"File"),h("span",{class:"muted"},dir==="out"?"→":"←"),r.type?h("span",{class:"flag"},r.type):null),nodeLink(r.uid))));
+  }
+  function screenNode(uid){
+    const nd=NODES[uid];
+    const nar=NAR[uid];
+    if(!nd&&!nar) return [h("p",{},"That node is not in this payload."),h("a",{href:"#/nodes"},"nodes")];
+    const type=nd?nd.type:"", title=nd?nd.title:nar.title, state=nd?nd.state:{DEPTH:nar.depth,AUTHORED_BY:nar.authored}, path=nd?nd.path:nar.path;
+    const back=BACK[uid]||[];
+    const fields=nd?Object.entries(nd.fields||{}):[];
+    return [
+      h("div",{class:"nodehead stack"},h("p",{class:"kicker"},type),h("code",{},uid),h("h1",{},title),
+        h("div",{class:"row"},stateChips(state)),
+        nar?h("p",{class:"small"},h("a",{href:`#/n/${enc(uid)}`},"shown in the view")):null),
+      fields.length?h("section",{class:"card"},h("h2",{},"fields"),h("dl",{class:"fields"},fields.flatMap(([k,v])=>[h("dt",{},k),h("dd",{class:"field"},fieldText(v))]))):null,
+      h("section",{class:"card"},h("h2",{},"out"),relList(nd?nd.out:[],"out")),
+      h("section",{class:"card"},h("h2",{},"in"),relList(nd?nd.in:[],"in")),
+      nd&&nd.files&&nd.files.length?h("section",{class:"card"},h("h2",{},"files"),h("ul",{class:"plain"},nd.files.map(f=>h("li",{},h("code",{},f))))):null,
+      nd&&nd.fp&&nd.fp.length?h("section",{class:"card"},h("h2",{},"fingerprints"),h("ul",{class:"plain"},nd.fp.map(f=>h("li",{},nodeLink(f.uid),h("span",{class:"muted small"},"hash ",h("code",{},f.hash)))))):null,
+      h("section",{class:"card"},h("h2",{},plural(back.length,"backlink")),back.length?h("ul",{class:"plain"},back.map(b=>{
+        const href=b.row!=null&&NAR[b.from]?`#/n/${enc(b.from)}/r/${enc(b.row)}`:hrefOf(b.from);
+        return h("li",{},h("div",{class:"row"},h("span",{class:"flag"},b.via),b.row!=null?h("span",{class:"muted small"},"row #"+b.row):null,b.word!=null?wordChip(b.word):null),
+          href?h("a",{class:"node",href},h("code",{},b.from),h("span",{class:"t"},titleOf(b.from))):h("span",{class:"node dead"},h("code",{},b.from)));
+      })):h("p",{class:"muted"},"nothing points here")),
+      path?h("p",{class:"muted small"},"file: ",h("code",{},path)):null,
+    ];
+  }
+
+  /* ---------- router ---------- */
+  function route(){
+    const raw=location.hash.replace(/^#\/?/,"");
+    const parts=raw.split("/").filter(Boolean).map(decodeURIComponent);
+    const top=parts[0]||"start";
+    const main=document.getElementById("main");
+    let out, current=top, target=null;
+    try{
+      switch(top){
+        case "start": out=screenStart(); break;
+        case "n": {
+          const uid=parts[1]; const tab=TAB[uid];
+          if(uid===ROOT.uid||!NAR[uid]){ out=uid===ROOT.uid?screenStart():[h("p",{},"No such screen."),h("a",{href:"#/start"},"start")]; current="start"; }
+          else { out=screenTab(tab); current="n:"+tab; target = parts[2]==="r"&&parts[3]!=null ? `row-${uid}-${parts[3]}` : (uid!==tab?`nar-${uid}`:null); }
+          break; }
+        case "nodes": out=parts[1]?screenNode(parts[1]):screenNodes(); current="nodes"; break;
+        default: out=[h("p",{},"No such screen."),h("a",{href:"#/start"},"start")];
+      }
+    }catch(e){ out=[h("p",{class:"warn"},"This screen failed to render: "+e.message)]; console.error(e); }
+    main.replaceChildren(...out.flat(Infinity).filter(Boolean));
+    document.querySelectorAll("#tabs a").forEach(a=>{ if(a.dataset.key===current) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current"); });
+    // The strip scrolls and hides its scrollbar, so on a narrow screen the
+    // active tab is centred in it by hand; only the strip moves, never the page.
+    const tabs=document.getElementById("tabs"), cur=tabs.querySelector('a[aria-current="page"]');
+    if(cur){ const tb=tabs.getBoundingClientRect(), cb=cur.getBoundingClientRect(); tabs.scrollLeft+=cb.left-tb.left-(tabs.clientWidth-cb.width)/2; }
+    if(target){ const el=document.getElementById(target); if(el){ el.classList.add("hit"); el.scrollIntoView({block:"start"}); return; } }
+    window.scrollTo(0,0);
+  }
+  function init(){
+    if(DATA.schema!==SCHEMA){
+      document.getElementById("main").append(h("p",{class:"warn"},"This page was built for schema ",h("code",{},SCHEMA)," and the payload says ",h("code",{},String(DATA.schema))," -- refusing to render."));
+      return;
+    }
+    document.title=ROOT.title;
+    const brand=document.getElementById("brand"); brand.textContent=ROOT.title;
+    document.getElementById("brandsub").textContent=(DATA.generated&&DATA.generated.at)||"";
+    const tabs=document.getElementById("tabs");
+    tabs.append(h("a",{href:"#/start","data-key":"start"},"start"));
+    TABS.forEach(t=>tabs.append(h("a",{href:`#/n/${enc(t.uid)}`,"data-key":"n:"+t.uid,title:t.title},t.title)));
+    tabs.append(h("a",{href:"#/nodes","data-key":"nodes"},"nodes"));
+    const gen=DATA.generated||{};
+    document.getElementById("foot").append(h("p",{},"Generated ",gen.at||"",gen.canon_commit?[" from commit ",h("code",{},String(gen.canon_commit).slice(0,12))]:null,". Every word on this page comes from the payload; the page itself knows only its shape."));
+    window.addEventListener("hashchange",route);
+    if(!location.hash) history.replaceState(null,"","#/start");
+    route();
+  }
+  init();
+</script>

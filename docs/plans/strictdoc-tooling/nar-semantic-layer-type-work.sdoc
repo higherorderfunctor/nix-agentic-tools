@@ -1,0 +1,47 @@
+[DOCUMENT]
+TITLE: work
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-TYPE-WORK
+TITLE: work
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: prose
+TAGS: WORK
+STATEMENT: >>>
+Build this. Not a claim about the world, so not in the grid; it dies with the plan that held it.
+
+Also: work declares what it crosses, and crossing more than one layer is what used to be called a slice ([LINK: DEC-SLICE-DECOMPOSES-TO-WORK]). It Crosses the mechanisms it builds on and Produces the evidence it leaves behind ([LINK: DEC-NODE-FAMILIES]). The fourteen SLICE- nodes and the three unrun probes are WORK since 2026-08-30, prefixes kept under [LINK: DEC-UID-OUTLIVES-TYPE]; a run probe is evidence instead, per [LINK: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION]. Whether WORK survives as a type once beads owns execution is [LINK: DEC-PLAN-LIFECYCLE-OPEN]'s to decide.
+
+State: DEPTH. A probe's STATUS went with the SPIKE type.
+<<<
+PARENT_FP: >>>
+DEC-NODE-FAMILIES:0000000
+DEC-PLAN-LIFECYCLE-OPEN:0000000
+DEC-SLICE-DECOMPOSES-TO-WORK:0000000
+DEC-UID-OUTLIVES-TYPE:0000000
+MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION:0000000
+NAR-TERM-BEADS:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SLICE-DECOMPOSES-TO-WORK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-UID-OUTLIVES-TYPE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-PLAN-LIFECYCLE-OPEN
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-BEADS
+  ROLE: Cites

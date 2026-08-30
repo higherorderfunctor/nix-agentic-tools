@@ -1,0 +1,78 @@
+[DOCUMENT]
+TITLE: The data model
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-WHITEBOARD-VIEW-DATA-MODEL
+TITLE: The data model
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+STATEMENT: >>>
+One row per ruling the view rests on: this plan's decisions and requirements first, then the four spec rulings of 2026-08-30 the plan sits under. A row's word is the node's own state on the day of the render, read off the node, not a verdict of this page.
+
+- A view is a tree of narratives: rows inside a statement, Cites for what a narrative presents, Contains for its parts in relation order. [LINK: DEC-NARRATIVE-IS-THE-VIEW-NODE] [ACCEPTED]
+- The words a row may carry, with their colours and meanings, are rows of a legend narrative under the root, never a grammar field and never something the renderer knows. [LINK: DEC-LEGEND-IS-DATA] [ACCEPTED]
+- Each ruled term is a narrative in the spec that cites its ruling, and a narrative that uses the term cites it, so retitling the term dirties every narrative that used it. [LINK: DEC-TERMS-ARE-NARRATIVES] [ACCEPTED]
+- Whether code samples, diagrams and other maintained projections become types of their own or stay narratives with a widget. [LINK: DEC-INLINE-CODE-TYPE] [OPEN]
+- What DEPTH means on a WORK node: design maturity, delivery, or nothing once execution state lives elsewhere. [LINK: DEC-WORK-STATE-FIELD] [OPEN]
+- The renderer knows the shape of a payload and the widget words, never a UID, a type name or a plan. [LINK: REQ-VIEW-RENDERER-IS-CONTENT-BLIND] [ACCEPTED]
+- No node outside the representation family carries a Parent relation or a fingerprint entry to a narrative. [LINK: REQ-NOTHING-DEPENDS-ON-A-NARRATIVE] [ACCEPTED]
+- Node types come in four families, and only the definition grid is a grid; a narrative is the representation family. [LINK: DEC-NODE-FAMILIES] [ACCEPTED]
+- A UID never changes: a retype changes the element tag, and the prefix names the type a node was born with. [LINK: DEC-UID-OUTLIVES-TYPE] [ACCEPTED]
+- A rendered view is a regenerable deliverable computed from the export, never hand-edited and never the source. [LINK: DEC-VIEWS-ARE-REGENERABLE] [ACCEPTED]
+- The node-type migration proceeds now, with WORK as a type, without waiting for beads. [LINK: DEC-MIGRATE-BEFORE-BEADS] [ACCEPTED]
+<<<
+PARENT_FP: >>>
+DEC-INLINE-CODE-TYPE:0000000
+DEC-LEGEND-IS-DATA:0000000
+DEC-MIGRATE-BEFORE-BEADS:0000000
+DEC-NARRATIVE-IS-THE-VIEW-NODE:0000000
+DEC-NODE-FAMILIES:0000000
+DEC-TERMS-ARE-NARRATIVES:0000000
+DEC-UID-OUTLIVES-TYPE:0000000
+DEC-VIEWS-ARE-REGENERABLE:0000000
+DEC-WORK-STATE-FIELD:0000000
+NAR-TERM-BEADS:0000000
+REQ-NOTHING-DEPENDS-ON-A-NARRATIVE:0000000
+REQ-VIEW-RENDERER-IS-CONTENT-BLIND:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NARRATIVE-IS-THE-VIEW-NODE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-LEGEND-IS-DATA
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-TERMS-ARE-NARRATIVES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-INLINE-CODE-TYPE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-WORK-STATE-FIELD
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: REQ-VIEW-RENDERER-IS-CONTENT-BLIND
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: REQ-NOTHING-DEPENDS-ON-A-NARRATIVE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-UID-OUTLIVES-TYPE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-VIEWS-ARE-REGENERABLE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-MIGRATE-BEFORE-BEADS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-BEADS
+  ROLE: Cites
