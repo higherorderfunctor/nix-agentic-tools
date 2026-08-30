@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: A system is a named set of node types and roles declared in one table; membership is computed and a node may be in more than one
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SYSTEM-IS-A-TYPE-SET
+TITLE: A system is a named set of node types and roles declared in one table; membership is computed and a node may be in more than one
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A system is needed that no set of types and roles can name.
+STATEMENT: >>>
+The canon is read as SYSTEMS a person can switch on and off. A system is a
+row of NAR-CANON-SYSTEMS, a durable table in the spec: its name, the node
+types it holds, the relation roles it holds, and what it is for. Today:
+canon (the claims: REQUIREMENT, DECISION, MECHANISM, EVIDENCE, USE_CASE),
+whiteboard (NARRATIVE and its Cites and Contains -- the overlay of
+presentation over the claims), and work (WORK and EVIDENCE with Crosses and
+Produces -- what is to do and what it left behind; beads takes execution
+state over later).
+
+Membership is computed from a node's type and is a SET, not a partition:
+evidence is in two systems, and a node in two enabled systems carries both
+marks. A node shows when any enabled system holds it; an edge shows when
+both ends show and its role belongs to an enabled system. Turning a system
+off changes what is shown and never what was rendered: the payload is the
+same file whatever the switches say.
+<<<
+RATIONALE: >>>
+The operator asked to toggle systems that overlap -- whiteboard and canon
+together or apart, work as a continuation of the whole -- rather than pick
+one. A table the canon holds is the only form under which a new system, or
+a type re-homed to another, is an edit to the canon and not to a script.
+<<<
+NOTES: >>>
+Ruled 2026-08-30 as a first-pass decision under the operator's delegation ('I don't want to be bothered by the recommendation before implementation'); overrule by superseding. Chosen from three independent designs judged against an 82-element inventory of the v1 page. AUTHORED_BY reads llm because the writer has no flag for the human rungs. The switches are drawn by the systems widget on the canon root's Start. A node naming a system by hand is DEC-SYSTEM-TAG-ON-EVERY-ELEMENT, open.
+<<<

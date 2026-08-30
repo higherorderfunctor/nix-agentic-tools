@@ -8,7 +8,7 @@ IMPORT_FROM_FILE: @repo
 UID: DEC-LEGEND-IS-DATA
 TITLE: A view's verdict words, their colours and their meanings are rows in a legend narrative, never a grammar field and never renderer knowledge
 AUTHORED_BY: llm
-STATUS: accepted
+STATUS: superseded
 RETIRES_ON: Two views need to share one verdict vocabulary and repeating the legend proves to drift.
 STATEMENT: >>>
 The words a view's rows may carry in their trailing bracket -- WORKS, GAP,
@@ -37,3 +37,7 @@ sdoc.
 NOTES: >>>
 Ruled 2026-08-30 as a first-pass decision under the operator's delegation of that day ("I'll trust you to take first pass at making decisions"); overrule by superseding. AUTHORED_BY reads llm because the writer has no flag for the human rungs.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LEGEND-IS-DATA-WHERE-PLACED
+  ROLE: Superseded_By

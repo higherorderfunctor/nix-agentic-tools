@@ -1,0 +1,21 @@
+[DOCUMENT]
+TITLE: From a type, gap or node screen, a line's crumb lands on it among its topic neighbours with the filter kept
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[USE_CASE]
+UID: UC-FOLLOW-A-LINE-HOME
+TITLE: From a type, gap or node screen, a line's crumb lands on it among its topic neighbours with the filter kept
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Reading a type screen, the operator taps a line's topic crumb and lands on that topic's screen, scrolled to the line and ringed, with the legend-word filter they had chosen still applied. The same from a gap screen and from a node screen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-EVERY-PART-HAS-A-ROUTE
+  ROLE: Covered_By
+- TYPE: Parent
+  VALUE: DEC-ROW-REFERENCE-LINES
+  ROLE: Covered_By

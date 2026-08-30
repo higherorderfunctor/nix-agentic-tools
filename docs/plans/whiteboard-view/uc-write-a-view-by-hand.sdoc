@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: An author writes a new view with the scribe and gets a page without touching the renderer
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[USE_CASE]
+UID: UC-WRITE-A-VIEW-BY-HAND
+TITLE: An author writes a new view with the scribe and gets a page without touching the renderer
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+An author writes a root, a legend card, tabs, screens and cards with sdoc new NARRATIVE, giving each its WIDGET, PLACE and, where a figure draws over other narratives, its Over target. The task renders it. No file under docs/sdoc/view changes.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NARRATIVE-DECLARES-ITS-PLACE
+  ROLE: Covered_By
+- TYPE: Parent
+  VALUE: DEC-WIDGET-SUBJECT-IS-ITS-OVER-TARGET
+  ROLE: Covered_By
+- TYPE: Parent
+  VALUE: REQ-VIEW-STRUCTURE-COMES-FROM-THE-CANON
+  ROLE: Covered_By

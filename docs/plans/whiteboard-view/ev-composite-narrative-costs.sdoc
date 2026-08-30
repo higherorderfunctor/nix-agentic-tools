@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: What nesting narratives inside one file costs, measured on strictdoc 0.28.3
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-COMPOSITE-NARRATIVE-COSTS
+TITLE: What nesting narratives inside one file costs, measured on strictdoc 0.28.3
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: fixtures and exports under the session scratchpad wf4/strictdoc-organization/ (run.sh, fx-a-*, fx-a2-*, fx-a3-*, out/)
+STATEMENT: >>>
+Measured 2026-08-30. A NARRATIVE element with IS_COMPOSITE true in the
+imported grammar parses, nests children in the export with numbering, and
+the writer round-trips the file byte-identical -- but it refuses the plain
+[NARRATIVE] form everywhere, so all 52 existing narratives would be
+rewritten, and the scribe's walk is flat: on a nested fixture sdoc list saw
+1 node, sdoc check reported 1 node, sdoc show printed the whole subtree. A
+SECTION element declared in the imported grammar parses too (the skill's
+'a TAG starting with SECTION will not parse' is wrong for grammar files;
+the plain [SECTION] node form is what is refused), nests in NODES rather
+than Contains, and the same flat walk applies. DOCUMENT_FROM_FILE assembles
+one-node files into a composite root, exporting each include as an
+unnamed section and dropping the leaves from the document list unless
+--included-documents is passed. strictdoc's own HTML export of a
+three-document fixture: 17 MB, 88 static files, per-document TOC and
+TABLE/TRACE/DEEP-TRACE screens, reverse roles shown; no tabs, no widgets,
+no colours, nothing computed.
+<<<

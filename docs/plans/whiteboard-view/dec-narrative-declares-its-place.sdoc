@@ -1,0 +1,46 @@
+[DOCUMENT]
+TITLE: A narrative declares how it sits on its container's screen; the renderer follows that and never the depth of the tree
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-NARRATIVE-DECLARES-ITS-PLACE
+TITLE: A narrative declares how it sits on its container's screen; the renderer follows that and never the depth of the tree
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A view needs a placement the four words cannot say, or a renderer is found deriving placement from tree shape again.
+STATEMENT: >>>
+A view is still a tree of narratives (rows in a statement, Cites for what a
+narrative presents, Contains for its parts in relation order, a home in the
+plan of what it cites -- all as DEC-NARRATIVE-IS-THE-VIEW-NODE said, and
+restated here unchanged). What changes is that the tree's SHAPE no longer
+decides how it is drawn. Each narrative says so itself, in PLACE:
+
+  tab      an entry in the view's tab strip; its screen is its own body
+           followed by its children
+  screen   a screen of its own, reached from its container's index and by
+           route; the container lists it and never stacks it
+  section  stacked on the container's screen under its title
+  card     stacked on the container's screen as a boxed block
+
+Absent PLACE reads section. The root has no PLACE: it is the page, and its
+own screen is the view's Start. A container may mix children -- a Types tab
+may hold three cards and seven screens -- and the renderer draws the cards
+on the tab's screen and lists the screens after them.
+
+Every root, tab, screen, row and node has a route. A route is the node's
+whole UID, lowercased, never a prefix stripped off it; a tab's label is its
+TITLE, so a tab narrative carries a short one.
+<<<
+RATIONALE: >>>
+The v2 page lost v1 because the only structural fact a narrative could
+state was 'I am contained', and the renderer guessed tab, section and card
+from depth: every child of the root became a tab and a tab with children
+stacked them. Placement is a fact about the view, so it belongs in the
+canon, in a field strictdoc refuses to misspell, outside the contract hash
+so that moving a card never dirties what cites it.
+<<<
+NOTES: >>>
+Ruled 2026-08-30 as a first-pass decision under the operator's delegation ('I don't want to be bothered by the recommendation before implementation'); overrule by superseding. Chosen from three independent designs judged against an 82-element inventory of the v1 page. AUTHORED_BY reads llm because the writer has no flag for the human rungs. Composite narratives, a SECTION element and DOCUMENT_FROM_FILE were measured and rejected for this: DEC-FILES-STAY-FLAT-FOR-VIEWS.
+<<<

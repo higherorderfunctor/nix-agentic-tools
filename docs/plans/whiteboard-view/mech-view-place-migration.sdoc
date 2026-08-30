@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: The scripted pass that gives the existing narratives their PLACE, the Start cards, the reference and source lines, and short tab titles
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-VIEW-PLACE-MIGRATION
+TITLE: The scripted pass that gives the existing narratives their PLACE, the Start cards, the reference and source lines, and short tab titles
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+One script over the semantic-layer tree, through the scribe: PLACE on the
+five tabs, the sheet snapshot as a tab, the legend as a card, the type,
+topic and gap narratives as screens; new cards under the root for what v1's
+Start showed -- the heat strip over Topics, the type grid over a grid card
+under Types, the layer stack, the five gaps over Gaps, the source facts;
+a ladders card under Types; a section under Edges that mirrors the
+allowed-edges topic; the 145 topic rows rewritten to headline, reference
+line and source line; the legend rows given their by-line labels; the five
+tab titles shortened to one word. The type cards move to the spec with
+their plan citations turned into inline links. Nothing is signed, so every
+edit is free; every new citation is a placeholder.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NARRATIVE-DECLARES-ITS-PLACE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-ROW-REFERENCE-LINES
+  ROLE: Governed_By

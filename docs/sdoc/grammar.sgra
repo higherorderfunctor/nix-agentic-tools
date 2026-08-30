@@ -243,7 +243,10 @@ ELEMENTS:
     TYPE: SingleChoice(llm, llm-accepted, llm-adopted, human)
     REQUIRED: True
   - TITLE: WIDGET
-    TYPE: SingleChoice(prose, rows, table, glossary, legend, tally, edges)
+    TYPE: SingleChoice(prose, callout, rows, table, facts, glossary, legend, stack, grid, ladder, strip, tally, index, list, edges, fingerprints)
+    REQUIRED: False
+  - TITLE: PLACE
+    TYPE: SingleChoice(tab, screen, section, card)
     REQUIRED: False
   - TITLE: TAGS
     TYPE: Tag
@@ -270,6 +273,9 @@ ELEMENTS:
   - TYPE: Parent
     ROLE: Backlogged_In
     REVERSE_ROLE: Backlogs
+  - TYPE: Parent
+    ROLE: Over
+    REVERSE_ROLE: Shown_By
 - TAG: WORK
   PROPERTIES:
     PREFIX: WORK-

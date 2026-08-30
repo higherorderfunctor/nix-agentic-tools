@@ -1,0 +1,21 @@
+[DOCUMENT]
+TITLE: Switch systems on and off and watch the figures, counts and indexes follow without a reload
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[USE_CASE]
+UID: UC-TOGGLE-A-SYSTEM
+TITLE: Switch systems on and off and watch the figures, counts and indexes follow without a reload
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The operator turns the whiteboard off and sees the edges figure fall to the canon's pairs; turns work on and sees evidence marked as belonging to both; copies the address and the recipient opens the same selection.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-IS-A-TYPE-SET
+  ROLE: Covered_By
+- TYPE: Parent
+  VALUE: REQ-A-TOGGLE-NEVER-CHANGES-THE-PAYLOAD
+  ROLE: Covered_By

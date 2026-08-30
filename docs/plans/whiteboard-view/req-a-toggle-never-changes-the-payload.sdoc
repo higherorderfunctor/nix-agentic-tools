@@ -1,0 +1,18 @@
+[DOCUMENT]
+TITLE: Switching a system on or off changes what is shown and never the payload
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-A-TOGGLE-NEVER-CHANGES-THE-PAYLOAD
+TITLE: Switching a system on or off changes what is shown and never the payload
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The system switches select client-side over the nodes, edges and backlinks the payload already holds; counts, strips, indexes and figures recompute from that selection; the selection rides in the page's address so a link carries it. No switch causes a re-render or a second payload.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-IS-A-TYPE-SET
+  ROLE: Governed_By

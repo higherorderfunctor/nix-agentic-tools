@@ -11,12 +11,15 @@ DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
 The renderer knows the wireline schema, the widget words and how to draw
-each, the legend's colour vocabulary, and that a tree's children are tabs,
-sections and cards in order. It knows no UID, no tag word, no node-type
-name, no plan directory and no reading of one type through another. Every
-word on the page comes from the payload: from a narrative's own fields, or
-from a table a backed script computed from the export. A renderer edit that
-is needed to show a new node, a new word or a new project violates this.
+each, the legend's colour vocabulary, and that a narrative is placed as its
+PLACE declares and drawn as its WIDGET names over the subject its Over relation
+names. It knows no UID, no tag word, no node-type name, no plan directory and
+no reading of one type through another. Every word on the page comes from the
+payload: from a narrative's own fields, or from a table a backed script
+computed from the export. A renderer edit that is needed to show a new node, a
+new word or a new project violates this -- and so does a renderer that derives
+structure from the shape of the tree instead of from what the narratives
+declare.
 <<<
 RATIONALE: >>>
 The operator's line: "the renderer can have opinions on the data it expects
