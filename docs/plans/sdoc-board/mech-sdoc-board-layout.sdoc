@@ -7,12 +7,17 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SDOC-BOARD-LAYOUT
 TITLE: The board layout condenses cycles before assigning stable layers
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 layout.js treats the snapshot as a directed multigraph. It condenses strongly connected components, ranks the resulting acyclic projection from left to right, orders each rank with deterministic barycentric sweeps, and keeps every original node and edge for rendering. The layout consumes and returns application-owned objects so Dagre or ELK can replace it later.
+<<<
+NOTES: >>>
+Implemented 2026-08-30. The real snapshot condensed to 348 strongly connected components with two two-node cycles preserved. Oversized logical ranks pack into at most 32 rows per adjacent lane. A cyclic fixture proves deterministic positions and forward component ranks.
 <<<
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-SDOC-BOARD-MVP-NATIVE-WEB
   ROLE: Governed_By
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/layout.js

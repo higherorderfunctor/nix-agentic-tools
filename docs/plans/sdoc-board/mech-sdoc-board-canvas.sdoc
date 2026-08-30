@@ -7,10 +7,13 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SDOC-BOARD-CANVAS
 TITLE: The board canvas renders compact cards over a pan-and-zoom scene
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 board.js requests /api/graph, asks the layout module for positions, and renders the complete snapshot as SVG paths and foreign-object-free card groups. Cards show type, UID, title and the node's state; edges show the declared role and arrow. Pointer and wheel transforms provide pan, zoom and fit. Clicking a card emphasizes its immediate incoming and outgoing relations and fills a read-only inspector with every field and relation.
+<<<
+NOTES: >>>
+Implemented 2026-08-30. Headless Chromium at 1708 by 1252 rendered the whole 350-node, 872-edge snapshot; the selected WORK-SDOC-BOARD-MVP route dimmed unrelated topology, highlighted six outgoing declarations and showed all five source fields in the inspector.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -19,3 +22,9 @@ RELATIONS:
 - TYPE: Parent
   VALUE: REQ-SDOC-BOARD-MVP-READS-WHOLE-CANON
   ROLE: Guarantees
+- TYPE: File
+  VALUE: docs/sdoc/board/index.html
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/board.css
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/board.js

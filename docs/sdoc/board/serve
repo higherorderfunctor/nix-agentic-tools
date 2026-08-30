@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+strictdoc_bin="$(command -v strictdoc)"
+strictdoc_python="$(sed -n '1s/^#!//p' "$strictdoc_bin")"
+
+if [[ ! -x $strictdoc_python ]]; then
+  echo "sdoc-board: cannot resolve StrictDoc's Python interpreter from $strictdoc_bin" >&2
+  exit 1
+fi
+
+exec "$strictdoc_python" "$script_dir/server.py" "$@"

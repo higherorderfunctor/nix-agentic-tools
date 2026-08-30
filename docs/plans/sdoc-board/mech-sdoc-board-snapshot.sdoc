@@ -7,10 +7,13 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SDOC-BOARD-SNAPSHOT
 TITLE: The board snapshot preserves StrictDoc nodes and declared relations
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 snapshot.py loads the project with ProjectConfigLoader and TraceabilityIndexBuilder from strictdoc.api. It emits schema sdoc-board/1: project metadata; one node per StrictDoc node with stable UID identity, generated MID alias, type, fields and source location; every resolved Parent and Child declaration with role, reverse role and declaration direction; and the grammar's fields and relation vocabulary. Unresolved targets remain diagnostics rather than disappearing.
+<<<
+NOTES: >>>
+Implemented 2026-08-30 against StrictDoc 0.28.3. The real canon load produced 350 UID-identified nodes, 872 resolved Parent or Child declarations, 12 roles and 0 diagnostics. The snapshot hash excludes generated MIDs and is stable across repeated compilation of one loaded index.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -19,3 +22,5 @@ RELATIONS:
 - TYPE: Parent
   VALUE: REQ-SDOC-BOARD-MVP-READS-WHOLE-CANON
   ROLE: Guarantees
+- TYPE: File
+  VALUE: docs/sdoc/board/snapshot.py

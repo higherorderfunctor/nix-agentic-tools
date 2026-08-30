@@ -1,0 +1,15 @@
+[DOCUMENT]
+TITLE: The first board renders the whole loaded canon and a selected node's context
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SDOC-BOARD-FIRST-RENDER
+TITLE: The first board renders the whole loaded canon and a selected node's context
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: docs/sdoc/board/; headless Chromium 1708x1252; StrictDoc 0.28.3
+STATEMENT: >>>
+Measured on 2026-08-30 from this worktree after the sdoc-board plan was registered. The server retained a TraceabilityIndex containing 350 StrictDoc documents and served an sdoc-board/1 snapshot with 350 nodes, 872 resolved Parent or Child relations across 12 roles, 7 node types and 0 diagnostics. The stable layout found 348 strongly connected components, including two cyclic components of two nodes each, then fit the whole canon into adjacent rank lanes. A 1708 by 1252 headless Chromium render showed every card and edge; loading the route for WORK-SDOC-BOARD-MVP selected its card, dimmed unrelated topology, highlighted its six outgoing declarations and rendered all five fields in the inspector. Five Python server and snapshot contracts, the cyclic deterministic JavaScript layout contract, shellcheck, treefmt and sdoc check all passed.
+<<<
