@@ -1,5 +1,13 @@
 # validate-at-stop: replace the racy prek PostToolUse hook with a Stop hook
 
+> **Status update (2026-08-29):** v1 is implemented. The later validation-policy
+> decision is now resolved by `config/repo-validation.nix`: cspell, deadnix,
+> shellcheck, and statix stay as pre-commit and Stop feedback and also run as
+> merge-blocking corpus gates. Stop requests the generated manual-stage list,
+> formats the working tree without staging, and reports a persistent formatter
+> failure. Embedded snippets below are the historical implementation plan, not
+> the current source of truth.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
@@ -13,13 +21,13 @@ lint.
 
 **Architecture:** A `Stop` hook (`validate-at-stop`) runs when Claude hands
 control back. It (1) early-exits on a no-diff turn, (2) auto-applies formatting
-over the working-tree changeset via the existing git-hooks `treefmt` and
-restages, (3) runs the judgment linters over the same changeset and, if any
-fail, emits `{"decision":"block","reason":…}` so the finding reaches the model
-and forces a fix pass — with a `stop_hook_active` loop-guard so a persistent
-false positive can't trap the turn. Formatting no longer races because at Stop
-there is no subsequent Edit to desync. The existing racy `PostToolUse`
-`git-hooks-run` hook is disabled.
+over the working-tree changeset via the existing git-hooks `treefmt` without
+mutating the index, (3) runs the judgment linters over the same changeset and,
+if any fail, emits `{"decision":"block","reason":…}` so the finding reaches the
+model and forces a fix pass — with a `stop_hook_active` loop-guard so a
+persistent false positive can't trap the turn. Formatting no longer races
+because at Stop there is no subsequent Edit to desync. The existing racy
+`PostToolUse` `git-hooks-run` hook is disabled.
 
 **Tech Stack:** Nix + devenv (`claude.code.hooks` integration), `prek`
 (pre-commit reimpl, = `config.git-hooks.package`), `treefmt`, bash (strict
@@ -43,9 +51,9 @@ live block→fix→clean run all passed. See memory
   `writeShellApplication`; every external command it uses (`git`, `python3`,
   `prek`, coreutils) must come from `runtimeInputs` so it works under a stripped
   PATH (`.claude/rules/nix-standards.md`; `checks/bare-commands.nix`).
-- **DRY — reuse git-hooks config:** invoke formatting + linters through `prek`,
-  not by re-declaring tools/excludes; `treefmt.nix` and `git-hooks.hooks` stay
-  the single source of truth.
+- **DRY — reuse validation policy:** invoke formatting + linters through `prek`,
+  not by re-declaring tools/excludes or hook IDs; `config/repo-validation.nix`
+  is the single source of truth.
 - **`.claude/settings.json` is a devenv-generated, read-only store symlink.**
   Changes to `devenv.nix` hooks take effect only after a **devshell reload**,
   never in the session that edited `devenv.nix`
@@ -493,13 +501,12 @@ agent run is a user-driven test — spoon-fed step-by-step, never async
 
 ---
 
-## Open questions / deferred (NOT in scope for v1)
+## Open questions / deferred from v1
 
-- **De-dupe the two-tier suite:** the devenv two-tier comment says
-  deadnix/statix/cspell/shellcheck "belong in agent steering, not pre-commit."
-  Now that the Stop hook _is_ that steering surface, should those move OUT of
-  pre-commit (keeping pre-commit = treefmt + gitleaks + convco)? Bigger change;
-  decide separately.
+- **Resolved 2026-08-29 — validator placement:** cspell, deadnix, shellcheck,
+  and statix remain local pre-commit and Stop feedback, with authoritative
+  whole-corpus CI gates. Changeset feedback is useful but cannot cover
+  `--no-verify`, human/editor paths, or latent corpus drift.
 - **SubagentStop:** should subagents validate at their own Stop too (worktree
   edits)? v1 is main-agent Stop only.
 - **prek stash under `--files`:** if Task 1 finds `--files` still stashes, note

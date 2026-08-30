@@ -4,79 +4,11 @@
   instr,
   ...
 }: let
-  cu = "${pkgs.coreutils}/bin";
-  # cmp ships in diffutils, NOT coreutils. Getting this wrong fails
-  # silently: the call sits in an `if` condition, where a missing binary
-  # is just a false branch and errexit never trips, so every file gets
-  # rewritten on every shell entry instead of being skipped.
-  du = "${pkgs.diffutils}/bin";
-
-  # Materialize generated instruction files into the working tree.
-  #
-  # ONE mechanism for all five groups: a real file copy. These are tracked
-  # repository projections, so they cannot be store symlinks: Git would commit
-  # mode 120000 with an absolute /nix/store target that is meaningless in any
-  # other clone. Consumer-module Kiro steering is separate and now uses the
-  # ordinary runtime-files symlink sink after the pinned loader spike.
-  #
-  # Idempotent on purpose: an unchanged file is never rewritten, so mtimes
-  # don't churn on every direnv reload. Writes go through mktemp+mv so a
-  # concurrent agent session (this repo is routinely co-occupied) observes
-  # old bytes or new bytes, never a partial file. devenv's own
-  # copyMode="copy" does an unconditional `rm -rf` + `cp`, which has both
-  # of those hazards and cannot prune orphans.
-  syncLib = ''
-    # direnv activates in SUBDIRECTORIES and a task's default cwd is the
-    # caller's cwd, so relative destinations must be anchored.
-    cd "$DEVENV_ROOT"
-
-    sync_file() {
-      # `if` form rather than `cmp && return` — an AND-list whose final
-      # command fails would trip errexit.
-      if ${du}/cmp -s "$1" "$2" 2>/dev/null; then return 0; fi
-      ${cu}/mkdir -p "$(${cu}/dirname "$2")"
-      # Hidden prefix: a crashed run must not strand a visible *.md.XXXXXX
-      # in a gitignored dir where nothing would ever notice it.
-      tmp=$(${cu}/mktemp "$(${cu}/dirname "$2")/.$(${cu}/basename "$2").XXXXXX")
-      ${cu}/cp -L "$1" "$tmp"
-      ${cu}/chmod 0644 "$tmp"
-      ${cu}/mv -f "$tmp" "$2"
-      log "materialized $2"
-    }
-
-    # Mirror <srcdir>/*.md into <destdir>, pruning generated files that no
-    # longer exist upstream. All three managed dirs are 100% generated, so
-    # pruning is safe — and it closes a gap BOTH old mechanisms left open:
-    # a renamed fragment used to strand a stale rule/steering file forever,
-    # invisible because those dirs are gitignored.
-    sync_dir() {
-      ${cu}/mkdir -p "$2"
-      for f in "$1"/*.md; do
-        [ -e "$f" ] || continue
-        sync_file "$f" "$2/$(${cu}/basename "$f")"
-      done
-      for f in "$2"/*.md; do
-        [ -e "$f" ] || continue
-        if [ ! -e "$1/$(${cu}/basename "$f")" ]; then
-          ${cu}/rm -f "$f"
-          log "pruned stale $f"
-        fi
-      done
-    }
+  materializeInstructions = import ../../lib/materialize-repo-instructions.nix {inherit instr pkgs;};
+  materialize = group: ''
+    ${bashPreamble}
+    exec ${pkgs.lib.getExe materializeInstructions} ${group} "$DEVENV_ROOT"
   '';
-
-  syncEco = {
-    agents = ''sync_file ${instr.agents}/AGENTS.md AGENTS.md'';
-    claude = ''
-      sync_file ${instr.claude}/CLAUDE.md CLAUDE.md
-      sync_dir ${instr.claude}/rules .claude/rules
-    '';
-    copilot = ''
-      sync_file ${instr.copilot}/copilot-instructions.md .github/copilot-instructions.md
-      sync_dir ${instr.copilot}/instructions .github/instructions
-    '';
-    kiro = ''sync_dir ${instr.kiro} .kiro/steering'';
-  };
   bashPreamble = ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
@@ -181,51 +113,31 @@ in {
     "generate:instructions:agents" = {
       description = "Generate AGENTS.md from fragments";
       before = ["generate:instructions"];
-      exec = ''
-        ${bashPreamble}
-        ${log}
-        ${syncLib}
-        ${syncEco.agents}
-      '';
+      exec = materialize "agents";
     };
 
     "generate:instructions:claude" = {
       description = "Generate CLAUDE.md and Claude rule files from fragments";
       before = ["generate:instructions"];
-      exec = ''
-        ${bashPreamble}
-        ${log}
-        ${syncLib}
-        ${syncEco.claude}
-      '';
+      exec = materialize "claude";
     };
 
     "generate:instructions:copilot" = {
       description = "Generate Copilot instruction files from fragments";
       before = ["generate:instructions"];
-      exec = ''
-        ${bashPreamble}
-        ${log}
-        ${syncLib}
-        ${syncEco.copilot}
-      '';
+      exec = materialize "copilot";
     };
 
     "generate:instructions:kiro" = {
       description = "Generate Kiro steering files from fragments";
       before = ["generate:instructions"];
-      exec = ''
-        ${bashPreamble}
-        ${log}
-        ${syncLib}
-        ${syncEco.kiro}
-      '';
+      exec = materialize "kiro";
     };
 
     # ── Bootstrap ────────────────────────────────────────────────────
     # Runs on every `devenv shell`, `direnv reload`, `devenv up`,
-    # `devenv reload` and `devenv test`. THIS is what replaces the deleted
-    # devenv `files.*` block: a fresh clone has no CLAUDE.md,
+    # `devenv reload` and manual `devenv test`. THIS is what replaces the
+    # deleted devenv `files.*` block: a fresh clone has no CLAUDE.md,
     # .claude/rules/* or .kiro/steering/* (all gitignored), and this
     # creates them as real files before the prompt appears.
     #
@@ -250,15 +162,7 @@ in {
       description = "Materialize generated instruction files on shell entry";
       after = ["devenv:files:cleanup"];
       before = ["devenv:enterShell"];
-      exec = ''
-        ${bashPreamble}
-        ${log}
-        ${syncLib}
-        ${syncEco.agents}
-        ${syncEco.claude}
-        ${syncEco.copilot}
-        ${syncEco.kiro}
-      '';
+      exec = materialize "all";
     };
 
     "generate:instructions" = {

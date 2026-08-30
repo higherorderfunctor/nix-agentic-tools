@@ -11,10 +11,10 @@
 #
 # Two independent gaps let that happen, and this check closes both:
 #
-#   1. The prek `shellcheck` hook is `lib.optionalAttrs (!isCI)` in devenv.nix,
-#      so it runs ZERO hooks in CI. Same reasoning as checks/doubled-words.nix:
-#      a local-only, `--no-verify`-skippable hook does not cover the path the
-#      defect actually took, which was a PR.
+#   1. The prek `shellcheck` hook had no flake-check projection, so CI ran zero
+#      shellcheck hooks. A local, `--no-verify`-skippable hook did not cover the
+#      path the defect actually took, which was a PR. The validator's current
+#      corpus backend is declared in config/repo-validation.nix.
 #   2. A pre-commit hook only ever sees STAGED files. A script can land dirty
 #      and stay invisible until someone happens to run `prek run --all-files`.
 #      That is the gap that hid #618 — not CI's absence alone.
@@ -35,9 +35,9 @@
 # what reaches a flake sandbox is a copy. Content is the reliable signal.
 #
 # THERE ARE NO EXCLUSIONS, and that is a measured claim rather than an
-# aspiration: the whole 54-file corpus is clean under these flags as of this
-# commit. Adding an exclusion here silently un-gates a file, so prefer fixing
-# the script. If a file genuinely cannot pass, a targeted `# shellcheck
+# aspiration: the whole corpus is clean under these flags. Adding an exclusion
+# here silently un-gates a file, so prefer fixing the script. If a file
+# genuinely cannot pass, a targeted `# shellcheck
 # disable=` at the offending line keeps the exemption visible in the source.
 #
 # Only git-tracked files reach the sandbox — see the "Flake Source Visibility"

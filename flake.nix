@@ -94,6 +94,12 @@
         config.allowUnfree = true;
         overlays = [self.overlays.default];
       };
+    instructionsFor = system:
+      import ./dev/instructions.nix {
+        inherit lib;
+        pkgs = pkgsFor system;
+        inherit (inputs) treefmt-nix;
+      };
     # Bind each overlay once so `overlays.<name>` and the
     # `overlays.default` composition share the same import.
     aiOverlay = import ./overlays {inherit inputs;};
@@ -235,6 +241,10 @@
 
     checks = forAllSystems (system: let
       pkgs = pkgsFor system;
+      instr = instructionsFor system;
+      instructionMaterializer = import ./lib/materialize-repo-instructions.nix {inherit instr pkgs;};
+      isolatePrekHooks = import ./lib/isolate-prek-hooks.nix {inherit pkgs;};
+      repoValidation = import ./config/repo-validation.nix {inherit lib pkgs;};
       bareCommandsCheck = {bare-commands = import ./checks/bare-commands.nix {inherit pkgs;};};
       beadsContractsCheck = {beads-contracts = import ./checks/beads-contracts.nix {inherit pkgs;};};
       beadsLifecycleCheck = {beads-lifecycle = import ./checks/beads-lifecycle.nix {inherit lib pkgs self;};};
@@ -260,6 +270,18 @@
       goFloorDriftChecks = import ./checks/go-floor-drift.nix {inherit lib pkgs self;};
       goToolchainFloorChecks = import ./checks/go-toolchain-floor.nix {inherit inputs lib pkgs;};
       instructionsDriftCheck = import ./checks/instructions-drift.nix {inherit pkgs self;};
+      instructionMaterializationCheck = {
+        instruction-materialization = import ./checks/instruction-materialization.nix {
+          inherit instr pkgs;
+          materializer = instructionMaterializer;
+        };
+      };
+      isolatePrekHooksCheck = {
+        isolate-prek-hooks = import ./checks/isolate-prek-hooks.nix {
+          inherit pkgs;
+          isolator = isolatePrekHooks;
+        };
+      };
       kiroExtractedCheck = import ./checks/kiro-cli-extracted.nix {inherit pkgs self;};
       kiroFhsContractCheck = {kiro-fhs-contract = import ./checks/kiro-fhs-contract.nix {inherit pkgs;};};
       kiroWrapperArgvCheck = {kiro-wrapper-argv = import ./checks/kiro-wrapper-argv.nix {inherit lib pkgs;};};
@@ -267,12 +289,15 @@
       optionsDocsCheck = import ./checks/options-doc.nix {inherit lib pkgs self;};
       pnpmFetcherParityCheck = import ./checks/pnpm-fetcher-parity.nix {inherit lib pkgs self;};
       sembleTemplatesCheck = import ./checks/semble-templates.nix {inherit lib pkgs self;};
-      shellcheckCorpusCheck = {shellcheck-corpus = import ./checks/shellcheck-corpus.nix {inherit lib pkgs;};};
+      repoValidationChecks = repoValidation.mkCiChecks {
+        gitHooksRun = inputs.git-hooks.lib.${system}.run;
+        src = ./.;
+      };
       splitCodeSpansCheck = {split-code-spans = import ./checks/split-code-spans.nix {inherit pkgs;};};
       updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit inputs lib pkgs self updateRegistry;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // beadsContractsCheck // beadsLifecycleCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // claudeMemoryCollisionGuardCheck // claudeSettingsSchemaCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // doubledWordsCheck // doubledWordsFixturesCheck // facetMockChecks // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goFloorDriftChecks // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroFhsContractCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // sembleTemplatesCheck // shellcheckCorpusCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);
+      bareCommandsCheck // beadsContractsCheck // beadsLifecycleCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // claudeMemoryCollisionGuardCheck // claudeSettingsSchemaCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // doubledWordsCheck // doubledWordsFixturesCheck // facetMockChecks // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goFloorDriftChecks // goToolchainFloorChecks // instructionMaterializationCheck // instructionsDriftCheck // isolatePrekHooksCheck // kiroExtractedCheck // kiroFhsContractCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // repoValidationChecks // sembleTemplatesCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.
@@ -287,10 +312,7 @@
       # Shared with devenv.nix — see dev/instructions.nix for why. The
       # working tree is materialized from these exact derivations on every
       # shell entry, so a second rendering here would flip-flop the tree.
-      instr = import ./dev/instructions.nix {
-        inherit lib pkgs;
-        inherit (inputs) treefmt-nix;
-      };
+      instr = instructionsFor system;
     in
       # Grouped namespaces under pkgs.ai are flattened here for CLI ergonomics so
       # `nix build .#context7-mcp` works without knowing the group.

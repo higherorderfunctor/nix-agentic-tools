@@ -9,9 +9,17 @@
   mcpLib = import ./lib/mcp.nix {inherit lib;};
   inherit (mcpLib) mkPackageEntry;
 
-  # Shared shell-hardening settings (bashOptions / shoptHeader /
-  # shellcheckFlags) — see config/shell-strict.nix.
-  shellStrict = import ./config/shell-strict.nix;
+  # One declaration table owns each hook's local, Stop, and CI lifecycle.
+  repoValidation = import ./config/repo-validation.nix {inherit lib pkgs;};
+  gitHooksPackages = import "${inputs.git-hooks}/nix" {
+    inherit (pkgs) system;
+    inherit (inputs) nixpkgs;
+    isFlakes = true;
+  };
+  repoValidationChecks = repoValidation.mkCiChecks {
+    gitHooksRun = gitHooksPackages.run;
+    src = ./.;
+  };
 
   # The four generated instruction-file derivations — same import as
   # flake.nix, single source of truth. Returns { agents, claude, copilot,
@@ -27,79 +35,24 @@
   # Stop-hook validator (runs the git-hooks suite when Claude hands control
   # back, instead of racing the Edit tool on every PostToolUse). See the
   # claude.code.hooks block below.
-  validateAtStop = import ./lib/validate-at-stop.nix {inherit pkgs config;};
-
-  # Pre-commit guard: reject commits made while the default branch is the
-  # checked-out HEAD. This repo is trunk-based (see the git-workflow
-  # fragment) — `main` is never committed to directly. The branch-protection
-  # ruleset already rejects the push, but that only fires after work is done;
-  # this catches a mis-branched commit at commit time, in whichever worktree
-  # has `main` checked out (normally the primary checkout). It rides the
-  # git-hooks framework (never core.hooksPath), so it is SHARED across
-  # worktrees but INERT in any worktree not on the trunk.
-  # Wired into git-hooks.hooks below.
-  rejectDefaultBranchCommit = pkgs.writeShellApplication {
-    name = "reject-default-branch-commit";
-    runtimeInputs = [pkgs.git];
-    extraShellCheckFlags = shellStrict.shellcheckFlags;
-    inherit (shellStrict) bashOptions;
-    text = ''
-      ${shellStrict.shoptHeader}
-      # The protected trunk. Hardcoded on purpose: resolving origin/HEAD
-      # needs a network round-trip and a configured remote HEAD, neither
-      # guaranteed at commit time. If the trunk is ever renamed, edit this
-      # one string.
-      default_branch="main"
-      current_branch="$(git rev-parse --abbrev-ref HEAD)"
-      # A detached HEAD prints "HEAD" and every feature branch prints its own
-      # name — both are allowed. Only a commit while the default branch is the
-      # checked-out HEAD (the one worktree that has main checked out —
-      # normally the primary checkout) is rejected. This hook is SHARED across
-      # worktrees (it rides the git-hooks framework, never core.hooksPath),
-      # but it is INERT in any worktree not on the trunk.
-      if [ "$current_branch" = "$default_branch" ]; then
-        printf '%s\n' \
-          "error: refusing to commit directly on the default branch ('$default_branch')." \
-          "This repo is trunk-based — branch into a worktree first, e.g.:" \
-          "  worktrees=\"\$(dirname \"\$(git rev-parse --path-format=absolute --git-common-dir)\")-worktrees\"" \
-          "  git worktree add -b <type>/<slug> \"\$worktrees/<slug>\" origin/$default_branch" \
-          "(--no-verify bypasses this guard by design.)" >&2
-        exit 1
-      fi
-    '';
+  validateAtStop = import ./lib/validate-at-stop.nix {
+    inherit pkgs config;
+    inherit (repoValidation) formatterHookId judgmentHookIds;
   };
+  isolatePrekHooks = import ./lib/isolate-prek-hooks.nix {inherit pkgs;};
 
-  # Re-stage files changed by formatting hooks without hiding a failure from
-  # the producing `git diff`. The previous inline pipeline inherited neither
-  # strict mode nor pipefail, so a broken first stage looked like an empty,
-  # successful xargs invocation.
-  treefmtRestage = pkgs.writeShellApplication {
-    name = "treefmt-restage";
-    runtimeInputs = [pkgs.findutils pkgs.git];
-    extraShellCheckFlags = shellStrict.shellcheckFlags;
-    inherit (shellStrict) bashOptions;
-    text = ''
-      ${shellStrict.shoptHeader}
-      git diff --name-only -z | xargs -0 -r git add --
-    '';
-  };
-
-  # CI-lean closure — EVAL-time branch on $CI. Distinct from the RUNTIME
-  # $CI guard in processes.docs.exec below: that one skips work inside an
-  # already-built shell; this one changes what the shell closure CONTAINS,
-  # so CI never downloads it. Under CI (`devenv test` in
-  # .github/workflows/devenv-test.yml) the shell exists only to run the
-  # materialize/generate tasks and the enterTest assertions — both use
-  # interpolated store paths and never invoke the interactive tooling —
-  # so the LSP servers (packages, below) and the git-hooks suite are
-  # gated to !CI. The ai.* modules stay ENABLED under CI: their files
-  # fanout is exactly what enterTest gates (their CLI wrappers ride
-  # along in the closure; gating those needs a factory-level option).
+  # Diagnostic-lean closure — EVAL-time branch on $CI. The manual Devenv
+  # Diagnostic workflow sets it to omit interactive LSP/Semble tooling that
+  # enterTest never invokes. Validation policy is deliberately NOT conditional:
+  # local hooks, their manual-stage projection, and the flake CI projection all
+  # exist regardless of $CI, so exporting CI cannot silently make a guard
+  # disappear. The ai.* modules stay enabled because enterTest exercises their
+  # files fanout (their CLI wrappers ride along in the closure; gating those
+  # needs a factory-level option).
   # devenv evaluates impurely and its eval cache records env-var inputs
   # (devenv-eval-cache EnvInputDesc), so flipping $CI re-evaluates
-  # instead of serving a stale shell. With CI unset this config is
-  # byte-identical to the pre-gate one; a dev who exports CI=1 in their
-  # environment gets the lean shell — accepted.
+  # instead of serving a stale shell. A developer who exports CI=1 gets the
+  # diagnostic-lean interactive tool set, but the same validation declarations.
   isCI = builtins.getEnv "CI" != "";
 
   # Normalize the repository's canonical checkout and worktree collection from
@@ -252,7 +205,7 @@ in {
       statix
     ]
     # Fixture interpreters — `fixtures/kiro-primitives` is operator-run and
-    # nothing in CI reaches it: no workflow and no flake check references those
+    # no flake check executes those suites: no workflow or check references the
     # suites, and devenv.nix itself never invokes either interpreter (the
     # generate/materialize tasks and the enterTest assertions use interpolated
     # store paths, per the isCI note above). Same reasoning and same gate as the
@@ -263,7 +216,7 @@ in {
       python3
     ]
     # LSP servers (in PATH for ENABLE_LSP_TOOL and MCP bridging) —
-    # interactive-only, dropped from the CI closure (~1GB: nixd pulls
+    # interactive-only, dropped from the diagnostic closure (~1GB: nixd pulls
     # llvm, marksman pulls dotnet). See the isCI note above.
     ++ lib.optionals (!isCI) [
       marksman
@@ -302,8 +255,8 @@ in {
     claude.enable = true;
     codex = {
       enable = true;
-      # Semble stays outside the CI devenv-test closure but is pinned by this
-      # flake for every interactive shell. The extra parsers cover file types
+      # Semble stays outside the manual diagnostic closure but is pinned by
+      # this flake for every interactive shell. The extra parsers cover files
       # Semble recognizes but its upstream bundled grammar archive does not
       # currently ship. Restrict the integration to Codex through the generated
       # runtime program tree rather than a runtime selector.
@@ -476,131 +429,12 @@ in {
 
   # ── Git Hooks ─────────────────────────────────────────────────────────
   #
-  # Two-tier validation architecture:
-  #
-  #   1. Pre-commit (this block, runs on `git commit`):
-  #      - Formatters: treefmt (drives biome/taplo/alejandra/etc.)
-  #      - Re-stagers: treefmt-restage
-  #      - Security trip-wires: gitleaks (catches secrets BEFORE push)
-  #      - Commit-message validators: convco
-  #      - Code validators (TEMPORARY here): deadnix, statix, cspell,
-  #        shellcheck — these belong in agent steering, not pre-commit.
-  #        Pre-commit's job is "did I format and not leak secrets",
-  #        not "is this code well-typed". The `validate-at-stop` Stop
-  #        hook (claude.code, below) now runs these same validators at
-  #        each agent hand-back — the first piece of that steering
-  #        surface — but they stay here too as the commit-time gate. See
-  #        the single-source-of-truth decision in
-  #        feedback_validation_entrypoint.md (memory).
-  #
-  #   2. CI (`nix flake check` in .github/workflows/ci.yml):
-  #      - Structural eval checks (cache-hit-parity, factory-eval, etc.)
-  #      - Formatting hard gate: checks.<system>.formatting (treefmt --check)
-  #      - Package builds (separate `build` job via nix-fast-build)
-  #      - `devenv test` (separate `devenv-test` job): runs the
-  #        enterTest real-file gate below — the ONLY check on the
-  #        gitignored generated instruction files (symlink-vs-copy
-  #        class), which no flake check can see.
-  #      - NOT the validators above — they're advisory until the
-  #        steering migration.
-  #
-  # If you're an agent reading this and wondering where to add a new
-  # validator: think first about whether it belongs in the agent
-  # steering (most do) or as a CI hard gate (formatting, security).
-  # Pre-commit should stay narrow.
-  #
-  # Gated to !CI (see the isCI note above): with every hook disabled,
-  # devenv's git-hooks integration emits no install/run tasks, so
-  # `devenv test` in CI skips the suite — it duplicates the flake-check
-  # formatting gate there — and the hook toolchain (gitleaks, convco,
-  # per-hook wrappers) drops out of the CI closure. prek itself stays:
-  # validate-at-stop carries it as a runtimeInput.
-  git-hooks.hooks = lib.optionalAttrs (!isCI) {
-    treefmt.enable = true;
-    deadnix = {
-      enable = true;
-      excludes = ["overlays/sources/.*"];
-    };
-    statix = {
-      enable = true;
-      excludes = ["overlays/sources/.*"];
-    };
-    cspell = {
-      enable = true;
-      excludes = [
-        ".*-package-lock\\.json$"
-        ".*\\.lock$"
-        "^config/cspell/"
-        "^docs/"
-        # Verbatim engine-bundle quotes and real command output, including
-        # identifier fragments cut mid-token by windowed byte extraction.
-        # Excluded HERE as well as in cspell.json's ignorePaths: pre-commit
-        # must filter these itself, because a batch whose every file is
-        # ignored leaves `cspell lint` with no files to check and it exits
-        # non-zero on that. Authored prose in the same tree stays checked.
-        "^fixtures/kiro-primitives/evidence/"
-        "^fixtures/kiro-primitives/records/"
-        # `\\.` and not `\.`: these are Nix double-quoted strings, where a
-        # backslash before a non-escape character is DROPPED, so `\.patch$`
-        # reaches cspell as `.patch$` — a regex whose `.` matches any
-        # character, quietly excluding every path ending in "patch". Measured:
-        # `nix eval --expr '".*\.patch$"'` prints `.*.patch$`. The `.lock` and
-        # `-package-lock.json` rows above already double it; the codex row did
-        # not, and is corrected here.
-        "^overlays/chatgpt-codex-extracted\\.json$"
-        # Same story: the claude sidecar is now the binary's own settings
-        # schema verbatim — ~160 upstream setting names and every enum value
-        # they carry, none of them authored here.
-        "^overlays/claude-code-extracted\\.json$"
-        # Patch files are verbatim third-party code plus git blob hashes; no
-        # token in one is authored here. They were never deliberately checked
-        # — oxlint's napi-rs patch merely happened to carry an index hash
-        # containing a digit, and regenerating it against a newer dependency
-        # produced an all-letter one that cspell reads as a misspelled word.
-        # Excluded in both places for the reason given above.
-        ".*\\.patch$"
-      ];
-    };
-    # Re-stage files modified by formatters (treefmt, shfmt, etc.)
-    # Without this, formatters modify staged files but the formatted
-    # version isn't re-added — leaving dirty tree after commit.
-    treefmt-restage = {
-      enable = true;
-      name = "treefmt-restage";
-      # -z/-0: a path containing whitespace would otherwise be split into
-      # several nonexistent paths and silently left unstaged.
-      # `--`: a path beginning with a dash is otherwise parsed as an option —
-      # measured, `git add` on a path like `-x.md` dies with an unknown-switch
-      # error and stages nothing.
-      entry = lib.getExe treefmtRestage;
-      pass_filenames = false;
-      stages = ["pre-commit"];
-    };
-    convco.enable = true;
-    shellcheck = {
-      enable = true;
-      args = ["-x"] ++ shellStrict.shellcheckFlags;
-    };
-    gitleaks = {
-      enable = true;
-      name = "gitleaks";
-      entry = "${pkgs.gitleaks}/bin/gitleaks protect --staged --verbose --redact";
-      pass_filenames = false;
-      stages = ["pre-commit"];
-    };
-    # Trunk guard: reject a commit made while the default branch is the
-    # checked-out HEAD. always_run so it fires with no file match; INERT on
-    # every feature branch (fires only in the worktree that has `main`
-    # checked out — normally the primary checkout).
-    reject-default-branch-commit = {
-      enable = true;
-      name = "reject-default-branch-commit";
-      entry = lib.getExe rejectDefaultBranchCommit;
-      pass_filenames = false;
-      always_run = true;
-      stages = ["pre-commit"];
-    };
-  };
+  # `config/repo-validation.nix` is the policy source of truth. It gives Stop
+  # participants a manual stage and leaves commit-message, security, restaging,
+  # and trunk guards on their real Git lifecycle only. Flake CI projects its
+  # corpus validators from the same declarations.
+  git-hooks.hooks = repoValidation.localHooks;
+  git-hooks.run = repoValidationChecks.repo-lints;
 
   # ── Claude Code (upstream devenv options) ───────────────────────────
   claude.code = {
@@ -785,8 +619,9 @@ in {
     # can be committed when their projection is tracked. This is distinct
     # from consumer `ai.<runtime>.files`, whose ordinary backend symlinks are
     # supported by current Kiro. `test ! -L` is load-bearing because `test -f`
-    # follows symlinks. Three groups below are gitignored and invisible to
-    # every flake check, so this is the only runtime gate on their projection.
+    # follows symlinks. This remains a full-shell smoke assertion; the required
+    # instruction-materialization flake check exercises the exact copier in a
+    # temporary repository without depending on this working tree.
     for f in AGENTS.md CLAUDE.md .claude/rules/nix-standards.md \
              .github/copilot-instructions.md \
              .github/instructions/pipeline.instructions.md \
@@ -808,6 +643,19 @@ in {
     checkTasks
     // generateTasks
     // {
+      # Upstream's unscoped `prek run -a` selects pre-commit hooks, which makes
+      # the default-branch guard reject `devenv test` on main. The manual stage
+      # is the deliberately side-effect-free diagnostic projection: formatter
+      # plus code validators, never commit lifecycle hooks.
+      "devenv:git-hooks:run".exec = lib.mkForce ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        exec ${lib.getExe config.git-hooks.package} run \
+          --hook-stage manual \
+          --all-files \
+          --config "$DEVENV_ROOT/${config.git-hooks.configPath}"
+      '';
+
       # ── Update pipeline (ninja DAG) ──────────────────────────────────
       # ninja handles the full dependency graph with -j4 concurrency.
       # Each target runs in a git worktree, cherry-picks to branch on
@@ -905,139 +753,8 @@ in {
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
 
-          ${pkgs.git}/bin/git rev-parse --git-dir >/dev/null 2>&1 || exit 0
-          hooks_dir="$(${pkgs.git}/bin/git rev-parse --path-format=absolute --git-path hooks)"
-          [ -d "$hooks_dir" ] || exit 0
-          exec {isolate_lock_fd}> "$hooks_dir/.devenv-isolate.lock"
-          ${lib.getExe pkgs.flock} "$isolate_lock_fd"
+          exec ${lib.getExe isolatePrekHooks}
 
-          # Rewrite only prek-generated hooks (they carry a baked
-          # --config="<abs>"); git-branchless hooks have neither marker
-          # and are left untouched.
-          #
-          # GNU tools are pinned to store paths (the repo convention). The
-          # `$(git ...)` INSIDE the injected block is written verbatim into
-          # the hook and runs at COMMIT time under git's own hook
-          # environment (git is always on PATH there), so it stays bare —
-          # pinning a store path there would break the hook if that path
-          # were garbage-collected.
-          #
-          # The shared lock serializes concurrent rewrite tasks. Each complete
-          # hook is rendered to a temp file in the hooks directory, receives
-          # the original mode, and is published with a same-filesystem rename;
-          # a concurrent commit therefore sees either complete generation,
-          # never a truncated mixture.
-          #
-          # The same hooks also get project-local runtime state and a bootstrap
-          # preflight injected ahead of their `exec`, and the exec's --config is
-          # pointed at the block's `$_devenv_config`. Routing the path through a
-          # variable rather than inlining the expression twice keeps ONE source
-          # of truth in the hook and — load-bearing — keeps the `--config="…"`
-          # sed below idempotent: the primary-checkout expression contains
-          # nested double quotes, which `[^"]*` would only match a prefix of, so
-          # inlining it would corrupt the exec line on the second rewrite.
-          #
-          # PREK_HOME stays anchored to the COMMITTING worktree. A devenv
-          # shell's PREK_HOME is not inherited by commits launched from an
-          # editor or agent, so deriving it here beats falling back to the
-          # user-global XDG cache; and under the agent sandbox the primary
-          # checkout is a read-only bind while the worktree is the writable one.
-          # No `mkdir -p` is needed: prek creates PREK_HOME itself (measured
-          # against prek 0.4.12 — a commit into a fresh worktree populated
-          # config-tracking.json, hooks/, repos/ and .lock under an absent dir).
-          #
-          # The bootstrap preflight now names the PRIMARY CHECKOUT, since that
-          # is where the config it reads comes from. Left to itself prek
-          # volunteers three remedies (PREK_ALLOW_NO_CONFIG=1,
-          # --allow-missing-config, prek uninstall) that all SKIP every check
-          # instead of fixing the bootstrap, so the preflight replaces that
-          # advice with the correct action. `-f` follows symlinks, so a dangling
-          # one (its store path garbage-collected) trips the guard too — the
-          # same fix applies. The injected text is POSIX sh: the emitted hook is
-          # #!/bin/sh, not bash.
-          #
-          # Idempotent, and migration-safe against the PREVIOUS block shape: the
-          # rewrite STRIPS any existing marker-delimited block and re-injects
-          # the current one, rather than skipping when a marker is present. A
-          # marker check alone would have left worktree-anchored blocks from
-          # before this change in place while the exec line started reading
-          # their `$_devenv_config` — silently keeping the old semantics.
-          guard_begin="# --- devenv worktree bootstrap guard (hooks:isolate-config) ---"
-          guard_end="# --- end devenv worktree bootstrap guard ---"
-          IFS= read -r -d "" guard_body <<'GUARD' || :
-          PREK_HOME="$(git rev-parse --show-toplevel)/.devenv/state/prek"
-          export PREK_HOME
-          _devenv_primary="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
-          _devenv_config="$_devenv_primary/.pre-commit-config.yaml"
-          if [ ! -f "$_devenv_config" ]; then
-              echo 'prek: the primary checkout has not been bootstrapped.' >&2
-              echo "  missing: $_devenv_config" >&2
-              echo >&2
-              echo '  .pre-commit-config.yaml is a devenv files.* artifact: it is' >&2
-              echo '  materialized on devenv shell entry, and neither "git clone"' >&2
-              echo '  nor "git worktree add" runs devenv.' >&2
-              echo >&2
-              echo "  Fix: run \"devenv shell true\" in $_devenv_primary once," >&2
-              echo '  then commit again. Linked worktrees need no bootstrap of' >&2
-              echo '  their own: they read the primary checkout config.' >&2
-              echo >&2
-              echo '  Do NOT silence this with PREK_ALLOW_NO_CONFIG=1,' >&2
-              echo '  --allow-missing-config, or "prek uninstall". prek suggests' >&2
-              echo '  them, but they skip every pre-commit check instead of fixing' >&2
-              echo '  the bootstrap.' >&2
-              exit 1
-          fi
-          GUARD
-
-          for hook in "$hooks_dir"/*; do
-            [ -f "$hook" ] || continue
-            ${pkgs.gnugrep}/bin/grep -q 'prek' "$hook" || continue
-            ${pkgs.gnugrep}/bin/grep -q -- '--config=' "$hook" || continue
-
-            tmp="$(${pkgs.coreutils}/bin/mktemp "$hooks_dir/.devenv-hook.XXXXXX")"
-            trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
-            ${pkgs.gnused}/bin/sed 's#--config="[^"]*"#--config="$_devenv_config"#' "$hook" \
-              | {
-                in_guard=""
-                injected=""
-                while IFS= read -r line || [ -n "$line" ]; do
-                  if [ -n "$in_guard" ]; then
-                    if [ "$line" = "$guard_end" ]; then
-                      in_guard=""
-                    fi
-                    continue
-                  fi
-                  if [ "$line" = "$guard_begin" ]; then
-                    in_guard=1
-                    continue
-                  fi
-                  case "$line" in
-                    'exec '*)
-                      if [ -z "$injected" ]; then
-                        printf '%s\n%s%s\n' "$guard_begin" "$guard_body" "$guard_end"
-                        injected=1
-                      fi
-                      ;;
-                  esac
-                  printf '%s\n' "$line"
-                done
-              } >"$tmp"
-            # Fail loudly rather than publish an unguarded hook: if prek ever
-            # stops emitting a single-line `exec`, the block is stripped and
-            # never re-injected, and every commit would silently validate
-            # against whatever config prek found on its own. An unterminated
-            # block (a hand edit — the atomic rename above cannot produce one)
-            # reaches here the same way, since the strip then swallows the
-            # `exec` line too, so name both causes rather than only the one
-            # this task can distinguish.
-            ${pkgs.gnugrep}/bin/grep -qF -- "$guard_begin" "$tmp" || {
-              echo "hooks:isolate-config: refusing to install $hook without the bootstrap guard; it has no single-line 'exec', or an unterminated guard block swallowed it" >&2
-              exit 1
-            }
-            ${pkgs.coreutils}/bin/chmod --reference="$hook" "$tmp"
-            ${pkgs.coreutils}/bin/mv -f "$tmp" "$hook"
-            trap - EXIT
-          done
         '';
       };
     };

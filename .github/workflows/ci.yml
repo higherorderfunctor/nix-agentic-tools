@@ -23,9 +23,7 @@ env:
 # day before anyone notices.
 #
 # 60 is a ceiling for a hung job, NOT a budget any job is expected to approach.
-# The one job measured against it, `devenv-test`, tops out around 42m cold; see
-# the note on its own timeout for why 45 was too tight. Do not read this number
-# as headroom to spend.
+# Do not read this number as headroom to spend.
 jobs:
   build:
     strategy:
@@ -318,7 +316,7 @@ jobs:
   # branch ruleset's required-checks list has to move with it.
   #
   # ALWAYS-REPORTING, deliberately: the JOB always runs and the expensive steps
-  # are gated on `steps.scope.outputs.needed`, matching devenv-test. A required
+  # are gated on `steps.scope.outputs.needed`. A required
   # check that is genuinely SKIPPED never reports a conclusion, and GitHub
   # blocks the PR forever waiting for it — so "make it required" and "skip it
   # when irrelevant" can only coexist in this shape.
@@ -583,11 +581,12 @@ jobs:
           fi
           echo "No patched Kiro path is fetchable from $CACHE."
 
-  # Validation entrypoint: `nix flake check` is the single source of
-  # truth for repo health (structural eval checks + formatting hard
-  # gate via checks.<system>.formatting). Pre-commit hooks remain a
-  # local-only fast subset; see devenv.nix's git-hooks.hooks comment
-  # block for the architecture rationale.
+  # Validation entrypoint: `nix flake check` is the single source of truth for
+  # repo health. In addition to structural evaluation and formatting, it runs
+  # the cspell/deadnix/statix all-files projection and the specialized
+  # shellcheck corpus gate derived from config/repo-validation.nix. Local hooks
+  # provide earlier feedback; CI is the authority that covers --no-verify and
+  # pre-existing corpus drift.
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -690,17 +689,10 @@ jobs:
           fi
           echo "heron_brook mitigation review due ${review_by} (today ${today}) — OK."
 
-  # The `devenv test` runtime gate lives in its OWN workflow
-  # (devenv-test.yml). Its job always reports because branch protection USED to
-  # require that context — it was required 2026-08-03 and demoted 2026-08-05,
-  # and the six contexts required today are `build` and `kiro-patched` on both
-  # systems plus `test` and `gitleaks`. The always-report shape is kept anyway,
-  # deliberately: a genuinely skipped required check never reports a conclusion
-  # and blocks the PR forever, so re-promoting the context needs no rework. It
-  # detects changed paths before checkout so only
-  # PRs touching instruction-file materialization surfaces pay its cold-closure
-  # cost. `nix flake check` (the test job above) remains THE validation
-  # entrypoint.
+  # The full `devenv test` smoke suite and #821 telemetry remain available as
+  # the manual Devenv Diagnostic workflow. Its extracted deterministic
+  # contracts live in the flake checks above, so no automatic PR or push path
+  # pulls the interactive shell closure.
 
   # gitleaks runs locally as a pre-commit hook (see devenv.nix). This
   # CI job is the safety net for the `--no-verify` path: even when

@@ -4,6 +4,8 @@
 {
   pkgs,
   config,
+  formatterHookId,
+  judgmentHookIds,
   ...
 }: let
   shellStrict = import ../config/shell-strict.nix;
@@ -21,5 +23,10 @@ in
     # No shoptHeader here: validate-at-stop.sh carries the full strict-mode
     # header itself, because it must also be valid standalone (prek lints it
     # as a tracked *.sh).
-    text = builtins.readFile ./validate-at-stop.sh;
+    text = ''
+      FORMATTER_HOOK_ID=${pkgs.lib.escapeShellArg formatterHookId}
+      JUDGMENT_HOOKS=${pkgs.lib.escapeShellArg (pkgs.lib.concatStringsSep " " judgmentHookIds)}
+      export FORMATTER_HOOK_ID JUDGMENT_HOOKS
+      ${builtins.readFile ./validate-at-stop.sh}
+    '';
   }

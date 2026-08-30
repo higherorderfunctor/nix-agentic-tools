@@ -1,54 +1,21 @@
-# Runtime materialization gate — the ONLY place `devenv test` runs in CI.
-#
-# Standing decision (amended 2026-07-21 with operator approval):
-# `nix flake check` remains THE validation entrypoint; this workflow is
-# a NON-entrypoint runtime gate for exactly one defect class the flake
-# check structurally cannot see — whether repository-generated instruction
-# projections actually land on disk as portable REAL files at shell entry
-# (devenv.nix enterTest asserts the results). Consumer runtime files may use
-# backend symlinks; the projection copy is a separate Git-portability concern.
-# The original never-wire-devenv-test-to-CI rule
-# existed because of a cold-store eval bug on an older devenv; the
-# pinned 2.x rev runs green (proven live on PR #438).
-#
-# Cost containment: every pull request gets the stable `devenv-test` status
-# context. It is NOT a required check — required 2026-08-03, demoted
-# 2026-08-05 — and the always-report shape below is retained on purpose so
-# re-promotion needs no rework: a genuinely skipped required check never
-# reports a conclusion and would block every PR. The first step checks changed
-# paths and skips the entire Nix closure unless a materialization surface moved
-# (a docs/plans PR pays for one GitHub API call, not the ~30-minute cold
-# closure). Pushes remain paths-filtered. The processes leg is skipped under
-# $CI (devenv.nix), with a 45-minute ceiling.
+# On-demand full devenv diagnostic. This is deliberately NOT an automatic CI
+# gate: the cold shell closure routinely takes tens of minutes. Merge-blocking
+# invariants live under `nix flake check`, including the extracted instruction
+# materializer, shared-hook isolation, validation-policy projection, and corpus
+# linters. Run this workflow manually when changing the broader interactive
+# shell or investigating issue #821; it retains the full enterTest smoke suite
+# and forensic telemetry.
 
-name: Devenv Test
+name: Devenv Diagnostic
 
 on:
-  pull_request:
-  push:
-    branches: [main]
-    paths:
-      - .github/actions/warm-ifd/**
-      - .github/workflows/devenv-test.yml
-      - config/**
-      - dev/generate.nix
-      - dev/instructions.nix
-      - dev/tasks/**
-      - devenv.lock
-      - devenv.nix
-      - devenv.yaml
-      - flake.lock
-      - flake.nix
-      - lib/**
-      - modules/**
-      - packages/**
+  workflow_dispatch:
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
-  devenv-test:
+  devenv-diagnostic:
     runs-on: ubuntu-latest
     # Cold-cache ceiling; the workflow-less default is 6h, which would
     # let a hung process leg burn a runner all day.
@@ -66,58 +33,8 @@ jobs:
     # `jobs:` in ci.yml. It is a ceiling for a hung job, not a budget.
     timeout-minutes: 60
     steps:
-      # A required workflow cannot use pull_request.paths: GitHub leaves its
-      # context pending forever when the workflow is filtered out. Resolve the
-      # same scope inside the always-created job instead, so an irrelevant PR
-      # succeeds cheaply while a relevant one still runs the real gate.
-      - name: Check whether devenv test is needed
-        id: scope
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-
-          needed=true
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            needed=false
-            changed_files="$(
-              gh api --paginate \
-                "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
-                --jq '.[].filename'
-            )"
-
-            while IFS= read -r changed_file; do
-              case "$changed_file" in
-                .github/actions/warm-ifd/* | \
-                  .github/workflows/devenv-test.yml | \
-                  config/* | \
-                  dev/generate.nix | \
-                  dev/instructions.nix | \
-                  dev/tasks/* | \
-                  devenv.lock | \
-                  devenv.nix | \
-                  devenv.yaml | \
-                  flake.lock | \
-                  flake.nix | \
-                  lib/* | \
-                  modules/* | \
-                  packages/*)
-                  needed=true
-                  break
-                  ;;
-              esac
-            done <<< "$changed_files"
-          fi
-
-          echo "needed=${needed}" >> "$GITHUB_OUTPUT"
-          echo "devenv test needed: ${needed}"
-
-      - if: steps.scope.outputs.needed == 'true'
-        uses: actions/checkout@v6
-      - if: steps.scope.outputs.needed == 'true'
-        uses: cachix/install-nix-action@v31
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
@@ -136,7 +53,6 @@ jobs:
       # + the CI-lean devenv shell closure (~2GB, see devenv.nix) —
       # about 4G; 5G leaves headroom without hoarding the budget.
       - id: nix-cache
-        if: steps.scope.outputs.needed == 'true'
         uses: nix-community/cache-nix-action@v7.0.2
         with:
           gc-max-store-size-linux: 5G
@@ -145,8 +61,7 @@ jobs:
             'devenv.nix', 'devenv.yaml', 'flake.lock') }}
           restore-prefixes-first-match: nix-store-${{ runner.os }}-
 
-      - if: steps.scope.outputs.needed == 'true'
-        uses: cachix/cachix-action@v17
+      - uses: cachix/cachix-action@v17
         with:
           name: nix-agentic-tools
 
@@ -154,7 +69,6 @@ jobs:
       # repo overlays, whose eval reads fetchFromGitHub sources (IFD) —
       # warm them so a transient fetch blip doesn't fail the job.
       - name: Warm IFD sources (retry, best-effort)
-        if: steps.scope.outputs.needed == 'true'
         uses: ./.github/actions/warm-ifd
         with:
           systems: x86_64-linux
@@ -189,10 +103,6 @@ jobs:
       # SQLite database (it can capture environment inputs). The
       # eval-cache probes below record file METADATA only.
       #
-      # Every step here stays gated on steps.scope.outputs.needed,
-      # including the non-success one — a bare status function would also
-      # be true for a job that failed before the scope gate resolved.
-      #
       # The snapshot step's gate is `failure() || cancelled()`, not
       # `failure()` alone. `failure()` is FALSE on a cancellation, and a
       # cancellation is a live shape for this bug: the job's own
@@ -211,7 +121,6 @@ jobs:
       # earliest point RUNNER_TEMP is resolvable, and the value reaches
       # the upload step's `path:` as `env.DEVENV_TELEMETRY_DIR`.
       - name: Record telemetry run context
-        if: steps.scope.outputs.needed == 'true'
         env:
           CACHE_HIT: ${{ steps.nix-cache.outputs.hit }}
           CACHE_HIT_FIRST_MATCH: ${{ steps.nix-cache.outputs.hit-first-match }}
@@ -332,7 +241,6 @@ jobs:
       # instead of pooling every pattern: debug lines mentioning store
       # paths now vastly outnumber the one line that names the offender.
       - name: Run devenv test
-        if: steps.scope.outputs.needed == 'true'
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
@@ -380,9 +288,7 @@ jobs:
         # same reason: telemetry must not add a red step of its own, least
         # of all one whose message is about telemetry rather than about
         # #821.
-        if:
-          (failure() || cancelled()) && steps.scope.outputs.needed == 'true' &&
-          env.DEVENV_TELEMETRY_DIR != ''
+        if: (failure() || cancelled()) && env.DEVENV_TELEMETRY_DIR != ''
         env:
           JOB_STATUS: ${{ job.status }}
         run: |
@@ -752,9 +658,7 @@ jobs:
         # never completed, in which case `path:` would be empty and the
         # upload would fail — telemetry must not be able to add a red step
         # of its own, so skip instead.
-        if:
-          always() && steps.scope.outputs.needed == 'true' &&
-          env.DEVENV_TELEMETRY_DIR != ''
+        if: always() && env.DEVENV_TELEMETRY_DIR != ''
         uses: actions/upload-artifact@v7
         with:
           # `warn`, never `error`: telemetry must not be able to turn a

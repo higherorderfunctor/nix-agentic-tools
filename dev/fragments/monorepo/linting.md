@@ -1,12 +1,34 @@
 ## Linting
 
-`nix flake check` is the CI gate. The prek pre-commit hooks are a fast local
-subset: they are `lib.optionalAttrs (!isCI)` in `devenv.nix`, so they do NOT run
-in CI and are not part of `nix flake check`. They can also be skipped with
-`--no-verify`.
+> **Last verified:** 2026-08-29 (commit pending — repository hooks now declare
+> their local, Stop, and CI lifecycles once in `config/repo-validation.nix`;
+> every code validator has a merge-blocking whole-corpus gate).
 
-Formatters and linters are separate here — treefmt runs formatters only and
-lints nothing.
+`nix flake check` is the authoritative CI gate. Local hooks provide earlier
+feedback, but neither a successful changeset scan nor a `--no-verify` commit is
+evidence that the tracked corpus is clean.
+
+The source of truth is `config/repo-validation.nix`. Every hook declaration must
+name its role, Stop participation, and CI backend (including an explicit `null`
+for local-only commit-lifecycle hooks). Evaluation rejects a validator,
+formatter, or security hook without CI coverage, and rejects a validator that
+does not participate in Stop feedback. From that table the repo derives:
+
+| Surface                    | Selection                                           | Scope                                                       | Authority                        |
+| -------------------------- | --------------------------------------------------- | ----------------------------------------------------------- | -------------------------------- |
+| Git hooks                  | each declaration's real Git stages                  | staged files / commit message                               | fast local feedback; bypassable  |
+| Claude Stop                | `stop = "formatter"` or `"judgment"` → manual stage | unstaged ∪ staged ∪ untracked changes                       | agent feedback; not a merge gate |
+| `checks.repo-lints`        | validators with `ci.backend = "git-hooks"`          | every matching tracked file                                 | required `test` context          |
+| `checks.shellcheck-corpus` | validator with the specialized corpus backend       | every tracked extension- or shebang-identified shell script | required `test` context          |
+
+The manual stage is a lifecycle boundary, not a synonym for pre-commit. It
+contains treefmt plus the four code validators and therefore excludes convco,
+gitleaks, treefmt-restage, and `reject-default-branch-commit`. Devenv
+diagnostics and the Stop hook always request that stage explicitly; an unscoped
+`prek run` must not be used for either. Stop may rewrite working-tree files but
+never stages them. Index mutation belongs only to the pre-commit restager.
+
+Formatters and linters remain separate — treefmt formats and lints nothing.
 
 **Formatters — treefmt, all write in place:**
 
@@ -17,20 +39,20 @@ lints nothing.
   extensionless script, shell embedded in a `.nix` string, or a heredoc body)
 - **TOML:** taplo
 
-**Linters — prek hooks, not treefmt, not `nix flake check`:**
+**Code validators — local changeset feedback plus CI corpus gates:**
 
 - **Nix:** deadnix (dead code), statix (anti-patterns)
-- **Shell:** `shellcheck -x`, on files prek tags `shell` — which needs a `.sh` /
-  `.bash` extension OR the executable bit. Shell embedded in `.nix` strings is
-  linted by nothing except `writeShellApplication`'s own build-time checkPhase.
+- **Shell:** `shellcheck -x` with the shared opt-in flags from
+  `config/shell-strict.nix`. The specialized CI scanner deliberately covers a
+  superset of prek's file tagging and hard-fails an empty corpus.
 - **Spelling:** cspell
 
-**Commit gates — prek hooks that block the commit:**
+**Commit-only hooks:**
 
 - convco (commit message shape)
-- gitleaks (staged secrets)
+- gitleaks (staged secrets; mirrored by its standalone CI job)
 - reject-default-branch-commit
-- treefmt `--fail-on-change`, plus treefmt-restage to re-add reformatted files
+- treefmt-restage (re-adds formatter changes only during pre-commit)
 
 **Available in the devShell, wired to no gate:** agnix (agent config linting) —
 run it by hand or via the agnix MCP server.

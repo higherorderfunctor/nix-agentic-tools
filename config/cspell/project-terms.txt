@@ -43,6 +43,7 @@ bubblewrap
 bunfs
 bunmap
 bunsh
+bypassable
 bununpack
 burndown
 bwrap
@@ -342,6 +343,7 @@ repoint
 reprioritize
 repros
 rerere
+restager
 revertibility
 revset
 revsets

@@ -1,13 +1,15 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-08-25 (commit pending —
-> `overlays/claude-code-extracted.json` now carries the binary's whole settings
-> schema and is ~3.2k lines, so the `update-pkg.sh` formatter pass over a
-> bot-regenerated sidecar went from a cosmetic array reflow to something
-> `checks.formatting` will actually fail on). Prior: 2026-08-14 (commit pending
-> — the required-context count was stale in BOTH places it appeared here: there
-> are SIX, not four, because both `kiro-patched` contexts were promoted
-> 2026-08-13 with PR #895. Found while landing PR #946;
+> **Last verified:** 2026-08-29 (commit pending — update PRs no longer trigger
+> the costly, non-required devenv workflow; its deterministic contracts moved
+> into the required flake-check path and the full diagnostic is manual). Prior:
+> 2026-08-25 (commit pending — `overlays/claude-code-extracted.json` now carries
+> the binary's whole settings schema and is ~3.2k lines, so the `update-pkg.sh`
+> formatter pass over a bot-regenerated sidecar went from a cosmetic array
+> reflow to something `checks.formatting` will actually fail on). Prior:
+> 2026-08-14 (commit pending — the required-context count was stale in BOTH
+> places it appeared here: there are SIX, not four, because both `kiro-patched`
+> contexts were promoted 2026-08-13 with PR #895. Found while landing PR #946;
 > `.github/workflows/update.yml` disagreed a third way, saying "five" and naming
 > the demoted `devenv-test` inside the safety rationale for unattended
 > auto-merge. Three surfaces, three different wrong answers, none of them
@@ -123,13 +125,14 @@ to "some dependencies landed" instead of "none", which is the point.
 
 **Phase 3 — Validation** (triggered automatically):
 
-PRs trigger ci.yml's `pull_request` event, which runs builds on both linux and
-darwin runners, plus the always-reporting `devenv-test` workflow. That runtime
-gate performs its expensive work only when the pull request touches a relevant
-path; otherwise it succeeds after a changed-files API query. It is not a merge
-gate; PRs can merge only after the six required status contexts pass — `build`
-and `kiro-patched` on both systems, plus `test` and `gitleaks`. Do not take that
-list on trust; read it back, because it has been wrong here before:
+PRs trigger ci.yml's `pull_request` event, which runs builds on both Linux and
+Darwin plus the required flake and secret gates. The full Devenv Diagnostic is
+`workflow_dispatch` only and is not part of update-PR validation. Its extracted
+instruction-materialization, shared-hook-isolation, validation-policy, and
+corpus-lint contracts run inside `test` instead. PRs can merge only after the
+six required status contexts pass — `build` and `kiro-patched` on both systems,
+plus `test` and `gitleaks`. Do not take that list on trust; read it back,
+because it has been wrong here before:
 
 ```bash
 gh api "repos/OWNER/REPO/rulesets/<id>" \

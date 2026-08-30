@@ -1,6 +1,8 @@
 ## Generation Architecture
 
-> **Last verified:** 2026-08-16 (commit pending — generated repository
+> **Last verified:** 2026-08-29 (commit pending — instruction tasks and the
+> merge-blocking materialization contract now execute the same packaged
+> real-file copier). Prior: 2026-08-16 (commit pending — generated repository
 > instruction projections remain real copies for Git portability, while consumer
 > runtime instructions now traverse `ai.<runtime>.files`; Kiro 2.18.1 follows
 > the resulting steering symlinks).
@@ -14,8 +16,11 @@ scope:
   fragments + nix-evaluated data
 - `generate:all` — runs all scopes
 
-Each task wraps a `nix build .#<derivation>` and copies output to the working
-tree. Nix store caching means unchanged inputs skip rebuild.
+The Nix derivations own the rendered bytes. Repository-document tasks build a
+named flake package and copy its output. Instruction tasks receive their
+already-realized derivation paths from devenv evaluation and invoke
+`lib/materialize-repo-instructions.nix`; unchanged bytes, file type, and mode
+are a no-op.
 
 ### Source Layout
 
@@ -55,6 +60,11 @@ absolute `/nix/store` path. This is separate from consumer module delivery:
 normalized runtime context/rules enter `ai.<runtime>.files` and lower to
 ordinary backend symlinks. A 2.18.1 live spike confirmed Kiro steering now loads
 through that path. See the devenv files-internals fragment.
+
+`checks/instruction-materialization.nix` runs the exact packaged copier in a
+temporary repository. It covers portability and lifecycle behavior without
+building the full interactive devenv shell, so the on-demand Devenv Diagnostic
+is no longer an automatic CI dependency.
 
 ### Running Generation
 
