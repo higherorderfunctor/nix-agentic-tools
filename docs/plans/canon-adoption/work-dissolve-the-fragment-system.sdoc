@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: Dissolve the fragment system into representations rendered from the canon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-DISSOLVE-THE-FRAGMENT-SYSTEM
+TITLE: Dissolve the fragment system into representations rendered from the canon
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Dissolve the fragment system. Once the knowledge it carries is in the canon,
+the path-scoped fragments, their registry and the generated projections
+(the Claude rules, the Copilot instructions, the Kiro steering) become
+representations rendered from the canon rather than sources of their own,
+and the generator that composes them retires.
+<<<
+NOTES: >>>
+Filed 2026-08-30 from the operator's list of things to do before they forget, restated under the ruled vocabulary; some restate earlier items. Depends on WORK-LIFT-REPO-ARCHITECTURE-INTO-THE-CANON and on the model-facing representations of WORK-MODEL-AND-HUMAN-REPRESENTATIONS.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-CANON-ADOPTION
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-LIFT-REPO-ARCHITECTURE-INTO-THE-CANON
+  ROLE: Assumes
