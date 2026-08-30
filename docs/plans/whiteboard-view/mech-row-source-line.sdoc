@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: The row parser reads link-only continuation lines as references and a quoted continuation line as the source wording
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-ROW-SOURCE-LINE
+TITLE: The row parser reads link-only continuation lines as references and a quoted continuation line as the source wording
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+In view-check.py's row parser: a continuation line that holds nothing but
+inline links is the row's references; a continuation line beginning with
+'> ' is the row's source wording; both are split off before the trailing
+bracket is read, so a bracket on the source line is the row's bracket. A
+legend row accepts a fourth part, the by-line label. The wireline carries
+references, source and by-label so the renderer draws them apart.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-ROW-REFERENCE-LINES
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-LEGEND-IS-DATA-WHERE-PLACED
+  ROLE: Governed_By

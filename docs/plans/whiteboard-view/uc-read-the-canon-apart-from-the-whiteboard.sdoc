@@ -1,0 +1,21 @@
+[DOCUMENT]
+TITLE: With the whiteboard switched off, the page shows the claims, their edges, their ladders and the node index, as v1 did
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[USE_CASE]
+UID: UC-READ-THE-CANON-APART-FROM-THE-WHITEBOARD
+TITLE: With the whiteboard switched off, the page shows the claims, their edges, their ladders and the node index, as v1 did
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The operator switches the whiteboard system off. Every narrative, every Cites and Contains edge and every row backlink disappears; what remains is the canon's claims with the type grid, the ladders with live counts, the edges figure over the selection and the node index -- the shape of v1's canon-only screens. Switching work on adds WORK and its Crosses and Produces edges to the same figure.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-IS-A-TYPE-SET
+  ROLE: Covered_By
+- TYPE: Parent
+  VALUE: REQ-A-TOGGLE-NEVER-CHANGES-THE-PAYLOAD
+  ROLE: Covered_By

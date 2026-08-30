@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: The systems a reader can switch on and off
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-CANON-SYSTEMS
+TITLE: The systems a reader can switch on and off
+DEPTH: interface-settled
+AUTHORED_BY: llm
+WIDGET: table
+PLACE: card
+STATEMENT: >>>
+| system | types | roles | meaning |
+| canon | REQUIREMENT, DECISION, MECHANISM, EVIDENCE, USE_CASE | Governed_By, Guarantees, Serialized_By, Proven_By, Assumes, Superseded_By, Covered_By, Backlogged_In | the claims the canon asserts |
+| whiteboard | NARRATIVE | Cites, Contains, Over | presentation over the claims: what a person reads, and the connections a settled specification would not carry |
+| work | WORK, EVIDENCE | Crosses, Produces, Proven_By | what is to do and what it left behind; execution state moves to beads later |
+<<<
+PARENT_FP: >>>
+DEC-SYSTEM-IS-A-TYPE-SET:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-IS-A-TYPE-SET
+  ROLE: Cites

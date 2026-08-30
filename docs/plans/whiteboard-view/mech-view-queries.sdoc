@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: The few tables no narrative can hold are computed by one registered query module
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-VIEW-QUERIES
+TITLE: The few tables no narrative can hold are computed by one registered query module
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+A narrative can draw over what it contains or names with Over. Three
+things no narrative can name by relation without breaking the plan-refs
+rule: the roots of every view in the canon, every node of the canon, and a
+type's live counts over the whole export. A widget whose subject is one of
+those names a query word in its TAGS (roots, nodes, grammar), and one
+registered module computes the table into the payload. The list of query
+words is closed and small; a new one is a canon decision and a script edit.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-ONE-PAGE-RENDERS-THE-WHOLE-CANON
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-WIDGET-SUBJECT-IS-ITS-OVER-TARGET
+  ROLE: Governed_By

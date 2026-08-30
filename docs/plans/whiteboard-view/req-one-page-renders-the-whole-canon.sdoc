@@ -1,0 +1,18 @@
+[DOCUMENT]
+TITLE: One page renders every root and every node of the canon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-ONE-PAGE-RENDERS-THE-WHOLE-CANON
+TITLE: One page renders every root and every node of the canon
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+One render holds every root narrative and every node -- cited or not -- with the systems of NAR-CANON-SYSTEMS as switches. A single-root render is the same page with one root, for iterating on a view. The whole page is one self-contained file under the artifact host's size limit.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-IS-A-TYPE-SET
+  ROLE: Governed_By

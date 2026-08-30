@@ -8,7 +8,7 @@ IMPORT_FROM_FILE: @repo
 UID: DEC-NARRATIVE-IS-THE-VIEW-NODE
 TITLE: A view is a tree of narratives: rows in a statement, Cites for what it presents, Contains for its parts
 AUTHORED_BY: llm
-STATUS: accepted
+STATUS: superseded
 RETIRES_ON: A view needs a unit smaller than a narrative that must be addressable by UID, and promoting the row to its own narrative proves too costly in practice.
 STATEMENT: >>>
 A rendered view is a tree of NARRATIVE nodes and nothing else.
@@ -57,3 +57,7 @@ backed by a Parent relation on the node that carries it.
 NOTES: >>>
 Ruled 2026-08-30 as a first-pass decision under the operator's delegation of that day ("I'll trust you to take first pass at making decisions"); overrule by superseding. AUTHORED_BY reads llm because the writer has no flag for the human rungs. The strictdoc measurements this rests on: RELATIONS order is preserved in the JSON export; a Child written on A registers a derived parent link on the target in strictdoc's own index (harmless within one plan); an inline link inside a multiline field is resolved and refused if dangling, while one inside TITLE is inert text.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NARRATIVE-DECLARES-ITS-PLACE
+  ROLE: Superseded_By

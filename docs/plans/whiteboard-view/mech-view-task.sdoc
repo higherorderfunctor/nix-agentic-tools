@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-VIEW-TASK
 TITLE: One devenv task renders a root: export, view-check, wireline, render
-DEPTH: implemented
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
 devenv tasks run --mode before view:render --input root=UID runs the

@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: Views nest by Contains and PLACE, never by composite nodes, section elements or included documents
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-FILES-STAY-FLAT-FOR-VIEWS
+TITLE: Views nest by Contains and PLACE, never by composite nodes, section elements or included documents
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: The scribe learns to walk nested nodes and a view needs nesting one file cannot express with Contains.
+STATEMENT: >>>
+strictdoc can nest: a composite element holds nodes inside one file, a
+SECTION element declared in the grammar nests with numbering, and
+DOCUMENT_FROM_FILE assembles one-node files into a tree. All three were
+measured on 2026-08-30 (EV-COMPOSITE-NARRATIVE-COSTS) and refused for
+views: a composite element refuses the plain form, so every narrative would
+be rewritten; the scribe's walk is flat, so it lists, checks and shows only
+the top node of a nested file; included documents export as unnamed
+sections and drop out of the document list. Views nest with Contains and
+say how with PLACE. One node per file stands.
+<<<
+RATIONALE: >>>
+Nesting inside a file buys nothing the flat form with PLACE cannot say, and costs the scribe, the checks and one-node-per-file.
+<<<
+NOTES: >>>
+Ruled 2026-08-30 as a first-pass decision under the operator's delegation ('I don't want to be bothered by the recommendation before implementation'); overrule by superseding. Chosen from three independent designs judged against an 82-element inventory of the v1 page. AUTHORED_BY reads llm because the writer has no flag for the human rungs.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: EV-COMPOSITE-NARRATIVE-COSTS
+  ROLE: Proven_By

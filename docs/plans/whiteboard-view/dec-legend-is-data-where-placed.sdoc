@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: The legend is the narrative with the legend widget anywhere in a root's tree, drawn once where its PLACE puts it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-LEGEND-IS-DATA-WHERE-PLACED
+TITLE: The legend is the narrative with the legend widget anywhere in a root's tree, drawn once where its PLACE puts it
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: Two roots need to share one legend and repeating it proves to drift.
+STATEMENT: >>>
+What DEC-LEGEND-IS-DATA said stands: the words a view's rows may carry, their
+colours and their meanings are rows of one narrative whose WIDGET is legend
+('- WORD: colour: meaning'), never a grammar field and never renderer
+knowledge. What is replaced is where it sits: not 'a child of the root' by
+definition, but wherever its PLACE puts it -- a card on Start, drawn once and
+nowhere else. A legend row may carry a fourth part, the label the row's
+by-line takes ('- FALLS OUT: slate: dissolved; the direction replaces it:
+Dissolved by'), so the renderer never knows which word means 'owned' and
+which 'dissolved'.
+<<<
+RATIONALE: >>>
+The 'child of the root' clause composed with the old tab rule into a legend that was both a card on Start and a tab of its own. The vocabulary itself was right.
+<<<
+NOTES: >>>
+Ruled 2026-08-30 as a first-pass decision under the operator's delegation ('I don't want to be bothered by the recommendation before implementation'); overrule by superseding. Chosen from three independent designs judged against an 82-element inventory of the v1 page. AUTHORED_BY reads llm because the writer has no flag for the human rungs.
+<<<

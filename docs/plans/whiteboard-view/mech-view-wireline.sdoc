@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-VIEW-WIRELINE
 TITLE: The wireline: one versioned JSON payload per root, computed from the export by a backed script
-DEPTH: implemented
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
 wireline.py --root UID reads the strictdoc JSON export, the grammar file

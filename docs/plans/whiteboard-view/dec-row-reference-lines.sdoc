@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: A row's references are a continuation line that holds only links; its source wording is a continuation line that begins with a quote mark
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-ROW-REFERENCE-LINES
+TITLE: A row's references are a continuation line that holds only links; its source wording is a continuation line that begins with a quote mark
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: Rows gain a structured form of their own that makes continuation conventions unnecessary.
+STATEMENT: >>>
+A row under a rows widget is its headline line, then optionally: one or more
+continuation lines holding nothing but inline links -- the row's REFERENCES,
+which the renderer groups by the container of what they link (a link to a
+narrative under the Types tab is 'speaks about', to one under Gaps is
+'feeds', to a node of the canon is 'cites'); and one continuation line
+beginning with '> ' -- the row's SOURCE wording, drawn as a collapsed
+disclosure. The trailing bracket stays on the last line. No row carries a
+link-role word in its prose; the grouping is read off the tree.
+<<<
+RATIONALE: >>>
+v1 showed a clean headline, then the cited nodes with their titles, then the sheet's wording one tap below. The v2 rows carried 'See X. Speaks about Y. Feeds Z.' inside the prose, which read as noise.
+<<<
+NOTES: >>>
+Ruled 2026-08-30 as a first-pass decision under the operator's delegation ('I don't want to be bothered by the recommendation before implementation'); overrule by superseding. Chosen from three independent designs judged against an 82-element inventory of the v1 page. AUTHORED_BY reads llm because the writer has no flag for the human rungs.
+<<<

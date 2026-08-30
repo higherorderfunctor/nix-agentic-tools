@@ -29,7 +29,7 @@ HASH_LEN = 7
 # which is deliberately left for after the Nix option surface in
 # DEC-FP-FIELDS-CONFIGURABLE exists. Do not tune this without reading that
 # node first.
-EXCLUDED_FIELDS = {"RATIONALE", "NOTES", "PARENT_FP"}
+EXCLUDED_FIELDS = {"RATIONALE", "NOTES", "PARENT_FP", "PLACE"}
 
 # Export-scaffolding keys strictdoc's JSON emits per node that are not sdoc
 # fields at all.

@@ -211,18 +211,46 @@ in [
   })
 
   # ------------------------------------------------------------- Representation
-  # WIDGET is the author's preferred way to draw this node's STATEMENT; the
-  # renderer knows the widget words and nothing else. TAGS are free facet words
-  # a renderer may show as chips and never interprets. A narrative Cites what it
-  # presents (dependency, fingerprintable) and Contains the narratives it is
-  # composed of, in the order the RELATIONS block lists them.
+  # WIDGET names how this node's STATEMENT is drawn -- the renderer knows the
+  # widget words and nothing else. The first seven draw the STATEMENT itself;
+  # stack, grid, ladder and facts draw its rows as a figure; strip, tally,
+  # index and list count or list the SUBJECT's children; edges and
+  # fingerprints draw the selection. The subject is the narrative named by the
+  # Over relation, else the narrative itself (DEC-WIDGET-SUBJECT-IS-ITS-OVER-
+  # TARGET). PLACE says how a narrative sits on the screen of the narrative
+  # that Contains it: a tab of its own, a screen of its own reached from an
+  # index, a section stacked on the container's screen, or a card; absent
+  # reads section, and a root has none (DEC-NARRATIVE-DECLARES-ITS-PLACE).
+  # TAGS are free facet words a renderer may show as chips and never
+  # interprets. A narrative Cites what it presents (dependency, fingerprintable)
+  # and Contains the narratives it is composed of, in RELATIONS order. PLACE
+  # and Over are outside the contract hash: moving a card must not dirty
+  # what cites it.
   (el "NARRATIVE" {prefix = "NAR-";} {
     fields = [
       uid
       title
       depth
       authoredBy
-      (one "WIDGET" ["prose" "rows" "table" "glossary" "legend" "tally" "edges"])
+      (one "WIDGET" [
+        "prose"
+        "callout"
+        "rows"
+        "table"
+        "facts"
+        "glossary"
+        "legend"
+        "stack"
+        "grid"
+        "ladder"
+        "strip"
+        "tally"
+        "index"
+        "list"
+        "edges"
+        "fingerprints"
+      ])
+      (one "PLACE" ["tab" "screen" "section" "card"])
       (tag "TAGS")
       statement
       rationale
@@ -233,6 +261,7 @@ in [
       cites
       contains
       backloggedIn
+      (rel.parent "Over" "Shown_By")
     ];
   })
 

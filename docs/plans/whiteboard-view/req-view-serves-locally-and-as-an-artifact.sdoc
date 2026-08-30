@@ -1,0 +1,18 @@
+[DOCUMENT]
+TITLE: The same page is served locally and published as an artifact, from one template
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-VIEW-SERVES-LOCALLY-AND-AS-AN-ARTIFACT
+TITLE: The same page is served locally and published as an artifact, from one template
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The task writes a full standalone page that opens from disk and from a loopback server, and an artifact copy that is the same bytes inside the host's wrapper. Both come from one template; the only difference is the wrapper. The artifact is a copy the session publishes, never a different render, and v1's page at its original link is never republished.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-VIEWS-ARE-REGENERABLE
+  ROLE: Governed_By
