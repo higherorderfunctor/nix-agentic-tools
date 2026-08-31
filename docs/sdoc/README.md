@@ -87,7 +87,7 @@ the repository a body of nodes documents, named by its source directories
 (`DEC-SYSTEM-IS-A-SOURCE-SET`): `model` (`docs/spec/`, pinned on because
 everything cites it), plus `adoption`, `architecture`, `beads`, `core` and
 `whiteboard`. A TAB is a row of `NAR-CANON-TABS`
-(`DEC-TABS-ARE-A-DECLARED-VOCABULARY`) — Types, Edges, Topics, Gaps, Words,
+(`DEC-TABS-ARE-A-DECLARED-VOCABULARY`) — Types, Edges, Topics, Gaps, Glossary,
 between the page's own Start and Nodes — and a narrative joins one by naming its
 key in `TAGS`. A tab's screen is the union of every enabled system's
 contributions, grouped by system. **A root narrative is no longer a tab**: the
