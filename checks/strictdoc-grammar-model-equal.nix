@@ -2,7 +2,7 @@
 # checks/strictdoc-grammar-model-equal.nix -- acceptance items 4 and 5 of
 # SLICE-GRAMMAR-FROM-NIX (packages/strictdoc-grammar/docs/implementation-brief.md).
 #
-# The `.sgra` this repository's five node types render to must be the same
+# The `.sgra` this repository's eight node types render to must be the same
 # grammar as the committed `docs/sdoc/grammar.sgra`. Two gates, and they are
 # NOT the same gate:
 #
