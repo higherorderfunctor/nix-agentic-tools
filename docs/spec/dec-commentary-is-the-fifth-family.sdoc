@@ -1,0 +1,65 @@
+[DOCUMENT]
+TITLE: A commentary remarks on the canon; whether that is a fifth family is open
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-COMMENTARY-IS-THE-FIFTH-FAMILY
+TITLE: A commentary remarks on the canon; whether that is a fifth family is open
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: The operator rules on the family, or commentary nodes prove to be a second backlog rather than a checked overlay.
+STATEMENT: >>>
+COMMENTARY is a remark ABOUT the canon rather than about the system the canon
+describes: a gap, an architecture note, a verdict on a node, a note on one
+edge. The element exists, `dev/scripts/commentary-check.py` gates it, and
+NOTHING IN THE CORPUS IS ONE YET.
+
+**What is open is the family, not the element.** [LINK: DEC-NODE-FAMILIES]
+derives the vocabulary from four families and says of the third that "a
+representation is never itself a claim". Read strictly, a commentary asserts
+something and therefore cannot be Representation, and Commentary is a fifth
+family -- which means superseding an accepted decision that sixteen narratives
+cite. Read loosely, it is the odd member of Representation and nothing needs
+superseding. No code reads the family, so the element is usable either way and
+the ruling costs nothing to defer.
+
+**What this does NOT retire.** The row bracket -- a `- ` line ending in
+`[WORD]` or `[WORD: by]` -- stays legal, and [LINK: DEC-ROW-REFERENCE-LINES]
+stays in force. 494 rows are drawn through it today, and a session that reads
+"commentary replaces the row DSL" and deletes the parser takes the whole
+Topics tab with it. Commentary is what a NEW remark should be; it is not a
+migration of what exists.
+<<<
+RATIONALE: >>>
+The operator: "i dont like general NARRATIVE nodes used to document things like
+gaps or other arch notes. i think this should be a new class of core cannon
+grammar for effectively commentary nodes I can run semantic validators against.
+i like this as an overlay for effectively edge annotations. i can disolve the
+cards not rely on a meta DSL invented to fill it."
+
+The meta DSL is concrete: a narrative with `WIDGET: rows` carries its verdicts
+as a bracket at the end of a line, parsed by BRACKET_RE in view-check.py. A
+validator cannot ask that structure whether a gap names what would close it,
+because the whole row is one string. An element can require CLOSES_ON, and the
+grammar itself enforces it.
+
+Edge annotation is the part with no precedent, and it is why EDGE exists as a
+string rather than a relation. A strictdoc relation is a TYPE/VALUE/ROLE triple
+INSIDE a node with no identity of its own -- there is nothing to point a UID at.
+So an edge is named structurally, and both its endpoints are ALSO written as
+Remarks_On relations, which is what makes the parser refuse a dangling end: the
+redundancy buys parser-enforced existence for a field the parser cannot read.
+The same bargain PARENT_FP already makes.
+
+Landing the element with zero nodes is deliberate. Every ordering for retyping
+the five existing gap narratives was measured and each one loses a gap SILENTLY
+-- retype-and-keep-Contains fires a finding and the walk continues, so the gap
+disappears from the tab with a green build. The Gaps tab is currently the one
+screen already meeting the aspiration. Breaking it to prove a mechanism is the
+wrong trade.
+<<<
+NOTES: >>>
+Filed 2026-08-31. The element and its CI gate ship together because INV-GUARDS-MUST-EXECUTE forbids the other order; the check carries its own negative fixture, because a green over zero commentary nodes is otherwise indistinguishable from a checker that always returns 0.
+<<<
