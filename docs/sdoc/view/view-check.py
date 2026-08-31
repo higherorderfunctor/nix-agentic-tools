@@ -128,7 +128,10 @@ SWITCH_WORDS = ("always", "optional")
 TABS_HEADER = ("tab", "title", "meaning")
 PAGE_TABS = ("start", "nodes")
 # TAGS words the view already reads for something other than a tab.
-RESERVED_TAGS = ("systems", "tabs", "term")
+RESERVED_TAGS = ("systems", "tabs", "colours", "term")
+# The shared colour table (DEC-COLOUR-IS-SHARED-WORDS-ARE-NOT): one row per
+# colour the page may draw and the one thing it means everywhere.
+COLOURS_HEADER = ("colour", "means")
 
 # strictdoc's inline link token. The export keeps it literal.
 LINK_RE = re.compile(r"\[LINK:\s*([^\]\s]+)\s*\]")
@@ -788,6 +791,11 @@ class Canon:
         directory = path.rsplit("/", 1)[0] if path and "/" in path else (path or "~")
         return (0 if cls == "spec" else 1, directory, uid)
 
+    def colours_narrative(self):
+        """The one narrative tagged colours, or None."""
+        tagged = [uid for uid, node in self.by_uid.items() if is_narrative(node) and "colours" in tags_of(node)]
+        return tagged[0] if len(tagged) == 1 else None
+
     def tabs_narrative(self):
         """The one narrative tagged tabs, or None. Its shape is checked under
         tabs-table; queries.py parses it."""
@@ -842,6 +850,7 @@ class Canon:
                         self._find("systems-table", uid, f"no system holds {', '.join(unheld)}; a node no switch can show is unreachable")
 
         self._tabs_rules()
+        self._colours_rules()
 
         for _doc, node in iter_nodes(self.index):
             if is_narrative(node) or "UID" not in node:
@@ -853,6 +862,46 @@ class Canon:
             for parent, _digest in parse_parent_fp(node.get("PARENT_FP")):
                 if is_narrative(self.by_uid.get(parent)):
                     self._find("nothing-depends-on-a-narrative", uid, f"{uid} carries a PARENT_FP entry for the narrative {parent}")
+
+    def _colours_rules(self) -> None:
+        tagged = sorted(uid for uid, node in self.by_uid.items() if is_narrative(node) and "colours" in tags_of(node))
+        if not tagged:
+            self._find("colours-table", "canon", "no narrative is tagged colours; the shared colour key (DEC-COLOUR-IS-SHARED-WORDS-ARE-NOT) has nowhere to come from")
+            return
+        if len(tagged) > 1:
+            self._find("colours-table", tagged[1], f"{len(tagged)} narratives are tagged colours ({', '.join(tagged)}); the table is one narrative")
+            return
+        uid = tagged[0]
+        node = self.by_uid[uid]
+        if widget_of(node) != "table":
+            self._find("colours-table", uid, f"{uid} is tagged colours but its WIDGET is {widget_of(node)}, not table")
+            return
+        parsed = parse_statement(node.get("STATEMENT") or "", "table")
+        header = [h.lower() for h in (parsed["table"] or {}).get("header", [])]
+        missing = [h for h in COLOURS_HEADER if h not in header]
+        if missing:
+            self._find("colours-table", uid, f"{uid}'s header lacks {', '.join(missing)}; the colours table is {' | '.join(COLOURS_HEADER)}")
+            return
+        col = {h: header.index(h) for h in COLOURS_HEADER}
+        declared = []
+        for row in (parsed["table"] or {}).get("rows", []):
+            if len(row) < len(header):
+                continue
+            name = row[col["colour"]].strip().lower()
+            if name not in COLOURS:
+                self._find("colours-table", uid, f"{uid} declares {name!r}, which the page cannot draw; the colours are {', '.join(COLOURS)}")
+            if name in declared:
+                self._find("colours-table", uid, f"{uid} declares {name!r} twice; a colour means one thing")
+            declared.append(name)
+        # every legend word anywhere sits on a colour this table declares, so
+        # a reader can carry a colour from one system's rows to another's
+        for u, nd in self.by_uid.items():
+            if not is_narrative(nd) or widget_of(nd) != "legend":
+                continue
+            for row in parse_statement(nd.get("STATEMENT") or "", "legend")["legend"] or []:
+                colour = (row.get("colour") or "").strip().lower()
+                if colour and colour not in declared:
+                    self._find("legend-colour-undeclared", u, f"{u} puts {row.get('word')!r} on {colour!r}, which {uid} does not declare")
 
     def _tabs_rules(self) -> None:
         tagged = sorted(uid for uid, node in self.by_uid.items() if is_narrative(node) and "tabs" in tags_of(node))

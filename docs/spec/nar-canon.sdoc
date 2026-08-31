@@ -49,3 +49,6 @@ RELATIONS:
 - TYPE: Child
   VALUE: NAR-CANON-TABS
   ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-CANON-COLOURS
+  ROLE: Contains
