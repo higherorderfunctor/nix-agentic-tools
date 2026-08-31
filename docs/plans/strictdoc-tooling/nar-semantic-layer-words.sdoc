@@ -6,12 +6,12 @@ IMPORT_FROM_FILE: @repo
 
 [NARRATIVE]
 UID: NAR-SEMANTIC-LAYER-WORDS
-TITLE: Words
+TITLE: The vocabulary this layer uses
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: glossary
 PLACE: tab
-TAGS: words
+TAGS: glossary
 STATEMENT: >>>
 The ruled words are the seven term narratives this tab contains, each citing the decision that ruled it. The field names and working terms below are the sheet's own and rule nothing; where a word is the sheet's, the sheet's wording in the last tab shows it in use.
 
