@@ -20,3 +20,24 @@ RELATIONS:
 - TYPE: Parent
   VALUE: NAR-TERM-CANON
   ROLE: Cites
+- TYPE: Child
+  VALUE: NAR-TERM-JOINT
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-TERM-CHECKPOINT
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-TERM-SCRIBE
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-TERM-SDOC
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-TERM-STRICTDOC
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-TERM-CANON
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-TERM-BEADS
+  ROLE: Contains
