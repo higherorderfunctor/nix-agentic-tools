@@ -131,7 +131,11 @@
     };
     treefmt = {
       role = "formatter";
-      hook.enable = true;
+      hook = {
+        enable = true;
+        require_serial = true;
+        settings.no-cache = false;
+      };
       stop = "formatter";
       ci = {
         backend = "external";

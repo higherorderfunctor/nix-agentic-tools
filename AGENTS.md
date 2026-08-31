@@ -1305,9 +1305,12 @@ the merged `flake.nix` / `devenv.yaml`.
 
 ## Linting
 
-> **Last verified:** 2026-08-29 (commit pending — repository hooks now declare
-> their local, Stop, and CI lifecycles once in `config/repo-validation.nix`;
-> every code validator has a merge-blocking whole-corpus gate).
+> **Last verified:** 2026-08-31 (commit pending — full-corpus treefmt and hook
+> diagnostics are detached from shell activation; serialized treefmt hooks now
+> use their cache, while Stop keeps its two convergence passes uncached). Prior:
+> 2026-08-29 (repository hooks now declare their local, Stop, and CI lifecycles
+> once in `config/repo-validation.nix`; every code validator has a
+> merge-blocking whole-corpus gate).
 
 `nix flake check` is the authoritative CI gate. Local hooks provide earlier
 feedback, but neither a successful changeset scan nor a `--no-verify` commit is
@@ -1332,6 +1335,22 @@ gitleaks, treefmt-restage, and `reject-default-branch-commit`. Devenv
 diagnostics and the Stop hook always request that stage explicitly; an unscoped
 `prek run` must not be used for either. Stop may rewrite working-tree files but
 never stages them. Index mutation belongs only to the pre-commit restager.
+
+Full-corpus work is not a shell-entry concern. `devenv:treefmt:run` and
+`devenv:git-hooks:run` remain explicit named diagnostics with no activation DAG
+edges. `devenv test` invokes the same packaged hook runner only after
+shell-entry tasks finish, before its runtime smoke assertions. This placement is
+deliberate: devenv's `RunMode::All` can traverse from a shared prerequisite into
+a sibling lane, so leaving the hook task behind `devenv:git-hooks:install` made
+ordinary shell activation run the full repository even though the hook task
+targeted `devenv:enterTest`.
+
+The treefmt hook enables treefmt's SQLite evaluation cache and sets
+`require_serial = true`. prek otherwise partitions the files across concurrent
+treefmt processes; those processes contend on one cache database, time out, and
+lose the intended warm-cache benefit. The Stop hook is the exception: it sets
+`TREEFMT_NO_CACHE=true` for both formatter passes so the second pass proves the
+first rewrite converged instead of accepting a cache hit as that proof.
 
 Formatters and linters remain separate — treefmt formats and lints nothing.
 

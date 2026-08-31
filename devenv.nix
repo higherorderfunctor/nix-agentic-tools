@@ -40,6 +40,18 @@
     inherit (repoValidation) formatterHookId judgmentHookIds;
   };
   isolatePrekHooks = import ./lib/isolate-prek-hooks.nix {inherit pkgs;};
+  runRepoHooks = pkgs.writeShellApplication {
+    name = "run-repo-hooks";
+    bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+    text = ''
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      exec ${lib.getExe config.git-hooks.package} run \
+        --hook-stage manual \
+        --all-files \
+        --config ${config.git-hooks.configFile}
+    '';
+  };
 
   # Diagnostic-lean closure — EVAL-time branch on $CI. The manual Devenv
   # Diagnostic workflow sets it to omit interactive LSP/Semble tooling that
@@ -501,6 +513,10 @@ in {
 
   # ── Validation ─────────────────────────────────────────────────────────
   enterTest = ''
+    # Shell-entry tasks have finished, so full-corpus validation cannot race
+    # materialization. Keep this here rather than in the task DAG: RunMode::All
+    # can pull a sibling task through a shared prerequisite during shell entry.
+    ${lib.getExe runRepoHooks}
     echo "Validating devenv configuration..."
     # Per-runtime ai.shell delivery, against the real artifacts on PATH.
     ${lib.getExe verifyAiShell}
@@ -590,18 +606,17 @@ in {
     checkTasks
     // generateTasks
     // {
-      # Upstream's unscoped `prek run -a` selects pre-commit hooks, which makes
-      # the default-branch guard reject `devenv test` on main. The manual stage
-      # is the deliberately side-effect-free diagnostic projection: formatter
-      # plus code validators, never commit lifecycle hooks.
-      "devenv:git-hooks:run".exec = lib.mkForce ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        exec ${lib.getExe config.git-hooks.package} run \
-          --hook-stage manual \
-          --all-files \
-          --config "$DEVENV_ROOT/${config.git-hooks.configPath}"
-      '';
+      # Keep full-corpus work as named diagnostics. Upstream wires both tasks
+      # into activation; detach them because devenv's RunMode::All can traverse
+      # from a shared prerequisite into a sibling lane (cachix/devenv#2337).
+      # The immutable config lets the hook task remain dependency-free while
+      # `enterTest` invokes the same helper after shell-entry tasks complete.
+      "devenv:git-hooks:run" = {
+        after = lib.mkForce [];
+        before = lib.mkForce [];
+        exec = lib.mkForce (lib.getExe runRepoHooks);
+      };
+      "devenv:treefmt:run".before = lib.mkForce [];
 
       # ── Update pipeline (ninja DAG) ──────────────────────────────────
       # ninja handles the full dependency graph with -j4 concurrency.
