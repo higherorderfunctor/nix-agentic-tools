@@ -477,6 +477,28 @@
   .flag.warn {
     border-color: var(--c-red);
   }
+  /* provenance */
+  .src {
+    margin: 0;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .src a {
+    color: var(--ink3);
+    text-decoration: none;
+  }
+  .src a:hover {
+    color: var(--ink2);
+    text-decoration: underline;
+  }
+  .srcdir {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--ink3);
+    margin-left: 6px;
+    overflow-wrap: anywhere;
+  }
   .count {
     font-family: var(--mono);
     font-size: 0.78rem;
@@ -1187,6 +1209,23 @@
   const nodeHref=uid=>`#/nodes/${enc(uid)}`;
   const hrefOf=uid=>NAR[uid]?narHref(uid):(NODES[uid]?nodeHref(uid):null);
   const titleOf=uid=>NAR[uid]?NAR[uid].title:(NODES[uid]?NODES[uid].title:null);
+  /* ---------- provenance: the .sdoc a thing was authored in ---------- */
+  // Every node and every narrative carries its own path in the payload; the
+  // page never derives one. A file is named for its node's UID lowercased, so
+  // the basename repeats the UID and the DIRECTORY is the part that says
+  // something -- which plan, the spec, or a package. srcLine gives the whole
+  // path where nothing else names the source; srcDir gives the directory
+  // where the UID is already on screen beside it.
+  const pathOf=uid=>{ const nd=NODES[uid]; if(nd&&nd.path) return nd.path; const n=NAR[uid]; return n&&n.path?n.path:null; };
+  const dirOf=uid=>{ const p=pathOf(uid); if(!p) return null; const i=String(p).lastIndexOf("/"); return i<0?"":String(p).slice(0,i+1); };
+  function srcLine(uid){
+    const p=pathOf(uid); if(!p) return null;
+    return h("p",{class:"src"},h("a",{href:nodeHref(uid),title:"the file this was written in"},h("code",{},p)));
+  }
+  function srcDir(uid){
+    const d=dirOf(uid); if(d==null) return null;
+    return h("span",{class:"srcdir",title:pathOf(uid)},d);
+  }
   const colourOf=(uid,word)=>{ const l=legendRow(uid,word); return l&&COLOURS.includes(l.colour)?l.colour:null; };
   const cls=(uid,word)=>"c-"+(colourOf(uid,word)||"none");
   const rank=(field,value)=>{ const l=LADDERS[field]; if(!Array.isArray(l)) return null; const i=l.indexOf(value); return i<0?null:[i+1,l.length]; };
@@ -1237,6 +1276,7 @@
     if(!nodeOn(uid)) return h("span",{class:"node"},h("code",{},uid)," ",offNote(uid));
     const a=h("a",{class:"node"+(inline?" inline":""),href,title:inline&&t!=null?t:undefined},h("code",{},uid));
     if(t!=null&&!inline) a.append(h("span",{class:"t"},t));
+    if(!inline){ const d=srcDir(uid); if(d) a.append(d); }
     return a;
   }
   function spans(list){ return (list||[]).map(sp=> sp&&sp.link!=null ? nodeLink(sp.link,true) : String(sp&&sp.t!=null?sp.t:"")); }
@@ -1358,7 +1398,7 @@
     const source=r.source!=null&&r.source!==""?h("details",{class:"orig"},h("summary",{},"the source wording"),h("p",{},String(r.source),r.word!=null?`  [${r.word}${r.by!=null?": "+r.by:""}]`:"")):null;
     return h("article",{class:`line ${cls(home.uid,r.word)}`,id:opts.home?`row-${home.uid}-${r.n}`:null},
       h("div",{class:"line-head"},wordChip(home.uid,r.word),
-        opts.crumb?h("a",{class:"crumb",href:narHref(home.uid,`/row/${r.n}`)},home.title):h("span",{class:"idx"},"#"+r.n)),
+        opts.crumb?h("a",{class:"crumb",href:narHref(home.uid,`/row/${r.n}`)},home.title,srcDir(home.uid)):h("span",{class:"idx"},"#"+r.n)),
       h("p",{class:"h"},spans(r.spans)),
       by, refs, source);
   }
@@ -1550,8 +1590,8 @@
   /* ---------- index and list: over children or over a query ---------- */
   function childEntry(c){
     const rows=rowCount(c), back=rowBacklinks(c.uid).length, cites=(c.cites||[]).length;
-    const bits=[]; if(rows) bits.push(plural(rows,"row")); else if(back) bits.push(`${back} that link it`); if(cites) bits.push(plural(cites,"cite"));
-    return {uid:c.uid,title:c.title,blurb:firstPara(c),bits,href:narHref(c.uid),on:nodeOn(c.uid)};
+    const bits=[]; if(c.dir_class) bits.push(c.dir_class); if(rows) bits.push(plural(rows,"row")); else if(back) bits.push(`${back} that link it`); if(cites) bits.push(plural(cites,"cite"));
+    return {uid:c.uid,title:c.title,path:c.path,dir_class:c.dir_class,blurb:firstPara(c),bits,href:narHref(c.uid),on:nodeOn(c.uid)};
   }
   // the narratives a query word names: the table the backend computed under
   // DATA.queries when it is there (each row a uid), drawn as the narrative on
@@ -1833,8 +1873,8 @@
   function stacked(n,ctx){
     const kids=stackKids(n);
     const inner=[...narBody(n,ctx).flat().filter(Boolean),kids.map(c=>stacked(c,ctx)),autoIndex(n),citesList(n)];
-    if(n.place==="card") return h("article",{class:"card",id:`nar-${n.uid}`},h("h3",{},n.title),tagRow(n),inner);
-    return h("section",{class:"sec",id:`nar-${n.uid}`},h("div",{class:"row"},h("h2",{},n.title)),tagRow(n),inner);
+    if(n.place==="card") return h("article",{class:"card",id:`nar-${n.uid}`},h("h3",{},n.title),tagRow(n),srcLine(n.uid),inner);
+    return h("section",{class:"sec",id:`nar-${n.uid}`},h("div",{class:"row"},h("h2",{},n.title)),tagRow(n),srcLine(n.uid),inner);
   }
   // the rows anywhere on the page that link this narrative, as line cards
   // with crumbs home, under a screen that is not itself a rows widget
@@ -1874,7 +1914,7 @@
   function screenNar(uid,ctx={}){
     const n=NAR[uid];
     const head=[subStrip(uid),
-      h("div",{class:"stack",id:`nar-${n.uid}`},crumbTrail(uid),h("h1",{},n.title),h("div",{class:"row"},narChips(n),cellBadge(uid),isRoot(n)?h("span",{class:"chip"},n.dir_class):null),tagRow(n))];
+      h("div",{class:"stack",id:`nar-${n.uid}`},crumbTrail(uid),h("h1",{},n.title),h("div",{class:"row"},narChips(n),cellBadge(uid),isRoot(n)?h("span",{class:"chip"},n.dir_class):null),tagRow(n),srcLine(n.uid))];
     const kids=stackKids(n);
     const out=[...head,...narBody(n,ctx).flat().filter(Boolean),...kids.map(c=>stacked(c,ctx))];
     // a screen names a cited node once: what a stacked child already cites is left off the container's list
