@@ -529,6 +529,11 @@
     color: var(--ink2);
     text-decoration: underline;
   }
+  .seed {
+    margin: 0 0 8px;
+    font-size: 0.78rem;
+    color: var(--ink3);
+  }
   .idline {
     display: flex;
     align-items: center;
@@ -1984,10 +1989,23 @@
   // a narrative's body: its prose, its widget and, for a narrative about a
   // grammar element, that element's tables. What it cites comes after its
   // stacked children (citesAfter), so provenance closes a screen
+  // A widget that draws over something other than its own STATEMENT says so.
+  // Two sources exist in the payload: an Over relation naming another
+  // narrative, and a query word naming a computed table. The two widgets that
+  // draw the whole SELECTION rather than a subject -- edges and fingerprints --
+  // are deliberately silent: their scope is the reader's switches, not a node,
+  // and naming a seed for them would be inventing copy the payload does not
+  // carry.
+  function seedNote(n){
+    if(n.widget==="edges"||n.widget==="fingerprints") return null;
+    if(n.over!=null&&NAR[n.over]) return h("p",{class:"seed"},"drawn over ",nodeLink(n.over,true));
+    if(n.query!=null) return h("p",{class:"seed"},"drawn from the ",h("code",{},n.query)," query");
+    return null;
+  }
   function narBody(n,ctx={}){
     const overMissing=n.over!=null&&!NAR[n.over]?h("p",{class:"muted small"},"drawn over ",h("code",{},n.over),", which is not a narrative on this page"):null;
     const intro=n.widget==="callout"?h("div",{class:"banner"},prose(n)):prose(n);
-    return [intro, overMissing, widgetBody(n,ctx), n.grammar_of!=null?grammarTables(n.grammar_of):null];
+    return [intro, overMissing, seedNote(n), widgetBody(n,ctx), n.grammar_of!=null?grammarTables(n.grammar_of):null];
   }
   // a section or card child stacked on its container's screen
   function stacked(n,ctx){
