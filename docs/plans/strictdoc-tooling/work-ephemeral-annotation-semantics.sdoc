@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: Work out annotation that is not meant to last, and whether DEPTH survives it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-EPHEMERAL-ANNOTATION-SEMANTICS
+TITLE: Work out annotation that is not meant to last, and whether DEPTH survives it
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+DEPTH is a bad field and the annotation vocabulary around it is underdefined.
+Two separate problems, worth drilling into together.
+
+DEPTH names a design-maturity ladder -- sketch, needs-design, needs-spike,
+interface-settled, implemented, verified -- and the word says nothing of the
+kind. It reads as distance from a root, which is what a person meets it
+expecting. DEC-WORK-STATE-FIELD already asks what it means on a WORK node and
+is open; this is the wider question of whether the field earns its place at
+all, and under what name.
+
+The gap it sits next to: there is no way to annotate a node with something
+NOT meant to survive to main. Comments, observed gaps, working notes, a
+verdict left for the next session -- none of them are durable claims, and
+today the only places to put them are NOTES on a real node or a new node that
+outlives its usefulness. The corpus grows and nothing prunes it.
+
+COMMENTARY exists as an element and nothing in the corpus is one; whether it
+is the answer here, or whether ephemeral annotation is a different thing
+again, is part of the question rather than the answer to it.
+
+Not this session's to carry.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

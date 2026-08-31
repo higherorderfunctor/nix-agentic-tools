@@ -664,6 +664,12 @@ def verify(root: Path, restore: dict[Path, str | None]) -> None:
 
 
 def finish(graph, args, root: Path, *, created: Path | None = None) -> int:
+    # Running inside a resident workspace: it owns saving and verification,
+    # and doing either here would pay the full reload the daemon exists to
+    # defer. The handler has already mutated the graph, which is all the
+    # workspace needs from it.
+    if getattr(args, "_defer_save", False) and not getattr(args, "dry_run", False):
+        return 0
     if getattr(args, "dry_run", False):
         print_diff(graph, root)
         if created is not None:

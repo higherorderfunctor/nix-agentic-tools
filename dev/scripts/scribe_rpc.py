@@ -38,7 +38,9 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from scribe_ops import apply as apply_operation  # noqa: E402
 from scribe_workspace import Workspace, WorkspaceError  # noqa: E402
+from sdoc_model import SdocError  # noqa: E402
 
 SCHEMA = "scribe-rpc/1"
 MAX_REQUEST_BYTES = 16 * 1024 * 1024
@@ -48,6 +50,7 @@ METHODS = (
     "workspace.describe",
     "workspace.export",
     "workspace.reload",
+    "scribe.apply",
 )
 
 
@@ -96,6 +99,16 @@ def _call(workspace: Workspace, method: str, params: dict) -> Any:
     if method == "workspace.reload":
         workspace.reload()
         return workspace.describe()
+    if method == "scribe.apply":
+        op = params.get("op")
+        if not op:
+            raise RpcFault(-32602, "Invalid params", "scribe.apply needs an op")
+        try:
+            return apply_operation(workspace, op, params)
+        except SdocError as exc:
+            # A refusal, not a transport failure: the operation was
+            # understood and declined. The client prints it and exits 1.
+            raise RpcFault(-32002, "Refused", str(exc)) from exc
     if method == "workspace.export":
         output_dir = params.get("outputDir")
         if not output_dir:
