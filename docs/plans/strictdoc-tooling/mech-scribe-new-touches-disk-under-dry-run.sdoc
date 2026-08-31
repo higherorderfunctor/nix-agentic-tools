@@ -10,7 +10,7 @@ TITLE: scribe new writes its skeleton to disk before validation, even under --dr
 DEPTH: sketch
 AUTHORED_BY: llm
 STATEMENT: >>>
-`sdoc new` writes a header-only skeleton to DISK and reloads the canon before
+`scribe new` writes a header-only skeleton to DISK and reloads the canon before
 the node is validated, and it does so under --dry-run too: the skeleton is
 unlinked again at the end of the dry run (sdoc_cli.py:416-426, :647-648). A
 create is therefore never a pure in-memory proposal, and a joint fired "before

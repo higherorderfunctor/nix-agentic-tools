@@ -360,7 +360,7 @@ hard rules, the parser gotchas), `docs/sdoc/grammar.sgra`, and the rulings in
 `docs/spec/`. Read the canon through the export, never by parsing files; one
 node with its neighbours is `docs/sdoc/render.py --uid`; a whole view as JSON is
 `docs/sdoc/view/wireline.py <index.json> <worktree> --all-roots` (nodes, edges,
-backlinks, grammar, systems). The strictdoc and `sdoc` binaries live in this
+backlinks, grammar, systems). The strictdoc and `scribe` binaries live in this
 worktree's `.devenv/profile/bin/`; another worktree can call them by absolute
 path. The rules that bind every agent: write only your own plan directory,
 register first; never a Parent relation into another plan; never `fp-accept`,

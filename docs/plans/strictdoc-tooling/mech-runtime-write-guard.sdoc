@@ -57,7 +57,7 @@ the grammar makes it REQUIRED on all five types.
 One thing had to be spoken rather than merely absent. argparse answers an
 undeclared flag with "unrecognized arguments", which reads as a typo rather
 than as a refusal, so reject_guarded scans argv before parsing and names the
-owner. Measured: `sdoc set MECH-... --authored-by human` exits 1 saying
+owner. Measured: `scribe set MECH-... --authored-by human` exits 1 saying
 AUTHORED_BY is the operator's. There is no override flag.
 
 PARENT_FP is not emitted by the CLI at all. fp-accept.py reaches it through

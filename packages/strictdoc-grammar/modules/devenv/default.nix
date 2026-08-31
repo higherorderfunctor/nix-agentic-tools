@@ -70,10 +70,10 @@
     strictdoc = cfg.package;
   };
 
-  # `sdoc` — SLICE-SDOC-CLI's entry point. Takes the runner above rather than
-  # deriving a second interpreter; see ../../lib/mkSdocCli.nix for why the
+  # `scribe` — SLICE-SDOC-CLI's entry point. Takes the runner above rather than
+  # deriving a second interpreter; see ../../lib/mkScribe.nix for why the
   # script itself is resolved at run time instead of being baked in.
-  sdocCli = import ../../lib/mkSdocCli.nix {
+  scribe = import ../../lib/mkScribe.nix {
     inherit lib pkgs;
     runner = extract;
   };
@@ -208,7 +208,7 @@ in {
     packages = [
       cfg.package
       extract
-      sdocCli
+      scribe
     ];
 
     # Declared even when `grammars` is empty, so `devenv tasks list` shows the

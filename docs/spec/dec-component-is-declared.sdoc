@@ -24,7 +24,7 @@ script -- the same shape [LINK: NAR-CANON-SYSTEMS] and [LINK: NAR-CANON-TABS]
 already have.
 
 **The field is live and empty, and nothing reads it yet.** The grammar carries
-it, `sdoc` writes it, and no node declares one. Until a corpus and a vocabulary
+it, `scribe` writes it, and no node declares one. Until a corpus and a vocabulary
 exist, [LINK: DEC-SYSTEM-IS-A-SOURCE-SET] REMAINS IN FORCE and the page still
 switches by path. This decision is open precisely because the vocabulary is the
 question, and the vocabulary is not derivable from the directory layout that

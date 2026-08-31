@@ -28,8 +28,8 @@
 # UID PREFIXES NAME THE TYPE A NODE WAS BORN WITH, NOT THE TYPE IT IS.
 # DEC-UID-OUTLIVES-TYPE: a UID never changes, so the node-type migration of
 # 2026-08-30 retyped SLICE-, INV- and SPIKE- nodes in place and those prefixes
-# are retired history. The element tag is the type. `sdoc new` still requires
-# the current prefix on a NEW node; `sdoc check` tolerates a prefix no element
+# are retired history. The element tag is the type. `scribe new` still requires
+# the current prefix on a NEW node; `scribe check` tolerates a prefix no element
 # declares and reports only a prefix that belongs to a DIFFERENT element.
 #
 # ORDER IS LOAD-BEARING, though not uniformly, and the difference was measured

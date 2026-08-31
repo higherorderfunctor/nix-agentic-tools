@@ -1,4 +1,4 @@
-# `sdoc` — the dev-shell entry point for dev/scripts/sdoc_cli.py
+# `scribe` — the dev-shell entry point for dev/scripts/sdoc_cli.py
 # (SLICE-SDOC-CLI, docs/plans/strictdoc-tooling/slice-sdoc-cli.sdoc).
 #
 # ── Why the script is NOT baked into the store ───────────────────────────────
@@ -6,7 +6,7 @@
 # The CLI is dev-only tooling that lives beside the corpus it writes, in the
 # same tree, on the same long-lived branch. Copying it into a derivation would
 # mean a rebuild between editing the tool and running it, and — worse — a
-# `sdoc` resolved from the PRIMARY checkout's shell would carry that checkout's
+# `scribe` resolved from the PRIMARY checkout's shell would carry that checkout's
 # copy of the script into every linked worktree, which is precisely the skew
 # the one-graph layout exists to avoid. So this wrapper carries the
 # INTERPRETER, which does need Nix, and resolves the SCRIPT at run time.
@@ -33,7 +33,7 @@
   runner,
 }:
 pkgs.writeShellApplication {
-  name = "sdoc";
+  name = "scribe";
 
   # `nounset` has to be armed ABOVE writeShellApplication's own generated
   # `export PATH=...`, which is what putting these here rather than in `text`
@@ -50,7 +50,7 @@ pkgs.writeShellApplication {
     while [ ! -f "$root/strictdoc_config.py" ]; do
       parent=$(dirname "$root")
       if [ "$parent" = "$root" ]; then
-        echo "sdoc: no strictdoc_config.py in $PWD or any parent -- run" \
+        echo "scribe: no strictdoc_config.py in $PWD or any parent -- run" \
              "inside the repository" >&2
         exit 1
       fi
@@ -59,7 +59,7 @@ pkgs.writeShellApplication {
 
     script=$root/dev/scripts/sdoc_cli.py
     if [ ! -f "$script" ]; then
-      echo "sdoc: $script is missing; this wrapper carries the interpreter," \
+      echo "scribe: $script is missing; this wrapper carries the interpreter," \
            "not the script" >&2
       exit 1
     fi
@@ -69,7 +69,7 @@ pkgs.writeShellApplication {
 
   meta = {
     description = "Grammar-derived writer for this repository's .sdoc design graph";
-    mainProgram = "sdoc";
+    mainProgram = "scribe";
     license = lib.licenses.unlicense;
     platforms = lib.platforms.unix;
   };

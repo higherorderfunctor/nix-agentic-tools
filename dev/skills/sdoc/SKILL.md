@@ -46,15 +46,15 @@ IMPORT_FROM_FILE: @repo
 
 ## Glossary — ruled terms, use them and correct drift on sight
 
-| term       | means                                                                              | ruling                                   |
-| ---------- | ---------------------------------------------------------------------------------- | ---------------------------------------- |
-| beads      | the LLM's working graph: private, one per user per repo, NOT part of the canon     | `DEC-CANON-NAMES-THE-COMMITTED-CONTENTS` |
-| canon      | the committed, human-reviewed `.sdoc` contents; never "graph"                      | `DEC-CANON-NAMES-THE-COMMITTED-CONTENTS` |
-| checkpoint | a joint that fires on a workflow moment (commit, push, check)                      | `DEC-JOINT-NOT-SURFACE`                  |
-| joint      | join point: a place logic COULD attach; never "surface"                            | `DEC-JOINT-NOT-SURFACE`                  |
-| scribe     | the writer of the canon, CLI and library alike; the binary is still spelled `sdoc` | `DEC-SCRIBE-NAMES-THE-WRITER`            |
-| sdoc       | the file format and its grammar, nothing else                                      | `DEC-SCRIBE-NAMES-THE-WRITER`            |
-| strictdoc  | the upstream package                                                               | `DEC-SCRIBE-NAMES-THE-WRITER`            |
+| term       | means                                                                          | ruling                                   |
+| ---------- | ------------------------------------------------------------------------------ | ---------------------------------------- |
+| beads      | the LLM's working graph: private, one per user per repo, NOT part of the canon | `DEC-CANON-NAMES-THE-COMMITTED-CONTENTS` |
+| canon      | the committed, human-reviewed `.sdoc` contents; never "graph"                  | `DEC-CANON-NAMES-THE-COMMITTED-CONTENTS` |
+| checkpoint | a joint that fires on a workflow moment (commit, push, check)                  | `DEC-JOINT-NOT-SURFACE`                  |
+| joint      | join point: a place logic COULD attach; never "surface"                        | `DEC-JOINT-NOT-SURFACE`                  |
+| scribe     | the writer of the canon, CLI and library alike; the command is `scribe`        | `DEC-SCRIBE-NAMES-THE-WRITER`            |
+| sdoc       | the file format and its grammar, nothing else                                  | `DEC-SCRIBE-NAMES-THE-WRITER`            |
+| strictdoc  | the upstream package                                                           | `DEC-SCRIBE-NAMES-THE-WRITER`            |
 
 ## Node types
 
@@ -77,10 +77,10 @@ grid.
 node to WORK, `INV-` to REQUIREMENT (two measurements to EVIDENCE) and `SPIKE-`
 to EVIDENCE when run or WORK when unrun, changing only the element tag; those
 prefixes are retired history, and a MECHANISM re-read as a REQUIREMENT keeps
-`MECH-`. Read the tag (`_NODE_TYPE` in the export), never the prefix. `sdoc new`
-requires the current prefix on a NEW node; `sdoc check` prints a `NOTE` per
-retyped node and never fails on one. A retype records itself in the node's
-NOTES.
+`MECH-`. Read the tag (`_NODE_TYPE` in the export), never the prefix.
+`scribe new` requires the current prefix on a NEW node; `scribe check` prints a
+`NOTE` per retyped node and never fails on one. A retype records itself in the
+node's NOTES.
 
 `COMMENTARY` is new and NOTHING IN THE CORPUS IS ONE YET
 (`DEC-COMMENTARY-IS-THE-FIFTH-FAMILY`, open). It carries `STANDING` (open /
@@ -142,23 +142,24 @@ mechanism in its closure is `interface-settled` or better, every decision in it
 is `accepted`, and no edge is suspect. The count of `open` decisions in that
 closure is the slice's degrees of freedom.
 
-## Write with `sdoc`, not with the edit tool
+## Write with `scribe`, not with the edit tool
 
-`sdoc` is this repository's writer for the graph (SLICE-SDOC-CLI). **Its option
-surface is DERIVED from the grammar** — one flag per field a node type declares,
-one per relation role it may make, and every choice flag's word list read off
-that field — so `sdoc new DECISION --help` and `sdoc new NARRATIVE --help` print
-two different surfaces, and neither can be got wrong from memory.
+`scribe` is this repository's writer for the graph (SLICE-SDOC-CLI). **Its
+option surface is DERIVED from the grammar** — one flag per field a node type
+declares, one per relation role it may make, and every choice flag's word list
+read off that field — so `scribe new DECISION --help` and
+`scribe new NARRATIVE --help` print two different surfaces, and neither can be
+got wrong from memory.
 
 ```bash
-sdoc new MECHANISM --help          # the flags MECHANISM actually declares
-sdoc new MECHANISM --uid MECH-THING --title "..." --depth sketch \
+scribe new MECHANISM --help          # the flags MECHANISM actually declares
+scribe new MECHANISM --uid MECH-THING --title "..." --depth sketch \
      --statement @statement.md --path docs/plans/<plan>/
-sdoc set MECH-THING --depth implemented --notes @notes.md
-sdoc relate MECH-THING --role Governed_By --target DEC-SOMETHING
-sdoc show MECH-THING               # the node, with relations resolved to titles
-sdoc list --type WORK --depth sketch
-sdoc check                         # every node, relation and File path
+scribe set MECH-THING --depth implemented --notes @notes.md
+scribe relate MECH-THING --role Governed_By --target DEC-SOMETHING
+scribe show MECH-THING               # the node, with relations resolved to titles
+scribe list --type WORK --depth sketch
+scribe check                         # every node, relation and File path
 ```
 
 Every writing verb takes **`--dry-run`**, which prints the diff and writes
@@ -177,12 +178,12 @@ Two fields have **no flags at all** and that is the enforcement: `AUTHORED_BY`
 and `PARENT_FP` are the operator's (MECH-RUNTIME-WRITE-GUARD). Naming one exits
 non-zero saying who owns it. There is no override.
 
-`sdoc` reaches strictdoc's own interpreter and needs a dev shell, like every
+`scribe` reaches strictdoc's own interpreter and needs a dev shell, like every
 other strictdoc command here.
 
 ## Required loop when you edit a `.sdoc` by hand anyway
 
-`sdoc` covers node and relation writes. For anything outside it — editing the
+`scribe` covers node and relation writes. For anything outside it — editing the
 `[DOCUMENT]` header, or a bulk fix across many files — the old loop still
 applies:
 
@@ -207,7 +208,7 @@ is read and never written, so it is not the grammar's formatter.
    rendered views, and an index is a handle they cannot dereference. **Do not
    run `strictdoc manage auto-uid`** — it mints prefix-plus-counter, which is
    the form nobody here keeps.
-2. **Never hand-write a node from memory — use `sdoc new`.** Field order and
+2. **Never hand-write a node from memory — use `scribe new`.** Field order and
    blank-line rules are what get subtly wrong, and the tool takes both from the
    grammar rather than from your recollection. It also refuses a UID whose
    prefix does not match the node type, which strictdoc itself does not check.
@@ -220,7 +221,7 @@ is read and never written, so it is not the grammar's formatter.
    node you author cites is a declaration, not a signature.
 4. **Never edit an accepted `DECISION`'s `STATEMENT`.** Set its `STATUS` to
    `superseded`, add `Superseded_By`, and write a new decision.
-5. **Always `format` before hashing** — unless `sdoc` did the write, which
+5. **Always `format` before hashing** — unless `scribe` did the write, which
    already emits the canonical form. It does not rewrap prose _today_ —
    `strictdoc_config.py` sets no `document_line_width`, so the round-trip is a
    no-op on paragraph text and only node structure is normalized. Run it anyway:
@@ -348,9 +349,9 @@ Suspect-link detection, the readiness query and a derived view all shipped on
 this branch: `dev/scripts/fp-check.py`, `docs/sdoc/status.py`'s
 `closure_verdict()`, and `docs/sdoc/render.py`. The first is a required check.
 
-`sdoc` shipped with milestone two (SLICE-SDOC-CLI): the grammar-derived writer,
-`dev/scripts/sdoc_model.py` beneath it, and `dev/scripts/file-check.py` in
-`nix flake check` alongside the cycle and fingerprint checks. It applies **no
+`scribe` shipped with milestone two (SLICE-SDOC-CLI): the grammar-derived
+writer, `dev/scripts/sdoc_model.py` beneath it, and `dev/scripts/file-check.py`
+in `nix flake check` alongside the cycle and fingerprint checks. It applies **no
 instance semantics** — whether `DEPTH` may regress, when deleting is legitimate,
 and who may sign are milestone five's, and `delete` exists in the tool precisely
 because this skill is what does not teach it.

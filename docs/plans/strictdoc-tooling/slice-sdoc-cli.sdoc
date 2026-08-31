@@ -86,11 +86,11 @@ working copy at a stable path; a fresh temporary copy pays the cold cost.
 Prefix-to-type agreement is unenforced today: a MECHANISM named SLICE-... exports
 exit 0 and lands in the JSON unremarked. The tool is where that closes.
 
-IMPLEMENTED 2026-08-27 as dev/scripts/sdoc_cli.py, reachable as `sdoc` in
-the dev shell through packages/strictdoc-grammar/lib/mkSdocCli.nix.
+IMPLEMENTED 2026-08-27 as dev/scripts/sdoc_cli.py, reachable as `scribe` in
+the dev shell through packages/strictdoc-grammar/lib/mkScribe.nix.
 
 The option surface is derived, and the asymmetry this slice's RATIONALE
-predicted is what comes out: `sdoc new DECISION --help` offers no --depth,
+predicted is what comes out: `scribe new DECISION --help` offers no --depth,
 no File role and STATUS as open|accepted|rejected|superseded, while `sdoc
 new SPIKE --help` offers both a --depth and a --status of
 unrun|run|blocked. Relation roles are per type too -- --role Crosses is
