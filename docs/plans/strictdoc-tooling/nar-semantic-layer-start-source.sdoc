@@ -10,7 +10,7 @@ TITLE: Where this comes from
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: facts
-PLACE: section
+PLACE: screen
 STATEMENT: >>>
 - input: [LINK: MECH-SEMANTIC-LAYER-WHITEBOARD]
 - brief: [LINK: SLICE-SEMANTIC-LAYER-RENDER]

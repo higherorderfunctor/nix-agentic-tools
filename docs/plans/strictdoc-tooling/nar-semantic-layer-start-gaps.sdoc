@@ -10,7 +10,7 @@ TITLE: The five top gaps
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: list
-PLACE: section
+PLACE: screen
 STATEMENT: >>>
 The sheet's own closing section -- the places where the direction has no answer at all. Each line carries how many rows feed the gap and how many nodes it touches.
 <<<
