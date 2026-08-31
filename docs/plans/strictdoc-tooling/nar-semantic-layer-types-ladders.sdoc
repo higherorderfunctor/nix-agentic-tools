@@ -10,7 +10,7 @@ TITLE: The state fields every type shares
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: ladder
-PLACE: card
+PLACE: screen
 STATEMENT: >>>
 One ladder per state field, each rung with its live count over the selection.
 
