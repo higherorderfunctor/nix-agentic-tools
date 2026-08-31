@@ -22,11 +22,11 @@ PARTIALLY implemented 2026-08-31 as scribe_client.py: the transport, the
 fail-closed refusal that names the socket and the command to start one. It
 carries no strictdoc import, so asking whether a daemon is up costs no parser.
 
-WHAT IS NOT DONE: the scribe verbs are not proxied. `scribe show`, `list`,
+WHAT IS NOT DONE: the scribe commands do not go through the daemon. `scribe show`, `list`,
 `check`, `new`, `set` and the rest still load the graph in-process, because
 sdoc_cli's finish() calls verify(), which is a full reload -- the exact cost
-the daemon exists to remove, so routing verbs through it without replacing
-that verification would defer nothing. See MECH-SCRIBE-VERB-PROXY.
+the daemon exists to remove, so routing commands through it without replacing
+that verification would defer nothing. See MECH-SCRIBE-COMMANDS-LOAD-IN-PROCESS.
 <<<
 RELATIONS:
 - TYPE: Parent

@@ -1,0 +1,40 @@
+[DOCUMENT]
+TITLE: Every scribe command still loads the graph itself
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-COMMANDS-LOAD-IN-PROCESS
+TITLE: Every scribe command still loads the graph itself
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Every scribe command -- show, list, check, new, set, relate and the rest --
+still loads the whole graph in its own process, about a second each. The
+daemon serves the render and nothing else.
+
+Pointing them at the socket is not the work. `scribe new` loads the graph
+three times: at startup, again to resolve the grammar alias on the file it
+just created, and again at the end inside finish() -> verify() to prove the
+written file did not break the corpus. Run that same code inside the daemon
+and the third load still happens, so the command costs what it costs today
+with a socket added in the middle.
+
+The workspace already replaces that third load -- parse only the file just
+written, defer the whole-graph check to the next read -- but verify() is
+called from finish(), which every writing command goes through. So the
+commands move only once their verification is the workspace's rather than
+their own, and that is a change to the existing CLI, not to transport.
+
+The likely shape afterwards is one socket call carrying the command line,
+dispatched inside the daemon against the held graph, since main() already
+takes only a graph and a root.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SCRIBE-DAEMON
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-RPC
+  ROLE: Assumes
