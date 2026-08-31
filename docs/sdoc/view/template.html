@@ -1473,9 +1473,12 @@
     // a term whose text is a contained narrative's title carries that
     // narrative's body under its definition and anchors its route
     const childOf=t=>kids.find(c=>(c.title||"").trim()===String(t.term).trim());
-    const dl=h("dl",{class:"words"},terms.flatMap(t=>{ const c=childOf(t); return [h("dt",{id:c?`nar-${c.uid}`:`row-${n.uid}-${t.n}`},c?h("a",{href:narHref(c.uid)},t.term):t.term),h("dd",{},h("p",{},spans(t.spans)),c?[prose(c),citesList(c)]:null)]; }));
+    // a term whose narrative is switched off keeps its heading and loses its
+    // body: printing the definition under an "(switched off)" label is the
+    // one place a switch used to say one thing and show another
+    const dl=h("dl",{class:"words"},terms.flatMap(t=>{ const c=childOf(t); const on=c&&nodeOn(c.uid); return [h("dt",{id:c?`nar-${c.uid}`:`row-${n.uid}-${t.n}`},on?h("a",{href:narHref(c.uid)},t.term):t.term,c&&!on?[" ",offNote(c.uid)]:null),h("dd",{},h("p",{},spans(t.spans)),on?[prose(c),citesList(c)]:null)]; }));
     const extra=kids.filter(c=>!terms.some(t=>String(t.term).trim()===(c.title||"").trim()));
-    const dl2=extra.length?h("dl",{class:"words"},extra.flatMap(c=>[h("dt",{id:`nar-${c.uid}`},nodeOn(c.uid)?(hrefOf(c.uid)?h("a",{href:hrefOf(c.uid)},c.title):c.title):[c.title," ",offNote(c.uid)]),h("dd",{},prose(c),citesList(c))])):null;
+    const dl2=extra.length?h("dl",{class:"words"},extra.flatMap(c=>{ const on=nodeOn(c.uid); return [h("dt",{id:`nar-${c.uid}`},on?(hrefOf(c.uid)?h("a",{href:hrefOf(c.uid)},c.title):c.title):[c.title," ",offNote(c.uid)]),h("dd",{},on?[prose(c),citesList(c)]:null)]; })):null;
     // the narratives the glossary contains or its query names come first,
     // then the terms of its own statement, in Contains order
     return [dl2,terms.length?dl:null];

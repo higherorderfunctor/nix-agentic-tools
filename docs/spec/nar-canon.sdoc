@@ -10,6 +10,7 @@ TITLE: The canon
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: callout
+TAGS: whole canon, not settled
 STATEMENT: >>>
 This page is the canon: every root narrative and every node of the committed, human-reviewed contents, rendered from one export. The systems table beneath is the switches. Each row names a set of node types and relation roles; a node shows when any system that holds it is on, and an edge when both its ends show and its role belongs to a system that is on ([LINK: DEC-SYSTEM-IS-A-TYPE-SET]). Switching changes what is shown and never what was rendered, and the selection rides in the page's address so a link carries it.
 <<<
