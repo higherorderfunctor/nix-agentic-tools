@@ -10,7 +10,7 @@ TITLE: How settled the view is
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: strip
-PLACE: section
+PLACE: screen
 STATEMENT: >>>
 Each row is one screen of this view. Bar length is how many rows the screen has; the segments are its words. Tap a segment to see just those rows.
 <<<

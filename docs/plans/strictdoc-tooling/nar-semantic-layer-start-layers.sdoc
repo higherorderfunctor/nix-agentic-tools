@@ -10,7 +10,7 @@ TITLE: The four layers
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: stack
-PLACE: section
+PLACE: screen
 STATEMENT: >>>
 Each layer may use only what is beneath it.
 
