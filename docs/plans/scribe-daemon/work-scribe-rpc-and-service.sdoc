@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: Serve the workspace over a socket, as a devenv process
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SCRIBE-RPC-AND-SERVICE
+TITLE: Serve the workspace over a socket, as a devenv process
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Put the workspace behind a Unix socket and a devenv process. Derive the socket
+path from the resolved target root, own it with a stale-probe and an
+inode-checked cleanup, serve newline-framed JSON-RPC, and report the served
+root on every method. Declare the process in devenv so it starts and stops
+with `devenv up` and `devenv down`.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-RPC
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-SOCKET-IDENTITY
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-DEVENV-PROCESS
+  ROLE: Crosses

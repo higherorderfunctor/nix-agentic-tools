@@ -1,0 +1,36 @@
+[DOCUMENT]
+TITLE: StrictDoc mutates a loaded index in place, unguarded and without rollback
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-STRICTDOC-MUTATION-PRIMITIVES
+TITLE: StrictDoc mutates a loaded index in place, unguarded and without rollback
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: audit plus refute-and-defend contest over strictdoc 0.28.3 driven against a corpus copy; 2026-08-31
+STATEMENT: >>>
+An audit of strictdoc 0.28.3 followed by an adversarial refute-and-defend pair,
+all three driving the code against a copy of this repository's corpus.
+
+Settled by both sides. The TraceabilityIndex mutation primitives run headlessly
+with no HTTP layer. SDWriter and SDReader are index-independent.
+CreateOrUpdateNodeCommand os.utime()s every document -- 348 of 348 from a no-op
+edit -- while the primitives touch 0 or 2. update_requirement_parent_uid writes
+the graph only, so the writer emits a byte-identical file and the edge is lost
+on reload. StrictDoc's cycle detection is inert on a role-bearing corpus: the
+facade defaults edge=None while all 869 relations carry roles, and both agents
+created a real cycle with no exception. There is no transaction or rollback
+anywhere, and invariants are bare asserts.
+
+Contested and unresolved at the headline. The refuter drove a colliding UID
+through the primitives and got a half-applied index -- fields already cleared,
+old UID link deleted, nothing to roll back. The defender answered with
+create_from_document_tree: the same code a full reload runs, minus the file
+walk, at 20 ms against 500 ms, catching duplicate UID, dangling reference and
+missing required field when driven at each.
+
+Both hold. The primitives half-apply; a 20 ms whole-graph rebuild makes that
+recoverable. The design takes both findings rather than either verdict.
+<<<

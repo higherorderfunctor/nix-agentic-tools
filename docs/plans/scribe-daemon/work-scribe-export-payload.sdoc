@@ -1,0 +1,20 @@
+[DOCUMENT]
+TITLE: Serve the render's export from the held graph
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SCRIBE-EXPORT-PAYLOAD
+TITLE: Serve the render's export from the held graph
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Generate the export payload from the held graph and point the render task at
+it instead of a fresh strictdoc export. Downstream consumers read the same
+bytes, so nothing after wireline changes.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-EXPORT-PAYLOAD
+  ROLE: Crosses

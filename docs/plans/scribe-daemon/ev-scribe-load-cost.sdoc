@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: Every scribe call and every render pays a full graph load
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SCRIBE-LOAD-COST
+TITLE: Every scribe call and every render pays a full graph load
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: strictdoc-trial worktree, 348-node canon, warm cache; strictdoc 0.28.3; 2026-08-31
+STATEMENT: >>>
+Measured in the strictdoc-trial worktree against a 348-node canon, warm, each
+command confirmed to exit 0 with non-empty output before its timing was read:
+
+    scribe show <uid>     1.05 s     one graph load
+    scribe check          1.56 s     one graph load
+    strictdoc export      1.76 s     one load, 10.3 MB index.json
+    wireline.py           0.19 s     given that index.json
+    python startup        0.017 s
+
+scribe new pays THREE loads -- the command's own, a reload to resolve the
+grammar alias on the new document, and verify's reload to prove the written
+bytes still parse -- measured at 1.96 s under --dry-run, which skips only the
+third. So authoring ten nodes costs about 30 seconds of graph loading.
+
+A cold number could not be taken: STRICTDOC_CACHE_DIR asserts its value equals
+the literal Output/_cache, so redirecting it raises rather than loading. A
+first attempt read 0.42 s and was a traceback, not a load.
+<<<

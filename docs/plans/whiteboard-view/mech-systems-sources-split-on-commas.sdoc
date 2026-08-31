@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: The systems table's sources cell splits on commas, and a space fails silently
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SYSTEMS-SOURCES-SPLIT-ON-COMMAS
+TITLE: The systems table's sources cell splits on commas, and a space fails silently
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+queries._split_words splits the systems table's sources cell on COMMAS, not on
+whitespace, despite its name. A space-separated cell parses as one unmatchable
+prefix, silently unholding every directory in that row.
+
+Measured 2026-08-31: adding a second source to the core row with a space
+unheld both that plan and strictdoc-tooling. view-check's systems-table rule
+caught it, which is the only reason it was not committed -- and that rule is
+not in nix flake check, so the same mistake lands green in CI.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-WHITEBOARD-VIEW
+  ROLE: Backlogged_In

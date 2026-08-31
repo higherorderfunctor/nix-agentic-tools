@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: The writer's module files still carry the retired name
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-MODULE-FILENAMES
+TITLE: The writer's module files still carry the retired name
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The writer's command is scribe; its module files are still sdoc_cli.py and
+sdoc_model.py. Renaming them restates prose in twelve nodes, three of which
+must not change -- the frozen ruling, and two evidence nodes recording
+measurements against those paths -- so the canon cannot be made fully
+consistent by the rename and the churn buys only internal tidiness.
+
+Mechanical and unblocking when someone wants it. sdoc_fp.py is out of scope: it
+is format-side, not the writer.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

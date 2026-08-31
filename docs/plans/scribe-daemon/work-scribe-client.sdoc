@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: Turn the scribe command into a client that fails closed
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SCRIBE-CLIENT
+TITLE: Turn the scribe command into a client that fails closed
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Make the scribe command a client. Resolve the target workspace from --root,
+SCRIBE_ROOT, or the walk up from the current directory; assert the daemon's
+reported root matches; and on an unreachable socket exit non-zero naming the
+socket and the command that starts one. Add the daemon preflight and the
+rebuild-triggering table to the scribe skill.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-DAEMON-NO-FALLBACK
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-RPC
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-SOCKET-IDENTITY
+  ROLE: Crosses

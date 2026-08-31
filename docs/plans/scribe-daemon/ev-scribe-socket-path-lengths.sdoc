@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: A socket under .devenv exceeds the sockaddr cap for most worktrees
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SCRIBE-SOCKET-PATH-LENGTHS
+TITLE: A socket under .devenv exceeds the sockaddr cap for most worktrees
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: 27 registered worktrees on the operator's machine; 104-byte cap; 2026-08-31
+STATEMENT: >>>
+Socket path lengths measured across the 27 worktrees registered on the
+operator's machine, against the 104-byte sockaddr_un cap the reference
+implementation enforces.
+
+Under <worktree>/.devenv/state/, 24 of 27 exceed the cap. The longest real
+worktree reaches 130 bytes and the strictdoc-trial worktree itself is 106.
+Only the primary checkout (80) and two short slugs (99, 101) fit.
+
+Under the user runtime directory every scheme fits: a sanitized basename is 33
+to 58 bytes, a sanitized branch name 29 to 62, and a hash a constant 45.
+XDG_RUNTIME_DIR is set to /run/user/1000, mode 0700, owned by the user, on
+tmpfs, and removed by pam_systemd at final logout.
+
+Identity: a resolved absolute path is the only stable key. A branch name is
+empty or literally HEAD on a detached worktree, one of which exists here, and
+one worktree already deviates from the flat-slug convention with a nested
+directory component.
+<<<

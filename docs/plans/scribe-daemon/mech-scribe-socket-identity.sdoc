@@ -1,0 +1,35 @@
+[DOCUMENT]
+TITLE: The socket path is derived from the resolved target root
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-SOCKET-IDENTITY
+TITLE: The socket path is derived from the resolved target root
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The socket path is derived, never configured, so a server and a client that
+never met agree on it.
+
+The target root resolves from --root, else SCRIBE_ROOT, else by walking up from
+the current directory for strictdoc_config.py. The socket is then named under
+the user runtime directory from that resolved absolute path: a readable slug
+plus a short digest of the path, so a directory listing is legible to a person
+while remaining collision-proof and stable across a branch rename.
+
+DEVENV_STATE is deliberately not the lookup. It is set only inside a devenv
+shell, and the most frequent client -- an agent invoking the binary by absolute
+path with no shell -- would compute a different answer from the server.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-SOCKET-IN-RUNTIME-DIR
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-ROOT-SELECTS-THE-WORKSPACE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: EV-SCRIBE-SOCKET-PATH-LENGTHS
+  ROLE: Proven_By

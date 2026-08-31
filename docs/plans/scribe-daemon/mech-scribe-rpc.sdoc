@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: One Unix socket carries newline-framed JSON-RPC to the workspace
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-RPC
+TITLE: One Unix socket carries newline-framed JSON-RPC to the workspace
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Requests reach the workspace as JSON-RPC 2.0, one JSON value per newline, over
+an AF_UNIX stream socket at mode 0600 inside a directory at mode 0700 owned by
+the caller.
+
+On start the server probes any socket already at its path: refused or absent
+means stale and it is replaced; a successful connect means another daemon owns
+this workspace and the start fails. On stop the socket is removed only if its
+inode is the one that was bound.
+
+Requests are bounded, malformed input and unknown methods return standard
+JSON-RPC errors, and the method set is discoverable. Every method names the
+workspace root it served, so a client can assert it reached the workspace it
+asked for.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-WORKSPACE
+  ROLE: Assumes

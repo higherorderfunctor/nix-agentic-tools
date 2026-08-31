@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: A client without a daemon fails loudly and does nothing else
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-SCRIBE-CLIENT-FAILS-CLOSED
+TITLE: A client without a daemon fails loudly and does nothing else
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+A scribe client shall treat an unreachable daemon as an error. It shall not
+load the graph in its own process, shall not start a daemon, and shall not
+answer from a cache.
+
+It shall name the socket it looked for and the command that starts a daemon,
+and exit non-zero.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-DAEMON-NO-FALLBACK
+  ROLE: Governed_By

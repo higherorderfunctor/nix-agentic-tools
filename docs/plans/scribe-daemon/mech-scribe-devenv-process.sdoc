@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: The daemon is a devenv process, one per worktree
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-DEVENV-PROCESS
+TITLE: The daemon is a devenv process, one per worktree
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The daemon is a devenv process, started with `devenv up` and stopped with
+`devenv down`. Per-worktree isolation is inherited rather than built: devenv
+derives root, state and runtime directories from the checkout path, which was
+confirmed distinct across the primary checkout and both worktrees.
+
+Auto-start on shell entry is possible but is not taken by default. A task
+running before enterShell fires on every entry -- this worktree records over
+seventy in a week -- so it would need the task system's status guard to probe
+for a live owner first, and nothing in the repository uses that guard yet.
+
+The process manager here resolves to `native` rather than the documented
+process-compose default, with no override anywhere in the repository, so
+process-compose-specific settings are not relied on.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-SOCKET-IDENTITY
+  ROLE: Assumes

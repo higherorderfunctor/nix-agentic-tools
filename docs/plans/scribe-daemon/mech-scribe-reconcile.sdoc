@@ -1,0 +1,48 @@
+[DOCUMENT]
+TITLE: A write parses its own file now and defers the whole-graph rebuild
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-RECONCILE
+TITLE: A write parses its own file now and defers the whole-graph rebuild
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Reconciliation has two tiers, and the split is what makes deferral safe.
+
+Per write, immediately: re-parse the file just written, on its own. This costs
+about 0.4 ms and catches a document that will not parse, naming the write that
+caused it. It cannot see across documents.
+
+Deferred to the next operation needing a whole-graph view: rebuild the graph
+over the already-parsed documents. This is strictdoc's own build minus the file
+walk -- about 20 ms against about 500 ms for the walk-and-unpickle it skips --
+and it catches duplicate UIDs, dangling relation targets and missing required
+fields. The repository's role-aware cycle check runs alongside it, because
+strictdoc's own is inert on this corpus.
+
+On failure the written bytes are restored AND the affected document is
+re-parsed and swapped back, then the rebuild is re-run before anything is
+served. Restoring bytes alone leaves a corrupt in-memory graph that a resident
+process would keep answering from -- the difference between a daemon and a
+one-shot command.
+
+The builder exits the process on four failure paths and raises on others, so
+both SystemExit and the exception have to be caught. The daemon never runs
+under python -O, where the invariant asserts vanish.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-DEFERS-THE-REBUILD
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-AVOIDS-THE-TRANSFORMS-LAYER
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-WORKSPACE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: EV-STRICTDOC-MUTATION-PRIMITIVES
+  ROLE: Proven_By
