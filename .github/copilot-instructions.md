@@ -376,61 +376,59 @@ the repo before committing.
 
 > **Last verified:** 2026-08-29 (commit pending — `devenv-test` no longer runs
 > automatically; its full shell smoke suite is an on-demand diagnostic, while
-> extracted runtime contracts and all code-validator corpora now run inside
-> the existing required `test` context. The six-context ruleset is unchanged).
+> extracted runtime contracts and all code-validator corpora now run inside the
+> existing required `test` context. The six-context ruleset is unchanged).
 > Prior: 2026-08-27 (commit pending — adds the per-unit worktree recipe, and
 > corrects the premise it was asked for under. There is no such thing as a
 > worktree OF a worktree: `git worktree add` run from inside a linked worktree
 > registers the new tree under the ORIGINAL clone, with `commondir` `../..` —
 > the same two-level path a level-one worktree has — so depth is a
-> filesystem-layout choice and every piece of shared machinery survives
-> because there is no second level to get lost in. Measured: prek resolves in
-> both directions (a mis-formatted staged file failed the real hook, a clean
-> one passed, the parent's prek state untouched) and `strictdoc export` yields
-> an identical graph. The one genuinely new hazard is LAYOUT — a worktree
-> placed inside its parent's tree is untracked to the outer `git status` and
-> so reaches treefmt/prek/gitleaks, and hard-fails `strictdoc export` on
-> duplicate UIDs — and the "worktree of a worktree" phrasing invites exactly
-> that, so the phrase is retired here. The isolation bought is PARTIAL: the
-> shared-across-worktrees list is unchanged at depth two, so concurrent `git
-> branchless` operations still serialize, and merge-back still happens in the
-> long-lived worktree because git refuses a second checkout of a checked-out
-> branch.) Prior: 2026-08-19 (commit pending — the rebase backup advice
-> recommended a local TAG, reasoning that `--update-refs` moves branches but
-> not tags. True, but incomplete: tags are refs in the COMMON git dir, so a
-> fetch from ANY worktree can prune them all in one shot when
-> `fetch.pruneTags` is set, which is a global (not per-repo) git config
-> setting — measured twice on 2026-08-15, the second time by the same
-> session's own fetch. Neither a local tag nor a local branch survives both
-> hazards; only a ref actually pushed to `origin` does. Backup guidance now
-> says `git push origin refs/heads/archive/<slug>`, created and pushed in the
-> same sequence as the rebase rather than verified afterward, since verifying
-> is itself a fetch that can destroy the thing being verified. Also adds local
-> tags to the shared-across-worktrees list, since the root cause is that tags
-> are common-dir refs, not anything about rebasing specifically.) Prior:
-> 2026-08-18 (commit pending — the per-worktree bootstrap requirement is GONE.
-> The shared prek hooks now resolve `.pre-commit-config.yaml` from the PRIMARY
-> CHECKOUT, derived from the shared common git dir, so a linked worktree that
-> has never entered `devenv shell` commits fine. `PREK_HOME` stays anchored to
-> the committing worktree, because under the agent sandbox the primary
-> checkout is a read-only bind. Written for the sandbox-stack pivot's "devenv
-> is never activated in a worktree" topology (#1106), under which the old
-> model rejected every worktree commit by design. Do NOT re-add a `devenv
-> shell` step to the worktree recipe below.) Prior: 2026-08-17 (commit pending
-> — shared prek hooks now derive `PREK_HOME` from the committing worktree, so
-> commits launched outside a devenv shell retain isolated project-local state
-> instead of falling back to the user-global XDG cache; the bootstrap
-> diagnostic now names shell entry as the only materialization path, and
-> shared-hook rewrites serialize and publish by atomic rename). Prior:
-> 2026-08-15 (commit pending — adds the adversarial subagent-review protocol
-> that SUBSTITUTES for the Copilot loop while its quota is exhausted, roughly
-> two weeks from 2026-08-15. Written because an agent cannot review its own
-> output, and because the operator had been having to ask for an independent
-> reviewer by hand each time. Includes the refuter+defender pairing and the
-> never-self-adjudicate rule, both of which exist because refute-by-default on
-> your own work is a second discard filter rather than a check). Prior:
-> 2026-08-14 (commit pending — TWO corrections. (1) The required-status-check
-> list said FOUR; there are SIX, both `kiro-patched`
+> filesystem-layout choice and every piece of shared machinery survives because
+> there is no second level to get lost in. Measured: prek resolves in both
+> directions (a mis-formatted staged file failed the real hook, a clean one
+> passed, the parent's prek state untouched) and `strictdoc export` yields an
+> identical graph. The one genuinely new hazard is LAYOUT — a worktree placed
+> inside its parent's tree is untracked to the outer `git status` and so reaches
+> treefmt/prek/gitleaks, and hard-fails `strictdoc export` on duplicate UIDs —
+> and the "worktree of a worktree" phrasing invites exactly that, so the phrase
+> is retired here. The isolation bought is PARTIAL: the shared-across-worktrees
+> list is unchanged at depth two, so concurrent `git branchless` operations
+> still serialize, and merge-back still happens in the long-lived worktree
+> because git refuses a second checkout of a checked-out branch.) Prior:
+> 2026-08-19 (commit pending — the rebase backup advice recommended a local TAG,
+> reasoning that `--update-refs` moves branches but not tags. True, but
+> incomplete: tags are refs in the COMMON git dir, so a fetch from ANY worktree
+> can prune them all in one shot when `fetch.pruneTags` is set, which is a
+> global (not per-repo) git config setting — measured twice on 2026-08-15, the
+> second time by the same session's own fetch. Neither a local tag nor a local
+> branch survives both hazards; only a ref actually pushed to `origin` does.
+> Backup guidance now says `git push origin refs/heads/archive/<slug>`, created
+> and pushed in the same sequence as the rebase rather than verified afterward,
+> since verifying is itself a fetch that can destroy the thing being verified.
+> Also adds local tags to the shared-across-worktrees list, since the root cause
+> is that tags are common-dir refs, not anything about rebasing specifically.)
+> Prior: 2026-08-18 (commit pending — the per-worktree bootstrap requirement is
+> GONE. The shared prek hooks now resolve `.pre-commit-config.yaml` from the
+> PRIMARY CHECKOUT, derived from the shared common git dir, so a linked worktree
+> that has never entered `devenv shell` commits fine. `PREK_HOME` stays anchored
+> to the committing worktree, because under the agent sandbox the primary
+> checkout is a read-only bind. Written for the sandbox-stack pivot's "devenv is
+> never activated in a worktree" topology (#1106), under which the old model
+> rejected every worktree commit by design. Do NOT re-add a `devenv shell` step
+> to the worktree recipe below.) Prior: 2026-08-17 (commit pending — shared prek
+> hooks now derive `PREK_HOME` from the committing worktree, so commits launched
+> outside a devenv shell retain isolated project-local state instead of falling
+> back to the user-global XDG cache; the bootstrap diagnostic now names shell
+> entry as the only materialization path, and shared-hook rewrites serialize and
+> publish by atomic rename). Prior: 2026-08-15 (commit pending — adds the
+> adversarial subagent-review protocol that SUBSTITUTES for the Copilot loop
+> while its quota is exhausted, roughly two weeks from 2026-08-15. Written
+> because an agent cannot review its own output, and because the operator had
+> been having to ask for an independent reviewer by hand each time. Includes the
+> refuter+defender pairing and the never-self-adjudicate rule, both of which
+> exist because refute-by-default on your own work is a second discard filter
+> rather than a check). Prior: 2026-08-14 (commit pending — TWO corrections. (1)
+> The required-status-check list said FOUR; there are SIX, both `kiro-patched`
 > contexts having been promoted 2026-08-13 with PR #895. This file was wrong in
 > two places, `ci-update-workflow.md` was wrong in two more, and
 > `.github/workflows/update.yml` was wrong a third way — "five", including the
