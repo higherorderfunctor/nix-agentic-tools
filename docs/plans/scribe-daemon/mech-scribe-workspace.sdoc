@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SCRIBE-WORKSPACE
 TITLE: A workspace holds one graph and publishes it as an immutable generation
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 A workspace owns one project root, hydrates its graph once, and publishes it as
@@ -25,4 +25,9 @@ RELATIONS:
   ROLE: Guarantees
 - TYPE: Parent
   VALUE: EV-SCRIBE-LOAD-COST
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: dev/scripts/scribe_workspace.py
+- TYPE: Parent
+  VALUE: EV-SCRIBE-WORKSPACE-CONTRACTS
   ROLE: Proven_By

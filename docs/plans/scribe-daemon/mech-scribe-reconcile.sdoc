@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SCRIBE-RECONCILE
 TITLE: A write parses its own file now and defers the whole-graph rebuild
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Reconciliation has two tiers, and the split is what makes deferral safe.
@@ -45,4 +45,9 @@ RELATIONS:
   ROLE: Assumes
 - TYPE: Parent
   VALUE: EV-STRICTDOC-MUTATION-PRIMITIVES
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: dev/scripts/scribe_workspace.py
+- TYPE: Parent
+  VALUE: EV-SCRIBE-WORKSPACE-CONTRACTS
   ROLE: Proven_By
