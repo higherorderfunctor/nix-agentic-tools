@@ -71,10 +71,11 @@ def terms(canon) -> list:
 
 def systems(canon) -> list:
     """The systems table: one entry per row of the narrative tagged systems,
-    whose table widget has the header system | types | roles | meaning.
+    whose table widget has the header system | sources | switch | meaning.
     Columns are matched by header word, so their order is the author's.
     Empty when no single such narrative exists (view-check's systems-table
-    rule says why)."""
+    rule says why); wireline refuses to write a payload with no systems
+    rather than shipping a page whose switches silently vanish."""
     uid = canon.systems_narrative()
     if uid is None:
         return []
@@ -94,19 +95,22 @@ def systems(canon) -> list:
             continue
         out.append(
             {
-                "name": row[col["system"]],
-                "types": _split_words(row[col["types"]]),
-                "roles": _split_words(row[col["roles"]]),
+                "name": row[col["system"]].strip(),
+                "sources": _split_words(row[col["sources"]]),
+                "switch": row[col["switch"]].strip().lower(),
                 "meaning": row[col["meaning"]],
             }
         )
     return out
 
 
-def systems_of(node_type: str, table: list) -> list:
-    """The names of the systems whose type set holds this type: a set, not a
-    partition (evidence is in two)."""
-    return [s["name"] for s in table if node_type in s["types"]]
+def systems_of(path, table: list) -> list:
+    """The names of the systems whose source directories hold this path: a
+    set, not a partition, since one prefix may contain another
+    (DEC-SYSTEM-IS-A-SOURCE-SET)."""
+    if not path:
+        return []
+    return [s["name"] for s in table if any(str(path).startswith(src) for src in s["sources"])]
 
 
 def nodes(canon, table: list, cited: set) -> dict:
@@ -125,7 +129,7 @@ def nodes(canon, table: list, cited: set) -> dict:
         node_type = node.get("_NODE_TYPE")
         bump("type", node_type)
         bump("dir_class", canon.dir_class_of(uid))
-        for name in systems_of(node_type, table):
+        for name in systems_of(canon.paths.get(uid), table):
             bump("system", name)
         for field in STATE_FIELDS:
             if field in node:

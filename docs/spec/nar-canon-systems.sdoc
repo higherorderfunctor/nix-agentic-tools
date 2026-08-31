@@ -13,10 +13,13 @@ WIDGET: table
 PLACE: card
 TAGS: systems
 STATEMENT: >>>
-| system | types | roles | meaning |
-| canon | REQUIREMENT, DECISION, MECHANISM, EVIDENCE, USE_CASE | Governed_By, Guarantees, Serialized_By, Proven_By, Assumes, Superseded_By, Covered_By, Backlogged_In | the claims the canon asserts |
-| whiteboard | NARRATIVE | Cites, Contains, Over | presentation over the claims: what a person reads, and the connections a settled specification would not carry |
-| work | WORK, EVIDENCE | Crosses, Produces, Proven_By | what is to do and what it left behind; execution state moves to beads later |
+| system | sources | switch | meaning |
+| model | docs/spec/ | always | the shared model every other system cites: the node types, the state ladders and the ruled words |
+| adoption | docs/plans/canon-adoption/ | optional | lifting the rest of the repository into the canon: what dissolves, what becomes evidence |
+| architecture | packages/ | optional | settled design co-located with the package it describes |
+| beads | docs/plans/beads-migration/ | optional | the working store the canon will hand execution to |
+| core | docs/plans/strictdoc-tooling/ | optional | the canon's own tooling: the grammar, the scribe, the checks and the hooks |
+| whiteboard | docs/plans/whiteboard-view/ | optional | the view system that renders the canon for a person to read |
 <<<
 PARENT_FP: >>>
 DEC-SYSTEM-IS-A-TYPE-SET:0000000
@@ -24,4 +27,7 @@ DEC-SYSTEM-IS-A-TYPE-SET:0000000
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-SYSTEM-IS-A-TYPE-SET
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-IS-A-SOURCE-SET
   ROLE: Cites
