@@ -1520,7 +1520,7 @@
     const source=r.source!=null&&r.source!==""?h("details",{class:"orig"},h("summary",{},"the source wording"),h("p",{},String(r.source),r.word!=null?`  [${r.word}${r.by!=null?": "+r.by:""}]`:"")):null;
     return h("article",{class:`line ${cls(home.uid,r.word)}`,id:opts.home?`row-${home.uid}-${r.n}`:null},
       h("div",{class:"line-head"},wordChip(home.uid,r.word),
-        opts.crumb?h("a",{class:"crumb",href:narHref(home.uid,`/row/${r.n}`)},home.title,srcDir(home.uid)):h("span",{class:"idx"},"#"+r.n)),
+        opts.crumb?h("a",{class:"crumb",href:narHref(home.uid,`/row/${r.n}`)},home.title,srcDir(home.uid)):((r.refs||[])[0]!=null?h("span",{class:"idx"},nodeLink(r.refs[0],true)):null)),
       h("p",{class:"h"},spans(r.spans)),
       by, refs, source);
   }
@@ -1713,7 +1713,7 @@
   function childEntry(c){
     const rows=rowCount(c), back=rowBacklinks(c.uid).length, cites=(c.cites||[]).length;
     const bits=[]; if(c.dir_class) bits.push(c.dir_class); if(rows) bits.push(plural(rows,"row")); else if(back) bits.push(`${back} that link it`); if(cites) bits.push(plural(cites,"cite"));
-    return {uid:c.uid,title:c.title,path:c.path,dir_class:c.dir_class,blurb:firstPara(c),bits,href:narHref(c.uid),on:nodeOn(c.uid)};
+    return {uid:c.uid,title:c.title,path:c.path,dir_class:c.dir_class,blurb:firstPara(c),bits,href:hrefOf(c.uid),on:nodeOn(c.uid)};
   }
   // the narratives a query word names: the table the backend computed under
   // DATA.queries when it is there (each row a uid), drawn as the narrative on
@@ -1731,8 +1731,7 @@
       case "roots": return ROOTS.map(r=>({uid:r.uid,title:r.title,blurb:firstPara(r),bits:[r.dir_class,plural((r.children||[]).length,"part")],href:narHref(r.uid),on:nodeOn(r.uid)}));
       case "grammar": return Object.entries(GRAMMAR).map(([t,g])=>({uid:t,title:t,blurb:null,bits:[g.prefix?`prefix ${g.prefix}`:null,plural((g.fields||[]).length,"field"),plural((g.roles||[]).length,"role"),plural(selectedNodes().filter(nd=>nd.type===t).length,"node")].filter(Boolean),href:null,on:true}));
       case "systems": return SYSTEMS.map(x=>({uid:x.name,title:x.name,blurb:x.meaning?h("p",{class:"dim small"},x.meaning):null,bits:[(x.sources||[]).join(", "),plural(selectedNodes().filter(nd=>systemsOf(nd.uid).includes(x.name)).length,"node"),x.switch==="always"?"always on":null].filter(Boolean),href:null,on:ON.has(x.name)}));
-      case "terms": return queryNarratives(word).map(childEntry);
-      default: return null;
+      default: return (DATA.queries&&Array.isArray(DATA.queries[word]))?queryNarratives(word).map(childEntry):null;
     }
   }
   function entriesFor(n){
