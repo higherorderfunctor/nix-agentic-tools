@@ -12,7 +12,7 @@ AUTHORED_BY: llm
 STATEMENT: >>>
 Hash each node's contract-bearing fields from the JSON export. A node is suspect
 when a parent it records a fingerprint for no longer hashes to the recorded
-value, or when that parent has been deleted. Excludes RATIONALE and NOTES.
+value, or when that parent has been deleted. Excludes the fields that are not the contract: RATIONALE, NOTES, PARENT_FP, PLACE and COMPONENT -- commentary, the fingerprint block itself, and the two fields that say where a node is drawn and what it is about rather than what it claims.
 <<<
 RATIONALE: >>>
 StrictDoc has no suspect-link feature. It is on the upstream backlog as

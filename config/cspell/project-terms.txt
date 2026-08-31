@@ -70,6 +70,8 @@ codemod
 codepaths
 codesign
 codewhisperer
+colour
+colours
 commondir
 completionist
 configdir
