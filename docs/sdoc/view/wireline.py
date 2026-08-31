@@ -250,6 +250,7 @@ class Wireline:
         return {
             "uid": uid,
             "title": node.get("TITLE", uid),
+            "type": node.get("_NODE_TYPE"),
             "depth": node.get("DEPTH"),
             "authored": node.get("AUTHORED_BY"),
             "widget": vc.widget_of(node),

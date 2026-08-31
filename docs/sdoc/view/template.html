@@ -529,6 +529,23 @@
     color: var(--ink2);
     text-decoration: underline;
   }
+  .idline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 2px 0 0;
+  }
+  .idline .uid {
+    font-size: 0.72rem;
+    color: var(--ink3);
+  }
+  .chip.kind {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink3);
+    letter-spacing: 0.04em;
+  }
   .srcdir {
     font-family: var(--mono);
     font-size: 0.68rem;
@@ -1270,6 +1287,17 @@
     const p=pathOf(uid); if(!p) return null;
     return h("p",{class:"src"},h("a",{href:nodeHref(uid),title:"the file this was written in"},h("code",{},p)));
   }
+  // What a thing IS and what it is called, the way strictdoc's own export
+  // stamps an element type and an id on every block. The type word comes from
+  // the payload -- the page never writes a type name of its own.
+  function typeBadge(type){
+    if(type==null||type==="") return null;
+    return h("span",{class:"chip kind"},String(type).toLowerCase().replace(/_/g," "));
+  }
+  function idLine(uid,type){
+    if(!uid) return null;
+    return h("div",{class:"idline"},typeBadge(type),h("code",{class:"uid"},uid));
+  }
   function srcDir(uid){
     const d=dirOf(uid); if(d==null) return null;
     return h("span",{class:"srcdir",title:pathOf(uid)},d);
@@ -1334,7 +1362,11 @@
     if(!nodeOn(uid)) return h("span",{class:"node"},h("code",{},uid)," ",offNote(uid));
     const a=h("a",{class:"node"+(inline?" inline":""),href,title:inline&&t!=null?t:undefined},h("code",{},uid));
     if(t!=null&&!inline) a.append(h("span",{class:"t"},t));
-    if(!inline){ const d=srcDir(uid); if(d) a.append(d); }
+    if(!inline){
+      const nd=NODES[uid];
+      if(nd&&!NAR[uid]){ const b=typeBadge(nd.type); if(b) a.append(b); }
+      const d=srcDir(uid); if(d) a.append(d);
+    }
     return a;
   }
   function spans(list){ return (list||[]).map(sp=> sp&&sp.link!=null ? nodeLink(sp.link,true) : String(sp&&sp.t!=null?sp.t:"")); }
@@ -1961,8 +1993,8 @@
   function stacked(n,ctx){
     const kids=stackKids(n);
     const inner=[...narBody(n,ctx).flat().filter(Boolean),kids.map(c=>stacked(c,ctx)),autoIndex(n),citesList(n)];
-    if(n.place==="card") return h("article",{class:"card",id:`nar-${n.uid}`},h("h3",{},n.title),tagRow(n),srcLine(n.uid),inner);
-    return h("section",{class:"sec",id:`nar-${n.uid}`},h("div",{class:"row"},h("h2",{},n.title)),tagRow(n),srcLine(n.uid),inner);
+    if(n.place==="card") return h("article",{class:"card",id:`nar-${n.uid}`},h("h3",{},n.title),idLine(n.uid,n.type),tagRow(n),srcLine(n.uid),inner);
+    return h("section",{class:"sec",id:`nar-${n.uid}`},h("div",{class:"row"},h("h2",{},n.title)),idLine(n.uid,n.type),tagRow(n),srcLine(n.uid),inner);
   }
   // the rows anywhere on the page that link this narrative, as line cards
   // with crumbs home, under a screen that is not itself a rows widget
@@ -2043,13 +2075,13 @@
     const body=[...narBody(n,ctx).flat().filter(Boolean),...kids.map(c=>stacked(c,ctx))];
     const idx=autoIndex(n);
     const inner=[...body,idx?h("section",{class:"sec"},h("h2",{},plural(screenKids(n).length,"screen")),idx):null,citesList(n)];
-    if(lead) return [h("div",{class:"stack",id:`nar-${n.uid}`},h("h1",{},n.title),h("div",{class:"row"},narChips(n),h("span",{class:"chip"},n.dir_class)),tagRow(n),srcLine(n.uid)),...inner];
-    return [h("section",{class:"sec",id:`nar-${n.uid}`},h("div",{class:"row"},h("h2",{},n.title)),tagRow(n),srcLine(n.uid),inner)];
+    if(lead) return [h("div",{class:"stack",id:`nar-${n.uid}`},h("h1",{},n.title),idLine(n.uid,n.type),h("div",{class:"row"},narChips(n),h("span",{class:"chip"},n.dir_class)),tagRow(n),srcLine(n.uid)),...inner];
+    return [h("section",{class:"sec",id:`nar-${n.uid}`},h("div",{class:"row"},h("h2",{},n.title)),idLine(n.uid,n.type),tagRow(n),srcLine(n.uid),inner)];
   }
   function screenNar(uid,ctx={}){
     const n=NAR[uid];
     const head=[subStrip(uid),
-      h("div",{class:"stack",id:`nar-${n.uid}`},crumbTrail(uid),h("h1",{},n.title),h("div",{class:"row"},narChips(n),cellBadge(uid),isRoot(n)?h("span",{class:"chip"},n.dir_class):null),tagRow(n),srcLine(n.uid))];
+      h("div",{class:"stack",id:`nar-${n.uid}`},crumbTrail(uid),h("h1",{},n.title),idLine(n.uid,n.type),h("div",{class:"row"},narChips(n),cellBadge(uid),isRoot(n)?h("span",{class:"chip"},n.dir_class):null),tagRow(n),srcLine(n.uid))];
     const kids=stackKids(n);
     const out=[...head,...narBody(n,ctx).flat().filter(Boolean),...kids.map(c=>stacked(c,ctx))];
     // a screen names a cited node once: what a stacked child already cites is left off the container's list
@@ -2080,7 +2112,7 @@
     const seenOther=new Set();
     const other=back.filter(b=>{ if(isRowVia(b)&&rowOf(b)) return false; const k=`${b.from}\t${b.via}\t${b.row}`; if(seenOther.has(k)) return false; seenOther.add(k); return true; });
     return [
-      h("div",{class:"nodehead stack"},h("p",{class:"kicker"},type),h("code",{},uid),h("h1",{},title),
+      h("div",{class:"nodehead stack"},idLine(uid,type),h("h1",{},title),
         h("div",{class:"row"},stateChips(state),sysChips(uid),cellBadge(uid)),
         nar?h("p",{class:"small"},h("a",{href:narHref(uid)},"shown as a narrative")):null),
       fields.length?h("section",{class:"card"},h("h2",{},"fields"),h("dl",{class:"fields"},fields.flatMap(([k,v])=>[h("dt",{},k),h("dd",{class:"field"},fieldText(v))]))):null,
