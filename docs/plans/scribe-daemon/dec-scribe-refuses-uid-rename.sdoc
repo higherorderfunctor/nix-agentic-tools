@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: Renaming a UID is refused while the daemon holds the graph
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SCRIBE-REFUSES-UID-RENAME
+TITLE: Renaming a UID is refused while the daemon holds the graph
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: Upstream supports renaming the UID of a node carrying relations, rewriting the referring references and inline links with it.
+STATEMENT: >>>
+Scribe refuses to rename a node's UID while the daemon holds the graph. The
+operation falls back to a full reload, or is declined.
+
+Upstream declares it unsupported for any node carrying relations, which is
+effectively the whole corpus. Around that refusal the raw primitive swaps the
+graph key and leaves every referring reference and inline link pointing at the
+dead UID: the in-memory index looks consistent and the written corpus fails to
+load.
+<<<

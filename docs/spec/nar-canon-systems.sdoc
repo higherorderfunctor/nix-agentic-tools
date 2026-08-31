@@ -18,7 +18,7 @@ STATEMENT: >>>
 | adoption | docs/plans/canon-adoption/ | optional | lifting the rest of the repository into the canon: what dissolves, what becomes evidence |
 | architecture | packages/ | optional | settled design co-located with the package it describes |
 | beads | docs/plans/beads-migration/ | optional | the working store the canon will hand execution to |
-| core | docs/plans/strictdoc-tooling/ | optional | the canon's own tooling: the grammar, the scribe, the checks and the hooks |
+| core | docs/plans/strictdoc-tooling/, docs/plans/scribe-daemon/ | optional | the canon's own tooling: the grammar, the scribe and its daemon, the checks and the hooks |
 | whiteboard | docs/plans/whiteboard-view/ | optional | the view system that renders the canon for a person to read |
 <<<
 PARENT_FP: >>>
