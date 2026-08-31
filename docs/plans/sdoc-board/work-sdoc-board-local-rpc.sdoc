@@ -7,10 +7,13 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-SDOC-BOARD-LOCAL-RPC
 TITLE: Add the local JSON-RPC control adapter and client
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Cohost a JSON-RPC 2.0 Unix-socket adapter with the existing HTTP server, add a small CLI client for discovery, workspace description, snapshot retrieval and explicit reload, and verify workspace isolation, socket permissions, error behavior and shared generation state across both transports.
+<<<
+NOTES: >>>
+Implemented 2026-08-30. Added the private Unix socket server, stdlib-only client, discovery and read/reload methods, cohosted lifecycle and four RPC-focused assertions inside the nine-test board contract suite. A live client advanced generation one to two and HTTP observed the same replacement snapshot; canonicalMutation remains false.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -22,3 +25,8 @@ RELATIONS:
 - TYPE: Parent
   VALUE: MECH-SDOC-BOARD-RESIDENT-WORKSPACE
   ROLE: Crosses
+- TYPE: Child
+  VALUE: EV-SDOC-BOARD-LOCAL-RPC-SMOKE
+  ROLE: Produces
+- TYPE: File
+  VALUE: docs/sdoc/board/test_board.py

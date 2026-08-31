@@ -7,13 +7,13 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SDOC-BOARD-SERVER
 TITLE: The board HTTP adapter serves the resident workspace
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 server.py cohosts loopback HTTP and local RPC around one resident Workspace. The HTTP adapter serves only GET and HEAD routes for board assets, health and /api/graph; each dynamic response reads the current immutable workspace generation without parsing or reloading StrictDoc. The workspace, not the HTTP server, owns the retained index, serialized snapshot, stable output identity and explicit reload. Canonical SDoc mutation remains absent.
 <<<
 NOTES: >>>
-The original read-only server implementation loaded one snapshot before binding, rejected mutation methods and retained the TraceabilityIndex, but passed a fresh temporary output directory on each launch and had no explicit reload or control transport. The resident-workspace work replaces those two limitations while preserving the HTTP contract.
+The original read-only server loaded one snapshot before binding, rejected mutation methods and retained the TraceabilityIndex, but passed a fresh temporary output directory on each launch and had no explicit reload or control transport. Implemented the resident form on 2026-08-30: HTTP and RPC threads now share one Workspace, dynamic HTTP responses read its current generation, /api/health reports workspace identity and hydration metrics, and shutdown closes both adapters and removes the socket.
 <<<
 RELATIONS:
 - TYPE: Parent

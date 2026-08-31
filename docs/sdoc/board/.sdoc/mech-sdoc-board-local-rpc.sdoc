@@ -7,10 +7,13 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SDOC-BOARD-LOCAL-RPC
 TITLE: The local RPC adapter exposes read and reload operations over one Unix socket
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 The RPC adapter owns one mode-0600 Unix stream socket under a mode-0700 runtime directory, accepts newline-framed JSON-RPC 2.0 requests, and delegates daemon.ping, rpc.discover, workspace.describe, workspace.snapshot and workspace.reload to the resident Workspace. Requests are bounded and validated; unknown methods and malformed messages receive standard JSON-RPC errors. No method mutates canonical SDoc files.
+<<<
+NOTES: >>>
+Implemented 2026-08-30 in rpc.py and client.py. The server supports multiple framed requests per connection, standard JSON-RPC errors, five discoverable non-canonical methods, active-owner detection, bounded requests and inode-checked socket cleanup. The executable client imports only stdlib path and transport modules and ran successfully under /usr/bin/python3.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -22,3 +25,10 @@ RELATIONS:
 - TYPE: Parent
   VALUE: MECH-SDOC-BOARD-RESIDENT-WORKSPACE
   ROLE: Assumes
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-LOCAL-RPC-SMOKE
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: docs/sdoc/board/rpc.py
+- TYPE: File
+  VALUE: docs/sdoc/board/client.py

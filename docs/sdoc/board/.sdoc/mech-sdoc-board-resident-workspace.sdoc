@@ -30,3 +30,5 @@ RELATIONS:
   ROLE: Proven_By
 - TYPE: File
   VALUE: docs/sdoc/board/workspace.py
+- TYPE: File
+  VALUE: docs/sdoc/board/paths.py

@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: HTTP and local RPC share one live workspace generation
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SDOC-BOARD-LOCAL-RPC-SMOKE
+TITLE: HTTP and local RPC share one live workspace generation
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: docs/sdoc/board contracts and live system-Python client smoke; StrictDoc 0.28.3; 2026-08-30
+STATEMENT: >>>
+Nine Python contracts passed for the cohosted HTTP and Unix-socket adapters. They proved mode-0700 runtime directory and mode-0600 socket permissions, refusal of a second owner, standard parse and unknown-method errors, canonicalMutation false discovery, shared HTTP/RPC state and socket cleanup. In a separate live process, /usr/bin/python3 ran the transport-only client without the StrictDoc environment, described generation one with 364 nodes and 899 relations, requested explicit reload, received generation two after 722.056 ms, and then observed generation two and the same snapshot hash through HTTP health.
+<<<
+RELATIONS:
+- TYPE: File
+  VALUE: docs/sdoc/board/rpc.py
+- TYPE: File
+  VALUE: docs/sdoc/board/client.py
+- TYPE: File
+  VALUE: docs/sdoc/board/test_board.py

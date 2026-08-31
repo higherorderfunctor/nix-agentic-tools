@@ -3,44 +3,17 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
-import os
-import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from snapshot import LoadedProject, find_project_root, load_project
+from paths import default_state_dir, find_project_root
+from snapshot import LoadedProject, load_project
 
 WORKSPACE_SCHEMA = "sdoc-board-workspace/1"
 Loader = Callable[[Path, Path], LoadedProject]
-
-
-def workspace_key(project_root: Path) -> str:
-    """Return a short stable identity for one absolute workspace root."""
-    root = find_project_root(project_root)
-    return hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:20]
-
-
-def default_state_dir(project_root: Path) -> Path:
-    """Put restart-persistent board state outside the checkout."""
-    cache_home = os.environ.get("XDG_CACHE_HOME")
-    base = Path(cache_home).expanduser() if cache_home else Path.home() / ".cache"
-    return base / "sdoc-board" / workspace_key(project_root)
-
-
-def default_runtime_dir() -> Path:
-    """Return a short, user-private directory suitable for Unix sockets."""
-    runtime_home = os.environ.get("XDG_RUNTIME_DIR")
-    if runtime_home:
-        return Path(runtime_home) / "sdoc-board"
-    return Path(tempfile.gettempdir()) / f"sdoc-board-{os.getuid()}"
-
-
-def default_socket_path(project_root: Path) -> Path:
-    return default_runtime_dir() / f"{workspace_key(project_root)}.sock"
 
 
 @dataclass(frozen=True)

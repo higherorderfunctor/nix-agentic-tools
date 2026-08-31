@@ -7,12 +7,14 @@ import argparse
 import json
 import mimetypes
 import sys
+import threading
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from snapshot import find_project_root
+from paths import default_socket_path, find_project_root
+from rpc import RpcServer, build_rpc_server
 from workspace import Workspace
 
 HERE = Path(__file__).resolve().parent
@@ -153,6 +155,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="persistent board state directory (default: derived from root)",
     )
+    parser.add_argument(
+        "--socket",
+        type=Path,
+        help="local JSON-RPC Unix socket (default: derived from root)",
+    )
     return parser.parse_args(argv)
 
 
@@ -163,6 +170,16 @@ def main(argv: list[str] | None = None) -> int:
     print(f"sdoc-board: loading {project_root}", flush=True)
     state = workspace.hydrate()
     server = build_server(workspace, args.host, args.port)
+    socket_path = args.socket or default_socket_path(project_root)
+    rpc_server: RpcServer | None = None
+    rpc_thread: threading.Thread | None = None
+    try:
+        rpc_server = build_rpc_server(workspace, socket_path)
+        rpc_thread = threading.Thread(target=rpc_server.serve_forever, daemon=True)
+        rpc_thread.start()
+    except BaseException:
+        server.server_close()
+        raise
     host, port = server.server_address[:2]
     stats = state.loaded.snapshot["stats"]
     hydration = state.loaded.hydration.as_dict()
@@ -173,12 +190,18 @@ def main(argv: list[str] | None = None) -> int:
         flush=True,
     )
     print(f"sdoc-board: state {workspace.state_dir}", flush=True)
+    print(f"sdoc-board: rpc {socket_path}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nsdoc-board: stopping", flush=True)
     finally:
         server.server_close()
+        if rpc_server is not None:
+            rpc_server.shutdown()
+            rpc_server.server_close()
+        if rpc_thread is not None:
+            rpc_thread.join(timeout=5)
     return 0
 
 

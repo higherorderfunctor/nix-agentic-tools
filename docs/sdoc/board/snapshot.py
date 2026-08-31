@@ -18,6 +18,8 @@ from typing import Any, Iterable
 
 from strictdoc.api import Parallelizer, ProjectConfigLoader, TraceabilityIndexBuilder
 
+from paths import find_project_root
+
 SCHEMA = "sdoc-board/1"
 
 
@@ -47,17 +49,6 @@ class LoadedProject:
     traceability_index: Any
     snapshot: dict[str, Any]
     hydration: HydrationMetrics
-
-
-def find_project_root(start: Path) -> Path:
-    """Walk upward to the StrictDoc project marker."""
-    current = start.resolve()
-    if current.is_file():
-        current = current.parent
-    for candidate in (current, *current.parents):
-        if (candidate / "strictdoc_config.py").is_file():
-            return candidate
-    raise FileNotFoundError(f"no strictdoc_config.py above {start}")
 
 
 def load_project(project_root: Path, output_dir: Path) -> LoadedProject:
