@@ -296,7 +296,23 @@ in {
         rm -rf "$export_dir"
         mkdir -p "$out"
         log "Exporting the canon into $export_dir"
-        env -u PYTHONPATH -u STRICTDOC_CACHE_DIR strictdoc export . --formats=json --output-dir "$export_dir" >/dev/null
+        # Prefer the resident scribe. The JSON export is a pure function of a
+        # built index, so a daemon already holding one answers in ~0.3 s where
+        # `strictdoc export` takes ~2.3 s, essentially all of it that command's
+        # own graph load. Output is byte-identical -- verified, not assumed.
+        #
+        # This falls back where the scribe CLI deliberately does not
+        # (DEC-SCRIBE-DAEMON-NO-FALLBACK), and the difference is the arithmetic
+        # rather than the principle: that rule exists because ten small reads
+        # silently degrading compounds into thirty seconds, while one render is
+        # a single 2 s hit. It is still LOUD -- it says which path it took and
+        # how to get the fast one.
+        if scribe-client --root "$DEVENV_ROOT" export --out "$export_dir" >/dev/null 2>&1; then
+          log "Exported from the resident scribe"
+        else
+          log "No scribe daemon (start one with: devenv up scribe) -- exporting the slow way"
+          env -u PYTHONPATH -u STRICTDOC_CACHE_DIR strictdoc export . --formats=json --output-dir "$export_dir" >/dev/null
+        fi
         index="$export_dir/json/index.json"
         if [ -n "$root" ]; then
           roots="$root"

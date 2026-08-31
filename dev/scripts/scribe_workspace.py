@@ -168,6 +168,40 @@ class Workspace:
         """
         return self._held().has_node(uid)
 
+    def export_json(self, output_dir: Path) -> dict:
+        """Write the export JSON from the HELD graph (MECH-SCRIBE-EXPORT-PAYLOAD).
+
+        StrictDoc's JSON generator is a pure function of a built index -- its
+        own server calls it against the live one -- so this costs a walk of
+        objects already in memory instead of the 1.76 s `strictdoc export`
+        the render pays today, all of which is that command's own graph load.
+
+        Written to a directory rather than returned: the current export is
+        10.3 MB, which has no business crossing a socket. The layout matches
+        `strictdoc export --output-dir` exactly, so every downstream consumer
+        reads the same bytes at the same path it reads today.
+
+        This is a READ, so it reconciles first like any other.
+        """
+        from strictdoc.backend.json.json_generator import JSONGenerator
+
+        state = self.current()
+        destination = Path(output_dir).expanduser().resolve() / "json"
+        destination.mkdir(parents=True, exist_ok=True)
+        self._guarded(
+            lambda: JSONGenerator().export_tree(
+                state.graph.index, state.graph.config, str(destination)
+            )
+        )
+        written = destination / "index.json"
+        return {
+            "root": str(self.root),
+            "generation": state.number,
+            "outputDir": str(destination),
+            "index": str(written),
+            "bytes": written.stat().st_size,
+        }
+
     def describe(self) -> dict:
         state = self.current()
         return {

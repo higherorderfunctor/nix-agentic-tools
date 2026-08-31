@@ -1,5 +1,7 @@
-# `scribe` — the dev-shell entry point for dev/scripts/sdoc_cli.py
-# (SLICE-SDOC-CLI, docs/plans/strictdoc-tooling/slice-sdoc-cli.sdoc).
+# The dev-shell entry points for the scribe programs: the writer itself
+# (SLICE-SDOC-CLI), the resident daemon and its client
+# (docs/plans/scribe-daemon/). One builder, three instantiations — they differ
+# only in which script under dev/scripts/ they exec.
 #
 # ── Why the script is NOT baked into the store ───────────────────────────────
 #
@@ -31,9 +33,14 @@
   lib,
   pkgs,
   runner,
+  # Which program this instantiation is. `script` is resolved at RUN time,
+  # relative to the project root the wrapper walks up to — see above.
+  name ? "scribe",
+  script ? "dev/scripts/sdoc_cli.py",
+  description ? "Grammar-derived writer for this repository's .sdoc design graph",
 }:
 pkgs.writeShellApplication {
-  name = "scribe";
+  inherit name;
 
   # `nounset` has to be armed ABOVE writeShellApplication's own generated
   # `export PATH=...`, which is what putting these here rather than in `text`
@@ -50,16 +57,16 @@ pkgs.writeShellApplication {
     while [ ! -f "$root/strictdoc_config.py" ]; do
       parent=$(dirname "$root")
       if [ "$parent" = "$root" ]; then
-        echo "scribe: no strictdoc_config.py in $PWD or any parent -- run" \
+        echo "${name}: no strictdoc_config.py in $PWD or any parent -- run" \
              "inside the repository" >&2
         exit 1
       fi
       root=$parent
     done
 
-    script=$root/dev/scripts/sdoc_cli.py
+    script=$root/${script}
     if [ ! -f "$script" ]; then
-      echo "scribe: $script is missing; this wrapper carries the interpreter," \
+      echo "${name}: $script is missing; this wrapper carries the interpreter," \
            "not the script" >&2
       exit 1
     fi
@@ -68,8 +75,8 @@ pkgs.writeShellApplication {
   '';
 
   meta = {
-    description = "Grammar-derived writer for this repository's .sdoc design graph";
-    mainProgram = "scribe";
+    inherit description;
+    mainProgram = name;
     license = lib.licenses.unlicense;
     platforms = lib.platforms.unix;
   };

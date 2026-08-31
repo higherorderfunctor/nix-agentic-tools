@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SCRIBE-SOCKET-IDENTITY
 TITLE: The socket path is derived from the resolved target root
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 The socket path is derived, never configured, so a server and a client that
@@ -33,3 +33,8 @@ RELATIONS:
 - TYPE: Parent
   VALUE: EV-SCRIBE-SOCKET-PATH-LENGTHS
   ROLE: Proven_By
+- TYPE: Parent
+  VALUE: EV-SCRIBE-RPC-AND-EXPORT
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: dev/scripts/scribe_paths.py

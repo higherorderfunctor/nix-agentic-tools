@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-SCRIBE-RPC-AND-SERVICE
 TITLE: Serve the workspace over a socket, as a devenv process
-DEPTH: sketch
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Put the workspace behind a Unix socket and a devenv process. Derive the socket
@@ -15,6 +15,17 @@ path from the resolved target root, own it with a stale-probe and an
 inode-checked cleanup, serve newline-framed JSON-RPC, and report the served
 root on every method. Declare the process in devenv so it starts and stops
 with `devenv up` and `devenv down`.
+<<<
+NOTES: >>>
+Implemented 2026-08-31: scribe_paths.py, scribe_rpc.py, scribe_daemon.py, and
+a devenv process. Seven contracts in test_scribe_rpc.py.
+
+The socket is 52 bytes for this worktree against the 104-byte cap. Hydration
+completes BEFORE the socket is bound, so the socket's existence is the
+readiness signal and a client's check is a connect rather than a poll.
+
+Not auto-started: a before-enterShell task fires on every entry, so it needs
+the task system's status guard first. `devenv up scribe` until then.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -26,3 +37,8 @@ RELATIONS:
 - TYPE: Parent
   VALUE: MECH-SCRIBE-DEVENV-PROCESS
   ROLE: Crosses
+- TYPE: Child
+  VALUE: EV-SCRIBE-RPC-AND-EXPORT
+  ROLE: Produces
+- TYPE: File
+  VALUE: dev/scripts/test_scribe_rpc.py

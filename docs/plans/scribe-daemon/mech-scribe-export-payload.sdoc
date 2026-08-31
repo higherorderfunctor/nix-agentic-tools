@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SCRIBE-EXPORT-PAYLOAD
 TITLE: The render reads an export generated from the held graph
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 A render obtains the export JSON from the held graph rather than by running a
@@ -32,3 +32,8 @@ RELATIONS:
 - TYPE: Parent
   VALUE: EV-SCRIBE-LOAD-COST
   ROLE: Proven_By
+- TYPE: Parent
+  VALUE: EV-SCRIBE-RPC-AND-EXPORT
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: dev/tasks/generate.nix

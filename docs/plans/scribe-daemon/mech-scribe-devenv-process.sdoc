@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SCRIBE-DEVENV-PROCESS
 TITLE: The daemon is a devenv process, one per worktree
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 The daemon is a devenv process, started with `devenv up` and stopped with
@@ -28,3 +28,10 @@ RELATIONS:
 - TYPE: Parent
   VALUE: MECH-SCRIBE-SOCKET-IDENTITY
   ROLE: Assumes
+- TYPE: Parent
+  VALUE: EV-SCRIBE-RPC-AND-EXPORT
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: dev/scripts/scribe_daemon.py
+- TYPE: File
+  VALUE: packages/strictdoc-grammar/modules/devenv/default.nix

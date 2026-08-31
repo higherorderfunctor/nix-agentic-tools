@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SCRIBE-RPC
 TITLE: One Unix socket carries newline-framed JSON-RPC to the workspace
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Requests reach the workspace as JSON-RPC 2.0, one JSON value per newline, over
@@ -28,3 +28,8 @@ RELATIONS:
 - TYPE: Parent
   VALUE: MECH-SCRIBE-WORKSPACE
   ROLE: Assumes
+- TYPE: Parent
+  VALUE: EV-SCRIBE-RPC-AND-EXPORT
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: dev/scripts/scribe_rpc.py

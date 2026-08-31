@@ -78,6 +78,26 @@
     runner = extract;
   };
 
+  # The resident writer and its client (docs/plans/scribe-daemon/). Same
+  # wrapper, same run-time script resolution, different entry points --
+  # parameterized rather than copied so the root-walk and the interpreter
+  # indirection stay in one place.
+  scribeDaemon = import ../../lib/mkScribe.nix {
+    inherit lib pkgs;
+    runner = extract;
+    name = "scribe-daemon";
+    script = "dev/scripts/scribe_daemon.py";
+    description = "Resident scribe: one held graph per worktree";
+  };
+
+  scribeClient = import ../../lib/mkScribe.nix {
+    inherit lib pkgs;
+    runner = extract;
+    name = "scribe-client";
+    script = "dev/scripts/scribe_client.py";
+    description = "Talk to a scribe daemon, and fail when there isn't one";
+  };
+
   # Store paths rather than bare names: `generate:sgra` is a plain script and
   # must not depend on what happens to be on the caller's PATH. `cmp` ships in
   # diffutils, NOT coreutils — getting that wrong here would fail silently, in
@@ -209,7 +229,22 @@ in {
       cfg.package
       extract
       scribe
+      scribeClient
+      scribeDaemon
     ];
+
+    # MECH-SCRIBE-DEVENV-PROCESS. Per-worktree isolation is inherited rather
+    # than built: devenv derives root, state and runtime from the checkout
+    # path, so two worktrees are already two processes with two sockets.
+    #
+    # NOT auto-started on shell entry. A task running before enterShell fires
+    # on EVERY entry -- this worktree recorded over seventy in a week -- so an
+    # unguarded one would spawn duplicates; doing it properly needs the task
+    # system's `status` guard to probe for a live owner first, which nothing
+    # in this repository uses yet. `devenv up scribe` until then.
+    processes.scribe = {
+      exec = "${lib.getExe scribeDaemon} --root \"$DEVENV_ROOT\"";
+    };
 
     # Declared even when `grammars` is empty, so `devenv tasks list` shows the
     # route rather than making its absence look like a missing feature. With no

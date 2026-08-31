@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-SCRIBE-CLIENT
 TITLE: Turn the scribe command into a client that fails closed
-DEPTH: sketch
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Make the scribe command a client. Resolve the target workspace from --root,
@@ -15,6 +15,18 @@ SCRIBE_ROOT, or the walk up from the current directory; assert the daemon's
 reported root matches; and on an unreachable socket exit non-zero naming the
 socket and the command that starts one. Add the daemon preflight and the
 rebuild-triggering table to the scribe skill.
+<<<
+NOTES: >>>
+PARTIALLY implemented 2026-08-31 as scribe_client.py: the transport, the
+--root / SCRIBE_ROOT / walk-up precedence, the served-root assertion, and the
+fail-closed refusal that names the socket and the command to start one. It
+carries no strictdoc import, so asking whether a daemon is up costs no parser.
+
+WHAT IS NOT DONE: the scribe verbs are not proxied. `scribe show`, `list`,
+`check`, `new`, `set` and the rest still load the graph in-process, because
+sdoc_cli's finish() calls verify(), which is a full reload -- the exact cost
+the daemon exists to remove, so routing verbs through it without replacing
+that verification would defer nothing. See MECH-SCRIBE-VERB-PROXY.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -26,3 +38,5 @@ RELATIONS:
 - TYPE: Parent
   VALUE: MECH-SCRIBE-SOCKET-IDENTITY
   ROLE: Crosses
+- TYPE: File
+  VALUE: dev/scripts/scribe_client.py
