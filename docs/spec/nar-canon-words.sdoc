@@ -6,12 +6,12 @@ IMPORT_FROM_FILE: @repo
 
 [NARRATIVE]
 UID: NAR-CANON-WORDS
-TITLE: Words
+TITLE: The ruled vocabulary
 DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: glossary
 PLACE: tab
-TAGS: terms, words
+TAGS: terms, glossary
 STATEMENT: >>>
 The ruled words: every term narrative in the canon, each citing the decision that ruled it. Use them, and correct drift on sight.
 <<<
