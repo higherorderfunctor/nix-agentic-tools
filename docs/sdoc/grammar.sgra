@@ -28,6 +28,9 @@ ELEMENTS:
   - TITLE: NOTES
     TYPE: String
     REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
+    REQUIRED: False
   RELATIONS:
   - TYPE: Parent
     ROLE: Superseded_By
@@ -65,6 +68,9 @@ ELEMENTS:
     REQUIRED: False
   - TITLE: NOTES
     TYPE: String
+    REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
     REQUIRED: False
   RELATIONS:
   - TYPE: Parent
@@ -113,6 +119,9 @@ ELEMENTS:
     REQUIRED: False
   - TITLE: NOTES
     TYPE: String
+    REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
     REQUIRED: False
   RELATIONS:
   - TYPE: Parent
@@ -165,6 +174,9 @@ ELEMENTS:
   - TITLE: NOTES
     TYPE: String
     REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
+    REQUIRED: False
   RELATIONS:
   - TYPE: Parent
     ROLE: Governed_By
@@ -212,6 +224,9 @@ ELEMENTS:
     REQUIRED: False
   - TITLE: NOTES
     TYPE: String
+    REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
     REQUIRED: False
   RELATIONS:
   - TYPE: Parent
@@ -263,6 +278,9 @@ ELEMENTS:
   - TITLE: NOTES
     TYPE: String
     REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
+    REQUIRED: False
   RELATIONS:
   - TYPE: Parent
     ROLE: Cites
@@ -303,6 +321,9 @@ ELEMENTS:
     REQUIRED: False
   - TITLE: NOTES
     TYPE: String
+    REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
     REQUIRED: False
   RELATIONS:
   - TYPE: Parent

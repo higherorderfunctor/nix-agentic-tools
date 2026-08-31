@@ -1,0 +1,57 @@
+[DOCUMENT]
+TITLE: A node declares the component it documents; membership is never read off a file path
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-COMPONENT-IS-DECLARED
+TITLE: A node declares the component it documents; membership is never read off a file path
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: The vocabulary is ruled and the corpus carries it, or a node must belong to something no word can name.
+STATEMENT: >>>
+A COMPONENT is what a body of nodes is ABOUT -- a plan, the canon's core
+architecture, the whiteboard's architecture, and whatever else this repository
+comes to document. A node DECLARES its components in the `COMPONENT` field, a
+free-word tag list carried by all seven types. Membership is never computed
+from a file path.
+
+A node may name several: a mechanism can belong to the scribe and to the view
+at once, which a directory cannot express. The vocabulary is a declared table
+in the spec, so adding a component is an edit to the canon rather than to a
+script -- the same shape [LINK: NAR-CANON-SYSTEMS] and [LINK: NAR-CANON-TABS]
+already have.
+
+**The field is live and empty, and nothing reads it yet.** The grammar carries
+it, `sdoc` writes it, and no node declares one. Until a corpus and a vocabulary
+exist, [LINK: DEC-SYSTEM-IS-A-SOURCE-SET] REMAINS IN FORCE and the page still
+switches by path. This decision is open precisely because the vocabulary is the
+question, and the vocabulary is not derivable from the directory layout that
+currently stands in for it.
+<<<
+RATIONALE: >>>
+A path is for human navigation. It cannot express a node belonging to two
+things, it cannot be queried except by prefix, and it forces a cut that the
+filesystem happens to make rather than one the design makes. The operator:
+"i dont like partitioning via file path. thats for human navigation. graphs can
+get more complex. its also difficult to build any sort of query mechanics based
+on file paths."
+
+[LINK: DEC-SYSTEM-TAG-ON-EVERY-ELEMENT] asked almost exactly this and deferred
+it, reasoning that a TAGS token would enter the six non-narrative types'
+contract hash. That objection is answered rather than overruled: COMPONENT is
+its own field and is excluded from the hash in `dev/scripts/sdoc_fp.py`, for
+the reason PLACE already is -- re-filing a node does not change what it claims.
+
+The cost this buys, and it is real: today membership CANNOT BE WRONG, only
+unhelpful, because a path is a fact about a file. A declaration can be wrong and
+still look right. Worse, the renderer short-circuits an empty membership list to
+always-shown, so a node that declares nothing becomes un-hideable rather than
+invisible -- the failure is silent in the direction that does not alarm anyone.
+That is the argument for a checked vocabulary rather than free words alone, and
+for landing the field before the corpus rather than after.
+<<<
+NOTES: >>>
+Filed 2026-08-31 on the operator's directive, with the mechanism landed and the vocabulary left open. The field's POSITION is the only one-way door here and it is still open: appended last today, but strictdoc validates the order of the fields a node ACTUALLY HAS, so while no node carries a value the position and the name are both free. After a migration writes values, moving it costs a rewrite of every node.
+<<<
