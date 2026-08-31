@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: What a colour means, wherever it appears
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-CANON-COLOURS
+TITLE: What a colour means, wherever it appears
+DEPTH: interface-settled
+AUTHORED_BY: llm
+WIDGET: table
+PLACE: card
+TAGS: colours
+STATEMENT: >>>
+| colour | means |
+| green | it holds as written, or it is in force |
+| teal | designed or recorded, but not built and not proven |
+| blue | an open question, and somebody has to answer it |
+| amber | incomplete or low confidence: it wants attention and is not broken |
+| red | missing: it is needed and nobody owns it |
+| slate | nothing owed here: dissolved, already covered elsewhere, or unchanged |
+| violet | reserved; no system uses it yet |
+| grey | a marker, not a verdict |
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-COLOUR-IS-SHARED-WORDS-ARE-NOT
+  ROLE: Cites

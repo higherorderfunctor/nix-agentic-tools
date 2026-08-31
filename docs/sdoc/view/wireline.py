@@ -17,6 +17,8 @@ computed sits under a key that says so:
               tagged systems
   tabs        the tab strip's vocabulary (queries.tabs), read from the
               narrative tagged tabs; a narrative names its tab in TAGS
+  colours     what each colour means page-wide (queries.colours), read from
+              the narrative tagged colours; a system's legend words map onto it
   roots       every NARRATIVE nothing Contains (or the one asked for),
               spec first, then by directory, then UID; each root's tree
               fully expanded in Contains order, every STATEMENT parsed per
@@ -104,6 +106,9 @@ class Wireline:
         self.canon = canon
         self.by_uid = canon.by_uid
         self.grammar = canon.grammar
+        self.colours = queries.colours(canon)
+        if not self.colours:
+            raise SystemExit("wireline: the canon has no colours table, or its header is not " + " | ".join(vc.COLOURS_HEADER))
         self.tabs = queries.tabs(canon)
         if not self.tabs:
             raise SystemExit("wireline: the canon has no tabs table, or its header is not " + " | ".join(vc.TABS_HEADER))
@@ -309,6 +314,7 @@ class Wireline:
             },
             "systems": self.systems,
             "tabs": self.tabs,
+            "colours": self.colours,
             "roots": [self.narrative(root) for root in canon.roots],
             "nodes": {uid: self.card(uid) for uid in self.by_uid},
             "edges": self.edges,

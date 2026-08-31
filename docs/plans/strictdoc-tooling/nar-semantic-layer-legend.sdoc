@@ -12,12 +12,16 @@ AUTHORED_BY: llm
 WIDGET: legend
 PLACE: card
 STATEMENT: >>>
-Colour is only ever a tag, and every tag is written out beside it.
+Colour is only ever a tag, and every tag is written out beside it. What a colour means is the same on every screen of this page ([LINK: NAR-CANON-COLOURS]); the words below are this system's own.
 
 - WORKS: green: stands as written under the current direction: Note
 - FALLS OUT: slate: dissolved; the direction replaces it with something already in the model: Dissolved by
 - UNADDRESSED: amber: the direction is silent on it: Note
 - OPEN: blue: an open decision owns it: Owned by
 - GAP: red: needed, and nobody has written it: Note
-- HERE: teal: the layer this page is about
+- HERE: grey: the layer this page is about
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-CANON-COLOURS
+  ROLE: Cites

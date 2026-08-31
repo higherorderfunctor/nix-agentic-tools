@@ -1,0 +1,53 @@
+[DOCUMENT]
+TITLE: A colour means one thing across the whole page; each system keeps its own words for it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-COLOUR-IS-SHARED-WORDS-ARE-NOT
+TITLE: A colour means one thing across the whole page; each system keeps its own words for it
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A system needs a verdict no declared colour can carry, or two systems need the same colour for genuinely opposed meanings.
+STATEMENT: >>>
+COLOUR is shared across the whole page and WORDS belong to each system.
+
+[LINK: NAR-CANON-COLOURS] is a durable table in the spec: one row per colour
+the page may draw, and the one thing that colour means wherever it appears. A
+system's legend keeps naming its own verdicts -- a design review's words are
+not a renderer's -- but every word it declares must sit on a colour whose
+declared meaning fits it, and no colour may mean two things.
+
+Where a screen shows more than one system, the page draws the shared colour key
+beside them: each colour, its meaning, and the word each enabled system uses
+for it. That is what lets a reader carry a colour from one system's rows to
+another's without learning three vocabularies.
+<<<
+RATIONALE: >>>
+Three legends existed, one per root, and nothing said what a colour meant
+outside the document that declared it. Green already meant "stands as written",
+"retyped to a requirement", "in force" and "code landed"; teal meant "records
+what was observed", "designed, not built" and "the layer this page is about".
+While every document owned its own tab that was survivable, because a reader
+only ever saw one legend at a time. Under
+[LINK: DEC-TABS-ARE-A-DECLARED-VOCABULARY] a tab is the union of every enabled
+system, so two or three vocabularies land on one screen and colour stops
+carrying information.
+
+The operator was given three ways out -- shared colours with per-system words,
+one page-wide vocabulary, or leaving the legends alone -- and chose the first.
+One page-wide vocabulary was rejected as flattening real distinctions: the
+verdicts of a design review, the solidity of a semantic layer and the build
+state of a renderer are not one scale.
+
+What the colours already were is most of the argument that this costs little.
+Reading the three legends against each other, sixteen of the seventeen words
+were ALREADY on a colour consistent with this table; only HERE, a locator
+rather than a verdict, had to move, from teal to grey. The collision was in the
+prose, not in the assignments -- so what was missing was a place to write the
+shared meaning down, which is what this decision adds.
+<<<
+NOTES: >>>
+Ruled by the operator on 2026-08-30, choosing between three options put to them as a card. AUTHORED_BY reads llm because the writer has no flag for the human rungs.
+<<<

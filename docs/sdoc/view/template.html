@@ -485,6 +485,35 @@
     padding-bottom: 4px;
     border-bottom: 1px solid var(--line);
   }
+  .ckey summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .colourkey {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px 14px;
+    margin: 12px 0 0;
+    align-items: start;
+  }
+  .colourkey dt {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+  .colourkey dd {
+    margin: 0;
+  }
+  .colourkey dd p {
+    margin: 0;
+  }
+  .colourkey .sw {
+    padding: 2px 4px;
+  }
   /* provenance */
   .src {
     margin: 0;
@@ -1212,6 +1241,9 @@
      field names, and MANY narratives in many systems may join one. Start and
      Nodes are the page's own and are never rows. */
   const TABS=Array.isArray(DATA.tabs)?DATA.tabs:[];
+  // DEC-COLOUR-IS-SHARED-WORDS-ARE-NOT: colour means the same thing on every
+  // screen; the words on it belong to each system.
+  const COLOURKEY=Array.isArray(DATA.colours)?DATA.colours:[];
   const tabHref=key=>`#/t/${encodeURIComponent(String(key))}`;
   const TABTITLE={}; TABS.forEach(t=>TABTITLE[t.key]=t.title);
   // the legend of a root: the first narrative anywhere in its tree whose widget is legend
@@ -1323,6 +1355,25 @@
       const figure=lines.some(l=>/^[ \t]/.test(l)||/\S {3,}\S/.test(l));
       return figure?h("pre",{class:"figure scrollx"},linkifyText(par)):h("p",{},linkifyText(lines.map(l=>l.trim()).join(" ")));
     });
+  }
+  // The shared colour key over whatever narratives a screen is showing: each
+  // colour, what it means everywhere, and the word each system here uses for
+  // it. Drawn where a screen carries more than one system's words, which is
+  // the only place a reader has to carry a colour between vocabularies.
+  function colourKey(narratives){
+    if(!COLOURKEY.length) return null;
+    const roots=[...new Set((narratives||[]).map(x=>ROOTOF[x.uid]).filter(Boolean))];
+    const words={};
+    roots.forEach(r=>{ const sname=SYSORDER[sysRank(r)]||null;
+      legendFor(r).forEach(l=>{ if(!l.colour) return; (words[l.colour]=words[l.colour]||[]).push({sys:sname,word:l.word}); }); });
+    const used=COLOURKEY.filter(c=>(words[c.colour]||[]).length);
+    const systems=new Set(); roots.forEach(r=>{ const x=SYSORDER[sysRank(r)]; if(x) systems.add(x); });
+    if(used.length<2||systems.size<2) return null;
+    return h("details",{class:"card ckey"},h("summary",{},"What the colours mean here"),
+      h("dl",{class:"colourkey"},used.flatMap(c=>[
+        h("dt",{},h("span",{class:"sw word "+("c-"+c.colour)},h("i")),c.colour),
+        h("dd",{},h("p",{},c.means),
+          h("p",{class:"muted small"},words[c.colour].map((w,i)=>[i?" · ":"",h("b",{},w.word),w.sys?" "+w.sys:""])))])));
   }
   function wordChip(uid,word,n,big){
     if(word==null) return h("span",{class:"word c-none"+(big?" big":"")},h("i"),h("span",{class:"muted"},"no word"),n!=null?h("span",{class:"n"},n):null);
@@ -1954,11 +2005,12 @@
       h("p",{class:"muted small"},plural(on.length,"contribution")," from ",plural(seen.size,"system"),
         off?`, ${off} switched off`:""));
     if(!on.length) return [head,h("p",{class:"muted"},"No enabled system contributes to this tab.")];
+    const ckey=colourKey(on);
     const groups=[];
     SYSORDER.forEach(sname=>{ const g=on.filter(x=>SYSORDER[sysRank(x.uid)]===sname); if(g.length) groups.push([sname,g]); });
     const rest=on.filter(x=>sysRank(x.uid)>=SYSORDER.length);
     if(rest.length) groups.push([null,rest]);
-    return [head,...groups.map(([sname,g])=>h("div",{class:"stack tabgroup"},
+    return [head,ckey,...groups.map(([sname,g])=>h("div",{class:"stack tabgroup"},
       sname?h("p",{class:"kicker"},sname):null,...g.map(x=>stacked(x,ctx))))];
   }
   // Start: every root narrative, the canon's own leading as the page's
@@ -1978,6 +2030,7 @@
     groups.forEach(([sname,g])=>out.push(h("div",{class:"stack tabgroup"},
       sname?h("p",{class:"kicker"},sname):null,...g.flatMap(r=>rootBlock(r,ctx,false)))));
     if(!out.length) out.push(h("p",{class:"muted"},"No enabled system has a document."));
+    const ckey=colourKey(on); if(ckey) out.splice(lead?1:0,0,ckey);
     // the canon-wide findings, plus every root's, in one place
     const checks=CHECKS.filter(c=>c.root==null||NAR[c.root]&&nodeOn(c.root));
     if(checks.length) out.push(h("section",{class:"card"},h("h2",{},plural(checks.length,"finding")),h("ul",{class:"plain checks"},checks.map(c=>h("li",{},h("div",{},h("span",{class:"chip"},h("b",{},c.rule))),nodeLink(c.at),h("span",{class:"text"},c.text))))));
