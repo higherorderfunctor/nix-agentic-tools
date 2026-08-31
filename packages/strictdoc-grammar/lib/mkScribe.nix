@@ -36,7 +36,7 @@
   # Which program this instantiation is. `script` is resolved at RUN time,
   # relative to the project root the wrapper walks up to — see above.
   name ? "scribe",
-  script ? "dev/scripts/sdoc_cli.py",
+  script ? "dev/scripts/scribe_cmd.py",
   description ? "Grammar-derived writer for this repository's .sdoc design graph",
 }:
 pkgs.writeShellApplication {
