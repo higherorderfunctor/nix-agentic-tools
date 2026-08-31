@@ -119,8 +119,8 @@ fi
 # hand-back made partial staging impossible to trust.
 formatter="${FORMATTER_HOOK_ID_OVERRIDE:-${FORMATTER_HOOK_ID:?FORMATTER_HOOK_ID is not configured}}"
 report=""
-if ! prek run "$formatter" --hook-stage manual --config "$prek_config" --files "${files[@]}" >/dev/null 2>&1; then
-  if ! out="$(prek run "$formatter" --hook-stage manual --config "$prek_config" --files "${files[@]}" 2>&1)"; then
+if ! TREEFMT_NO_CACHE=true prek run "$formatter" --hook-stage manual --config "$prek_config" --files "${files[@]}" >/dev/null 2>&1; then
+  if ! out="$(TREEFMT_NO_CACHE=true prek run "$formatter" --hook-stage manual --config "$prek_config" --files "${files[@]}" 2>&1)"; then
     report="${report}### ${formatter}"$'\n'"${out}"$'\n\n'
   fi
 fi

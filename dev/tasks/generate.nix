@@ -143,8 +143,9 @@ in {
     #
     # No `nix build` here — ${instr.*} are eval-time store paths, realized
     # when devenv builds the shell itself. Steady-state cost is ~48 `cmp`s
-    # on small markdown files, next to a full-tree treefmt that already
-    # runs on every entry.
+    # on small markdown files. Full-tree formatting is deliberately detached
+    # from shell entry, so keeping this materializer idempotent is what makes
+    # instruction freshness cheap enough to retain on every activation.
     #
     # after devenv:files:cleanup — cleanup deletes paths dropped from
     # files.*, so running after it repairs any such deletion within the

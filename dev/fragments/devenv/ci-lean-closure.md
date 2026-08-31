@@ -1,24 +1,26 @@
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-08-30 (commit pending — the Home Manager layer has
-> migrated to named permissions, while this repository temporarily selects
-> `danger-full-access`; the obsolete workspace-write roots and diagnostic
-> assertions are gone). Prior: 2026-08-29 (`devenv test` is now an on-demand
-> diagnostic instead of an automatic PR/push workflow. Deterministic
-> instruction-copy, shared-hook-isolation, and validation-projection contracts
-> moved under `nix flake check`; `$CI` no longer removes validation hooks).
-> Prior: 2026-08-17 (commit pending — the staged Codex named-profile migration
-> now receives the canonical Git common directory automatically, including from
-> linked worktrees, while this repository's still-legacy config retains its
-> existing `.git` workspace root until the separate migration). Prior:
-> 2026-08-17 (commit pending — enabled treefmt now contributes its effective
-> cache through the same permission-model-aware Codex root pool; enterTest
-> expects five local roots and four in CI). Prior: 2026-08-17 (commit pending —
-> named Codex permission tables are enabled at the module boundary, but this
-> repository deliberately remains on legacy workspace-write until its Home
-> Manager user layer migrates first; Codex does not compose the two models
-> across config layers). Prior: 2026-08-15 (commit pending — the
-> interactive-only Semble gate moved unchanged to
+> **Last verified:** 2026-08-31 (commit pending — full-corpus validation moved
+> out of the activation task graph and into enterTest after shell setup; normal
+> shell entry now performs activation setup without full-corpus scans). Prior:
+> 2026-08-30 (the Home Manager layer has migrated to named permissions, while
+> this repository temporarily selects `danger-full-access`; the obsolete
+> workspace-write roots and diagnostic assertions are gone). Prior: 2026-08-29
+> (`devenv test` is now an on-demand diagnostic instead of an automatic PR/push
+> workflow. Deterministic instruction-copy, shared-hook-isolation, and
+> validation-projection contracts moved under `nix flake check`; `$CI` no longer
+> removes validation hooks). Prior: 2026-08-17 (commit pending — the staged
+> Codex named-profile migration now receives the canonical Git common directory
+> automatically, including from linked worktrees, while this repository's
+> still-legacy config retains its existing `.git` workspace root until the
+> separate migration). Prior: 2026-08-17 (commit pending — enabled treefmt now
+> contributes its effective cache through the same permission-model-aware Codex
+> root pool; enterTest expects five local roots and four in CI). Prior:
+> 2026-08-17 (commit pending — named Codex permission tables are enabled at the
+> module boundary, but this repository deliberately remains on legacy
+> workspace-write until its Home Manager user layer migrates first; Codex does
+> not compose the two models across config layers). Prior: 2026-08-15 (commit
+> pending — the interactive-only Semble gate moved unchanged to
 > `ai.codex.programs.semble.enable`; grammar and path customization now follow
 > the same generated runtime program tree). Prior: 2026-08-14 (commit pending —
 > the local shell now enables the flake-pinned Semble module with AWK and jq
@@ -78,6 +80,14 @@ previously justified the runtime workflow:
 omits tooling that enterTest never invokes, but it does not alter repository
 validation declarations. A developer exporting `CI=1` gets fewer interactive
 packages, never fewer guards.
+
+The diagnostic's full-corpus manual-stage hook run lives in the `enterTest`
+script, after shell-entry tasks have materialized files and installed hooks. It
+does not live behind `devenv:enterTest` in the task DAG: a shared prerequisite
+with the shell lane allowed devenv's all-task traversal to pull that sibling
+into ordinary `devenv shell`. The named `devenv:git-hooks:run` task remains
+available as a dependency-free manual diagnostic and executes the same packaged
+runner against the immutable generated hook config.
 
 ## The five buckets
 

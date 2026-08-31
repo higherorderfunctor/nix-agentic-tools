@@ -33,6 +33,16 @@ pkgs.runCommandLocal "repo-validation-policy-check" {
     | sort > actual-manual
   diff -u expected-manual actual-manual
 
+  # A single treefmt process owns its SQLite cache. prek's default file-batch
+  # fanout makes concurrent processes contend on that database, which turns
+  # cache bootstrap into timeouts and can leave the hook effectively uncached.
+  jq -e '
+    [.repos[].hooks[] | select(.id == "treefmt")]
+    | length == 1
+      and .[0].require_serial
+      and (.[0].entry | contains("--no-cache") | not)
+  ' local.json >/dev/null
+
   {
     ${pkgs.lib.concatMapStringsSep "\n" (name: "echo ${pkgs.lib.escapeShellArg name}") ciHookIds}
   } | sort > expected-ci

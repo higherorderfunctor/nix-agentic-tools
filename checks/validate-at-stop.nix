@@ -44,6 +44,9 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   done
   [ "$stage" = manual ] || { echo "missing manual hook stage" >&2; exit 2; }
   case "$id" in
+    treefmt*) [ "''${TREEFMT_NO_CACHE:-}" = true ] || { echo "treefmt cache must be disabled at Stop" >&2; exit 2; } ;;
+  esac
+  case "$id" in
     treefmt)
       changed=0
       for f in "$@"; do
