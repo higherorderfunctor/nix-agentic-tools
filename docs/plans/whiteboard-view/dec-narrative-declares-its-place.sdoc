@@ -8,7 +8,7 @@ IMPORT_FROM_FILE: @repo
 UID: DEC-NARRATIVE-DECLARES-ITS-PLACE
 TITLE: A narrative declares how it sits on its container's screen; the renderer follows that and never the depth of the tree
 AUTHORED_BY: llm
-STATUS: accepted
+STATUS: superseded
 RETIRES_ON: A view needs a placement the four words cannot say, or a renderer is found deriving placement from tree shape again.
 STATEMENT: >>>
 A view is still a tree of narratives (rows in a statement, Cites for what a
@@ -44,3 +44,7 @@ so that moving a card never dirties what cites it.
 NOTES: >>>
 Ruled 2026-08-30 as a first-pass decision under the operator's delegation ('I don't want to be bothered by the recommendation before implementation'); overrule by superseding. Chosen from three independent designs judged against an 82-element inventory of the v1 page. AUTHORED_BY reads llm because the writer has no flag for the human rungs. Composite narratives, a SECTION element and DOCUMENT_FROM_FILE were measured and rejected for this: DEC-FILES-STAY-FLAT-FOR-VIEWS.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-TABS-ARE-A-DECLARED-VOCABULARY
+  ROLE: Superseded_By

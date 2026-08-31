@@ -11,6 +11,7 @@ DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: edges
 PLACE: tab
+TAGS: edges
 STATEMENT: >>>
 Which kinds of node point at which, among the nodes this page cites, with the live count on each arrow. An arrow runs from the node that depends to the node depended on, which is the direction a Parent relation is written. The parser checks only that a role is registered on the source type and that the target exists; direction, target type and cycles are this repository's own rules, and the diagram shows what the live relations actually look like against them. Fingerprints are not arrows of their own: each rides on a Parent relation, and the ladder says they point strictly down, from a decision to a mechanism to work to a narrative.
 <<<

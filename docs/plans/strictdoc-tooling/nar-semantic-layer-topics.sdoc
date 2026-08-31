@@ -11,6 +11,7 @@ DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: prose
 PLACE: tab
+TAGS: topics
 STATEMENT: >>>
 The sheet's thirteen topics in the sheet's order, one section each. A row is one line of the sheet: the headline, the nodes the line cited, the kinds of node it speaks about, the top gaps it feeds, and the verdict the sheet gave it. The sheet's closing section, the five top gaps, has a tab of its own.
 <<<

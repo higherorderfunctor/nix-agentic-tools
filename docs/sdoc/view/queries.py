@@ -69,6 +69,39 @@ def terms(canon) -> list:
     return [_row_of(canon, uid) for uid in sorted(uids, key=canon.root_key)]
 
 
+def tabs(canon) -> list:
+    """The tabs table: one entry per row of the narrative tagged tabs, whose
+    table widget has the header tab | title | meaning. The strip's order is
+    the table's. Empty when no single such narrative exists (view-check's
+    tabs-table rule says why)."""
+    uid = canon.tabs_narrative()
+    if uid is None:
+        return []
+    node = canon.by_uid[uid]
+    if vc.widget_of(node) != "table":
+        return []
+    table = vc.parse_statement(node.get("STATEMENT") or "", "table")["table"]
+    if not table:
+        return []
+    header = [h.lower() for h in table["header"]]
+    if any(h not in header for h in vc.TABS_HEADER):
+        return []
+    col = {h: header.index(h) for h in vc.TABS_HEADER}
+    out = []
+    for row in table["rows"]:
+        if len(row) < len(header):
+            continue
+        out.append({"key": row[col["tab"]].strip(), "title": row[col["title"]].strip(), "meaning": row[col["meaning"]]})
+    return out
+
+
+def tab_of(tags: list, table: list):
+    """The tab key a narrative's TAGS names, or None. view-check files a
+    finding when there are two; the first wins here."""
+    keys = [t["key"] for t in table]
+    return next((t for t in tags if t in keys), None)
+
+
 def systems(canon) -> list:
     """The systems table: one entry per row of the narrative tagged systems,
     whose table widget has the header system | sources | switch | meaning.

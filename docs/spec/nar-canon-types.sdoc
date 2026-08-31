@@ -11,6 +11,7 @@ DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: prose
 PLACE: tab
+TAGS: types
 STATEMENT: >>>
 The kinds of node the grammar spells, in four families of which only the first is a grid ([LINK: DEC-NODE-FAMILIES]): definition, the claims the canon asserts; coverage, the use case; representation, the narrative; and work. The grid card places each kind, and the ladders card draws the state fields with their live counts. A UID's prefix names the kind a node was born with, not the kind it is ([LINK: DEC-UID-OUTLIVES-TYPE]); read the tag.
 <<<

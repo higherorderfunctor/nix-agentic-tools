@@ -15,6 +15,8 @@ computed sits under a key that says so:
               roots (the UIDs of the roots in this payload)
   systems     the systems table (queries.systems), read from the narrative
               tagged systems
+  tabs        the tab strip's vocabulary (queries.tabs), read from the
+              narrative tagged tabs; a narrative names its tab in TAGS
   roots       every NARRATIVE nothing Contains (or the one asked for),
               spec first, then by directory, then UID; each root's tree
               fully expanded in Contains order, every STATEMENT parsed per
@@ -102,6 +104,9 @@ class Wireline:
         self.canon = canon
         self.by_uid = canon.by_uid
         self.grammar = canon.grammar
+        self.tabs = queries.tabs(canon)
+        if not self.tabs:
+            raise SystemExit("wireline: the canon has no tabs table, or its header is not " + " | ".join(vc.TABS_HEADER))
         self.systems = queries.systems(canon)
         if not self.systems:
             # An empty table reads to the renderer as "no switches at all",
@@ -245,6 +250,7 @@ class Wireline:
             "widget": vc.widget_of(node),
             "place": vc.place_of(node),
             "tags": tags,
+            "tab": queries.tab_of(tags, self.tabs),
             "path": self.canon.paths.get(uid),
             "dir_class": self.canon.dir_class_of(uid),
             "prose": parsed["prose"],
@@ -302,6 +308,7 @@ class Wireline:
                 "roots": list(canon.roots),
             },
             "systems": self.systems,
+            "tabs": self.tabs,
             "roots": [self.narrative(root) for root in canon.roots],
             "nodes": {uid: self.card(uid) for uid in self.by_uid},
             "edges": self.edges,
