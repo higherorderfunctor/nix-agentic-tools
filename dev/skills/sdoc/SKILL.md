@@ -70,6 +70,7 @@ grid.
 | `USE_CASE`    | `UC-`   | coverage                      | a path the specification must enable; covered or uncovered                   |
 | `NARRATIVE`   | `NAR-`  | representation                | a maintained projection for a reader; its `Cites` edges go dirty             |
 | `WORK`        | `WORK-` | work                          | something to do; `Crosses` its lane, `Produces` evidence, dies with its plan |
+| `COMMENTARY`  | `CMT-`  | commentary (family OPEN)      | a remark ABOUT the canon: a gap, an arch note, a verdict, a note on one edge |
 
 **A UID's prefix names the type a node was BORN with, not the type it is**
 (`DEC-UID-OUTLIVES-TYPE`). The migration of 2026-08-30 retyped every `SLICE-`
@@ -80,6 +81,14 @@ prefixes are retired history, and a MECHANISM re-read as a REQUIREMENT keeps
 requires the current prefix on a NEW node; `sdoc check` prints a `NOTE` per
 retyped node and never fails on one. A retype records itself in the node's
 NOTES.
+
+`COMMENTARY` is new and NOTHING IN THE CORPUS IS ONE YET
+(`DEC-COMMENTARY-IS-THE-FIFTH-FAMILY`, open). It carries `STANDING` (open /
+closed / withdrawn), a required `CLOSES_ON`, and an optional `EDGE` naming one
+relation as `<FROM> <ROLE> <TO>` -- both ends of which must ALSO be `Remarks_On`
+targets, which is what lets the parser refuse a dangling one.
+`dev/scripts/commentary-check.py` gates all of that and is in `nix flake check`.
+It does NOT retire the row bracket: 494 rows still use it.
 
 `STATUS` lives on DECISION only (`open` / `accepted` / `rejected` /
 `superseded`). Every other type carries `DEPTH`.

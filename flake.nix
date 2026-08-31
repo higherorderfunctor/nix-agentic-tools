@@ -284,6 +284,7 @@
       shellcheckCorpusCheck = {shellcheck-corpus = import ./checks/shellcheck-corpus.nix {inherit lib pkgs;};};
       splitCodeSpansCheck = {split-code-spans = import ./checks/split-code-spans.nix {inherit pkgs;};};
       strictdocCycleCheck = {strictdoc-cycle-check = import ./checks/strictdoc-cycle-check.nix {inherit pkgs self;};};
+      strictdocCommentaryCheck = {strictdoc-commentary-check = import ./checks/strictdoc-commentary-check.nix {inherit pkgs self;};};
       # The grammar extractor's environment, built ONCE for the four checks
       # that run it. It is not an overlay attribute: an overlay converts an
       # upstream package, wrapping belongs to the consumer, and the consumer
@@ -305,7 +306,7 @@
       updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit inputs lib pkgs self updateRegistry;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // beadsContractsCheck // beadsLifecycleCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // claudeMemoryCollisionGuardCheck // claudeSettingsSchemaCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // doubledWordsCheck // doubledWordsFixturesCheck // facetMockChecks // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goFloorDriftChecks // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroFhsContractCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // sembleTemplatesCheck // shellcheckCorpusCheck // splitCodeSpansCheck // strictdocCycleCheck // strictdocFileCheck // strictdocFpCheck // strictdocGrammarCorpusCheck // strictdocGrammarForeignRoundtripCheck // strictdocGrammarModelEqualCheck // strictdocGrammarNegativeFixturesCheck // strictdocGrammarSurfaceCurrentCheck // strictdocGrammarSurfaceLiveCheck // updateTargetsParityCheck // validateAtStopCheck);
+      bareCommandsCheck // beadsContractsCheck // beadsLifecycleCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // claudeMemoryCollisionGuardCheck // claudeSettingsSchemaCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // doubledWordsCheck // doubledWordsFixturesCheck // facetMockChecks // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goFloorDriftChecks // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroFhsContractCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // sembleTemplatesCheck // shellcheckCorpusCheck // splitCodeSpansCheck // strictdocCommentaryCheck // strictdocCycleCheck // strictdocFileCheck // strictdocFpCheck // strictdocGrammarCorpusCheck // strictdocGrammarForeignRoundtripCheck // strictdocGrammarModelEqualCheck // strictdocGrammarNegativeFixturesCheck // strictdocGrammarSurfaceCurrentCheck // strictdocGrammarSurfaceLiveCheck // updateTargetsParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.

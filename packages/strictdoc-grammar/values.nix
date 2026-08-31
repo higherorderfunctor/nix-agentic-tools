@@ -19,6 +19,11 @@
 #   Representation  NARRATIVE  a maintained projection for a reader; its edges go
 #                              dirty when what it presents changes
 #   Work            WORK       something to do; not a claim; dies with its plan
+#   Commentary      COMMENTARY a remark ABOUT the canon: a gap, an architecture
+#                              note, a verdict, a note on one edge. Whether this
+#                              is a fifth family or the odd member of
+#                              Representation is OPEN
+#                              (DEC-COMMENTARY-IS-THE-FIFTH-FAMILY).
 #
 # UID PREFIXES NAME THE TYPE A NODE WAS BORN WITH, NOT THE TYPE IT IS.
 # DEC-UID-OUTLIVES-TYPE: a UID never changes, so the node-type migration of
@@ -127,6 +132,12 @@
   # relation list rather than slotted in beside the roles it reads like, per the
   # ORDER note above.
   backloggedIn = rel.parent "Backlogged_In" "Backlogs";
+
+  # A commentary DEPENDS on the wording of what it remarks on -- that is what
+  # makes a stale remark detectable at all, because the PARENT_FP entry drifts
+  # when the target's contract changes. Parent, therefore, and fingerprintable.
+  # Carried by COMMENTARY alone.
+  remarksOn = rel.parent "Remarks_On" "Remarked_On_By";
 
   # The relation run the four Definition types and WORK share: what rules it,
   # what it upholds, what serializes it, what evidence backs it, what it takes
@@ -317,6 +328,56 @@ in [
       produces
       rel.file
       backloggedIn
+    ];
+  })
+
+  # ----------------------------------------------------------------- Commentary
+  # A remark ABOUT the canon rather than about the system the canon describes:
+  # a gap, an architecture note, a verdict on a node, a note on one edge. Its
+  # point is that a validator can be run against it, which a narrative row
+  # carrying a bracketed word cannot be.
+  #
+  # DEC-COMMENTARY-IS-THE-FIFTH-FAMILY is OPEN. Whether this is a fifth family
+  # or the odd member of Representation is the operator's call, and no code
+  # reads the family, so the element exists while that is unsettled. Nothing in
+  # the corpus is a COMMENTARY yet.
+  #
+  # STANDING, not STATUS: STATUS is one name with one word list on one type,
+  # and a second list under that name would make the word mean two things.
+  # CLOSES_ON is RETIRES_ON's shape and is required for the same reason -- a
+  # remark with no closing condition is a complaint, not a finding, and being
+  # `required` is what makes the grammar itself enforce that.
+  #
+  # There is deliberately NO KIND field: verdict vocabularies are legend data
+  # (DEC-LEGEND-IS-DATA-WHERE-PLACED), never a grammar field, so facet words
+  # ride in TAGS.
+  #
+  # EDGE names one relation structurally, "<FROM> <Role> <TO>", because a
+  # strictdoc relation is a TYPE/VALUE/ROLE triple with no identity of its own.
+  # Both endpoints are ALSO Remarks_On relations, which is what makes the
+  # PARSER refuse a dangling end; dev/scripts/commentary-check.py keeps the
+  # redundancy honest. The three-token split assumes no role name contains
+  # whitespace, which holds -- every role is Snake_Case.
+  (el "COMMENTARY" {prefix = "CMT-";} {
+    fields = [
+      uid
+      title
+      authoredBy
+      (required (one "STANDING" ["open" "closed" "withdrawn"]))
+      (required (str "CLOSES_ON"))
+      (str "EDGE")
+      (tag "TAGS")
+      statement
+      rationale
+      parentFp
+      notes
+      component
+    ];
+    relations = [
+      remarksOn
+      provenBy
+      backloggedIn
+      rel.file
     ];
   })
 ]
