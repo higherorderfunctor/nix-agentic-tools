@@ -477,6 +477,10 @@
   .flag.warn {
     border-color: var(--c-red);
   }
+  .pinned {
+    opacity: 0.75;
+    cursor: default;
+  }
   /* provenance */
   .src {
     margin: 0;
@@ -1231,22 +1235,22 @@
   const rank=(field,value)=>{ const l=LADDERS[field]; if(!Array.isArray(l)) return null; const i=l.indexOf(value); return i<0?null:[i+1,l.length]; };
 
   /* ---------- the selection: systems switched on, carried in ?on= ---------- */
+  // A system whose switch reads "always" is pinned: it cannot be turned off,
+  // and an address that omits it still carries it.
+  const PINNED=SYSTEMS.filter(x=>x.switch==="always").map(x=>x.name);
   function readSelection(){
     const q=new URLSearchParams(location.search).get("on");
     if(q==null||!SYSTEMS.length) return new Set(SYSTEMS.map(x=>x.name));
-    return new Set(q.split(",").map(x=>x.trim()).filter(Boolean));
+    return new Set([...PINNED,...q.split(",").map(x=>x.trim()).filter(Boolean)]);
   }
   let ON=readSelection();
-  const typeOn=t=>!SYSTEMS.length||SYSTEMS.some(x=>ON.has(x.name)&&(x.types||[]).includes(t));
-  const roleOn=r=>!SYSTEMS.length||SYSTEMS.some(x=>ON.has(x.name)&&(x.roles||[]).includes(r));
-  // a narrative that belongs to the spec root is the canon's own chrome (its
-  // tabs, cards and screens) and never switches off; a plan root's narratives
-  // are the overlay and go with the system that holds narratives
-  const nodeOn=uid=>{ const nd=NODES[uid]; if(!nd) return true; if(nd.type==="NARRATIVE"&&CANON&&ROOTOF[uid]===CANON.uid) return true; return typeOn(nd.type); };
-  const systemsOfType=t=>SYSTEMS.filter(x=>(x.types||[]).includes(t)).map(x=>x.name);
-  const systemsOf=uid=>{ const nd=NODES[uid]; return nd?(Array.isArray(nd.systems)&&nd.systems.length?nd.systems:systemsOfType(nd.type)):[]; };
-  const edgeOn=e=>nodeOn(e.from)&&nodeOn(e.to)&&roleOn(e.role);
-  const selectedNodes=()=>Object.values(NODES).filter(nd=>typeOn(nd.type));
+  // Membership is the payload's: every node card carries the systems that
+  // hold it, computed from its path. The page never reads a node's type or a
+  // relation's role to decide what to show.
+  const systemsOf=uid=>{ const nd=NODES[uid]; return nd&&Array.isArray(nd.systems)?nd.systems:[]; };
+  const nodeOn=uid=>{ const nd=NODES[uid]; if(!nd) return true; const sys=systemsOf(uid); return !sys.length||sys.some(x=>ON.has(x)); };
+  const edgeOn=e=>nodeOn(e.from)&&nodeOn(e.to);
+  const selectedNodes=()=>Object.values(NODES).filter(nd=>nodeOn(nd.uid));
   const selectedEdges=()=>EDGES.filter(edgeOn);
   function setSelection(next){
     ON=next;
@@ -1258,8 +1262,10 @@
     if(!SYSTEMS.length) return null;
     const wrap=h("div",{class:compact?"switches":"row",role:"group","aria-label":"systems"});
     SYSTEMS.forEach(x=>{
-      const on=ON.has(x.name);
-      wrap.append(h("button",{class:compact?null:"switch","aria-pressed":String(on),title:x.meaning||undefined,onclick:()=>{ const n=new Set(ON); if(n.has(x.name)) n.delete(x.name); else n.add(x.name); setSelection(n); }},h("i"),x.name));
+      const on=ON.has(x.name), pinned=x.switch==="always";
+      const title=[x.meaning||"",pinned?"(always on)":""].filter(Boolean).join(" ");
+      if(pinned){ wrap.append(h("span",{class:(compact?"":"switch ")+"pinned","aria-disabled":"true",title:title||undefined},h("i"),x.name)); return; }
+      wrap.append(h("button",{class:compact?null:"switch","aria-pressed":String(on),title:title||undefined,onclick:()=>{ const n=new Set(ON); if(n.has(x.name)) n.delete(x.name); else n.add(x.name); setSelection(n); }},h("i"),x.name));
     });
     return wrap;
   }
@@ -1607,8 +1613,8 @@
   function queryEntries(word){
     switch(word){
       case "roots": return ROOTS.map(r=>({uid:r.uid,title:r.title,blurb:firstPara(r),bits:[r.dir_class,plural((r.children||[]).length,"part")],href:narHref(r.uid),on:nodeOn(r.uid)}));
-      case "grammar": return Object.entries(GRAMMAR).map(([t,g])=>({uid:t,title:t,blurb:null,bits:[g.prefix?`prefix ${g.prefix}`:null,plural((g.fields||[]).length,"field"),plural((g.roles||[]).length,"role"),plural(selectedNodes().filter(nd=>nd.type===t).length,"node")].filter(Boolean),href:null,on:typeOn(t)}));
-      case "systems": return SYSTEMS.map(x=>({uid:x.name,title:x.name,blurb:x.meaning?h("p",{class:"dim small"},x.meaning):null,bits:[(x.types||[]).join(", "),(x.roles||[]).join(", ")],href:null,on:ON.has(x.name)}));
+      case "grammar": return Object.entries(GRAMMAR).map(([t,g])=>({uid:t,title:t,blurb:null,bits:[g.prefix?`prefix ${g.prefix}`:null,plural((g.fields||[]).length,"field"),plural((g.roles||[]).length,"role"),plural(selectedNodes().filter(nd=>nd.type===t).length,"node")].filter(Boolean),href:null,on:true}));
+      case "systems": return SYSTEMS.map(x=>({uid:x.name,title:x.name,blurb:x.meaning?h("p",{class:"dim small"},x.meaning):null,bits:[(x.sources||[]).join(", "),plural(selectedNodes().filter(nd=>systemsOf(nd.uid).includes(x.name)).length,"node"),x.switch==="always"?"always on":null].filter(Boolean),href:null,on:ON.has(x.name)}));
       case "terms": return queryNarratives(word).map(childEntry);
       default: return null;
     }
@@ -1799,7 +1805,7 @@
     const ladderRow=ruleRows(n).find(t=>t.includes(">"));
     const ladder=ladderRow?ladderRow.split(">").map(x=>x.trim()).filter(Boolean):null;
     const counts=new Map(); let total=0, placeholders=0;
-    selectedNodes().forEach(nd=>(nd.fp||[]).forEach(f=>{ const p=NODES[f.uid]; if(!p||!typeOn(p.type)) return; total++; if(unsignedHash(f.hash)) placeholders++; const k=`${nd.type}\t${p.type}`; counts.set(k,(counts.get(k)||0)+1); }));
+    selectedNodes().forEach(nd=>(nd.fp||[]).forEach(f=>{ const p=NODES[f.uid]; if(!p||!nodeOn(f.uid)) return; total++; if(unsignedHash(f.hash)) placeholders++; const k=`${nd.type}\t${p.type}`; counts.set(k,(counts.get(k)||0)+1); }));
     const off=(child,parent)=>{ if(!ladder) return false; const a=ladder.indexOf(child), b=ladder.indexOf(parent); return a<0||b<0||b>=a; };
     const rows=[...counts].map(([k,c])=>{ const [child,parent]=k.split("\t"); return {child,parent,count:c,off:off(child,parent)}; }).sort((x,y)=>(x.child+x.parent).localeCompare(y.child+y.parent));
     return [h("p",{class:"dim"},`${plural(total,"entry","entries")} live in the selection, ${placeholders} never signed.`,ladder?[" The ladder: ",ladder.map((t,i)=>[i?" → ":"",h("code",{},t)])]:null),
@@ -1934,7 +1940,7 @@
   /* ---------- the node screen ---------- */
   function relList(items,dir){
     if(!items||!items.length) return h("p",{class:"muted"},"none");
-    return h("ul",{class:"plain"},items.map(r=>h("li",{},h("div",{class:"row"},h("code",{class:"muted"},r.role!=null?r.role:"File"),h("span",{class:"muted"},dir==="out"?"→":"←"),roleOn(r.role)?null:h("span",{class:"muted small"},"(role switched off)")),nodeLink(r.uid))));
+    return h("ul",{class:"plain"},items.map(r=>h("li",{},h("div",{class:"row"},h("code",{class:"muted"},r.role!=null?r.role:"File"),h("span",{class:"muted"},dir==="out"?"→":"←")),nodeLink(r.uid))));
   }
   function screenNode(uid){
     const nd=NODES[uid];

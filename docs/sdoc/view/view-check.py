@@ -118,7 +118,10 @@ COLOURS = ("green", "slate", "amber", "blue", "red", "teal", "violet", "grey")
 # The closed list of query words (MECH-VIEW-QUERIES). queries.py computes
 # each; this module only checks the word.
 QUERY_WORDS = ("roots", "nodes", "grammar", "systems", "terms")
-SYSTEMS_HEADER = ("system", "types", "roles", "meaning")
+SYSTEMS_HEADER = ("system", "sources", "switch", "meaning")
+# A system row's switch column. "always" pins the system on; the reader may
+# not turn it off (DEC-SYSTEM-IS-A-SOURCE-SET).
+SWITCH_WORDS = ("always", "optional")
 
 # strictdoc's inline link token. The export keeps it literal.
 LINK_RE = re.compile(r"\[LINK:\s*([^\]\s]+)\s*\]")
@@ -230,6 +233,37 @@ def uid_paths(worktree: Path) -> dict:
                     if line.startswith("UID: "):
                         paths.setdefault(line[5:].strip(), rel)
     return paths
+
+
+def rows_of(parsed) -> list:
+    """The systems table's rows as {name, sources, switch}, for the rules that
+    have to reason about membership before queries.py is imported."""
+    table = parsed.get("table") or {}
+    header = [h.lower() for h in table.get("header", [])]
+    if any(h not in header for h in SYSTEMS_HEADER):
+        return []
+    col = {h: header.index(h) for h in SYSTEMS_HEADER}
+    out = []
+    for row in table.get("rows", []):
+        if len(row) < len(header):
+            continue
+        out.append(
+            {
+                "name": row[col["system"]].strip(),
+                "sources": [w.strip() for w in row[col["sources"]].split(",") if w.strip()],
+                "switch": row[col["switch"]].strip().lower(),
+            }
+        )
+    return out
+
+
+def queries_systems_of(path, rows) -> list:
+    """The systems whose source prefixes hold this path. Duplicated from
+    queries.systems_of on purpose: view-check must not import the module it
+    is the checker for."""
+    if not path:
+        return []
+    return [r["name"] for r in rows if any(str(path).startswith(src) for src in r["sources"])]
 
 
 def dir_class(path) -> str:
@@ -769,7 +803,30 @@ class Canon:
                 header = [h.lower() for h in (parsed["table"] or {}).get("header", [])]
                 missing = [h for h in SYSTEMS_HEADER if h not in header]
                 if missing:
-                    self._find("systems-table", uid, f"{uid}'s header lacks {', '.join(missing)}; the systems table is system | types | roles | meaning")
+                    self._find("systems-table", uid, f"{uid}'s header lacks {', '.join(missing)}; the systems table is {' | '.join(SYSTEMS_HEADER)}")
+                else:
+                    col = {h: header.index(h) for h in SYSTEMS_HEADER}
+                    seen = set()
+                    always = 0
+                    for row in (parsed["table"] or {}).get("rows", []):
+                        if len(row) < len(header):
+                            continue
+                        name = row[col["system"]].strip()
+                        if name in seen:
+                            self._find("systems-table", uid, f"{uid} names the system {name!r} twice; a name is one row")
+                        seen.add(name)
+                        switch = row[col["switch"]].strip().lower()
+                        if switch not in SWITCH_WORDS:
+                            self._find("systems-table", uid, f"{uid}'s system {name!r} has switch {switch!r}; the words are {', '.join(SWITCH_WORDS)}")
+                        elif switch == "always":
+                            always += 1
+                        if not [w for w in row[col["sources"]].split(",") if w.strip()]:
+                            self._find("systems-table", uid, f"{uid}'s system {name!r} names no source directory; membership is by path")
+                    if seen and not always:
+                        self._find("systems-table", uid, f"{uid} pins no system on; the shared model every system cites has to outlive every switch")
+                    unheld = sorted({self.dir_class_of(u) for u in self.by_uid if not queries_systems_of(self.paths.get(u), rows_of(parsed))})
+                    if unheld:
+                        self._find("systems-table", uid, f"no system holds {', '.join(unheld)}; a node no switch can show is unreachable")
 
         for _doc, node in iter_nodes(self.index):
             if is_narrative(node) or "UID" not in node:

@@ -20,7 +20,7 @@ computed sits under a key that says so:
               fully expanded in Contains order, every STATEMENT parsed per
               its WIDGET (view-check.parse_statement)
   nodes       a card per node in the export: type, path, dir_class, the
-              systems that hold it, its state, every other field verbatim
+              systems that hold it (by path), its state, every other field verbatim
               in grammar order, relations out and in, files, fingerprints
   edges       every Parent or Child relation whose target is a node of the
               export, whole canon
@@ -103,6 +103,12 @@ class Wireline:
         self.by_uid = canon.by_uid
         self.grammar = canon.grammar
         self.systems = queries.systems(canon)
+        if not self.systems:
+            # An empty table reads to the renderer as "no switches at all",
+            # because every gate there short-circuits on SYSTEMS.length. A
+            # header typo would therefore ship a page that quietly shows
+            # everything. Refuse instead.
+            raise SystemExit("wireline: the canon has no systems table, or its header is not " + " | ".join(vc.SYSTEMS_HEADER))
         self.inbound: dict = {}
         self.edges: list = []
         for uid, node in self.by_uid.items():
@@ -276,7 +282,7 @@ class Wireline:
             "title": node.get("TITLE", uid),
             "path": self.canon.paths.get(uid),
             "dir_class": self.canon.dir_class_of(uid),
-            "systems": queries.systems_of(node_type, self.systems),
+            "systems": queries.systems_of(self.canon.paths.get(uid), self.systems),
             "state": {k: node[k] for k in STATE_FIELDS if k in node},
             "fields": {n: node[n] for n in names if n not in CARD_HEAD},
             "out": out_rel,

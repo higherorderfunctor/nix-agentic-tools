@@ -12,7 +12,7 @@ AUTHORED_BY: llm
 WIDGET: callout
 TAGS: whole canon, not settled
 STATEMENT: >>>
-This page is the canon: every root narrative and every node of the committed, human-reviewed contents, rendered from one export. The systems table beneath is the switches. Each row names a set of node types and relation roles; a node shows when any system that holds it is on, and an edge when both its ends show and its role belongs to a system that is on ([LINK: DEC-SYSTEM-IS-A-TYPE-SET]). Switching changes what is shown and never what was rendered, and the selection rides in the page's address so a link carries it.
+This page is the canon: every node of the committed, human-reviewed contents, rendered from one export. The systems table beneath is the switches. Each row names the part of the repository a body of nodes documents, by the directories that hold it; a node shows when any system holding it is on, and an edge when both its ends show ([LINK: DEC-SYSTEM-IS-A-SOURCE-SET]). The model is always on, because every other system cites it. Switching changes what is shown and never what was rendered, and the selection rides in the page's address so a link carries it.
 <<<
 PARENT_FP: >>>
 DEC-SYSTEM-IS-A-TYPE-SET:0000000
@@ -42,4 +42,7 @@ RELATIONS:
   ROLE: Cites
 - TYPE: Parent
   VALUE: NAR-TERM-CANON
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-IS-A-SOURCE-SET
   ROLE: Cites
