@@ -13,7 +13,7 @@ WIDGET: glossary
 PLACE: tab
 TAGS: glossary
 STATEMENT: >>>
-The ruled words are the seven term narratives this tab contains, each citing the decision that ruled it. The field names and working terms below are the sheet's own and rule nothing; where a word is the sheet's, the sheet's wording in the last tab shows it in use.
+The ruled words live once, in the canon's own glossary above. The field names and working terms below are this sheet's own and rule nothing. The field names and working terms below are the sheet's own and rule nothing; where a word is the sheet's, the sheet's wording in the last tab shows it in use.
 
 - node: One claim, decision, narrative or piece of work, in one file named for its UID.
 - UID: A node's hand-chosen name, such as DEC-LAYER-STACK. Its prefix spells the type the node was born with; the element tag is the type it is ([LINK: DEC-UID-OUTLIVES-TYPE]).
@@ -52,27 +52,6 @@ NAR-TERM-CANON:0000000
 NAR-TERM-JOINT:0000000
 <<<
 RELATIONS:
-- TYPE: Child
-  VALUE: NAR-TERM-JOINT
-  ROLE: Contains
-- TYPE: Child
-  VALUE: NAR-TERM-CHECKPOINT
-  ROLE: Contains
-- TYPE: Child
-  VALUE: NAR-TERM-SCRIBE
-  ROLE: Contains
-- TYPE: Child
-  VALUE: NAR-TERM-SDOC
-  ROLE: Contains
-- TYPE: Child
-  VALUE: NAR-TERM-STRICTDOC
-  ROLE: Contains
-- TYPE: Child
-  VALUE: NAR-TERM-CANON
-  ROLE: Contains
-- TYPE: Child
-  VALUE: NAR-TERM-BEADS
-  ROLE: Contains
 - TYPE: Parent
   VALUE: DEC-UID-OUTLIVES-TYPE
   ROLE: Cites
