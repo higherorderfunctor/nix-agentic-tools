@@ -79,18 +79,27 @@ devenv tasks run --mode before view:render --input root=NAR-SEMANTIC-LAYER
 ```
 
 (the root goes through devenv's task-input channel; `--` passthrough does not
-exist here). Pages and payloads land under `output/view/`, gitignored. Four
-roots exist: `NAR-CANON` (the spec root: systems, counts, types, edges, words,
-whiteboards), `NAR-SEMANTIC-LAYER` (the whiteboard as a tree of narratives,
-`docs/plans/strictdoc-tooling/`), `NAR-WHITEBOARD-VIEW` (the view system's own
-design) and `NAR-MECHANISM-MOOD-REVIEW` (the mechanism sort: 27 retyped in
-place, 4 held for the operator, 104 stayed). Published copy (private artifact, a
-copy of `output/view/canon.artifact.html`; republish the same file to keep the
-link): https://claude.ai/code/artifact/45b8f97a-2f88-411b-81dc-ff057ad17ba8 —
-one page over the whole canon with the system switches. The first render of
-2026-08-29 stays at
-https://claude.ai/code/artifact/9cdae156-301a-4baa-8d20-585dd6125d4e as the
-reference and is never republished. Locally:
+exist here). Pages and payloads land under `output/view/`, gitignored.
+
+**The page has one stable tab strip, and the switches choose what fills it**
+(2026-08-30, superseding what this file said before). A SYSTEM is the part of
+the repository a body of nodes documents, named by its source directories
+(`DEC-SYSTEM-IS-A-SOURCE-SET`): `model` (`docs/spec/`, pinned on because
+everything cites it), plus `adoption`, `architecture`, `beads`, `core` and
+`whiteboard`. A TAB is a row of `NAR-CANON-TABS`
+(`DEC-TABS-ARE-A-DECLARED-VOCABULARY`) — Types, Edges, Topics, Gaps, Words,
+between the page's own Start and Nodes — and a narrative joins one by naming its
+key in `TAGS`. A tab's screen is the union of every enabled system's
+contributions, grouped by system. **A root narrative is no longer a tab**: the
+four roots (`NAR-CANON`, `NAR-SEMANTIC-LAYER`, `NAR-WHITEBOARD-VIEW`,
+`NAR-MECHANISM-MOOD-REVIEW`) all land on Start, grouped by the system that holds
+them, which is how `docs/plans/beads-migration/` — 20 nodes and no root at all —
+stopped being unreachable. Published copy (private artifact, a copy of
+`output/view/canon.artifact.html`; republish the same file to keep the link):
+https://claude.ai/code/artifact/45b8f97a-2f88-411b-81dc-ff057ad17ba8 — one page
+over the whole canon with the system switches. The first render of 2026-08-29
+stays at https://claude.ai/code/artifact/9cdae156-301a-4baa-8d20-585dd6125d4e as
+the reference and is never republished. Locally:
 `devenv tasks run --mode before view:render` writes `output/view/canon.html`
 (open it from disk) and `devenv tasks run view:serve` serves it on loopback.
 
