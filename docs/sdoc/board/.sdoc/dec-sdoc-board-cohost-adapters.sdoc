@@ -1,0 +1,18 @@
+[DOCUMENT]
+TITLE: HTTP and local RPC cohost one resident workspace
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SDOC-BOARD-COHOST-ADAPTERS
+TITLE: HTTP and local RPC cohost one resident workspace
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: The browser needs an independent deployment, security or lifecycle boundary, or one daemon must multiplex independently owned workspaces.
+STATEMENT: >>>
+The foreground sdoc-board process owns one resident StrictDoc workspace and cohosts two transport adapters: loopback HTTP for browser assets and snapshots, and local RPC for CLI or TUI clients. Neither adapter parses or owns project state; both call a transport-neutral Workspace API. A later split moves either adapter behind that same API without changing workspace semantics.
+<<<
+RATIONALE: >>>
+A separate web process now would introduce proxying and notification semantics before either provides value. Cohosting preserves one state owner and the existing browser path while the Workspace boundary keeps a later process split mechanical.
+<<<

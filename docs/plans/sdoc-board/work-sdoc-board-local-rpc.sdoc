@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: Add the local JSON-RPC control adapter and client
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SDOC-BOARD-LOCAL-RPC
+TITLE: Add the local JSON-RPC control adapter and client
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Cohost a JSON-RPC 2.0 Unix-socket adapter with the existing HTTP server, add a small CLI client for discovery, workspace description, snapshot retrieval and explicit reload, and verify workspace isolation, socket permissions, error behavior and shared generation state across both transports.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-LOCAL-RPC
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-LOCAL-RPC
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-RESIDENT-WORKSPACE
+  ROLE: Crosses

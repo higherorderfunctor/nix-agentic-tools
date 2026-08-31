@@ -1,0 +1,21 @@
+[DOCUMENT]
+TITLE: Audit and wrap pinned StrictDoc live mutation primitives
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SDOC-BOARD-LIVE-MUTATION-ADAPTER
+TITLE: Audit and wrap pinned StrictDoc live mutation primitives
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Before enabling writes, map each semantic node, field, identity and relation operation to the pinned StrictDoc live-edit primitives and every derived index they maintain; define preflight, persistence commit, poisoned-workspace recovery and fresh-rebuild equivalence tests. Keep mutation semantics in the library rather than the daemon or transport adapters.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-RESIDENT-WORKSPACE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SDOC-BOARD
+  ROLE: Backlogged_In

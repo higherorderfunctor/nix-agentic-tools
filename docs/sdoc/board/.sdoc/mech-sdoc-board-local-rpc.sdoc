@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: The local RPC adapter exposes read and reload operations over one Unix socket
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-LOCAL-RPC
+TITLE: The local RPC adapter exposes read and reload operations over one Unix socket
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The RPC adapter owns one mode-0600 Unix stream socket under a mode-0700 runtime directory, accepts newline-framed JSON-RPC 2.0 requests, and delegates daemon.ping, rpc.discover, workspace.describe, workspace.snapshot and workspace.reload to the resident Workspace. Requests are bounded and validated; unknown methods and malformed messages receive standard JSON-RPC errors. No method mutates canonical SDoc files.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-LOCAL-RPC
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: REQ-SDOC-BOARD-ONE-RESIDENT-WORKSPACE
+  ROLE: Guarantees
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-RESIDENT-WORKSPACE
+  ROLE: Assumes

@@ -1,0 +1,21 @@
+[DOCUMENT]
+TITLE: Connect workspace invalidation to future lane lifecycle
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SDOC-BOARD-LANE-LIFECYCLE
+TITLE: Connect workspace invalidation to future lane lifecycle
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+When the lane harness exists, assign at most one mutable workspace owner per stable lane, invalidate hydrated state before checkout replacement or stable semantic-runtime advancement, retain the lane cache, and lazily hydrate on the next operation. Do not infer checkout replacement with continuous file watching.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-RESIDENT-WORKSPACE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SDOC-BOARD
+  ROLE: Backlogged_In

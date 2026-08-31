@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: The board reuses StrictDoc native pickles through a stable workspace output identity
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-STABLE-CACHE-IDENTITY
+TITLE: The board reuses StrictDoc native pickles through a stable workspace output identity
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The workspace derives a persistent state directory from the resolved project-root identity and supplies one stable StrictDoc output directory on every hydration. ProjectConfig is constructed while cwd is the project root, preserving the repository cache namespace, and the stable output path preserves PickleCache entry keys across daemon restarts. The board adds no parsed-document or graph cache of its own; full index reconstruction remains the cold-start and recovery path.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-SDOC-BOARD-ONE-RESIDENT-WORKSPACE
+  ROLE: Guarantees
+- TYPE: Parent
+  VALUE: MECH-SDOC-CACHE-DIR-FOR-WORKTREES
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-CACHE-IDENTITY-PROBE
+  ROLE: Proven_By

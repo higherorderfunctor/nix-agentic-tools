@@ -1,0 +1,18 @@
+[DOCUMENT]
+TITLE: Local control uses JSON-RPC over a Unix stream socket
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SDOC-BOARD-LOCAL-RPC
+TITLE: Local control uses JSON-RPC over a Unix stream socket
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A supported client requires cross-host access, Windows portability, direct browser use or measured binary-stream throughput that the local newline-framed protocol cannot provide.
+STATEMENT: >>>
+Non-browser clients control one local sdoc-board workspace with JSON-RPC 2.0 over an AF_UNIX stream socket. UTF-8 requests and responses use one JSON value per newline. The socket is derived from the absolute workspace root unless explicitly supplied, and is accessible only to the owning user. Browser traffic remains HTTP. A future browser change stream uses SSE for one-way notification or WebSocket when bidirectional browser operations are justified; WebRTC is outside this local control plane.
+<<<
+RATIONALE: >>>
+JSON-RPC supplies typed, language-neutral requests and errors without inventing an application protocol. Unix sockets provide local namespace, permissions and one-owner discovery with less exposure than TCP. WebRTC solves peer negotiation and network traversal problems this same-host service does not have.
+<<<

@@ -1,0 +1,18 @@
+[DOCUMENT]
+TITLE: Pinned StrictDoc cache reuse also requires a stable output directory
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SDOC-BOARD-CACHE-IDENTITY-PROBE
+TITLE: Pinned StrictDoc cache reuse also requires a stable output directory
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: StrictDoc 0.28.3 ProjectConfig and PickleCache; local configuration probe on 2026-08-30
+STATEMENT: >>>
+Loading this worktree resolves dir_for_sdoc_cache to /tmp/strictdoc_cache/47e713edaf1edc8e821ce1fc79c0d574/0.28.3, proving the existing project configuration creates a persistent cache namespace keyed by the project-root cwd and StrictDoc version. PickleCache.get_cached_file_path hashes project_config.output_dir concatenated with the absolute input path. Therefore the board server current per-process temporary output directory defeats cache reuse across launches even though the cache directory persists; a stable workspace-derived output directory restores the native cache identity without a second cache.
+<<<
+RELATIONS:
+- TYPE: File
+  VALUE: strictdoc_config.py

@@ -1,0 +1,14 @@
+[DOCUMENT]
+TITLE: Each board process owns one explicitly rooted resident workspace
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-SDOC-BOARD-ONE-RESIDENT-WORKSPACE
+TITLE: Each board process owns one explicitly rooted resident workspace
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+A board process shall resolve one explicit project root, hydrate its StrictDoc document tree and TraceabilityIndex at most once until an explicit reload, and answer browser or RPC reads without rebuilding either object graph. A reload shall build replacement state before publication and shall retain the previous state if construction fails. Runtime state and cache identity shall be derived from the resolved workspace root rather than the process launch directory.
+<<<

@@ -1,0 +1,21 @@
+[DOCUMENT]
+TITLE: Publish workspace generation changes to connected clients
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SDOC-BOARD-CHANGE-STREAM
+TITLE: Publish workspace generation changes to connected clients
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+When automatic client refresh is needed, define one workspace.changed event carrying generation and snapshot hash, publish it only after atomic state replacement, and map it to browser SSE or WebSocket plus persistent JSON-RPC notifications without making any transport another workspace owner.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-RESIDENT-WORKSPACE
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SDOC-BOARD
+  ROLE: Backlogged_In
