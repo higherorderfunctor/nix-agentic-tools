@@ -7,10 +7,13 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SDOC-BOARD-RESIDENT-WORKSPACE
 TITLE: A workspace publishes immutable generations of one retained StrictDoc index
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Workspace resolves the project root and stable state directory once, hydrates and retains LoadedProject including the StrictDoc TraceabilityIndex, and publishes a serialized snapshot as a numbered immutable generation. Reads take the current generation without parsing. Explicit reload constructs a complete replacement under one lock and swaps it only after success, so concurrent HTTP and RPC reads observe either the old or new complete generation.
+<<<
+NOTES: >>>
+Implemented 2026-08-30 in workspace.py. One RLock serializes hydration and reload, WorkspaceGeneration is immutable, reads retain the same object, and replacement is assigned only after the loader and snapshot serialization both succeed. HTTP now reads the published generation and returns its number in a response header.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -22,3 +25,8 @@ RELATIONS:
 - TYPE: Parent
   VALUE: MECH-SDOC-BOARD-SNAPSHOT
   ROLE: Assumes
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-RESIDENT-HYDRATION
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: docs/sdoc/board/workspace.py

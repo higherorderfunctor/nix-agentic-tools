@@ -1,0 +1,20 @@
+[DOCUMENT]
+TITLE: The resident workspace reuses native parses and publishes atomic generations
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SDOC-BOARD-RESIDENT-HYDRATION
+TITLE: The resident workspace reuses native parses and publishes atomic generations
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: docs/sdoc/board workspace contracts and two same-root hydrations; StrictDoc 0.28.3; 2026-08-30
+STATEMENT: >>>
+Two newly constructed Workspace instances resolved the same state directory, stable StrictDoc output directory and native cache directory. The first measured hydration was 3411.944 ms: 63.463 ms configuration, 3325.789 ms index construction and 22.684 ms snapshot compilation. The immediately repeated hydration was 632.702 ms: 0.318 ms configuration, 603.537 ms index construction and 28.839 ms snapshot compilation. Seven Python contracts passed, including object-identical repeated reads, monotonic reload generation, stable output and cache identities, and an injected failed reload that retained generation one.
+<<<
+RELATIONS:
+- TYPE: File
+  VALUE: docs/sdoc/board/workspace.py
+- TYPE: File
+  VALUE: docs/sdoc/board/test_board.py

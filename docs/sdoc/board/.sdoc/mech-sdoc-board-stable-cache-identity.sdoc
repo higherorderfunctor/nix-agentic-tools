@@ -7,10 +7,13 @@ IMPORT_FROM_FILE: @repo
 [MECHANISM]
 UID: MECH-SDOC-BOARD-STABLE-CACHE-IDENTITY
 TITLE: The board reuses StrictDoc native pickles through a stable workspace output identity
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 The workspace derives a persistent state directory from the resolved project-root identity and supplies one stable StrictDoc output directory on every hydration. ProjectConfig is constructed while cwd is the project root, preserving the repository cache namespace, and the stable output path preserves PickleCache entry keys across daemon restarts. The board adds no parsed-document or graph cache of its own; full index reconstruction remains the cold-start and recovery path.
+<<<
+NOTES: >>>
+Implemented 2026-08-30. The default state path is ~/.cache/sdoc-board/<sha256 of resolved root>, its strictdoc-output child is stable across process launches, and ProjectConfig construction still occurs after chdir to the root. A same-root two-hydration probe reduced total load time from 3411.944 ms to 632.702 ms with identical output and native cache paths.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -22,3 +25,8 @@ RELATIONS:
 - TYPE: Parent
   VALUE: EV-SDOC-BOARD-CACHE-IDENTITY-PROBE
   ROLE: Proven_By
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-RESIDENT-HYDRATION
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: docs/sdoc/board/workspace.py

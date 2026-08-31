@@ -11,17 +11,19 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from server import SnapshotStore, build_server
+from server import build_server
 from snapshot import SCHEMA, compile_snapshot, load_project
+from workspace import Workspace
 
 
 class BoardContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.project_root = Path(__file__).resolve().parents[3]
-        cls.cache = tempfile.TemporaryDirectory(prefix="sdoc-board-test-")
-        cls.loaded = load_project(cls.project_root, Path(cls.cache.name))
-        cls.server = build_server(SnapshotStore(cls.loaded), "127.0.0.1", 0)
+        cls.state = tempfile.TemporaryDirectory(prefix="sdoc-board-test-")
+        cls.workspace = Workspace(cls.project_root, Path(cls.state.name))
+        cls.loaded = cls.workspace.hydrate().loaded
+        cls.server = build_server(cls.workspace, "127.0.0.1", 0)
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
         host, port = cls.server.server_address[:2]
@@ -32,7 +34,27 @@ class BoardContractTest(unittest.TestCase):
         cls.server.shutdown()
         cls.server.server_close()
         cls.thread.join(timeout=5)
-        cls.cache.cleanup()
+        cls.state.cleanup()
+
+    def test_failed_reload_retains_the_published_generation(self) -> None:
+        calls = 0
+
+        def load_then_fail(project_root: Path, output_dir: Path):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return self.loaded
+            raise RuntimeError("injected hydration failure")
+
+        with tempfile.TemporaryDirectory(prefix="sdoc-board-failure-") as state:
+            workspace = Workspace(
+                self.project_root, Path(state), loader=load_then_fail
+            )
+            first = workspace.hydrate()
+            with self.assertRaisesRegex(RuntimeError, "injected"):
+                workspace.reload()
+            self.assertIs(workspace.current(), first)
+            self.assertEqual(workspace.describe()["generation"], 1)
 
     def test_snapshot_preserves_loaded_nodes_and_relation_endpoints(self) -> None:
         snapshot = self.loaded.snapshot
@@ -67,6 +89,10 @@ class BoardContractTest(unittest.TestCase):
             payload = json.load(response)
             self.assertEqual(response.status, 200)
             self.assertEqual(payload["schema"], SCHEMA)
+            self.assertEqual(
+                int(response.headers["X-SDoc-Board-Generation"]),
+                self.workspace.current().number,
+            )
 
         request = urllib.request.Request(
             f"{self.base_url}/api/graph", method="HEAD"
@@ -93,6 +119,28 @@ class BoardContractTest(unittest.TestCase):
         self.assertEqual(error.exception.code, 405)
         self.assertEqual(error.exception.headers["Allow"], "GET, HEAD")
         error.exception.close()
+
+    def test_workspace_retains_state_and_uses_one_stable_output_identity(
+        self,
+    ) -> None:
+        first = self.workspace.current()
+        self.assertIs(self.workspace.current(), first)
+        self.assertEqual(
+            Path(first.loaded.project_config.output_dir),
+            self.workspace.output_dir,
+        )
+
+        replacement = self.workspace.reload()
+        self.assertEqual(replacement.number, first.number + 1)
+        self.assertIsNot(replacement.loaded, first.loaded)
+        self.assertEqual(
+            Path(replacement.loaded.project_config.output_dir),
+            self.workspace.output_dir,
+        )
+        self.assertEqual(
+            replacement.loaded.project_config.dir_for_sdoc_cache,
+            first.loaded.project_config.dir_for_sdoc_cache,
+        )
 
 
 if __name__ == "__main__":

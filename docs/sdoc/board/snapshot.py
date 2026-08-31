@@ -13,11 +13,30 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Iterable
 
 from strictdoc.api import Parallelizer, ProjectConfigLoader, TraceabilityIndexBuilder
 
 SCHEMA = "sdoc-board/1"
+
+
+@dataclass(frozen=True)
+class HydrationMetrics:
+    """Measured cold-path phases for one StrictDoc hydration."""
+
+    config_ms: float
+    index_ms: float
+    snapshot_ms: float
+    total_ms: float
+
+    def as_dict(self) -> dict[str, float]:
+        return {
+            "configMs": round(self.config_ms, 3),
+            "indexMs": round(self.index_ms, 3),
+            "snapshotMs": round(self.snapshot_ms, 3),
+            "totalMs": round(self.total_ms, 3),
+        }
 
 
 @dataclass(frozen=True)
@@ -27,6 +46,7 @@ class LoadedProject:
     project_config: Any
     traceability_index: Any
     snapshot: dict[str, Any]
+    hydration: HydrationMetrics
 
 
 def find_project_root(start: Path) -> Path:
@@ -40,23 +60,28 @@ def find_project_root(start: Path) -> Path:
     raise FileNotFoundError(f"no strictdoc_config.py above {start}")
 
 
-def load_project(project_root: Path, cache_dir: Path) -> LoadedProject:
+def load_project(project_root: Path, output_dir: Path) -> LoadedProject:
     """Load StrictDoc once and retain its in-memory index beside the snapshot."""
     project_root = find_project_root(project_root)
+    output_dir.mkdir(parents=True, exist_ok=True)
     previous = Path.cwd()
     chatter = io.StringIO()
     parallelizer = Parallelizer.create(False, dynamic=True)
+    started_at = perf_counter()
     try:
         os.chdir(project_root)
         with contextlib.redirect_stdout(chatter):
+            config_started_at = perf_counter()
             project_config = ProjectConfigLoader.load(
-                input_path=str(project_root), output_dir=str(cache_dir)
+                input_path=str(project_root), output_dir=str(output_dir)
             )
+            config_finished_at = perf_counter()
             traceability_index = TraceabilityIndexBuilder.create(
                 project_config=project_config,
                 parallelizer=parallelizer,
                 skip_source_files=True,
             )
+            index_finished_at = perf_counter()
     except BaseException:
         print(chatter.getvalue(), end="")
         raise
@@ -65,7 +90,14 @@ def load_project(project_root: Path, cache_dir: Path) -> LoadedProject:
         os.chdir(previous)
 
     snapshot = compile_snapshot(project_root, traceability_index)
-    return LoadedProject(project_config, traceability_index, snapshot)
+    finished_at = perf_counter()
+    hydration = HydrationMetrics(
+        config_ms=(config_finished_at - config_started_at) * 1000,
+        index_ms=(index_finished_at - config_finished_at) * 1000,
+        snapshot_ms=(finished_at - index_finished_at) * 1000,
+        total_ms=(finished_at - started_at) * 1000,
+    )
+    return LoadedProject(project_config, traceability_index, snapshot, hydration)
 
 
 def _document_path(document: Any) -> str:

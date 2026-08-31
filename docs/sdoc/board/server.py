@@ -7,13 +7,13 @@ import argparse
 import json
 import mimetypes
 import sys
-import tempfile
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from snapshot import LoadedProject, find_project_root, load_project
+from snapshot import find_project_root
+from workspace import Workspace
 
 HERE = Path(__file__).resolve().parent
 STATIC_ROUTES = {
@@ -26,22 +26,12 @@ STATIC_ROUTES = {
 mimetypes.add_type("text/javascript", ".js")
 
 
-class SnapshotStore:
-    """The seam a future watcher swaps and a WebSocket broadcaster observes."""
-
-    def __init__(self, loaded: LoadedProject):
-        self.loaded = loaded
-        self.payload = json.dumps(
-            loaded.snapshot, ensure_ascii=False, separators=(",", ":")
-        ).encode("utf-8")
-
-
 class BoardServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, address: tuple[str, int], store: SnapshotStore):
+    def __init__(self, address: tuple[str, int], workspace: Workspace):
         super().__init__(address, BoardHandler)
-        self.store = store
+        self.workspace = workspace
 
 
 class BoardHandler(BaseHTTPRequestHandler):
@@ -74,22 +64,19 @@ class BoardHandler(BaseHTTPRequestHandler):
     def _serve(self, *, include_body: bool) -> None:
         path = urlsplit(self.path).path
         if path == "/api/graph":
+            state = self.server.workspace.current()
             self._respond(
                 HTTPStatus.OK,
                 "application/json; charset=utf-8",
-                self.server.store.payload,
+                state.payload,
                 include_body=include_body,
                 cache="no-store",
+                generation=state.number,
             )
             return
         if path == "/api/health":
-            snapshot = self.server.store.loaded.snapshot
             body = json.dumps(
-                {
-                    "ok": True,
-                    "schema": snapshot["schema"],
-                    "snapshotHash": snapshot["project"]["snapshotHash"],
-                },
+                {"ok": True, **self.server.workspace.describe()},
                 separators=(",", ":"),
             ).encode("utf-8")
             self._respond(
@@ -127,6 +114,7 @@ class BoardHandler(BaseHTTPRequestHandler):
         *,
         include_body: bool,
         cache: str = "no-cache",
+        generation: int | None = None,
     ) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
@@ -134,6 +122,8 @@ class BoardHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", cache)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
+        if generation is not None:
+            self.send_header("X-SDoc-Board-Generation", str(generation))
         self.send_header(
             "Content-Security-Policy",
             "default-src 'self'; connect-src 'self' ws:; img-src 'self' data:; "
@@ -144,8 +134,8 @@ class BoardHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
 
-def build_server(store: SnapshotStore, host: str, port: int) -> BoardServer:
-    return BoardServer((host, port), store)
+def build_server(workspace: Workspace, host: str, port: int) -> BoardServer:
+    return BoardServer((host, port), workspace)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -158,30 +148,37 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--host", default="127.0.0.1", help="bind address")
     parser.add_argument("--port", type=int, default=8765, help="bind port")
+    parser.add_argument(
+        "--state-dir",
+        type=Path,
+        help="persistent board state directory (default: derived from root)",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     project_root = find_project_root(args.root)
-    with tempfile.TemporaryDirectory(prefix="sdoc-board-") as cache:
-        print(f"sdoc-board: loading {project_root}", flush=True)
-        loaded = load_project(project_root, Path(cache))
-        store = SnapshotStore(loaded)
-        server = build_server(store, args.host, args.port)
-        host, port = server.server_address[:2]
-        stats = loaded.snapshot["stats"]
-        print(
-            f"sdoc-board: http://{host}:{port}/ "
-            f"({stats['nodes']} nodes, {stats['edges']} relations)",
-            flush=True,
-        )
-        try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            print("\nsdoc-board: stopping", flush=True)
-        finally:
-            server.server_close()
+    workspace = Workspace(project_root, args.state_dir)
+    print(f"sdoc-board: loading {project_root}", flush=True)
+    state = workspace.hydrate()
+    server = build_server(workspace, args.host, args.port)
+    host, port = server.server_address[:2]
+    stats = state.loaded.snapshot["stats"]
+    hydration = state.loaded.hydration.as_dict()
+    print(
+        f"sdoc-board: http://{host}:{port}/ "
+        f"({stats['nodes']} nodes, {stats['edges']} relations, "
+        f"hydrated in {hydration['totalMs']:.1f} ms)",
+        flush=True,
+    )
+    print(f"sdoc-board: state {workspace.state_dir}", flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nsdoc-board: stopping", flush=True)
+    finally:
+        server.server_close()
     return 0
 
 

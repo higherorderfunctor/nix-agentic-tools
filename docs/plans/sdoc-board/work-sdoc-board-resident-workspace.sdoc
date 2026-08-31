@@ -7,10 +7,13 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-SDOC-BOARD-RESIDENT-WORKSPACE
 TITLE: Extract and measure the resident board workspace
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Extract StrictDoc ownership from the HTTP server into a reusable Workspace, give each resolved root a stable state and output identity, retain one loaded TraceabilityIndex across requests, publish atomic generations, and expose hydration timing and cache paths. Update HTTP health and focused tests to prove repeated reads do not reload and failed reload cannot replace good state.
+<<<
+NOTES: >>>
+Implemented 2026-08-30. Added workspace.py, hydration phase metrics, stable per-root state/output identity, atomic generation replacement, generation-aware HTTP health and response headers, and two new resident-state contracts. All seven board Python contracts and Python compilation pass.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -22,3 +25,6 @@ RELATIONS:
 - TYPE: Parent
   VALUE: MECH-SDOC-BOARD-STABLE-CACHE-IDENTITY
   ROLE: Crosses
+- TYPE: Child
+  VALUE: EV-SDOC-BOARD-RESIDENT-HYDRATION
+  ROLE: Produces
