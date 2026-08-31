@@ -10,28 +10,27 @@ TITLE: A write parses its own file now and defers the whole-graph rebuild
 DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
-Reconciliation has two tiers, and the split is what makes deferral safe.
+A write is checked before any byte moves. The mutation applies in memory, the
+cross-document rules answerable from the held index run, every touched
+document is rendered to a string and that string is parsed -- and only then
+does the write reach the disk. A refusal moved nothing, so nothing is undone.
 
-Per write, immediately: re-parse the file just written, on its own. This costs
-about 0.4 ms and catches a document that will not parse, naming the write that
-caused it. It cannot see across documents.
+The whole-graph reload is deferred to the next read, and it is strictdoc's
+FULL load. A run of writes therefore pays one reload rather than one each.
 
-Deferred to the next operation needing a whole-graph view: rebuild the graph
-over the already-parsed documents. This is strictdoc's own build minus the file
-walk -- about 20 ms against about 500 ms for the walk-and-unpickle it skips --
-and it catches duplicate UIDs, dangling relation targets and missing required
-fields. The repository's role-aware cycle check runs alongside it, because
-strictdoc's own is inert on this corpus.
+A read reloads when the workspace is dirty from its own writes AND when the
+files changed underneath it. The second is not hypothetical: git rewrites the
+tree during a checkout or a rebase, and the daemon is not what runs git. The
+detector is a content hash over every .sdoc, .sgra and the project config,
+about 7 ms against a 550 ms reload -- content rather than modification time,
+because strictdoc's own transforms layer stamps every document on an edit.
 
-On failure the written bytes are restored AND the affected document is
-re-parsed and swapped back, then the rebuild is re-run before anything is
-served. Restoring bytes alone leaves a corrupt in-memory graph that a resident
-process would keep answering from -- the difference between a daemon and a
-one-shot command.
+Rollback survives beneath the save itself, where a partial filesystem write
+cannot be prevented by any check. Nothing above that layer depends on it.
 
-The builder exits the process on four failure paths and raises on others, so
-both SystemExit and the exception have to be caught. The daemon never runs
-under python -O, where the invariant asserts vanish.
+A failed load clears the held state. Leaving it set wedged the workspace
+permanently: every later read failed and repairing the file on disk did not
+help, because a rebuild over in-memory objects never re-read it.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -50,4 +49,13 @@ RELATIONS:
   VALUE: dev/scripts/scribe_workspace.py
 - TYPE: Parent
   VALUE: EV-SCRIBE-WORKSPACE-CONTRACTS
+  ROLE: Proven_By
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-DEFERRED-RELOAD-IS-FULL
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-VALIDATES-BEFORE-WRITING
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: EV-CHEAP-REBUILD-SKIPS-INLINE-LINKS
   ROLE: Proven_By

@@ -17,7 +17,7 @@ across ten invocations that each look normal. A refusal costs one
 interruption. The operator, or later the harness, is the scheduler; being
 told is the point.
 
-    scribe-client ping | info | reconcile | export --out DIR
+    scribe-client ping | info | reload | export --out DIR
 """
 
 from __future__ import annotations
@@ -102,7 +102,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("ping", help="is a daemon serving this workspace?")
     sub.add_parser("info", help="what the daemon holds")
-    sub.add_parser("reconcile", help="rebuild now rather than at the next read")
+    sub.add_parser("reload", help="rebuild now rather than at the next read")
     export = sub.add_parser("export", help="write the export JSON from the held graph")
     export.add_argument("--out", required=True, help="output directory")
     return parser.parse_args(argv)
@@ -111,7 +111,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 METHODS = {
     "ping": "daemon.ping",
     "info": "workspace.describe",
-    "reconcile": "workspace.reconcile",
+    "reload": "workspace.reload",
     "export": "workspace.export",
 }
 

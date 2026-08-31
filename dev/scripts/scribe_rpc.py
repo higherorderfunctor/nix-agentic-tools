@@ -38,7 +38,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from scribe_workspace import Reconcile, Workspace, WorkspaceError  # noqa: E402
+from scribe_workspace import Workspace, WorkspaceError  # noqa: E402
 
 SCHEMA = "scribe-rpc/1"
 MAX_REQUEST_BYTES = 16 * 1024 * 1024
@@ -47,7 +47,7 @@ METHODS = (
     "rpc.discover",
     "workspace.describe",
     "workspace.export",
-    "workspace.reconcile",
+    "workspace.reload",
 )
 
 
@@ -93,9 +93,8 @@ def _call(workspace: Workspace, method: str, params: dict) -> Any:
         }
     if method == "workspace.describe":
         return workspace.describe()
-    if method == "workspace.reconcile":
-        level = params.get("level")
-        workspace.reconcile(Reconcile(level) if level else None)
+    if method == "workspace.reload":
+        workspace.reload()
         return workspace.describe()
     if method == "workspace.export":
         output_dir = params.get("outputDir")

@@ -8,7 +8,7 @@ IMPORT_FROM_FILE: @repo
 UID: DEC-SCRIBE-DEFERS-THE-REBUILD
 TITLE: A write marks the graph dirty; the next read that needs it reconciles once
 AUTHORED_BY: llm
-STATUS: accepted
+STATUS: superseded
 RETIRES_ON: Reconciliation stops dominating the cost of a write batch, or strictdoc gains a document lifecycle primitive making an incremental path as safe as the rebuild.
 STATEMENT: >>>
 A write marks the workspace dirty rather than rebuilding the graph. The next
@@ -36,3 +36,7 @@ insertion would cost about 25 ms -- but amortized over a batch the difference
 stops mattering, so the plan takes the documented path and builds nothing that
 reaches into DocumentTree's internals.
 <<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-DEFERRED-RELOAD-IS-FULL
+  ROLE: Superseded_By

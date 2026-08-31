@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import tempfile
 import os
 import sys
 from pathlib import Path
@@ -485,9 +486,24 @@ class Graph:
                 path.unlink()
                 written.append(path)
                 continue
-            temporary = path.with_name(f".{path.name}.sdoc-tmp")
-            temporary.write_text(content, encoding="utf8")
-            temporary.replace(path)
+            # A UNIQUE temp name, not a deterministic one. Two writers on the
+            # same file -- a second scribe process, or fp-accept alongside one
+            # -- collided on a fixed `.<name>.sdoc-tmp`: one got ENOENT from
+            # replace() and the other read a half-written file. Hidden prefix
+            # so a crashed run cannot strand a visible sibling that a
+            # whole-project `strictdoc export .` would try to parse.
+            handle, temporary_name = tempfile.mkstemp(
+                dir=path.parent, prefix=f".{path.name}.", suffix=".sdoc-tmp"
+            )
+            temporary = Path(temporary_name)
+            try:
+                with os.fdopen(handle, "w", encoding="utf8") as stream:
+                    stream.write(content)
+                os.chmod(temporary, 0o644)
+                temporary.replace(path)
+            except BaseException:
+                temporary.unlink(missing_ok=True)
+                raise
             written.append(path)
         self._dirty.clear()
         self._removed.clear()
