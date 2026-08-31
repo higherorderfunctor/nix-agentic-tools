@@ -481,6 +481,10 @@
     opacity: 0.75;
     cursor: default;
   }
+  .tabgroup > .kicker {
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--line);
+  }
   /* provenance */
   .src {
     margin: 0;
@@ -1202,6 +1206,14 @@
   Object.keys(NAR).forEach(u=>LC[u.toLowerCase()]=u);
   // the canon root is the first root: the payload orders roots with the canon's own first
   const CANON=ROOTS[0]||null;
+  /* ---------- the tab strip: a vocabulary the canon declares ----------
+     DEC-TABS-ARE-A-DECLARED-VOCABULARY. TABS is the table's rows in the
+     table's order; a narrative with PLACE: tab joins the tab its own `tab`
+     field names, and MANY narratives in many systems may join one. Start and
+     Nodes are the page's own and are never rows. */
+  const TABS=Array.isArray(DATA.tabs)?DATA.tabs:[];
+  const tabHref=key=>`#/t/${encodeURIComponent(String(key))}`;
+  const TABTITLE={}; TABS.forEach(t=>TABTITLE[t.key]=t.title);
   // the legend of a root: the first narrative anywhere in its tree whose widget is legend
   const LEGENDOF={};
   ROOTS.forEach(r=>{ let found=null; (function walk(n){ if(found) return; if(n.widget==="legend"&&Array.isArray(n.legend)) found=n.legend; else (n.children||[]).forEach(walk); })(r); LEGENDOF[r.uid]=found||[]; });
@@ -1250,6 +1262,14 @@
   const systemsOf=uid=>{ const nd=NODES[uid]; return nd&&Array.isArray(nd.systems)?nd.systems:[]; };
   const nodeOn=uid=>{ const nd=NODES[uid]; if(!nd) return true; const sys=systemsOf(uid); return !sys.length||sys.some(x=>ON.has(x)); };
   const edgeOn=e=>nodeOn(e.from)&&nodeOn(e.to);
+  // a narrative sorts by the first system that holds it, in the systems
+  // table's order, so a tab reads model first and then each plan in turn
+  const SYSORDER=SYSTEMS.map(x=>x.name);
+  const sysRank=uid=>{ let best=SYSORDER.length; systemsOf(uid).forEach(x=>{ const i=SYSORDER.indexOf(x); if(i>=0&&i<best) best=i; }); return best; };
+  const CONTRIB={}; TABS.forEach(t=>CONTRIB[t.key]=[]);
+  Object.values(NAR).forEach(x=>{ if(x.place==="tab"&&x.tab!=null&&CONTRIB[x.tab]) CONTRIB[x.tab].push(x); });
+  Object.keys(CONTRIB).forEach(k=>CONTRIB[k].sort((a,b)=>sysRank(a.uid)-sysRank(b.uid)));
+  const contribsOn=key=>(CONTRIB[key]||[]).filter(contribShown);
   const selectedNodes=()=>Object.values(NODES).filter(nd=>nodeOn(nd.uid));
   const selectedEdges=()=>EDGES.filter(edgeOn);
   function setSelection(next){
@@ -1364,13 +1384,21 @@
 
   /* ---------- tree shape helpers (place words only) ---------- */
   const isRoot=n=>!PARENT[n.uid];
-  const ownsScreen=n=>isRoot(n)||n.place==="tab"||n.place==="screen";
-  const tabKids=n=>(n.children||[]).filter(c=>c.place==="tab");
+  const ownsScreen=n=>isRoot(n)||n.place==="screen";
+  // where a narrative is DRAWN: its own screen, the tab it joins, or Start
+  function homeOf(uid){
+    for(let u=uid;u;u=PARENT[u]){
+      const x=NAR[u]; if(!x) break;
+      if(x.place==="screen") return {kind:"screen",uid:u};
+      if(x.place==="tab"&&x.tab!=null&&TABTITLE[x.tab]!=null) return {kind:"tab",key:x.tab};
+      if(isRoot(x)) return {kind:"start"};
+    }
+    return {kind:"start"};
+  }
   const screenKids=n=>(n.children||[]).filter(c=>c.place==="screen");
   const stackKids=n=>(n.children||[]).filter(c=>c.place!=="tab"&&c.place!=="screen"&&!(n.widget==="glossary"&&c.place==null));
   // a glossary's terms: the narratives it contains that declare no place
   const termKids=n=>(n.children||[]).filter(c=>c.place==null);
-  function screenOf(uid){ let u=uid; while(NAR[u]&&!ownsScreen(NAR[u])) u=PARENT[u]; return u; }
   const subjectOf=n=>(n.over!=null&&NAR[n.over])?NAR[n.over]:n;
   const rowCount=n=>(n.rows||[]).length;
   // the rows that link a node: backlinks whose via is a link or a reference
@@ -1846,6 +1874,9 @@
   const NARRATIVE_DATA=["rows","strip","tally","index","list","glossary"];
   // the query words whose table is narratives (the other three are canon data)
   const NARRATIVE_QUERIES=["roots","terms"];
+  // a narrative whose whole body is other narratives drops with them
+  const narrativeData=n=>NARRATIVE_DATA.includes(n.widget)&&(n.query==null||NARRATIVE_QUERIES.includes(n.query));
+  const contribShown=x=>nodeOn(x.uid)&&!(narrativeData(x)&&!nodeOn(subjectOf(x).uid));
   function widgetBody(n,ctx){
     if(NARRATIVE_DATA.includes(n.widget)&&n.query==null&&!nodeOn(subjectOf(n).uid)) return h("p",{},offNote(subjectOf(n).uid));
     switch(n.widget){
@@ -1902,20 +1933,65 @@
     if(!prev&&!next) return null;
     return h("div",{class:"prevnext"},prev?h("a",{href:narHref(prev.uid)},"← ",prev.title):h("span"),next?h("a",{href:narHref(next.uid)},next.title," →"):h("span"));
   }
-  // the strip of tabs that frames a narrative: the nearest ancestor-or-self
-  // with tab children, unless that is the canon root (whose tabs are the page's)
-  function tabOwner(uid){
-    let u=uid;
-    while(u){ if(CANON&&u===CANON.uid) return null; if(tabKids(NAR[u]).length) return u; u=PARENT[u]; }
-    return null;
-  }
+  // the strip beside a screen: its sibling screens under the same container,
+  // so moving within one contribution never goes through the tab
   function subStrip(uid){
-    const owner=tabOwner(uid); if(!owner) return null;
-    const own=NAR[owner];
-    const entries=[{uid:owner,label:isRoot(own)?"Start":own.title},...tabKids(own).filter(tabShown).map(t=>({uid:t.uid,label:t.title}))];
-    let active=owner; for(let u=uid;u;u=PARENT[u]){ if(u!==owner&&tabKids(own).some(t=>t.uid===u)){ active=u; break; } }
-    const nav=h("nav",{class:"tabs sub scrollx","aria-label":"screens of "+own.title},entries.map(e=>h("a",{href:narHref(e.uid),"aria-current":e.uid===active?"page":null,title:e.label},e.label)));
-    return nav;
+    const n=NAR[uid]; if(!n||n.place!=="screen"||!PARENT[uid]) return null;
+    const sibs=screenKids(NAR[PARENT[uid]]).filter(c=>nodeOn(c.uid));
+    if(sibs.length<2) return null;
+    return h("nav",{class:"tabs sub scrollx","aria-label":"screens of "+NAR[PARENT[uid]].title},
+      sibs.map(c=>h("a",{href:narHref(c.uid),"aria-current":c.uid===uid?"page":null,title:c.title},c.title)));
+  }
+  // one tab: the union of every enabled system's contributions, grouped by
+  // system in the systems table's order
+  function screenTab(key,ctx={}){
+    const meta=TABS.find(x=>x.key===key);
+    if(!meta) return miss("No such tab.","#/start","start");
+    const all=CONTRIB[key]||[], on=all.filter(x=>nodeOn(x.uid)), off=all.length-on.length;
+    const seen=new Set(); on.forEach(x=>systemsOf(x.uid).forEach(y=>seen.add(y)));
+    const head=h("div",{class:"stack"},h("h1",{},meta.title),
+      meta.meaning?h("p",{class:"dim"},meta.meaning):null,
+      h("p",{class:"muted small"},plural(on.length,"contribution")," from ",plural(seen.size,"system"),
+        off?`, ${off} switched off`:""));
+    if(!on.length) return [head,h("p",{class:"muted"},"No enabled system contributes to this tab.")];
+    const groups=[];
+    SYSORDER.forEach(sname=>{ const g=on.filter(x=>SYSORDER[sysRank(x.uid)]===sname); if(g.length) groups.push([sname,g]); });
+    const rest=on.filter(x=>sysRank(x.uid)>=SYSORDER.length);
+    if(rest.length) groups.push([null,rest]);
+    return [head,...groups.map(([sname,g])=>h("div",{class:"stack tabgroup"},
+      sname?h("p",{class:"kicker"},sname):null,...g.map(x=>stacked(x,ctx))))];
+  }
+  // Start: every root narrative, the canon's own leading as the page's
+  // opening and the rest grouped by system. A root is not a tab any more, so
+  // a system with no root is still whole -- its narratives join the tabs they
+  // name, and every node of it is in the index.
+  function screenStart(ctx={}){
+    const on=ROOTS.filter(r=>nodeOn(r.uid));
+    const lead=CANON&&nodeOn(CANON.uid)?CANON:null;
+    const rest=on.filter(r=>r!==lead);
+    const out=[];
+    if(lead) out.push(...rootBlock(lead,ctx,true));
+    const groups=[];
+    SYSORDER.forEach(sname=>{ const g=rest.filter(r=>SYSORDER[sysRank(r.uid)]===sname); if(g.length) groups.push([sname,g]); });
+    const other=rest.filter(r=>sysRank(r.uid)>=SYSORDER.length);
+    if(other.length) groups.push([null,other]);
+    groups.forEach(([sname,g])=>out.push(h("div",{class:"stack tabgroup"},
+      sname?h("p",{class:"kicker"},sname):null,...g.flatMap(r=>rootBlock(r,ctx,false)))));
+    if(!out.length) out.push(h("p",{class:"muted"},"No enabled system has a document."));
+    // the canon-wide findings, plus every root's, in one place
+    const checks=CHECKS.filter(c=>c.root==null||NAR[c.root]&&nodeOn(c.root));
+    if(checks.length) out.push(h("section",{class:"card"},h("h2",{},plural(checks.length,"finding")),h("ul",{class:"plain checks"},checks.map(c=>h("li",{},h("div",{},h("span",{class:"chip"},h("b",{},c.rule))),nodeLink(c.at),h("span",{class:"text"},c.text))))));
+    return out;
+  }
+  // one root on Start: its own body, its stacked cards and sections, and an
+  // index of the screens it holds. Its tab children are drawn in their tabs.
+  function rootBlock(n,ctx,lead){
+    const kids=stackKids(n);
+    const body=[...narBody(n,ctx).flat().filter(Boolean),...kids.map(c=>stacked(c,ctx))];
+    const idx=autoIndex(n);
+    const inner=[...body,idx?h("section",{class:"sec"},h("h2",{},plural(screenKids(n).length,"screen")),idx):null,citesList(n)];
+    if(lead) return [h("div",{class:"stack",id:`nar-${n.uid}`},h("h1",{},n.title),h("div",{class:"row"},narChips(n),h("span",{class:"chip"},n.dir_class)),tagRow(n),srcLine(n.uid)),...inner];
+    return [h("section",{class:"sec",id:`nar-${n.uid}`},h("div",{class:"row"},h("h2",{},n.title)),tagRow(n),srcLine(n.uid),inner)];
   }
   function screenNar(uid,ctx={}){
     const n=NAR[uid];
@@ -1927,11 +2003,6 @@
     const below=new Set(); (function walk(k){ (k.cites||[]).forEach(x=>below.add(x.uid)); stackKids(k).forEach(walk); })({cites:[],children:kids});
     const cites=citesList(n,below); if(cites) out.push(cites);
     if(n.widget!=="rows"&&!isRoot(n)){ const lr=linkingRows(uid); if(lr) out.push(lr); }
-    if(isRoot(n)){
-      // the check findings under this root; the canon-wide ones go on the canon root's Start
-      const checks=CHECKS.filter(c=>c.root===n.uid||(c.root==null&&CANON&&n.uid===CANON.uid));
-      if(checks.length) out.push(h("section",{class:"card"},h("h2",{},plural(checks.length,"finding")),h("ul",{class:"plain checks"},checks.map(c=>h("li",{},h("div",{},h("span",{class:"chip"},h("b",{},c.rule))),nodeLink(c.at),h("span",{class:"text"},c.text))))));
-    }
     const idx=autoIndex(n); if(idx) out.push(h("section",{class:"sec"},h("h2",{},plural(screenKids(n).length,"screen")),idx));
     const pn=prevNext(n); if(pn) out.push(pn);
     return out;
@@ -1974,20 +2045,13 @@
   /* ---------- the header and the router ---------- */
   // a tab drops out of the strip when what it draws is switched off: a root
   // other than the canon's, or a tab whose widget's data is narratives
-  const narrativeData=n=>NARRATIVE_DATA.includes(n.widget)&&(n.query==null||NARRATIVE_QUERIES.includes(n.query));
-  const tabShown=t=>!(narrativeData(t)&&!nodeOn(subjectOf(t).uid));
   function topEntries(){
     const out=[{key:"start",label:"Start",href:"#/start"}];
-    if(CANON) tabKids(CANON).filter(tabShown).forEach(t=>out.push({key:t.uid,label:t.title,href:narHref(t.uid)}));
-    ROOTS.filter(r=>r!==CANON&&nodeOn(r.uid)).forEach(r=>out.push({key:r.uid,label:r.title,href:narHref(r.uid)}));
+    TABS.forEach(t=>{ if(contribsOn(t.key).length) out.push({key:t.key,label:t.title,href:tabHref(t.key)}); });
     out.push({key:"nodes",label:"Nodes",href:"#/nodes"});
     return out;
   }
-  function topKeyFor(uid){
-    const root=ROOTOF[uid]; if(!root) return "nodes";
-    if(CANON&&root===CANON.uid){ for(let u=uid;u;u=PARENT[u]){ if(tabKids(CANON).some(t=>t.uid===u)) return u; } return "start"; }
-    return root;
-  }
+  const topKeyFor=uid=>{ const home=homeOf(uid); return home.kind==="tab"?home.key:"start"; };
   function renderHeader(){
     const brand=document.getElementById("brand");
     brand.textContent=CANON?CANON.title:"Canon";
@@ -2009,19 +2073,31 @@
     let out, current=top, target=null, rootUid=CANON?CANON.uid:null;
     try{
       switch(top){
-        case "start": out=CANON?screenNar(CANON.uid):[h("p",{},"No roots in this payload.")]; current="start"; break;
+        case "start": out=screenStart(); current="start"; break;
+        case "t": {
+          const key=(parts[1]||"").toLowerCase();
+          const meta=TABS.find(x=>String(x.key).toLowerCase()===key);
+          if(!meta){ out=miss("No such tab.","#/start","start"); current="start"; break; }
+          out=screenTab(meta.key); current=meta.key; break; }
         case "n": {
           const uid=LC[(parts[1]||"").toLowerCase()];
           if(!uid||!NAR[uid]){ out=miss("No such screen.","#/start","start"); current="start"; break; }
           rootUid=ROOTOF[uid];
           if(!nodeOn(uid)){ out=[h("h1",{},NAR[uid].title),h("p",{},offNote(uid)),h("a",{href:"#/start"},"start")]; current=topKeyFor(uid); break; }
-          const owner=screenOf(uid);
+          const home=homeOf(uid);
           const ctx={};
           if(parts[2]==="row"&&parts[3]!=null) target=`row-${uid}-${parts[3]}`;
           else if(parts[2]!=null) ctx.word=parts[2];
-          if(owner!==uid&&!target) target=`nar-${uid}`;
-          if(CANON&&owner===CANON.uid){ out=screenNar(CANON.uid,ctx); current="start"; }
-          else { out=screenNar(owner,ctx); current=topKeyFor(owner); }
+          if(home.kind==="screen"){
+            if(home.uid!==uid&&!target) target=`nar-${uid}`;
+            out=screenNar(home.uid,ctx); current=topKeyFor(home.uid);
+          } else if(home.kind==="tab"){
+            if(!target) target=`nar-${uid}`;
+            out=screenTab(home.key,ctx); current=home.key;
+          } else {
+            if(!target) target=`nar-${uid}`;
+            out=screenStart(ctx); current="start";
+          }
           break; }
         case "nodes": {
           if(parts[1]){ const uid=LC[parts[1].toLowerCase()]||parts[1]; out=screenNode(uid); }

@@ -1,0 +1,76 @@
+[DOCUMENT]
+TITLE: The tab strip is a vocabulary the canon declares, and many narratives across many systems may join one tab
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-TABS-ARE-A-DECLARED-VOCABULARY
+TITLE: The tab strip is a vocabulary the canon declares, and many narratives across many systems may join one tab
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A view needs a tab no row of the table can name, or two views over the same canon need different strips.
+STATEMENT: >>>
+The tab strip is a DECLARED VOCABULARY, not a shape read off the tree. Its
+words are the rows of [LINK: NAR-CANON-TABS], a durable table in the spec: a
+tab's key, the label the strip shows, and what the tab is for.
+
+A narrative joins a tab by naming that tab's key in its TAGS -- the same way a
+narrative already names a query word, `term`, or `systems`. MANY narratives, in
+many systems, may name the SAME tab, and the tab's screen is the union of all
+of them: every contribution whose system is switched on, grouped by system, in
+the order the systems table declares. That is what makes the page the sum of
+the selected systems rather than one page per document.
+
+PLACE is unchanged for `screen`, `section` and `card`, and keeps the meaning
+[LINK: DEC-NARRATIVE-DECLARES-ITS-PLACE] gave it. What changes is `tab`: a
+narrative with `PLACE: tab` is a CONTRIBUTION to the tab its TAGS name, not a
+tab of its own, and its TITLE is a heading inside that tab rather than the
+strip's label.
+
+Two tabs are the page's own and are not rows of the table. NODES is the index
+over every node in the selection. START is the aggregate opening: EVERY root
+narrative lands there, its own body, its cards and sections, and an index of
+its screens, grouped by system -- so a root is no longer a tab, and a system
+with no root narrative at all is still reachable through the tabs its
+narratives join and through Nodes. A tab drops out of the strip when no enabled
+system contributes to it.
+<<<
+RATIONALE: >>>
+[LINK: DEC-NARRATIVE-DECLARES-ITS-PLACE] fixed the right problem -- the second
+render guessed placement from tree depth -- but left tab IDENTITY as the
+narrative's own UID, so two systems could not contribute to one tab. The strip
+was therefore the canon root's tab children plus one entry per other root, and
+documenting a new part of the repository added a tab instead of filling the
+tabs already there.
+
+The measured tell was already in the data: eleven narratives declared
+`PLACE: tab` and carried only SEVEN distinct titles. Edges appeared three
+times, Types twice, Words twice -- the same five categories, re-declared once
+per document, because there was no way to say "this is the Edges tab" that two
+documents could both say. The stable vocabulary a reader wants was present and
+had no key to group on.
+
+Naming the tab in TAGS costs no grammar change and no payload field: TAGS is
+already free text, already emitted verbatim, and already the carrier for every
+other word the view reads off a narrative. Putting the vocabulary in a spec
+table rather than in the renderer keeps
+[LINK: REQ-VIEW-RENDERER-IS-CONTENT-BLIND]: the page knows that a tabs table
+exists, exactly as it knows a systems table exists, and knows none of its words.
+<<<
+NOTES: >>>
+Ruled 2026-08-30 as a first-pass decision under the operator's standing
+delegation, on their reading of the render: "the semantic layer is what I was
+expecting just with like more dynamic front end. the sum of all selected
+systems." Overrule by superseding. AUTHORED_BY reads llm because the writer has
+no flag for the human rungs.
+
+The five words are v1's, minus the two the page owns: v1 hard-coded
+start, types, edges, topics, gaps, nodes, words. What was a literal in a
+renderer is a table in the canon here, so a sixth tab is an edit to the canon.
+
+Open, and deliberately not decided here: whether a tab that aggregates two
+systems shows one legend or one per system. Every system's legend words differ
+today and their colours collide, so the first tab to aggregate two of them will
+make the question concrete.
+<<<

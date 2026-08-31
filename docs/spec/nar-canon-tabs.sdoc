@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: The tabs, and what each is for
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-CANON-TABS
+TITLE: The tabs, and what each is for
+DEPTH: interface-settled
+AUTHORED_BY: llm
+WIDGET: table
+PLACE: card
+TAGS: tabs
+STATEMENT: >>>
+| tab | title | meaning |
+| types | Types | the kinds of node the canon is written in, and the state fields each carries |
+| edges | Edges | which relations are allowed, which are drawn, and where a fingerprint may point |
+| topics | Topics | what each system says about its own subject, one screen per topic |
+| gaps | Gaps | where the design is unfinished, contradictory, or owned by nobody |
+| words | Words | the ruled vocabulary, each term citing the decision that ruled it |
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-TABS-ARE-A-DECLARED-VOCABULARY
+  ROLE: Cites

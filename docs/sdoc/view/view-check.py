@@ -122,6 +122,13 @@ SYSTEMS_HEADER = ("system", "sources", "switch", "meaning")
 # A system row's switch column. "always" pins the system on; the reader may
 # not turn it off (DEC-SYSTEM-IS-A-SOURCE-SET).
 SWITCH_WORDS = ("always", "optional")
+# The tabs table (DEC-TABS-ARE-A-DECLARED-VOCABULARY). A narrative joins a tab
+# by naming its key in TAGS; start and nodes are the page's own and are never
+# rows of the table.
+TABS_HEADER = ("tab", "title", "meaning")
+PAGE_TABS = ("start", "nodes")
+# TAGS words the view already reads for something other than a tab.
+RESERVED_TAGS = ("systems", "tabs", "term")
 
 # strictdoc's inline link token. The export keeps it literal.
 LINK_RE = re.compile(r"\[LINK:\s*([^\]\s]+)\s*\]")
@@ -781,6 +788,12 @@ class Canon:
         directory = path.rsplit("/", 1)[0] if path and "/" in path else (path or "~")
         return (0 if cls == "spec" else 1, directory, uid)
 
+    def tabs_narrative(self):
+        """The one narrative tagged tabs, or None. Its shape is checked under
+        tabs-table; queries.py parses it."""
+        tagged = [uid for uid, node in self.by_uid.items() if is_narrative(node) and "tabs" in tags_of(node)]
+        return tagged[0] if len(tagged) == 1 else None
+
     def systems_narrative(self):
         """The one narrative tagged systems, or None. Its shape is checked
         under systems-table; queries.py parses it."""
@@ -828,6 +841,8 @@ class Canon:
                     if unheld:
                         self._find("systems-table", uid, f"no system holds {', '.join(unheld)}; a node no switch can show is unreachable")
 
+        self._tabs_rules()
+
         for _doc, node in iter_nodes(self.index):
             if is_narrative(node) or "UID" not in node:
                 continue
@@ -838,6 +853,56 @@ class Canon:
             for parent, _digest in parse_parent_fp(node.get("PARENT_FP")):
                 if is_narrative(self.by_uid.get(parent)):
                     self._find("nothing-depends-on-a-narrative", uid, f"{uid} carries a PARENT_FP entry for the narrative {parent}")
+
+    def _tabs_rules(self) -> None:
+        tagged = sorted(uid for uid, node in self.by_uid.items() if is_narrative(node) and "tabs" in tags_of(node))
+        if not tagged:
+            self._find("tabs-table", "canon", "no narrative is tagged tabs; the tab strip (DEC-TABS-ARE-A-DECLARED-VOCABULARY) has nowhere to come from")
+            return
+        if len(tagged) > 1:
+            self._find("tabs-table", tagged[1], f"{len(tagged)} narratives are tagged tabs ({', '.join(tagged)}); the table is one narrative")
+            return
+        uid = tagged[0]
+        node = self.by_uid[uid]
+        if widget_of(node) != "table":
+            self._find("tabs-table", uid, f"{uid} is tagged tabs but its WIDGET is {widget_of(node)}, not table")
+            return
+        parsed = parse_statement(node.get("STATEMENT") or "", "table")
+        header = [h.lower() for h in (parsed["table"] or {}).get("header", [])]
+        missing = [h for h in TABS_HEADER if h not in header]
+        if missing:
+            self._find("tabs-table", uid, f"{uid}'s header lacks {', '.join(missing)}; the tabs table is {' | '.join(TABS_HEADER)}")
+            return
+        col = {h: header.index(h) for h in TABS_HEADER}
+        keys = []
+        for row in (parsed["table"] or {}).get("rows", []):
+            if len(row) < len(header):
+                continue
+            key = row[col["tab"]].strip()
+            if key in keys:
+                self._find("tabs-table", uid, f"{uid} names the tab {key!r} twice; a key is one row")
+            if key in PAGE_TABS:
+                self._find("tabs-table", uid, f"{uid} declares {key!r}, which the page owns; the table names only the tabs between Start and Nodes")
+            if key in RESERVED_TAGS or key in QUERY_WORDS:
+                self._find("tabs-table", uid, f"{uid} declares the tab {key!r}, but the view already reads that TAGS word for something else")
+            keys.append(key)
+        # every PLACE: tab narrative joins exactly one declared tab, and every
+        # declared tab has somebody joining it -- a tab nobody joins is a strip
+        # entry that opens on nothing
+        joined = {}
+        for u, nd in self.by_uid.items():
+            if not is_narrative(nd) or place_of(nd) != "tab":
+                continue
+            named = [t for t in tags_of(nd) if t in keys]
+            if not named:
+                self._find("tab-membership", u, f"{u} has PLACE: tab but its TAGS name no tab; the keys are {', '.join(keys)}")
+            elif len(named) > 1:
+                self._find("tab-membership", u, f"{u} names {len(named)} tabs ({', '.join(named)}); a contribution joins one")
+            else:
+                joined.setdefault(named[0], []).append(u)
+        for key in keys:
+            if key not in joined:
+                self._find("tabs-table", uid, f"no narrative joins the tab {key!r}; a declared tab nobody joins opens on nothing")
 
     def all_findings(self) -> list:
         out = []

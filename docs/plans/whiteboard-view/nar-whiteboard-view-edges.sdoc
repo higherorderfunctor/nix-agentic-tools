@@ -11,6 +11,7 @@ DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: edges
 PLACE: tab
+TAGS: edges
 STATEMENT: >>>
 Which kinds of node point at which among the nodes this page cites, with the live count on each arrow. An arrow runs from the node that depends to the node depended on, which is the direction a Parent relation is written. Every arrow into a narrative should be a Cites or a Contains from another narrative; anything else is a finding on the start screen.
 <<<

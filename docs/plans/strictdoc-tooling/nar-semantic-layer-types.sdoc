@@ -11,6 +11,7 @@ DEPTH: sketch
 AUTHORED_BY: llm
 WIDGET: tally
 PLACE: tab
+TAGS: types
 STATEMENT: >>>
 Node types come in four families, and only the first is a grid ([LINK: DEC-NODE-FAMILIES]). Definition holds the claims the canon asserts, on two axes -- normative or descriptive, universal or particular -- so a requirement is what must always hold, a decision what was chosen here, a mechanism how the system always behaves, and evidence what was observed once. Coverage is the use case, covered or uncovered. Representation is the narrative, which presents and is never presented. Work is something to do, and dies with its plan. The bars below count the rows of the sheet that speak about each kind, by verdict word.
 <<<
