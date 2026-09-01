@@ -42,6 +42,55 @@ does not need it: the prek hooks resolve their config from the primary checkout,
 so a worktree that has never entered a shell validates exactly like one that
 has.
 
+## Running the scribe daemon
+
+`scribe` and every writing command talk to a resident daemon holding one loaded
+graph per worktree. Without one they fail closed, naming the socket and the
+command that starts it; there is deliberately no fallback.
+
+From this worktree, inside a devenv shell:
+
+| what                                         | command                            |
+| -------------------------------------------- | ---------------------------------- |
+| up, foreground — holds the pane, logs inline | `devenv up scribe`                 |
+| up, background                               | `devenv up -d scribe`              |
+| down                                         | Ctrl-C, or `devenv processes down` |
+| restart after editing the writer             | `devenv processes restart scribe`  |
+| is the manager alive?                        | `devenv processes list`            |
+| is the daemon up?                            | `scribe-client ping`               |
+| what does it hold?                           | `scribe-client info`               |
+
+The client walks up from the working directory for `strictdoc_config.py`, the
+same marker the writer uses, so the bare forms work from anywhere inside the
+worktree; `--root` is for calling from outside one.
+
+**Restart after every edit under `dev/scripts/`.** The daemon imports those
+modules once, at startup, so a change on disk does nothing until it restarts and
+nothing warns you that you are running the old code. `restart` needs the process
+manager alive, which means either `-d` or a pane sitting in `devenv up`.
+
+**It is not auto-started.** A task running before `enterShell` fires on every
+shell entry — this worktree recorded over seventy in a week — so an unguarded
+one would spawn duplicates, and guarding it needs the task system's `status`
+probe, which nothing in this repository uses yet.
+
+**An orphan needs a direct kill.** The daemon runs in the foreground and writes
+no pid file, deliberately: devenv's process manager owns the lifecycle. So when
+that manager dies and leaves the daemon reparented to `systemd --user`,
+`devenv processes down` has nothing left to stop it with.
+
+```bash
+pkill -f "$PWD/dev/scripts/scribe_daemon.py"
+```
+
+The full path is what keeps that from reaching another worktree's daemon. It
+traps SIGTERM and prints `scribe-daemon: stopped`.
+
+The socket is derived, never configured, so a server and a client that never met
+agree on it: `$XDG_RUNTIME_DIR/scribe/<slug>-<hash8>.sock`. Its EXISTENCE is the
+readiness signal — hydration finishes before the bind, so a client that connects
+has a daemon ready to answer.
+
 ## The vocabulary is migrated — read the tag, not the prefix
 
 On 2026-08-30 the node-type families landed (`DEC-NODE-FAMILIES`, docs/spec):
