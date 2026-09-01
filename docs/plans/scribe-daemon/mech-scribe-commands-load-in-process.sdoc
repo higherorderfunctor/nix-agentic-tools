@@ -1,40 +1,37 @@
 [DOCUMENT]
-TITLE: Every scribe command still loads the graph itself
+TITLE: No scribe command loads a graph of its own any more
 
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
 [MECHANISM]
 UID: MECH-SCRIBE-COMMANDS-LOAD-IN-PROCESS
-TITLE: Every scribe command still loads the graph itself
-DEPTH: sketch
+TITLE: No scribe command loads a graph of its own any more
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
-Every scribe command -- show, list, check, new, set, relate and the rest --
-still loads the whole graph in its own process, about a second each. The
-daemon serves the render and nothing else.
+Every scribe command is a typed operation against the graph the daemon already
+holds. The client parses its own command line -- it can, because the option
+surface comes from the grammar FILE and needs no corpus -- and sends an
+operation. The daemon validates that operation against the held graph and
+never sees an argv. No command loads a graph of its own.
 
-Pointing them at the socket is not the work. `scribe new` loads the graph
-three times: at startup, again to resolve the grammar alias on the file it
-just created, and again at the end inside finish() -> verify() to prove the
-written file did not break the corpus. Run that same code inside the daemon
-and the third load still happens, so the command costs what it costs today
-with a socket added in the middle.
+The last one that did was `new`, which reloaded mid-operation to resolve the
+grammar alias on the file it had just written. That stopped on 2026-09-01:
+[LINK: MECH-SCRIBE-NEW-BUILDS-THE-DOCUMENT].
 
-The workspace already replaces that third load -- parse only the file just
-written, defer the whole-graph check to the next read -- but verify() is
-called from finish(), which every writing command goes through. So the
-commands move only once their verification is the workspace's rather than
-their own, and that is a change to the existing CLI, not to transport.
-
-The likely shape afterwards is one socket call carrying the command line,
-dispatched inside the daemon against the held graph, since main() already
-takes only a graph and a root.
+What this node predicted got one thing right and one thing wrong, and the
+wrong one is worth keeping. RIGHT: the commands could not move until their
+verification was the workspace's rather than finish() -> verify()'s, which is
+a change to the writer and not to transport. WRONG: the shape was expected to
+be one socket call carrying the command line, and the seam is TYPED instead.
+A daemon that parsed an argv would have to own the caller's working directory
+and the caller's stdin, which is where `@file` and `-` are resolved.
 <<<
 RELATIONS:
 - TYPE: Parent
-  VALUE: MECH-BACKLOG-SCRIBE-DAEMON
-  ROLE: Backlogged_In
-- TYPE: Parent
   VALUE: MECH-SCRIBE-RPC
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-NEW-BUILDS-THE-DOCUMENT
   ROLE: Assumes

@@ -1,23 +1,28 @@
 [DOCUMENT]
-TITLE: scribe new writes its skeleton to disk before validation, even under --dry-run
+TITLE: A create is a pure in-memory proposal, dry run or not
 
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
 [MECHANISM]
 UID: MECH-SCRIBE-NEW-TOUCHES-DISK-UNDER-DRY-RUN
-TITLE: scribe new writes its skeleton to disk before validation, even under --dry-run
-DEPTH: sketch
+TITLE: A create is a pure in-memory proposal, dry run or not
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
-`scribe new` writes a header-only skeleton to DISK and reloads the canon before
-the node is validated, and it does so under --dry-run too: the skeleton is
-unlinked again at the end of the dry run (sdoc_cli.py:416-426, :647-648). A
-create is therefore never a pure in-memory proposal, and a joint fired "before
-the write" on `new` has already seen a file appear. Measured 2026-08-28 while
-inventorying scribe's phases for the hook layer.
+A create is a pure in-memory proposal. The document is built in memory, joins
+pending() like every other edit, and reaches the disk only in save(): under
+--dry-run the whole new file prints as an addition and nothing is written, and
+a refused create leaves no skeleton behind. A joint fired "before the write"
+on `new` can therefore be taken at its word.
+
+How the document is built without a reload is
+[LINK: MECH-SCRIBE-NEW-BUILDS-THE-DOCUMENT].
+
+THIS NODE RECORDS A DEFECT THAT IS NOW FIXED, and is kept rather than deleted
+([LINK: DEC-NO-DELETES-YET]). Until 2026-09-01 `scribe new` wrote a
+header-only skeleton to DISK and reloaded the canon before the node was
+validated, under --dry-run too, where the skeleton was unlinked again at the
+end of the run. Measured 2026-08-28 while inventorying scribe's phases for the
+hook layer, which is what it was filed against.
 <<<
-RELATIONS:
-- TYPE: Parent
-  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
-  ROLE: Backlogged_In
