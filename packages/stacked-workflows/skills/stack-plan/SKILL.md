@@ -386,9 +386,17 @@ only the final tree state matters.
    Remove any untracked artifacts that weren't in the original tree.
 
 5. **Run tests** if a test command is identifiable:
+
    ```bash
-   git test run -x '<test-command>' 'stack()'
+   git test run -x '<test-command>' --jobs <N> '<revset>'
    ```
+
+   Pick `<revset>` per **Choosing the test revset** in
+   `references/git-branchless.md`. Restructuring is one of the cases that argues
+   for `stack()` even inside a single PR — the intermediate commits are newly
+   built and untested — but say so rather than widening silently, and size `<N>`
+   by memory, not cores.
+
    Report any commits that break the build.
 
 ## Tips

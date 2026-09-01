@@ -77,11 +77,20 @@ as a revset to select which commits to submit. Default is the current stack.
    commits conflict. Ask if they want to resolve with `git sync --merge` or
    handle individually with `git move -b <hash> -d main --merge`.
 
-4. **Run tests across the stack** to validate each commit independently:
+4. **Run tests across the stack** to validate each commit independently. This is
+   the one case where `stack()` is unambiguously right: every commit here is
+   about to become its own PR, so every commit has to stand alone.
 
    ```bash
-   git test run -x '<test-command>' 'stack()'
+   git test run -x '<test-command>' --jobs <N> 'stack()'
    ```
+
+   Size `<N>` by **memory**, not cores — see **Sizing `--jobs`** in
+   `references/git-branchless.md`. Each job is a separate worktree with no
+   shared cache, so peak usage is `jobs x per-job footprint`. Never pass
+   `--jobs 0` — it means one job per physical CPU and overrides any bound the
+   machine's config set, which for a multi-GB command such as `nix flake check`
+   exhausts RAM.
 
    Determine the test command from the project (package.json scripts, Makefile,
    Cargo.toml, etc.). If no obvious test command exists, ask the user. If the

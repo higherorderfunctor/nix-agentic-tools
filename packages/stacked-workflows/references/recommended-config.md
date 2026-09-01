@@ -85,11 +85,16 @@ These improve the development experience.
   autoSwitchBranches = true
 
 [branchless "test"]
-  # Use worktrees for test execution — enables parallelism and avoids
-  # dirtying the working copy
+  # Run tests in a managed worktree rather than the working copy. The default
+  # is working-copy, which needs a clean tree; worktree isolates each commit
+  # and tolerates a dirty one.
   strategy = worktree
-  # Use all available CPU cores for parallel testing
-  jobs = 0
+  # Pin the job count. Worktree isolation is what makes fan-out possible, so
+  # this belongs next to it: `0` means one job per physical CPU, and seven
+  # concurrent `nix flake check` evaluators is ~24 GB. `1` matches the
+  # upstream default; raise it per command with `--jobs N`, which overrides
+  # this value in both directions.
+  jobs = 1
 ```
 
 ### git-revise
@@ -160,7 +165,7 @@ Convenience settings that some users prefer.
 | `branchless.revsets.alias.<name>`                | string | —                                                        | Custom revset aliases                                  |
 | `branchless.smartlog.defaultRevset`              | revset | `((draft()\|branches()\|@) % main()) \| branches() \| @` | Default smartlog display                               |
 | `branchless.test.alias.<name>`                   | string | —                                                        | Named test command aliases                             |
-| `branchless.test.jobs`                           | int    | 1                                                        | Parallel test jobs (0 = auto)                          |
+| `branchless.test.jobs`                           | int    | `1`                                                      | Parallel test jobs (`0` = one job per physical CPU)    |
 | `branchless.test.strategy`                       | enum   | `working-copy`                                           | Test execution strategy (`working-copy` or `worktree`) |
 | `branchless.undo.createSnapshots`                | bool   | `true`                                                   | Working copy snapshots before destructive ops          |
 | `remote.pushDefault`                             | string | —                                                        | Default remote for `git submit --create`               |

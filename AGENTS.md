@@ -557,45 +557,52 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-29 (commit pending — `devenv-test` no longer runs
-> automatically; its full shell smoke suite is an on-demand diagnostic, while
-> extracted runtime contracts and all code-validator corpora now run inside the
-> existing required `test` context. The six-context ruleset is unchanged).
-> Prior: 2026-08-19 (commit pending — the rebase backup advice recommended a
-> local TAG, reasoning that `--update-refs` moves branches but not tags. True,
-> but incomplete: tags are refs in the COMMON git dir, so a fetch from ANY
-> worktree can prune them all in one shot when `fetch.pruneTags` is set, which
-> is a global (not per-repo) git config setting — measured twice on 2026-08-15,
-> the second time by the same session's own fetch. Neither a local tag nor a
-> local branch survives both hazards; only a ref actually pushed to `origin`
-> does. Backup guidance now says `git push origin refs/heads/archive/<slug>`,
-> created and pushed in the same sequence as the rebase rather than verified
-> afterward, since verifying is itself a fetch that can destroy the thing being
-> verified. Also adds local tags to the shared-across-worktrees list, since the
-> root cause is that tags are common-dir refs, not anything about rebasing
-> specifically.) Prior: 2026-08-18 (commit pending — the per-worktree bootstrap
-> requirement is GONE. The shared prek hooks now resolve
-> `.pre-commit-config.yaml` from the PRIMARY CHECKOUT, derived from the shared
-> common git dir, so a linked worktree that has never entered `devenv shell`
-> commits fine. `PREK_HOME` stays anchored to the committing worktree, because
-> under the agent sandbox the primary checkout is a read-only bind. Written for
-> the sandbox-stack pivot's "devenv is never activated in a worktree" topology
-> (#1106), under which the old model rejected every worktree commit by design.
-> Do NOT re-add a `devenv shell` step to the worktree recipe below.) Prior:
-> 2026-08-17 (commit pending — shared prek hooks now derive `PREK_HOME` from the
-> committing worktree, so commits launched outside a devenv shell retain
-> isolated project-local state instead of falling back to the user-global XDG
-> cache; the bootstrap diagnostic now names shell entry as the only
-> materialization path, and shared-hook rewrites serialize and publish by atomic
-> rename). Prior: 2026-08-15 (commit pending — adds the adversarial
-> subagent-review protocol that SUBSTITUTES for the Copilot loop while its quota
-> is exhausted, roughly two weeks from 2026-08-15. Written because an agent
-> cannot review its own output, and because the operator had been having to ask
-> for an independent reviewer by hand each time. Includes the refuter+defender
-> pairing and the never-self-adjudicate rule, both of which exist because
-> refute-by-default on your own work is a second discard filter rather than a
-> check). Prior: 2026-08-14 (commit pending — TWO corrections. (1) The
-> required-status-check list said FOUR; there are SIX, both `kiro-patched`
+> **Last verified:** 2026-09-01 (commit pending — the fix-and-re-review loop is
+> now ONE round, not five. Round one is the free automatic review; a second is
+> earned only by a significant change in what there is to review, never by
+> having applied round one's own findings. Operator instruction 2026-09-01,
+> after exhausting a usage allowance in about ten days under the five-round
+> rule. This supersedes a temporary one-review credit budget that ran through
+> 2026-08-31 and was deliberately kept OUT of this fragment as dated; the new
+> rule is standing policy, so it belongs here). Prior: 2026-08-29 (commit
+> pending — `devenv-test` no longer runs automatically; its full shell smoke
+> suite is an on-demand diagnostic, while extracted runtime contracts and all
+> code-validator corpora now run inside the existing required `test` context.
+> The six-context ruleset is unchanged). Prior: 2026-08-19 (commit pending — the
+> rebase backup advice recommended a local TAG, reasoning that `--update-refs`
+> moves branches but not tags. True, but incomplete: tags are refs in the COMMON
+> git dir, so a fetch from ANY worktree can prune them all in one shot when
+> `fetch.pruneTags` is set, which is a global (not per-repo) git config setting
+> — measured twice on 2026-08-15, the second time by the same session's own
+> fetch. Neither a local tag nor a local branch survives both hazards; only a
+> ref actually pushed to `origin` does. Backup guidance now says
+> `git push origin refs/heads/archive/<slug>`, created and pushed in the same
+> sequence as the rebase rather than verified afterward, since verifying is
+> itself a fetch that can destroy the thing being verified. Also adds local tags
+> to the shared-across-worktrees list, since the root cause is that tags are
+> common-dir refs, not anything about rebasing specifically.) Prior: 2026-08-18
+> (commit pending — the per-worktree bootstrap requirement is GONE. The shared
+> prek hooks now resolve `.pre-commit-config.yaml` from the PRIMARY CHECKOUT,
+> derived from the shared common git dir, so a linked worktree that has never
+> entered `devenv shell` commits fine. `PREK_HOME` stays anchored to the
+> committing worktree, because under the agent sandbox the primary checkout is a
+> read-only bind. Written for the sandbox-stack pivot's "devenv is never
+> activated in a worktree" topology (#1106), under which the old model rejected
+> every worktree commit by design. Do NOT re-add a `devenv shell` step to the
+> worktree recipe below.) Prior: 2026-08-17 (commit pending — shared prek hooks
+> now derive `PREK_HOME` from the committing worktree, so commits launched
+> outside a devenv shell retain isolated project-local state instead of falling
+> back to the user-global XDG cache; the bootstrap diagnostic now names shell
+> entry as the only materialization path, and shared-hook rewrites serialize and
+> publish by atomic rename). Prior: 2026-08-15 (commit pending — adds the
+> adversarial subagent-review protocol that SUBSTITUTES for the Copilot loop
+> while its quota is exhausted, roughly two weeks from 2026-08-15. Written
+> because an agent cannot review its own output, and because the operator had
+> been having to ask for an independent reviewer by hand each time. Includes the
+> refuter+defender pairing and the never-self-adjudicate rule, both of which
+> exist because refute-by-default on your own work is a second discard filter
+> rather than a check). Prior: 2026-08-14 (commit pending — TWO corrections. (1)
+> The required-status-check list said FOUR; there are SIX, both `kiro-patched`
 > contexts having been promoted 2026-08-13 with PR #895. This file was wrong in
 > two places, `ci-update-workflow.md` was wrong in two more, and
 > `.github/workflows/update.yml` was wrong a third way — "five", including the
@@ -796,8 +803,9 @@ blast radius; treat it like code.
 
 **This loop is yours to start, unprompted, as soon as the PR is non-draft — it
 is part of landing the change, not a follow-up the operator has to request.** A
-PR handed back with its review unread is unfinished work. Only continuing past
-the 5-round cap below needs explicit approval.
+PR handed back with its review unread is unfinished work. The loop is ONE round;
+a second needs a significant change in reviewed scope, and anything beyond that
+needs explicit approval (see the round rule below).
 
 Copilot records its findings in two places, and only one of them creates a
 thread:
@@ -934,10 +942,10 @@ Two consequences, and the second is the expensive one:
 
 - **Never poll or wait for a review after a push.** Nothing is coming. Read the
   run once to confirm which commit the existing review covers, then decide.
-- **Every review after the first is a deliberate, paid manual request.** Spend
-  it on a content change that is worth a fresh review, not on re-establishing a
-  trigger. Batch fixes into one push and request once, rather than requesting
-  per round.
+- **Every review after the first is a deliberate, paid manual request.** The
+  default is not to spend it: one round is the policy, and a second is earned
+  only by a significant change in what there is to review — never by having
+  applied round one's findings. Never spend one re-establishing a trigger.
 
 Pair this with the `commit_id` gate below. The two compound: after a push the
 previous commit's review stays readable and is indistinguishable from a fresh
@@ -998,26 +1006,34 @@ where requesting again is pointless — a request is pending. Reading the list
 alone inverts the first case into the third and leaves you waiting for a review
 nobody asked for.
 
-### Cap the fix-and-re-review loop at 5 rounds
+### ONE round — the automatic review. A second is earned by scope, not by fixes
 
-Run at most **five** fix → push → re-request → verify rounds, then STOP and get
-explicit approval before continuing. Exit earlier if a round returns clean in
-BOTH buckets — that is the real terminus. The cap is the only place in this loop
-where approval is required: you enter round one without asking, and you leave
-round five without proceeding.
+Run **one** round: take the review the ready transition triggers, read BOTH
+buckets, fix what is real, reply, resolve the gating threads, and stop. Do not
+re-request to see whether your fixes satisfied it.
 
-Five is a ceiling, not a target. Round one is free — it is the automatic review
-the ready transition buys — and **every round after it spends a paid manual
-request**, so the loop is not merely long when it runs hot, it is expensive.
-Batch a round's fixes into one push and request once.
+Round one is free. Every round after it spends a paid manual request, and that
+is the whole constraint — the operator exhausted a usage allowance in about ten
+days under the previous, looser rule. Set 2026-09-01; this is the standing
+policy, not a dated budget window.
+
+**A second round is earned by a significant change in what there is to review,
+never by having addressed round one.** Applying the review's own findings is not
+new scope, and neither is rewording prose, reformatting, or renaming.
+Re-requesting on those spends a credit to be told about the thing you already
+fixed. What does earn one: a new file or mechanism the previous review never
+saw, an approach rewritten rather than corrected, or scope added to the PR after
+the review ran. When it is genuinely unclear, it is not significant.
+
+If findings remain unfixed after round one, **summarize them for the operator
+instead of looping** — what was found, what was fixed, what is outstanding, and
+why. Landing a PR with known-but-unfixed review comments is the operator's call.
+So is spending another review; ask rather than assume.
 
 The failure mode this prevents is not a bad round, it is a good one repeating.
 On PR #568 every round produced a genuine finding, so each was individually
-defensible while the aggregate churned the PR through eight force-pushes. An
-uncapped loop has no guaranteed terminus; the cap makes continuing an operator
-decision rather than an emergent property.
-
-At the cap, summarize what was found, what was fixed, and what is outstanding.
+defensible while the aggregate churned the PR through eight force-pushes and
+seven reviews. An uncapped loop has no guaranteed terminus.
 
 Suppressed findings have no thread to resolve, so reply on the PR itself saying
 what you did with each. Resolve each gating thread as you fix it — they gate the
@@ -1160,8 +1176,8 @@ silently resolves one level too deep, into
    freshly-opened PR with an unread review is an incomplete task, not a
    checkpoint: it makes the operator notice the review, chase it, and hand it
    back to you, when you are the one still holding the context to act on it.
-   STARTING the loop needs no permission; only CONTINUING past the 5-round cap
-   does.
+   STARTING the loop needs no permission. It is ONE round; going beyond that
+   needs a significant change in reviewed scope, or the operator's say-so.
 
 6. Merges are squash merges. The operator performs them for **human** PRs; the
    bot's `update/*` PRs land themselves (next section).

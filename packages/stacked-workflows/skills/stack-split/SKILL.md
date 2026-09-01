@@ -103,11 +103,16 @@ defaults to HEAD if not specified.
    ```bash
    git sl
    ```
-   Show the user the new stack. If a test command is available, run tests across
+   Show the user the new stack. If a test command is available, run tests over
    the new commits:
    ```bash
-   git test run -x '<test-command>' 'stack()'
+   git test run -x '<test-command>' --jobs <N> '<revset>'
    ```
+   Pick `<revset>` per **Choosing the test revset** in
+   `references/git-branchless.md`. Splitting is one of the cases that argues for
+   `stack()` even inside a single PR — you have just created commits that never
+   existed before — but say so rather than widening silently, and size `<N>` by
+   memory, not cores.
 
 ## Alternative: Full Stack Restructure
 
