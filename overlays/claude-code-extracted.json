@@ -43,8 +43,10 @@
   "models": [
     "claude-3-5-sonnet",
     "claude-fable-5",
+    "claude-fable-5-1",
     "claude-haiku-4-5",
     "claude-mythos-5",
+    "claude-mythos-5-1",
     "claude-opus-4-5",
     "claude-opus-4-6",
     "claude-opus-4-7",
@@ -1880,6 +1882,9 @@
       "modelPicker.options[]": {
         "type": "object"
       },
+      "modelPicker.options[].behavesAs": {
+        "type": "string"
+      },
       "modelPicker.options[].description": {
         "type": "string"
       },
@@ -1960,6 +1965,9 @@
       },
       "permissions.ask[]": {
         "type": "string"
+      },
+      "permissions.blockReadsOutsideWorkingDirectories": {
+        "type": "boolean"
       },
       "permissions.defaultMode": {
         "enum": [
@@ -2069,10 +2077,10 @@
         "type": "number"
       },
       "policyHelper.refreshIntervalMs|1": {
-        "type": "integer"
+        "type": "any"
       },
       "policyHelper.timeoutMs": {
-        "type": "integer"
+        "type": "any"
       },
       "policyHelpers": {
         "type": "object"
@@ -2109,13 +2117,13 @@
         "type": "number"
       },
       "policyHelpers.linux.refreshIntervalMs|1": {
-        "type": "integer"
+        "type": "any"
       },
       "policyHelpers.linux.script": {
         "type": "string"
       },
       "policyHelpers.linux.timeoutMs": {
-        "type": "integer"
+        "type": "any"
       },
       "policyHelpers.macos": {
         "type": "object"
@@ -2143,13 +2151,13 @@
         "type": "number"
       },
       "policyHelpers.macos.refreshIntervalMs|1": {
-        "type": "integer"
+        "type": "any"
       },
       "policyHelpers.macos.script": {
         "type": "string"
       },
       "policyHelpers.macos.timeoutMs": {
-        "type": "integer"
+        "type": "any"
       },
       "policyHelpers.windows": {
         "type": "object"
@@ -2177,13 +2185,13 @@
         "type": "number"
       },
       "policyHelpers.windows.refreshIntervalMs|1": {
-        "type": "integer"
+        "type": "any"
       },
       "policyHelpers.windows.script": {
         "type": "string"
       },
       "policyHelpers.windows.timeoutMs": {
-        "type": "integer"
+        "type": "any"
       },
       "policyHelpers.wsl": {
         "type": "object"
@@ -2211,13 +2219,13 @@
         "type": "number"
       },
       "policyHelpers.wsl.refreshIntervalMs|1": {
-        "type": "integer"
+        "type": "any"
       },
       "policyHelpers.wsl.script": {
         "type": "string"
       },
       "policyHelpers.wsl.timeoutMs": {
-        "type": "integer"
+        "type": "any"
       },
       "prUrlTemplate": {
         "type": "string"
@@ -3027,6 +3035,19 @@
       "theme|1": {
         "type": "any"
       },
+      "timeFormat": {
+        "type": "anyOf"
+      },
+      "timeFormat|0": {
+        "enum": ["12-hour", "24-hour", "24-hour-utc", "auto"],
+        "type": "string"
+      },
+      "timeFormat|1": {
+        "type": "string"
+      },
+      "timeZone": {
+        "type": "string"
+      },
       "todoFeatureEnabled": {
         "type": "boolean"
       },
@@ -3268,6 +3289,8 @@
       "terminalProgressBarEnabled",
       "terminalTitleFromRename",
       "theme",
+      "timeFormat",
+      "timeZone",
       "todoFeatureEnabled",
       "tui",
       "ultracode",
