@@ -78,11 +78,6 @@ _: {
       flags = ["--version" "skip"];
       git = "https://github.com/modelcontextprotocol/servers.git";
     };
-    openmemory-mcp = {
-      file = "overlays/mcp-servers/openmemory-mcp.nix";
-      flags = ["--version" "skip"];
-      git = "https://github.com/CaviraOSS/OpenMemory.git";
-    };
     # oxlint overrides three hashes: src, cargoDeps (fetchCargoVendor), pnpmDeps
     # (fetchPnpmDeps). The rev-bump pre-step writes the src hash itself, and
     # `--no-src` is REQUIRED so nix-update does not then try to re-derive it.

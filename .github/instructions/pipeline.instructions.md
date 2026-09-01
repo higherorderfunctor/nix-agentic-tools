@@ -942,27 +942,29 @@ aggregate but skips its dependency leaves.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-08-29 (commit pending — update PR auto-merge still
-> waits on the same six required contexts; the non-required full devenv run is
-> now manual and its deterministic contracts are part of `test`). Prior:
-> 2026-08-24 (commit pending — makes the existing Beads binary target a grouped
-> owner: its compound update script independently checks the Beads and paired
-> Dolt release sidecars, then commits either or both onto the one `update/beads`
-> branch without changing Ninja, Cachix warming, build verification, or PR
-> publication). Prior: 2026-08-15 (commit pending — registers the sidecar-owned
-> stable Beads release as a binary update target without introducing a second
-> source tracker). Prior: 2026-08-03 (commit pending — adds reverse
-> package-to-target completeness coverage using derivation, source,
-> update-script, flake-input, package-exemption, and registry-exemption
-> properties). Prior: 2026-08-03 (commit pending — limits package DAG edges to
-> initialization plus explicit target-specific constraints and removes
-> base-checkout finalizers that could not observe isolated update branches).
-> Prior: 2026-08-03 (commit pending — repairs the always-uploaded hidden
-> update-report artifact and makes its absence fail loudly). Prior: 2026-08-03
-> (commit pending — records the fifth required `devenv-test` context in the
-> update workflow's auto-merge contract). Prior: 2026-08-03 (commit pending —
-> moves the `gh` and `glab` update targets with their overlay files from
-> `generic/` to `dev-tools/`). Prior: 2026-08-02 (commit pending — the
+> **Last verified:** 2026-09-01 (commit pending — `updateTargetExempt`'s only
+> instance, the repository-local `kiro-memory-distiller`, was removed, so that
+> exemption currently has no consumer). Prior: 2026-08-29 (commit pending —
+> update PR auto-merge still waits on the same six required contexts; the
+> non-required full devenv run is now manual and its deterministic contracts are
+> part of `test`). Prior: 2026-08-24 (commit pending — makes the existing Beads
+> binary target a grouped owner: its compound update script independently checks
+> the Beads and paired Dolt release sidecars, then commits either or both onto
+> the one `update/beads` branch without changing Ninja, Cachix warming, build
+> verification, or PR publication). Prior: 2026-08-15 (commit pending —
+> registers the sidecar-owned stable Beads release as a binary update target
+> without introducing a second source tracker). Prior: 2026-08-03 (commit
+> pending — adds reverse package-to-target completeness coverage using
+> derivation, source, update-script, flake-input, package-exemption, and
+> registry-exemption properties). Prior: 2026-08-03 (commit pending — limits
+> package DAG edges to initialization plus explicit target-specific constraints
+> and removes base-checkout finalizers that could not observe isolated update
+> branches). Prior: 2026-08-03 (commit pending — repairs the always-uploaded
+> hidden update-report artifact and makes its absence fail loudly). Prior:
+> 2026-08-03 (commit pending — records the fifth required `devenv-test` context
+> in the update workflow's auto-merge contract). Prior: 2026-08-03 (commit
+> pending — moves the `gh` and `glab` update targets with their overlay files
+> from `generic/` to `dev-tools/`). Prior: 2026-08-02 (commit pending — the
 > `llm-agents` input update regenerates Semble's upstream-template snapshot
 > through its separate extraction derivation, while human-reviewed content
 > hashes intentionally remain manual and make CI stop on unreviewed drift).
@@ -1141,9 +1143,11 @@ registry every package contributes a row to. It replaced the flat, top-level
   carry a non-empty `passthru.updateTargetExempt` reason, or match an explicit
   `excludePatterns` exemption. The first CI run proved the reverse direction by
   finding two previously unrecorded cases: `git-branchless` is owned by its
-  flake input, while the repository-local `kiro-memory-distiller` has no
-  upstream release to track. Targets → overlays: every main-tracking target
-  (with a `git` URL) must declare a non-null `file` equal to
+  flake input. (The other historical exemption, the repository-local
+  `kiro-memory-distiller`, was removed on 2026-09-01 — the shape it illustrated,
+  an in-repo package with no upstream release to sweep, has no current
+  instance.) Targets → overlays: every main-tracking target (with a `git` URL)
+  must declare a non-null `file` equal to
   `resolve_overlay_file(<git>, overlays)`, and the resolved overlay must carry
   an inline 40-hex `rev`. A positive control removes the real, uniquely sourced
   `context7-mcp` row in memory and requires that its package become uncovered;

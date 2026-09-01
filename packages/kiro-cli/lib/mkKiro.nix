@@ -1331,7 +1331,7 @@ in
           {
             capability = "mcp";
             effect = "allow";
-            match = ["openmemory/*" "git-mcp/git_diff"];
+            match = ["context7-mcp/*" "git-mcp/git_diff"];
           }
         ];
       };
@@ -1429,7 +1429,7 @@ in
           `<configDir>/hooks/<file>.json` on both backends — `<file>` defaults to
           the record's attribute name (one file per record), or is set explicitly
           via the record's `file` key to CO-LOCATE several records in one envelope
-          (multiple hooks per file, e.g. autoMemory's set in kiro-memory.json).
+          (multiple hooks sharing one file, e.g. several in kiro-memory.json).
           `trigger` is a soft enum from the drift-checked sidecar. Raw pre-baked
           envelopes go in `hooksJson`. v3 schema only — v2 embedded hooks are NOT
           modeled (they live in agent config; `kiro-cli agent migrate` converts

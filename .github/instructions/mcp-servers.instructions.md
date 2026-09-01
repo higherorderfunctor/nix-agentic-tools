@@ -114,17 +114,24 @@ If a JS MCP server fails with `Cannot find module 'X'`:
 
 ## MCP Server Packages
 
-> **Last verified:** 2026-08-04 (commit pending — the local-patch section
-> claimed "excludePattern + detector, OR a targets row — never both" as though
-> it covered every patch, but it was written about patching published BUILD
-> OUTPUT only. openmemory-mcp's loopback-bind patch is a SOURCE patch on a
-> package that runs tsc itself, and it correctly KEEPS its targets row; a new
-> subsection draws that line, and records why a held-back sweep is the desired
-> signal for a security patch rather than a nuisance). Prior: 2026-08-02 (commit
-> pending — adds Semble's identity-preserving external-flake MCP role, which
-> shares its CLI derivation and is updated with the flake input rather than a
-> package target). Prior: 2026-07-27 (commit pending — absorbing `aihubmix-mcp`
-> corrected three stale claims in the "Adding a New Server" checklist below:
+> **Last verified:** 2026-09-01 (commit pending — `openmemory-mcp` was RETIRED:
+> upstream renamed itself to LongMemory and rewrote the tree, killing every
+> `--replace-fail` anchor, and had by then adopted a loopback default of its
+> own. The security-patch subsection keeps it as a past-tense worked example
+> because this repo now carries no other source-level security patch, and
+> records the two things it proved — the held-back sweep behaving as designed,
+> and a source patch's success condition being its own deletion). Prior:
+> 2026-08-04 (commit pending — the local-patch section claimed "excludePattern +
+> detector, OR a targets row — never both" as though it covered every patch, but
+> it was written about patching published BUILD OUTPUT only. openmemory-mcp's
+> loopback-bind patch is a SOURCE patch on a package that runs tsc itself, and
+> it correctly KEEPS its targets row; a new subsection draws that line, and
+> records why a held-back sweep is the desired signal for a security patch
+> rather than a nuisance). Prior: 2026-08-02 (commit pending — adds Semble's
+> identity-preserving external-flake MCP role, which shares its CLI derivation
+> and is updated with the flake input rather than a package target). Prior:
+> 2026-07-27 (commit pending — absorbing `aihubmix-mcp` corrected three stale
+> claims in the "Adding a New Server" checklist below:
 > `overlays/mcp-servers/locks/` has never existed, `flake.nix` needs no
 > per-package edit, and the top-level `modules/` directory is gone. It also adds
 > the vendored-lockfile + local-patch shape and the excluded-with-an-annotation
@@ -152,8 +159,8 @@ unified overlay in `overlays/default.nix` exposes all servers under
 Servers use one of three Nix builders depending on upstream language:
 
 - **npm** (`buildNpmPackage` / pnpm override) — aihubmix-mcp, context7-mcp,
-  effect-mcp, git-intel-mcp, gitlab-mcp, openmemory-mcp. Require `pnpmDeps` or
-  `npmDeps` hash inline in the overlay file
+  effect-mcp, git-intel-mcp, gitlab-mcp. Require `pnpmDeps` or `npmDeps` hash
+  inline in the overlay file
 - **Python** (`buildPythonApplication`) — kagi-mcp, mcp-proxy, sympy-mcp. Some
   use `pyproject = true` with hatchling or setuptools
 - **Go** (`buildGoModule`) — github-mcp. Requires `vendorHash` inline in the
@@ -275,12 +282,27 @@ default. Prefer edits that also make the compiler your backstop: if the patched
 signature is threaded through callers, a partial application fails to typecheck
 rather than compiling into a half-patched binary.
 
-`openmemory-mcp` is the worked example. Upstream calls `listen(port)` with no
-host and ships no bind knob, so the daemon binds every interface; the overlay
-patches `src/core/cfg.ts`, `src/server/server.ts` and `src/server/index.ts` to
-thread a required `host` defaulting to loopback, backed by a `postInstallCheck`
-positive control and negative-control-verified (neutering `postPatch` reddens
-the build; breaking an anchor reddens `substituteInPlace`).
+`openmemory-mcp` WAS the worked example, and its whole arc is the lesson — the
+package was retired on 2026-09-01, but keep the example: this repo carries no
+other source-level security patch, and a rule with a retired illustration beats
+a rule with none.
+
+Upstream called `listen(port)` with no host and shipped no bind knob, so the
+daemon bound every interface. The overlay patched `src/core/cfg.ts`,
+`src/server/server.ts` and `src/server/index.ts` to thread a required `host`
+defaulting to loopback, backed by a `postInstallCheck` positive control and
+negative-control-verified (neutering `postPatch` reddened the build; breaking an
+anchor reddened `substituteInPlace`).
+
+TWO THINGS IT PROVED, both worth carrying forward. First, the held-back sweep
+worked exactly as designed: when upstream renamed itself and rewrote the tree,
+every `--replace-fail` anchor died and the sweep STOPPED rather than
+auto-sweeping past a broken security patch. That is the whole point of
+preferring `--replace-fail` over a tolerant substitution. Second, the patch's
+own success condition was upstream adopting the fix — which it eventually did,
+defaulting to `127.0.0.1` and threading the host through its listeners. A source
+patch that inverts an unsafe upstream default is a bet that upstream comes
+around; plan for the patch to be DELETED, not maintained forever.
 
 ### Adding a New Server
 

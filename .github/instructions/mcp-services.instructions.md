@@ -7,10 +7,14 @@ applyTo: "checks/factory-eval.nix,checks/module-eval.nix,lib/ai/mcpServer/mkServ
 
 ## Managed MCP Service Bind-Address Contract
 
-> **Last verified:** 2026-08-05 (commit pending — native HTTP modes must now
-> declare whether they honor `service.host`; unsupported modes reject every
-> concrete address, and Context7 joins the centrally covered `mcp-proxy` bridges
-> because its native HTTP path cannot honor the option).
+> **Last verified:** 2026-09-01 (commit pending — the native-declaration table
+> drops to a single row: `openmemory-mcp` was retired, and with it the only
+> `honorsHost = true` backed by a patch this repo authored rather than an
+> upstream primitive. The shape is kept in prose because it is legitimate but
+> only as durable as the patch). Prior: 2026-08-05 (commit pending — native HTTP
+> modes must now declare whether they honor `service.host`; unsupported modes
+> reject every concrete address, and Context7 joins the centrally covered
+> `mcp-proxy` bridges because its native HTTP path cannot honor the option).
 
 `services.mcp-servers.servers.<name>.service.host` is a security control, not
 descriptive metadata. An address is valid only when it reaches the process that
@@ -36,10 +40,17 @@ The contract lives in `lib/ai/mcpServer/serviceSchema.nix` and
 
 The native declarations currently are:
 
-| Server           | Honors host | Mechanism                  |
-| ---------------- | ----------- | -------------------------- |
-| `nixos-mcp`      | yes         | `MCP_NIXOS_HOST`           |
-| `openmemory-mcp` | yes         | patched upstream `OM_HOST` |
+| Server      | Honors host | Mechanism        |
+| ----------- | ----------- | ---------------- |
+| `nixos-mcp` | yes         | `MCP_NIXOS_HOST` |
+
+There was a second row until 2026-09-01: `openmemory-mcp`, which honored host
+through an `OM_HOST` this repo PATCHED INTO upstream. It is worth remembering as
+the shape rather than the instance — a `true` declaration backed by our own
+source patch is legitimate under the rule above (the patch created a real
+upstream bind primitive), but it makes the declaration only as durable as the
+patch. That package was retired when upstream rewrote itself; upstream had by
+then adopted a loopback default of its own accord.
 
 Context7 deliberately uses bridge mode: its stdio transport works, while its
 native HTTP transport requires Upstash Redis and exposes no bind-address knob.

@@ -159,7 +159,7 @@ Stacked commit workflow skills using git-branchless, git-absorb, and git-revise.
 ## Packages
 
 <details>
-<summary><strong>MCP Servers</strong> (17 servers)</summary>
+<summary><strong>MCP Servers</strong> (16 servers)</summary>
 
 <!-- prettier-ignore -->
 | Server | Description | Credentials |
@@ -176,7 +176,6 @@ Stacked commit workflow skills using git-branchless, git-absorb, and git-revise.
 | `mcp-language-server` | LSP-to-MCP bridge | None |
 | `mcp-proxy` | stdio-to-HTTP bridge proxy | None |
 | `nixos-mcp` | NixOS and Nix documentation | None |
-| `openmemory-mcp` | Persistent memory + vector search | None |
 | `semble-mcp` | Local semantic and lexical code search | None |
 | `sequential-thinking-mcp` | Step-by-step reasoning | None |
 | `serena-mcp` | Codebase-aware semantic tools | Optional |

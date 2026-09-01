@@ -35,7 +35,7 @@ _: {
     # no longer exists — nothing else in this row covered those overlays, so
     # the glob was RE-POINTED at them rather than deleted. Do not collapse it
     # to `overlays/*.nix`: that would also load this AI-CLI-specific guide for
-    # agnix and kiro-memory-distiller.
+    # unrelated overlays such as agnix.
     ai-clis = {
       scopes = [
         # The behavioral wrapper check belongs here for the same reason
@@ -233,24 +233,6 @@ _: {
           location = "package";
           name = "kimchi-factory";
           dir = "kimchi";
-        }
-      ];
-    };
-    # kiro-cli: auto-memory system (distiller pipeline, v3 hook set,
-    # buffer/archive tiers, the openmemory-mem backend seam). Scoped to the
-    # kiro-cli package, the distiller overlay, and the backend helper source.
-    kiro-cli = {
-      scopes = [
-        "overlays/kiro-memory-distiller.nix"
-        "overlays/kiro-memory-distiller/**"
-        "overlays/mcp-servers/openmemory-mem/**"
-        "packages/kiro-cli/**"
-      ];
-      sources = [
-        {
-          location = "package";
-          name = "kiro-auto-memory";
-          dir = "kiro-cli";
         }
       ];
     };

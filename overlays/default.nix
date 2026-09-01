@@ -19,8 +19,10 @@
 #
 # Each per-package file takes {inputs, final, ...} and manages its
 # own source — fetchFromGitHub with inline hashes for upstream
-# packages, or an in-repo path for packages built from this repo
-# (e.g. kiro-memory-distiller).
+# packages, or an in-repo path for packages built from this repo.
+# NO PACKAGE USES THE IN-REPO SHAPE TODAY: kiro-memory-distiller was
+# the only one and was removed 2026-09-01. The shape stays documented
+# because nothing about it was wrong — it simply has no consumer.
 {inputs, ...}: final: _prev: let
   # Unfree guard. Checks if the derivation has an unfree license and
   # wraps it so the consumer's allowUnfree config is respected. If the
@@ -108,9 +110,6 @@
     kiro-gateway = import ./kiro-gateway.nix {
       inherit inputs final;
     };
-    kiro-memory-distiller = import ./kiro-memory-distiller.nix {
-      inherit inputs final;
-    };
     semble = sembleDrv;
   };
 
@@ -156,9 +155,6 @@
       inherit inputs final;
     };
     nixos-mcp = import ./mcp-servers/nixos-mcp.nix {inherit inputs final;};
-    openmemory-mcp = import ./mcp-servers/openmemory-mcp.nix {
-      inherit inputs final;
-    };
     serena-mcp = import ./mcp-servers/serena-mcp.nix {inherit inputs final;};
     semble-mcp = import ./mcp-servers/semble-mcp.nix {semble = sembleDrv;};
     sympy-mcp = import ./mcp-servers/sympy-mcp.nix {
