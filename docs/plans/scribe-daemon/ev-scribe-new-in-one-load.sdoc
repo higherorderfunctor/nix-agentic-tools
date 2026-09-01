@@ -44,3 +44,10 @@ harness say so:
   the guard exists for, and it was previously caught by accident, because the
   old shape looked the new document up in a reloaded tree and did not find it.
 <<<
+NOTES: >>>
+END TO END, through the client against a live daemon on the real canon,
+2026-09-01: `scribe new` 0.084 s wall, against 2.9 s for the one-shot command
+and about 1.0 s through the daemon before this change. Measured by creating a
+throwaway node and deleting it again; `scribe check` reported 384 nodes and 0
+findings afterwards, and the working tree was clean.
+<<<
