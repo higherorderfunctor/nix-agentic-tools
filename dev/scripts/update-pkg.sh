@@ -174,7 +174,7 @@ if [ -n "$git_url" ]; then
             if [ "$resolved" != "[]" ]; then
               # Exits non-zero, WITHOUT writing, if any marker had no
               # literal to rewrite — see the rationale in the script.
-              if ! python3 - "$target_file" "$resolved" <<'PY'; then
+              if ! python3 - "$target_file" "$resolved" <<'PY'
 import json, re, sys
 path, spec = sys.argv[1], sys.argv[2]
 entries = json.loads(spec)
@@ -208,6 +208,7 @@ if unmatched:
 with open(path, "w") as f:
     f.write("\n".join(lines))
 PY
+              then
                 git -C "$wt" reset --hard "$base_head"
                 report_held_back "$name" "upstream literal not rewritten" \
                   "$(basename "$target_file"): marker resolved but no literal followed it"
