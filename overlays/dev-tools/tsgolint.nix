@@ -12,12 +12,12 @@
   };
   vu = import ../lib.nix;
 
-  rev = "ef193195a389b21108b6862853c71f924aaa372c";
+  rev = "3b600f467d401d116db62e5940973cbc00bc0fd0";
   src = ourPkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "tsgolint";
     inherit rev;
-    hash = "sha256-4BVA/nXJi198XmvLCiMvmPTy9SVOCS5MiF6QAZNTAHE=";
+    hash = "sha256-rqXuARtDWAYlZoQ5bLdYADVob+dgjtae211v5qKJ33U=";
     fetchSubmodules = true;
   };
 in
