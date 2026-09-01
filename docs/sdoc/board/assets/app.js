@@ -1,11 +1,12 @@
-// The shell: one top bar, two views over one daemon-served dataset.
+// The shell: one top bar, the views over one daemon-served dataset.
 // Following beadboard's shape: the chrome is global and stable, the middle
 // content swaps, and the active view lives in the URL (?view=perspective) so
 // it survives reload and can be linked. Node selection stays in the #hash.
 import { renderBoard } from "/assets/board.js";
+import { renderGrammars, selectGrammar } from "/assets/grammars.js";
 import { loadPerspective } from "/assets/perspective.js";
 
-const VIEWS = ["board", "perspective"];
+const VIEWS = ["perspective", "grammars", "board"];
 const elements = {
   error: document.querySelector("#error"),
   loading: document.querySelector("#loading"),
@@ -18,10 +19,12 @@ const elements = {
 };
 const sections = {
   board: document.querySelector("#view-board"),
+  grammars: document.querySelector("#view-grammars"),
   perspective: document.querySelector("#view-perspective"),
 };
 const switches = {
   board: document.querySelector("#switch-board"),
+  grammars: document.querySelector("#switch-grammars"),
   perspective: document.querySelector("#switch-perspective"),
 };
 
@@ -83,6 +86,19 @@ async function showBoard() {
   loaded.board = true;
 }
 
+async function showGrammars() {
+  if (!cache.graph) {
+    showLoading("Asking the scribe daemon", "Exporting the held graph");
+    cache.graph = await fetchJson("/api/graph");
+  }
+  const payload = cache.graph;
+  if (payload.schema !== "sdoc-board/2") {
+    throw new Error(`unsupported snapshot schema: ${payload.schema}`);
+  }
+  renderStats(payload);
+  renderGrammars(payload);
+}
+
 async function showPerspective() {
   if (!cache.rows) {
     showLoading("Asking the scribe daemon", "Adapting rows for Perspective");
@@ -111,6 +127,7 @@ async function activate(view, { push = false } = {}) {
   elements.error.hidden = true;
   try {
     if (view === "board") await showBoard();
+    else if (view === "grammars") await showGrammars();
     else await showPerspective();
     elements.loading.hidden = true;
     setStatus("live from the daemon", "ready");
@@ -141,6 +158,9 @@ for (const name of VIEWS) {
   });
 }
 document.querySelector("#refresh").addEventListener("click", refresh);
+window.addEventListener("sdoc:show-grammar", (event) => {
+  activate("grammars", { push: true }).then(() => selectGrammar(event.detail));
+});
 document.querySelector("#retry").addEventListener("click", refresh);
 
 activate(activeView());

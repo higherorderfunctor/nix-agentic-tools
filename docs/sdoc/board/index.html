@@ -26,8 +26,9 @@
       </div>
 
       <nav class="view-switch" aria-label="View">
-        <button id="switch-board" type="button" class="is-active">Board</button>
         <button id="switch-perspective" type="button">Perspective</button>
+        <button id="switch-grammars" type="button">Grammars</button>
+        <button id="switch-board" type="button" class="is-active">Board</button>
       </nav>
 
       <dl class="stats" aria-label="Canon counts">
@@ -124,6 +125,34 @@
             </p>
           </div>
           <div id="inspector-content" hidden></div>
+        </aside>
+      </section>
+
+      <section
+        id="view-grammars"
+        class="view grammars-view"
+        aria-label="Grammars view"
+        hidden
+      >
+        <div class="grammar-shell">
+          <p class="grammar-hint">
+            One card per grammar element · select a card for the full
+            declaration
+          </p>
+          <div id="grammar-grid" class="grammar-grid"></div>
+        </div>
+
+        <aside class="inspector" aria-live="polite">
+          <div id="grammar-inspector-empty" class="inspector-empty">
+            <span class="empty-mark" aria-hidden="true">◈</span>
+            <h1>Read the grammar</h1>
+            <p>
+              Select a card to see everything the grammar declares for that
+              element: fields, kinds, choice words and relation roles.
+            </p>
+            <p class="read-only">generated from docs/sdoc/grammar.sgra</p>
+          </div>
+          <div id="grammar-inspector-content" hidden></div>
         </aside>
       </section>
 

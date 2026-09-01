@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: One card per grammar element; the declaration in the side pane
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-GRAMMARS-VIEW
+TITLE: One card per grammar element; the declaration in the side pane
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+The Grammars view draws one uniform card per grammar element on a grid --
+tag, UID prefix, and field/role/node counts -- and puts the full declaration
+in the right-hand pane on selection: every field with its kind, choice words
+and required flag, and every relation role the element may write. Data is the
+snapshot's grammar key (parsed from grammar.sgra, since the JSON export types
+every field as String); an element with zero nodes still gets a card, which
+is how an empty vocabulary such as COMMENTARY stays visible. The Board
+inspector's type name links here: clicking it switches the view and selects
+that element's card. The switcher order is Perspective, Grammars, Board.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-ONE-APP-TWO-VIEWS
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+  ROLE: Governed_By
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/grammars.js
+- TYPE: File
+  VALUE: docs/sdoc/board/index.html

@@ -637,6 +637,200 @@ html[data-status="error"] .status-dot {
   overflow-wrap: anywhere;
 }
 
+/* ---- grammars view ---------------------------------------------------- */
+
+.grammars-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+}
+
+.grammar-shell {
+  overflow: auto;
+  padding: 18px;
+  border-right: 1px solid var(--border-default);
+  background:
+    radial-gradient(circle at 50% 0%, rgb(100 255 218 / 5%), transparent 44%),
+    var(--surface-backdrop);
+}
+
+.grammar-hint {
+  margin: 0 0 14px;
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.grammar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.grammar-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px 14px 12px;
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent);
+  border-radius: 9px;
+  background: var(--surface-quaternary);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 7px 14px rgb(0 0 0 / 22%);
+}
+
+.grammar-card:hover,
+.grammar-card:focus-visible {
+  border-color: var(--accent);
+  border-left-color: var(--accent);
+  background: var(--surface-tertiary);
+  outline: none;
+}
+
+.grammar-card.is-selected {
+  border-color: var(--text-primary);
+  border-left-color: var(--accent);
+  background: var(--surface-tertiary);
+}
+
+.grammar-card-head {
+  display: grid;
+  gap: 4px;
+}
+
+.grammar-card-tag {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.grammar-card-prefix {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.grammar-card-facts {
+  display: flex;
+  gap: 14px;
+  margin: 0;
+}
+
+.grammar-card-facts div {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.grammar-card-facts dt {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.grammar-card-facts dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.grammar-field-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grammar-field {
+  padding: 8px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-input);
+}
+
+.grammar-field-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.grammar-field-name {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.grammar-field-kind {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.grammar-required,
+.grammar-optional {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.grammar-required {
+  color: var(--accent-warning);
+}
+
+.grammar-optional {
+  color: var(--text-disabled);
+}
+
+.grammar-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 7px;
+}
+
+.grammar-option {
+  padding: 2px 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+
+/* The Board inspector's type name links into this view. */
+.type-link {
+  height: auto;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.type-link:hover,
+.type-link:focus-visible {
+  background: none;
+  color: var(--text-primary);
+}
+
 /* ---- perspective view ------------------------------------------------- */
 
 .perspective-view {

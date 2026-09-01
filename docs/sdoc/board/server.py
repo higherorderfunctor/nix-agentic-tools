@@ -44,6 +44,7 @@ STATIC_ROUTES = {
     "/assets/app.css": HERE / "assets" / "app.css",
     "/assets/app.js": HERE / "assets" / "app.js",
     "/assets/board.js": HERE / "assets" / "board.js",
+    "/assets/grammars.js": HERE / "assets" / "grammars.js",
     "/assets/layout.js": HERE / "assets" / "layout.js",
     "/assets/perspective.js": HERE / "assets" / "perspective.js",
     "/assets/theme.css": HERE / "assets" / "theme.css",
