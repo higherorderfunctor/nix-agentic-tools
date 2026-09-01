@@ -7,34 +7,38 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-SCRIBE-NEW-DOES-NOT-BATCH
 TITLE: Creating a node still costs a reload each, where every other write batches
-DEPTH: sketch
+DEPTH: needs-design
 AUTHORED_BY: llm
 STATEMENT: >>>
 Every other write defers its reload, so a run of them pays one. `new` does
 not: it reloads inside the operation, because the @repo grammar alias is
-resolved by the index builder and not by the reader, so a document assembled
-purely in memory has no grammar. Measured: three news cost 2462 ms, about
-820 ms each, against 17 ms for three sets.
+resolved by the index builder and not by the reader. Measured: three creates
+cost 2462 ms, about 820 ms each, against 17 ms for three sets.
 
-The shape that would fix it is splitting the operation. Write the skeleton,
-mark the workspace dirty, and add the node after the deferred reload rather
-than before it -- so N new nodes cost N cheap writes and one reload. A
-relation naming a node created earlier in the same batch would not resolve
-until that reload, which the workspace's retry path already handles by
-re-deriving once.
+THE FACT THAT MAKES THIS TRACTABLE, measured on the live canon: 382
+documents hold 382 distinct DocumentGrammar objects but exactly ONE shared
+element list. The parsed element definitions the alias resolves to are a
+single object already in memory that never changes. The reload re-reads 382
+files to obtain a reference to something that never moved.
 
-The alternative is adopting a document in memory: build its DocumentMeta and
-insert it into the document tree by hand. That removes the reload entirely
-and is how the containers would have to be touched directly, which the
-workspace deliberately does not do today.
+So the shape is: construct a DocumentGrammar around the existing shared
+element list, derive the new document's DocumentMeta, and insert into
+document_list, map_docs_by_paths and map_docs_by_rel_paths. No file re-read,
+no re-resolution, and `new` becomes an ordinary deferred write that batches
+like the others.
 
-Filed rather than guessed at. Until it lands, `new` is the one command still
-paying a load per call.
+The care is in the meta, not the grammar. Of six directory-scoped fields
+compared between two documents in one directory, three matched and three did
+not, so the rest must be derived from the path -- which means hand-mirroring
+document_finder, the thing the workspace otherwise refuses to do. That is
+made safe by a contract rather than by care: adopt, then full-reload, then
+compare EVERY meta field. A prior probe did this round trip and got 10 of 10
+fields identical to a genuine rebuild at about 25 ms.
 <<<
 RELATIONS:
 - TYPE: Parent
-  VALUE: MECH-BACKLOG-SCRIBE-DAEMON
-  ROLE: Backlogged_In
-- TYPE: Parent
   VALUE: DEC-SCRIBE-DEFERRED-RELOAD-IS-FULL
   ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-RECONCILE
+  ROLE: Crosses
