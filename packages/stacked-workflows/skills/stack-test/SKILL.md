@@ -108,20 +108,15 @@ Run a test command or formatter across commits in the current stack.
    which is only safe if you know what it says — this repo's own preset shipped
    `0` for a while, so do not rely on it.
 
-   ```bash
-   if [ -r /proc/meminfo ]; then
-     avail_mb=$(awk '/^MemAvailable:/{print int($2/1024)}' /proc/meminfo)
-   else
-     avail_mb=$(( $(sysctl -n hw.memsize) / 1048576 / 2 ))  # macOS: half RAM
-   fi
-   footprint_mb=3500          # nix; see the footprint table in the reference
-   jobs=$(( avail_mb * 70 / 100 / footprint_mb ))
-   if [ "$jobs" -lt 1 ]; then jobs=1; fi
-   echo "$jobs"
-   ```
+   Derive the number with the snippet under **Sizing `--jobs`** in
+   `references/git-branchless.md`. It already clamps by CPUs and by commit
+   count; the one value you must supply is `footprint_mb`, taken from that
+   section's table **for the command you detected in step 1** — not the Nix
+   default. Leaving it at Nix's ~3500 for `cargo test` or `npm test` would
+   serialize a run that could safely use every core.
 
-   Then clamp `jobs` to the commit count and to the physical CPU count. When the
-   revset is a single commit, `--jobs 1` is the whole answer.
+   When the revset resolves to a single commit, `--jobs 1` is the whole answer
+   and no arithmetic is needed.
 
 ### Run Mode (testing)
 

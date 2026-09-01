@@ -410,22 +410,39 @@ git test clean 'stack()'                       # clear cached results
 
 ### Choosing the test revset
 
-**Default to the tip (`@`), not `stack()`.** Two different situations hide
-behind "run the tests on my stack", and only one of them wants per-commit
-testing:
+**Default to the tip, not `stack()`.** Two different situations hide behind "run
+the tests on my stack", and only one of them wants per-commit testing:
 
-| Situation                      | Revset    | Why                                                                                                                                     |
-| ------------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| One PR/MR, several WIP commits | `@`       | Only the merged result ships. The tip is what reviewers read and what CI gates. Intermediate commits are checkpoints, not deliverables. |
-| A stack of independent PRs/MRs | `stack()` | Each commit lands separately and must stand alone, so each one genuinely has to pass.                                                   |
+| Situation                      | Revset           | Why                                                                                                                                     |
+| ------------------------------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| One PR/MR, several WIP commits | `heads(stack())` | Only the merged result ships. The tip is what reviewers read and what CI gates. Intermediate commits are checkpoints, not deliverables. |
+| A stack of independent PRs/MRs | `stack()`        | Each commit lands separately and must stand alone, so each one genuinely has to pass.                                                   |
+
+Use `heads(stack())` for the tip, **not `@`**. They differ exactly when the user
+has navigated back with `git prev`: `@` is then a middle commit and testing it
+proves nothing about what will merge. `@` is right only as the fallback when
+`stack()` is empty — on `main` there is no stack and `heads(stack())` resolves
+to zero commits, which would test nothing at all.
+
+Which situation you are in is readable from repository structure rather than
+guesswork, because every PR/MR needs its own branch:
+
+```bash
+git branchless query 'stack()' | wc -l          # commits in the stack
+git branchless query 'stack() & branches()'     # and their branches
+```
+
+Two or more branches inside the stack means a stack of PRs. One or zero means a
+single PR. The count cannot tell a real two-PR stack from one PR plus a stale
+leftover branch, so name the branches you counted when you report — over-testing
+is the safe direction, but a stale branch should be visible.
 
 Small, frequent commits inside a single PR are a deliberate, good habit. Do
 **not** discourage them, and do not read them as N things to validate: testing
 all seven commits of a seven-commit PR runs six evaluations that buy nothing.
 
-Both widening (`@` -> `stack()`) and narrowing are coverage decisions. Never
-switch silently — say which revset you used and why. If the situation is
-genuinely ambiguous, ask rather than guess.
+Both widening and narrowing are coverage decisions. Never switch silently — say
+which revset you used and why.
 
 ### Sizing `--jobs` — by memory, not by cores
 
@@ -433,9 +450,18 @@ genuinely ambiguous, ask rather than guess.
 worktree with no shared build or evaluation cache, so peak usage is
 `jobs x per-job footprint` — sizing it to the core count assumes jobs are cheap.
 
-Measured on git-branchless 0.11.1, 8 physical / 16 logical cores, with `HOME`
-and `XDG_CONFIG_HOME` pointed at a scratch dir so no real user config leaks in.
-Peak concurrency observed by recording a start timestamp inside each job:
+Measured on this repo's own git-branchless build (`overlays/git-tools`, which
+tracks the upstream flake input rather than a release, and whose binary
+self-reported `0.11.1`), 8 physical / 16 logical cores, with `HOME` and
+`XDG_CONFIG_HOME` pointed at a scratch dir so no real user config leaks in.
+
+Do not treat that version string as a firm anchor: the overlay sets `name`
+without `version` and strips `versionCheckHook` precisely because the two can
+disagree, and the flake input advances on the normal update sweep. What the
+numbers below pin down is behavior, not a release. Only the explicit `jobs = 1`
+in the preset is independent of it — an explicit job count is a bound whatever
+upstream's default happens to be. Peak concurrency observed by recording a start
+timestamp inside each job:
 
 | Global config | `--jobs` flag | Commits | Peak concurrency |
 | ------------- | ------------- | ------- | ---------------- |
@@ -480,16 +506,29 @@ Rough per-job footprints:
 | `npm test`, `pytest`           | 0.2-0.5 GB        | all CPUs                        |
 | `prettier`, `treefmt`, `fmt`   | < 0.1 GB          | all CPUs                        |
 
-To derive a bound instead of guessing:
+To derive a bound instead of guessing. **`footprint_mb` is the one value you
+must set per command** — the default below is Nix's, and leaving it there for a
+cheap command needlessly serializes the run:
 
 ```bash
+# 1. What ONE job of YOUR command costs, from the table above.
+#    nix ~3500 | cargo, go ~1500 | npm, pytest ~400 | formatters ~100
+footprint_mb=3500
+
+# 2. What this machine can spare.
 if [ -r /proc/meminfo ]; then
   avail_mb=$(awk '/^MemAvailable:/{print int($2/1024)}' /proc/meminfo)
 else
   avail_mb=$(( $(sysctl -n hw.memsize) / 1048576 / 2 ))  # macOS: half of RAM
 fi
-footprint_mb=3500                                   # from the table above
-jobs=$(( avail_mb * 70 / 100 / footprint_mb ))      # keep 30% headroom
+
+# 3. Bound by memory, then by CPUs, then by how many commits there even are.
+jobs=$(( avail_mb * 70 / 100 / footprint_mb ))          # keep 30% headroom
+cpus=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+commits=$(git branchless query "$revset" | wc -l)
+for cap in "$cpus" "$commits"; do
+  if [ "$jobs" -gt "$cap" ]; then jobs="$cap"; fi
+done
 if [ "$jobs" -lt 1 ]; then jobs=1; fi
 echo "$jobs"
 ```
