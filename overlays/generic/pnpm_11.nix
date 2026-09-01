@@ -9,8 +9,13 @@
 # so `pkgs.ai.generic.pnpm_11` and plain `pkgs.pnpm_11` are different store
 # paths from day one. That gap is the ordinary steady state for a package
 # on this pattern — a repo sweeping 4x/day sits ahead of a nixpkgs
-# channel — and it is why both majors are carried the same way even
-# though one of them happens to be at parity right now.
+# channel — and it is why pnpm_10 and pnpm_11 are carried the same way
+# even though one of them happens to be at parity right now.
+#
+# pnpm_12 is NOT carried this way, and the difference is upstream's, not
+# a style choice: pnpm 12 moved its implementation out of the npm package
+# into per-platform native binaries, so there is no `pkgs.pnpm_12` to
+# override at all. See ./pnpm_12.nix.
 #
 # Bare `pnpm` in the pinned nixpkgs aliases `pnpm_11` (identical
 # drvPath). We deliberately do NOT shadow it: this overlay is additive

@@ -108,6 +108,7 @@ _: let
     otel-tui = "Terminal OpenTelemetry viewer";
     pnpm_10 = "Fast, disk-space-efficient JavaScript package manager (10.x)";
     pnpm_11 = "Fast, disk-space-efficient JavaScript package manager (11.x)";
+    pnpm_12 = "Fast, disk-space-efficient JavaScript package manager (12.x)";
   };
 
   # ── Git tool descriptions ────────────────────────────────────────────

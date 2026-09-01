@@ -217,6 +217,13 @@
       pnpm_11 = import ./generic/pnpm_11.nix {
         inherit inputs final;
       };
+      # pnpm 12 is NOT a ./generic/pnpm-major.nix caller. Upstream moved
+      # the implementation out of the npm `pnpm` package and into
+      # per-platform native binaries, and nixpkgs has no `pnpm_12` to
+      # override — see the header of ./generic/pnpm_12.nix.
+      pnpm_12 = import ./generic/pnpm_12.nix {
+        inherit inputs final;
+      };
     }
     # gluetun is the one genuinely LINUX-ONLY package here: `internal/routing`
     # uses `unix.RT_TABLE_MAIN`/`RT_TABLE_LOCAL`, which x/sys/unix defines on

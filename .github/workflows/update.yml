@@ -666,7 +666,7 @@ jobs:
           fi
 
           if [ "$upstream_max" -gt "$ours" ]; then
-            echo "::warning::pnpm: upstream publishes a stable latest-${upstream_max} dist-tag, but this repo carries up to pnpm_${ours}. Slide the window deliberately — add overlays/generic/pnpm_${upstream_max}.nix plus its sidecar, a config/update-targets.nix row, a config/cache-hit-parity-targets.nix row and a dev/data.nix description, then retire the oldest major. Not auto-bumped and not auto-PRed on purpose."
+            echo "::warning::pnpm: upstream publishes a stable latest-${upstream_max} dist-tag, but this repo carries up to pnpm_${ours}. Add it deliberately — overlays/generic/pnpm_${upstream_max}.nix plus its sidecar, a config/update-targets.nix row, a config/cache-hit-parity-targets.nix row, a dev/data.nix description and an overlays/README.md row. RETIRING an old major is a SEPARATE decision, not part of this: the window is not fixed-width (10, 11 and 12 are all carried today). CHECK FIRST whether the new major is still the same KIND of artifact — pnpm 12 moved its implementation out of the npm package into per-platform native binaries, so it could not use pnpm-major.nix at all and nixpkgs had no pnpm_12 to override. Not auto-bumped and not auto-PRed on purpose."
           else
             echo "pnpm: upstream stable majors top out at ${upstream_max}; this repo carries up to pnpm_${ours}. No annotation."
           fi
