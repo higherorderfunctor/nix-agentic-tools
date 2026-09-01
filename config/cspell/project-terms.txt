@@ -233,6 +233,7 @@ mcpservers
 mdbook
 mdformat
 memoizer
+memsize
 mergetool
 metacharacter
 misattributes

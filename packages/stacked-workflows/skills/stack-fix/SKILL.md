@@ -267,7 +267,14 @@ Run after either path to confirm the stack is healthy.
    this skill handles content changes only.
 
 3. **Run tests** if a test command is readily identifiable:
+
    ```bash
-   git test run -x '<test-command>' 'stack()'
+   git test run -x '<test-command>' --jobs <N> '<revset>'
    ```
+
+   Pick `<revset>` per **Choosing the test revset** in
+   `references/git-branchless.md`: `heads(stack())` for one PR with several
+   commits, `stack()` only for a stack of independent PRs. Size `<N>` by memory,
+   not cores, and never pass `--jobs 0`.
+
    Report any regressions introduced by the fix.

@@ -129,7 +129,7 @@ _: let
     stack-split = "Split a large commit into reviewable atomic commits";
     stack-submit = "Sync, validate, push stack, and create stacked PRs";
     stack-summary = "Analyze stack quality, flag violations, produce planner-ready summary";
-    stack-test = "Run tests or formatters across every commit in a stack";
+    stack-test = "Run tests or formatters across commits in a stack";
   };
 
   # ── Derived counts ──────────────────────────────────────────────────
