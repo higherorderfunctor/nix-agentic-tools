@@ -175,6 +175,7 @@ _: {
     otel-tui = {flags = ["--use-update-script" "--override-filename" "overlays/generic/otel-tui.nix"];};
     pnpm_10 = {flags = ["--use-update-script" "--override-filename" "overlays/generic/pnpm_10.nix"];};
     pnpm_11 = {flags = ["--use-update-script" "--override-filename" "overlays/generic/pnpm_11.nix"];};
+    pnpm_12 = {flags = ["--use-update-script" "--override-filename" "overlays/generic/pnpm_12.nix"];};
   };
 
   # Packages excluded from the update loop entirely.

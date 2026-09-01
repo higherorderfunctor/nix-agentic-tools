@@ -58,6 +58,7 @@ catppuccin
 caubut
 cavira
 cclsp
+cctools
 chafa
 chonk
 clearenv
@@ -206,8 +207,14 @@ kirocli
 kirodotdev
 landable
 ldflags
+libc
+libdl
 libexec
+libgcc
 libgit
+libm
+libpthread
+librt
 libsecret
 libsets
 libstdc

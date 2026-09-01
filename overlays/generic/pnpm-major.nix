@@ -1,9 +1,19 @@
-# pnpm — shared builder for the majored `pkgs.ai.generic.pnpm_<N>`
-# attributes. Called once per major from the thin `pnpm_10.nix` /
-# `pnpm_11.nix` files, which exist so each major keeps its own path for
-# `--override-filename` in config/update-targets.nix and its own sidecar
-# beside it. Everything except the major itself is here: two files that
-# differ only in a version number are a smell.
+# pnpm — shared builder for the JAVASCRIPT-DISTRIBUTED majors of
+# `pkgs.ai.generic.pnpm_<N>`. Called once per major from the thin
+# `pnpm_10.nix` / `pnpm_11.nix` files, which exist so each major keeps
+# its own path for `--override-filename` in config/update-targets.nix and
+# its own sidecar beside it. Everything except the major itself is here:
+# two files that differ only in a version number are a smell.
+#
+# `pnpm_12.nix` IS NOT A CALLER, and that is not an oversight to tidy up.
+# pnpm 12 moved the implementation out of the npm package and into
+# per-platform native binaries (`@pnpm/exe.<platform>`), leaving
+# `package/pnpm` a placeholder text file — so there is no
+# `ourPkgs.pnpm_12` to override, and nixpkgs' own generic expression
+# cannot build a 12.x tarball either. It is a standalone prebuilt-binary
+# derivation instead; its header carries the measurements. The guard
+# below still matters for 10 and 11 and must not be relaxed on its
+# account.
 #
 # A thin `overrideAttrs` over nixpkgs' own `pnpm_<N>` derivation: only
 # `version`, `src` and `passthru.updateScript` move, so every build

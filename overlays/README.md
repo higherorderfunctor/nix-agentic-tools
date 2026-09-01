@@ -75,11 +75,21 @@ computed at eval time via `overlays/lib.nix:mkVersion`
   exit is not a valid change signal, so pass `alwaysPrefetch = true` to
   `mkUpdateScript`. It prefetches every run and decides whether to write by
   comparing the freshly built sidecar against the committed one.
-- **Several majors of one upstream** (`pnpm_10`, `pnpm_11`): one shared builder
-  (`generic/pnpm-major.nix`) parameterized by the major, with a two-line file
-  per major so each gets its own `--override-filename` path and sidecar. The
-  version check reads the registry's per-major channel, and an eval-time guard
-  rejects a sidecar whose major does not match the attribute.
+- **Several majors of one upstream** (`pnpm_10`, `pnpm_11` — but NOT `pnpm_12`,
+  see below): one shared builder (`generic/pnpm-major.nix`) parameterized by the
+  major, with a two-line file per major so each gets its own
+  `--override-filename` path and sidecar. The version check reads the registry's
+  per-major channel, and an eval-time guard rejects a sidecar whose major does
+  not match the attribute.
+- **A major that leaves the family** (`pnpm_12`): the shared builder is only
+  correct while every major is the same KIND of artifact. pnpm 12 moved its
+  implementation out of the npm package into per-platform native binaries
+  (`@pnpm/exe.<platform>`), leaving `package/pnpm` a placeholder text file — so
+  there is no `pkgs.pnpm_12` to override and nixpkgs' own generic expression
+  cannot build a 12.x tarball either. `pnpm_12` is therefore a standalone
+  prebuilt-binary derivation on the `chatgpt-codex` shape with a per-platform
+  sidecar, and it carries its OWN major guard rather than inheriting
+  `pnpm-major.nix`'s. See the header of `generic/pnpm_12.nix`.
 - **Hand-bumped, with currency annotated instead of swept** (`aihubmix-mcp`): a
   package carrying a local patch against upstream's published BUILD OUTPUT
   cannot ride the sweep — no update script can re-author a patch. This says
@@ -157,5 +167,6 @@ computed at eval time via `overlays/lib.nix:mkVersion`
 | otel-tui             | generic    | GitHub archive          | go (nixpkgs override)     | `otel-tui`            | go test       | --version           |
 | pnpm_10              | generic    | npm `latest-10` tag     | files only (nixpkgs ovr)  | `pnpm_10`             | —             | --version           |
 | pnpm_11              | generic    | npm `latest-11` tag     | files only (nixpkgs ovr)  | `pnpm_11`             | —             | --version           |
+| pnpm_12              | generic    | npm `latest-12` tag     | pre-built binary          | — (no `pnpm_12`)      | —             | --version           |
 | agnix-mcp            | mcpServers | mainProgram override    | —                         | —                     | —             | —                   |
 | agnix-lsp            | lspServers | mainProgram override    | —                         | —                     | —             | —                   |
