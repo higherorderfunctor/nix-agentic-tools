@@ -219,7 +219,12 @@ def _new(workspace: Workspace, params: dict, fields: dict) -> dict:
         path.unlink(missing_ok=True)
         workspace._discard()
         raise
-    workspace._discard()
+    # ADOPT the graph we just paid for rather than throwing it away. The
+    # reload was needed to resolve the @repo alias on the new document; it
+    # is also a complete, current graph, so publishing it leaves the
+    # workspace clean and the next read free. Discarding here made `new`
+    # cost TWO loads -- this one, and another at whatever came next.
+    workspace._adopt(reloaded)
     return {"written": [str(p.relative_to(workspace.root)) for p in written]}
 
 

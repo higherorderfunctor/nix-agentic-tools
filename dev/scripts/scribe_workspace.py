@@ -231,6 +231,17 @@ class Workspace:
             self._dirty = True
             return written
 
+    def _adopt(self, graph: Graph) -> Generation:
+        """Publish a graph someone else already built from disk.
+
+        `new` has to reload mid-operation to resolve the grammar alias on the
+        document it just created. That reload is a complete current graph, so
+        throwing it away and reloading again at the next read pays for the
+        same work twice.
+        """
+        with self._lock:
+            return self._republish(graph)
+
     def reload(self) -> Generation:
         """Rebuild now rather than at the next read."""
         with self._lock:
