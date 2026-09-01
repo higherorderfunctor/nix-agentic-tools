@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: The Board canvas uses the native web platform behind replaceable seams
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+TITLE: The Board canvas uses the native web platform behind replaceable seams
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: Measured board usage requires a component, layout, or rendering library whose benefit exceeds the app's build and dependency cost.
+STATEMENT: >>>
+The Board canvas is dependency-free HTML, CSS and JavaScript over SVG. Data
+adaptation, layout and rendering remain separate modules communicating through
+application-owned plain objects, so a heavier canvas (React Flow and ELK, say)
+can replace the drawing without replacing the server, the adapter, or the
+snapshot schema. The Perspective view is the ruled exception, and its
+dependency is pinned and governed separately
+(DEC-SDOC-BOARD-PERSPECTIVE-FROM-CDN).
+<<<
+RATIONALE: >>>
+The operator asked first to see the whole canon with no filtering or mutation
+and expects to reshape the result. A zero-build canvas reaches that probe
+directly while keeping the durable boundary: canon source, owned snapshot,
+layout, renderer.
+<<<
+NOTES: >>>
+Ported 2026-09-01 from the codex spike branch, narrowed from "the MVP browser"
+to the Board canvas when the Perspective view joined the app.
+<<<

@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: One app; views are lenses over one daemon-served dataset
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SDOC-BOARD-ONE-APP-TWO-VIEWS
+TITLE: One app; views are lenses over one daemon-served dataset
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A view requires its own process, deployment, lifecycle or security boundary, or the view count outgrows a flat switcher.
+STATEMENT: >>>
+One web app serves every browser reading of the canon. A view is a lens over
+the same daemon-served dataset -- it may not fetch from a different source --
+selected by a global switcher and recorded in the URL (?view=), with node
+selection in the #hash so both survive reload and travel in a link. The chrome
+(brand, counts, generation, status, refresh) is global and stable across
+views. The first two views are Board, the relation canvas, and Perspective,
+the data explorer.
+<<<
+RATIONALE: >>>
+Directed by the operator on 2026-09-01 after running the two spikes side by
+side. The shape follows beadboard: views as lenses over one live dataset, the
+URL as the source of truth for view state, chrome that does not move when the
+view does.
+<<<

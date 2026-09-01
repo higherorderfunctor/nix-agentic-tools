@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: The board reads the whole canon and cannot mutate it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-SDOC-BOARD-MVP-READS-WHOLE-CANON
+TITLE: The board reads the whole canon and cannot mutate it
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The board presents every node and every resolved Parent or Child declaration
+loaded from the canon, in each of its views. It offers no filter, no editor, no
+mutation endpoint and no write-back path: selection, pan, zoom, table queries
+and inspection are reading actions only.
+<<<
+NOTES: >>>
+Ported 2026-09-01 from the codex spike branch (feat/strictdoc-trial-codex),
+where it governed the board spike alone; the merged app extends it over the
+Perspective view. The known cost of "every node": the whole-canon canvas is
+denser than a person can read (operator, 2026-09-01). WORK-BOARD-FILTER-MODEL
+owns deciding the filter model, and this requirement's no-filter clause is
+expected to be superseded by what it decides.
+<<<

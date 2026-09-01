@@ -1,0 +1,42 @@
+[DOCUMENT]
+TITLE: The Board canvas renders compact cards over a pan-and-zoom scene
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-CANVAS
+TITLE: The Board canvas renders compact cards over a pan-and-zoom scene
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+board.js renders the snapshot as SVG card groups over a pan-and-zoom scene:
+cards show type, UID, title and state; edges show the declared role and an
+arrow; pointer and wheel transforms provide pan, zoom and fit. Clicking a card
+emphasizes its immediate incoming and outgoing relations and fills a read-only
+inspector with every field, the declaring file's path, and both relation
+directions resolved to titles. The shell (app.js) fetches the snapshot and
+calls renderBoard; the view module fetches nothing itself.
+<<<
+NOTES: >>>
+Ported 2026-09-01 from the codex spike unchanged in substance; the fetch moved
+into the shell and the type accents moved onto the shared Aurora palette.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: REQ-SDOC-BOARD-MVP-READS-WHOLE-CANON
+  ROLE: Guarantees
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-MERGED-SMOKE
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: docs/sdoc/board/index.html
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/app.css
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/app.js
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/board.js

@@ -1,0 +1,40 @@
+[DOCUMENT]
+TITLE: One export becomes the snapshot and two queryable tables
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-ADAPTER
+TITLE: One export becomes the snapshot and two queryable tables
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+adapter.py's adapt() turns one workspace.export index.json into both browser
+payloads in a single pass, joining two sources the export does not carry: the
+UID-to-file walk (view-check's uid_paths, imported rather than duplicated) for
+provenance paths, and parse_sgra for field kinds and option lists, since the
+export types every field as String. The snapshot (sdoc-board/2) is one record
+per node plus one edge per RESOLVED Parent or Child declaration, with
+unresolved targets kept as diagnostics rather than dropped. The rows payload
+(sdoc-perspective/2) is two tables: nodes, one row per node with PATH, DIR and
+degree facets; and relations, one row per declared relation, denormalized with
+both endpoints' type, title, state and path. Every row of a table carries the
+union key set with nulls for absent fields, because Perspective infers its
+column schema from the rows.
+<<<
+RATIONALE: >>>
+The spike squashed relations into comma-joined facet strings on the node row;
+Perspective cannot explode a string back into rows, so relations were
+unqueryable (the operator's report, 2026-09-01). The denormalized second table
+is the fix.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-READS-THE-SCRIBE-DAEMON
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-MERGED-SMOKE
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: docs/sdoc/board/adapter.py

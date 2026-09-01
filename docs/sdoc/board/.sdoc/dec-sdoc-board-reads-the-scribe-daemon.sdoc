@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: The board's one data source is the resident scribe daemon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SDOC-BOARD-READS-THE-SCRIBE-DAEMON
+TITLE: The board's one data source is the resident scribe daemon
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: The daemon grows a typed query interface that supersedes the JSON export as the read path, or the board stops being read-only.
+STATEMENT: >>>
+The board's one data source is the resident scribe daemon. The server asks
+workspace.describe for the held generation, calls workspace.export when it
+moved, adapts the exported JSON, and caches the adapted payloads keyed by
+generation; it never imports strictdoc, never loads a second graph, and never
+runs an exporter subprocess. When no daemon answers, API requests refuse with
+the client's own remedy (HTTP 503 naming devenv up scribe) and the page renders
+that refusal with a retry; there is deliberately no fallback load.
+<<<
+RATIONALE: >>>
+One loaded graph per worktree already exists, reconciles itself on every read,
+and exports in about 0.3 s. Both spikes duplicated it: the board hydrated its
+own in-process StrictDoc workspace (3.4 s cold) beside the daemon's, and the
+explorer paid a 2.2 s strictdoc export subprocess on every page load. The
+export lands under output/, which the daemon's freshness sweep and the UID walk
+both skip, so serving never dirties what it serves.
+<<<
+NOTES: >>>
+Written 2026-09-01 for the merge. It replaces the codex spike's data-plane
+decisions (DEC-SDOC-BOARD-SERVER-OWNS-SNAPSHOT, DEC-SDOC-BOARD-COHOST-ADAPTERS,
+DEC-SDOC-BOARD-LOCAL-RPC, DEC-SDOC-PERSPECTIVE-EXPORT-BOUNDARY): the spike's
+private workspace, its Unix-socket RPC and its per-request exporter are all
+dropped in favour of the daemon this branch already runs. Those nodes never
+landed on this branch, so there are no Superseded_By edges to write -- the
+provenance lives here instead.
+<<<

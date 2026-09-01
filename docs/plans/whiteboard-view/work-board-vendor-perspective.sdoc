@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: Vendor the pinned Perspective build out of the CDN
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-BOARD-VENDOR-PERSPECTIVE
+TITLE: Vendor the pinned Perspective build out of the CDN
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Vendor or nix-package the pinned Perspective 5.3.0 assets (modules, wasm,
+pro-dark base stylesheet) so the explorer works offline and cannot drift under
+the CDN, and drop the cdn.jsdelivr.net Content-Security-Policy admissions when
+it lands. This is DEC-SDOC-BOARD-PERSPECTIVE-FROM-CDN's named retirement.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-PERSPECTIVE-FROM-CDN
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-WHITEBOARD-VIEW
+  ROLE: Backlogged_In

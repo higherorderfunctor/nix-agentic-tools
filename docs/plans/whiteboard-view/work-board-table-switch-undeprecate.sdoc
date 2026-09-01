@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Exit the deprecated load(table) path in the table switch
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-BOARD-TABLE-SWITCH-UNDEPRECATE
+TITLE: Exit the deprecated load(table) path in the table switch
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The explorer's table switch rides viewer.load(table), which upstream
+deprecates in favour of load(client) plus restore({table}) -- but that path
+merges the old view's columns into the new table's schema and is refused
+(measured 2026-09-01: Unknown column SOURCE_TYPE in field columns). Exit the
+deprecated path once upstream restores cleanly across tables, or switch via an
+explicit clear-then-restore if the warning ever becomes a removal.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-PERSPECTIVE-VIEW
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-WHITEBOARD-VIEW
+  ROLE: Backlogged_In

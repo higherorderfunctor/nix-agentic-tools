@@ -250,6 +250,32 @@ in {
       '';
     };
 
+    # ── The board app (MECH-SDOC-BOARD-SERVER) ───────────────────────
+    #
+    # Serves docs/sdoc/board/ -- the Board canvas and the Perspective
+    # explorer over one page -- reading the RESIDENT scribe daemon
+    # (workspace.export) on every generation change. No daemon means the
+    # page renders the refusal and a retry, not a fallback load, so bring
+    # one up first: devenv up scribe. Any python3 serves; the server
+    # imports nothing from strictdoc.
+    #
+    #   devenv tasks run board:serve
+    #   devenv tasks run board:serve --input port=8080
+    #
+    # Foreground on purpose, like view:serve: Ctrl-C stops it.
+    "board:serve" = {
+      description = "Serve the board app on 127.0.0.1 (input port, default 8765)";
+      exec = ''
+        ${bashPreamble}
+        ${log}
+        cd "$DEVENV_ROOT"
+        port=$(printf '%s' "''${DEVENV_TASK_INPUT:-null}" | jq -r '.port // 8765')
+        log "Serving the board at http://127.0.0.1:$port/ (Ctrl-C stops it)"
+        exec env -u PYTHONPATH python3 docs/sdoc/board/server.py \
+          --root "$DEVENV_ROOT" --port "$port"
+      '';
+    };
+
     # ── The whiteboard view (MECH-VIEW-TASK, MECH-VIEW-SERVE) ────────
     #
     # Renders the canon: strictdoc export into a CLEAN directory (an

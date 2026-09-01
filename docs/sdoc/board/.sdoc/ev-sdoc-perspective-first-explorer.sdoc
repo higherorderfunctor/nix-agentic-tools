@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: The export-backed Perspective explorer renders and restores a query
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SDOC-PERSPECTIVE-FIRST-EXPLORER
+TITLE: The export-backed Perspective explorer renders and restores a query
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: StrictDoc 0.28.3 JSON export; Perspective 5.3.0 CDN build; headless Chromium; codex spike contracts; 2026-08-31
+STATEMENT: >>>
+A direct request exported 372 documents and 372 nodes with 954 relations from
+a 9,162,301-byte json/index.json in 2,171.6 ms, then returned 372 flat rows
+without retaining the export. Headless Chromium defined the Perspective custom
+element, rendered its Pro Dark Datagrid with the native settings panel and
+eight selected columns, and reported the same node and relation counts. A
+native _NODE_TYPE group-by survived a fresh-export page reload through the
+viewer's save and restore token. The browser smoke exposed a blocked
+Perspective blob module under the initial Content-Security-Policy; the final
+policy admits blob scripts and workers while retaining the remaining
+restrictions.
+<<<
+NOTES: >>>
+Measured on the codex spike branch (feat/strictdoc-trial-codex) before the
+merge; ported 2026-09-01 because two findings still govern the merged app: the
+CSP directive set, kept verbatim in server.py, and the per-request export cost
+that DEC-SDOC-BOARD-READS-THE-SCRIBE-DAEMON removes. The spike's test file did
+not survive the merge, so this carries no File relation.
+<<<

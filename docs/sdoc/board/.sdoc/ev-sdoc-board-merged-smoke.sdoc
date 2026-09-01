@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: The merged app serves both views from the live daemon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SDOC-BOARD-MERGED-SMOKE
+TITLE: The merged app serves both views from the live daemon
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: Live scribe daemon (generation 3) and headless ungoogled-chromium 151 driven over the DevTools pipe; system python3; 2026-09-01
+STATEMENT: >>>
+Nine hermetic contracts passed under system python3: adapter fixtures covering
+edge resolution, the dangling-target diagnostic, per-table union key sets and
+degree facets, plus the HTTP allowlist, 405s on mutating methods, and a 503
+whose body carries "devenv up scribe". Against the live daemon the server
+adapted 384 nodes, 922 resolved edges, 0 diagnostics and 953 relation rows;
+/api/graph served 1,306,012 bytes and /api/rows 1,470,894 bytes at generation
+3, and a repeat request answered from the generation cache in about 18 ms with
+no export. In the driven browser the Board drew the whole canon with all seven
+type accents, and a hash-selected node dimmed unrelated topology and filled
+the inspector; the Perspective view rendered the Aurora datagrid at 384 rows
+by 8 columns, and the Relations switch rendered 953 rows by 8 with source and
+target facets. Switching tables via restore({table}) was refused with "Unknown
+column SOURCE_TYPE in field columns"; loading the Table object directly worked
+and logs upstream's deprecation of that path.
+<<<
+RELATIONS:
+- TYPE: File
+  VALUE: docs/sdoc/board/test_board.py

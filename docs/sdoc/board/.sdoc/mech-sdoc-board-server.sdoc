@@ -1,0 +1,41 @@
+[DOCUMENT]
+TITLE: One stdlib HTTP server serves the app over the resident daemon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-SERVER
+TITLE: One stdlib HTTP server serves the app over the resident daemon
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+server.py is one stdlib threaded HTTP server: GET and HEAD only, an
+allowlisted static surface, and three JSON routes -- /api/health (the daemon's
+describe), /api/graph (the sdoc-board/2 snapshot) and /api/rows (the
+sdoc-perspective/2 tables). source.py's DaemonSource holds the adapted
+payloads keyed by daemon generation and re-exports only when describe reports
+movement, so a repeat request costs no export. A NoDaemon refusal becomes HTTP
+503 with the remedy in the body; any other daemon error is a 502. The process
+imports nothing from strictdoc, so ./serve runs under any python3 and the
+devenv task board:serve wraps it.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-READS-THE-SCRIBE-DAEMON
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-ONE-APP-TWO-VIEWS
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: REQ-SDOC-BOARD-MVP-READS-WHOLE-CANON
+  ROLE: Guarantees
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-MERGED-SMOKE
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: docs/sdoc/board/server.py
+- TYPE: File
+  VALUE: docs/sdoc/board/source.py
+- TYPE: File
+  VALUE: docs/sdoc/board/serve

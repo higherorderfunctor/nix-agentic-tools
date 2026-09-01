@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Perspective owns ephemeral view state in the browser
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SDOC-PERSPECTIVE-LOCAL-VIEW-STATE
+TITLE: Perspective owns ephemeral view state in the browser
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: View configurations must be shared, synchronized across devices, migrated across incompatible schemas, or governed outside one browser profile.
+STATEMENT: >>>
+The Perspective view persists only Perspective's native save and restore
+tokens, one per named table, in browser localStorage. The server stores no
+viewer configuration, and exported canon data is never part of a saved token.
+<<<
+RATIONALE: >>>
+Perspective already serializes its complete view configuration without the
+data. Using that contract preserves a useful reload experience without
+inventing an application state model.
+<<<
+NOTES: >>>
+Ported 2026-09-01 from the codex spike branch; "one per named table" is the
+merge's only extension, following the second table.
+<<<

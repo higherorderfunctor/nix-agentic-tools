@@ -1,0 +1,43 @@
+[DOCUMENT]
+TITLE: Perspective explores two named tables under a registered Aurora theme
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-PERSPECTIVE-VIEW
+TITLE: Perspective explores two named tables under a registered Aurora theme
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+perspective.js loads the pinned CDN modules, builds two named tables (nodes,
+relations) on one client worker, and drives one viewer. The Nodes|Relations
+switch loads the target Table object and then restores that table's saved or
+default configuration: restore({table}) alone merges the OLD view's columns
+into the NEW table's schema and is refused, so the switch rides the deprecated
+load(table) path instead (measured; WORK-BOARD-TABLE-SWITCH-UNDEPRECATE owns
+the exit). Config-update events save the native token per table to
+localStorage. Aurora is a REGISTERED Perspective theme: assets/theme.css
+carries a quoted --psp-theme-name on a bare perspective-viewer selector for
+auto-discovery, overrides the --psp-* variables under the theme-scoped
+selectors, themes the popup custom elements separately (they are not viewer
+descendants), and rides the CDN pro-dark.css base -- linked with crossorigin,
+without which a cross-origin stylesheet's rules are unreadable and the theme
+silently never appears -- for icons, labels and defaults.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-PERSPECTIVE-LOCAL-VIEW-STATE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-PERSPECTIVE-FROM-CDN
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-MERGED-SMOKE
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/perspective.js
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/theme.css
+- TYPE: File
+  VALUE: docs/sdoc/board/index.html

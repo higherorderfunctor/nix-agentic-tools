@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: The Perspective view rides a pinned CDN build
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SDOC-BOARD-PERSPECTIVE-FROM-CDN
+TITLE: The Perspective view rides a pinned CDN build
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: The board outgrows spike status or must work offline; WORK-BOARD-VENDOR-PERSPECTIVE is the successor's work.
+STATEMENT: >>>
+The Perspective view loads the pinned @perspective-dev 5.3.0 CDN modules
+(viewer, datagrid, charts, client) and the pro-dark base stylesheet from
+cdn.jsdelivr.net, and the server's Content-Security-Policy admits exactly that
+host plus the blob: and wasm-unsafe-eval channels Perspective's worker needs.
+Nothing else crosses the loopback boundary.
+<<<
+RATIONALE: >>>
+Pinning a CDN build keeps the spike zero-build while the explorer's worth is
+still being measured. The CSP directives are the measured minimum from the
+spike's browser smoke (EV-SDOC-PERSPECTIVE-FIRST-EXPLORER), not a guess.
+<<<
