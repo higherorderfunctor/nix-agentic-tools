@@ -1,0 +1,44 @@
+[DOCUMENT]
+TITLE: dev/tasks/check.nix restates the flake checks instead of running them
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE
+TITLE: dev/tasks/check.nix restates the flake checks instead of running them
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+`check:sdoc-grammar` and checks/strictdoc-grammar-*.nix implement the same
+acceptance list twice, in bash and in Nix, against the same fixtures. They agree
+today. Nothing makes them agree tomorrow: the flake checks read committed bytes
+through the flake's `self` while the task reads the working tree, and only the
+flake side reads the layer expectation out of fixtures/README.md, so the task's
+negative arm accepts a fixture failing for the wrong reason.
+
+Acceptance item 3 is already handled the other way -- the task shells out to
+`nix build .#checks.<system>.strictdoc-grammar-surface-live` rather than
+restating its case table -- and that is the shape the rest should converge on:
+the task becomes a working-tree render plus a deferral, and the assertions live
+in one place.
+<<<
+RATIONALE: >>>
+Written when item 3 was added and the choice had to be made once. Deferring is
+cheap for a new arm and a rewrite for the existing five, so the existing five
+were left alone and the divergence recorded instead of half-fixed.
+<<<
+NOTES: >>>
+The operator asked for a position rather than a question, 2026-08-26. Position:
+the flake check is the gate and the devenv task should defer to it, which one of
+the six arms already does. The duplication is therefore a defect rather than a
+design.
+
+Held rather than acted on, because the boundary it depends on is not written
+down anywhere -- see MECH-CHECK-SYSTEM-BOUNDARY, which is the repo-wide version
+and interacts with the standing intention to move checks into packages/.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

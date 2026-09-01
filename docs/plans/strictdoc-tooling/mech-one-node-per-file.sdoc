@@ -1,0 +1,85 @@
+[DOCUMENT]
+TITLE: One node per file, because an agent reads files and traverses edges
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: MECH-ONE-NODE-PER-FILE
+TITLE: One node per file, because an agent reads files and traverses edges
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+A file holds exactly one node. One requirement, one plan step, one plan, one
+milestone, one backlog item, one decision -- one. The operator's word for it is
+ONE.
+
+The graph is a web pulled in by edges, not a set of documents read whole. That
+only works if the unit a reader fetches is the unit the graph addresses. Before
+the carve the addressable unit was a node and the fetchable unit was a file, and
+the two were off by two orders of magnitude.
+
+The corpus now satisfies this. DEC-NODE-FILE-NAMING carries how a file is
+named, DEC-BACKLOG-IS-A-REGISTER-NODE carries what a plan's backlog became once
+it stopped being a file, and MECH-SDOC-LAYOUT-CHECK carries the guard that would
+keep both true, which does not exist yet.
+<<<
+RATIONALE: >>>
+This was a context-economy defect before it was a tidiness one, and the system's
+stated purpose makes it acute: DEC-SYSTEM-PURPOSE optimizes for a reader with a
+bounded context and no memory of yesterday. A layout that forced that reader to
+take 279 KB to learn 2.7 KB was working against the thing the graph is for.
+
+It also compounded silently. Every session that filed a backlog item made the
+next session's read more expensive, and nothing reported the cost.
+
+The operator expects this to get clearer once semantics land and each item type
+can have its own grammar, which is when a file's shape and its single node's
+type become the same statement.
+<<<
+NOTES: >>>
+Raised by the operator 2026-08-27 after reading the file sizes: "thats a failure
+mode ... 273k backlog loaded into context churning with re-reads ... you are
+supposed to pull in from the graph what you need from edges."
+
+The measurement that carried the argument, taken before the migration: 421 KB
+across 156 nodes in 8 files, so an average node was about 2.7 KB. Reading one
+node out of the backlog document cost 279 KB, because that file held 110 of
+them. Reading one out of the executable-rules document cost 74 KB for 7 nodes,
+10.5 KB apiece. An agent that opened the backlog to read one item took the
+entire backlog into context, roughly a hundred times what it came for, and did
+it again on every re-read.
+
+Migration ran the same day, in ten commits from 667d0404 to ccad4c9d, and did
+NOT wait for the writing tool from SLICE-SDOC-CLI as this node originally
+wanted. The export is the validator, so a script splitting at node boundaries
+plus a clean-directory export per step was sufficient. Node bodies were copied
+byte for byte and only the document preamble was regenerated; the UID never
+changes, so no edge moved. Proof rather than assertion: a per-node dump of the
+JSON export, every field but the within-document _TOC position, is identical
+before and after, and 0 of 161 contract hashes changed.
+
+After: 161 nodes in 161 files, 447,724 bytes, 2,780 bytes on average. The
+largest file is one node, slice-behaviour-model.sdoc at 17.9 KB, which is the
+node's own size and not a packing problem.
+
+DEPTH is implemented rather than verified: the carve was checked by the session
+that ran it and by a contest over its findings, but no independent session has
+read this node against the tree.
+
+Adjacent but different, and now dissolved:
+MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE was about groomed nodes not moving
+to a numbered document. That was a question of WHICH file; this was a question
+of how many nodes a file may hold. Under this rule the other node's problem
+went away, since a groomed node no longer moves at all.
+
+Tool reads are a separate lever and were not in scope. The operator's words: "we
+can tune later to not have as many tool reads, but for now thats a failure
+mode."
+
+Retyped from MECHANISM to REQUIREMENT on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with high confidence after a second opinion: it can be violated: a counterexample would be fixed in the world, not in this node. Noted for a later split: NOTES hold the before/after measurements (421 KB across 156 nodes in 8 files; 279 KB to read one backlog item; 161 nodes in 161 files, 447,724 bytes after; 0 of 161 contract hashes changed) -- evidence that could split out into its own node. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NODE-FILE-NAMING
+  ROLE: Governed_By

@@ -1,0 +1,44 @@
+[DOCUMENT]
+TITLE: Build the resident workspace and its reconciliation
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SCRIBE-WORKSPACE
+TITLE: Build the resident workspace and its reconciliation
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+Build the workspace and its reconciliation as a library, with no transport.
+Hold one graph, publish generations, mark dirty on write, parse each written
+file immediately, and reconcile with the whole-graph rebuild when a consistent
+view is next needed. Prove the recovery path with a fixture: a half-applied
+mutation must restore bytes, re-parse the document and re-verify before the
+workspace serves again.
+<<<
+NOTES: >>>
+Implemented 2026-08-31 as dev/scripts/scribe_workspace.py, with contracts in
+dev/scripts/test_scribe_workspace.py. Seven contracts pass.
+
+Two reconcile levels, GRAPH and FULL, and the write path never reconciles --
+that was the bug the batch contract caught on its first run. The
+retry-once-after-deferred-work path is what makes the batching advice
+advisory: a reference the stale index cannot resolve costs a re-derive rather
+than an error.
+
+Library only. No transport, no socket, no devenv process: those are
+WORK-SCRIBE-RPC-AND-SERVICE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-WORKSPACE
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-RECONCILE
+  ROLE: Crosses
+- TYPE: Child
+  VALUE: EV-SCRIBE-WORKSPACE-CONTRACTS
+  ROLE: Produces
+- TYPE: File
+  VALUE: dev/scripts/test_scribe_workspace.py

@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: Whether a settled node terminates the readiness closure walk
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-CLOSURE-STOPS-AT-SETTLED
+TITLE: Whether a settled node terminates the readiness closure walk
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: >>>
+`MECH-READY-QUERY` reaching implementation, since the walk it ships encodes one answer either way.
+<<<
+STATEMENT: >>>
+The closure walk passes through a settled node into that node's own dependencies, so an unsettled ancestor blocks a root arbitrarily far downstream. Measured instance: `SLICE-SDOC-IN-SEMBLE` is DEPTH verified and reports blocked, because it Crosses `MECH-SEMBLE-EXTRA-GRAMMARS` (implemented) whose Governed_By parent `DEC-ARCH-COLOCATION` is STATUS open. The alternative reading is that `interface-settled` is itself the promise that a node's own closure was handled, which makes it a terminator and shrinks every report. Decide which.
+<<<
+RATIONALE: >>>
+Not a plumbing question. The two walks are two lines apart, and the choice is what settled is taken to mean: a claim about the node, or a claim about everything behind it. It is also what makes a verified slice read as blocked, which is the discrepancy `MECH-READINESS-PREDICATE-RECONCILE` records and explicitly declines to resolve.
+<<<
+NOTES: >>>
+`MECH-READY-QUERY`'s LEFT TO THE OPERATOR list names this exact question with this exact instance and says "Filed as a backlog DECISION". Distinct from the DEPTH cut point, which that node's list carries separately: the cut point says which values count as settled, this says what a settled node does to the walk.
+<<<

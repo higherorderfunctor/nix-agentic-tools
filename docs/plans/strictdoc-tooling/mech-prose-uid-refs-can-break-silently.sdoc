@@ -1,0 +1,42 @@
+[DOCUMENT]
+TITLE: A UID wrapped across a line break stops resolving and nothing notices
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-PROSE-UID-REFS-CAN-BREAK-SILENTLY
+TITLE: A UID wrapped across a line break stops resolving and nothing notices
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+strictdoc format rewraps prose, and a UID mentioned in prose can be wrapped
+across a line break. The result is a reference that resolves to nothing: grep
+for the UID does not find the file that cites it, and docs/sdoc/render.py prints
+the broken form. There is no relation to dangle, so the parser is content and
+every existing check passes.
+
+Found once, on MECH-CHECK-SYSTEM-BOUNDARY, and fixed by rewrapping the
+sentence. A formatter run can reintroduce it at any time.
+
+The check is cheap: scan node field text for a token matching a known UID
+prefix that is split by a newline, and for any bare prefix-shaped token that is
+not a live UID.
+<<<
+RATIONALE: >>>
+Prose UID references are how this corpus does most of its cross-referencing --
+far more of them than there are relations -- and they are the only class of
+reference nothing validates. The failure is silent in both directions: the
+citing file loses the pointer, and the cited node loses an inbound mention it
+never knew it had.
+<<<
+NOTES: >>>
+Related but distinct from MECH-FILE-RELATION-EXISTENCE, which is about relation
+VALUEs naming paths that do not exist. This is about prose, where there is no
+relation at all. Both are cases of the parser proving structure and nothing
+proving reference.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

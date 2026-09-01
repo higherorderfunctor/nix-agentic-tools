@@ -1,0 +1,46 @@
+[DOCUMENT]
+TITLE: A slice is imperative work, and a use case is a claim about the same subject
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SLICE-IS-WORK-NOT-A-USE-CASE
+TITLE: A slice is imperative work, and a use case is a claim about the same subject
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A SLICE is IMPERATIVE, so under DEC-NODE-TYPE-GRID it is not in the grid at all
+-- it is work, alongside WORK itself. It is not a USE CASE, and the two are easy
+to conflate because they are usually about the same subject.
+
+The existing definition is a vertical unit of deliverable work that Crosses the
+mechanisms it needs, and DEC-DEFER-LAYER names it as the one axis this graph can
+currently express: the vertical, cutting the horizontal layers.
+
+THE DIFFERENCE IS MOOD, not subject. A slice says BUILD THIS. A use case says
+THIS PATH MUST WORK. One is an instruction and dies when it is carried out; the
+other is a claim and outlives the work that satisfied it. So they pair rather
+than compete -- a slice is frequently the work a use case motivates, and the use
+case is what the slice is checked against afterwards.
+
+The practical consequence for the migration: a slice does not become a use case,
+and rewriting slices as use cases would silently convert a work queue into a set
+of standing claims that nothing ever completes.
+<<<
+RATIONALE: >>>
+One of the three types DEC-NODE-TYPE-GRID left unruled, and the one most likely to be mis-migrated, because a vertical slice and a use case describe the same territory from opposite moods. Recording the distinction before the migration keeps it from being decided by whoever edits first.
+<<<
+NOTES: >>>
+The operator could not recall the definition on 2026-08-28 and reasoned from the name to 'a vertical slice through horizontal layers, so a use case'. The first half is exactly right and matches DEC-DEFER-LAYER; the second half is the conflation this node exists to prevent.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NODE-TYPE-GRID
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: DEC-SLICE-DECOMPOSES-TO-WORK
+  ROLE: Governed_By

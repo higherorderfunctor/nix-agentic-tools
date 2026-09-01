@@ -1,0 +1,39 @@
+[DOCUMENT]
+TITLE: Nix's regex engine cannot express the dialect StrictDoc's grammar is written in
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-NIX-REGEX-DIALECT-GAP
+TITLE: Nix's regex engine cannot express the dialect StrictDoc's grammar is written in
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured on 0.28.3 while writing the faithful extractor. builtins.match is
+POSIX ERE. It rejects, outright and at match time rather than at declaration
+time, three constructs the .sgra grammar uses: negative lookahead, the \S class
+shorthand, and backreferences. Three of the nineteen reachable rules carry one:
+FieldName is (?!^UID)(?!^RELATIONS)..., SingleLineString is (?!>>>\r?\n)\S...,
+and ChoiceOption is (["])[^,]+\1|[^,()"]+.
+
+So "faithful means the exact regex" and "the type is checkable" cannot both
+hold. lib/faithful.nix therefore carries two spellings per pattern -- source,
+upstream's verbatim, and ere, a mechanical rewrite -- plus the named rewrites
+that got from one to the other and any deny prefixes a hoisted lookahead
+became. Every rewrite is exact rather than widening: a lookahead becomes an
+explicit prefix rejection, and a construct no named rewrite claims raises.
+
+The open item is that nothing re-validates ere against source. A rewrite that
+silently widened would pass every check in this milestone, because the only
+oracle is that the ERE compiles at all.
+<<<
+RATIONALE: >>>
+Worth knowing before anyone reads the surface as carrying upstream's patterns
+verbatim, and before the normalizer treats ere as the authority. source is the
+authority; ere is a derived artifact of a translation with no test behind it.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

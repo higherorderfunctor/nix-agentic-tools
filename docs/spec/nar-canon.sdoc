@@ -1,0 +1,54 @@
+[DOCUMENT]
+TITLE: The canon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-CANON
+TITLE: The canon
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: callout
+TAGS: whole canon, not settled
+STATEMENT: >>>
+This page is the canon: every node of the committed, human-reviewed contents, rendered from one export. The systems table beneath is the switches. Each row names the part of the repository a body of nodes documents, by the directories that hold it; a node shows when any system holding it is on, and an edge when both its ends show ([LINK: DEC-SYSTEM-IS-A-SOURCE-SET]). The model is always on, because every other system cites it. Switching changes what is shown and never what was rendered, and the selection rides in the page's address so a link carries it.
+<<<
+PARENT_FP: >>>
+DEC-SYSTEM-IS-A-TYPE-SET:0000000
+NAR-TERM-CANON:0000000
+<<<
+RELATIONS:
+- TYPE: Child
+  VALUE: NAR-CANON-SYSTEMS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-CANON-START-COUNTS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-CANON-TYPES
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-CANON-EDGES
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-CANON-WORDS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-CANON-WHITEBOARDS
+  ROLE: Contains
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-IS-A-TYPE-SET
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-IS-A-SOURCE-SET
+  ROLE: Cites
+- TYPE: Child
+  VALUE: NAR-CANON-TABS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-CANON-COLOURS
+  ROLE: Contains

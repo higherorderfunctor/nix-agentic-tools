@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: What goes in a context packet, and what happens when it does not fit
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: MECH-READY-PACKET-BUDGET
+TITLE: What goes in a context packet, and what happens when it does not fit
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+`ready.py --packet` renders a whole closure as one brief and nothing bounds it. Measured over the current export: the deepest closure is `SLICE-INSTANCE-SEMANTICS-MIGRATION` at 34 of 144 nodes carrying 207,174 characters of field text against 365,154 for the whole graph — 57 percent of the corpus in one packet. Restricting the packet to the contract fields — UID, TITLE, STATEMENT, DEPTH, STATUS, RETIRES_ON, AUTHORED_BY — cuts the same closure to 77,039 characters, a 63 percent reduction, because NOTES and RATIONALE carry most of the bytes. Decide whether NOTES and RATIONALE belong in a packet at all, given fp-check already excludes them from the contract hash, and decide what the packet does when a budget is exceeded: truncate at a hop distance, drop non-contract fields, or refuse.
+<<<
+RATIONALE: >>>
+The packet is what hands an implementing session its brief, so its content is spent on every session that uses it, and the lever is measurable rather than stylistic. `MECH-READY-QUERY` settles the order — dependency-first — and the record shape, and says nothing about content or size; at 144 nodes the whole-closure packet fits a session, and it is already more than half the graph.
+<<<
+NOTES: >>>
+Measured 2026-08-27 by summing every string field per node over a clean export, which is a different basis from the 59,740 characters `MECH-READY-QUERY`'s NOTES records for the same slice through `render.py`; the ratio between the two bases is the measurement that matters here, not either absolute.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: '`ready.py --packet` renders a whole closure as one brief and nothing bounds it' is the one universal behaviour sentence a MECHANISM reading would centre on; the two 'Decide ...' asks are open decisions, not claims. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

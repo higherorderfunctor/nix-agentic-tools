@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: Contract-bearing fields are semantic, and their edge should move
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-CONTRACT-FIELDS-EDGE-TO-SEMANTIC-LAYER
+TITLE: Contract-bearing fields are semantic, and their edge should move
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+SLICE-GRAMMAR-FROM-NIX still carries a Governed_By edge to
+DEC-FP-FIELDS-CONFIGURABLE and a matching PARENT_FP entry, from when
+contract-bearing fields were in its scope. They are not: which fields count as a
+node's contract is special meaning laid over the grammar, so it belongs to the
+semantic layer along with relation target sets and the lifecycle.
+
+Move the edge to the milestone that delivers the semantic layer. The PARENT_FP
+entry has to move with it and only the operator changes those.
+<<<
+RATIONALE: >>>
+Left in place deliberately rather than overlooked: an agent editing PARENT_FP is
+the failure this graph already recorded once.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: Human-readable renders are cached on the fingerprint of their inputs
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-RENDER-CACHE
+TITLE: Human-readable renders are cached on the fingerprint of their inputs
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+A rendered chunk is produced by a model, not deterministically: it expands one
+node and pulls in neighbouring content that adds value to the reader. Because
+generation costs tokens, each rendered chunk records the set of nodes that fed
+it and a fingerprint over their contract fields. The chunk is regenerated only
+when one of those inputs changes.
+<<<
+RATIONALE: >>>
+This is the same primitive as the suspect-link check, pointed at a different
+question. Suspect detection asks whether a node's parent contract moved since it
+was accepted; render caching asks whether any input to a chunk moved since it
+was drawn. Both hash the contract fields of a node set and compare. Building the
+fingerprint machinery therefore serves the viewer as well as drift detection,
+which is an argument for doing it before either consumer needs it.
+<<<
+PARENT_FP: DEC-HITL-IS-THE-VIEWER:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-HITL-IS-THE-VIEWER
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-BEADS-MIGRATION
+  ROLE: Backlogged_In

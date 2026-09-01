@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: PLACE, Over and sixteen widget words parse, export and round-trip under strictdoc 0.28.3
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-PLACE-FIELD-FIXTURE
+TITLE: PLACE, Over and sixteen widget words parse, export and round-trip under strictdoc 0.28.3
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: fixture and derivation script under the session scratchpad wf4/organization-in-grammar/ (fx-place, screens.py, out/screens.txt)
+STATEMENT: >>>
+Measured 2026-08-30 on a 20-file fixture: a NARRATIVE with PLACE after
+WIDGET, sixteen widget words and an Over relation parses under the imported
+grammar; export exit 0; the writer round-trips all 20 files byte-identical;
+PLACE and Over appear in the JSON in RELATIONS order; the day's view-check
+reported 0 findings on the tree; a 28-line script derived v1's screen tree
+-- Start sections, tabs, per-item screens, routes -- from the export alone.
+Also measured: a '> ' continuation line was swallowed into the bracket by
+the day's row parser, which the source-line rule corrects.
+<<<

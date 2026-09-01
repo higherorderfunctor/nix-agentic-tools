@@ -1,0 +1,60 @@
+[DOCUMENT]
+TITLE: The renderer: a content-blind page over one payload, keyed on tree shape and widget words
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-VIEW-RENDERER
+TITLE: The renderer: a content-blind page over one payload, keyed on tree shape and widget words
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+render.py takes one payload and one template and writes one self-contained
+page; it refuses any payload whose schema it was not built for. The page's
+structure is what the narratives declare: the top strip is the canon root's
+tab children, then every other root as a tab, then Nodes; a root's own
+screen is its Start -- its body, its section and card children stacked,
+what it cites, then the check findings under it; a tab's screen is the same
+over the tab; a screen child has a screen of its own with previous and next
+over its siblings and a crumb to its container, and a container that
+declares no index of its own lists its screen children. Each narrative
+draws its STATEMENT as its WIDGET names, over the subject its Over relation
+names, else itself; one whose TAGS names a grammar element draws that
+element's fields, roles and ladders with live counts beside it; one whose
+TAGS names a query word draws the table the wireline computed for it. The
+Nodes tab lists every node of the selection grouped by type with its state
+and facets, and gives each node a screen with its fields, its relations,
+its fingerprints and the rows that link it; the rows that link a
+narrative's screen draw beneath it the same way. Every UID is shown with
+its title; colour is only ever a legend word and is always written out
+beside it; the system switches select client-side and ride in the address.
+The page renders in both themes.
+<<<
+RATIONALE: >>>
+The screens are an opinion about shape, allowed by REQ-VIEW-RENDERER-IS-CONTENT-BLIND; a project whose root has no legend simply has no colours.
+<<<
+PARENT_FP: >>>
+DEC-NARRATIVE-DECLARES-ITS-PLACE:0000000
+DEC-WIDGET-SUBJECT-IS-ITS-OVER-TARGET:0000000
+<<<
+NOTES: >>>
+Rewritten 2026-08-30 to the PLACE model. The earlier statement described a structure derived from tree depth (one tab per child of the root, sections under a tab, cards under a section), which DEC-NARRATIVE-DECLARES-ITS-PLACE retired the same day.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-VIEWS-ARE-REGENERABLE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: REQ-VIEW-RENDERER-IS-CONTENT-BLIND
+  ROLE: Guarantees
+- TYPE: File
+  VALUE: docs/sdoc/view/render.py
+- TYPE: File
+  VALUE: docs/sdoc/view/template.html
+- TYPE: Parent
+  VALUE: DEC-NARRATIVE-DECLARES-ITS-PLACE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-WIDGET-SUBJECT-IS-ITS-OVER-TARGET
+  ROLE: Governed_By

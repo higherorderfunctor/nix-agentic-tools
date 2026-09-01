@@ -1,0 +1,80 @@
+[DOCUMENT]
+TITLE: The overlay that put the extractor's sources on the wrong side is gone
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY
+TITLE: The overlay that put the extractor's sources on the wrong side is gone
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+dev/fragments/overlays/overlay-pattern.md states an invariant: an overlay must
+not import build sources from packages/, because that outbound edge prevents
+lifting the overlay tree as a clean directory move. The two worked examples,
+overlays/kiro-memory-distiller/ and overlays/mcp-servers/openmemory-mem/, both
+keep their repo-local sources beside the derivation that consumes them.
+
+The grammar milestone's layout puts the extractor's three Python entry points
+under packages/strictdoc-grammar/extract/ while exposing the runner at
+pkgs.ai.devTools.strictdoc-grammar-extract, so wiring the entry points into the
+derivation would create exactly that edge.
+
+overlays/dev-tools/strictdoc-grammar-extract.nix therefore ships only the
+environment -- an interpreter carrying strictdoc's dependency closure, its
+site-packages on PYTHONPATH, and ast-grep on PATH -- and takes the entry point
+as its first argument. It works, and it is not the intended shape.
+
+Two ways out, both one small edit. Relocate the entry points under
+overlays/dev-tools/strictdoc-grammar-extract/ and add src plus an --add-flags
+line, which honours the invariant and splits the package's sources from its
+generated output. Or record an exemption to the invariant for generation-time
+tooling and point src at packages/, which keeps the package's four surfaces
+co-located and admits one overlay-to-packages edge.
+
+Nothing enforces the invariant mechanically; there is no check, and no such
+edge exists in the tree today.
+<<<
+RATIONALE: >>>
+Noted while scaffolding the grammar package. A partial wiring that works is the
+kind of thing that stops being noticed once the logic lands on top of it, and
+the choice belongs to whoever owns the overlay taxonomy rather than to the
+session that tripped over it.
+<<<
+NOTES: >>>
+RULED by the operator 2026-08-26: the invariant was read the wrong way round.
+It is correct that an overlay should be the faithful conversion of upstream, but
+the conclusion is not that sources must move under overlays/ -- it is that the
+WRAPPING does not belong in an overlay at all. It belongs in a module. See
+MECH-STRICTDOC-DEVENV-MODULE for where it goes, and
+MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES for the repo-wide version of the same
+mistake.
+
+IMPLEMENTED 2026-08-27, and by NEITHER of the two ways out the statement above
+lists. Both of those assumed the wrap survives somewhere and only argued about
+where its sources sit. The ruling says it does not belong in an overlay at all,
+so overlays/dev-tools/strictdoc-grammar-extract.nix was DELETED rather than
+thinned and pkgs.ai.devTools.strictdoc-grammar-extract no longer exists. The
+outbound overlay-to-packages edge is gone because the overlay is gone, not
+because anything moved to satisfy the invariant.
+
+packages/strictdoc-grammar/lib/mkExtract.nix is now the only copy. It is a
+factory rather than inline module code because it has two consumers that are
+not each other: ../modules/devenv puts it in the dev shell, and flake.nix builds
+it ONCE for the strictdoc-grammar-* checks, which run the same entry points in a
+derivation with no module system in sight. Measured at the move: the wrapper's
+store path is unchanged, and devenv's package list carries exactly one copy.
+
+One consequence, recorded because it is what wrapping in a module MEANS rather
+than a side effect of this edit. Build inputs now come from the CONSUMER's pkgs
+instead of an overlay's isolated ourPkgs. That is only safe here because the
+part that has to agree with upstream's virtual environment is upstream's own
+interpreter, and the single spliced import (ast_grep_py) is guarded by the
+wrapper's install check.
+
+The repo-wide version of the same mistake is untouched and still open:
+MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES, and
+MECH-AGENTS-INFER-OVERLAY-CONVENTION-FROM-EXAMPLES for why writing the rule
+down again is not the remedy.
+<<<

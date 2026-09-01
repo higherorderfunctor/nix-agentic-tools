@@ -1,0 +1,72 @@
+[DOCUMENT]
+TITLE: The programs
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-WHITEBOARD-VIEW-PROGRAMS
+TITLE: The programs
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+PLACE: screen
+STATEMENT: >>>
+The programs in the order the task runs them, then the grammar and parser pieces they rest on. A row's word says whether the code has landed; the node's own DEPTH says the same on the node, and the files it names are its File relations.
+
+- The task renders the whole canon by default into one page written twice, a standalone page and the artifact host's shape, and a second task serves the page on loopback; a root narrows the render to one view.
+[LINK: MECH-VIEW-SERVE] [LINK: MECH-VIEW-TASK] [BUILT]
+- The view check walks the tree under a root and reports, count first, the rules the parser does not check; its findings are also embedded in the payload.
+[LINK: MECH-VIEW-CHECK] [BUILT]
+- The wireline reads the export, the grammar and the worktree and writes one payload for the whole canon, schema whiteboard-view/2, that the renderer and nothing else consumes.
+[LINK: MECH-VIEW-WIRELINE] [BUILT]
+- The renderer splices one payload into a content-blind template and writes one self-contained page, refusing any schema it was not built for.
+[LINK: MECH-VIEW-RENDERER] [BUILT]
+- The grammar carries PLACE, Over and the sixteen widget words on NARRATIVE, and PLACE is outside the contract hash.
+[LINK: MECH-NARRATIVE-PLACE-AND-OVER] [BUILT]
+- The row parser reads link-only continuation lines as references and a quoted continuation line as the source wording.
+[LINK: MECH-ROW-SOURCE-LINE] [BUILT]
+- The few tables no narrative can hold -- the roots, the nodes, the systems, the terms, the grammar -- are computed by one registered query module from a closed list of words.
+[LINK: MECH-VIEW-QUERIES] [BUILT]
+- One scripted pass gave the existing narratives their PLACE, the Start cards, the reference and source lines and short tab titles.
+[LINK: MECH-VIEW-PLACE-MIGRATION] [BUILT]
+<<<
+PARENT_FP: >>>
+MECH-NARRATIVE-PLACE-AND-OVER:0000000
+MECH-ROW-SOURCE-LINE:0000000
+MECH-VIEW-CHECK:0000000
+MECH-VIEW-PLACE-MIGRATION:0000000
+MECH-VIEW-QUERIES:0000000
+MECH-VIEW-RENDERER:0000000
+MECH-VIEW-SERVE:0000000
+MECH-VIEW-TASK:0000000
+MECH-VIEW-WIRELINE:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-VIEW-WIRELINE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-VIEW-CHECK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-VIEW-RENDERER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-VIEW-TASK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-VIEW-SERVE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-NARRATIVE-PLACE-AND-OVER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-ROW-SOURCE-LINE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-VIEW-QUERIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-VIEW-PLACE-MIGRATION
+  ROLE: Cites

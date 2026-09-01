@@ -1,0 +1,96 @@
+[DOCUMENT]
+TITLE: Applying the node-type grid is a corpus migration, and three existing types have no ruling
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-GRID-MIGRATION-UNCOSTED
+TITLE: Applying the node-type grid is a corpus migration, not yet costed or applied
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+DEC-NODE-TYPE-GRID names six node types and the grammar declares five, and only
+two names are common to both. Applying the grid is a CORPUS MIGRATION, not a
+values.nix edit, and it has not been costed.
+
+WHAT THE GRID DOES NOT SAY, which is a gap in that decision rather than a
+subtlety of it. SLICE, INVARIANT and SPIKE appear nowhere in the grid, and the
+decision never states their fate. Reading its own axes gives an answer for each,
+but reading is not ruling:
+
+  INVARIANT   normative and universal, so it IS a REQUIREMENT. The grid says a
+              constraint is a requirement; it does not say the type collapses.
+  SLICE       imperative. A unit of deliverable work makes no claim about the
+              world, so it falls outside the grid the way WORK does.
+  SPIKE       imperative likewise. A probe is work; what it produces is
+              EVIDENCE. One type becomes two things at different times.
+
+WHAT IT COSTS, measured against the corpus at 173 nodes on 2026-08-28. 117 are
+MECHANISM, and the normative-or-descriptive test has to be applied to each ONE
+AT A TIME -- it cannot be derived from any field, because the current grammar
+never asked. At least one is already known to fail it: MECH-GRAMMAR-SGRA-NOT-
+GENERATED is enforced by a check, which makes it normative, under a descriptive
+prefix. Then 11 SLICE, 10 SPIKE and 4 INVARIANT by whatever the ruling above
+turns out to be.
+
+THE EXPENSIVE PART IS NOT THE TYPING. A node's UID carries its type prefix, so a
+retype mints a new UID, and every relation naming the old one moves with it,
+along with every PARENT_FP entry. The convention that a UID never changes -- the
+thing that makes grooming safe today -- does not survive a retype, so the
+migration needs a rule for identity across it before it needs a script.
+
+GATED, not merely unscheduled. DEC-PLAN-LIFECYCLE-OPEN decides whether execution
+lives in beads, and if it does then SLICE and SPIKE may LEAVE the graph rather
+than become WORK. Migrating before that is ratified risks doing it twice.
+
+NOT A BLOCKER FOR THE HOOK LAYER. L2 is about the shape of a node -- its fields,
+its relations, and the create, read, update and delete events over it -- and is
+indifferent to which node types exist. The two can proceed in either order, and
+hooks first costs nothing.
+
+DO NOT HALF-APPLY IT. Adding the new types while existing nodes keep the old
+ones leaves MECHANISM meaning two things at once, which is worse than either end
+state and is not a smaller step.
+<<<
+RATIONALE: >>>
+The grid was accepted as a description of the target vocabulary and reads as though it were a grammar change. It is not. Recording the distance now keeps a later session from discovering mid-edit that a retype moves every citation, and keeps the three unaddressed types from being decided by whoever happens to touch them first.
+<<<
+NOTES: >>>
+Raised 2026-08-28, in the same session that wrote DEC-NODE-TYPE-GRID, on the
+operator asking whether the rulings had been applied. They had not, and the
+question surfaced that the grid is silent on SLICE, INVARIANT and SPIKE. The
+grid's STATEMENT is not amended here: it describes the target correctly and its
+omission is about migration, which is this node's subject.
+
+UPDATED LATER THE SAME DAY. Two of the three are now RULED rather than read:
+DEC-SLICE-DECOMPOSES-TO-WORK (SLICE is work that declares its crossings, and
+the Crosses edge is the lane) and DEC-INVARIANT-IS-A-REQUIREMENT. SPIKE stays a
+reading, MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION. Both rulings are wired in
+below as Governed_By, so the migration is reachable from either ruling by
+traversal rather than by remembering this node exists.
+
+NOTHING IS APPLIED, and that is the point of keeping this node loud. Eleven
+SLICE nodes, four INVARIANT nodes and the Crosses role still carry the old
+grammar, so every session citing a SLICE- UID is citing WORK under a legacy
+prefix. The operator's concern on 2026-08-28 (session 6) was exactly this: a
+settled ruling going invisible behind a corpus that still spells the old
+vocabulary. The sdoc skill carries the read-through table; docs/sdoc/README.md
+points at it before the session log.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NODE-TYPE-GRID
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-ONE-GRAMMAR
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: DEC-SLICE-DECOMPOSES-TO-WORK
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-INVARIANT-IS-A-REQUIREMENT
+  ROLE: Governed_By

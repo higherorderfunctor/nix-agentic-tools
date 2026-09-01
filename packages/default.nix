@@ -32,5 +32,6 @@
   serena-mcp = import ./serena-mcp;
   semble = import ./semble;
   stacked-workflows = import ./stacked-workflows;
+  strictdoc-grammar = import ./strictdoc-grammar;
   sympy-mcp = import ./sympy-mcp;
 }

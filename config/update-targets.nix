@@ -113,6 +113,15 @@ _: {
       flags = ["--version" "skip"];
       git = "https://github.com/sdiehl/sympy-mcp.git";
     };
+    # Upstream ships no tags — grammar.js/document_grammar.js are patched, not
+    # forked, per DEC-GRAMMAR-PATCH-NOT-FORK. A rev bump that moves the patch
+    # target lines is a normal `nix-update` build failure (Hunk FAILED), not a
+    # silent drift; --fuzz=0 in the overlay guarantees that.
+    tree-sitter-strictdoc = {
+      file = "overlays/generic/tree-sitter-strictdoc.nix";
+      flags = ["--version" "skip"];
+      git = "https://github.com/manueldiagostino/tree-sitter-strictdoc.git";
+    };
     # tsgolint src uses fetchSubmodules (typescript-go). The rev-bump pre-step's
     # `nix flake prefetch` writes a submodule-less src hash, but nix-update then
     # self-corrects it — its `outputHash=""` src rebuild respects fetchSubmodules,

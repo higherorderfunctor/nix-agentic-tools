@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: Serve the render's export from the held graph
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SCRIBE-EXPORT-PAYLOAD
+TITLE: Serve the render's export from the held graph
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+Generate the export payload from the held graph and point the render task at
+it instead of a fresh strictdoc export. Downstream consumers read the same
+bytes, so nothing after wireline changes.
+<<<
+NOTES: >>>
+Implemented 2026-08-31. workspace.export_json runs strictdoc's own JSON
+generator against the held index into a caller-named directory, laid out
+exactly as `strictdoc export --output-dir`, and view:render prefers it.
+
+Measured byte-identical, 0.270 s against 2.292 s; the whole render task falls
+from 3.232 s to 1.435 s. The task falls back LOUDLY when no daemon answers --
+a deliberate divergence from the client's no-fallback rule, because that rule
+is about repeated small reads compounding, and one render is a single hit.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-EXPORT-PAYLOAD
+  ROLE: Crosses
+- TYPE: Child
+  VALUE: EV-SCRIBE-RPC-AND-EXPORT
+  ROLE: Produces

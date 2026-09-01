@@ -1,0 +1,13 @@
+[GRAMMAR]
+ELEMENTS:
+- TAG: NOTE
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: LICENCE
+    TYPE: SingleChoice(alpha, "beta, gamma")
+    REQUIRED: False

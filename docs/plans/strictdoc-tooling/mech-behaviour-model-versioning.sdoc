@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: The behaviour model stamps a version and states no rule about it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-BEHAVIOUR-MODEL-VERSIONING
+TITLE: The behaviour model stamps a version and states no rule about it
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+`SLICE-BEHAVIOUR-MODEL` emits a neutral JSON carrying a schema version and a model version, and that JSON is the interchange form the tool and the validators consume because Python cannot evaluate Nix. No rule says what either version is compared against, or what happens when a consumer reads a model produced against a different grammar. Decide what the stamp is compared to, and what fails when they disagree.
+<<<
+RATIONALE: >>>
+The grammar surface has the analogous problem in the opposite direction and answers it with a currency check that regenerates and diffs; the behaviour model has no upstream to be current against, so its compatibility has to be declared rather than derived. A consumer reading a mismatched model has no way to notice, which is the failure mode the whole milestone exists to remove.
+<<<
+NOTES: >>>
+Named in `SLICE-BEHAVIOUR-MODEL`'s NOTES as "the one piece of plumbing here with no measured precedent" — the stamp is in the emitted JSON, the compatibility rule is not. Filed so the gap survives that slice moving to implemented, at which point its NOTES stop being a worklist.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

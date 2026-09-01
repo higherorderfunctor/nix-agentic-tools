@@ -1,0 +1,61 @@
+[DOCUMENT]
+TITLE: A write parses its own file now and defers the whole-graph rebuild
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-RECONCILE
+TITLE: A write parses its own file now and defers the whole-graph rebuild
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+A write is checked before any byte moves. The mutation applies in memory, the
+cross-document rules answerable from the held index run, every touched
+document is rendered to a string and that string is parsed -- and only then
+does the write reach the disk. A refusal moved nothing, so nothing is undone.
+
+The whole-graph reload is deferred to the next read, and it is strictdoc's
+FULL load. A run of writes therefore pays one reload rather than one each.
+
+A read reloads when the workspace is dirty from its own writes AND when the
+files changed underneath it. The second is not hypothetical: git rewrites the
+tree during a checkout or a rebase, and the daemon is not what runs git. The
+detector is a content hash over every .sdoc, .sgra and the project config,
+about 7 ms against a 550 ms reload -- content rather than modification time,
+because strictdoc's own transforms layer stamps every document on an edit.
+
+Rollback survives beneath the save itself, where a partial filesystem write
+cannot be prevented by any check. Nothing above that layer depends on it.
+
+A failed load clears the held state. Leaving it set wedged the workspace
+permanently: every later read failed and repairing the file on disk did not
+help, because a rebuild over in-memory objects never re-read it.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-DEFERS-THE-REBUILD
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-AVOIDS-THE-TRANSFORMS-LAYER
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-WORKSPACE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: EV-STRICTDOC-MUTATION-PRIMITIVES
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: dev/scripts/scribe_workspace.py
+- TYPE: Parent
+  VALUE: EV-SCRIBE-WORKSPACE-CONTRACTS
+  ROLE: Proven_By
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-DEFERRED-RELOAD-IS-FULL
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-VALIDATES-BEFORE-WRITING
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: EV-CHEAP-REBUILD-SKIPS-INLINE-LINKS
+  ROLE: Proven_By

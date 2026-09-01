@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: The Python side hand-copies every vocabulary and every walk, and the copies are about to disagree
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: MECH-SDOC-VOCABULARY-SINGLE-SOURCE
+TITLE: The Python side hand-copies every vocabulary and every walk, and the copies are about to disagree
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Four vocabularies and one graph walk are written three times each across `dev/scripts/` and `docs/sdoc/`, with nothing making them agree. Node discovery: `docs/sdoc/status.py:24` and `docs/sdoc/render.py:31` accept anything whose UID prefix is in a hand-written tuple (`status.py:17`, `render.py:22`); `dev/scripts/sdoc_fp.py:52` walks DOCUMENTS then NODES and accepts anything whose `_NODE_TYPE` is not TEXT. The DEPTH ladder appears at `packages/strictdoc-grammar/values.nix:36-41`, again at `status.py:33` as SETTLED, again at `sdoc_fp.py:38` as READY_DEPTHS. The fingerprint placeholder is `sdoc_fp.py:19`, the literal `":0000000"` at `status.py:110`, and the literal `"0000000"` at `render.py:70`. PARENT_FP is parsed by `sdoc_fp.py:82` with `partition(":")` — first colon, as `DEC-FINGERPRINT-IN-NODE` specifies — and by `status.py:52,54` and `render.py:66` with `split()` then `rsplit(":", 1)` — last colon. Fold all five into the shared module `MECH-READINESS-PREDICATE-RECONCILE` creates, deriving the vocabularies from the generated grammar rather than restating them.
+<<<
+RATIONALE: >>>
+Today the copies agree — all three discovery walks return the same 144 nodes — so the cost of the duplication is zero and the cost of a divergence is silence. Two divergences are already scheduled. `MECH-SIGNATURE-REVOCATION` writes `revoked:<hash>` into the value slot: under the last-colon parsers `DEC-FINGERPRINT-IN-NODE:revoked:b2c00b4` yields the parent UID `DEC-FINGERPRINT-IN-NODE:revoked`, which resolves to no node, so `status.py` silently drops that dependency from a closure and `render.py:70` prints the withdrawn acceptance as `signed b2c00b4`. And a node nested in a `[SECTION]` is found by the two recursive walks and missed by `sdoc_fp`'s two-level one, while a new element added to the grammar is found by `sdoc_fp` and missed by the other two.
+<<<
+NOTES: >>>
+Measured 2026-08-27 against a clean export of 144 nodes. `MECH-READINESS-PREDICATE-RECONCILE`'s NOTES logs the three discovery walks and says they are out of scope there and logged separately; this is that node, widened to the three constants and the two parsers, because the fix is one import in each of two directories and splitting it into three nodes would produce three edits to the same two files. The revocation divergence was confirmed by running both parser forms over the exact string `MECH-SIGNATURE-REVOCATION` specifies.
+
+Absorbs the proposed `MECH-NODE-DISCOVERY-SINGLE-SOURCE`, `MECH-FP-VOCABULARY-DUPLICATED` and `MECH-STATE-VOCABULARY-FROM-GRAMMAR`.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: Design sentence: "Fold all five into the shared module MECH-READINESS-PREDICATE-RECONCILE creates, deriving the vocabularies from the generated grammar rather than restating them." A reader could weigh the Backlogged_In work item as the centre and keep it MECHANISM; the RATIONALE's predicted divergences are descriptive of scheduled changes, not rules. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

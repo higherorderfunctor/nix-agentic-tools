@@ -1,0 +1,68 @@
+[DOCUMENT]
+TITLE: The default export format fails on this corpus, so only --formats=json is ever green
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: MECH-DEFAULT-EXPORT-IS-RED-ON-RST
+TITLE: The default export format fails on this corpus, so only --formats=json is ever green
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+`strictdoc export . --output-dir <dir>` with no `--formats` exits 1 on this
+corpus, and always has. StrictDoc renders every node field through docutils on
+the HTML path, and SLICE-SDOC-IN-SEMBLE's STATEMENT carries the bare glob
+`*.sdoc`, which RST reads as an inline emphasis start-string with no end-string:
+"problems when converting RST to HTML", raised from
+rst_to_html_fragment_writer.py:231. Measured against strictdoc 0.28.3 on
+2026-08-26. The prose predates this plan's tooling work.
+
+Every documented loop in this repository passes `--formats=json` -- the sdoc
+skill, docs/sdoc/README.md, the recipe in dev/scripts/fp-check.py and
+cycle-check.py, checks/strictdoc-fp-check.nix and checks/strictdoc-cycle-check.nix
+-- so the RST writer never runs and the breakage is invisible. Nothing checks
+this corpus against the renderer a person would read it in.
+
+The fix at authoring time is one character, and the rule is not the one it looks
+like. MEASURED by driving docutils directly: a glob inside a single backtick is
+CLEAN, and so is one inside double backticks, while a bare glob warns whether it
+appears once or twice on a line -- an asterisk that opens emphasis needs a
+closing asterisk that ENDS a word, and a glob never supplies one. So a pair of
+globs on one line is not a matched pair; it is two unterminated openings.
+
+Three bare sites exist today, all still unfixed and all now one node per file:
+two in SLICE-SDOC-IN-SEMBLE, one in its STATEMENT and one in its NOTES (formerly
+01-tooling.sdoc:195 and :208), and the unquoted `checks/strictdoc-grammar-*.nix`
+inside MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE, which this milestone wrote -- all
+three confirmed to warn, by a session with no way to notice. The export aborts at the
+first, so the count comes from probing docutils rather than from the export.
+
+Fix shape: either escape globs at authoring time and put an HTML export in the
+gate, or record that HTML is not a supported view of this corpus and make the
+JSON-only loop explicit rather than incidental. Pinning formats per
+MECH-SDOC-LEAN-FORMATS would settle it by removing the HTML writer -- note that
+node's separate false green, where `--formats=html` then exits 0 having written
+nothing.
+<<<
+RATIONALE: >>>
+Found by the landing step running the milestone's validation loop literally as
+worded -- "a clean export to a temp dir" -- rather than as the repository's own
+scripts spell it. The two differ, and only one of them is green.
+<<<
+NOTES: >>>
+RULED by the operator 2026-08-26: tech debt against this plan, LOW priority, may
+sit unfixed for several milestones. Found during milestone one, which is where
+it should be referenced back to.
+
+The requirement it implies is separate and is tracked as
+MECH-HTML-RENDER-MUST-PASS: whatever the fix, either repair the prose or make it
+error loudly, but the operator does not want this to become a blocker on work
+that has nothing to do with HTML.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: 'an asterisk that opens emphasis needs a closing asterisk that ENDS a word, and a glob never supplies one' (docutils behaviour, universal) and 'Every documented loop in this repository passes --formats=json ... so the RST writer never runs and the breakage is invisible' (repo mechanism); the NOTES' operator ruling (tech debt, LOW priority) is a decision. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

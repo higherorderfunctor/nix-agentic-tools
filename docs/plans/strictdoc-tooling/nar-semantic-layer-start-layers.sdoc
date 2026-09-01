@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: The four layers
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-START-LAYERS
+TITLE: The four layers
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: stack
+PLACE: screen
+STATEMENT: >>>
+Each layer may use only what is beneath it.
+
+- L3: the semantic layer: lifecycles, gates, ripple, signing, readiness -- a language that decomposes into L1 plus L2 [HERE]
+- L2: hook machinery: where logic can attach and what a handler is handed; semantic-free
+- L1: this repo's grammar: which node types exist, their fields, their relation roles
+- L0: grammar machinery: the typed Nix options, the checks and the emitter that renders the grammar file
+
+The hard rule, [LINK: DEC-LAYER-STACK]: semantics are never written directly into a tool. This page is about L3 -- and much of it is currently sitting in L0 tools.
+<<<
+PARENT_FP: DEC-LAYER-STACK:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Cites

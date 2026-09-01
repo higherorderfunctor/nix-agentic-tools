@@ -1,0 +1,55 @@
+[DOCUMENT]
+TITLE: Record overridePythonAttrs as the third override seam in the overlay fragment
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: MECH-OVERLAY-PYTHON-OVERRIDE-SEAM
+TITLE: Record overridePythonAttrs as the third override seam in the overlay fragment
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+dev/fragments/overlays/overlay-pattern.md teaches two override seams and a
+rule for choosing between them: a thin overrideAttrs for a builder that reads
+version and src as ordinary attrs, and .override on the BUILDER for a
+lib.extendMkDerivation one that consumed an argument to derive an attr. It
+never mentions overridePythonAttrs, which is the correct seam for a
+buildPythonPackage and is what two packages here already use --
+overlays/git-tools/git-revise.nix and, since SLICE-STRICTDOC-OVERLAY,
+overlays/dev-tools/strictdoc.nix.
+
+The INPUT-versus-OUTPUT rule the fragment already states decides this case
+too: buildPythonPackage consumes `dependencies` and `pythonRelaxDeps` as
+arguments, so overrideAttrs lands them as dead attrs nothing reads, exactly
+like an overridden npmDepsHash. Add the seam and cite the rule rather than
+writing a third independent one.
+<<<
+RATIONALE: >>>
+A pre-existing gap, not one this slice opened -- git-revise predates it. It
+surfaced while writing the strictdoc overlay, where the fragment was read for
+the seam decision and did not answer, and the answer had to be re-derived from
+the nixpkgs source. The next Python package pays that cost again.
+
+overlays/README.md now carries the seam in its source-pattern bullets, which
+is where an overlay author looks; the dev fragment is where an AGENT looks,
+and it is the one still silent.
+<<<
+NOTES: >>>
+Filed as issue #1267, self-contained, on 2026-08-25. That issue is the
+user-visible tracker; this node is the design-graph record of which slice found
+it. Close both together.
+
+One of the two worked examples cited above is GONE as of 2026-08-27:
+overlays/dev-tools/strictdoc.nix uses no override seam at all now, having become
+a plain attrset extension of upstream's flake package
+(MECH-STRICTDOC-UPSTREAM-FLAKE). overlays/git-tools/git-revise.nix is still the
+example, the gap in dev/fragments/overlays/overlay-pattern.md is unchanged, and
+#1267 is still the tracker -- the finding lost a citation, not its subject.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: 'overridePythonAttrs is the correct seam for a buildPythonPackage ... buildPythonPackage consumes dependencies and pythonRelaxDeps as arguments, so overrideAttrs lands them as dead attrs' -- a universal mechanism of nixpkgs, and a convention sentence the fragment's existing INPUT-versus-OUTPUT rule already governs. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

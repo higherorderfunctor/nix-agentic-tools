@@ -1,0 +1,39 @@
+[DOCUMENT]
+TITLE: Nothing asserts the strictdoc binary's version any more
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-STRICTDOC-VERSION-SMOKE
+TITLE: Nothing asserts the strictdoc binary's version any more
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The retired first-party build asserted its own acceptance condition in an
+installCheckPhase: `strictdoc version` had to print the version the sidecar
+pinned, and that assertion was positive-controlled. Re-exporting upstream's
+flake package took it away, because the package is extended by plain attrset
+update -- `//`, not overrideAttrs -- precisely so its drvPath and outPath stay
+identical to upstream's, and adding a phase would forfeit that.
+
+So the whole class of "the seam evaluates fine and produces some other
+version" is now unguarded. It was checked by hand at the switch (0.28.3, the
+release main was sitting on) and by hand is where it stands.
+
+Possible shapes, none costed: a separate flake check that runs
+`${pkgs.ai.devTools.strictdoc}/bin/strictdoc version` and greps for the input's
+locked rev-derived version; folding the same assertion into one of the two
+existing strictdoc checks, which already have the binary on nativeBuildInputs;
+or accepting that an upstream flake asserting its own version is upstream's job
+and dropping the requirement.
+<<<
+RATIONALE: >>>
+Worth recording because the loss is invisible: the package still builds, the
+checks still pass, and the only signal that the assertion is gone is that the
+file no longer contains it.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

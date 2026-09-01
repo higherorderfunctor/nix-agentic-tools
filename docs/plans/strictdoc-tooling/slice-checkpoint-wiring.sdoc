@@ -1,0 +1,108 @@
+[DOCUMENT]
+TITLE: Wire the behaviour model into the tool and the checkpoints
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: SLICE-CHECKPOINT-WIRING
+TITLE: Wire the behaviour model into the tool and the checkpoints
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Add the lifecycle verbs to the tool built in milestone two: a move is one command that names a transition, evaluates that transition's gates, and either refuses with a diagnostic naming the gate or performs the write through the same validated path a create or a set already takes. The verbs, the transitions and the gates come from the behaviour model. This milestone supplies no lifecycle content of its own.
+
+Register every validator against the model, not against a checkpoint. A gate declares what it needs to see -- the node alone, the whole graph, the working tree, the previous state, who is acting -- and the set of checkpoints it can run at is derived from that declaration. Five checkpoints exist in this repository today:
+
+- The tool itself, before and after its write. Sees the whole graph as it would be after the write, never a diff. Refuses by exiting non-zero without writing.
+- StrictDoc's own index-build hook, registered as ProjectConfig(user_plugin=...) in strictdoc_config.py. Fires whenever anything builds the traceability index, so it is the backstop for a tree edited around the tool. Sees the whole graph, never a diff. Refuses by raising, which strictdoc turns into exit 1 and a one-line error message.
+- The prek pre-commit suite in devenv.nix. Sees staged content and git history. Local-only, staged-only, and --no-verify bypasses it, so it is a fast local mirror and never the enforcement point.
+- The Claude Code Stop hook, lib/validate-at-stop.sh. Sees the whole working tree -- unstaged, staged and untracked -- and reaches the model with a block-and-reason. Its loop guard allows the hand-back after one fix pass, so it reports and does not enforce.
+- nix flake check, reached through the required test context. Unbypassable, and the only one that is. Its derivations read the flake source, which carries no .git, so it sees a snapshot and never a diff.
+
+Diff-relative gates therefore have no unbypassable checkpoint today, and that class is exactly the one that has already failed here: do not edit PARENT_FP, do not edit an accepted DECISION's STATEMENT, do not set AUTHORED_BY to human. All three need the previous state; the only checkpoint that cannot be bypassed cannot see it. This milestone adds that checkpoint -- a step inside the existing test job that fetches the branch point and runs the diff-relative validators against it. A step rather than a job, following the heron-brook tripwire, so no new required-status context is introduced; and the branch point is fetched by the step rather than by deepening the job's checkout, so an unrelated required check does not pay for a full clone.
+
+Every checkpoint fails loudly. No validator reports only to a log: a refusal names the gate, the node and the field, and reaches whoever is acting. A gate that no checkpoint can serve fails the model's evaluation unless it carries an explicit reason marking it unenforceable, and every such reason is rendered in the checkpoint table rather than left as an absence.
+
+One gate stays partly unenforceable, and the shape of the split is the point. The authorship guard's detection half -- an AUTHORED_BY flip on a node whose value in main is llm -- runs at the new CI checkpoint from this milestone on. Its authorization half does not, because no checkpoint can separate an operator's flip from an agent's: agents commit under the operator's identity. Until agents have their own identity in milestone five, the guard is recorded as a tripwire that makes the flip visible, not as an authorization that decides who may make it.
+
+Consumer surface the operator reviews before implementation: the checkpoint table -- every gate against the checkpoints it can run at, with the unenforceable ones and their stated reasons. Reviewed after: a rule that used to live only in the sdoc skill being refused by a running check, and each wired gate carrying a fixture on which it must fire, per MECH-TESTS-AS-CONTRACT.
+
+Not included: what the states, moves and gates are -- milestone three defines the model's shape and milestone five fills it with this system's semantics; agent identity; and git-flow handling of rebase and squash lineage, still deferred by MECH-FP-GIT-FLOW-HAZARDS.
+<<<
+RATIONALE: >>>
+This is the milestone INV-GUARDS-MUST-EXECUTE asks for: the point at which a rule stops being read and starts running.
+
+Deriving placement from what a gate needs to see, rather than naming a checkpoint per check, is the load-bearing choice. It makes "this gate can run nowhere" a computed answer the evaluation can fail on, instead of a fact nobody notices because the check was registered somewhere it cannot decide. The spike prototyped four representations of gate placement that all derived the same result, including that the authorship guard can run nowhere today.
+
+Failing loudly everywhere follows from the same invariant. Of the six guards it measured, the three that failed were documents and the three that held exited non-zero. A validator that writes to a log is a document with worse ergonomics.
+
+The new CI step exists because the class of rules that failed is precisely the class no current checkpoint can serve. A flake-check derivation reads a source snapshot with no git history, and the pre-commit suite that does have history is local, staged-only and bypassable -- so a diff-relative rule wired only there is enforced exactly where it was already being followed.
+<<<
+PARENT_FP: DEC-EXECUTABLE-RULES-ROADMAP:0000000
+NOTES: >>>
+Measured 2026-08-27 on the PRE-CARVE corpus (branch state before 667d0404), strictdoc 0.28.3, clean output directory: 139 nodes in 9 documents; export 2.46 s and 2.75 s wall on two cold runs; fp-check 0.14 s over 31 fingerprint entries; cycle-check 0.24 s over 92 role-carrying edges. A whole-corpus revalidation checkpoint therefore costs about three seconds, almost all of it the export. The one-node-per-file carve made that 161 nodes in 161 documents -- both counts moved, not just the document one -- and each cached parse is keyed on output directory plus input path, so the export term scales with document count and the three-second budget must be re-measured before it sizes the checkpoint. The 31-fingerprint-entry figure above is likewise unverified post-carve. Pinning formats (MECH-SDOC-LEAN-FORMATS) coexists with the plugin hook: on an eight-document probe, 0.54 s pinned against 0.80 s unpinned, hook fired and exit 0 both ways.
+
+The index-build hook fires from TraceabilityIndexBuilder.create (core/traceability_index_builder.py:291), which export, format, manage auto-uid and server all call. manage new does not: it calls create_from_document_tree directly (commands/manage_new_command.py:130), the method create delegates to several lines before the hook line. So the hook is a backstop over reads and can never guard node creation. Refusal from it was measured: raising produced exit 1 and "error: <message>" naming the config file and function, with no stack trace unless --debug (cli/main.py:105-121).
+
+Intercepting manage new needs the other seam -- a Format subclass, reached at core/file_system/document_finder.py:130 on every document read of every command. It is deliberately not used here: milestone two makes the tool the only caller of manage new, so the tool's own before-and-after validation already covers that write, and a second interception layer would duplicate it.
+
+MECH-SDOC-CONFIG-HOOK-IMPORTABILITY's sys.path requirement is fixed upstream at 0.28.3, the release the overlay ships: helpers/module.py:29-32 now removes and re-inserts the config's own directory at the front of sys.path when loading strictdoc_config.py. Measured -- a plugin class defined inline in strictdoc_config.py, with no sys.path line, ran an eight-document parallelised export to exit 0 on x86_64-linux. That node predates the fix and should be re-read before anyone adds the workaround.
+
+Why a flake check cannot see a diff, measured rather than assumed: a two-file git repository evaluated through self.outPath produced a store path containing the tracked file and no .git, so the tracked-file arm is the positive control for the same probe. The test job's checkout takes the default depth while the gitleaks job sets fetch-depth 0 for exactly this reason (.github/workflows/ci.yml:595, :720), and dev/tasks/check.nix:83-84 records the same constraint from the other side -- flake checks see committed bytes only.
+
+Wiring a validator into the prek suite is two edits, not one. The hook goes in devenv.nix git-hooks.hooks (devenv.nix:607) and its id must also be added to the hardcoded judgment list in lib/validate-at-stop.sh:121, or it runs at commit time and never at the Stop boundary. The list carries a comment asking for the two to be kept in sync, which is the only thing keeping them in sync.
+
+MECH-PLAN-REFS-CHECK needs a UID-to-file map the export does not carry: a document in the JSON is _NODE_TYPE, TITLE, GRAMMAR and NODES, with no path. dev/scripts/fp-accept.py:35-41 already builds one by scanning docs/plans/**/*.sdoc and **/.sdoc/*.sdoc for a "UID:" line; that scan is the map, and it is shared rather than rebuilt.
+
+The operator's estimate for this milestone was "light". It holds for the validators that read a single snapshot -- fp-check and cycle-check are already flake checks (flake.nix:284, :295) and gain a checkpoint by registration alone -- and does not hold for the diff-relative class, which has no checkpoint at all today and brings a CI change with it.
+
+A flow's tests become its contract once its mechanics settle, per MECH-TESTS-AS-CONTRACT. This milestone is that point for the checkpoint flows.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- What the states, moves and transitions actually are for any node type. No state machine is pre-populated here; this node settles only that a move is one command that names a transition, checks its gates, and refuses or writes.
+
+- Who may make each move. The model carries a slot for it; this milestone fills none of it.
+
+- Whether DEPTH may move backwards, and whether implemented and verified belong in DEPTH at all -- SLICE-INSTANCE-SEMANTICS-MIGRATION's decisions, taken at its own review.
+
+- The authorization half of the authorship guard: how a legitimate operator flip is discharged past a guard that cannot recognise them. Left blank deliberately -- it is an authorization rule, and every mechanism available today (a trailer, a label, a flag) is equally available to an agent, so choosing one now would encode a policy the plumbing cannot back.
+
+- Which of this system's own rules are worth wiring first. The checkpoint table is built from whatever the model declares; this node fixes the table's shape, not its rows.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-EXECUTABLE-RULES-ROADMAP
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-SDOC-CI-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-CYCLE-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-PLAN-REFS-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-AUTHORED-BY-GUARD
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-TESTS-AS-CONTRACT
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: SLICE-SDOC-CLI
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: SLICE-BEHAVIOUR-MODEL
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: SPIKE-EXECUTABLE-RULES
+  ROLE: Proven_By

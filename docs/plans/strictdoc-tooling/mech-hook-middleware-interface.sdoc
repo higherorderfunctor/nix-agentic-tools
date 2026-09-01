@@ -1,0 +1,97 @@
+[DOCUMENT]
+TITLE: The hook layer as middleware: every joint is the pre or post of one operation
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-HOOK-MIDDLEWARE-INTERFACE
+TITLE: The hook layer as middleware: every joint is the pre or post of one operation
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+PROPOSED, NOT ACCEPTED. A snapshot of the hook layer as it stood on
+2026-08-29, so it can be picked apart later rather than re-derived.
+
+A JOINT is an event a handler can be attached to. Every joint is the PRE or
+the POST of one OPERATION. A pre handler may STOP the operation; a post
+handler is handed the result and cannot. Stop is expressed the way a CLI or a
+Python program already expresses it -- a non-zero exit or a raised exception
+-- with one exit code (or one exception class) reserved for "refused" so a
+refusal and a handler bug read differently. The reason travels as the message.
+
+THE OPERATIONS.
+
+  scribe.command   arguments received, nothing loaded yet
+  scribe.load      every .sdoc read into memory
+  scribe.change    one edit applied in memory; kind = create, delete, set,
+                   unset, relate, unrelate, move
+  scribe.write     new bytes computed, about to hit disk / on disk
+  scribe.reload    the canon re-read from disk to prove it parses
+  scribe.read      show, list, check
+  git.commit       pre = pre-commit, message = commit-msg, post = post-commit
+  git.push         pre = pre-push
+  git.rewrite      post only (amend, rebase)
+  git.merge        post only
+  git.checkout     post only
+  strictdoc.index  post only: strictdoc's own hook, fired after every index
+                   build, including inside every scribe load
+
+devenv is not a joint. It is where hooks are declared and installed.
+
+THE OPTION SURFACE.
+
+  ai.strictdoc.hooks.<name> = {
+    on      = "scribe.change";     # an operation from the list above
+    phase   = "pre";               # pre | post
+    run     = <package>;           # a command: the event as JSON on stdin
+    # python = "pkg.mod:function"; # or in-process, for scribe and strictdoc
+    timeout = 30;
+  };
+  ai.strictdoc.hooks.gitTarget = "prek";   # prek | files | a function
+
+THE HANDLER PROTOCOL, the same for a command and a Python function. In: one
+JSON object carrying operation, phase, the actor if an extractor is
+configured, and the operation's payload (for scribe.change: node uid, kind,
+field, old value, new value; for git.push: the ref range). Out: exit 0 or a
+return means watch; exit 1 or raise Refuse("why") means stop; anything else
+is a handler bug and also stops, reported as a bug.
+
+WHAT THE MODULE DOES WITH IT. Scribe calls its hooks directly. Git hooks are
+rendered by the chosen target into prek configuration or raw hook files; the
+target also supplies what git does not -- the project root (hooks are shared
+across worktrees) and a scrubbed GIT_DIR. The strictdoc hook is registered in
+strictdoc_config.py.
+
+THREE ENABLERS THAT DO NOT EXIST YET. An actor slot, where one configured
+extractor (an ssh key, an environment variable) runs once per command and its
+answer is handed to every event; scribe writes a literal today. The old value
+on a field change, dropped today. A typed refusal, a bare string today.
+
+Scribe run from a shell and scribe imported as a library fire the same joints
+(DEC-SCRIBE-NAMES-THE-WRITER); today only the shell path has all of them.
+<<<
+NOTES: >>>
+Written 2026-08-29 from the conversation, at the operator's request to
+snapshot rather than unpack. Three things the operator has not formed an
+opinion on are the three open decisions this node is Governed_By; each names
+what the operator said at the time. The finer scribe phases in the operation
+list came from reading the writer's code (sdoc_cli.py, sdoc_model.py), which
+the operator had not yet read.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-JOINT-NOT-SURFACE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-HOOK-GRANULARITY
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-HOOK-SETTINGS-NAMESPACE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-HOOK-TRIGGER-REPRESENTATION
+  ROLE: Governed_By

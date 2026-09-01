@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: Move research such as the Kiro workflow findings into the canon as evidence
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-MOVE-RESEARCH-INTO-THE-CANON-AS-EVIDENCE
+TITLE: Move research such as the Kiro workflow findings into the canon as evidence
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Move research into the canon as evidence. The research that lives as
+reference documents and raw notes -- the Kiro workflow research is the
+standing example -- records what was measured and found; each finding becomes
+an EVIDENCE node with its SOURCE, so the claims that rest on it can cite it
+and be re-suspected when it changes.
+<<<
+NOTES: >>>
+Filed 2026-08-30 from the operator's list of things to do before they forget, restated under the ruled vocabulary; some restate earlier items.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-CANON-ADOPTION
+  ROLE: Backlogged_In

@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: A widget that counts or lists reads the narrative its Over relation names, else itself
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-WIDGET-SUBJECT-IS-ITS-OVER-TARGET
+TITLE: A widget that counts or lists reads the narrative its Over relation names, else itself
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A widget needs to draw over something that is not a narrative, or Over is found used as a dependency.
+STATEMENT: >>>
+The widgets that draw a figure over other narratives -- strip, tally, index,
+list, and grid, stack, ladder, rows when they mirror -- take a SUBJECT: the
+narrative named by the widget narrative's Over relation, else the widget
+narrative itself. So the Start screen shows a heat strip over the Topics tab,
+the type grid over the grid card under Types, and the five gaps over the
+Gaps tab, without containing any of them twice.
+
+Over is a Parent role written on the widget narrative. Its target is a
+narrative in the same plan or in the spec (INV-NO-EXTERNAL-PLAN-REFS holds
+unchanged). It carries no fingerprint and, like PLACE, is outside the
+contract hash: it says where to look, not what is true.
+<<<
+RATIONALE: >>>
+Drawing a figure over data that lives elsewhere is what v1's Start did four times; a relation that strictdoc refuses to dangle is the cheapest honest way to say it.
+<<<
+NOTES: >>>
+Ruled 2026-08-30 as a first-pass decision under the operator's delegation ('I don't want to be bothered by the recommendation before implementation'); overrule by superseding. Chosen from three independent designs judged against an 82-element inventory of the v1 page. AUTHORED_BY reads llm because the writer has no flag for the human rungs.
+<<<

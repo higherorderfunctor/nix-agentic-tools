@@ -1,0 +1,51 @@
+[DOCUMENT]
+TITLE: Design the workflow DSL: pick a shape, settle the condition language, then build
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: SLICE-WORKFLOW-DSL
+TITLE: Design the workflow DSL: pick a shape, settle the condition language, then build
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Design the DSL above the hook layer: rule DEC-DSL-SHAPE and
+DEC-DSL-LAYER-COUNT, settle the condition language, then build the option
+surface so that it compiles into MECH-HOOK-MIDDLEWARE-INTERFACE entries. Read
+as WORK under DEC-SLICE-DECOMPOSES-TO-WORK; the prefix is the grammar's.
+<<<
+NOTES: >>>
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-DSL-SHAPE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-DSL-LAYER-COUNT
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-DSL-CANDIDATE-JIRA-TRANSITIONS
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-DSL-CANDIDATE-XSTATE-MACHINES
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-DSL-CANDIDATE-ADMISSION-RULES
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-DSL-CONDITION-LANGUAGE
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-HOOK-MIDDLEWARE-INTERFACE
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: SLICE-HOOK-LAYER
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: SPIKE-DSL-PRIOR-ART
+  ROLE: Proven_By

@@ -1,0 +1,39 @@
+[DOCUMENT]
+TITLE: The render reads an export generated from the held graph
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-EXPORT-PAYLOAD
+TITLE: The render reads an export generated from the held graph
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+A render obtains the export JSON from the held graph rather than by running a
+fresh export. StrictDoc's JSON generator is a pure function of a built index --
+strictdoc's own server calls it against its live one -- so the daemon runs it
+against the resident graph into a directory the caller names, and every
+downstream consumer reads the same bytes it reads today.
+
+The payload is written to a directory rather than returned, because the current
+export is 10.3 MB. An export reconciles first, like any read.
+
+Nothing downstream changes: wireline, view-check, render and status all consume
+the export JSON and none of them imports strictdoc.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-SCRIBE-HOLDS-ONE-GRAPH
+  ROLE: Guarantees
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-WORKSPACE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: EV-SCRIBE-LOAD-COST
+  ROLE: Proven_By
+- TYPE: Parent
+  VALUE: EV-SCRIBE-RPC-AND-EXPORT
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: dev/tasks/generate.nix

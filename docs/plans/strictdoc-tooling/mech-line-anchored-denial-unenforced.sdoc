@@ -1,0 +1,88 @@
+[DOCUMENT]
+TITLE: FieldName's anchored denials are decided from a register, not from the grammar
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-LINE-ANCHORED-DENIAL-UNENFORCED
+TITLE: FieldName's anchored denials are decided from a register, not from the grammar
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The split itself is now decided per word rather than per anchor, and the rule
+is in decompose.py: run each denied word against the SIBLING ALTERNATIVES of
+the rule that denies it, enforce the ones that are an alternative of nothing,
+and record the rest. `sibling_alternatives` computes that set off the
+production tree, so the decision is the grammar's wherever the grammar shows
+it, and an anchored denial that is neither computable nor registered is a hard
+error.
+
+What is left is that FieldName's two answers are REGISTERED, in
+decompose.LINE_ANCHORED_DENIALS, rather than derived. The rule that gives its
+lookaheads their purpose is SDocNodeField, which lives in the DOCUMENT grammar
+and is not in the recipe this surface walks -- the .sgra grammar only ever
+enters FieldName after the literal '  - TITLE: ', which is a position no choice
+discriminates. So the register carries UID (an alternative of SDocNodeField, a
+backtracking guard, unenforced) and RELATIONS (an alternative of nothing, a
+reservation, enforced), each with its reason.
+
+A register entry is a human decision about a rule nobody is reading, and it
+cannot notice upstream moving a word from one bucket to the other. Fix shape:
+walk the document grammar too, at least far enough to read the alternatives at
+each anchored rule's entry positions, and let the same discriminator answer
+without a register. The discriminator is already exercised against a synthetic
+SDocNodeField-shaped recipe, so what is missing is the input, not the rule.
+<<<
+RATIONALE: >>>
+The first spelling of this rewrite was `strip-start-anchor`, which dropped the
+caret and enforced the rest, and it produced a FieldName type that rejected UID
+-- caught only when values.nix was first checked against the surface. Getting
+it right in one direction should not be mistaken for having a check.
+<<<
+NOTES: >>>
+RESOLVED 2026-08-26 with the operator, and the resting state was wrong. The two
+denied words are not the same kind of thing, and a rule read straight off the
+grammar separates them: run each denied word against the SIBLING ALTERNATIVES
+of the rule that denies it. A word that appears as an alternative is a
+backtracking guard. A word that appears as none is a real reservation.
+
+UID appears as its own literal alternative in SDocNodeField, so denying it as a
+value would be wrong -- a field named UID is legal and this repository declares
+one five times.
+
+RELATIONS appears as no alternative, and MEASURED it is a genuine defect: a
+grammar declaring a field titled RELATIONS exports clean with exit 0, and a
+document that USES that field fails to parse, because the parser reaches
+RELATIONS: expecting the relations block header. So strictdoc will accept a
+grammar that generates documents nobody can read, and says nothing at the layer
+where the mistake was made. That is precisely what a type here can catch.
+
+Enforcing it needs no regex and no new machinery. patternType already carries an
+addCheck branch for its enforced deny list, and a denial lifted out of a pattern
+is a list-membership test rather than a lookahead -- which is what makes it
+expressible at all, since POSIX extended regex has no lookaheads. Verified that
+addCheck fires on a scalar string type: DEPTH and UID accepted, RELATIONS and a
+lowercase name rejected.
+
+The earlier reasoning here was wrong twice over -- that the machinery did not
+exist, and that a lookahead's absence from the regex dialect meant the rule
+could not be enforced at all.
+
+IMPLEMENTED 2026-08-27, together with moving the whole decomposition out of the
+faithful surface. FieldName now carries deny = ["RELATIONS"] and
+denyAtLineStart = ["UID"], and the type rejects a field titled RELATIONS,
+accepts one titled UID, and still rejects a lowercase title. The rendered
+grammar is byte-identical to docs/sdoc/grammar.sgra, which declares UID five
+times, so the accept arm is not a bare assertion. What this node still names is
+the register, not the enforcement.
+
+DEPTH STAYS sketch, which is not drift against the paragraph above. What landed
+is the enforcement; what this node is TITLED for -- deriving FieldName's two
+answers from the document grammar instead of registering them -- is unbuilt and
+has no design yet. Raising DEPTH here would report the residual as done.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

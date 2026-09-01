@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Project-level Claude hooks are missing from about half this clone's worktrees
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: MECH-PROJECT-HOOKS-ABSENT-IN-WORKTREES
+TITLE: Project-level Claude hooks are missing from about half this clone's worktrees
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Re-measured 2026-08-27: of the 23 directories under `nix-agentic-tools-worktrees`, 12 have `.claude/settings.json` and 11 do not. The file is a symlink into `/nix/store` written on devenv shell entry (`devenv.nix:163-165`) and gitignored (`.gitignore:38`), and the sandbox-stack topology deliberately never enters a devenv shell in a worktree. The user-level `~/.claude/settings.json` carries PreCompact and UserPromptSubmit hooks only, so a missing project file has no backstop. The consequence is live rather than hypothetical: `claude.code.hooks.validate-at-stop` (`devenv.nix:703`) rides that same file, so the Stop-boundary validator does not run in those 11 worktrees, and the project permission rules are absent there too. Any future guard delivered as a project hook inherits this.
+<<<
+RATIONALE: >>>
+A hook that was never installed looks exactly like a hook that found nothing. The count also moves on its own — an earlier reading the same day was 10 of 22 — so this is a ratio that drifts with worktree creation rather than a fixed defect somebody forgot to fix.
+<<<
+NOTES: >>>
+Logged as the durable home for the delivery measurement behind `MECH-RUNTIME-WRITE-GUARD`'s RATIONALE. That node reads it as an argument for making the writer incapable of the write; this node is about the eleven worktrees currently running with no Stop validator, which is a repository defect independent of that design.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with high confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: The delivery mechanism explaining the count -- .claude/settings.json is a /nix/store symlink written on devenv shell entry, gitignored, never written under the sandbox-stack topology, and the user-level settings carry no backstop -- is a universal description that could split into its own mechanism, along with 'any future guard delivered as a project hook inherits this'. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

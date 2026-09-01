@@ -1,0 +1,20 @@
+[DOCUMENT]
+TITLE: The state fields every type shares
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-CANON-TYPES-LADDERS
+TITLE: The state fields every type shares
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: ladder
+PLACE: card
+STATEMENT: >>>
+One ladder per state field, each rung with its live count over the selection.
+
+- DEPTH: design maturity; live counts from the export
+- AUTHORED_BY: llm, llm-accepted, llm-adopted, human: ruled to be four rungs
+- STATUS: open, accepted, rejected, superseded: on a decision
+<<<

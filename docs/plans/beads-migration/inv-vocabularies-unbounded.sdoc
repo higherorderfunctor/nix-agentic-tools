@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: Two declared-bounded vocabularies are unbounded in practice
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: INV-VOCABULARIES-UNBOUNDED
+TITLE: Two declared-bounded vocabularies are unbounded in practice
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The grain rule labels: 127 rules across 90 distinct labels, one placeholder
+appearing 22 times, and case-variant duplicates. The corpus names this a blocker
+for a typed model and leaves it open. The cast kind column: declared as ten
+values, 43 observed, including multi-word phrases. Nothing in the corpus notices
+the second one.
+<<<
+RATIONALE: >>>
+Neither should become a SingleChoice on conversion. The grain vocabulary
+dissolves entirely if rules bind to a mechanism by edge rather than by label.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+NOTES: >>>
+Retyped from INVARIANT to EVIDENCE on 2026-08-30 (it records a measurement, not a rule; DEC-NODE-FAMILIES). The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By

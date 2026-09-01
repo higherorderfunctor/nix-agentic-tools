@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: scribe move renames on disk outside Graph, pending and save
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-MOVE-BYPASSES-THE-MODEL
+TITLE: scribe move renames on disk outside Graph, pending and save
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+`scribe move` renames the file on disk directly and then verifies, bypassing
+Graph, pending() and save() entirely (sdoc_cli.py:461-478). A handler anchored
+on the save path -- which is where every other write goes -- never sees a move,
+and the library form has no move at all. Measured 2026-08-28 while inventorying
+scribe's phases for the hook layer.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

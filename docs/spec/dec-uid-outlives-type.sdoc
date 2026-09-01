@@ -1,0 +1,46 @@
+[DOCUMENT]
+TITLE: A UID never changes: a retype changes the element tag, and the prefix names the type a node was born with
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-UID-OUTLIVES-TYPE
+TITLE: A UID never changes: a retype changes the element tag, and the prefix names the type a node was born with
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A consumer needs the prefix to mean the current type and cannot read the element tag instead.
+STATEMENT: >>>
+A node's UID is its identity for life. Retyping a node -- moving it to another
+element tag when a ruling lands -- changes the tag line in its file and nothing
+else: the UID stays, the file name stays, every relation and every fingerprint
+entry naming it stays, and every prose mention stays true.
+
+A UID's prefix therefore names the type a node was BORN with, not the type it
+is. The element tag is the type; the export carries it as _NODE_TYPE, and every
+tool reads the tag, never the prefix. A new node must take its element's current
+prefix, and sdoc new refuses otherwise. An existing node may carry a retired
+prefix (SLICE-, INV-, SPIKE- after 2026-08-30) or another live element's prefix
+(a mechanism re-read as a requirement keeps MECH-); sdoc check reports these as
+notes, never as findings, so the count of retyped nodes stays visible.
+
+Re-minting is the alternative, and it is refused. A retype that re-mints
+touches every inbound relation, every fingerprint key, the file name and every
+prose mention -- measured on 2026-08-30 at 127 in-canon mentions across 67
+nodes, four of them accepted decisions whose statements are frozen, before
+counting 43 more outside the canon. Grooming is safe today because a UID never
+moves; the migration keeps that property rather than spending it.
+<<<
+RATIONALE: >>>
+MECH-GRID-MIGRATION-UNCOSTED said the migration needed a rule for identity
+before it needed a script. This is the rule, and it makes the script one tag
+line per node.
+<<<
+NOTES: >>>
+Ruled 2026-08-30 as a first-pass decision under the operator's delegation of
+that day; overrule by superseding. Applied the same day: 6 INVARIANT nodes
+became REQUIREMENT, 2 became EVIDENCE (they record measurements), 14 SLICE
+became WORK, 8 run SPIKE became EVIDENCE and 3 unrun became WORK, and
+MECH-SEMANTIC-LAYER-WHITEBOARD became the first NARRATIVE -- the one retype
+between two live prefixes so far. Each carries the retype in its NOTES.
+<<<

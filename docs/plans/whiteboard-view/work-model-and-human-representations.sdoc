@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: Representations for a model's entry points and for generated human documents
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-MODEL-AND-HUMAN-REPRESENTATIONS
+TITLE: Representations for a model's entry points and for generated human documents
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+More representations over the canon, beyond the page a person reads: entry
+points a model reads -- the steering and instruction files each agent loads,
+rendered from the canon in place of the hand-kept ones -- and content a
+person reads outside the page: generated READMEs, markdown documents, docs.
+Each is a narrative or a new representation type (DEC-INLINE-CODE-TYPE is
+open) drawn by the same programs, so it goes dirty when what it presents
+changes.
+<<<
+NOTES: >>>
+Filed 2026-08-30 from the operator's list of things to do before they forget, restated under the ruled vocabulary; some restate earlier items.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-WHITEBOARD-VIEW
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: DEC-VIEWS-ARE-REGENERABLE
+  ROLE: Governed_By

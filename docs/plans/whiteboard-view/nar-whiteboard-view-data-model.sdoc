@@ -1,0 +1,132 @@
+[DOCUMENT]
+TITLE: The data model
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-WHITEBOARD-VIEW-DATA-MODEL
+TITLE: The data model
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+PLACE: screen
+STATEMENT: >>>
+One row per ruling the view rests on: this plan's decisions and requirements first, then the spec rulings of 2026-08-30 the plan sits under. A row's word is the node's own state on the day of the render, read off the node, not a verdict of this page; the questions still open have a screen of their own.
+
+- A view is a tree of narratives -- rows inside a statement, Cites for what a narrative presents, Contains for its parts in relation order -- and each narrative says in PLACE how it sits on its container's screen; the renderer never derives placement from the depth of the tree.
+[LINK: DEC-NARRATIVE-DECLARES-ITS-PLACE] [ACCEPTED]
+- The words a row may carry, with their colours and meanings, are rows of the one legend narrative in a root's tree, drawn once where its PLACE puts it, never a grammar field and never something the renderer knows.
+[LINK: DEC-LEGEND-IS-DATA-WHERE-PLACED] [ACCEPTED]
+- A widget that counts or lists reads the narrative its Over relation names, else itself; Over carries no fingerprint and sits outside the contract hash.
+[LINK: DEC-WIDGET-SUBJECT-IS-ITS-OVER-TARGET] [ACCEPTED]
+- A row's references are a continuation line holding only links, and its source wording a continuation line beginning with a quote mark; no row carries a link-role word in its prose.
+[LINK: DEC-ROW-REFERENCE-LINES] [ACCEPTED]
+- Views nest by Contains and PLACE, never by composite nodes, section elements or included documents; one node per file stands.
+[LINK: DEC-FILES-STAY-FLAT-FOR-VIEWS] [ACCEPTED]
+- Each ruled term is a narrative in the spec that cites its ruling, and a narrative that uses the term cites it, so retitling the term dirties every narrative that used it.
+[LINK: DEC-TERMS-ARE-NARRATIVES] [ACCEPTED]
+- The renderer knows the shape of a payload and the widget words, never a UID, a type name or a plan.
+[LINK: REQ-VIEW-RENDERER-IS-CONTENT-BLIND] [ACCEPTED]
+- Every tab, screen, section, card and figure on a page is a narrative's own declaration; the renderer adds only what has no content.
+[LINK: REQ-VIEW-STRUCTURE-COMES-FROM-THE-CANON] [ACCEPTED]
+- One page renders every root and every node of the canon, cited or not, with the systems as switches.
+[LINK: REQ-ONE-PAGE-RENDERS-THE-WHOLE-CANON] [ACCEPTED]
+- Every root, tab, screen, row and node is addressable by a route derived from its whole UID, never a prefix stripped off it.
+[LINK: REQ-EVERY-PART-HAS-A-ROUTE] [ACCEPTED]
+- Switching a system on or off changes what is shown and never the payload; the selection rides in the address.
+[LINK: REQ-A-TOGGLE-NEVER-CHANGES-THE-PAYLOAD] [ACCEPTED]
+- The same page is served locally and published as an artifact, from one template; the two differ only in the wrapper.
+[LINK: REQ-VIEW-SERVES-LOCALLY-AND-AS-AN-ARTIFACT] [ACCEPTED]
+- No node outside the representation family carries a Parent relation or a fingerprint entry to a narrative.
+[LINK: REQ-NOTHING-DEPENDS-ON-A-NARRATIVE] [ACCEPTED]
+- A system is a named set of node types and relation roles declared in one table of the spec; membership is computed and a node may be in more than one.
+[LINK: DEC-SYSTEM-IS-A-TYPE-SET] [ACCEPTED]
+- Node types come in four families, and only the definition grid is a grid; a narrative is the representation family.
+[LINK: DEC-NODE-FAMILIES] [ACCEPTED]
+- A UID never changes: a retype changes the element tag, and the prefix names the type a node was born with.
+[LINK: DEC-UID-OUTLIVES-TYPE] [ACCEPTED]
+- A rendered view is a regenerable deliverable computed from the export, never hand-edited and never the source.
+[LINK: DEC-VIEWS-ARE-REGENERABLE] [ACCEPTED]
+- The node-type migration proceeds now, with WORK as a type, without waiting for beads.
+[LINK: DEC-MIGRATE-BEFORE-BEADS] [ACCEPTED]
+<<<
+PARENT_FP: >>>
+DEC-FILES-STAY-FLAT-FOR-VIEWS:0000000
+DEC-LEGEND-IS-DATA-WHERE-PLACED:0000000
+DEC-MIGRATE-BEFORE-BEADS:0000000
+DEC-NARRATIVE-DECLARES-ITS-PLACE:0000000
+DEC-NODE-FAMILIES:0000000
+DEC-ROW-REFERENCE-LINES:0000000
+DEC-SYSTEM-IS-A-TYPE-SET:0000000
+DEC-TERMS-ARE-NARRATIVES:0000000
+DEC-UID-OUTLIVES-TYPE:0000000
+DEC-VIEWS-ARE-REGENERABLE:0000000
+DEC-WIDGET-SUBJECT-IS-ITS-OVER-TARGET:0000000
+NAR-TERM-BEADS:0000000
+REQ-A-TOGGLE-NEVER-CHANGES-THE-PAYLOAD:0000000
+REQ-EVERY-PART-HAS-A-ROUTE:0000000
+REQ-NOTHING-DEPENDS-ON-A-NARRATIVE:0000000
+REQ-ONE-PAGE-RENDERS-THE-WHOLE-CANON:0000000
+REQ-VIEW-RENDERER-IS-CONTENT-BLIND:0000000
+REQ-VIEW-SERVES-LOCALLY-AND-AS-AN-ARTIFACT:0000000
+REQ-VIEW-STRUCTURE-COMES-FROM-THE-CANON:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-TERMS-ARE-NARRATIVES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: REQ-VIEW-RENDERER-IS-CONTENT-BLIND
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: REQ-NOTHING-DEPENDS-ON-A-NARRATIVE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-UID-OUTLIVES-TYPE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-VIEWS-ARE-REGENERABLE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-MIGRATE-BEFORE-BEADS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-BEADS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-NARRATIVE-DECLARES-ITS-PLACE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-LEGEND-IS-DATA-WHERE-PLACED
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-WIDGET-SUBJECT-IS-ITS-OVER-TARGET
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-ROW-REFERENCE-LINES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-FILES-STAY-FLAT-FOR-VIEWS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: REQ-VIEW-STRUCTURE-COMES-FROM-THE-CANON
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: REQ-ONE-PAGE-RENDERS-THE-WHOLE-CANON
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: REQ-EVERY-PART-HAS-A-ROUTE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: REQ-A-TOGGLE-NEVER-CHANGES-THE-PAYLOAD
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: REQ-VIEW-SERVES-LOCALLY-AND-AS-AN-ARTIFACT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-IS-A-TYPE-SET
+  ROLE: Cites

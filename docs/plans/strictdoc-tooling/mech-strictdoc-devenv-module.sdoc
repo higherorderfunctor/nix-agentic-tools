@@ -1,0 +1,51 @@
+[DOCUMENT]
+TITLE: A devenv module owns strictdoc's wrapping and its grammar generation
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-STRICTDOC-DEVENV-MODULE
+TITLE: A devenv module owns strictdoc's wrapping and its grammar generation
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+Add a devenv module, named for the tool rather than the milestone --
+ai.strictdoc, not ai.strictdocGrammar. Home-manager is deliberately out of
+scope for now.
+
+Surface:
+  ai.strictdoc.enable    -- installs and wraps it in the dev shell
+  ai.strictdoc.package   -- override the package, accepted as unsafe since the
+                            generated option surface is pinned to a version
+  ai.strictdoc.grammars  -- the intended way to configure it, and the path by
+                            which this repository's own grammar file is
+                            generated
+
+Generating the grammar through this module is this repository's convention, not
+a constraint on anyone consuming the published surface: a consumer may use the
+module, call the library directly, or hand-write the file.
+
+Closes the wrapping half of MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY and settles
+MECH-GRAMMAR-SGRA-NOT-GENERATED.
+<<<
+RATIONALE: >>>
+The overlay currently ships a wrapped environment because an invariant about
+overlays not importing from packages was read as forbidding the layout rather
+than as pointing at the wrong layer. The module is where the wrap was always
+meant to live.
+<<<
+NOTES: >>>
+Implemented 2026-08-27, all three options live in
+packages/strictdoc-grammar/modules/devenv/default.nix. `enable` installs
+strictdoc plus the extraction runner, `package` carries its own unsafe-override
+warning, and `grammars` is a typed attrset whose `elements` is declared with
+the NORMALIZED type -- so a consumer handing raw attrsets to the emitter, which
+asserts nothing by itself, cannot get past the module.
+
+`generate:sgra` is the task that writes, and it is defined HERE rather than in
+dev/tasks/generate.nix so the module references no task it does not own and
+stays importable by a project that has none. It deliberately carries no edge to
+generate:sdoc-grammar -- see MECH-GRAMMAR-SGRA-NOT-GENERATED for why chaining
+the two would write a stale grammar.
+<<<

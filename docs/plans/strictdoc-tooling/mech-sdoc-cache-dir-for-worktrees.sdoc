@@ -1,0 +1,57 @@
+[DOCUMENT]
+TITLE: Put strictdoc's cache directory where a worktree hook does not scan it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-CACHE-DIR-FOR-WORKTREES
+TITLE: Put strictdoc's cache directory where a worktree hook does not scan it
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+strictdoc_config.py's create_config() passes dir_for_sdoc_cache="$TMPDIR" to ProjectConfig. That exact literal is a sentinel strictdoc expands to <tempfile.gettempdir()>/strictdoc_cache/<md5 of os.getcwd()>/<strictdoc version>, so every worktree gets its own cache outside its own checkout, keyed by the directory the command ran in. That one keyword argument is the whole change. No devenv wiring, no wrapper, no environment variable, no new option.
+
+It covers the parse cache written by every command, export, format, manage and server alike, because the expansion happens in ProjectConfig.__init__ and every entry point builds one. It does not cover the export ARTIFACT directory: a bare strictdoc export . still writes ./output/json, so the output/ line in .gitignore stays. The change stops the 3.8 MB of _cache landing under it, not the directory itself.
+
+Two constraints bind the tool that consumes this. The cache path is keyed on the cwd at the moment ProjectConfig is constructed, so the CLI chdirs to the project root before constructing it. And each cached parse is keyed on the output directory concatenated with the input path, so a warm cache also needs one stable --output-dir; a fresh output directory is a cold parse cache and leaves behind a second full set of entries.
+<<<
+RATIONALE: >>>
+The cache is the only thing strictdoc writes into the checkout that nobody asked for, and it got in once already: commit 893009a0 records a git add -A staging the parse cache and cspell reporting 2591 issues over it. That same commit closed the route by gitignoring output/, which is why nothing fails today. What remains is 3.8 MB of untracked files inside a worktree defended by an ignore rule, in a repository where the standing advice is to run git add -A and where the sdoc skill has to carry a warning about it. Moving the writer is cheaper than maintaining the exclusion, and it is one line.
+
+The $TMPDIR sentinel rather than a hand-picked absolute path because the cached parses are per-file but the dependency map is a single file per cache directory, so worktrees pointed at one fixed path would overwrite each other's. The sentinel's md5-of-cwd component gives each worktree its own directory with no per-worktree configuration to keep in sync.
+<<<
+NOTES: >>>
+Measured 2026-08-27 against strictdoc 0.28.3, on a scratch copy of the corpus, never in the tree.
+
+STRICTDOC_CACHE_DIR is worse than inert. project_config.py:244 asserts it equals exactly "Output/_cache" -- capital O, which the earlier draft of this node got wrong. Lowercase output/_cache aborts too, with the bare message "error: output/_cache" and no explanation. The branch is checked BEFORE the config value (241-245 versus 246-251), so it overrides dir_for_sdoc_cache: with the config already set to "$TMPDIR", STRICTDOC_CACHE_DIR=Output/_cache put the cache back inside the checkout at ./Output/_cache/0.28.3. It is not a relocation lever, it is a way to undo this mechanism. Nothing in this repository sets it.
+
+Which commands dirty the checkout today: format . creates ./output/_cache/<version>/ with 11 files. Only integrate_server_config and integrate_export_config move the cache into the output directory (project_config.py:716 and 755), and they fire only because the default value startswith "output/_cache"; format and manage have neither hook nor --output-dir. So export --output-dir <elsewhere> never dirtied the checkout, and the 3.8 MB in the current worktree, holding 0.28.2 and 0.28.3 side by side, is from format and manage runs.
+
+After the change --output-dir no longer moves the cache, because the expanded value is absolute and fails that startswith guard. Measured: export --formats=json --output-dir <scratch> left ./output absent and wrote /tmp/strictdoc_cache/<md5>/0.28.3.
+
+Positive control that the relocated cache is read and not merely written: on this 10-document corpus export costs 1.87 to 1.92 s cold and 1.32 to 1.57 s warm at a stable output directory. A brand-new output directory against the same warm cache directory costs 2.04 s, then 1.51 s -- because pickle_cache.py:127 keys each entry on output_dir + the input path. Three output directories left 27 entries for 9 sdoc files. Nothing prunes them, and the version component means a strictdoc bump strands the old tree; that is true today as well, just in /tmp instead of the checkout.
+
+The one file shared within a cache directory is <cache>/dependencies (file_dependency_manager.py:36). It is written even by a json-only export but read only by the HTML generator's must_generate, so with formats pinned to SDoc and JSON (MECH-SDOC-LEAN-FORMATS) nothing consumes it.
+
+TMPDIR is unset on this machine and /tmp is mode 1777, so the path is world-writable and predictable while pickle_cache.py:38 unpickles without validation. Not a concern on a single-user laptop; on a shared host, set TMPDIR.
+
+Not proven either way: the sdoc skill's "incremental export produces false greens" gotcha did not reproduce on 0.28.3 for a syntax break -- an unknown field appended to 99-backlog.sdoc, then the largest document in the corpus, gave exit 1 on a fresh output directory, on a reused one, and on repeats, both before and after the change. To re-run it, pick any current document: the one-node-per-file carve deleted that file. So the relocation is measured not to INTRODUCE a false green for that break class, and the original gotcha is unreproduced rather than refuted. See the SPIKE proposed alongside this node.
+
+Lands with MECH-SDOC-LEAN-FORMATS: same file, same function, both single keyword arguments. Two things go stale in the same commit -- the sdoc skill's line that "format and export write a cache into ./output/ by default", and any existing output/_cache directories, which the change should delete rather than leave as orphans of a version that no longer writes there.
+
+IMPLEMENTED 2026-08-27 in strictdoc_config.py, one keyword argument as
+written. Measured after the change: /tmp/strictdoc_cache/<md5 of cwd>/0.28.3
+holds the parse cache and the worktree's output/_cache stopped being
+written. The orphaned output/_cache this node's RATIONALE calls out was
+deleted in the same commit rather than left as a stale version tree.
+
+dev/scripts/sdoc_model.py's open_graph carries both constraints this node
+puts on its consumer: it chdirs to the project root before ProjectConfig is
+constructed, because the cache path is keyed on the cwd at that moment, and
+it fixes the output directory at <root>/output, because each cached parse is
+keyed on output_dir concatenated with the input path.
+<<<
+RELATIONS:
+- TYPE: File
+  VALUE: strictdoc_config.py

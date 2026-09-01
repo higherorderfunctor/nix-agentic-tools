@@ -1,0 +1,39 @@
+[DOCUMENT]
+TITLE: Report the readiness frontier, not the whole closure
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-READINESS-REPORT-FRONTIER
+TITLE: Report the readiness frontier, not the whole closure
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+status.py seeds its closure walk with the slice itself, so a slice below
+interface-settled reports itself as its own blocker: SLICE-FIRST-CONVERSION
+prints "blocked by SLICE-FIRST-CONVERSION" and nothing else. Not designed yet
+and blocked on a dependency call for different actions and should not read the
+same.
+
+The walk then appends every unsettled node in the transitive closure, so
+SLICE-INSTANCE-SEMANTICS-MIGRATION lists twenty-three blockers, most reachable
+only through another blocker. What a reader can act on is the frontier: the
+unsettled nodes whose own dependencies are all settled. The rest follow.
+
+Fix shape: separate the slice's own DEPTH from its dependency blockers in the
+output, and print the frontier with a count of what sits behind it.
+<<<
+RATIONALE: >>>
+The readiness query is the only view that says what to work on next, and at
+twenty-three undifferentiated lines it says nothing. Distinct from
+MECH-READINESS-PREDICATE-RECONCILE, which is about five definitions of ready
+disagreeing; this is one predicate reported unusably.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LOCAL-IMPLEMENTABILITY
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

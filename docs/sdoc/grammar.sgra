@@ -1,0 +1,398 @@
+[GRAMMAR]
+ELEMENTS:
+- TAG: DECISION
+  PROPERTIES:
+    PREFIX: DEC-
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: TITLE
+    TYPE: String
+    REQUIRED: True
+  - TITLE: AUTHORED_BY
+    TYPE: SingleChoice(llm, llm-accepted, llm-adopted, human)
+    REQUIRED: True
+  - TITLE: STATUS
+    TYPE: SingleChoice(open, accepted, rejected, superseded)
+    REQUIRED: True
+  - TITLE: RETIRES_ON
+    TYPE: String
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: RATIONALE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: NOTES
+    TYPE: String
+    REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: Superseded_By
+    REVERSE_ROLE: Supersedes
+  - TYPE: Parent
+    ROLE: Backlogged_In
+    REVERSE_ROLE: Backlogs
+  - TYPE: Parent
+    ROLE: Proven_By
+    REVERSE_ROLE: Proves
+- TAG: MECHANISM
+  PROPERTIES:
+    PREFIX: MECH-
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: TITLE
+    TYPE: String
+    REQUIRED: True
+  - TITLE: DEPTH
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented, verified)
+    REQUIRED: True
+  - TITLE: AUTHORED_BY
+    TYPE: SingleChoice(llm, llm-accepted, llm-adopted, human)
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: RATIONALE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: NOTES
+    TYPE: String
+    REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: Governed_By
+    REVERSE_ROLE: Governs
+  - TYPE: Parent
+    ROLE: Guarantees
+    REVERSE_ROLE: Guaranteed_By
+  - TYPE: Parent
+    ROLE: Serialized_By
+    REVERSE_ROLE: Serializes
+  - TYPE: Parent
+    ROLE: Proven_By
+    REVERSE_ROLE: Proves
+  - TYPE: Parent
+    ROLE: Assumes
+    REVERSE_ROLE: Assumed_By
+  - TYPE: File
+  - TYPE: Parent
+    ROLE: Backlogged_In
+    REVERSE_ROLE: Backlogs
+- TAG: REQUIREMENT
+  PROPERTIES:
+    PREFIX: REQ-
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: TITLE
+    TYPE: String
+    REQUIRED: True
+  - TITLE: DEPTH
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented, verified)
+    REQUIRED: True
+  - TITLE: AUTHORED_BY
+    TYPE: SingleChoice(llm, llm-accepted, llm-adopted, human)
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: RATIONALE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: NOTES
+    TYPE: String
+    REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: Governed_By
+    REVERSE_ROLE: Governs
+  - TYPE: Parent
+    ROLE: Guarantees
+    REVERSE_ROLE: Guaranteed_By
+  - TYPE: Parent
+    ROLE: Serialized_By
+    REVERSE_ROLE: Serializes
+  - TYPE: Parent
+    ROLE: Proven_By
+    REVERSE_ROLE: Proves
+  - TYPE: Parent
+    ROLE: Assumes
+    REVERSE_ROLE: Assumed_By
+  - TYPE: File
+  - TYPE: Parent
+    ROLE: Backlogged_In
+    REVERSE_ROLE: Backlogs
+- TAG: EVIDENCE
+  PROPERTIES:
+    PREFIX: EV-
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: TITLE
+    TYPE: String
+    REQUIRED: True
+  - TITLE: DEPTH
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented, verified)
+    REQUIRED: True
+  - TITLE: AUTHORED_BY
+    TYPE: SingleChoice(llm, llm-accepted, llm-adopted, human)
+    REQUIRED: True
+  - TITLE: SOURCE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: RATIONALE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: NOTES
+    TYPE: String
+    REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: Governed_By
+    REVERSE_ROLE: Governs
+  - TYPE: Parent
+    ROLE: Guarantees
+    REVERSE_ROLE: Guaranteed_By
+  - TYPE: Parent
+    ROLE: Serialized_By
+    REVERSE_ROLE: Serializes
+  - TYPE: Parent
+    ROLE: Proven_By
+    REVERSE_ROLE: Proves
+  - TYPE: Parent
+    ROLE: Assumes
+    REVERSE_ROLE: Assumed_By
+  - TYPE: File
+  - TYPE: Parent
+    ROLE: Backlogged_In
+    REVERSE_ROLE: Backlogs
+- TAG: USE_CASE
+  PROPERTIES:
+    PREFIX: UC-
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: TITLE
+    TYPE: String
+    REQUIRED: True
+  - TITLE: DEPTH
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented, verified)
+    REQUIRED: True
+  - TITLE: AUTHORED_BY
+    TYPE: SingleChoice(llm, llm-accepted, llm-adopted, human)
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: RATIONALE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: NOTES
+    TYPE: String
+    REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: Governed_By
+    REVERSE_ROLE: Governs
+  - TYPE: Parent
+    ROLE: Covered_By
+    REVERSE_ROLE: Covers
+  - TYPE: Parent
+    ROLE: Proven_By
+    REVERSE_ROLE: Proves
+  - TYPE: Parent
+    ROLE: Backlogged_In
+    REVERSE_ROLE: Backlogs
+- TAG: NARRATIVE
+  PROPERTIES:
+    PREFIX: NAR-
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: TITLE
+    TYPE: String
+    REQUIRED: True
+  - TITLE: DEPTH
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented, verified)
+    REQUIRED: True
+  - TITLE: AUTHORED_BY
+    TYPE: SingleChoice(llm, llm-accepted, llm-adopted, human)
+    REQUIRED: True
+  - TITLE: WIDGET
+    TYPE: SingleChoice(prose, callout, rows, table, facts, glossary, legend, stack, grid, ladder, strip, tally, index, list, edges, fingerprints)
+    REQUIRED: False
+  - TITLE: PLACE
+    TYPE: SingleChoice(tab, screen, section, card)
+    REQUIRED: False
+  - TITLE: TAGS
+    TYPE: Tag
+    REQUIRED: False
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: RATIONALE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: NOTES
+    TYPE: String
+    REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: Cites
+    REVERSE_ROLE: Cited_By
+  - TYPE: Child
+    ROLE: Contains
+    REVERSE_ROLE: Contained_In
+  - TYPE: Parent
+    ROLE: Backlogged_In
+    REVERSE_ROLE: Backlogs
+  - TYPE: Parent
+    ROLE: Over
+    REVERSE_ROLE: Shown_By
+- TAG: WORK
+  PROPERTIES:
+    PREFIX: WORK-
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: TITLE
+    TYPE: String
+    REQUIRED: True
+  - TITLE: DEPTH
+    TYPE: SingleChoice(sketch, needs-design, needs-spike, interface-settled, implemented, verified)
+    REQUIRED: True
+  - TITLE: AUTHORED_BY
+    TYPE: SingleChoice(llm, llm-accepted, llm-adopted, human)
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: RATIONALE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: NOTES
+    TYPE: String
+    REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: Governed_By
+    REVERSE_ROLE: Governs
+  - TYPE: Parent
+    ROLE: Crosses
+    REVERSE_ROLE: Crossed_By
+  - TYPE: Parent
+    ROLE: Assumes
+    REVERSE_ROLE: Assumed_By
+  - TYPE: Parent
+    ROLE: Proven_By
+    REVERSE_ROLE: Proves
+  - TYPE: Child
+    ROLE: Produces
+    REVERSE_ROLE: Produced_By
+  - TYPE: File
+  - TYPE: Parent
+    ROLE: Backlogged_In
+    REVERSE_ROLE: Backlogs
+- TAG: COMMENTARY
+  PROPERTIES:
+    PREFIX: CMT-
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: TITLE
+    TYPE: String
+    REQUIRED: True
+  - TITLE: AUTHORED_BY
+    TYPE: SingleChoice(llm, llm-accepted, llm-adopted, human)
+    REQUIRED: True
+  - TITLE: STANDING
+    TYPE: SingleChoice(open, closed, withdrawn)
+    REQUIRED: True
+  - TITLE: CLOSES_ON
+    TYPE: String
+    REQUIRED: True
+  - TITLE: EDGE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: TAGS
+    TYPE: Tag
+    REQUIRED: False
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: RATIONALE
+    TYPE: String
+    REQUIRED: False
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: NOTES
+    TYPE: String
+    REQUIRED: False
+  - TITLE: COMPONENT
+    TYPE: Tag
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: Remarks_On
+    REVERSE_ROLE: Remarked_On_By
+  - TYPE: Parent
+    ROLE: Proven_By
+    REVERSE_ROLE: Proves
+  - TYPE: Parent
+    ROLE: Backlogged_In
+    REVERSE_ROLE: Backlogs
+  - TYPE: File

@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: Prose for description, lists for anything the reader must unpack
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: INV-LISTS-WHERE-THE-READER-UNPACKS
+TITLE: Prose for description, lists for anything the reader must unpack
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Descriptive content may be paragraphs. Anything the reader must MENTALLY UNPACK
+-- options, steps, findings, obligations, open questions -- is a list.
+
+Brief and informative beats complete and long. A wall of text is a defect in its
+own right, independent of whether every sentence in it is true, because the
+reader cannot find the one sentence that needed them.
+<<<
+RATIONALE: >>>
+A list makes the count of things visible before any of them is read, which is
+what lets a reader decide what to unpack and what to skip. Prose hides the
+count. The rule is about the reader's attention, not about style.
+<<<
+NOTES: >>>
+Recorded 2026-08-28 at the operator's request, as one of four contributor-communication requirements (INV-DECISIONS-ARRIVE-AS-CARDS, INV-LISTS-WHERE-THE-READER-UNPACKS, INV-FILE-DO-NOT-NARRATE, INV-SETTLED-STAYS-VISIBLE). The rule is the operator's; AUTHORED_BY reads llm because the writer has no flag for the other value. An INVARIANT is read as a REQUIREMENT under DEC-INVARIANT-IS-A-REQUIREMENT; the grammar type is kept so the grid is not half-applied. The sdoc skill's backlog protocol is the procedure these four are the requirement for.
+
+Retyped from INVARIANT to REQUIREMENT on 2026-08-30 (DEC-INVARIANT-IS-A-REQUIREMENT; DEC-NODE-FAMILIES). The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<

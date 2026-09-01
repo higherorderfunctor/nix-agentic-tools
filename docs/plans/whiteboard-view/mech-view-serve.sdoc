@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: The task renders the whole canon by default, writes both wrappers, and a second task serves the page on loopback
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-VIEW-SERVE
+TITLE: The task renders the whole canon by default, writes both wrappers, and a second task serves the page on loopback
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+view:render with no root renders every root into output/view/canon.html
+(a full page: doctype, head with title and viewport, body) and
+output/view/canon.artifact.html (the same content in the artifact host's
+shape); with --input root=UID it renders one root as the same page with one
+root. view:serve serves output/view on 127.0.0.1 and prints the address. The
+page is self-contained -- no fetch, fonts with fallbacks, the payload
+inlined -- so the file opens from disk without the server.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-VIEW-SERVES-LOCALLY-AND-AS-AN-ARTIFACT
+  ROLE: Governed_By
+- TYPE: File
+  VALUE: dev/tasks/generate.nix

@@ -1,0 +1,78 @@
+[DOCUMENT]
+TITLE: Semantic layer
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER
+TITLE: Semantic layer
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: callout
+TAGS: explored, not settled
+STATEMENT: >>>
+What the canon describes, tagged against the direction of 2026-08-29. Nothing on this page is settled: it shows what the session of that day explored -- every semantic the canon describes, tagged against its direction -- so the operator can decide what to settle. Decisions come afterwards, one at a time, and only for what they ask to settle.
+<<<
+PARENT_FP: >>>
+DEC-NODE-FAMILIES:0000000
+DEC-UID-OUTLIVES-TYPE:0000000
+MECH-SEMANTIC-LAYER-WHITEBOARD:0000000
+NAR-TERM-CANON:0000000
+SLICE-SEMANTIC-LAYER-RENDER:0000000
+<<<
+NOTES: >>>
+Built on 2026-08-30 by migrate_whiteboard.py from the sheet's lines and the reviewed headlines of the 2026-08-29 render, through the scribe. Every PARENT_FP entry is a 0000000 declaration; nothing here is signed.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SEMANTIC-LAYER-WHITEBOARD
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: SLICE-SEMANTIC-LAYER-RENDER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-UID-OUTLIVES-TYPE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-LEGEND
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-START-SOLID
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-START-KINDS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-START-LAYERS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-START-GAPS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-START-SOURCE
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-TYPES
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-TOPICS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-GAPS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-EDGES
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-WORDS
+  ROLE: Contains
+- TYPE: Child
+  VALUE: MECH-SEMANTIC-LAYER-WHITEBOARD
+  ROLE: Contains

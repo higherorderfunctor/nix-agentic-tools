@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: A flow whose gates read git cannot be tested the way the existing checks are
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-FLOW-TEST-GIT-CHECKPOINTS
+TITLE: A flow whose gates read git cannot be tested the way the existing checks are
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Every check the design system has today is a pure function of the JSON export. `checks/strictdoc-fp-check.nix` and `checks/strictdoc-cycle-check.nix` both run over `${self}`, a flake source store path carrying no `.git`, and neither `dev/scripts/fp-check.py` nor `dev/scripts/cycle-check.py` contains the string git or subprocess — 0 matches each, against 6 for `checks/doubled-words.py` with the same pattern. `SLICE-CHECKPOINT-WIRING` places checkpoints that are not pure: the pre-commit hook runs against the previous commit and the CI step against the point where the branch left main. A contract test for any flow reaching one of those needs a synthetic git repository built inside the derivation — commits, a branch point, and a working tree the tool can write into — or that flow is declared untestable in the harness and reported as such. Decide which, and if a synthetic repository is the answer, decide whether it is built once per check or once per flow.
+<<<
+RATIONALE: >>>
+`MECH-TESTS-AS-CONTRACT` makes a flow's declared outcome its contract and gates `verified` on a test that runs in `nix flake check`. A flow whose gates read git would sit permanently below `verified` with no stated reason, which turns the ladder's most useful query into one with a silent exemption.
+<<<
+NOTES: >>>
+Cited by UID in `MECH-TESTS-AS-CONTRACT`'s NOTES — "Logged as MECH-FLOW-TEST-GIT-CHECKPOINTS rather than solved here" — which also carries the grep and its positive control.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

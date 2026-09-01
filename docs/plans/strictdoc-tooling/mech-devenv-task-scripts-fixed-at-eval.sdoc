@@ -1,0 +1,42 @@
+[DOCUMENT]
+TITLE: A devenv task cannot consume what another task in the same run regenerates
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-DEVENV-TASK-SCRIPTS-FIXED-AT-EVAL
+TITLE: A devenv task cannot consume what another task in the same run regenerates
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Repo-wide, not attached to any milestone. devenv renders every task's `exec`
+into a script at EVALUATION and runs the graph afterwards, so anything a task
+body interpolates out of Nix is fixed before the first task in the run starts. A
+task that consumes what an earlier task in the same run regenerates therefore
+sees the PRE-RUN value, and the failure is silent: the run reports success and
+writes a stale artefact.
+
+Measured 2026-08-27 while wiring generate:sgra.
+`ai.strictdoc.grammars.<name>.rendered` is an evaluation-time string, so chaining
+the write behind generate:sdoc-grammar:normalized would have emitted the grammar
+rendered from the surface that existed when the run BEGAN -- in precisely the run
+that regenerated it. The two are deliberately separate invocations and
+generate:sdoc-grammar's log line names the follow-up rather than running it.
+
+The generate:* graph is largely interpolation-free today and so does not hit
+this, which is why it has never been noticed. Nothing detects the shape. The fix
+in any given case is either a second invocation or a task body that READS the
+file at run time instead of interpolating it, and the second only works where a
+file is what is being passed.
+<<<
+RATIONALE: >>>
+Recorded repo-wide rather than inside the grammar nodes because the reasoning has
+nothing to do with strictdoc: it is a property of how devenv builds its task
+graph. The next session to chain a generator behind a regeneration pays the same
+cost, and pays it as a wrong output rather than as an error.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

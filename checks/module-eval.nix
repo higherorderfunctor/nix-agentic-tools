@@ -299,6 +299,7 @@
         ./../packages/kiro-cli/modules/devenv
         ./../packages/semble/modules/devenv
         ./../packages/stacked-workflows/modules/devenv
+        ./../packages/strictdoc-grammar/modules/devenv
         devenvStubs
         {inherit config;}
       ];
@@ -308,6 +309,18 @@
   # produce, so losing this specialArgs-only seam fails loudly instead of
   # silently measuring production builtins.getEnv behavior.
   evalDevenvWithGetEnv = codexGetEnv: evalDevenvWithSpecialArgs {inherit codexGetEnv;};
+
+  # `ai.strictdoc` helpers (MECH-STRICTDOC-DEVENV-MODULE). The grammar library
+  # is imported with the PLAIN lib rather than hmLib: it is an ordinary Nix
+  # function that takes `lib`, with no home-manager surface in it.
+  strictdocGrammarLib = import ./../packages/strictdoc-grammar/lib {inherit lib;};
+
+  # Derivation NAMES of what a given devenv config installs. Names, not
+  # drvPaths: the assertions below are about which packages the module put in
+  # the shell, and a drvPath comparison would additionally couple them to
+  # whatever nixpkgs pin built strictdoc that day.
+  strictdocDevenvNames = config:
+    map (p: p.name or "") (evalDevenv config).config.packages;
 
   # Codex HM settings are embedded as one-line JSON in the reconciliation
   # activation script rather than exposed as a home.file source. Keeping this
@@ -3822,6 +3835,123 @@ in {
         PY
         ${pkgs.coreutils}/bin/chmod +x test-grammars.py
         ./test-grammars.py
+        ${pkgs.coreutils}/bin/touch "$out"
+      '';
+
+  # MECH-STRICTDOC-DEVENV-MODULE: `ai.strictdoc`, the devenv module that owns
+  # strictdoc's wrapping now that the overlay converts and no longer wraps.
+  #
+  # Three assertions, and the third is the one that matters. The first two are
+  # ordinary enable-gating. The third runs this repository's own `values.nix`
+  # THROUGH THE MODULE'S OPTION and requires the result to be the committed
+  # `docs/sdoc/grammar.sgra` byte for byte. checks/strictdoc-grammar-model-equal
+  # .nix asserts the same identity by calling `grammar.render` directly, which
+  # is exactly why this one is not redundant: it is the only thing that proves
+  # the typed `grammars.<name>.elements` path reaches the same bytes rather
+  # than merely existing.
+  module-strictdoc-inert-when-disabled = mkTest "strictdoc-inert-when-disabled" (!(lib.any (n: lib.hasPrefix "strictdoc" n) (strictdocDevenvNames {})));
+
+  module-strictdoc-enable-installs-cli-and-runner = mkTest "strictdoc-enable-installs-cli-and-runner" (
+    let
+      names = strictdocDevenvNames {ai.strictdoc.enable = true;};
+    in
+      lib.any (n: lib.hasPrefix "strictdoc-0" n || n == "strictdoc") names
+      && lib.any (lib.hasPrefix "strictdoc-grammar-extract-") names
+  );
+
+  module-strictdoc-grammars-render-committed-file = mkTest "strictdoc-grammars-render-committed-file" (
+    let
+      cfg =
+        (evalDevenv {
+          ai.strictdoc.grammars.repo = {
+            target = "docs/sdoc/grammar.sgra";
+            elements =
+              import ./../packages/strictdoc-grammar/values.nix
+              {inherit (strictdocGrammarLib) dsl;};
+          };
+        })
+        .config
+        .ai
+        .strictdoc
+        .grammars
+        .repo;
+    in
+      cfg.target
+      == "docs/sdoc/grammar.sgra"
+      && cfg.rendered == builtins.readFile ./../docs/sdoc/grammar.sgra
+  );
+
+  # SLICE-SDOC-IN-SEMBLE (docs/plans/strictdoc-tooling/slice-sdoc-in-semble.sdoc):
+  # the custom (non-nixpkgs) grammar load path, exercised through the exact same
+  # production entry point as module-semble-extra-grammars-load above, and a real
+  # .sdoc sample rather than a synthetic snippet.
+  module-semble-strictdoc-grammar-load = let
+    customizePackage = import ../packages/semble/lib/withGrammars.nix {inherit lib pkgs;};
+    pathMappings = [
+      {
+        content = "docs";
+        language = "strictdoc";
+        patterns = ["*.sdoc" "*.sgra"];
+      }
+    ];
+    sembleWithGrammars =
+      customizePackage pkgs.ai.semble [pkgs.ai.generic.tree-sitter-strictdoc]
+      pathMappings;
+    # pkgs.writeText, not a heredoc: interpolating a multi-line string as its
+    # own heredoc line double-counts the trailing newline (the value's own
+    # "\n" plus the outer string's line-end "\n"), leaving a blank line at
+    # EOF the grammar does not tolerate — measured directly against this
+    # fixture.
+    sampleDoc = pkgs.writeText "strictdoc-grammar-sample.sdoc" ''
+      [DOCUMENT]
+      TITLE: Sample
+
+      [GRAMMAR]
+      IMPORT_FROM_FILE: @repo
+
+      [MECHANISM]
+      UID: MECH-SAMPLE
+      TITLE: Sample mechanism
+      DEPTH: sketch
+      AUTHORED_BY: llm
+      STATEMENT: >>>
+      A minimal MECHANISM node, parsed to prove the strictdoc grammar loads
+      through Semble's real extra-grammars entry point.
+      <<<
+    '';
+  in
+    assert sembleWithGrammars.passthru.updateFlakeInput == "llm-agents";
+      pkgs.runCommand "module-test-semble-strictdoc-grammar-load" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
+        ${pkgs.coreutils}/bin/mkdir -p repo/docs
+        ${pkgs.coreutils}/bin/cp ${sampleDoc} repo/docs/sample.sdoc
+        ${pkgs.coreutils}/bin/head -n 3 ${sembleWithGrammars}/bin/.semble-wrapped > test-strictdoc-grammar.py
+        ${pkgs.coreutils}/bin/cat >> test-strictdoc-grammar.py <<'PY'
+        from pathlib import Path
+
+        from semble.chunking.core import _cached_get_parser
+        from semble.index.files import detect_language
+
+        root = Path("repo").resolve()
+        sample = root / "docs" / "sample.sdoc"
+        assert detect_language(sample, root) == "strictdoc"
+
+        parser = _cached_get_parser("strictdoc")
+        assert parser is not None
+        tree = parser.parse(sample.read_bytes())
+
+        def error_count(node):
+            count = 1 if (node.type in ("ERROR", "MISSING") or node.is_error) else 0
+            for child in node.children:
+                count += error_count(child)
+            return count
+
+        assert error_count(tree.root_node) == 0, tree.root_node.type
+        PY
+        ${pkgs.coreutils}/bin/chmod +x test-strictdoc-grammar.py
+        ./test-strictdoc-grammar.py
         ${pkgs.coreutils}/bin/touch "$out"
       '';
 

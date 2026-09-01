@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: The systems a reader can switch on and off
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-CANON-SYSTEMS
+TITLE: The systems a reader can switch on and off
+DEPTH: interface-settled
+AUTHORED_BY: llm
+WIDGET: table
+PLACE: card
+TAGS: systems
+STATEMENT: >>>
+| system | sources | switch | meaning |
+| model | docs/spec/ | always | the shared model every other system cites: the node types, the state ladders and the ruled words |
+| adoption | docs/plans/canon-adoption/ | optional | lifting the rest of the repository into the canon: what dissolves, what becomes evidence |
+| architecture | packages/ | optional | settled design co-located with the package it describes |
+| beads | docs/plans/beads-migration/ | optional | the working store the canon will hand execution to |
+| core | docs/plans/strictdoc-tooling/, docs/plans/scribe-daemon/ | optional | the canon's own tooling: the grammar, the scribe and its daemon, the checks and the hooks |
+| whiteboard | docs/plans/whiteboard-view/ | optional | the view system that renders the canon for a person to read |
+<<<
+PARENT_FP: >>>
+DEC-SYSTEM-IS-A-TYPE-SET:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-IS-A-TYPE-SET
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-IS-A-SOURCE-SET
+  ROLE: Cites

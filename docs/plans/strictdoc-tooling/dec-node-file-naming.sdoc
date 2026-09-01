@@ -1,0 +1,75 @@
+[DOCUMENT]
+TITLE: How a node's file is named, and what a plan's backlog is now
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-NODE-FILE-NAMING
+TITLE: How a node's file is named, and what a plan's backlog is now
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: >>>
+The operator rules on it at pull-request review, or a plan directory grows past
+the point where a flat listing of single-node files is navigable and the
+subdirectory question has to be answered on evidence rather than on taste.
+<<<
+STATEMENT: >>>
+Applied by the 2026-08-27 carve; open for ratification.
+
+A node's file is named for its UID, lowercased, plus .sdoc. MECH-FP-CHECK lives
+in mech-fp-check.sdoc. The document's TITLE is the node's own TITLE.
+
+There is no numbered-document convention. The 01-, 02-, 03- and 99- prefixes
+ordered nodes within a file; a file now holds one node, so there is nothing left
+for them to order. Plan directories are flat.
+
+A plan's backlog is not a file. It is a register NODE that items point at with
+Backlogged_In -- see DEC-BACKLOG-IS-A-REGISTER-NODE, which settled that a
+directory query was the wrong successor because it is not in the graph. Grooming
+raises a node's DEPTH where the node already sits; it moves nothing.
+<<<
+RATIONALE: >>>
+Naming the file for the UID makes the addressable unit and the fetchable unit
+the same string. An agent holding a UID from an edge can open the file without a
+lookup, and the layout cannot drift from the graph, because a rename would have
+to change the UID, which never changes.
+
+Titling the document after its one node avoids inventing a second name for the
+same thing. A document title that differed from its node's would be a second
+handle the operator has to dereference, which is the objection that made UIDs
+semantic in the first place.
+
+Flat is chosen over per-topic subdirectories because subdirectories would
+reintroduce, one level up, the grouping the numbered documents used to carry: a
+containment decision the graph does not address and edges do not follow. The UID
+prefix already sorts a listing by node type.
+<<<
+NOTES: >>>
+Written open, not accepted, deliberately. The operator reserved three questions
+for themselves in docs/sdoc/README.md -- the naming convention, the fate of the
+numbered-document convention, and what a per-plan backlog becomes -- and the
+carve had to answer all three to run at all. The first two are answered here AS
+APPLIED, so that the tree and the graph agree, and left open so that
+ratification is still theirs. The THIRD is no longer open: the operator ruled it
+the same day, and DEC-BACKLOG-IS-A-REGISTER-NODE carries the answer.
+
+The conflict this originally left open is RESOLVED, and by the cleanest route
+available. DEC-PLAN-SCOPED-BACKLOG's statement described a 99-backlog document
+and grooming-by-moving, both false after the carve, and an accepted statement is
+frozen. It was not rewritten and did not need the operator to waive anything:
+its own RETIRES_ON names this exact situation -- an item tracked while living
+outside the plan's backlog document -- and names the successor too. The
+condition fired, so the decision was superseded rather than corrected, and
+DEC-BACKLOG-IS-A-REGISTER-NODE is the successor it asked for.
+
+Measured at the carve, 2026-08-27: 161 nodes in 161 files, 447,724 bytes, 2,780
+bytes on average. 135 files under docs/plans/strictdoc-tooling, 18 under
+docs/plans/beads-migration, 4 under docs/spec, 4 under packages/semble/.sdoc.
+Every file satisfies this convention without exception, verified by comparing
+each basename against its node's UID and each document TITLE against its node's
+TITLE.
+
+Nothing enforces it. INV-GUARDS-MUST-EXECUTE wants a guard, and
+MECH-SDOC-LAYOUT-CHECK carries that work.
+<<<

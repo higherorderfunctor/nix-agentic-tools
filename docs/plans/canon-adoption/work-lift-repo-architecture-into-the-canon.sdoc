@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: Lift the rest of the repository's architecture and contexts into the canon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-LIFT-REPO-ARCHITECTURE-INTO-THE-CANON
+TITLE: Lift the rest of the repository's architecture and contexts into the canon
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Lift the architecture and the contexts of the rest of the repository into the
+canon: the repository's own design, the model runtime, the developer tools,
+the continuous integration, beads. Today that knowledge lives in the
+fragment system -- the path-scoped instruction fragments under dev/fragments
+and the per-package docs they compose -- as prose no check can hold to the
+code. Each becomes claims of the canon (requirements, decisions, mechanisms,
+evidence) with the edges that let a change re-suspect what depends on it.
+<<<
+NOTES: >>>
+Filed 2026-08-30 from the operator's list of things to do before they forget, restated under the ruled vocabulary; some restate earlier items. Covers: repo design, model runtime, dev tools, CI, beads (after WORK-IMPORT-BEADS-DESIGN).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-CANON-ADOPTION
+  ROLE: Backlogged_In

@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: Gaps
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-GAPS
+TITLE: Gaps
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: prose
+PLACE: tab
+TAGS: gaps
+STATEMENT: >>>
+The sheet's own closing section: the five places where the direction of 2026-08-29 had no answer at all, one card each, with the nodes it touches. Every topic row that feeds a gap links to its card, so a card's backlinks are the lines behind it.
+<<<
+RELATIONS:
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER
+  ROLE: Contains

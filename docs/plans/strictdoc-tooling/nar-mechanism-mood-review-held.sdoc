@@ -1,0 +1,40 @@
+[DOCUMENT]
+TITLE: Held for the operator
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-MECHANISM-MOOD-REVIEW-HELD
+TITLE: Held for the operator
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+PLACE: screen
+STATEMENT: >>>
+These four read as mixed -- half rule, half design -- and the honest answer is a split into two nodes, which is authoring. They stay mechanisms until ruled.
+
+- [LINK: MECH-AI-STRICTDOC-HOME-PARITY] -- What would split it: (1) DECISION, once expressible: 'home-manager module carries enable and package only; grammars is not mirrored because it is project-scoped'. (2) REQUIREMENT / parity-rule amendment: 'a… [HELD: proposed REQUIREMENT]
+- [LINK: MECH-CI-UP-TO-PAR-BEFORE-MERGE] -- Really a DECISION plus a WORK item; REQUIREMENT is the nearest available verdict on the normative axis only. Split: DECISION -- 'additional CI tooling is not required for the bulk of this experiment; tooling… [HELD: proposed REQUIREMENT]
+- [LINK: MECH-HTML-RENDER-MUST-PASS] -- Genuinely half rule, half design; the split is the real answer. Split: REQUIREMENT 'the corpus renders to HTML' (paragraph 1 + RATIONALE) and MECHANISM 'the render gate invokes strictdoc's own field parser and… [HELD: proposed REQUIREMENT]
+- [LINK: MECH-SEMBLE-TEST-RECIPE] -- Genuinely mixed. What would split it: an EVIDENCE node for the PYTHONPATH-shadowing finding (measured on SLICE-SDOC-IN-SEMBLE, one false defect report caused) plus a WORK item for the recipe. If the operator's… [HELD: proposed EVIDENCE]
+<<<
+PARENT_FP: >>>
+MECH-AI-STRICTDOC-HOME-PARITY:0000000
+MECH-CI-UP-TO-PAR-BEFORE-MERGE:0000000
+MECH-HTML-RENDER-MUST-PASS:0000000
+MECH-SEMBLE-TEST-RECIPE:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-AI-STRICTDOC-HOME-PARITY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-CI-UP-TO-PAR-BEFORE-MERGE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-HTML-RENDER-MUST-PASS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SEMBLE-TEST-RECIPE
+  ROLE: Cites

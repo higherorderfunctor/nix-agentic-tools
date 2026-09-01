@@ -1,0 +1,2235 @@
+<title>Canon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Spline+Sans+Mono:wght@400;600&display=swap"
+/>
+<style>
+  /* A content-blind page over one payload (schema whiteboard-view/2).
+   The only vocabularies written into this file are the schema's keys, the
+   sixteen widget words, the four place words, the five query words, the eight
+   legend colour names and the layout rules (a root's Start with its check
+   findings, the Nodes index, an index of screen children, the rows that link
+   a screen, prev/next, crumbs, routes). Every other word on the page arrives
+   in the payload. */
+  :root {
+    --ground: #f5f6f4;
+    --surface: #ffffff;
+    --surface2: #ebede9;
+    --ink: #1c2321;
+    --ink2: #4a544f;
+    --ink3: #6f7973;
+    --line: #d5d9d4;
+    --focus: #2f6fd6;
+    --edge: rgba(28, 35, 33, 0.3);
+    --c-green: #2e8b57;
+    --c-slate: #6a5acd;
+    --c-amber: #b8860b;
+    --c-blue: #2f6fd6;
+    --c-red: #c43d3d;
+    --c-teal: #1a7f7a;
+    --c-violet: #8b3fbf;
+    --c-grey: #66706b;
+    --display:
+      "Bricolage Grotesque", "Atkinson Hyperlegible", system-ui, sans-serif;
+    --body:
+      "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto,
+      sans-serif;
+    --mono:
+      "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+      monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #141816;
+      --surface: #1c2220;
+      --surface2: #242b28;
+      --ink: #e6eae7;
+      --ink2: #b3bbb6;
+      --ink3: #8a948e;
+      --line: #2f3834;
+      --focus: #5f8ce0;
+      --edge: rgba(0, 0, 0, 0.75);
+      --c-green: #37a366;
+      --c-slate: #8c7bde;
+      --c-amber: #b98d1f;
+      --c-blue: #5f8ce0;
+      --c-red: #dc665c;
+      --c-teal: #3fb3ad;
+      --c-violet: #b48ae6;
+      --c-grey: #98a29c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #141816;
+    --surface: #1c2220;
+    --surface2: #242b28;
+    --ink: #e6eae7;
+    --ink2: #b3bbb6;
+    --ink3: #8a948e;
+    --line: #2f3834;
+    --focus: #5f8ce0;
+    --edge: rgba(0, 0, 0, 0.75);
+    --c-green: #37a366;
+    --c-slate: #8c7bde;
+    --c-amber: #b98d1f;
+    --c-blue: #5f8ce0;
+    --c-red: #dc665c;
+    --c-teal: #3fb3ad;
+    --c-violet: #b48ae6;
+    --c-grey: #98a29c;
+  }
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+  a {
+    color: inherit;
+  }
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  code,
+  .mono {
+    font-family: var(--mono);
+    font-size: 0.86em;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--display);
+    font-weight: 700;
+    line-height: 1.15;
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+  }
+  h1 {
+    font-size: 1.6rem;
+  }
+  h2 {
+    font-size: 1.3rem;
+  }
+  h3 {
+    font-size: 1.05rem;
+  }
+  h4 {
+    font-size: 0.95rem;
+  }
+  p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  .muted {
+    color: var(--ink3);
+  }
+  .dim {
+    color: var(--ink2);
+  }
+  .small {
+    font-size: 0.88rem;
+  }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink3);
+    overflow-wrap: anywhere;
+  }
+  a.kicker {
+    text-decoration: none;
+  }
+  a.kicker:hover {
+    text-decoration: underline;
+  }
+
+  /* colour classes: a legend colour name maps to one token, nothing else */
+  .c-green {
+    --tagc: var(--c-green);
+  }
+  .c-slate {
+    --tagc: var(--c-slate);
+  }
+  .c-amber {
+    --tagc: var(--c-amber);
+  }
+  .c-blue {
+    --tagc: var(--c-blue);
+  }
+  .c-red {
+    --tagc: var(--c-red);
+  }
+  .c-teal {
+    --tagc: var(--c-teal);
+  }
+  .c-violet {
+    --tagc: var(--c-violet);
+  }
+  .c-grey {
+    --tagc: var(--c-grey);
+  }
+  .c-none {
+    --tagc: var(--ink3);
+  }
+
+  /* header */
+  .top {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--ground);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 10px 16px 6px;
+    flex-wrap: wrap;
+  }
+  .brand a.name {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 1.05rem;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+  .pill {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--c-amber);
+    color: var(--c-amber);
+    white-space: nowrap;
+  }
+  .switches {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-left: auto;
+  }
+  .switches button,
+  .switch {
+    font: inherit;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink3);
+    cursor: pointer;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .switches button[aria-pressed="true"],
+  .switch[aria-pressed="true"] {
+    color: var(--ink);
+    border-color: var(--ink2);
+    background: var(--surface2);
+  }
+  .switches button i,
+  .switch i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--line);
+  }
+  .switches button[aria-pressed="true"] i,
+  .switch[aria-pressed="true"] i {
+    background: var(--c-green);
+  }
+  .tabs {
+    display: flex;
+    gap: 2px;
+    overflow-x: auto;
+    padding: 0 10px;
+    scrollbar-width: none;
+    align-items: flex-end;
+  }
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .tabs.scrollx {
+    --scroll-bg: var(--ground);
+  }
+  .tabs a {
+    flex: 0 0 auto;
+    padding: 8px 10px 8px;
+    text-decoration: none;
+    font-size: 0.92rem;
+    color: var(--ink2);
+    border-bottom: 3px solid transparent;
+    font-family: var(--display);
+    font-weight: 500;
+    max-width: 9rem;
+    line-height: 1.15;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    max-height: calc(2.3em + 16px);
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+  .tabs a[aria-current="page"] {
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+  }
+  .tabs.sub {
+    padding: 0;
+    margin: -6px 0 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  .tabs.sub a {
+    font-size: 0.84rem;
+    padding: 6px 7px 6px;
+    max-height: calc(2.3em + 12px);
+  }
+
+  /* horizontal scrollers: a shadow on whichever edge hides more content.
+     The two covering layers scroll with the content (background-attachment:
+     local) and slide off the edge as it is reached; the two shadow layers
+     stay put, so a shadow shows exactly while there is more to scroll to. */
+  .scrollx {
+    --scroll-bg: var(--surface);
+    background:
+      linear-gradient(90deg, var(--scroll-bg) 40%, transparent) left / 36px 100%,
+      linear-gradient(270deg, var(--scroll-bg) 40%, transparent) right / 36px
+        100%,
+      radial-gradient(farthest-side at 0 50%, var(--edge), transparent) left /
+        18px 100%,
+      radial-gradient(farthest-side at 100% 50%, var(--edge), transparent)
+        right / 18px 100%;
+    background-repeat: no-repeat;
+    background-attachment: local, local, scroll, scroll;
+  }
+
+  /* layout */
+  main {
+    padding: 16px 16px 72px;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .screen > * + * {
+    margin-top: 18px;
+  }
+  .stack > * + * {
+    margin-top: 10px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    scroll-margin-top: 120px;
+  }
+  .card > * + * {
+    margin-top: 10px;
+  }
+  section.sec {
+    scroll-margin-top: 120px;
+  }
+  section.sec > * + * {
+    margin-top: 10px;
+  }
+  .banner {
+    background: color-mix(in oklab, var(--c-amber) 12%, var(--surface));
+    border: 1px solid color-mix(in oklab, var(--c-amber) 45%, var(--line));
+    border-radius: 10px;
+    padding: 12px 16px;
+  }
+  .banner > * + * {
+    margin-top: 8px;
+  }
+  .row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .between {
+    justify-content: space-between;
+  }
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  @media (min-width: 640px) {
+    .grid2 {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  footer {
+    padding: 20px 16px 40px;
+    max-width: 760px;
+    margin: 0 auto;
+    color: var(--ink3);
+    font-size: 0.85rem;
+  }
+  footer code {
+    overflow-wrap: anywhere;
+  }
+  ul.plain {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  ul.plain > li + li {
+    margin-top: 6px;
+  }
+  .hit {
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 55%, transparent);
+  }
+  .off {
+    color: var(--ink3);
+    font-style: italic;
+  }
+  .clamp {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* word chips (legend words) and swatches */
+  .word {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.03em;
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+  .word i {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: var(--tagc, var(--ink3));
+    flex: none;
+  }
+  .word.big {
+    font-size: 0.82rem;
+  }
+  .word .n {
+    color: var(--ink3);
+  }
+
+  /* chips */
+  .chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: var(--surface2);
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+  .chip b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .chip small {
+    font-size: 0.66rem;
+    color: var(--ink3);
+    margin-left: 4px;
+  }
+  .flag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+  .flag.warn {
+    border-color: var(--c-red);
+  }
+  .pinned {
+    opacity: 0.75;
+    cursor: default;
+  }
+  .tabgroup > .kicker {
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  .ckey summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .colourkey {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px 14px;
+    margin: 12px 0 0;
+    align-items: start;
+  }
+  .colourkey dt {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    color: var(--ink2);
+    white-space: nowrap;
+  }
+  .colourkey dd {
+    margin: 0;
+  }
+  .colourkey dd p {
+    margin: 0;
+  }
+  .colourkey .sw {
+    padding: 2px 4px;
+  }
+  /* provenance */
+  .src {
+    margin: 0;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .src a {
+    color: var(--ink3);
+    text-decoration: none;
+  }
+  .src a:hover {
+    color: var(--ink2);
+    text-decoration: underline;
+  }
+  .seed {
+    margin: 0 0 8px;
+    font-size: 0.78rem;
+    color: var(--ink3);
+  }
+  .idline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 2px 0 0;
+  }
+  .idline .uid {
+    font-size: 0.72rem;
+    color: var(--ink3);
+  }
+  .chip.kind {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink3);
+    letter-spacing: 0.04em;
+  }
+  .srcdir {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--ink3);
+    margin-left: 6px;
+    overflow-wrap: anywhere;
+  }
+  .count {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--ink3);
+  }
+
+  /* node links: block form puts the title on its own line under the id */
+  a.node {
+    display: block;
+    text-decoration: none;
+    padding: 3px 0;
+    line-height: 1.45;
+  }
+  a.node code {
+    display: inline-block;
+    max-width: 100%;
+    font-size: 0.78rem;
+    color: var(--ink);
+    background: var(--surface2);
+    padding: 1px 6px;
+    border-radius: 5px;
+    overflow-wrap: anywhere;
+    margin-right: 8px;
+    vertical-align: baseline;
+  }
+  a.node .t {
+    color: var(--ink2);
+    font-size: 0.92rem;
+  }
+  a.node:hover .t {
+    text-decoration: underline;
+  }
+  a.node.inline {
+    display: inline;
+    padding: 0;
+  }
+  a.node.inline code {
+    display: inline;
+    font-size: 0.8em;
+    margin: 0;
+  }
+  span.node code {
+    font-size: 0.78rem;
+    background: var(--surface2);
+    padding: 1px 6px;
+    border-radius: 5px;
+  }
+
+  /* rows widget */
+  .filters {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .filters button {
+    font: inherit;
+    font-size: 0.82rem;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink2);
+    cursor: pointer;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .filters button[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--ground);
+    border-color: var(--ink);
+  }
+  .filters button i {
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    background: var(--tagc, var(--ink3));
+  }
+  .line {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 5px solid var(--tagc, var(--ink3));
+    border-radius: 10px;
+    padding: 12px 14px 10px;
+    scroll-margin-top: 120px;
+  }
+  .line > * + * {
+    margin-top: 8px;
+  }
+  .line-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .line .h {
+    font-size: 1rem;
+    line-height: 1.45;
+  }
+  .line .by {
+    font-size: 0.9rem;
+    color: var(--ink2);
+  }
+  .line .by b {
+    font-weight: 400;
+    color: var(--ink3);
+  }
+  .line .idx {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--ink3);
+  }
+  .crumb {
+    font-size: 0.8rem;
+    color: var(--ink3);
+    text-decoration: none;
+  }
+  .crumb:hover {
+    text-decoration: underline;
+  }
+  .refs {
+    list-style: none;
+    padding: 6px 0 0;
+    margin: 0;
+    border-top: 1px dashed var(--line);
+  }
+  .refs li {
+    margin: 0;
+  }
+  .refs .kicker {
+    margin-top: 4px;
+  }
+  details.orig summary {
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--ink3);
+    list-style: none;
+  }
+  details.orig summary::before {
+    content: "▸ ";
+  }
+  details.orig[open] summary::before {
+    content: "▾ ";
+  }
+  details.orig p {
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--ink2);
+    overflow-wrap: anywhere;
+    background: var(--surface2);
+    padding: 8px 10px;
+    border-radius: 6px;
+    white-space: pre-wrap;
+  }
+
+  /* strip and tally */
+  .heat {
+    display: grid;
+    grid-template-columns: minmax(120px, 38%) 1fr;
+    gap: 8px 12px;
+    align-items: center;
+  }
+  .heat-label {
+    text-decoration: none;
+    font-size: 0.9rem;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  .heat-label:hover {
+    text-decoration: underline;
+  }
+  .heat-label .n {
+    color: var(--ink3);
+    font-size: 0.8rem;
+  }
+  .bar {
+    display: flex;
+    gap: 2px;
+    height: 22px;
+  }
+  .seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--tagc);
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    text-decoration: none;
+    border-radius: 3px;
+    min-width: 6px;
+    overflow: hidden;
+  }
+  .seg:hover {
+    filter: brightness(1.12);
+  }
+  .totals .bar {
+    height: 28px;
+  }
+
+  /* legend widget */
+  .legend {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px 12px;
+    align-items: baseline;
+  }
+  .legend .meaning {
+    font-size: 0.92rem;
+    color: var(--ink2);
+  }
+  .legend .cn {
+    font-size: 0.72rem;
+    color: var(--ink3);
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+
+  /* definition lists: glossary, facts, fields */
+  dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 14px;
+    font-size: 0.92rem;
+  }
+  dt {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink3);
+    padding-top: 4px;
+    overflow-wrap: anywhere;
+  }
+  dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  dl.words dt {
+    padding-top: 0;
+    font-size: 0.95rem;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--ink);
+    font-family: var(--body);
+    font-weight: 700;
+  }
+  dl.words {
+    grid-template-columns: minmax(100px, 30%) 1fr;
+  }
+  dl.words dt a {
+    text-decoration: none;
+  }
+  dl.words dt a:hover {
+    text-decoration: underline;
+  }
+  dl.facts {
+    grid-template-columns: minmax(80px, 24%) 1fr;
+  }
+  dl.fields {
+    grid-template-columns: minmax(90px, 24%) 1fr;
+  }
+  @media (max-width: 480px) {
+    dl.fields,
+    dl.facts {
+      grid-template-columns: 1fr;
+    }
+    dl.fields dt,
+    dl.facts dt {
+      padding-top: 6px;
+    }
+  }
+
+  /* grid figure */
+  .gridfig {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr;
+    gap: 6px;
+    align-items: stretch;
+  }
+  .gridfig .ax {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--ink3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    align-self: center;
+    padding: 4px;
+  }
+  .gridfig .ax.left {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    text-align: center;
+  }
+  .cell {
+    display: block;
+    text-decoration: none;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 10px 12px;
+    min-height: 74px;
+  }
+  a.cell:hover {
+    border-color: var(--ink2);
+  }
+  .cell b {
+    font-family: var(--display);
+    font-size: 1rem;
+    display: block;
+    overflow-wrap: anywhere;
+  }
+  .cell span {
+    font-size: 0.82rem;
+    color: var(--ink2);
+  }
+  .cell.empty {
+    border-style: dashed;
+  }
+  .outside {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  @media (min-width: 560px) {
+    .outside {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+  }
+  .cellbadge {
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    color: var(--ink2);
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .cellbadge i {
+    width: 10px;
+    height: 10px;
+    border: 1px solid var(--ink2);
+    border-radius: 2px;
+  }
+  .cellbadge i.f {
+    background: var(--ink2);
+  }
+
+  /* ladders */
+  .ladder {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .ladder .rung {
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    padding: 4px 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface2);
+  }
+  .ladder .rung b {
+    font-weight: 600;
+  }
+  .ladder .rung.ghost {
+    border-style: dashed;
+    background: transparent;
+    color: var(--ink3);
+  }
+  .ladder .arrow {
+    color: var(--ink3);
+    font-size: 0.9rem;
+  }
+
+  /* layer stack */
+  .layers {
+    display: grid;
+    gap: 4px;
+  }
+  .layer {
+    display: grid;
+    grid-template-columns: minmax(44px, max-content) 1fr;
+    gap: 10px;
+    border: 1px solid var(--line);
+    border-left: 5px solid var(--tagc, var(--line));
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: var(--surface);
+  }
+  .layer .l {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 1rem;
+    max-width: 7rem;
+    overflow-wrap: anywhere;
+  }
+  .layer .d {
+    font-size: 0.9rem;
+    color: var(--ink2);
+  }
+  .layer.marked {
+    background: var(--surface2);
+  }
+
+  /* tables */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.9rem;
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink3);
+    font-weight: 600;
+  }
+  .tbl {
+    overflow-x: auto;
+  }
+  td.num {
+    text-align: right;
+    font-family: var(--mono);
+  }
+  td.opts {
+    min-width: 12rem;
+  }
+  @media (max-width: 480px) {
+    table {
+      font-size: 0.82rem;
+    }
+    th,
+    td {
+      padding: 5px 5px;
+    }
+    td.opts {
+      min-width: 9rem;
+    }
+    /* a wide table stacks: one block per row, each cell under its header */
+    table.rowwise,
+    table.rowwise tbody,
+    table.rowwise tr,
+    table.rowwise td {
+      display: block;
+    }
+    table.rowwise thead {
+      display: none;
+    }
+    table.rowwise tr {
+      border-bottom: 1px solid var(--line);
+      padding: 6px 0;
+    }
+    table.rowwise td {
+      border: 0;
+      padding: 2px 0;
+    }
+    table.rowwise td::before {
+      content: attr(data-th);
+      display: block;
+      font-family: var(--mono);
+      font-size: 0.66rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ink3);
+    }
+  }
+  ul.plain > li > p.dim {
+    margin-top: 2px;
+  }
+  .warn {
+    color: var(--c-red);
+  }
+
+  /* edges widget */
+  figure {
+    margin: 0;
+  }
+  figure svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    color: var(--ink2);
+  }
+  figcaption {
+    font-size: 0.85rem;
+    color: var(--ink3);
+    margin-top: 8px;
+  }
+  .figwrap {
+    overflow-x: auto;
+  }
+  @media (max-width: 760px) {
+    .figwrap svg {
+      min-width: 720px;
+    }
+  }
+
+  /* cites */
+  ul.cites {
+    list-style: none;
+    padding: 8px 0 0;
+    margin: 0;
+    border-top: 1px dashed var(--line);
+  }
+  ul.cites li {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0 10px;
+    align-items: start;
+  }
+  .fp {
+    font-size: 0.8rem;
+    color: var(--ink2);
+    white-space: nowrap;
+    padding-top: 4px;
+    text-align: right;
+  }
+  .fp .mark {
+    font-family: var(--mono);
+    margin-right: 4px;
+  }
+
+  /* index cards */
+  a.icard {
+    display: block;
+    text-decoration: none;
+  }
+  a.icard:hover h3 {
+    text-decoration: underline;
+  }
+  a.icard p {
+    margin-top: 4px;
+  }
+
+  /* node screen */
+  .nodehead code {
+    font-size: 0.9rem;
+    background: var(--surface2);
+    padding: 2px 8px;
+    border-radius: 6px;
+    overflow-wrap: anywhere;
+    display: inline-block;
+    max-width: 100%;
+  }
+  input.search {
+    width: 100%;
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .facets > * + * {
+    margin-top: 6px;
+  }
+  .facet {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .facet .kicker {
+    min-width: 5rem;
+  }
+  .facet button {
+    font: inherit;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink2);
+    cursor: pointer;
+  }
+  .facet button[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--ground);
+    border-color: var(--ink);
+  }
+  .field {
+    overflow-wrap: anywhere;
+    font-size: 0.92rem;
+  }
+  .field p + p,
+  .field pre + p,
+  .field p + pre {
+    margin-top: 0.6em;
+  }
+  .field pre.figure {
+    white-space: pre;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+  }
+  .checks li {
+    padding: 8px 0;
+    border-top: 1px dashed var(--line);
+  }
+  .checks li > * + * {
+    margin-top: 4px;
+  }
+  .prevnext {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+  }
+  .prevnext a {
+    text-decoration: none;
+    font-size: 0.92rem;
+    max-width: 48%;
+  }
+  .prevnext a:hover {
+    text-decoration: underline;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+</style>
+<!--BODY-->
+<div id="app">
+  <header class="top">
+    <div class="brand">
+      <a id="brand" class="name" href="#/start"></a>
+      <span id="pills" class="row"></span>
+      <span id="hswitches" class="switches" aria-label="systems"></span>
+    </div>
+    <nav class="tabs scrollx" id="tabs" aria-label="Screens"></nav>
+  </header>
+  <main id="main" class="screen"></main>
+  <footer id="foot"></footer>
+</div>
+
+<script>
+  const DATA = /*DATA*/;
+
+  const SCHEMA="whiteboard-view/2";
+  const COLOURS=["green","slate","amber","blue","red","teal","violet","grey"];
+  const WIDGETS=["prose","callout","rows","table","facts","glossary","legend","stack","grid","ladder","strip","tally","index","list","edges","fingerprints"];
+  const PLACES=["tab","screen","section","card"];
+  const QUERIES=["roots","nodes","grammar","systems","terms"];
+  const LISTING=["index","list","strip","tally"];
+  const FPMARK={undeclared:"◌",unsigned:"○",signed:"●",drifted:"◐"};
+
+  function h(tag, attrs={}, ...kids){
+    const e=document.createElement(tag);
+    for(const [k,v] of Object.entries(attrs||{})){
+      if(v==null||v===false) continue;
+      if(k==="class") e.className=v;
+      else if(k.startsWith("on")) e.addEventListener(k.slice(2),v);
+      else e.setAttribute(k,v);
+    }
+    for(const k of kids.flat(Infinity)){ if(k==null||k===false) continue; e.append(k.nodeType?k:document.createTextNode(String(k))); }
+    return e;
+  }
+  const SVGNS="http://www.w3.org/2000/svg";
+  function s(tag, attrs={}, ...kids){
+    const e=document.createElementNS(SVGNS,tag);
+    for(const [k,v] of Object.entries(attrs||{})){ if(v==null) continue; e.setAttribute(k,v); }
+    for(const k of kids.flat(Infinity)){ if(k==null||k===false) continue; e.append(k.nodeType?k:document.createTextNode(String(k))); }
+    return e;
+  }
+  const plural=(n,one,many)=>`${n} ${n===1?one:(many||one+"s")}`;
+
+  /* ---------- indexes over the payload ---------- */
+  const NODES=DATA.nodes||{};
+  const BACK=DATA.backlinks||{};
+  const GRAMMAR=DATA.grammar||{};
+  const LADDERS=DATA.ladders||{};
+  const SYSTEMS=Array.isArray(DATA.systems)?DATA.systems:[];
+  const ROOTS=Array.isArray(DATA.roots)?DATA.roots:[];
+  const EDGES=Array.isArray(DATA.edges)?DATA.edges:[];
+  const CHECKS=Array.isArray(DATA.checks)?DATA.checks:[];
+  const NAR={}, PARENT={}, ROOTOF={}, LC={};
+  ROOTS.forEach(r=>(function index(n,parent){ NAR[n.uid]=n; PARENT[n.uid]=parent; ROOTOF[n.uid]=r.uid; (n.children||[]).forEach(c=>index(c,n.uid)); })(r,null));
+  Object.keys(NODES).forEach(u=>LC[u.toLowerCase()]=u);
+  Object.keys(NAR).forEach(u=>LC[u.toLowerCase()]=u);
+  // the canon root is the first root: the payload orders roots with the canon's own first
+  const CANON=ROOTS[0]||null;
+  /* ---------- the tab strip: a vocabulary the canon declares ----------
+     DEC-TABS-ARE-A-DECLARED-VOCABULARY. TABS is the table's rows in the
+     table's order; a narrative with PLACE: tab joins the tab its own `tab`
+     field names, and MANY narratives in many systems may join one. Start and
+     Nodes are the page's own and are never rows. */
+  const TABS=Array.isArray(DATA.tabs)?DATA.tabs:[];
+  // DEC-COLOUR-IS-SHARED-WORDS-ARE-NOT: colour means the same thing on every
+  // screen; the words on it belong to each system.
+  const COLOURKEY=Array.isArray(DATA.colours)?DATA.colours:[];
+  const tabHref=key=>`#/t/${encodeURIComponent(String(key))}`;
+  const TABTITLE={}; TABS.forEach(t=>TABTITLE[t.key]=t.title);
+  // the legend of a root: the first narrative anywhere in its tree whose widget is legend
+  const LEGENDOF={};
+  ROOTS.forEach(r=>{ let found=null; (function walk(n){ if(found) return; if(n.widget==="legend"&&Array.isArray(n.legend)) found=n.legend; else (n.children||[]).forEach(walk); })(r); LEGENDOF[r.uid]=found||[]; });
+  const legendFor=uid=>LEGENDOF[ROOTOF[uid]]||[];
+  const legendRow=(uid,word)=>word==null?null:(legendFor(uid).find(l=>l.word===word)||null);
+
+  const enc=u=>encodeURIComponent(String(u).toLowerCase());
+  const narHref=(uid,extra)=>`#/n/${enc(uid)}${extra||""}`;
+  const nodeHref=uid=>`#/nodes/${enc(uid)}`;
+  const hrefOf=uid=>NAR[uid]?narHref(uid):(NODES[uid]?nodeHref(uid):null);
+  const titleOf=uid=>NAR[uid]?NAR[uid].title:(NODES[uid]?NODES[uid].title:null);
+  /* ---------- provenance: the .sdoc a thing was authored in ---------- */
+  // Every node and every narrative carries its own path in the payload; the
+  // page never derives one. A file is named for its node's UID lowercased, so
+  // the basename repeats the UID and the DIRECTORY is the part that says
+  // something -- which plan, the spec, or a package. srcLine gives the whole
+  // path where nothing else names the source; srcDir gives the directory
+  // where the UID is already on screen beside it.
+  const pathOf=uid=>{ const nd=NODES[uid]; if(nd&&nd.path) return nd.path; const n=NAR[uid]; return n&&n.path?n.path:null; };
+  const dirOf=uid=>{ const p=pathOf(uid); if(!p) return null; const i=String(p).lastIndexOf("/"); return i<0?"":String(p).slice(0,i+1); };
+  function srcLine(uid){
+    const p=pathOf(uid); if(!p) return null;
+    return h("p",{class:"src"},h("a",{href:nodeHref(uid),title:"the file this was written in"},h("code",{},p)));
+  }
+  // What a thing IS and what it is called, the way strictdoc's own export
+  // stamps an element type and an id on every block. The type word comes from
+  // the payload -- the page never writes a type name of its own.
+  function typeBadge(type){
+    if(type==null||type==="") return null;
+    return h("span",{class:"chip kind"},String(type).toLowerCase().replace(/_/g," "));
+  }
+  function idLine(uid,type){
+    if(!uid) return null;
+    return h("div",{class:"idline"},typeBadge(type),h("code",{class:"uid"},uid));
+  }
+  function srcDir(uid){
+    const d=dirOf(uid); if(d==null) return null;
+    return h("span",{class:"srcdir",title:pathOf(uid)},d);
+  }
+  const colourOf=(uid,word)=>{ const l=legendRow(uid,word); return l&&COLOURS.includes(l.colour)?l.colour:null; };
+  const cls=(uid,word)=>"c-"+(colourOf(uid,word)||"none");
+  const rank=(field,value)=>{ const l=LADDERS[field]; if(!Array.isArray(l)) return null; const i=l.indexOf(value); return i<0?null:[i+1,l.length]; };
+
+  /* ---------- the selection: systems switched on, carried in ?on= ---------- */
+  // A system whose switch reads "always" is pinned: it cannot be turned off,
+  // and an address that omits it still carries it.
+  const PINNED=SYSTEMS.filter(x=>x.switch==="always").map(x=>x.name);
+  function readSelection(){
+    const q=new URLSearchParams(location.search).get("on");
+    if(q==null||!SYSTEMS.length) return new Set(SYSTEMS.map(x=>x.name));
+    return new Set([...PINNED,...q.split(",").map(x=>x.trim()).filter(Boolean)]);
+  }
+  let ON=readSelection();
+  // Membership is the payload's: every node card carries the systems that
+  // hold it, computed from its path. The page never reads a node's type or a
+  // relation's role to decide what to show.
+  const systemsOf=uid=>{ const nd=NODES[uid]; return nd&&Array.isArray(nd.systems)?nd.systems:[]; };
+  const nodeOn=uid=>{ const nd=NODES[uid]; if(!nd) return true; const sys=systemsOf(uid); return !sys.length||sys.some(x=>ON.has(x)); };
+  const edgeOn=e=>nodeOn(e.from)&&nodeOn(e.to);
+  // a narrative sorts by the first system that holds it, in the systems
+  // table's order, so a tab reads model first and then each plan in turn
+  const SYSORDER=SYSTEMS.map(x=>x.name);
+  const sysRank=uid=>{ let best=SYSORDER.length; systemsOf(uid).forEach(x=>{ const i=SYSORDER.indexOf(x); if(i>=0&&i<best) best=i; }); return best; };
+  const CONTRIB={}; TABS.forEach(t=>CONTRIB[t.key]=[]);
+  Object.values(NAR).forEach(x=>{ if(x.place==="tab"&&x.tab!=null&&CONTRIB[x.tab]) CONTRIB[x.tab].push(x); });
+  Object.keys(CONTRIB).forEach(k=>CONTRIB[k].sort((a,b)=>sysRank(a.uid)-sysRank(b.uid)));
+  const contribsOn=key=>(CONTRIB[key]||[]).filter(contribShown);
+  const selectedNodes=()=>Object.values(NODES).filter(nd=>nodeOn(nd.uid));
+  const selectedEdges=()=>EDGES.filter(edgeOn);
+  function setSelection(next){
+    ON=next;
+    const url=`?on=${encodeURIComponent([...ON].join(","))}${location.hash}`;
+    history.replaceState(null,"",url);
+    renderHeader(); route();
+  }
+  function switchRow(compact){
+    if(!SYSTEMS.length) return null;
+    const wrap=h("div",{class:compact?"switches":"row",role:"group","aria-label":"systems"});
+    SYSTEMS.forEach(x=>{
+      const on=ON.has(x.name), pinned=x.switch==="always";
+      const title=[x.meaning||"",pinned?"(always on)":""].filter(Boolean).join(" ");
+      if(pinned){ wrap.append(h("span",{class:(compact?"":"switch ")+"pinned","aria-disabled":"true",title:title||undefined},h("i"),x.name)); return; }
+      wrap.append(h("button",{class:compact?null:"switch","aria-pressed":String(on),title:title||undefined,onclick:()=>{ const n=new Set(ON); if(n.has(x.name)) n.delete(x.name); else n.add(x.name); setSelection(n); }},h("i"),x.name));
+    });
+    return wrap;
+  }
+  function offNote(uid){
+    const holders=systemsOf(uid);
+    return h("span",{class:"off"},"(switched off: ",holders.length?holders.join(", "):"—",")");
+  }
+
+  /* ---------- small components ---------- */
+  function nodeLink(uid, inline){
+    const t=titleOf(uid);
+    const href=hrefOf(uid);
+    if(!href) return h("span",{class:"node"},h("code",{},uid)," ",h("span",{class:"muted small"},"(not in the canon)"));
+    if(!nodeOn(uid)) return h("span",{class:"node"},h("code",{},uid)," ",offNote(uid));
+    const a=h("a",{class:"node"+(inline?" inline":""),href,title:inline&&t!=null?t:undefined},h("code",{},uid));
+    if(t!=null&&!inline) a.append(h("span",{class:"t"},t));
+    if(!inline){
+      const nd=NODES[uid];
+      if(nd&&!NAR[uid]){ const b=typeBadge(nd.type); if(b) a.append(b); }
+      const d=srcDir(uid); if(d) a.append(d);
+    }
+    return a;
+  }
+  function spans(list){ return (list||[]).map(sp=> sp&&sp.link!=null ? nodeLink(sp.link,true) : String(sp&&sp.t!=null?sp.t:"")); }
+  const spanText=list=>(list||[]).map(sp=>sp&&sp.link!=null?sp.link:String(sp&&sp.t!=null?sp.t:"")).join("");
+  const LINKTOKEN=/\[LINK:\s*([^\]\s]+)\s*\]/g;
+  function linkifyText(text){
+    const out=[]; let last=0; const str=String(text);
+    str.replace(LINKTOKEN,(m,uid,off)=>{ out.push(str.slice(last,off)); out.push(hrefOf(uid)?nodeLink(uid,true):m); last=off+m.length; return m; });
+    out.push(str.slice(last)); return out;
+  }
+  // A field's text, verbatim in content, reflowed in shape: a paragraph is
+  // joined into one run unless a line of it is indented or holds a run of
+  // spaces, which marks a figure laid out by hand and is kept as-is.
+  function fieldText(text){
+    const str=String(text);
+    return str.split(/\n[ \t]*\n/).map(par=>{
+      const lines=par.split("\n");
+      const figure=lines.some(l=>/^[ \t]/.test(l)||/\S {3,}\S/.test(l));
+      return figure?h("pre",{class:"figure scrollx"},linkifyText(par)):h("p",{},linkifyText(lines.map(l=>l.trim()).join(" ")));
+    });
+  }
+  // The shared colour key over whatever narratives a screen is showing: each
+  // colour, what it means everywhere, and the word each system here uses for
+  // it. Drawn where a screen carries more than one system's words, which is
+  // the only place a reader has to carry a colour between vocabularies.
+  function colourKey(narratives){
+    if(!COLOURKEY.length) return null;
+    const roots=[...new Set((narratives||[]).map(x=>ROOTOF[x.uid]).filter(Boolean))];
+    const words={};
+    roots.forEach(r=>{ const sname=SYSORDER[sysRank(r)]||null;
+      legendFor(r).forEach(l=>{ if(!l.colour) return; (words[l.colour]=words[l.colour]||[]).push({sys:sname,word:l.word}); }); });
+    const used=COLOURKEY.filter(c=>(words[c.colour]||[]).length);
+    const systems=new Set(); roots.forEach(r=>{ const x=SYSORDER[sysRank(r)]; if(x) systems.add(x); });
+    if(used.length<2||systems.size<2) return null;
+    return h("details",{class:"card ckey"},h("summary",{},"What the colours mean here"),
+      h("dl",{class:"colourkey"},used.flatMap(c=>[
+        h("dt",{},h("span",{class:"sw word "+("c-"+c.colour)},h("i")),c.colour),
+        h("dd",{},h("p",{},c.means),
+          h("p",{class:"muted small"},words[c.colour].map((w,i)=>[i?" · ":"",h("b",{},w.word),w.sys?" "+w.sys:""])))])));
+  }
+  function wordChip(uid,word,n,big){
+    if(word==null) return h("span",{class:"word c-none"+(big?" big":"")},h("i"),h("span",{class:"muted"},"no word"),n!=null?h("span",{class:"n"},n):null);
+    const l=legendRow(uid,word);
+    return h("span",{class:`word ${cls(uid,word)}${big?" big":""}`,title:l?`${l.colour}: ${l.meaning}`:undefined},h("i"),word,n!=null?h("span",{class:"n"},n):null);
+  }
+  function stateChips(state){
+    if(!state) return [];
+    return Object.entries(state).filter(([,v])=>v!=null).map(([k,v])=>{ const r=rank(k,v); return h("span",{class:"chip"},k," · ",h("b",{},String(v)),r?h("small",{},`${r[0]}/${r[1]}`):null); });
+  }
+  // a narrative's state chips come from its node card, which names the fields;
+  // without a card the schema keys stand in
+  const narChips=n=>stateChips(NODES[n.uid]&&NODES[n.uid].state?NODES[n.uid].state:{depth:n.depth,authored:n.authored});
+  const sysChips=uid=>systemsOf(uid).map(x=>h("span",{class:"flag"},x));
+  function tagRow(n){
+    const tags=(n.tags||[]);
+    if(!tags.length) return null;
+    return h("div",{class:"row"},tags.map(t=>h("span",{class:"flag"},t)));
+  }
+  // a paragraph that opens with "> " is source wording: a collapsed disclosure
+  const isSource=p=>p&&p[0]&&p[0].t!=null&&/^>\s/.test(String(p[0].t));
+  const sourceOf=p=>[{t:String(p[0].t).replace(/^>\s+/,"")},...p.slice(1)];
+  const prose=n=>(n.prose||[]).map(p=>isSource(p)?h("details",{class:"orig"},h("summary",{},"the source wording"),h("p",{},spans(sourceOf(p)))):h("p",{},spans(p)));
+  const firstPara=n=>{ const p=(n.prose||[])[0]; return p?h("p",{class:"dim small clamp"},spans(p)):null; };
+  // the nodes a narrative's own widget already links: a cites entry for one
+  // of them would say the same thing twice, so the list leaves it out
+  function widgetLinked(n){
+    const s=new Set(), d=subjectOf(n);
+    const add=u=>{ if(u!=null) s.add(u); };
+    const fromSpans=list=>(list||[]).forEach(sp=>{ if(sp&&sp.link!=null) add(sp.link); });
+    (d.rows||[]).forEach(r=>{ fromSpans(r.spans); (r.refs||[]).forEach(add); add(r.by_uid); });
+    (d.facts||[]).forEach(f=>fromSpans(f.spans));
+    (d.stack||[]).forEach(r=>fromSpans(r.spans));
+    (n.terms||[]).forEach(t=>fromSpans(t.spans));
+    if(d.grid){ (d.grid.cells||[]).forEach(c=>add(c.uid)); (d.grid.outside||[]).forEach(add); }
+    if(d.table) (d.table.rows||[]).forEach(r=>r.forEach(c=>{ String(c).replace(LINKTOKEN,(m,u)=>{ add(u); return m; }); }));
+    if(LISTING.includes(n.widget)) (entriesFor(n)||[]).forEach(e=>add(e.uid));
+    if(n.widget==="glossary") (n.query!=null?(queryNarratives(n.query)||[]):stackKids(n)).forEach(c=>add(c.uid));
+    return s;
+  }
+  // what a narrative cites, each with its fingerprint state and the node's
+  // own state chips; entries the widget already linked are left out
+  function citesList(n,except){
+    const linked=widgetLinked(n);
+    const c=(n.cites||[]).filter(x=>!linked.has(x.uid)&&!(except&&except.has(x.uid))); if(!c.length) return null;
+    return h("ul",{class:"cites","aria-label":"cites"},c.map(x=>{
+      const st=FPMARK[x.fp]?x.fp:"undeclared";
+      const nd=NODES[x.uid];
+      return h("li",{},h("div",{},nodeLink(x.uid),nd&&nodeOn(x.uid)?h("div",{class:"row"},stateChips(nd.state)):null),h("span",{class:"fp"},h("span",{class:"mark","aria-hidden":"true"},FPMARK[st]),st,x.superseded?[" ",h("span",{class:"flag warn"},"superseded")]:null));
+    }));
+  }
+  function crumbTrail(uid){
+    const trail=[]; let p=PARENT[uid];
+    while(p){ trail.unshift(p); p=PARENT[p]; }
+    if(!trail.length) return null;
+    return h("p",{class:"row"},trail.map((u,i)=>[i?h("span",{class:"muted"},"›"):null,h("a",{class:"crumb",href:narHref(u)},NAR[u].title)]));
+  }
+  const containerTitle=uid=>PARENT[uid]?NAR[PARENT[uid]].title:(NAR[uid]?NAR[uid].title:null);
+
+  /* ---------- tree shape helpers (place words only) ---------- */
+  const isRoot=n=>!PARENT[n.uid];
+  const ownsScreen=n=>isRoot(n)||n.place==="screen";
+  // where a narrative is DRAWN: its own screen, the tab it joins, or Start
+  function homeOf(uid){
+    for(let u=uid;u;u=PARENT[u]){
+      const x=NAR[u]; if(!x) break;
+      if(x.place==="screen") return {kind:"screen",uid:u};
+      if(x.place==="tab"&&x.tab!=null&&TABTITLE[x.tab]!=null) return {kind:"tab",key:x.tab};
+      if(isRoot(x)) return {kind:"start"};
+    }
+    return {kind:"start"};
+  }
+  const screenKids=n=>(n.children||[]).filter(c=>c.place==="screen");
+  const stackKids=n=>(n.children||[]).filter(c=>c.place!=="tab"&&c.place!=="screen"&&!(n.widget==="glossary"&&c.place==null));
+  // a glossary's terms: the narratives it contains that declare no place
+  const termKids=n=>(n.children||[]).filter(c=>c.place==null);
+  const subjectOf=n=>(n.over!=null&&NAR[n.over])?NAR[n.over]:n;
+  const rowCount=n=>(n.rows||[]).length;
+  // the rows that link a node: backlinks whose via is a link or a reference
+  // line and whose home narrative has that row (a grid cell, a glossary
+  // term or a fact also carries a row number, but no line card); one per
+  // (home, row), so a headline link and a reference line count once
+  const isRowVia=b=>b.via==="link"||b.via==="reference";
+  const rowOf=b=>b.row!=null&&NAR[b.from]?((NAR[b.from].rows||[])[b.row-1]||null):null;
+  function rowBacklinks(uid){
+    const seen=new Set();
+    return (BACK[uid]||[]).filter(b=>{ if(!isRowVia(b)||!rowOf(b)||!nodeOn(b.from)) return false; const k=b.from+"\t"+b.row; if(seen.has(k)) return false; seen.add(k); return true; });
+  }
+  // the nodes a root's tree cites: what a per-view figure draws over
+  const REACH={};
+  ROOTS.forEach(r=>{ const s=new Set(); (function walk(n){ (n.cites||[]).forEach(c=>s.add(c.uid)); (n.children||[]).forEach(walk); })(r); REACH[r.uid]=s; });
+  const reachOf=uid=>REACH[ROOTOF[uid]]||new Set();
+
+  /* ---------- the rows widget: filter chips + line cards ---------- */
+  function rowCard(home,r,opts={}){
+    const label=(legendRow(home.uid,r.word)||{}).by_label;
+    const by = r.by!=null ? h("p",{class:"by"},h("b",{},(label!=null&&label!==""?label:"by")+": "), r.by_uid&&hrefOf(r.by_uid) ? byWithLink(r.by,r.by_uid) : String(r.by)) : null;
+    // references grouped by the container of what they link: narratives of
+    // this page as one line of titles per group, canon nodes with their
+    // ids; the screen being viewed is not named on its own cards
+    const groups=new Map();
+    (r.refs||[]).forEach(u=>{ if(u===opts.viewing) return; const g=NAR[u]?(containerTitle(u)||""):null; if(!groups.has(g)) groups.set(g,[]); groups.get(g).push(u); });
+    const titleLink=u=>nodeOn(u)?h("a",{href:narHref(u)},NAR[u].title):[NAR[u].title," ",offNote(u)];
+    const refs=groups.size?h("ul",{class:"refs"},[...groups].map(([g,uids])=>g==null
+      ?[h("li",{},h("p",{class:"kicker"},"nodes")),uids.map(u=>h("li",{},nodeLink(u)))]
+      :h("li",{class:"small"},h("span",{class:"kicker"},g," "),uids.map((u,i)=>[i?", ":"",titleLink(u)])))):null;
+    const source=r.source!=null&&r.source!==""?h("details",{class:"orig"},h("summary",{},"the source wording"),h("p",{},String(r.source),r.word!=null?`  [${r.word}${r.by!=null?": "+r.by:""}]`:"")):null;
+    return h("article",{class:`line ${cls(home.uid,r.word)}`,id:opts.home?`row-${home.uid}-${r.n}`:null},
+      h("div",{class:"line-head"},wordChip(home.uid,r.word),
+        opts.crumb?h("a",{class:"crumb",href:narHref(home.uid,`/row/${r.n}`)},home.title,srcDir(home.uid)):((r.refs||[])[0]!=null?h("span",{class:"idx"},nodeLink(r.refs[0],true)):null)),
+      h("p",{class:"h"},spans(r.spans)),
+      by, refs, source);
+  }
+  // The "by" text is split on its by_uid as a whole id-shaped token, so a
+  // longer id that merely contains it is skipped and the standalone mention
+  // is the one linked.
+  const UIDTOKEN=/[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+/g;
+  function byWithLink(by,uid){
+    const str=String(by); let i=-1, m;
+    UIDTOKEN.lastIndex=0;
+    while((m=UIDTOKEN.exec(str))){ if(m[0]===uid){ i=m.index; break; } }
+    if(i<0) return [str," ",nodeLink(uid,true)];
+    return [str.slice(0,i),nodeLink(uid,true),str.slice(i+uid.length)];
+  }
+  // lines = [{home, row}]; initial = a legend word to preselect
+  function filteredLines(lines, legendUid, initial, opts={}){
+    // words in legend order; lines may come from several roots, so each
+    // word's colour is read off the legend of the first line that carries it
+    const words=[]; const homeOf={};
+    [legendUid,...lines.map(l=>l.home.uid)].forEach(u=>legendFor(u).forEach(l=>{ if(!words.includes(l.word)) words.push(l.word); }));
+    lines.forEach(({home,row})=>{ if(row.word!=null&&!(row.word in homeOf)) homeOf[row.word]=home.uid; });
+    const norm=w=>w==null?null:String(w).toLowerCase();
+    let cur=initial!=null?(words.find(w=>norm(w)===norm(initial))||null):null;
+    const wrap=h("div",{class:"stack"});
+    const list=h("div",{class:"stack"});
+    const bar=()=>{
+      const counts=new Map(); let none=0;
+      lines.forEach(({row})=>{ if(row.word==null) none++; else counts.set(row.word,(counts.get(row.word)||0)+1); });
+      const b=h("div",{class:"filters",role:"group","aria-label":"filter by word"});
+      b.append(h("button",{"aria-pressed":String(cur==null),onclick:()=>pick(null)},"all ",h("span",{class:"count"},lines.length)));
+      const order=[...words,...[...counts.keys()].filter(w=>!words.includes(w))];
+      order.forEach(w=>{ const c=counts.get(w); if(!c) return; b.append(h("button",{class:cls(homeOf[w]||legendUid,w),"aria-pressed":String(cur===w),onclick:()=>pick(w)},h("i"),w," ",h("span",{class:"count"},c))); });
+      if(none&&lines.length!==none) b.append(h("button",{class:"c-none","aria-pressed":String(cur==="")},h("i"),"no word ",h("span",{class:"count"},none)));
+      return b;
+    };
+    let filters=bar();
+    const render=()=>{ list.replaceChildren(...lines.filter(({row})=>cur==null||row.word===cur).map(({home,row})=>rowCard(home,row,opts))); const nb=bar(); filters.replaceWith(nb); filters=nb; };
+    const pick=w=>{ cur=w; render(); };
+    wrap.append(filters,list); render();
+    return wrap;
+  }
+  function widgetRows(n,ctx){
+    const subject=subjectOf(n);
+    const rows=subject.rows||[];
+    if(!rows.length) return h("p",{class:"muted"},"no rows");
+    const lines=rows.map(row=>({home:subject,row}));
+    const mirror=subject!==n;
+    return filteredLines(lines, subject.uid, ctx.word, {home:!mirror, crumb:mirror});
+  }
+
+  /* ---------- strip and tally ---------- */
+  function segBar(homeUid,by_word,hrefFor,height){
+    const bar=h("div",{class:"bar",style:height?`height:${height}px`:null,role:"img","aria-label":Object.entries(by_word).map(([w,c])=>`${c} ${w}`).join(", ")||"empty"});
+    const words=legendFor(homeUid).map(l=>l.word);
+    const order=[...words,...Object.keys(by_word).filter(w=>!words.includes(w))];
+    order.forEach(w=>{ const c=by_word[w]; if(!c) return; const href=hrefFor?hrefFor(w):null; bar.append(h(href?"a":"span",{class:`seg ${cls(homeUid,w)}`,style:`flex:${c}`,href,title:`${c} ${w}`},c>=2?c:"")); });
+    return bar;
+  }
+  function stripLike(n, entries){
+    // entries = [{uid,title,by_word,total}]
+    const totals={}; entries.forEach(e=>Object.entries(e.by_word||{}).forEach(([w,c])=>totals[w]=(totals[w]||0)+c));
+    const all=entries.reduce((a,e)=>a+(e.total||0),0);
+    const max=Math.max(1,...entries.map(e=>e.total||0));
+    const words=legendFor(n.uid).map(l=>l.word);
+    const order=[...words.filter(w=>totals[w]),...Object.keys(totals).filter(w=>!words.includes(w))];
+    const tot=h("div",{class:"totals"},segBar(n.uid,totals,null,28),
+      h("p",{class:"muted small",style:"margin-top:6px"},plural(all,"row"),all?": ":"",order.map((w,i)=>[i?", ":"",`${totals[w]} ${w}`])));
+    const g=h("div",{class:"heat"});
+    entries.forEach(e=>{
+      const href=hrefOf(e.uid);
+      g.append(h(href?"a":"span",{class:"heat-label",href},e.title!=null?e.title:e.uid," ",h("span",{class:"n"},e.total)),
+        h("div",{style:`width:${((e.total||0)/max*100).toFixed(1)}%`},segBar(n.uid,e.by_word||{},w=>narHref(e.uid,"/"+encodeURIComponent(w)),null)));
+    });
+    return [tot,g];
+  }
+  // what a counting widget counts: the subject's screen-owning children when
+  // it has any (its cards and sections are furniture), else all of them
+  const counted=subject=>{ const kids=subject.children||[]; const own=kids.filter(ownsScreen); return own.length?own:kids; };
+  function widgetStrip(n){
+    const subject=subjectOf(n);
+    const entries=counted(subject).filter(c=>rowCount(c)>0&&nodeOn(c.uid)).map(c=>{
+      const by_word={}; c.rows.forEach(r=>{ if(r.word!=null) by_word[r.word]=(by_word[r.word]||0)+1; });
+      return {uid:c.uid,title:c.title,by_word,total:c.rows.length};
+    });
+    if(!entries.length) return h("p",{class:"muted"},"nothing to count");
+    return stripLike(n,entries);
+  }
+  function widgetTally(n){
+    const subject=subjectOf(n);
+    const entries=counted(subject).filter(c=>nodeOn(c.uid)).map(c=>{
+      const by_word={}; let total=0;
+      rowBacklinks(c.uid).forEach(b=>{ total++; if(b.word!=null) by_word[b.word]=(by_word[b.word]||0)+1; });
+      return {uid:c.uid,title:c.title,by_word,total};
+    });
+    if(!entries.length) return h("p",{class:"muted"},"nothing to count");
+    return stripLike(n,entries);
+  }
+
+  /* ---------- legend, glossary, table, facts, stack, grid, ladder ---------- */
+  function widgetLegend(n){
+    const rows=(n.legend&&n.legend.length)?n.legend:legendFor(n.uid);
+    if(!rows.length) return h("p",{class:"muted"},"no legend");
+    return h("div",{class:"legend"},rows.flatMap(l=>[wordChip(n.uid,l.word,null,true),h("span",{class:"meaning"},l.meaning," ",h("span",{class:"cn"},"("+l.colour+(l.by_label?" · "+l.by_label:"")+")"))]));
+  }
+  function widgetGlossary(n){
+    const terms=n.terms||[];
+    // a glossary that names a query word draws that table's narratives;
+    // else the narratives it contains that declare no place are its terms
+    // (a child with a place stacks on the screen like any other)
+    const kids=n.query!=null?(queryNarratives(n.query)||[]):termKids(n);
+    if(!terms.length&&!kids.length) return h("p",{class:"muted"},"no terms");
+    // a term whose text is a contained narrative's title carries that
+    // narrative's body under its definition and anchors its route
+    const childOf=t=>kids.find(c=>(c.title||"").trim()===String(t.term).trim());
+    // a term whose narrative is switched off keeps its heading and loses its
+    // body: printing the definition under an "(switched off)" label is the
+    // one place a switch used to say one thing and show another
+    const dl=h("dl",{class:"words"},terms.flatMap(t=>{ const c=childOf(t); const on=c&&nodeOn(c.uid); return [h("dt",{id:c?`nar-${c.uid}`:`row-${n.uid}-${t.n}`},on?h("a",{href:narHref(c.uid)},t.term):t.term,c&&!on?[" ",offNote(c.uid)]:null),h("dd",{},h("p",{},spans(t.spans)),on?[prose(c),citesList(c)]:null)]; }));
+    const extra=kids.filter(c=>!terms.some(t=>String(t.term).trim()===(c.title||"").trim()));
+    const dl2=extra.length?h("dl",{class:"words"},extra.flatMap(c=>{ const on=nodeOn(c.uid); return [h("dt",{id:`nar-${c.uid}`},on?(hrefOf(c.uid)?h("a",{href:hrefOf(c.uid)},c.title):c.title):[c.title," ",offNote(c.uid)]),h("dd",{},on?[prose(c),citesList(c)]:null)]; })):null;
+    // the narratives the glossary contains or its query names come first,
+    // then the terms of its own statement, in Contains order
+    return [dl2,terms.length?dl:null];
+  }
+  // a table; one of three or more columns stacks its cells under 480px, each
+  // labelled by its header. The table that names the systems query carries
+  // the switches above its rows: that table is the switches.
+  function widgetTable(n){
+    const t=n.table; if(!t) return h("p",{class:"muted"},"no table");
+    const head=t.header||[];
+    const table=h("table",{class:head.length>=3?"rowwise":null},h("thead",{},h("tr",{},head.map(c=>h("th",{},c)))),h("tbody",{},(t.rows||[]).map(r=>h("tr",{},r.map((c,i)=>h("td",{"data-th":head[i]!=null?head[i]:""},linkifyText(c)))))));
+    return [n.query==="systems"?switchRow(false):null,h("div",{class:"tbl scrollx"},table)];
+  }
+  function widgetFacts(n){
+    const subject=subjectOf(n);
+    const facts=subject.facts||[]; if(!facts.length) return h("p",{class:"muted"},"no facts");
+    return h("dl",{class:"facts"},facts.flatMap(f=>[h("dt",{id:`row-${subject.uid}-${f.n}`},f.label),h("dd",{},spans(f.spans))]));
+  }
+  function widgetStack(n){
+    const subject=subjectOf(n);
+    const rows=subject.stack||[]; if(!rows.length) return h("p",{class:"muted"},"no layers");
+    return h("div",{class:"layers"},rows.map(r=>h("div",{class:`layer ${cls(subject.uid,r.word)}${r.word!=null?" marked":""}`,id:`row-${subject.uid}-${r.n}`},
+      h("div",{class:"l"},r.name),h("div",{},h("div",{class:"row"},h("b",{},r.label),r.word!=null?wordChip(subject.uid,r.word):null),h("div",{class:"d"},spans(r.spans))))));
+  }
+  const firstSentence=uid=>{ const n=NAR[uid]; if(!n) return null; const p=(n.prose||[])[0]; if(!p) return null; const t=spanText(p); const m=t.match(/^.*?[.!?](\s|$)/); return (m?m[0]:t).trim(); };
+  function gridCell(uid){
+    if(uid==null) return h("span",{class:"cell empty"},h("span",{class:"muted"},"—"));
+    const t=titleOf(uid)!=null?titleOf(uid):uid;
+    if(!nodeOn(uid)) return h("span",{class:"cell"},h("b",{},t));
+    return h("a",{class:"cell",href:hrefOf(uid)||"#"},h("b",{},t),h("span",{},firstSentence(uid)||""));
+  }
+  const gridOff=g=>{ const u=[...(g.cells||[]).map(c=>c.uid),...(g.outside||[])].find(x=>x!=null&&!nodeOn(x)); return u!=null?h("p",{class:"small"},offNote(u)," — the cells do not link"):null; };
+  function widgetGrid(n){
+    const subject=subjectOf(n);
+    const g=subject.grid; if(!g) return h("p",{class:"muted"},"no grid");
+    const rows=(g.axes&&g.axes.row)||[], cols=(g.axes&&g.axes.col)||[];
+    const fig=h("div",{class:"gridfig",style:`grid-template-columns:auto repeat(${Math.max(1,cols.length)},1fr)`});
+    fig.append(h("span"));
+    cols.forEach(c=>fig.append(h("span",{class:"ax"},c.word,c.caption?" — "+c.caption:"")));
+    rows.forEach(r=>{
+      fig.append(h("span",{class:"ax left"},r.word,r.caption?" — "+r.caption:""));
+      cols.forEach(c=>{ const cell=(g.cells||[]).find(x=>x.row===r.word&&x.col===c.word); fig.append(gridCell(cell?cell.uid:null)); });
+    });
+    const outside=(g.outside||[]);
+    return h("div",{class:"stack"},fig,outside.length?[h("p",{class:"kicker"},"outside"),h("div",{class:"outside"},outside.map(gridCell))]:null,gridOff(g));
+  }
+  // which grid cell (if any) links a narrative: the badge on its own screen
+  function cellBadge(uid){
+    for(const r of ROOTS){ let hit=null; (function walk(n){ if(hit) return; if(n.grid){ const c=(n.grid.cells||[]).find(x=>x.uid===uid); if(c) hit=h("span",{class:"cellbadge"},h("i",{class:"f"}),`${c.row} × ${c.col}`); else if((n.grid.outside||[]).includes(uid)) hit=h("span",{class:"cellbadge"},h("i"),"outside"); } (n.children||[]).forEach(walk); })(r); if(hit) return hit; }
+    return null;
+  }
+  function valueOf(nd,field){ if(nd.state&&nd.state[field]!=null) return nd.state[field]; if(nd.fields&&nd.fields[field]!=null) return nd.fields[field]; return null; }
+  function ladderEl(field,rungs,note,type){
+    const pool=selectedNodes().filter(nd=>type==null||nd.type===type);
+    const known=Array.isArray(LADDERS[field])?LADDERS[field]:null;
+    const list=rungs&&rungs.length?rungs:(known||[]);
+    const el=h("div",{class:"ladder"});
+    list.forEach((r,i)=>{ if(i) el.append(h("span",{class:"arrow"},"→")); const c=pool.filter(nd=>valueOf(nd,field)===r).length; const ghost=!known||!known.includes(r); el.append(h("span",{class:"rung"+(ghost?" ghost":""),title:ghost?"not in the grammar":undefined},r," ",h("b",{},c))); });
+    if(!list.length) el.append(h("span",{class:"muted small"},"no rungs"));
+    return h("div",{class:"stack"},h("div",{class:"row"},h("code",{},field),note?h("span",{class:"muted small"},note):null),el);
+  }
+  function widgetLadder(n){
+    const subject=subjectOf(n);
+    const rows=subject.ladder||[]; if(!rows.length) return h("p",{class:"muted"},"no ladders");
+    const type=n.grammar_of!=null?n.grammar_of:(subject.grammar_of!=null?subject.grammar_of:null);
+    return h("div",{class:"stack"},rows.map(l=>ladderEl(l.field,l.rungs,l.note,type)));
+  }
+
+  /* ---------- index and list: over children or over a query ---------- */
+  function childEntry(c){
+    const rows=rowCount(c), back=rowBacklinks(c.uid).length, cites=(c.cites||[]).length;
+    const bits=[]; if(c.dir_class) bits.push(c.dir_class); if(rows) bits.push(plural(rows,"row")); else if(back) bits.push(`${back} that link it`); if(cites) bits.push(plural(cites,"cite"));
+    return {uid:c.uid,title:c.title,path:c.path,dir_class:c.dir_class,blurb:firstPara(c),bits,href:hrefOf(c.uid),on:nodeOn(c.uid)};
+  }
+  // the narratives a query word names: the table the backend computed under
+  // DATA.queries when it is there (each row a uid), drawn as the narrative on
+  // this page where it is one, else as its node card; without the table, the
+  // narratives any glossary widget holds plus those tagged the word's singular
+  function queryNarratives(word){
+    const table=DATA.queries&&Array.isArray(DATA.queries[word])?DATA.queries[word]:null;
+    if(table) return table.map(x=>NAR[x.uid]||Object.assign({prose:[],children:[],cites:[]},NODES[x.uid]||{},{uid:x.uid,title:x.title!=null?x.title:(NODES[x.uid]||{}).title||x.uid}));
+    const seen=new Set(), out=[]; const single=word.replace(/s$/,"");
+    ROOTS.forEach(r=>(function walk(n){ if(n.widget==="glossary") stackKids(n).forEach(c=>{ if(!seen.has(c.uid)){ seen.add(c.uid); out.push(c); } }); if((n.tags||[]).includes(single)&&!seen.has(n.uid)){ seen.add(n.uid); out.push(n); } (n.children||[]).forEach(walk); })(r));
+    return out;
+  }
+  function queryEntries(word){
+    switch(word){
+      case "roots": return ROOTS.map(r=>({uid:r.uid,title:r.title,blurb:firstPara(r),bits:[r.dir_class,plural((r.children||[]).length,"part")],href:narHref(r.uid),on:nodeOn(r.uid)}));
+      case "grammar": return Object.entries(GRAMMAR).map(([t,g])=>({uid:t,title:t,blurb:null,bits:[g.prefix?`prefix ${g.prefix}`:null,plural((g.fields||[]).length,"field"),plural((g.roles||[]).length,"role"),plural(selectedNodes().filter(nd=>nd.type===t).length,"node")].filter(Boolean),href:null,on:true}));
+      case "systems": return SYSTEMS.map(x=>({uid:x.name,title:x.name,blurb:x.meaning?h("p",{class:"dim small"},x.meaning):null,bits:[(x.sources||[]).join(", "),plural(selectedNodes().filter(nd=>systemsOf(nd.uid).includes(x.name)).length,"node"),x.switch==="always"?"always on":null].filter(Boolean),href:null,on:ON.has(x.name)}));
+      default: return (DATA.queries&&Array.isArray(DATA.queries[word]))?queryNarratives(word).map(childEntry):null;
+    }
+  }
+  function entriesFor(n){
+    if(n.query!=null&&n.query!=="nodes"){ const q=queryEntries(n.query); if(q) return q; }
+    const subject=subjectOf(n);
+    return (subject.children||[]).filter(c=>c.place!=="tab").map(childEntry);
+  }
+  // the nodes query on a stacked card or section is the counts, type by
+  // directory class, each linking to the Nodes index; the list itself is
+  // drawn only where the widget owns a screen
+  function widgetIndex(n){
+    if(n.query==="nodes") return ownsScreen(n)?nodesIndex():nodesTally();
+    const entries=entriesFor(n); if(!entries.length) return h("p",{class:"muted"},"nothing to list");
+    return h("div",{class:"stack"},entries.map(e=>{
+      const inner=[h("h3",{},e.title),e.blurb,e.bits.length?h("p",{class:"muted small",style:"margin-top:6px"},e.bits.join(" · ")):null];
+      if(!e.on) return h("div",{class:"card"},inner,offNote(e.uid));
+      return e.href?h("a",{class:"card icard",href:e.href},inner):h("div",{class:"card"},inner);
+    }));
+  }
+  // one line per entry: its title, its counts, and its first sentence
+  function widgetList(n){
+    if(n.query==="nodes") return ownsScreen(n)?nodesIndex():nodesTally();
+    const entries=entriesFor(n); if(!entries.length) return h("p",{class:"muted"},"nothing to list");
+    return h("ul",{class:"plain"},entries.map(e=>{ const one=NAR[e.uid]?firstSentence(e.uid):null; return h("li",{},e.on?(e.href?h("a",{href:e.href},e.title):e.title):[e.title," ",offNote(e.uid)],e.bits.length?h("span",{class:"muted small"}," · ",e.bits.join(" · ")):null,one?h("p",{class:"dim small"},one):null); }));
+  }
+  function nodesTally(){
+    const all=selectedNodes();
+    if(!all.length) return h("p",{class:"muted"},"nothing in the selection");
+    const classes=[...new Set(all.map(nd=>nd.dir_class).filter(Boolean))].sort();
+    const rows=typeOrder().map(t=>{ const pool=all.filter(nd=>nd.type===t); if(!pool.length) return null;
+      return h("div",{class:"row between"},h("a",{class:"heat-label",href:"#/nodes"},t," ",h("span",{class:"n"},pool.length)),
+        h("span",{class:"row"},classes.map(c=>{ const k=pool.filter(nd=>nd.dir_class===c).length; return k?h("span",{class:"chip"},c," ",h("b",{},k)):null; }))); }).filter(Boolean);
+    return h("div",{class:"stack"},h("p",{class:"dim small"},h("a",{href:"#/nodes"},plural(all.length,"node"))," in the selection: ",classes.map((c,i)=>[i?", ":"",`${all.filter(nd=>nd.dir_class===c).length} ${c}`]),"."),rows);
+  }
+
+  /* ---------- the node index: search + facets, grouped by type ---------- */
+  function typeOrder(){
+    const order=Object.keys(GRAMMAR);
+    const seen=new Set(order);
+    Object.values(NODES).forEach(nd=>{ if(!seen.has(nd.type)){ seen.add(nd.type); order.push(nd.type); } });
+    return order;
+  }
+  function nodesIndex(){
+    const input=h("input",{class:"search",type:"search",placeholder:"filter by id or title","aria-label":"filter nodes"});
+    const list=h("div",{class:"stack"});
+    const facets=h("div",{class:"facets"});
+    const all=selectedNodes();
+    const picked={type:null,system:null,dir_class:null,state:null,reach:null};
+    const stateKey=nd=>Object.entries(nd.state||{}).filter(([,v])=>v!=null).map(([k,v])=>`${k}=${v}`);
+    // how the whiteboard reaches a node: a row links it, a narrative cites
+    // or links it in prose, or nothing on the page reaches it
+    const REACHWORDS=["row-linked","cited","unreached"];
+    const reach=nd=>{ if(rowBacklinks(nd.uid).length) return "row-linked"; return (BACK[nd.uid]||[]).some(b=>NAR[b.from]&&nodeOn(b.from)&&(b.via==="cites"||b.via==="link"))?"cited":"unreached"; };
+    const values={
+      type:typeOrder().filter(t=>all.some(nd=>nd.type===t)),
+      system:SYSTEMS.map(x=>x.name).filter(x=>ON.has(x)),
+      dir_class:[...new Set(all.map(nd=>nd.dir_class).filter(Boolean))].sort(),
+      state:[...new Set(all.flatMap(stateKey))].sort(),
+      reach:REACHWORDS.filter(w=>all.some(nd=>reach(nd)===w)),
+    };
+    const has=(nd,k,v)=>k==="type"?nd.type===v:k==="system"?systemsOf(nd.uid).includes(v):k==="dir_class"?nd.dir_class===v:k==="reach"?reach(nd)===v:stateKey(nd).includes(v);
+    const matchExcept=(nd,skip)=>Object.keys(picked).every(k=>k===skip||picked[k]==null||has(nd,k,picked[k]));
+    const match=nd=>matchExcept(nd,null);
+    const sortKey=nd=>{ const st=nd.state||{}; for(const k of Object.keys(st)){ const r=rank(k,st[k]); if(r) return r[0]; } return 0; };
+    const drawFacets=()=>{
+      facets.replaceChildren(...Object.entries(values).map(([k,vals])=>vals.length?h("div",{class:"facet"},h("span",{class:"kicker"},k),vals.map(v=>h("button",{"aria-pressed":String(picked[k]===v),onclick:()=>{ picked[k]=picked[k]===v?null:v; render(); }},v," ",h("span",{class:"count"},all.filter(nd=>matchExcept(nd,k)&&has(nd,k,v)).length)))):null));
+    };
+    const render=()=>{
+      const q=input.value.trim().toLowerCase();
+      const shown=all.filter(nd=>match(nd)&&(!q||`${nd.uid} ${nd.title||""}`.toLowerCase().includes(q)));
+      drawFacets();
+      list.replaceChildren(h("p",{class:"count"},plural(shown.length,"node"),shown.length!==all.length?` of ${all.length}`:""),...typeOrder().map(t=>{
+        const rows=shown.filter(nd=>nd.type===t).sort((a,b)=>sortKey(a)-sortKey(b)||a.uid.localeCompare(b.uid));
+        if(!rows.length) return null;
+        return h("section",{class:"card"},h("div",{class:"row"},h("h3",{},t),h("span",{class:"count"},rows.length)),
+          h("ul",{class:"plain"},rows.map(nd=>h("li",{},nodeLink(nd.uid),h("div",{class:"row"},stateChips(nd.state),sysChips(nd.uid),
+            rowBacklinks(nd.uid).length?h("span",{class:"count"},plural(rowBacklinks(nd.uid).length,"row")):null)))));
+      }).filter(Boolean), shown.length?null:h("p",{class:"muted"},"nothing matches"));
+    };
+    input.addEventListener("input",render); render();
+    return [h("p",{class:"dim small"},plural(all.length,"node")," in the selection, grouped by type."),input,facets,list];
+  }
+
+  /* ---------- edges and fingerprints over the selection ---------- */
+  // the rule rows an edges or fingerprints widget reads: its subject's
+  // facts ("- Role: TYPE, TYPE" as label and value) or its subject's rows
+  function ruleRows(n){
+    const d=subjectOf(n);
+    if((d.facts||[]).length) return d.facts.map(f=>`${f.label}: ${spanText(f.spans)}`.trim());
+    return (d.rows||[]).map(r=>spanText(r.spans).trim()).filter(Boolean);
+  }
+  // the edges a widget draws over: the whole selection when its query is
+  // the nodes of the canon, else the selection among the nodes its root's
+  // tree cites
+  function edgeScope(n){
+    if(n.query==="nodes") return selectedEdges();
+    const reach=reachOf(n.uid);
+    return selectedEdges().filter(e=>reach.has(e.from)&&reach.has(e.to));
+  }
+  function livePairs(edges){
+    const counts=new Map();
+    edges.forEach(e=>{ const a=NODES[e.from],b=NODES[e.to]; if(!a||!b) return; const k=`${a.type}\t${e.role}\t${b.type}`; counts.set(k,(counts.get(k)||0)+1); });
+    return [...counts].map(([k,c])=>{ const [a,role,b]=k.split("\t"); return {from:a,role,to:b,count:c}; }).sort((x,y)=>(x.from+x.role+x.to).localeCompare(y.from+y.role+y.to));
+  }
+  function edgeRules(n){
+    // "- Role: TYPE, TYPE" rows state the allowed targets of a role
+    const rules=new Map();
+    ruleRows(n).forEach(t=>{ const [role,rest]=t.split(/:\s*/,2); if(role&&rest) rules.set(role.trim(),rest.split(",").map(x=>x.trim()).filter(Boolean)); });
+    return rules;
+  }
+  function widgetEdges(n){
+    const edges=edgeScope(n);
+    const pairs=livePairs(edges);
+    const rules=edgeRules(n);
+    const broken=p=>rules.has(p.role)&&!rules.get(p.role).includes(p.to);
+    if(!pairs.length) return h("p",{class:"muted"},"no pairs in the selection");
+    const nodeCount=new Set(edges.flatMap(e=>[e.from,e.to])).size;
+    const loops=pairs.filter(p=>p.from===p.to), arrows=pairs.filter(p=>p.from!==p.to);
+    const flag=p=>broken(p)?h("span",{class:"warn"}," · breaks the rule"):null;
+    return [h("figure",{},h("div",{class:"figwrap scrollx"},edgesSvg(arrows,broken)),h("figcaption",{},`${plural(pairs.length,"pair")} among ${plural(nodeCount,"node")}. Arrows run from the source to the target, labelled with the role and the live count.`,rules.size?" A dashed red arrow is a pair off a rule row.":null,loops.length?" A kind that points at its own kind is listed beneath the figure.":null)),
+      loops.length?h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"points at its own kind"),h("th",{},"role"),h("th",{class:"num"},"live"))),
+        h("tbody",{},loops.map(p=>h("tr",{},h("td",{},p.from),h("td",{},h("code",{},p.role),flag(p)),h("td",{class:"num"},p.count)))))):null,
+      h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"from"),h("th",{},"role"),h("th",{},"to"),h("th",{class:"num"},"live"))),
+        h("tbody",{},pairs.map(p=>h("tr",{},h("td",{},p.from),h("td",{},h("code",{},p.role)),h("td",{},p.to,flag(p)),h("td",{class:"num"},p.count)))))),
+      rules.size&&subjectOf(n)===n?h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"role"),h("th",{},"may point at"))),h("tbody",{},[...rules].map(([role,targets])=>h("tr",{},h("td",{},h("code",{},role)),h("td",{},targets.join(", "))))))):null];
+  }
+  // the type boxes on a ring (a row for two, a square for four), one
+  // arrow per ordered pair with its roles stacked on the label, labels
+  // pushed off the line until they overlap nothing; self-loops are not
+  // drawn (the widget lists them)
+  function edgesSvg(pairs,broken){
+    const types=[]; pairs.forEach(p=>{ [p.from,p.to].forEach(t=>{ if(!types.includes(t)) types.push(t); }); });
+    const N=types.length;
+    const W=150,H=48;
+    const width=N<=2?W*2+200:720, height=N<=2?H+80:(N<=4?440:600);
+    const cx=width/2, cy=height/2, rx=(width-W)/2-30, ry=(height-H)/2-30;
+    const pos={}; types.forEach((t,i)=>{ const a=-Math.PI/2+i*2*Math.PI/N; const x=N<=2?(i?width-W-30:30):cx+rx*Math.cos(a)-W/2, y=N<=2?(height-H)/2:cy+ry*Math.sin(a)-H/2; pos[t]={x,y,cx:x+W/2,cy:y+H/2}; });
+    const svg=s("svg",{viewBox:`0 0 ${width} ${height}`,role:"img","aria-label":"which kinds of node point at which","font-family":"var(--body)","font-size":"12"});
+    svg.append(s("defs",{},s("marker",{id:"arr",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"7",markerHeight:"7",orient:"auto-start-reverse"},s("path",{d:"M0 0L10 5L0 10z",fill:"currentColor"})),
+      s("marker",{id:"arrw",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"7",markerHeight:"7",orient:"auto-start-reverse"},s("path",{d:"M0 0L10 5L0 10z",style:"fill:var(--c-red)"}))));
+    const groups=new Map();
+    pairs.forEach(p=>{ const k=p.from+" "+p.to; if(!groups.has(k)) groups.set(k,{a:p.from,b:p.to,labels:[],bad:false}); const g=groups.get(k); g.labels.push(`${p.role} ${p.count}${broken(p)?" · breaks the rule":""}`); if(broken(p)) g.bad=true; });
+    const lines=s("g",{fill:"none",stroke:"currentColor","stroke-width":"1.5"});
+    const texts=s("g",{fill:"currentColor",style:"paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round"});
+    const placed=[];
+    const boxOf=(x,y,labels)=>{ const w=Math.max(...labels.map(l=>l.length))*6.6+8, hh=labels.length*14+4; return {x:x-w/2,y:y-12,w,h:hh}; };
+    const hits=b=>placed.some(o=>b.x<o.x+o.w&&o.x<b.x+b.w&&b.y<o.y+o.h&&o.y<b.y+b.h) || types.some(t=>{ const P=pos[t]; return b.x<P.x+W&&P.x<b.x+b.w&&b.y<P.y+H&&P.y<b.y+b.h; });
+    const label=(x,y,labels,bad)=>{ placed.push(boxOf(x,y,labels)); labels.forEach((l,i)=>texts.append(s("text",{x,y:y+i*14,"text-anchor":"middle",style:bad&&/breaks the rule/.test(l)?"fill:var(--c-red)":null},l))); };
+    const strokeAttrs=bad=>bad?{style:"stroke:var(--c-red)","stroke-dasharray":"5 4","marker-end":"url(#arrw)"}:{"marker-end":"url(#arr)"};
+    // longer arrows first, so the short ones (whose labels have less room) pick last among the free spots
+    const order=[...groups.values()].sort((g1,g2)=>Math.hypot(pos[g2.b].cx-pos[g2.a].cx,pos[g2.b].cy-pos[g2.a].cy)-Math.hypot(pos[g1.b].cx-pos[g1.a].cx,pos[g1.b].cy-pos[g1.a].cy));
+    for(const {a,b,labels,bad} of order){
+      const A=pos[a],B=pos[b];
+      const reverse=groups.has(b+" "+a);
+      let dx=B.cx-A.cx, dy=B.cy-A.cy; const len=Math.hypot(dx,dy)||1; dx/=len; dy/=len;
+      const off=reverse?10:0, ox=-dy*off, oy=dx*off;
+      const p1=clip(A,dx,dy,W,H), p2=clip(B,-dx,-dy,W,H);
+      lines.append(s("line",{x1:p1.x+ox,y1:p1.y+oy,x2:p2.x+ox,y2:p2.y+oy,...strokeAttrs(bad)}));
+      const base=reverse?14:10;
+      let best=null, found=false;
+      for(const side of [base,base+16,-base-6,base+32,-base-22,base+48,-base-38]){
+        for(const t of [0.5,0.38,0.62,0.28,0.72,0.2,0.8,0.44,0.56]){
+          const mx=p1.x+(p2.x-p1.x)*t+ox-dy*side, my=p1.y+(p2.y-p1.y)*t+oy+dx*side;
+          const y=my-((labels.length-1)*14)/2+4;
+          if(best===null) best=[mx,y];
+          if(!hits(boxOf(mx,y,labels))){ best=[mx,y]; found=true; break; }
+        }
+        if(found) break;
+      }
+      label(best[0],best[1],labels,bad);
+    }
+    svg.append(lines,texts);
+    types.forEach(t=>{ const P=pos[t]; const cnt=selectedNodes().filter(nd=>nd.type===t).length; svg.append(s("g",{},
+      s("rect",{x:P.x,y:P.y,width:W,height:H,rx:"8",style:"fill:var(--surface);stroke:var(--ink2)","stroke-width":"1.5"}),
+      s("text",{x:P.cx,y:P.y+21,"text-anchor":"middle","font-size":"13","font-weight":"700",style:"fill:var(--ink);font-family:var(--display)"},t),
+      s("text",{x:P.cx,y:P.y+38,"text-anchor":"middle","font-size":"11",style:"fill:var(--ink3);font-family:var(--mono)"},plural(cnt,"node")))); });
+    return svg;
+  }
+  function clip(P,dx,dy,W,H){
+    const tx=dx!==0?(W/2)/Math.abs(dx):Infinity, ty=dy!==0?(H/2)/Math.abs(dy):Infinity, t=Math.min(tx,ty)+2;
+    return {x:P.cx+dx*t,y:P.cy+dy*t};
+  }
+  const unsignedHash=hsh=>/^0+$/.test(String(hsh||""));
+  function widgetFingerprints(n){
+    // a row "A > B > C" states the ladder: an entry may point only up it
+    const ladderRow=ruleRows(n).find(t=>t.includes(">"));
+    const ladder=ladderRow?ladderRow.split(">").map(x=>x.trim()).filter(Boolean):null;
+    const counts=new Map(); let total=0, placeholders=0;
+    selectedNodes().forEach(nd=>(nd.fp||[]).forEach(f=>{ const p=NODES[f.uid]; if(!p||!nodeOn(f.uid)) return; total++; if(unsignedHash(f.hash)) placeholders++; const k=`${nd.type}\t${p.type}`; counts.set(k,(counts.get(k)||0)+1); }));
+    const off=(child,parent)=>{ if(!ladder) return false; const a=ladder.indexOf(child), b=ladder.indexOf(parent); return a<0||b<0||b>=a; };
+    const rows=[...counts].map(([k,c])=>{ const [child,parent]=k.split("\t"); return {child,parent,count:c,off:off(child,parent)}; }).sort((x,y)=>(x.child+x.parent).localeCompare(y.child+y.parent));
+    return [h("p",{class:"dim"},`${plural(total,"entry","entries")} live in the selection, ${placeholders} never signed.`,ladder?[" The ladder: ",ladder.map((t,i)=>[i?" → ":"",h("code",{},t)])]:null),
+      rows.length?h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"child"),h("th",{},"parent"),h("th",{class:"num"},"entries"))),
+        h("tbody",{},rows.map(r=>h("tr",{},h("td",{},r.child),h("td",{},r.parent,r.off?h("span",{class:"warn"}," · off the ladder"):null),h("td",{class:"num"},r.count)))))):h("p",{class:"muted"},"no entries in the selection")];
+  }
+
+  /* ---------- grammar tables for a narrative about a type ---------- */
+  function grammarTables(type){
+    const g=GRAMMAR[type]; if(!g) return h("p",{class:"muted small"},"no such type in the grammar: ",h("code",{},type));
+    const pool=selectedNodes().filter(nd=>nd.type===type);
+    const out=selectedEdges().filter(e=>NODES[e.from]&&NODES[e.from].type===type);
+    const inn=selectedEdges().filter(e=>NODES[e.to]&&NODES[e.to].type===type);
+    const files=pool.reduce((a,nd)=>a+((nd.files||[]).length),0);
+    const outRows=[];
+    (g.roles||[]).forEach(r=>{
+      if(r.role==null){ outRows.push(h("tr",{},h("td",{},h("code",{},r.type)),h("td",{class:"muted"},"a file path"),h("td",{class:"num"},files))); return; }
+      const byTarget=new Map(); out.filter(e=>e.role===r.role).forEach(e=>{ const t=NODES[e.to].type; byTarget.set(t,(byTarget.get(t)||0)+1); });
+      if(!byTarget.size){ outRows.push(h("tr",{},h("td",{},h("code",{},r.role),h("span",{class:"muted small"}," · ",r.type)),h("td",{class:"muted"},"—"),h("td",{class:"num muted"},"0"))); return; }
+      [...byTarget].forEach(([t,c])=>outRows.push(h("tr",{},h("td",{},h("code",{},r.role),h("span",{class:"muted small"}," · ",r.type)),h("td",{},t),h("td",{class:"num"},c))));
+    });
+    const inMap=new Map(); inn.forEach(e=>{ const k=`${NODES[e.from].type}\t${e.role}`; inMap.set(k,(inMap.get(k)||0)+1); });
+    const singles=(g.fields||[]).filter(f=>f.kind==="SingleChoice");
+    return h("div",{class:"stack"},
+      h("div",{class:"row"},h("h4",{},"fields"),g.prefix?h("span",{class:"chip"},"prefix · ",h("b",{},g.prefix)):null,h("span",{class:"chip"},h("b",{},pool.length)," in the selection")),
+      h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"field"),h("th",{},"kind"),h("th",{},"options"),h("th",{},"required"))),
+        h("tbody",{},(g.fields||[]).map(f=>h("tr",{},h("td",{},h("code",{},f.name)),h("td",{},f.kind),h("td",{class:"dim opts"},(f.options||[]).join(", ")),h("td",{},f.required?"required":"optional")))))),
+      h("h4",{},"relations it may make"),
+      h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"role"),h("th",{},"points at"),h("th",{class:"num"},"live"))),h("tbody",{},outRows))),
+      inMap.size?[h("h4",{},"relations that point at it"),h("div",{class:"tbl scrollx"},h("table",{},h("thead",{},h("tr",{},h("th",{},"from"),h("th",{},"role"),h("th",{class:"num"},"live"))),
+        h("tbody",{},[...inMap].map(([k,c])=>{ const [t,role]=k.split("\t"); return h("tr",{},h("td",{},t),h("td",{},h("code",{},role)),h("td",{class:"num"},c)); }))))]:null,
+      singles.length?[h("h4",{},"state"),singles.map(f=>ladderEl(f.name,f.options,null,type))]:null);
+  }
+
+  /* ---------- a narrative's body, by its widget ---------- */
+  // widgets whose data is narratives (rows, children, terms) go dark when the
+  // system holding narratives is switched off; the canon-data widgets stay
+  const NARRATIVE_DATA=["rows","strip","tally","index","list","glossary"];
+  // the query words whose table is narratives (the other three are canon data)
+  const NARRATIVE_QUERIES=["roots","terms"];
+  // a narrative whose whole body is other narratives drops with them
+  const narrativeData=n=>NARRATIVE_DATA.includes(n.widget)&&(n.query==null||NARRATIVE_QUERIES.includes(n.query));
+  const contribShown=x=>nodeOn(x.uid)&&!(narrativeData(x)&&!nodeOn(subjectOf(x).uid));
+  function widgetBody(n,ctx){
+    if(NARRATIVE_DATA.includes(n.widget)&&n.query==null&&!nodeOn(subjectOf(n).uid)) return h("p",{},offNote(subjectOf(n).uid));
+    switch(n.widget){
+      case "rows": return widgetRows(n,ctx);
+      case "strip": return widgetStrip(n);
+      case "tally": return widgetTally(n);
+      case "legend": return widgetLegend(n);
+      case "glossary": return widgetGlossary(n);
+      case "table": return widgetTable(n);
+      case "facts": return widgetFacts(n);
+      case "stack": return widgetStack(n);
+      case "grid": return widgetGrid(n);
+      case "ladder": return widgetLadder(n);
+      case "index": return widgetIndex(n);
+      case "list": return widgetList(n);
+      case "edges": return widgetEdges(n);
+      case "fingerprints": return widgetFingerprints(n);
+      case "prose": case "callout": case undefined: case null: return null;
+      default: return h("p",{class:"muted small"},"unknown widget: ",h("code",{},String(n.widget)));
+    }
+  }
+  // a narrative's body: its prose, its widget and, for a narrative about a
+  // grammar element, that element's tables. What it cites comes after its
+  // stacked children (citesAfter), so provenance closes a screen
+  // A widget that draws over something other than its own STATEMENT says so.
+  // Two sources exist in the payload: an Over relation naming another
+  // narrative, and a query word naming a computed table. The two widgets that
+  // draw the whole SELECTION rather than a subject -- edges and fingerprints --
+  // are deliberately silent: their scope is the reader's switches, not a node,
+  // and naming a seed for them would be inventing copy the payload does not
+  // carry.
+  function seedNote(n){
+    if(n.widget==="edges"||n.widget==="fingerprints") return null;
+    if(n.over!=null&&NAR[n.over]) return h("p",{class:"seed"},"drawn over ",nodeLink(n.over,true));
+    if(n.query!=null) return h("p",{class:"seed"},"drawn from the ",h("code",{},n.query)," query");
+    return null;
+  }
+  function narBody(n,ctx={}){
+    const overMissing=n.over!=null&&!NAR[n.over]?h("p",{class:"muted small"},"drawn over ",h("code",{},n.over),", which is not a narrative on this page"):null;
+    const intro=n.widget==="callout"?h("div",{class:"banner"},prose(n)):prose(n);
+    return [intro, overMissing, seedNote(n), widgetBody(n,ctx), n.grammar_of!=null?grammarTables(n.grammar_of):null];
+  }
+  // a section or card child stacked on its container's screen
+  function stacked(n,ctx){
+    const kids=stackKids(n);
+    const inner=[...narBody(n,ctx).flat().filter(Boolean),kids.map(c=>stacked(c,ctx)),autoIndex(n),citesList(n)];
+    if(n.place==="card") return h("article",{class:"card",id:`nar-${n.uid}`},h("h3",{},n.title),idLine(n.uid,n.type),tagRow(n),srcLine(n.uid),inner);
+    return h("section",{class:"sec",id:`nar-${n.uid}`},h("div",{class:"row"},h("h2",{},n.title)),idLine(n.uid,n.type),tagRow(n),srcLine(n.uid),inner);
+  }
+  // the rows anywhere on the page that link this narrative, as line cards
+  // with crumbs home, under a screen that is not itself a rows widget
+  function linkingRows(uid){
+    const lines=rowBacklinks(uid).map(b=>({home:NAR[b.from],row:rowOf(b)}));
+    if(!lines.length) return null;
+    return h("section",{class:"sec"},h("h2",{},plural(lines.length,"row"),lines.length===1?" that links it":" that link it"),filteredLines(lines,lines[0].home.uid,null,{crumb:true,viewing:uid}));
+  }
+  function autoIndex(n){
+    if(LISTING.includes(n.widget)) return null;
+    const kids=screenKids(n); if(!kids.length) return null;
+    if(!nodeOn(n.uid)) return h("p",{},offNote(n.uid));
+    return h("div",{class:"stack"},kids.map(c=>{ const e=childEntry(c); const inner=[h("h3",{},e.title),e.blurb,e.bits.length?h("p",{class:"muted small",style:"margin-top:6px"},e.bits.join(" · ")):null]; return e.on?h("a",{class:"card icard",href:e.href},inner):h("div",{class:"card"},inner,offNote(e.uid)); }));
+  }
+  function prevNext(n){
+    if(n.place!=="screen"||!PARENT[n.uid]) return null;
+    const sibs=screenKids(NAR[PARENT[n.uid]]); const i=sibs.findIndex(x=>x.uid===n.uid);
+    const prev=sibs[i-1], next=sibs[i+1];
+    if(!prev&&!next) return null;
+    return h("div",{class:"prevnext"},prev?h("a",{href:narHref(prev.uid)},"← ",prev.title):h("span"),next?h("a",{href:narHref(next.uid)},next.title," →"):h("span"));
+  }
+  // the strip beside a screen: its sibling screens under the same container,
+  // so moving within one contribution never goes through the tab
+  function subStrip(uid){
+    const n=NAR[uid]; if(!n||n.place!=="screen"||!PARENT[uid]) return null;
+    const sibs=screenKids(NAR[PARENT[uid]]).filter(c=>nodeOn(c.uid));
+    if(sibs.length<2) return null;
+    return h("nav",{class:"tabs sub scrollx","aria-label":"screens of "+NAR[PARENT[uid]].title},
+      sibs.map(c=>h("a",{href:narHref(c.uid),"aria-current":c.uid===uid?"page":null,title:c.title},c.title)));
+  }
+  // one tab: the union of every enabled system's contributions, grouped by
+  // system in the systems table's order
+  function screenTab(key,ctx={}){
+    const meta=TABS.find(x=>x.key===key);
+    if(!meta) return miss("No such tab.","#/start","start");
+    const all=CONTRIB[key]||[], on=all.filter(x=>nodeOn(x.uid)), off=all.length-on.length;
+    const seen=new Set(); on.forEach(x=>systemsOf(x.uid).forEach(y=>seen.add(y)));
+    const head=h("div",{class:"stack"},h("h1",{},meta.title),
+      meta.meaning?h("p",{class:"dim"},meta.meaning):null,
+      h("p",{class:"muted small"},plural(on.length,"contribution")," from ",plural(seen.size,"system"),
+        off?`, ${off} switched off`:""));
+    if(!on.length) return [head,h("p",{class:"muted"},"No enabled system contributes to this tab.")];
+    const ckey=colourKey(on);
+    const groups=[];
+    SYSORDER.forEach(sname=>{ const g=on.filter(x=>SYSORDER[sysRank(x.uid)]===sname); if(g.length) groups.push([sname,g]); });
+    const rest=on.filter(x=>sysRank(x.uid)>=SYSORDER.length);
+    if(rest.length) groups.push([null,rest]);
+    return [head,ckey,...groups.map(([sname,g])=>h("div",{class:"stack tabgroup"},
+      sname?h("p",{class:"kicker"},sname):null,...g.map(x=>stacked(x,ctx))))];
+  }
+  // Start: every root narrative, the canon's own leading as the page's
+  // opening and the rest grouped by system. A root is not a tab any more, so
+  // a system with no root is still whole -- its narratives join the tabs they
+  // name, and every node of it is in the index.
+  function screenStart(ctx={}){
+    const on=ROOTS.filter(r=>nodeOn(r.uid));
+    const lead=CANON&&nodeOn(CANON.uid)?CANON:null;
+    const rest=on.filter(r=>r!==lead);
+    const out=[];
+    if(lead) out.push(...rootBlock(lead,ctx,true));
+    const groups=[];
+    SYSORDER.forEach(sname=>{ const g=rest.filter(r=>SYSORDER[sysRank(r.uid)]===sname); if(g.length) groups.push([sname,g]); });
+    const other=rest.filter(r=>sysRank(r.uid)>=SYSORDER.length);
+    if(other.length) groups.push([null,other]);
+    groups.forEach(([sname,g])=>out.push(h("div",{class:"stack tabgroup"},
+      sname?h("p",{class:"kicker"},sname):null,...g.flatMap(r=>rootBlock(r,ctx,false)))));
+    if(!out.length) out.push(h("p",{class:"muted"},"No enabled system has a document."));
+    const ckey=colourKey(on); if(ckey) out.splice(lead?1:0,0,ckey);
+    // the canon-wide findings, plus every root's, in one place
+    const checks=CHECKS.filter(c=>c.root==null||NAR[c.root]&&nodeOn(c.root));
+    if(checks.length) out.push(h("section",{class:"card"},h("h2",{},plural(checks.length,"finding")),h("ul",{class:"plain checks"},checks.map(c=>h("li",{},h("div",{},h("span",{class:"chip"},h("b",{},c.rule))),nodeLink(c.at),h("span",{class:"text"},c.text))))));
+    return out;
+  }
+  // one root on Start: its own body, its stacked cards and sections, and an
+  // index of the screens it holds. Its tab children are drawn in their tabs.
+  function rootBlock(n,ctx,lead){
+    const kids=stackKids(n);
+    const body=[...narBody(n,ctx).flat().filter(Boolean),...kids.map(c=>stacked(c,ctx))];
+    const idx=autoIndex(n);
+    const inner=[...body,idx?h("section",{class:"sec"},h("h2",{},plural(screenKids(n).length,"screen")),idx):null,citesList(n)];
+    if(lead) return [h("div",{class:"stack",id:`nar-${n.uid}`},h("h1",{},n.title),idLine(n.uid,n.type),h("div",{class:"row"},narChips(n),h("span",{class:"chip"},n.dir_class)),tagRow(n),srcLine(n.uid)),...inner];
+    return [h("section",{class:"sec",id:`nar-${n.uid}`},h("div",{class:"row"},h("h2",{},n.title)),idLine(n.uid,n.type),tagRow(n),srcLine(n.uid),inner)];
+  }
+  function screenNar(uid,ctx={}){
+    const n=NAR[uid];
+    const head=[subStrip(uid),
+      h("div",{class:"stack",id:`nar-${n.uid}`},crumbTrail(uid),h("h1",{},n.title),idLine(n.uid,n.type),h("div",{class:"row"},narChips(n),cellBadge(uid),isRoot(n)?h("span",{class:"chip"},n.dir_class):null),tagRow(n),srcLine(n.uid))];
+    const kids=stackKids(n);
+    const out=[...head,...narBody(n,ctx).flat().filter(Boolean),...kids.map(c=>stacked(c,ctx))];
+    // a screen names a cited node once: what a stacked child already cites is left off the container's list
+    const below=new Set(); (function walk(k){ (k.cites||[]).forEach(x=>below.add(x.uid)); stackKids(k).forEach(walk); })({cites:[],children:kids});
+    const cites=citesList(n,below); if(cites) out.push(cites);
+    if(n.widget!=="rows"&&!isRoot(n)){ const lr=linkingRows(uid); if(lr) out.push(lr); }
+    const idx=autoIndex(n); if(idx) out.push(h("section",{class:"sec"},h("h2",{},plural(screenKids(n).length,"screen")),idx));
+    const pn=prevNext(n); if(pn) out.push(pn);
+    return out;
+  }
+
+  /* ---------- the node screen ---------- */
+  function relList(items,dir){
+    if(!items||!items.length) return h("p",{class:"muted"},"none");
+    return h("ul",{class:"plain"},items.map(r=>h("li",{},h("div",{class:"row"},h("code",{class:"muted"},r.role!=null?r.role:"File"),h("span",{class:"muted"},dir==="out"?"→":"←")),nodeLink(r.uid))));
+  }
+  function screenNode(uid){
+    const nd=NODES[uid];
+    const nar=NAR[uid];
+    if(!nd&&!nar) return [h("p",{},"That node is not in the canon."),h("a",{href:"#/nodes"},"nodes")];
+    if(!nodeOn(uid)) return [h("div",{class:"nodehead stack"},h("code",{},uid),h("h1",{},titleOf(uid)),h("p",{},offNote(uid)))];
+    const type=nd?nd.type:"", title=nd?nd.title:nar.title, state=nd?nd.state:{depth:nar.depth,authored:nar.authored}, path=nd?nd.path:nar.path;
+    const back=BACK[uid]||[];
+    const fields=nd?Object.entries(nd.fields||{}):[];
+    const outP=nd?nd.out.filter(r=>r.type!=="Child"):[], outC=nd?nd.out.filter(r=>r.type==="Child"):[];
+    const rowLines=rowBacklinks(uid).map(b=>({home:NAR[b.from],row:rowOf(b)}));
+    // the other backlinks, one per (narrative, via, row)
+    const seenOther=new Set();
+    const other=back.filter(b=>{ if(isRowVia(b)&&rowOf(b)) return false; const k=`${b.from}\t${b.via}\t${b.row}`; if(seenOther.has(k)) return false; seenOther.add(k); return true; });
+    return [
+      h("div",{class:"nodehead stack"},idLine(uid,type),h("h1",{},title),
+        h("div",{class:"row"},stateChips(state),sysChips(uid),cellBadge(uid)),
+        nar?h("p",{class:"small"},h("a",{href:narHref(uid)},"shown as a narrative")):null),
+      fields.length?h("section",{class:"card"},h("h2",{},"fields"),h("dl",{class:"fields"},fields.flatMap(([k,v])=>[h("dt",{},k),h("dd",{class:"field"},fieldText(v))]))):null,
+      h("section",{class:"card"},h("h2",{},"depends on"),relList(outP,"out")),
+      outC.length?h("section",{class:"card"},h("h2",{},"holds"),relList(outC,"out")):null,
+      h("section",{class:"card"},h("h2",{},"depended on by"),relList(nd?nd.in:[],"in")),
+      nd&&nd.fp&&nd.fp.length?h("section",{class:"card"},h("h2",{},"fingerprints"),h("ul",{class:"plain"},nd.fp.map(f=>h("li",{},nodeLink(f.uid),h("span",{class:"muted small"},unsignedHash(f.hash)?"never signed":["signed ",h("code",{},f.hash)]))))):null,
+      nd&&nd.files&&nd.files.length?h("section",{class:"card"},h("h2",{},"files"),h("ul",{class:"plain"},nd.files.map(f=>h("li",{},h("code",{},f))))):null,
+      rowLines.length?h("section",{class:"sec"},h("h2",{},plural(rowLines.length,"row"),rowLines.length===1?" that links it":" that link it"),filteredLines(rowLines,rowLines[0].home.uid,null,{crumb:true,viewing:uid})):null,
+      other.length?h("section",{class:"card"},h("h2",{},plural(other.length,"backlink")),h("ul",{class:"plain"},other.map(b=>h("li",{},h("div",{class:"row"},h("span",{class:"flag"},b.via),b.word!=null?wordChip(b.from,b.word):null),nodeLink(b.from))))):null,
+      path?h("p",{class:"muted small"},"file: ",h("code",{},path)):null,
+    ];
+  }
+
+  /* ---------- the header and the router ---------- */
+  // a tab drops out of the strip when what it draws is switched off: a root
+  // other than the canon's, or a tab whose widget's data is narratives
+  function topEntries(){
+    const out=[{key:"start",label:"Start",href:"#/start"}];
+    TABS.forEach(t=>{ if(contribsOn(t.key).length) out.push({key:t.key,label:t.title,href:tabHref(t.key)}); });
+    out.push({key:"nodes",label:"Nodes",href:"#/nodes"});
+    return out;
+  }
+  const topKeyFor=uid=>{ const home=homeOf(uid); return home.kind==="tab"?home.key:"start"; };
+  function renderHeader(){
+    const brand=document.getElementById("brand");
+    brand.textContent=CANON?CANON.title:"Canon";
+    document.getElementById("hswitches").replaceChildren(switchRow(true)||"");
+    const tabs=document.getElementById("tabs");
+    tabs.replaceChildren(...topEntries().map(e=>h("a",{href:e.href,"data-key":e.key,title:e.label},e.label)));
+  }
+  function setPills(rootUid){
+    const r=NAR[rootUid]&&isRoot(NAR[rootUid])?NAR[rootUid]:CANON;
+    document.getElementById("pills").replaceChildren(...((r&&r.tags)||[]).map(t=>h("span",{class:"pill"},t)));
+  }
+  const miss=(text,href,label)=>[h("p",{},text),h("a",{href},label)];
+  function route(){
+    ON=readSelection();
+    const raw=location.hash.replace(/^#\/?/,"");
+    const parts=raw.split("/").filter(Boolean).map(decodeURIComponent);
+    const top=parts[0]||"start";
+    const main=document.getElementById("main");
+    let out, current=top, target=null, rootUid=CANON?CANON.uid:null;
+    try{
+      switch(top){
+        case "start": out=screenStart(); current="start"; break;
+        case "t": {
+          const key=(parts[1]||"").toLowerCase();
+          const meta=TABS.find(x=>String(x.key).toLowerCase()===key);
+          if(!meta){ out=miss("No such tab.","#/start","start"); current="start"; break; }
+          out=screenTab(meta.key); current=meta.key; break; }
+        case "n": {
+          const uid=LC[(parts[1]||"").toLowerCase()];
+          if(!uid||!NAR[uid]){ out=miss("No such screen.","#/start","start"); current="start"; break; }
+          rootUid=ROOTOF[uid];
+          if(!nodeOn(uid)){ out=[h("h1",{},NAR[uid].title),h("p",{},offNote(uid)),h("a",{href:"#/start"},"start")]; current=topKeyFor(uid); break; }
+          const home=homeOf(uid);
+          const ctx={};
+          if(parts[2]==="row"&&parts[3]!=null) target=`row-${uid}-${parts[3]}`;
+          else if(parts[2]!=null) ctx.word=parts[2];
+          if(home.kind==="screen"){
+            if(home.uid!==uid&&!target) target=`nar-${uid}`;
+            out=screenNar(home.uid,ctx); current=topKeyFor(home.uid);
+          } else if(home.kind==="tab"){
+            if(!target) target=`nar-${uid}`;
+            out=screenTab(home.key,ctx); current=home.key;
+          } else {
+            if(!target) target=`nar-${uid}`;
+            out=screenStart(ctx); current="start";
+          }
+          break; }
+        case "nodes": {
+          if(parts[1]){ const uid=LC[parts[1].toLowerCase()]||parts[1]; out=screenNode(uid); }
+          else out=[h("h1",{},"Nodes"),nodesIndex()];
+          current="nodes"; break; }
+        default: out=miss("No such screen.","#/start","start");
+      }
+    }catch(e){ out=[h("p",{class:"warn"},"This screen failed to render: "+e.message)]; console.error(e); }
+    main.replaceChildren(...out.flat(Infinity).filter(Boolean));
+    setPills(rootUid);
+    const r=rootUid&&NAR[rootUid]?NAR[rootUid]:CANON;
+    document.title=r?r.title:"Canon";
+    document.querySelectorAll("#tabs a").forEach(a=>{ if(a.dataset.key===current) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current"); });
+    // The strips scroll and hide their scrollbars, so the active tab is
+    // centred by hand; only the strip moves, never the page.
+    document.querySelectorAll("nav.tabs").forEach(tabs=>{ const cur=tabs.querySelector('a[aria-current="page"]'); if(cur){ const tb=tabs.getBoundingClientRect(), cb=cur.getBoundingClientRect(); tabs.scrollLeft+=cb.left-tb.left-(tabs.clientWidth-cb.width)/2; } });
+    if(target){ const el=document.getElementById(target); if(el){ el.classList.add("hit"); el.scrollIntoView({block:"start"}); return; } }
+    window.scrollTo(0,0);
+  }
+  function init(){
+    if(DATA.schema!==SCHEMA){
+      document.getElementById("main").append(h("p",{class:"warn"},"This page was built for schema ",h("code",{},SCHEMA)," and the payload says ",h("code",{},String(DATA.schema))," -- refusing to render."));
+      return;
+    }
+    renderHeader();
+    const gen=DATA.generated||{};
+    document.getElementById("foot").append(h("p",{},"Generated ",gen.at||"",gen.canon_commit?[" from commit ",h("code",{},String(gen.canon_commit).slice(0,12))]:null,gen.export_sha256?[", export ",h("code",{},String(gen.export_sha256).slice(0,12))]:null,"; ",plural(ROOTS.length,"root"),", ",plural(Object.keys(NODES).length,"node"),". Every word on this page comes from the payload; the page itself knows only its shape."));
+    window.addEventListener("hashchange",route);
+    if(!location.hash) history.replaceState(null,"",location.search+"#/start");
+    route();
+  }
+  init();
+</script>

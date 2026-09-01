@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: An idempotent writer reporting unchanged proves nothing about whether it can write
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-IDEMPOTENT-WRITER-UNCHANGED-IS-NOT-PROOF
+TITLE: An idempotent writer reporting unchanged proves nothing about whether it can write
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+generate:sgra skips a file whose bytes already match and logs `unchanged`. So
+does a run whose target path is wrong, whose cwd anchor is wrong, or whose
+comparison is inverted. Every one of those logs `unchanged` and exits 0, against
+a file it never touched, and the reassuring word is the same in all four cases.
+
+The first run of the write task on 2026-08-27 reported exactly that against
+docs/sdoc/grammar.sgra. It was believed only after DELETING the file and
+re-running, which logged `wrote` and reproduced the committed bytes; that
+sequence is what makes the write and the byte-identity claim one measurement
+instead of two assertions sitting next to each other.
+
+The shape is not local to this task: dev/tasks/generate.nix's `sync_file` has the
+same blind spot, and so does any comparison-first writer. Fix shape, if one is
+wanted, is to make the log carry the path that was compared, so a wrong anchor
+prints a wrong path rather than a right-sounding word.
+<<<
+RATIONALE: >>>
+Logged because the failure is silent and self-confirming in the direction a
+session already wants to believe: a generator that appears to have nothing to do
+is indistinguishable from a generator that is already correct.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

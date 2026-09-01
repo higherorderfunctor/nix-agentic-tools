@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: emit_nix.format_nix warns on a missing alejandra, which makes --check lie
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-FORMAT-NIX-DOWNGRADES-A-MISSING-FORMATTER
+TITLE: emit_nix.format_nix warns on a missing alejandra, which makes --check lie
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+extract/emit_nix.py's format_nix() shells out to alejandra when it is on PATH
+and otherwise prints a warning and returns the source unformatted. The
+generator's own wrapper package deliberately carries only what extraction needs,
+so alejandra is NOT on the PATH a bare `strictdoc-grammar-extract` sees.
+
+Consequence: `extract.py --check` run without alejandra diffs UNFORMATTED output
+against the committed (formatted) file and reports drift that does not exist.
+It fails red rather than green, so nothing is silently accepted -- but the
+failure names the wrong problem, and the diff it prints is pure formatting.
+checks/strictdoc-grammar-surface-current.nix works around it by naming alejandra
+in nativeBuildInputs.
+
+Fix shape: make a missing formatter FATAL under --check while leaving it a
+warning when writing, or put alejandra on the wrapper's PATH and drop the
+conditional entirely.
+<<<
+RATIONALE: >>>
+The warning is the right call for a write, where an unformatted file is fixed by
+the next treefmt. It is the wrong call for a comparison, where the formatter is
+part of what "current" means.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

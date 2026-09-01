@@ -16,9 +16,11 @@ argjson
 argstr
 aristocratos
 arkenfox
+arpeggio
 arxanas
 attrset
 attrsets
+attrTag
 aubut
 autologin
 automemory
@@ -68,6 +70,8 @@ codemod
 codepaths
 codesign
 codewhisperer
+colour
+colours
 commondir
 completionist
 configdir
@@ -79,6 +83,7 @@ cpaczek
 createdb
 creds
 crystallise
+ctypes
 cuda
 customisation
 dataurl
@@ -99,6 +104,7 @@ direnv
 direnvrc
 docnix
 docsite
+docstrings
 dogfood
 dogfooding
 doubao
@@ -132,10 +138,12 @@ fetchzip
 fhsenv
 fileset
 findutils
+fingerprintable
 fixpoint
 foldl
 footgun
 formedness
+FREETEXT
 frepo
 frontloaded
 frontmatter
@@ -224,6 +232,7 @@ lockfiles
 lspservers
 ltrimstr
 manpages
+manueldiagostino
 markdownify
 materializer
 mcpconfig
@@ -235,6 +244,7 @@ mdformat
 memoizer
 mergetool
 metacharacter
+metamodel
 misattributes
 miscited
 mlen
@@ -244,6 +254,7 @@ moff
 mojibake
 mountpoint
 mtimes
+mult
 mystor
 napi
 narinfo
@@ -334,7 +345,9 @@ recognised
 reflog
 reftable
 regen
+regenerable
 reimplementation
+relitigate
 relpath
 remapper
 reparent
@@ -342,6 +355,7 @@ replayable
 repoint
 reprioritize
 repros
+reqif
 rerere
 restager
 revertibility
@@ -362,6 +376,7 @@ sandboxed
 sarif
 scriptable
 sdiehl
+sdoc
 segs
 semble
 sequentialthinking
@@ -370,6 +385,7 @@ serialised
 serialising
 sess
 setext
+sgra
 shellharden
 shortrev
 sigmask
@@ -391,6 +407,7 @@ statix
 stdenv
 stopword
 streamable
+strictdoc
 strs
 subdirs
 subkeys
@@ -406,6 +423,7 @@ sympy
 taplo
 tengu
 testapp
+textx
 timespec
 tinyduck
 tmpfs
@@ -425,6 +443,7 @@ ultracode
 unapprove
 unbuildable
 uncacheable
+uncosted
 undimensioned
 undmg
 unexecutable
@@ -441,7 +460,9 @@ unredacted
 unrepresentable
 unresumable
 unreviewed
+unrun
 unscanned
+unsettable
 unskipped
 unstages
 unstarted
@@ -458,6 +479,8 @@ vendorhash
 watchlist
 webp
 wikilink
+wireline
+worklist
 worktree
 worktrees
 wyhash

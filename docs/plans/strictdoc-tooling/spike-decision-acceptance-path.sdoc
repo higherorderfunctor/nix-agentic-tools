@@ -1,0 +1,54 @@
+[DOCUMENT]
+TITLE: Who moves a DECISION from open to accepted, and how
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: SPIKE-DECISION-ACCEPTANCE-PATH
+TITLE: Who moves a DECISION from open to accepted, and how
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+No open-to-accepted transition has ever occurred on this branch: every
+accepted decision was born accepted, and the one exit from open was
+open-to-superseded. The README says a planning session grooms, decides and
+slots, and also that decisions come to the operator as plain-language cards;
+the skill does not say who turns STATUS. DEC-LONG-LIVED-BRANCH's acceptance
+language is about signing, not STATUS. The transition drawn in every state
+machine is inferred from the enum, not observed.
+<<<
+RATIONALE: >>>
+A transition that exists only in the enum is the kind of gate that gets
+guessed at. Observing it once settles who owns it.
+<<<
+NOTES: >>>
+RUN 2026-08-27, by observation rather than by probe. The operator stated the
+path outright, which is this spike's second retirement arm.
+
+WHO: the operator. HOW: in conversation, ad hoc. There is no gate, no trigger
+and no form, and that is deliberate while the system is being dogfooded. In
+their words: "We are making it up as you go, pretend dog fooding its a good
+system."
+
+Record it plainly and do not build ceremony around it. This spike's own
+rationale is that a transition existing only in the enum "is the kind of gate
+that gets guessed at", so the value of the answer is that it stops the next
+session inventing one.
+
+Do NOT read this as covering fingerprint signing. This spike already drew that
+line -- DEC-LONG-LIVED-BRANCH's acceptance language is about signing, not STATUS
+-- and that decision is unchanged: two reviews, the stack reviewed whole for
+usability and flow, the pull requests reviewed for implementation choices, and
+operator acceptance turned at the second of these, never before. STATUS is
+conversational; signing waits for the pull request.
+
+Retyped from SPIKE to EVIDENCE on 2026-08-30: a probe is work, then evidence, then a decision (MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION; DEC-NODE-FAMILIES). Its STATUS was 'run'. Its RETIRES_ON read: The first open-to-accepted transition is made on this branch with its actor and its trigger recorded, or the README states the path outright. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LONG-LIVED-BRANCH
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

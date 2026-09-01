@@ -1,0 +1,20 @@
+[DOCUMENT]
+TITLE: The seven kinds, one line each
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-WORDS-TYPES
+TITLE: The seven kinds, one line each
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: list
+PLACE: section
+STATEMENT: >>>
+The seven kinds of node, one line each: the first sentence of each kind's screen under Types, where the grammar's own fields and roles draw beside it.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPES
+  ROLE: Over

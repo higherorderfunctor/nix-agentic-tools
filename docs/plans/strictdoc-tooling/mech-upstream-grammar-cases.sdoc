@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: Borrow upstream's grammar test cases as fixtures rather than extracting them
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-UPSTREAM-GRAMMAR-CASES
+TITLE: Borrow upstream's grammar test cases as fixtures rather than extracting them
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The strictdoc package ships no .sgra files at all, and upstream's grammar test
+data is multiline Python strings or objects built straight from constructors,
+so there is no corpus sitting on disk to point a tool at. Building extraction
+machinery for it would cost more than it returns.
+
+Hand-convert a selection of their unit-test grammars into fixtures beside ours
+instead. The value is edge cases nobody here would think to write, not
+coverage: their tests were written against the parser by the people who wrote
+it. Source is their tests/unit tree, the grammar-element tests specifically.
+<<<
+RATIONALE: >>>
+Our fixtures test what we thought of. Theirs test what broke. The two sets
+overlap less than either author would guess, and the conversion is a morning's
+reading rather than a tool to maintain.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

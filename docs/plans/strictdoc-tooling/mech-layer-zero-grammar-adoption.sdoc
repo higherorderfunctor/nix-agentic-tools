@@ -1,0 +1,100 @@
+[DOCUMENT]
+TITLE: Rule the layer-zero grammar pair's held semantics during the migration
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-LAYER-ZERO-GRAMMAR-ADOPTION
+TITLE: Rule the layer-zero grammar pair's held semantics during the migration
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A two-grammar sketch sits in packages/strictdoc-grammar/values/plan.nix and
+values/spec.nix, wired to nothing: a `plan` vocabulary of PLAN and WORK, and a
+`spec` vocabulary of REQUIREMENT, DECISION, MECHANISM, EVIDENCE and NARRATIVE.
+The devenv block that would render them is present and commented out.
+
+Written deliberately ahead of the system that would give them meaning, so the
+node types could be argued about early. Each shape choice below therefore
+carries a semantic commitment that was NOT ruled when it was written, and each
+is held open here rather than settled in a comment nobody agreed to. Rule them
+alongside the semantics migration, since that is the first point where any of
+them can be decided against something real rather than against taste.
+
+Held open, one line each:
+
+- TIER duplicates what containment depth already implies. The redundancy is
+  what makes "a tier must descend along Contained_By" decidable, but nothing
+  says the redundancy is worth its cost.
+
+- Whether an ungroomed item is a TIER value on the work node or an element type
+  of its own. As drafted it is a tier, so the backlog is a query.
+
+- Whether RATIONALE stays optional on DECISION. Drafted optional on the
+  argument that a forced rationale restates the statement; the counter-argument
+  is that an unexplained decision is the thing this node type exists to prevent.
+
+- Which way Superseded_By points. Drafted forward, from the retired node to its
+  replacement, so a reader arriving at a stale node is carried onward.
+
+- Whether PLAN carries no containment edge, which is what makes the set of
+  roots a query rather than a convention about where files sit.
+
+- One state field per node type versus a tuple. Drafted as one, which keeps the
+  first semantic layer a set of independent single-field ladders.
+
+- Whether every type's state field should be called STATUS. Drafted that way,
+  so one name carries four unrelated vocabularies; distinct names cost nothing
+  now and are expensive later.
+
+- Whether File relations stay absent. Drafted absent, because a path is an
+  outside data source with a staleness story owed on day one.
+
+- Whether this repository's own five node types migrate onto the pair, or the
+  pair is abandoned in favour of the existing grammar.
+
+One assumption is UNVERIFIED and load-bearing: the work node's Realizes role
+points at a target in the other grammar, and nothing here has yet exercised a
+relation whose two ends import different grammars. A two-file fixture settles
+it, and it should be settled before anything is built on the split, because the
+whole disposable-plan design rests on that edge.
+<<<
+RATIONALE: >>>
+The sketch was requested early on purpose: node types are cheap to argue about
+in the abstract and expensive to change once a corpus exists. But writing the
+grammar forces answers to questions the roadmap deliberately defers, and an
+answer recorded only as a code comment is an answer nobody ruled on -- which is
+the failure this graph exists to end.
+
+Listing them as held rather than settled keeps the sketch useful without
+letting it quietly become the design. It also gives the migration a checklist
+instead of a rediscovery exercise.
+<<<
+NOTES: >>>
+Nothing imports either file, no check reads them, and the generation task will
+not render them while the devenv block stays commented. Enabling them is a
+decision, not a formality: neither has a corpus, and neither alias is
+registered in the project configuration that resolves an imported grammar by
+name.
+
+The files carry plain-language descriptions of each node type's intended use,
+and deliberately no design rationale -- that is what this node holds.
+
+UPDATED 2026-08-28. Three of the held items are now ruled elsewhere and are
+struck from the list above rather than restated: the two-grammar split itself
+falls to DEC-ONE-GRAMMAR, the state-field-per-type question is answered by
+DEC-NODE-TYPE-GRID's separation of claims from work, and DECISION's open state
+by DEC-OPEN-IS-THE-QUESTION. What remains genuinely held is the tier-versus-
+depth redundancy, whether an ungroomed item is a tier or a type, RATIONALE's
+optionality, supersession direction, File relations, and the unverified
+cross-grammar relation -- which the one-grammar ruling makes moot unless a
+second grammar ever returns.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: DEC-ONE-GRAMMAR
+  ROLE: Governed_By

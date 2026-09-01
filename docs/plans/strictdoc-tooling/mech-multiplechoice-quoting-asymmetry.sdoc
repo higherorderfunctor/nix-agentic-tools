@@ -1,0 +1,44 @@
+[DOCUMENT]
+TITLE: SingleChoice and MultipleChoice options are quoted by different rules on read and on write
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-MULTIPLECHOICE-QUOTING-ASYMMETRY
+TITLE: SingleChoice and MultipleChoice options are quoted by different rules on read and on write
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Measured on 0.28.3 while writing the .sgra emitter. StrictDoc's reader and
+writer treat SingleChoice and MultipleChoice options differently, and only
+SingleChoice is self-consistent.
+
+GrammarElementFieldSingleChoice strips a surrounding double quote from every
+option at construction, and get_unprocessed_options re-adds it on write for any
+option containing a parenthesis. GrammarElementFieldMultipleChoice does
+neither: the model keeps whatever quoting the file carried, and the writer joins
+options verbatim.
+
+Two consequences. A MultipleChoice option holding a parenthesis, built
+programmatically without quotes, is written to a file that does not parse --
+verified, it fails with a TextXSyntaxError expecting a separator or a closing
+parenthesis at the inner one. And a correctly quoted one round-trips
+byte-stable but carries the literal quote characters inside the model's option
+string, so a node's field value has to include them to match.
+
+The emitter quotes parenthesized options for both kinds, because that is the
+only spelling the grammar accepts. The residual asymmetry is in the model value
+and is upstream's.
+<<<
+RATIONALE: >>>
+Noticed because the emitter's quoting rule was specified as what strictdoc's own
+writer does, and the writer does two different things depending on the field
+kind. Worth knowing before any consumer compares an option vocabulary against a
+field value, and before anyone treats strictdoc's writer as the byte-identity
+oracle for a grammar that uses MultipleChoice.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

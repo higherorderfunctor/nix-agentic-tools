@@ -1,0 +1,20 @@
+[DOCUMENT]
+TITLE: Where the design is solid, and where it is not
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-START-SOLID
+TITLE: Where the design is solid, and where it is not
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: strip
+PLACE: screen
+STATEMENT: >>>
+Each row is one topic of the sheet. Bar length is how many lines the topic has; the segments are the tags. Tap a segment to see just those lines.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TOPICS
+  ROLE: Over

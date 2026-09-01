@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Build the hook layer
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: SLICE-HOOK-LAYER
+TITLE: Build the hook layer
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Build the hook layer as snapshotted in MECH-HOOK-MIDDLEWARE-INTERFACE, once
+the three open decisions it is governed by are ruled. Read as WORK under
+DEC-SLICE-DECOMPOSES-TO-WORK; the prefix is the grammar's, not a type claim.
+<<<
+NOTES: >>>
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-HOOK-MIDDLEWARE-INTERFACE
+  ROLE: Crosses

@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: A new prek hook does not reach the Stop checkpoint unless a second file is edited
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-STOP-HOOK-LIST-IS-HARDCODED
+TITLE: A new prek hook does not reach the Stop checkpoint unless a second file is edited
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+`lib/validate-at-stop.sh:121` runs a hardcoded list of hook ids — `cspell deadnix shellcheck statix` — rather than deriving them from the git-hooks suite it mirrors. A hook added to `devenv.nix` git-hooks.hooks therefore runs at commit time and silently never runs at the Stop boundary. The comment at `:119-120` asks for the two to be kept in sync and is the only thing keeping them in sync. Derive the list from the same evaluation that defines the hooks, or make the divergence a check.
+<<<
+RATIONALE: >>>
+The failure is invisible in both directions: the new hook passes at commit, the Stop hook reports nothing, and neither surface says a check was skipped. This is the same class as `MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE` — one list written twice with a comment as the enforcement — in a file that every session's hand-back passes through.
+<<<
+NOTES: >>>
+`SLICE-CHECKPOINT-WIRING`'s NOTES already carries the consequence for its own validators: wiring one into the prek suite is two edits, not one. That instruction fixes the instance and leaves the mechanism; this node is the mechanism.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

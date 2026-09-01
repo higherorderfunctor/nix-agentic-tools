@@ -1,0 +1,40 @@
+[DOCUMENT]
+TITLE: The devenv module instantiates the extraction wrapper a second time
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-DEVENV-MODULE-REBUILDS-EXTRACT
+TITLE: The devenv module instantiates the extraction wrapper a second time
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+packages/strictdoc-grammar/lib/mkExtract.nix states the rule in its own header:
+flake.nix builds it once for the checks and nothing else may build a second
+copy, or a session and CI stop running the same interpreter. The devenv module
+imports mkExtract.nix itself and passes its own package argument rather than
+receiving the flake's instantiation, which is a second instantiation of exactly
+that kind.
+
+Benign today and not obviously benign tomorrow. Two imports of one factory with
+equal arguments are the same derivation and the same store path, so nothing is
+built twice while the arguments agree -- and they are pinned to agree, since the
+module's package option defaults to the same overlay attribute the flake passes.
+The defect is that nothing enforces the agreement.
+<<<
+RATIONALE: >>>
+The header names the failure it is trying to prevent, and the module performs
+the thing the header forbids. Either the rule is wrong and should be relaxed in
+writing, or the module should receive the flake's instantiation.
+<<<
+NOTES: >>>
+Surfaced while verifying milestone one. Contested during that review: the
+refutation is that Nix derivation identity makes the duplication invisible, and
+the counter is that invisibility is a property of the arguments currently
+agreeing rather than of anything checking that they do.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

@@ -1,0 +1,52 @@
+[DOCUMENT]
+TITLE: A whole-project export reads every .sgra under the root, referenced or not
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SGRA-SCANNED-PROJECT-WIDE
+TITLE: A whole-project export reads every .sgra under the root, referenced or not
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+strictdoc export . reads every file with an .sgra extension anywhere beneath the
+project root, whether or not a document imports it. A grammar file that fails to
+parse therefore fails the whole export, from wherever it sits in the tree.
+
+Measured on 0.28.3 while committing the negative fixture corpus for the grammar
+milestone: six deliberately invalid grammars under
+packages/strictdoc-grammar/fixtures/negative/ took the repository-wide export
+from exit 0 to exit 1, on a file nothing referenced. They now carry an
+.sgra.invalid suffix so the scan skips them, which works but encodes the
+constraint in a filename rather than in configuration.
+
+exclude_doc_paths in strictdoc_config.py is the configured answer and already
+carries two globs for the same class of problem with .md files. Whether the
+fixture suffix or a third glob is the right shape is undecided; the glob keeps
+fixtures under their natural extension, the suffix keeps the config from
+listing every directory that might hold one.
+<<<
+RATIONALE: >>>
+The failure is remote from its cause -- the export names the fixture, but
+nothing connects "a file I added under packages/" to "the command that reads the
+design graph". A session that adds an invalid grammar anywhere and then sees the
+graph command break has no reason to look in packages/ for it.
+<<<
+NOTES: >>>
+A second producer of .sgra files under the root arrived 2026-08-27: the
+ai.strictdoc module's generate:sgra task writes every declared grammar into the
+working tree. It MITIGATES this node rather than resolving it. The task writes
+through a temporary file carrying a LEADING DOT, so a crashed run cannot strand
+a visible `grammar.sgra.XXXXXX` beside the real one for a whole-project export
+to pick up as another grammar.
+
+That is the constraint encoded in a filename for a second time, next to the
+fixtures' .sgra.invalid suffix. Two encodings of one rule, neither of them in
+strictdoc_config.py, is the argument for settling the exclude_doc_paths question
+rather than an argument against it.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

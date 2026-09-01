@@ -1,0 +1,51 @@
+[DOCUMENT]
+TITLE: The patched tree-sitter grammar cannot lex a dot in an unquoted choice option
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-TREE-SITTER-CHOICE-OPTION-CANNOT-LEX-A-DOT
+TITLE: The patched tree-sitter grammar cannot lex a dot in an unquoted choice option
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+overlays/generic/tree-sitter-strictdoc.patch now adds the QUOTED arm to
+choice_option, which is the only way to write an option containing a
+parenthesis and which costs ZERO regressions on strictdoc's own docs. The
+UNQUOTED arm is still upstream's `[\w/-]+`, so an option containing a `.` --
+`GPL-3.0-or-later`, any SPDX identifier with a version -- does not parse, even
+though strictdoc itself accepts it (`(["])[^,]+\1|[^,()"]+`).
+
+Widening the charset was measured three ways and every one lost, all on
+strictdoc_04_release_notes.sdoc against a 9-error-node baseline:
+
+  transcribing strictdoc's own classes  -> 89 nodes, 76795 -> 98406 error bytes
+  upstream's charset plus a bare `.`    -> 89 nodes
+  a dot only BETWEEN word runs          -> 108 nodes
+
+The error BYTES rise with the node count, so this is a real loss of coverage,
+not error-recovery reshaping. Cause: tree-sitter lexes by longest match over
+every token valid in the current state -- and in an error-recovery state every
+token is valid -- so a wider choice_option out-competes the narrow tokens
+wherever recovery is running.
+
+Fix shape: restrict WHERE the token can be lexed rather than widening WHAT it
+matches -- an external scanner, or restructuring grammar_field_single_choice /
+_multiple_choice so the option list is lexed in a state of its own. Belongs to
+SLICE-SDOC-IN-SEMBLE, which owns the grammar patch.
+
+Until then packages/strictdoc-grammar/fixtures/foreign.sgra carries
+`GPL-3-only`, not `GPL-3.0-or-later`; the dot was incidental to what that
+fixture exercises and its README says so.
+<<<
+RATIONALE: >>>
+Found by checks/strictdoc-grammar-corpus.nix the moment foreign.sgra entered the
+repository's own corpus -- the check did exactly its job. Recorded rather than
+fixed because a charset is the wrong lever and the right one is a grammar
+restructure in another slice.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

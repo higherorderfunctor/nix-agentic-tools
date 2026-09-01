@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: Whether the six non-narrative types gain TAGS so a node can name a system by hand
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SYSTEM-TAG-ON-EVERY-ELEMENT
+TITLE: Whether the six non-narrative types gain TAGS so a node can name a system by hand
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: A node needs to belong to a system its type does not place it in -- the first tooling mechanism that is really beads' -- and the beads import lands.
+STATEMENT: >>>
+Membership in a system is computed from a node's type (DEC-SYSTEM-IS-A-TYPE-
+SET). A node whose type puts it in one system but which belongs to another
+-- a tooling mechanism that is really part of the future beads engine -- has
+no way to say so. A TAGS field on the other six types, carrying a token like
+system/beads, would let it. Appending the field is free today; every
+existing entry is a placeholder. But TAGS would enter those types' contract
+hash unless excluded, and excluding it is one more constant in a script that
+DEC-FP-FIELDS-CONFIGURABLE says should be an option. Open until the beads
+import makes the need concrete.
+<<<
+RATIONALE: >>>
+Deciding it now would design beads ahead of its import, which the operator ruled out.
+<<<
+NOTES: >>>
+Opened 2026-08-30.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-WHITEBOARD-VIEW
+  ROLE: Backlogged_In

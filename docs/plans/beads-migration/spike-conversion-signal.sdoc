@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: Does converting 426 lines surface an unknown contradiction
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: SPIKE-CONVERSION-SIGNAL
+TITLE: Does converting 426 lines surface an unknown contradiction
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Convert the lane-iteration cluster and count contradictions discovered that were
+not known beforehand. A null result falsifies the approach for the cost of one
+day.
+<<<
+RATIONALE: >>>
+A fresh reader found several in an afternoon without looking hard, so a null
+result would be surprising and therefore informative.
+<<<
+PARENT_FP: DEC-CONVERT-IS-ADJUDICATION:0000000
+NOTES: >>>
+Retyped from SPIKE to WORK on 2026-08-30: a probe is work, then evidence, then a decision (MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION; DEC-NODE-FAMILIES). Its STATUS was 'unrun'. Its RETIRES_ON read: The first slice is converted and either surfaces at least one contradiction the author did not know about, or does not. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SLICE-FIRST-CONVERSION
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-CONVERT-IS-ADJUDICATION
+  ROLE: Governed_By

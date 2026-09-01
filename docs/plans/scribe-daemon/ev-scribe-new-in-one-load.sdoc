@@ -1,0 +1,53 @@
+[DOCUMENT]
+TITLE: Creating a node in memory costs 5 ms, and every meta field matches a rebuild
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SCRIBE-NEW-IN-ONE-LOAD
+TITLE: Creating a node in memory costs 5 ms, and every meta field matches a rebuild
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: strictdoc-trial worktree, 382-node canon copied to a temp dir, warm cache; strictdoc 0.28.3; 2026-09-01
+STATEMENT: >>>
+Measured in the strictdoc-trial worktree against the 382-node canon copied to
+a temporary directory, warm cache, through the same harness before and after,
+each run confirmed to write the files it claimed before its timing was read:
+
+    three creates, skeleton-to-disk then reload    2327 ms
+    three creates, built in memory                   16 ms
+    three sets (unchanged, the comparison)           18 ms
+    the one full reload the batch defers            630 ms
+
+So a create went from about 776 ms to about 5 ms, and a run of them now pays
+one reload rather than one each.
+
+WHAT MADE IT AVAILABLE: the corpus holds 382 documents and 382 DocumentGrammar
+objects around exactly ONE shared element list. The reload the create used to
+pay re-read 382 files to obtain a reference to an object already in memory.
+
+WHAT MADE IT SAFE: the meta is the one thing derived by hand, so it is
+compared rather than trusted. A document built in memory was compared against
+one from a genuine rebuild, field for field: 11 of 11 DocumentMeta fields
+identical, at four depths -- a plan directory, docs/spec, the repository root
+where the empty-directory branch is taken, and a hidden .sdoc/ directory
+beside a package. The rendered bytes match as well.
+
+THREE POSITIVE CONTROLS, each run by breaking the thing and watching the
+harness say so:
+
+* level derived one too deep -> the comparison fails naming `level`, 5 vs 4;
+* the element list copied rather than shared -> the identity check fails;
+* the unreadable-destination guard removed -> a create under output/ lands on
+  disk and has_node is False after the next reload. That is the silent loss
+  the guard exists for, and it was previously caught by accident, because the
+  old shape looked the new document up in a reloaded tree and did not find it.
+<<<
+NOTES: >>>
+END TO END, through the client against a live daemon on the real canon,
+2026-09-01: `scribe new` 0.084 s wall, against 2.9 s for the one-shot command
+and about 1.0 s through the daemon before this change. Measured by creating a
+throwaway node and deleting it again; `scribe check` reported 384 nodes and 0
+findings afterwards, and the working tree was clean.
+<<<

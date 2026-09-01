@@ -1,0 +1,183 @@
+[DOCUMENT]
+TITLE: Pin formats to SDoc and JSON in strictdoc_config.py
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-LEAN-FORMATS
+TITLE: Pin formats to SDoc and JSON in strictdoc_config.py
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+strictdoc_config.py registers exactly two formats, SDocFormat and JSONFormat,
+and there is one config, at the repository root. Not a wrapper-only or CI-only
+config: `format` and `manage` take no `--formats` flag, so the project config is
+the only lever on their cost, and a second config would be two files obliged to
+agree about the same thing.
+
+strictdoc.api exports ProjectConfig and no Format class at all, so the config
+imports the two from strictdoc.backend.sdoc.sdoc_format and
+strictdoc.backend.json.json_format. That couples the config to non-public module
+paths on an overlay that tracks latest upstream, and it fails closed: a renamed
+module exits 1 naming strictdoc_config.py and the import line, which the two
+corpus-export gates already run.
+
+exclude_doc_paths stays as written. Its two globs cost nothing measurable and
+re-arm the moment MarkdownFormat is registered again. What changes is the
+docstring, which says both globs are required -- a condition that stops holding.
+
+What the repository gives up is exporting html, html2pdf, rst, markdown, excel,
+reqif-sdoc, reqifz-sdoc, doxygen and spdx, and ingesting .md, .markdown and
+.gra.md as documents or grammars. Nothing asks for any of them: every check,
+script, skill recipe and README line passes --formats=json. .sgra grammar
+reading is unaffected -- it comes from SDocFormat, which stays.
+
+What it gains, per invocation on this corpus: export 2.02 s to 1.09 s, format
+1.50 s to 0.73 s, manage auto-uid 1.70 s to 0.73 s.
+
+The cost is a false green whose shape is narrower than it looks. Asking for a
+handle no registered format claims -- html, rst, markdown, excel, or the bare
+default, which is html -- exits 0 and writes no non-cache file. It is confined
+to OUTPUT. Validation is unaffected: the traceability index is built before any
+format is dispatched, so a corpus with a field-order violation exits 1 under
+every one of those handles. Both existing gates read their output file
+immediately after exporting and die on its absence, so neither can pass on an
+empty export.
+
+Making that loud is owed and is not this node's to build. strictdoc's --formats
+allowlist is a hardcoded list of built-in handles that a config can only extend,
+never narrow, so the guard belongs in the tool SLICE-SDOC-CLI builds -- the same
+slice this mechanism blocks. Until then the mitigation is documentary, which per
+INV-GUARDS-MUST-EXECUTE is not a guard and should be written as one that does
+not yet execute.
+
+Explicitly out of scope: making HTML render. This node does not repair it, gate
+it, or decide whether it should exist -- MECH-DEFAULT-EXPORT-IS-RED-ON-RST is
+the instance, MECH-HTML-RENDER-MUST-PASS the requirement. Re-registering
+HTMLFormat is that node's change and a one-line revert here.
+<<<
+RATIONALE: >>>
+The traceability index build is 3 ms; the cost of every strictdoc command is
+startup, config construction and the format stack default_formats() imports.
+This is the single largest lever on the skill loop and on every validation tier,
+and it needs no package change.
+
+The fork this node ended on -- pin the formats, or keep HTMLFormat and pay for
+it -- collapses on measurement, in both directions.
+
+Keeping HTMLFormat preserves no working HTML export. With HTMLFormat registered,
+`strictdoc export . --formats=html` exits 1 on this corpus, aborting partway with
+113 files written, because a bare glob in one node's prose is an unterminated RST
+emphasis marker. That arm buys a red render for 0.48 s of every command, and the
+operator has already ruled the breakage low-priority tech debt that must not
+block unrelated work.
+
+Dropping it opens no validation hole. The dangerous reading of the false green --
+that the loop the skill documents as "export == validate" would report green on a
+broken graph -- is false. Validation happens in the index build, upstream of
+format dispatch.
+
+What is left is a real but bounded output trap, in a repository where nothing
+invokes an unregistered handle and both gates would fail if one did. Against
+roughly halving every strictdoc invocation, on the commands every authoring loop
+and both CI checks run, that trades well.
+<<<
+NOTES: >>>
+Re-measured 2026-08-27 against strictdoc 0.28.3, cold cache (clean --output-dir
+per run, since the cache lives at <output-dir>/_cache/<version>), on a copy of
+the worktree. Interleaved A/B/C rounds, four of them:
+
+  export --formats=json   stock 1.98-2.12 s  lean 1.08-1.13 s  lean+HTML 1.55-1.58 s
+  export --no-parallelization --formats=json  stock 2.14-2.28 s  lean 1.31 s (x3)
+  format .                stock 1.48-1.97 s  lean 0.70-1.18 s
+  manage auto-uid .       stock 1.63-1.78 s  lean 0.71-0.74 s
+
+JSON output is byte-identical across stock, lean and lean+HTML (diff -r over the
+json/ tree), and identical again with exclude_doc_paths removed under lean.
+
+FOUR CORRECTIONS to the numbers this node previously carried, all from the
+re-measurement above.
+
+The absolute timings do not reproduce. This node said export 3.2 s to 1.24 s;
+measured 2.02 s to 1.09 s. The RATIO holds -- pinning roughly halves every
+command -- the absolutes do not, so quote the ratio.
+
+The claim that "the forkserver parallelizer adds about 1.4 s" is REFUTED.
+--no-parallelization is SLOWER than parallel in both configs, by about 0.15 s
+stock and 0.22 s lean. There is no 1.4 s parallelizer tax to recover, and
+--no-parallelization is not a lever.
+
+"65 nodes" is stale: the corpus is 139 UIDs across 9 documents.
+
+The fork's second arm was priced at 0.6 s for HTMLFormat; measured 0.48 s
+(2.02 vs 1.55). More to the point, what it buys exits 1.
+
+MEASURED, on the false green. Under lean, --formats=html, rst, markdown, excel
+and the bare default all exit 0 with zero non-cache files written; the 367 files
+in the output dir are all _cache. --formats=json,html writes json/ and exits 0.
+Positive control, same binary, same command, HTMLFormat registered: 26 html
+files then exit 1 on this corpus, and on a clean two-node mini corpus 5 html
+files and exit 0. So "writes nothing" is a property of the format registry, not
+of the broken prose.
+
+Second positive control, on the validation half: a field-order violation
+injected into 99-backlog.sdoc -- pre-carve; inject into any current document to
+re-run it -- exits 1 under lean for the bare default, for
+--formats=json and for --formats=html alike, with "Semantic error: Wrong field
+order". Third: fp-check.py and cycle-check.py both traceback and exit 1 on a
+missing index.json, so an empty export cannot pass either gate.
+
+MEASURED, on the markdown half. With MarkdownFormat unregistered, deleting
+exclude_doc_paths changes nothing: exit 0, JSON byte-identical, no measurable
+time difference (1.06-1.19 s against 1.04-1.20 s). Positive control with the
+full format stack and the globs deleted: exit 1, "Reading SDOC: 281 tasks", then
+"A process in the process pool was terminated abruptly". That crash is the
+reason the globs stay -- they are free, and they are the difference between a
+clean export and an unreadable pool failure if MarkdownFormat ever returns.
+
+Upstream mechanics worth not re-deriving. default_formats() (project_config.py
+:572) returns 13 Format instances and is used whenever the config passes no
+formats= (:411). export_formats defaults to ["html"] (:723), which is why bare
+`export` is an html request. ExportAction iterates the REGISTERED formats and
+matches them against the requested handles (export_action.py:91), so an
+unclaimed handle is a no-op loop -- while needs_html_templates is gated on the
+REQUESTED handle (:53), so --formats=html still compiles Jinja templates for
+0.53 s before writing nothing. build_index() runs in ExportAction.__init__
+(:27), which is why validation is upstream of all of this. EXPORT_FORMATS
+(commands/export.py:17) is the hardcoded argparse allowlist and config formats
+only append to it (:88), so no config can make --formats=html an argparse error.
+DocumentFinder builds its extension table from the registered formats
+(document_finder.py:41), which is the whole markdown-ingestion effect.
+
+PROPAGATION, in the same commit. Landing this makes the first sentence of
+MECH-DEFAULT-EXPORT-IS-RED-ON-RST false -- bare `strictdoc export .` stops
+exiting 1 and starts exiting 0 having written nothing -- so that node's
+STATEMENT changes with this one. The config docstring's "BOTH globs are
+required" changes too.
+
+A minor lever, measured and not required: importing ProjectConfig from
+strictdoc.core.project_config rather than strictdoc.api saves about 0.06 s
+(1.06 s against 1.12 s), because strictdoc.api's __init__ imports ExcelGenerator
+and so drags openpyxl in even when no Excel format is registered. Under the
+stock format list it saves nothing, default_formats() importing the same modules
+a moment later.
+
+IMPLEMENTED 2026-08-27 in strictdoc_config.py. Two corrections to the
+statement above, both found by running it.
+
+formats takes INSTANCES, not classes. default_formats() returns constructed
+objects and the dispatcher calls read_grammar on the member, so
+formats=[SDocFormat, JSONFormat] raises a missing-self TypeError at load
+rather than registering anything.
+
+The pin buys one thing the statement did not predict, and SLICE-SDOC-CLI
+depends on it. html2pdf4doc, reached only through the default format stack,
+reassigns sys.stdout AT IMPORT TIME and needs a real file descriptor, so any
+caller holding stdout in a buffer got io.UnsupportedOperation before this
+landed. That is what lets the CLI keep strictdoc's progress narration out of
+a --dry-run diff.
+<<<
+RELATIONS:
+- TYPE: File
+  VALUE: strictdoc_config.py

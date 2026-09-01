@@ -1,0 +1,20 @@
+[DOCUMENT]
+TITLE: Rows by topic
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-TOPICS-SOLID
+TITLE: Rows by topic
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: strip
+PLACE: section
+STATEMENT: >>>
+Each row is one topic of the sheet, in the sheet's order. Bar length is how many rows the topic has; the segments are the verdict words. Tap a segment to see just those rows; tap a name for the whole topic.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TOPICS
+  ROLE: Over

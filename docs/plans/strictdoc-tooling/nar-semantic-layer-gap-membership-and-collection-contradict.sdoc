@@ -1,0 +1,45 @@
+[DOCUMENT]
+TITLE: Plan membership and collection contradict
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT
+TITLE: Plan membership and collection contradict
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: prose
+PLACE: screen
+STATEMENT: >>>
+A node belongs to a plan by directory, while the one-grammar ruling says membership is an edge that 112 groomed nodes lack. Work 'dies with its plan', yet six pieces of work hold their proof in NOTES and twelve durable nodes point at probes whose work half would die. Collecting a plan today either breaks the export or deletes evidence.
+
+> Plan membership and collection contradict: retention is keyed on directory while DEC-ONE-GRAMMAR says membership is an edge that 112 groomed nodes lack; WORK 'dies with its plan' yet 6 SLICE hold their proof in NOTES and 12 Proven_By edges point into SPIKE whose work half would die, so collecting a plan today either breaks the export or deletes evidence.
+<<<
+PARENT_FP: >>>
+DEC-ONE-GRAMMAR:0000000
+DEC-PLAN-LIFECYCLE-OPEN:0000000
+MECH-PLAN-BEADS-SNAPSHOT:0000000
+MECH-PLAN-CHANGE-KINDS:0000000
+MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION:0000000
+SLICE-SDOC-IN-SEMBLE:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-ONE-GRAMMAR
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-PLAN-LIFECYCLE-OPEN
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-PLAN-CHANGE-KINDS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-PLAN-BEADS-SNAPSHOT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: SLICE-SDOC-IN-SEMBLE
+  ROLE: Cites

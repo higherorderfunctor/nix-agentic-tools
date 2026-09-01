@@ -1,0 +1,109 @@
+[DOCUMENT]
+TITLE: Fingerprints and what happens when a parent changes
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-DIRTY-RIPPLE
+TITLE: Fingerprints and what happens when a parent changes
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+PLACE: screen
+STATEMENT: >>>
+Dirty edges, signing, revocation, where a dirty edge blocks, and the git hazards.
+
+- An edge is dirty when the child's recorded fingerprint no longer matches the parent's current contract, or the parent is gone. An unsigned 0000000 is not dirty. Every fingerprint must have a matching relation, or the check fails.
+> dirty edge = child's PARENT_FP hash != parent's current contract hash, or parent gone; 0000000 is not dirty; every entry needs a backing Parent relation (unbacked fails) [WORKS]
+- The detector is two Python scripts, and their walk is the ripple. Under the layer stack that becomes a semantic-layer rule per role, a handler that marks after each write, and a report on read.
+[LINK: DEC-LAYER-STACK] [LINK: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER]
+> detector = fp-check.py + sdoc_fp.py; its traversal IS the ripple [FALLS OUT: DEC-LAYER-STACK, L3 rule per role (a per-role field list), post handler marks, scribe.read(check) reports]
+- Which fields count toward a contract is a per-project option. Changing the selection makes every signed edge suspect again.
+> contract-bearing fields = per-project option; re-selecting re-suspects every signed edge [WORKS]
+- Three shapes for the ripple are on the table — a per-field flag, a typed selector tree (unmeasured), or a per-role field list with a stored hash. No decision picks one.
+[LINK: SPIKE-RIPPLE-SELECTOR-AST]
+> ripple shape: per-field flag | selector AST (SPIKE-RIPPLE-SELECTOR-AST unrun) | per-role field list + stored hash; no DECISION picks [UNADDRESSED]
+- Clearing a dirty edge means signing — rewriting the child's hash to the parent's current one. It is refused while the parent is unsettled. Today a human does it at pull-request review.
+[LINK: DEC-FP-ACCEPT-AUTHORITY] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> clear = sign (rewrite to current hash), refused while the parent is unsettled; today identity:human at PR review [OPEN: DEC-FP-ACCEPT-AUTHORITY]
+- Revocation gets a 'revoked' slot on the entry; revoking an unsigned entry, or signing over a revoked one, is refused. Open: who may revoke, what a rebase does (re-accept automatically, warn, or block), and who re-signs their own conflict.
+[LINK: DEC-FP-ACCEPT-AUTHORITY] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> revocation: revoked:<hash> slot; refuse revoke-on-placeholder and sign-over-revoked; who = the key; rebase: auto re-accept? warn or block? who re-signs own conflict? [OPEN: DEC-FP-ACCEPT-AUTHORITY]
+- A signature pasted back by hand looks identical to a real one. Nothing proves a fingerprint change went through scribe.
+[LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> a hand-restored signature reads as current; nothing proves a PARENT_FP change went through scribe [GAP]
+- A dirty edge blocks only in nix flake check. Unsigned and revoked entries are tolerated everywhere. Nothing checks at commit or push.
+[LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]
+> where dirty blocks: nix flake check only (drifted|unbacked|deleted fail); 0000000 and revoked tolerated everywhere; nothing at commit or push [WORKS]
+- Severity by joint — legal in the canon, a warning at commit, a refusal at push and merge — has been described and not decided.
+[LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]
+> per-joint severity (legal in canon, warn at git.commit, deny at push and merge) [UNADDRESSED]
+- Git hazards, catalogued: drift after a rebase is detected; a merge conflict inside a fingerprint field is not; rerere replays old resolutions silently; absorb can route a fingerprint hunk to the wrong commit.
+> git hazards: rebase drift detected; conflict inside PARENT_FP not detected; git rerere replays silently; git absorb misroutes [WORKS]
+- A contract change and every acceptance it invalidates must land in the same pull request.
+[LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]
+> PR atomicity: a contract change and every acceptance it invalidates land in one PR [WORKS]
+- Collapsing fingerprint history before merge is dissolved — the main-lineage mechanism leaves nothing to collect.
+[LINK: MECH-FP-MAIN-LINEAGE] [LINK: MECH-FP-PREMERGE-GC] [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]
+> MECH-FP-PREMERGE-GC [FALLS OUT: MECH-FP-MAIN-LINEAGE, nothing survives to collect]
+- When a parent or relation is removed, the fingerprint entry that pointed at it should retire. No handler does that after an unrelate or delete.
+> PARENT_FP entry retirement when parent or relation is gone: no post handler on scribe.change(unrelate|delete) [GAP]
+- A node that links to a file should become dirty when the file changes. No hash over a file's contents is defined.
+> a File target changing should dirty the node; no file contract hash defined [GAP]
+<<<
+PARENT_FP: >>>
+DEC-FP-ACCEPT-AUTHORITY:0000000
+DEC-LAYER-STACK:0000000
+MECH-FP-MAIN-LINEAGE:0000000
+MECH-FP-PREMERGE-GC:0000000
+NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER:0000000
+NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT:0000000
+NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER:0000000
+NAR-SEMANTIC-LAYER-TYPE-DECISION:0000000
+NAR-SEMANTIC-LAYER-TYPE-MECHANISM:0000000
+NAR-TERM-CANON:0000000
+NAR-TERM-JOINT:0000000
+NAR-TERM-SCRIBE:0000000
+SPIKE-RIPPLE-SELECTOR-AST:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-SEMANTICS-LIVE-IN-TOOLS-WITH-NO-OWNER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: SPIKE-RIPPLE-SELECTOR-AST
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-FP-ACCEPT-AUTHORITY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-DECISION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FP-MAIN-LINEAGE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FP-PREMERGE-GC
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-MECHANISM
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-JOINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-SCRIBE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites

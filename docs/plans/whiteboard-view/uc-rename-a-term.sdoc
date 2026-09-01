@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: The operator chooses a different word for a ruled term, and every narrative that used it is flagged
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[USE_CASE]
+UID: UC-RENAME-A-TERM
+TITLE: The operator chooses a different word for a ruled term, and every narrative that used it is flagged
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The operator decides "joint" should be another word. They retitle the term
+narrative and supersede its ruling. The fingerprint check then reports every
+narrative that Cites the term as drifted, the view shows each drifted
+citation beside the narrative that carries it, and each is re-read and
+re-signed or rewritten. Nothing else has to be remembered.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-TERMS-ARE-NARRATIVES
+  ROLE: Covered_By
+- TYPE: Parent
+  VALUE: MECH-VIEW-WIRELINE
+  ROLE: Covered_By

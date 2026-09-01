@@ -1,0 +1,84 @@
+[DOCUMENT]
+TITLE: Render the semantic layer as an HTML artifact to judge from, not as text
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: SLICE-SEMANTIC-LAYER-RENDER
+TITLE: Render the semantic layer as an HTML artifact to judge from, not as text
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+Render the semantic layer as an HTML artifact the operator can read on a phone
+and judge from, instead of as linear text. Read as WORK under
+DEC-SLICE-DECOMPOSES-TO-WORK.
+
+THE INPUT is MECH-SEMANTIC-LAYER-WHITEBOARD (the tagged one-sheet), the
+collapsed vocabulary (REQUIREMENT, USE CASE, MECHANISM, EVIDENCE, DECISION,
+NARRATIVE, WORK -- never the dissolved names), and the nodes it cites. Nothing
+in it is settled; the render shows what was EXPLORED so the operator can
+decide what to settle.
+
+WHAT THE RENDER MUST DO, learned by failing three times on 2026-08-29:
+
+- A graph cannot be read as a flat list. Each attempt to linearize the sheet
+  got denser, not clearer, and on a phone node names and field names landed
+  in one column with nothing to tell them apart. Render structure as
+  structure: one screen per node type, fields separate from edges, edges as a
+  diagram, status as colour with a legend.
+- Show one thing at a time. The operator reads a node plus its neighbours
+  (docs/sdoc/render.py --uid is the precedent), never the whole canon.
+  Navigation between screens, not scrolling through everything.
+- No coined terms. Only the ruled glossary and plain words; every UID shown
+  with its title.
+- The five top gaps from the whiteboard's last section get their own screen,
+  each with the nodes it touches linked.
+- Then decisions come as cards, one per turn, AFTER the operator has read
+  the render -- not before, and not inside it.
+
+THE TOOL is the harness's HTML artifact (a private rendered page). Build it
+as a self-contained page, mobile-first, theme-aware. Do not present the
+semantic layer in chat text again.
+<<<
+NOTES: >>>
+Filed 2026-08-29 after three failed text presentations in one session. The
+operator's words: 'we aren't aligned on what it means to generate something for
+human consumption'. The next session starts here, via docs/sdoc/README.md.
+
+DELIVERED 2026-08-29 (session 7), private artifact:
+https://claude.ai/code/artifact/9cdae156-301a-4baa-8d20-585dd6125d4e
+
+Shape: a Start screen (colour legend, a per-topic bar of the five tags, the
+node-type grid, the four layers, the five top gaps); one screen per ruled type
+with fields, state ladders and relations shown separately; an Edges screen
+with a diagram of every live (source, role, target) combination and the
+fingerprint pairs; thirteen topic screens with a plain-language headline per
+line and the sheet's own wording one tap below; five gap screens with the nodes
+each touches and the lines that feed it; a screen per cited node with its
+neighbours; a Words screen. Every UID is shown with its title. Nothing is
+presented as settled.
+
+Measured: 145 tagged lines plus the five top gaps; the sheet's tag counts
+reproduce exactly from the parse; 59 UIDs cited, 95 nodes on the page with
+one-hop neighbours; every cited UID resolved against the export at bbcc0060.
+The five tag colours pass the colour-vision validator in both themes.
+
+Reviewed before hand-over by five independent readers (three for headline
+fidelity, one for vocabulary, one mechanical) with contested findings argued
+both ways: 37 raised, 23 confirmed and fixed, 6 split (resolved by falling
+back to the sheet's own wording; listed in the hand-over for the operator to
+overrule), 4 refuted, 4 nits fixed. Screenshot passes at phone and desktop
+width caught three layout defects before review.
+
+The generator is not in the repository: MECH-RENDER-GENERATOR-OUTSIDE-REPO.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: SLICE-WORKFLOW-DSL
+  ROLE: Assumes

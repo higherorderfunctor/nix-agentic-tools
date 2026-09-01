@@ -1,0 +1,45 @@
+[DOCUMENT]
+TITLE: The choice-option converter pair is split across two files with nothing checking they agree
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-CHOICE-ENCODER-PAIR-SPLIT
+TITLE: The choice-option converter pair is split across two files with nothing checking they agree
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+ChoiceOption is now the one converter whose two halves live in different files.
+The type rewrite is `decodedOption` in extract/normalize.py, which turns the
+faithful token pattern into the DECODED option value; the encode half is
+`choiceOption` in lib/emit.nix, which puts the quotes back.
+
+The split is deliberate -- when to quote is decided by
+GrammarElementFieldSingleChoice.get_unprocessed_options, which lives in
+strictdoc's WRITER and not in the grammar the surface is derived from, so
+normalize.py has no business deriving it. Every other pair ships both halves
+from normalize.py, and emit.nix merges `defaultEncoders // normalized.encoders`
+so a name shipped there wins.
+
+The cost is that nothing checks the two halves agree. If upstream widened the
+unquoted branch, or started quoting on a different condition, the type would
+accept a value the encoder spells in a way the grammar no longer parses -- and
+the only thing that would notice is the round-trip fixture happening to contain
+such an option.
+
+Fix shape: have normalize.py record the DECODE half's inverse as an assertion
+the check task can run, or move the quoting rule in by extracting it from the
+writer the same way the grammar is extracted from the builder.
+<<<
+RATIONALE: >>>
+Found by rendering fixtures/foreign.nix: `MIT (Expat)` failed the faithful
+ChoiceOption pattern, because the faithful type describes the TOKEN as written
+(quoted, for a parenthesised option) while the value in Nix is the option
+itself. Adding the decode converter fixed it, and made the pair's split
+explicit for the first time.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

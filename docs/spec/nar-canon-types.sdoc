@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: Types
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-CANON-TYPES
+TITLE: Types
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: prose
+PLACE: tab
+TAGS: types
+STATEMENT: >>>
+The kinds of node the grammar spells, in four families of which only the first is a grid ([LINK: DEC-NODE-FAMILIES]): definition, the claims the canon asserts; coverage, the use case; representation, the narrative; and work. The grid card places each kind, and the ladders card draws the state fields with their live counts. A UID's prefix names the kind a node was born with, not the kind it is ([LINK: DEC-UID-OUTLIVES-TYPE]); read the tag.
+<<<
+PARENT_FP: >>>
+DEC-NODE-FAMILIES:0000000
+DEC-UID-OUTLIVES-TYPE:0000000
+NAR-TERM-CANON:0000000
+<<<
+RELATIONS:
+- TYPE: Child
+  VALUE: NAR-CANON-TYPES-GRID
+  ROLE: Contains
+- TYPE: Child
+  VALUE: NAR-CANON-TYPES-LADDERS
+  ROLE: Contains
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-UID-OUTLIVES-TYPE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites

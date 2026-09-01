@@ -1,0 +1,36 @@
+[DOCUMENT]
+TITLE: The workspace holds, defers, batches and recovers, under contract
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SCRIBE-WORKSPACE-CONTRACTS
+TITLE: The workspace holds, defers, batches and recovers, under contract
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: dev/scripts/test_scribe_workspace.py against an isolated 374-node corpus copy; strictdoc 0.28.3; 2026-08-31
+STATEMENT: >>>
+Seven contracts pass against an isolated copy of the 374-node canon, each in
+its own temporary corpus so a rollback assertion cannot be satisfied by the
+working tree being untouched anyway.
+
+They cover: a repeated read reuses the generation object rather than
+reloading; a write defers its rebuild and the next read pays it once; a batch
+of five writes costs ONE rebuild; the cheap rebuild still catches a duplicate
+UID across two documents, with the unmodified corpus as its positive control;
+an unparseable write restores the bytes AND drops the graph, after which the
+workspace re-derives from disk and serves correctly; resolves() answers
+without reconciling; and a failed rebuild leaves the previous generation
+serving rather than stranding the workspace.
+
+The batch contract FAILED on the first run and that was the point of writing
+it: write() reached the graph through current(), which reconciles, so the
+second write of a batch paid a rebuild and the deferral bought nothing. The
+fix is a held-graph accessor that does not reconcile -- a mutation edits nodes
+in memory and does not need the cross-document view a read needs.
+
+Per-contract wall time is 3.3 to 4.0 s and is almost entirely the cold load of
+a freshly copied corpus with no pickle cache; it is not the cost of the
+operations under test.
+<<<

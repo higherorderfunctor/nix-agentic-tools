@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: Refuse to sign a fingerprint against a parent that is still moving
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: MECH-FP-ACCEPT-READINESS
+TITLE: Refuse to sign a fingerprint against a parent that is still moving
+DEPTH: implemented
+AUTHORED_BY: human
+STATEMENT: >>>
+fp-accept refuses to record a hash for a parent that is not yet stable:
+a MECHANISM, SLICE, INVARIANT or SPIKE below interface-settled, or a DECISION
+whose STATUS is open.
+
+No new field is needed. DEPTH already distinguishes still-moving from stable,
+and STATUS does the same for decisions.
+<<<
+RATIONALE: >>>
+Accepting a contract asserts that no further change is expected. A hash taken
+against a node someone is still editing is meaningless: it goes stale the next
+day, and the resulting suspect report trains the reader to dismiss suspects.
+<<<
+PARENT_FP: MECH-FP-CHECK:0000000
+NOTES: >>>
+Implemented as sdoc_fp.is_ready() (dev/scripts/sdoc_fp.py), the single
+readiness predicate dev/scripts/fp-accept.py calls before signing any entry.
+Verified against a synthetic fixture covering both refusal branches: a
+DECISION with STATUS open and a MECHANISM at DEPTH sketch. Both were
+refused with the reason stated; neither was silently skipped.
+
+Retyped from MECHANISM to REQUIREMENT on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with high confidence after a second opinion: it can be violated: a counterexample would be fixed in the world, not in this node. Noted for a later split: STATEMENT paragraph 2 'No new field is needed. DEPTH already distinguishes still-moving from stable, and STATUS does the same for decisions.' is a design note (mechanism) about how the rule is realized; NOTES 'Verified against a synthetic fixture covering both refusal branches' is a dated probe (evidence). The STATEMENT's descriptive phrasing ('fp-accept refuses...') is what a reader could mistake for a behaviour description. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Governed_By

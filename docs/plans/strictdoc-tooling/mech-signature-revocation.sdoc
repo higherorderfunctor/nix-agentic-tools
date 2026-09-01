@@ -1,0 +1,67 @@
+[DOCUMENT]
+TITLE: Make a revoked fingerprint distinguishable from one never signed
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SIGNATURE-REVOCATION
+TITLE: Make a revoked fingerprint distinguishable from one never signed
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+A PARENT_FP entry's value slot carries three states rather than two: the placeholder 0000000, meaning nobody has accepted this edge; a seven-character contract hash, meaning the edge was accepted at that hash; and revoked:<hash>, meaning an acceptance at that hash was withdrawn. The tag cannot be mistaken for a hash, since hashes are hexadecimal and the tag is not, and the existing parser already returns the value slot whole. Carrying it therefore needs no grammar change -- PARENT_FP is an unconstrained String -- and no parser change.
+
+fp-check gains a fifth case beside never-signed, drifted, unbacked and deleted. It is tested after unbacked and before the drift comparison; in the other order a revoked entry is reported as drift. The report names both the withdrawn hash and the parent's current hash, because equality between the two is the restoration risk: the contract has not moved since it was revoked, so a hash copied out of the reverting commit still reads as current. Revoked ships in the same non-failing bucket as never-signed, so a revocation never turns the gate red. Which cases fail is one named set in the checker, and setting it is the operator's rule, not this mechanism's.
+
+Writing stays with the single writer that owns PARENT_FP today, as a revoke verb on it rather than a second tool and never as a hand edit -- fp-accept now, the sdoc CLI's verb list when that lands, a move in the behaviour model after that. Two refusals are what give the marker meaning. Revoking an entry still at the placeholder is refused, because there is nothing to withdraw. Signing over a revoked entry is refused, so re-signing becomes a deliberate request to clear a revocation instead of something a re-run does silently. Who may make that request is DEC-FP-ACCEPT-AUTHORITY's to answer.
+
+The on-disk record is deliberately the minimum: the tag, the withdrawn hash, one state per edge, no history. Who revoked, when and why live in the commit, which is where DEC-FINGERPRINT-IN-NODE already puts the sign-off. An entry additionally carrying an actor, a timestamp or a reason would be per-edge state a node field cannot hold, which is that decision's own retirement condition.
+
+Detecting a hand-restored signature is out of scope and cannot be done from the file, because whoever restores it controls the file. That needs history against main (MECH-FP-MAIN-LINEAGE) or an identity the commit is attributable to (MECH-AGENT-IDENTITY-KEYS), both deferred. What this mechanism buys is that a restoration becomes the visible deletion of a named marker rather than an invisible edit of seven zeros.
+<<<
+RATIONALE: >>>
+The revert in 387cdaec was the right call and left no trace the checker can see. A signature that can be silently restored is the rubber stamp the mechanism exists to prevent, arrived at through git.
+
+The sketch offered a history check in CI against main as the alternative. It does not fit the gate that exists: checks/strictdoc-fp-check.nix runs over the flake source, and a flake source copy carries no .git, so a history check would have to be a second, git-aware gate outside nix flake check. The marker also works in a worktree before anything has reached main, which is where every acceptance in this plan will be taken. History stays the only way to catch a restoration performed by hand, so the two are complements rather than alternatives, and the marker is the half that is buildable now.
+
+Keeping the record inside PARENT_FP rather than in a sidecar is the same argument DEC-FINGERPRINT-IN-NODE made for the fingerprint itself: the state transition is a reviewable diff hunk, attributable to a commit and revertable.
+<<<
+NOTES: >>>
+Measured 2026-08-27 against the JSON export, using fixtures in a scratch copy; the worktree was not touched.
+
+Baseline: 31 fingerprint entries, 0 signed and current, 31 never signed, 0 suspect.
+
+The four distinct hashes 387cdaec reverted -- b2c00b4, ff63967, 5360cbe, 704b6d9 -- are all still the current contract hashes of their parents. Writing b2c00b4 back into MECH-FP-CHECK's entry gives "1 signed and current, 0 suspect" and exit 0: a restoration copy-pasted out of the revert diff is accepted with no complaint. Positive control on the same fixture: deadbee in the same slot gives "1 suspect" and exit 1, so the harness does detect a bad hash.
+
+Third fixture, DEC-FINGERPRINT-IN-NODE:revoked:b2c00b4 against today's checker: classified drifted, exit 1. The marker is therefore not inert -- shipping the representation without the classification turns all five reverted entries into false suspects. With the classification, the honest state of this graph is 26 never signed and 5 revoked out of 31.
+
+parse_parent_fp partitions on the first colon, so the value slot already survives whole: the fixture parses to ('DEC-FINGERPRINT-IN-NODE', 'revoked:b2c00b4'). Longest possible rendered entry across this graph is 50 characters, MECH-READINESS-PREDICATE-RECONCILE:revoked:0000000, or 61 with the single-entry field prefix, so no line-width question arises.
+
+The flake source store path contains docs/plans and no .git, which is what rules the history check out of the existing gate.
+
+Whether strictdoc format normalises a PARENT_FP block was not re-measured and no longer matters: distinguishability lives in the value slot, not in the layout.
+
+Constraint on MECH-FP-PREMERGE-GC when it is groomed: a revoked entry is not collectible lineage. Collecting it restores exactly the indistinguishability this mechanism removes.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- WHEN a signature should be revoked. No trigger, no condition, no policy is stated — the mechanism only defines how a withdrawal is written down and read back.
+
+- Whether a revoked entry should gate. It ships in the non-failing bucket so the mechanism is inert on arrival; membership is one named set (fp-check.py:38) and moving it there is a one-line change the operator's rule can make.
+
+- Who may revoke, and who may lift a revocation by signing over it. Left to DEC-FP-ACCEPT-AUTHORITY, which is still open and is explicitly about grading signing authority rather than about revocation specifically.
+
+- Whether a revocation ever expires, or whether an edge can be revoked more than once with each withdrawal retained. The design keeps one state per edge and no history; a retention rule that wants more is the operator's, and would trip DEC-FINGERPRINT-IN-NODE's RETIRES_ON.
+
+- The tag spelling itself. `revoked` is chosen because it is non-hex and self-describing in a diff; any other non-hex token works identically, and the operator may prefer a different vocabulary once the behaviour model names its moves.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-FINGERPRINT-IN-NODE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Assumes

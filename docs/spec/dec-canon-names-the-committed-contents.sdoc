@@ -1,0 +1,39 @@
+[DOCUMENT]
+TITLE: The committed, human-reviewed strictdoc contents are the canon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-CANON-NAMES-THE-COMMITTED-CONTENTS
+TITLE: The committed, human-reviewed strictdoc contents are the canon
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: The beads graph and the canon merge into one store, or the canon stops being the reviewed, committed one.
+STATEMENT: >>>
+The body of .sdoc nodes committed to this repository -- durable, reviewed by a
+human through a render, ratified by merge -- is THE CANON. "Graph" is not used
+for it.
+
+The operator's harness keeps a second, structurally similar graph in beads:
+the LLM's working space, private, held in a separate repository, one per user
+per repository, never crossing repositories, offered as a devenv module so
+others can run the same system. The two stores are distinguished by
+AUTHORITY, not by shape: the canon is what has been reviewed and committed;
+beads is where work happens before, and around, that.
+<<<
+RATIONALE: >>>
+"Graph" named the data structure, and both stores are graphs, so it
+distinguished nothing. Candidates: canon, record, corpus. Canon won on naming
+the property that separates the stores -- ratified, durable -- rather than the
+shape they share. Record collides with decision records and with the
+measurement notes nodes carry; corpus is in wide use here and costs nothing to
+keep, but says nothing about review.
+<<<
+NOTES: >>>
+Ruled by the operator on 2026-08-28. Existing nodes and code say "graph" and
+"corpus" throughout; under INV-SETTLED-STAYS-VISIBLE they are READ as canon
+and are not rewritten by this decision. The beads side is not modelled in the
+canon at all and this node is the only place it is described. AUTHORED_BY
+reads llm because the writer has no flag for the other value.
+<<<

@@ -1,0 +1,40 @@
+[DOCUMENT]
+TITLE: devenv shell -- strictdoc runs the enterTest DAG and stages the working tree
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: MECH-SDOC-LOOP-SHELL-ENTRY-STAGES-FILES
+TITLE: devenv shell -- strictdoc runs the enterTest DAG and stages the working tree
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The sdoc skill's required loop is `strictdoc format .` then a clean export, and
+strictdoc reaches a session only through `ai.strictdoc.enable`, so the obvious
+way to run it from a worktree is `devenv shell -- strictdoc format .`. Measured
+2026-08-27: that form runs devenv:enterTest first, which runs
+devenv:git-hooks:run, which runs prek over the tree and lets treefmt-restage
+`git add` whatever it touched. The hook run then reports FAILED (restage's own
+signal that it modified files) while `strictdoc format` afterwards exits 0.
+
+Two bad readings follow. The failure looks like the format loop failing, and a
+working tree that was deliberately unstaged comes back fully staged -- neither
+caused by anything the session was doing.
+
+Fix shape: reach the binary rather than the environment. `nix build .#strictdoc
+--print-out-paths` and prepend its bin, or give the module a task that runs the
+loop, so the validation loop never depends on entering a shell.
+<<<
+RATIONALE: >>>
+Hit while running the loop for the grammar-write wiring. Recorded because the
+skill names the two commands and says nothing about how to reach them from a
+worktree, which is the only place work happens here.
+<<<
+NOTES: >>>
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: "Fix shape: reach the binary rather than the environment ... so the validation loop never depends on entering a shell" is a mechanism sketch (the heuristic's "never" hit is a design goal, not a rule). A reader could read "that form runs devenv:enterTest first" as how devenv always behaves and keep it MECHANISM. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

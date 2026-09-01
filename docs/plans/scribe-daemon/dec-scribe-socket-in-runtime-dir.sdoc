@@ -1,0 +1,32 @@
+[DOCUMENT]
+TITLE: The workspace socket lives in the user runtime directory, not in .devenv
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SCRIBE-SOCKET-IN-RUNTIME-DIR
+TITLE: The workspace socket lives in the user runtime directory, not in .devenv
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A supported client runs where no user runtime directory exists, or a measured worktree path makes the runtime-directory scheme itself exceed the sockaddr cap.
+STATEMENT: >>>
+The workspace socket lives under the user runtime directory --
+$XDG_RUNTIME_DIR/scribe/ -- not under the worktree's .devenv. Durable state
+still belongs in $DEVENV_STATE; only the socket moves.
+
+This is forced, not preferred. A sockaddr_un path is capped at 104 bytes, and
+<worktree>/.devenv/state/scribe/scribe.sock exceeds it for 24 of the 27
+worktrees measured on the operator's machine, including the strictdoc-trial
+worktree itself at 106 bytes. Every runtime-directory scheme measured fits in
+29 to 62 bytes.
+
+The runtime directory also cleans itself: it is tmpfs, wiped on reboot, and
+removed by pam_systemd at the user's final logout.
+<<<
+RATIONALE: >>>
+A relative bind would evade the cap -- sun_path resolves against the process
+cwd, so chdir plus a bare name is twelve bytes -- and that stays the escape
+hatch if a sandbox ever lacks a runtime directory. It is not the default
+because chdir is process-global, and scribe is a library as well as a command.
+<<<

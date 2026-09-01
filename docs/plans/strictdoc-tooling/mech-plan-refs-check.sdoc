@@ -1,0 +1,58 @@
+[DOCUMENT]
+TITLE: Check INV-NO-EXTERNAL-PLAN-REFS over the export
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-PLAN-REFS-CHECK
+TITLE: Check INV-NO-EXTERNAL-PLAN-REFS over the export
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+A node is in plan P when its source file is under docs/plans/<P>/. Everywhere else is outside every plan: docs/spec/, **/.sdoc/, and any location added later. The check reports a Parent-type relation whose target is in a plan and whose source is not in that same plan. Another plan counts as outside -- both live violations are plan-to-plan, not architecture-to-plan.
+
+File relations are excluded, as in cycle-check.py and fp-check.py: their VALUE names a filesystem path, not a node. PARENT_FP entries are scanned as a second case, since an entry unbacked by a relation has no edge for the first pass to see.
+
+The export carries no source path for a node, so the check takes a repository root alongside the export and builds a UID-to-file map by scanning docs/**/*.sdoc and **/.sdoc/*.sdoc for a line-anchored ^UID: (\S+)$. A UID present in the export that the map cannot place is a finding, not a skip: treating an unplaceable node as outside would pass silently, which is the false-green shape the other graph checks exist to avoid. The map builder lives in dev/scripts/sdoc_fp.py beside the other shared logic, and fp-accept.py's own discovery is replaced by it.
+
+The CLI is dev/scripts/plan-refs-check.py <export.json> --repo-root PATH. It groups findings by case under a `== case (n) ==` header, prints a one-line summary of what was checked whether or not anything failed, and exits non-zero on any finding -- the shape cycle-check.py and fp-check.py already use. A check(index, uid_file) function returns the findings without printing, so SLICE-CHECKPOINT-WIRING can register it as a validator rather than shell out to the CLI.
+
+The gate is a flake check, checks/strictdoc-plan-refs-check.nix, registered in flake.nix's checks output: its own runCommand with its own clean $TMPDIR export, mirroring checks/strictdoc-cycle-check.nix rather than sharing a derivation, so a failure stays attributable to this check. No devenv task. MECH-CHECK-SYSTEM-BOUNDARY's position is that the flake output is the gate and a devenv task should defer to it rather than restate it; neither sibling graph check has one, and the interactive path is the strictdoc CLI devenv.nix already ships.
+
+Corpus before gate, as with SLICE-FP-DETECTOR: the two violating Assumes edges are deleted and the dependency restated as prose in the depending node's NOTES, in the same commit that wires the check, so the gate does not land red.
+<<<
+RATIONALE: >>>
+Predicted by the invariant's own NOTES and now measured. The check itself is a few dozen lines over data the export already holds; what needed settling was the definition of outside a plan, and where the source-path information comes from, since the export has none.
+
+Defining plan membership positively -- docs/plans/<P>/ and nothing else -- rather than enumerating what counts as outside is what makes the rule survive a new location. docs/spec/ already exists and is absent from the sdoc skill's layout table; an enumerated complement would have silently exempted it.
+
+Deleting the two edges rather than waiting for their targets to graduate is the unblocked move. Both are Assumes, neither carries a fingerprint, so nothing is being un-signed. The better fix -- promoting MECH-FP-CHECK and MECH-CYCLE-CHECK out of the plan into settled specification, which would make both edges legal outward references -- needs a promotion path, and that waits on DEC-PLAN-LIFECYCLE-OPEN.
+<<<
+NOTES: >>>
+Measured at bc646f12 against a clean export of the whole repository: 139 nodes, 92 Parent-type edges, 2 violations. MECH-RENDER-CACHE (docs/plans/beads-migration/00-approach.sdoc) --Assumes--> MECH-FP-CHECK, and MECH-CORPUS-EDGE-MAP (docs/plans/beads-migration/02-conversion-map.sdoc) --Assumes--> MECH-CYCLE-CHECK, both landing in docs/plans/strictdoc-tooling/01-tooling.sdoc. No PARENT_FP entry crosses a plan boundary today.
+
+The inbound arm the invariant is actually named for -- settled architecture depending into a plan -- has zero live hits, so it was proven with a positive control rather than assumed. Injecting MECH-SEMBLE-EXTRA-GRAMMARS --Assumes--> MECH-FP-CHECK into a copy of the export takes the count from 2 to 3 and reports the new one as inbound. Two negative controls hold the count at 2: an outward edge from a plan node to INV-GUARDS-MUST-EXECUTE in docs/spec/, and a File relation whose VALUE is a path under docs/plans/. A third positive control removes MECH-FP-CHECK from the map, and the check reports it unmapped rather than passing.
+
+The export carries no document path. Walking every key at every depth of the 393 KB index.json yields no key containing PATH or FILE; the only paths present are File-relation VALUEs. docs/sdoc/render.py reads RELATIVE_PATH or PATH per node, and neither is ever there.
+
+fp-accept.py's map is wrong twice and must not be copied. Its find_source_file substring-matches `UID: <uid>`, so a UID that is a prefix of another resolves to whichever file rglob reaches first. Measured pre-carve: MECH-READY-QUERY resolved to 99-backlog.sdoc, where MECH-READY-QUERY-GRAPH-REUSE lives, while the node itself was in 01-tooling.sdoc; MECH-STRICTDOC-DEVENV-MODULE had the same shape against MECH-STRICTDOC-DEVENV-MODULE-NOT-PUBLISHED. Re-measured after the one-node-per-file carve, both now resolve correctly and no UID mis-resolves -- but that is rglob ordering luck, not a fix, because the substring match is unchanged. The carve does make the fix trivial: a filename is now the UID lowercased, so resolution can be by name with an anchored `^UID: <uid>$` scan as the fallback. And its discover_sdoc_files scans docs/plans and **/.sdoc only, so the four nodes under docs/spec/ are invisible to it, while its own docstring claims to follow the skill's Layout table, which lists them. The line-anchored scan places all of them.
+
+Cost: 9 ms to build the map over the whole worktree, 0.1 ms to run the check. The strictdoc export dominates, and this makes a fourth export of the same corpus inside nix flake check.
+
+The source-annotation arm is unenforceable with this input. The invariant names source annotations, but strictdoc_config.py sets no source root, no annotated node exists, and @relation comments never appear in the JSON export. This check covers document-to-document edges only; the annotation arm needs a different input and is out of scope here.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Whether a plan-boundary violation FAILS a checkpoint or only REPORTS at it. This node fixes the CLI's own exit code to non-zero, matching cycle-check.py and fp-check.py, because that is the flake-check contract. How the same validator behaves once SLICE-CHECKPOINT-WIRING registers it at command, commit and merge time is that slice's review question, not settled here.
+
+- The retention and promotion policy that would make the two live edges legal instead of deleted -- promoting an implemented mechanism out of a plan into settled specification. That is DEC-PLAN-LIFECYCLE-OPEN, still open, and its RETIRES_ON has not been met.
+
+- Whether the invariant's source-annotation arm is ever enforced, and against what input. Recorded as out of scope with a reason, not decided.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: INV-NO-EXTERNAL-PLAN-REFS
+  ROLE: Guarantees

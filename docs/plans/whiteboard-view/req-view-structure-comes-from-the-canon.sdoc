@@ -1,0 +1,21 @@
+[DOCUMENT]
+TITLE: Every tab, screen, section, card and figure on a page is a narrative's own declaration
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-VIEW-STRUCTURE-COMES-FROM-THE-CANON
+TITLE: Every tab, screen, section, card and figure on a page is a narrative's own declaration
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Every tab, screen, section, card and figure a page shows is declared by a narrative -- its PLACE, its WIDGET, its Over target, its Contains order. The renderer adds only what has no content: the Start of a root with the check findings under it, the Nodes index, an index of screen children where a container declares none, the rows anywhere on the page that link a screen (drawn beneath it as line cards with crumbs home), previous and next over screen siblings, crumbs and routes. A renderer that derives a screen's structure from the shape of the tree violates this.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NARRATIVE-DECLARES-ITS-PLACE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-VIEWS-ARE-REGENERABLE
+  ROLE: Governed_By

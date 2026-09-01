@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: The socket holds one owner, and its export matches strictdoc byte for byte
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SCRIBE-RPC-AND-EXPORT
+TITLE: The socket holds one owner, and its export matches strictdoc byte for byte
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: dev/scripts/test_scribe_rpc.py plus live measurement on the 375-node canon; strictdoc 0.28.3; 2026-08-31
+STATEMENT: >>>
+Seven contracts pass against a real server on a real socket in a temporary
+runtime directory, so a running daemon is neither required nor disturbed.
+
+They cover: a missing daemon raises with the remedy in the message rather than
+hanging; the socket is 0600 inside a 0700 directory; a second daemon on one
+workspace is refused rather than stealing the path; a dead daemon's leftover
+socket is replaced, with a bound-then-abandoned socket as the positive
+control; an unknown method returns JSON-RPC -32601 and the daemon survives it;
+a client asking about one workspace refuses an answer from a daemon serving
+another; and the daemon's export is BYTE-IDENTICAL to `strictdoc export`.
+
+Measured live on the 375-node canon. Export via the daemon 0.270 s against
+2.292 s for `strictdoc export`, byte-identical, with most of the daemon
+number being the client's own Python startup. The whole `view:render` task
+falls from 3.232 s to 1.435 s. The socket path is 52 bytes, against the
+104-byte cap.
+<<<

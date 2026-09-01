@@ -1,0 +1,20 @@
+[DOCUMENT]
+TITLE: How settled the view is
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-WHITEBOARD-VIEW-START-COUNTS
+TITLE: How settled the view is
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: strip
+PLACE: screen
+STATEMENT: >>>
+Each row is one screen of this view. Bar length is how many rows the screen has; the segments are its words. Tap a segment to see just those rows.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-WHITEBOARD-VIEW
+  ROLE: Over

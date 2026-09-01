@@ -68,6 +68,20 @@
       url = "github:oraios/serena";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # strictdoc — taken from UPSTREAM'S OWN FLAKE, not built here. Its
+    # uv.lock is the single source of truth for every Python dependency, so
+    # the reqif pin and the pygments relaxation this repo used to carry
+    # against nixpkgs' recipe are gone with the first-party build.
+    #
+    # NO follows, deliberately: the flake is a uv2nix package set locked and
+    # tested against upstream's own nixpkgs, and rewriting that pin would
+    # fork the set this repo does not own. It also keeps the package's store
+    # path independent of any consumer's nixpkgs, which is what
+    # checks.cache-hit-parity asserts. Swept by the normal flake-input
+    # update (config/generate-update-ninja.nix derives its targets from
+    # flake.lock), claimed by `passthru.updateFlakeInput` in
+    # overlays/dev-tools/strictdoc.nix.
+    strictdoc.url = "github:strictdoc-project/strictdoc";
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -294,10 +308,30 @@
         src = ./.;
       };
       splitCodeSpansCheck = {split-code-spans = import ./checks/split-code-spans.nix {inherit pkgs;};};
+      strictdocCycleCheck = {strictdoc-cycle-check = import ./checks/strictdoc-cycle-check.nix {inherit pkgs self;};};
+      strictdocCommentaryCheck = {strictdoc-commentary-check = import ./checks/strictdoc-commentary-check.nix {inherit pkgs self;};};
+      # The grammar extractor's environment, built ONCE for the four checks
+      # that run it. It is not an overlay attribute: an overlay converts an
+      # upstream package, wrapping belongs to the consumer, and the consumer
+      # here is packages/strictdoc-grammar/lib/mkExtract.nix — the same factory
+      # the `ai.strictdoc` devenv module builds, so a session and CI run one
+      # wrap rather than two (MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY).
+      strictdocGrammarExtract = import ./packages/strictdoc-grammar/lib/mkExtract.nix {
+        inherit lib pkgs;
+        inherit (pkgs.ai.devTools) strictdoc;
+      };
+      strictdocFileCheck = {strictdoc-file-check = import ./checks/strictdoc-file-check.nix {inherit pkgs self;};};
+      strictdocFpCheck = {strictdoc-fp-check = import ./checks/strictdoc-fp-check.nix {inherit pkgs self;};};
+      strictdocGrammarCorpusCheck = {strictdoc-grammar-corpus = import ./checks/strictdoc-grammar-corpus.nix {inherit lib pkgs self;};};
+      strictdocGrammarForeignRoundtripCheck = {strictdoc-grammar-foreign-roundtrip = import ./checks/strictdoc-grammar-foreign-roundtrip.nix {inherit lib pkgs self strictdocGrammarExtract;};};
+      strictdocGrammarModelEqualCheck = {strictdoc-grammar-model-equal = import ./checks/strictdoc-grammar-model-equal.nix {inherit lib pkgs self strictdocGrammarExtract;};};
+      strictdocGrammarNegativeFixturesCheck = {strictdoc-grammar-negative-fixtures = import ./checks/strictdoc-grammar-negative-fixtures.nix {inherit lib pkgs self strictdocGrammarExtract;};};
+      strictdocGrammarSurfaceCurrentCheck = {strictdoc-grammar-surface-current = import ./checks/strictdoc-grammar-surface-current.nix {inherit pkgs self strictdocGrammarExtract;};};
+      strictdocGrammarSurfaceLiveCheck = {strictdoc-grammar-surface-live = import ./checks/strictdoc-grammar-surface-live.nix {inherit lib pkgs self;};};
       updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit inputs lib pkgs self updateRegistry;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // beadsContractsCheck // beadsLifecycleCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // claudeMemoryCollisionGuardCheck // claudeSettingsSchemaCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // doubledWordsCheck // doubledWordsFixturesCheck // facetMockChecks // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goFloorDriftChecks // goToolchainFloorChecks // instructionMaterializationCheck // instructionsDriftCheck // isolatePrekHooksCheck // kiroExtractedCheck // kiroFhsContractCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // repoValidationChecks // sembleTemplatesCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);
+      bareCommandsCheck // beadsContractsCheck // beadsLifecycleCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // claudeMemoryCollisionGuardCheck // claudeSettingsSchemaCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // doubledWordsCheck // doubledWordsFixturesCheck // facetMockChecks // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goFloorDriftChecks // goToolchainFloorChecks // instructionMaterializationCheck // instructionsDriftCheck // isolatePrekHooksCheck // kiroExtractedCheck // kiroFhsContractCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // repoValidationChecks // sembleTemplatesCheck // splitCodeSpansCheck // strictdocCommentaryCheck // strictdocCycleCheck // strictdocFileCheck // strictdocFpCheck // strictdocGrammarCorpusCheck // strictdocGrammarForeignRoundtripCheck // strictdocGrammarModelEqualCheck // strictdocGrammarNegativeFixturesCheck // strictdocGrammarSurfaceCurrentCheck // strictdocGrammarSurfaceLiveCheck // updateTargetsParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.
@@ -335,10 +369,12 @@
         # mono-repo combined package (nix-update target)
         modelcontextprotocol-all-mcps = pkgs.ai.mcpServers.modelContextProtocol.all-mcps;
         modelcontextprotocol-filesystem-mcp = pkgs.ai.mcpServers.modelContextProtocol.filesystem-mcp;
-        # Future custom Semble grammars that are not already in nixpkgs must be
-        # exposed here so the authenticated package sweep publishes them to
-        # Cachix. Do not expose nixpkgs grammars again; the nixpkgs follow
-        # already supplies those store paths. Keep patched Semble check-only.
+        # Custom Semble grammars absent from nixpkgs (tree-sitter-strictdoc)
+        # ride the ordinary `pkgs.ai.generic.*` flattening above, so the
+        # authenticated package sweep publishes them to Cachix without a
+        # special-cased line here. Do not expose nixpkgs grammars again; the
+        # nixpkgs follow already supplies those store paths. Keep patched
+        # Semble check-only.
         # Instruction file derivations (from dev/generate.nix).
         # Each ecosystem produces a content directory consumed by the
         # `generate:instructions:*` devenv tasks.

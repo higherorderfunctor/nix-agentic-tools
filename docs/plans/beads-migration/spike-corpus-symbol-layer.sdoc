@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: The symbol reference layer is healthy
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: SPIKE-CORPUS-SYMBOL-LAYER
+TITLE: The symbol reference layer is healthy
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+60 of 61 symbol references resolve. The layer that rotted is the coarse
+file-level anchor layer, not the fine mechanism-level one.
+<<<
+RATIONALE: >>>
+UIDs at mechanism granularity were already invented by the author and that layer
+works. The sdoc UID model is a fit arrived at independently, not an imposition.
+<<<
+NOTES: >>>
+Retyped from SPIKE to EVIDENCE on 2026-08-30: a probe is work, then evidence, then a decision (MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION; DEC-NODE-FAMILIES). Its STATUS was 'run'. Its RETIRES_ON read: Converted, at which point symbol references become UIDs. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<

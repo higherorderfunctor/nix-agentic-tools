@@ -1,0 +1,43 @@
+[DOCUMENT]
+TITLE: The five grammar gates are flake checks, so they are in the CI gate too
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-GRAMMAR-CHECKS-ARE-IN-FLAKE-CHECK
+TITLE: The five grammar gates are flake checks, so they are in the CI gate too
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+checks/strictdoc-grammar-{surface-current,surface-live,model-equal,
+negative-fixtures,foreign-roundtrip}.nix are registered in flake.nix's `checks`
+output, because that output is what makes `nix build .#checks.<system>.<name>`
+addressable. There is no third state: `nix flake check` builds everything in
+`checks`, so these now run in CI as well, on both x86_64-linux and
+aarch64-darwin.
+
+The cost is a closure, not a runtime: `pkgs.ai.devTools.strictdoc` was already
+pulled in by strictdoc-fp-check and strictdoc-cycle-check, but the extraction
+wrapper is new to CI, and so is alejandra as a check input. That wrapper is
+packages/strictdoc-grammar/lib/mkExtract.nix, which puts ast_grep_py on
+PYTHONPATH around upstream's own venv interpreter -- not the deleted
+overlays/dev-tools/strictdoc-grammar-extract.nix, and not a python env carrying
+a second copy of strictdoc's dependency closure.
+Every one of the five builds in under a second once its inputs exist.
+
+If the milestone's "wires no CI" is to hold literally, the five move out of
+`checks` into a separate flake output and lose the addressable name. That is
+the operator's call, not this session's. It was four when this node was
+written; -surface-live.nix was added afterwards, in the same milestone, and the
+count is the kind of thing that goes stale silently.
+<<<
+RATIONALE: >>>
+Recorded because the milestone brief says CI wiring is not required, and this is
+the one place where "buildable locally by name" and "not in CI" cannot both be
+true. Better legible as a consequence than discovered from a CI bill.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

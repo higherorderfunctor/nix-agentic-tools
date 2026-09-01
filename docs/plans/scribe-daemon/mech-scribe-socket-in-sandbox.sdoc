@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: Whether the runtime directory is reachable inside the agent sandbox is unmeasured
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-SOCKET-IN-SANDBOX
+TITLE: Whether the runtime directory is reachable inside the agent sandbox is unmeasured
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Whether the user runtime directory is visible inside the agent sandbox jail is
+unverified. If a jail does not carry /run/user, a client inside it cannot reach
+a socket named there, and the escape hatch is a relative bind under the
+worktree's own .devenv -- which is inside the bind-mounted tree by definition,
+and whose path length stops mattering because a relative sun_path is a dozen
+bytes.
+
+Not designed around today: the harness owns daemon lifecycle in that world.
+Measure it before the beads harness depends on either answer.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SCRIBE-DAEMON
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-SOCKET-IDENTITY
+  ROLE: Assumes

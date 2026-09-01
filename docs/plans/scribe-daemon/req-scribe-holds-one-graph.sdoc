@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: One held graph per workspace serves every reader
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-SCRIBE-HOLDS-ONE-GRAPH
+TITLE: One held graph per workspace serves every reader
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+A scribe daemon shall hold one workspace's graph and answer reads from it
+without rebuilding. A render shall obtain its payload from that same held
+graph rather than paying its own load.
+
+The graph may be rebuilt only when a write has marked it dirty, when a
+reference cannot be resolved against it, or on explicit request.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-DEFERS-THE-REBUILD
+  ROLE: Governed_By

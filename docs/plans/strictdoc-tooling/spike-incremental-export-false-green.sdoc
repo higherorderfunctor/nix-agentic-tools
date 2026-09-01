@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: Does incremental export still produce a false green, and can one stable output directory replace the clean-directory rule
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: SPIKE-INCREMENTAL-EXPORT-FALSE-GREEN
+TITLE: Does incremental export still produce a false green, and can one stable output directory replace the clean-directory rule
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The sdoc skill states that a broken input can exit 1 and then exit 0 on a re-run against the same output directory, and every gate in this plan is shaped around it: `dev/scripts/fp-check.py` and `dev/scripts/cycle-check.py` both instruct `rm -rf output` before exporting. It did not reproduce on 2026-08-27 against strictdoc 0.28.3. Appending an unknown field to `99-backlog.sdoc` gave exit 1 on a fresh output directory, on a second fresh directory with a warm relocated cache, and on three consecutive runs against a reused directory; the restored file gave exit 0. That is one break class only, so the gotcha is unreproduced rather than refuted — the original may have needed a different break, a different strictdoc version, or the HTML generator's dependency map, which a json-only export writes but never reads. Decide which, and settle the output directory in the same answer: each cached parse is keyed on the output directory concatenated with the input path (`pickle_cache.py:127`), so a fresh directory is a cold cache whatever the cache directory is — measured, 2.04 s against 1.51 s warm, with three distinct output directories leaving 27 entries for the 9 sdoc files the corpus then held, and nothing pruning them. The one-node-per-file carve took it to 161 files, so the same three directories would now leave 483 entries -- the un-pruned cache is a materially bigger problem than that figure suggests, and the file names in this paragraph are pre-carve.
+<<<
+RATIONALE: >>>
+The two questions are one answer. If the false green is real, the clean-directory discipline is load-bearing and the cold parse is the price. If it is refuted, that discipline costs about 0.5 s per gate invocation for nothing, and the callers can converge on one path — they do not agree today, with the two check scripts documenting `--output-dir output` inside the checkout, `dev/tasks/check.nix` exporting into a temporary project, and sessions exporting into ad-hoc scratch directories.
+<<<
+NOTES: >>>
+`MECH-SDOC-CACHE-DIR-FOR-WORKTREES`'s NOTES records the non-reproduction and points at this spike; its STATEMENT already binds the tool to one stable `--output-dir` for the warm-cache reason, so the retirement of the clean-directory rule is what remains unsettled. A negative result here needs a positive control: show the harness detecting a false green on some break class before reporting that no break class produces one.
+
+Absorbs the proposed `MECH-SDOC-STABLE-OUTPUT-DIR`.
+
+Retyped from SPIKE to WORK on 2026-08-30: a probe is work, then evidence, then a decision (MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION; DEC-NODE-FAMILIES). Its STATUS was 'unrun'. Its RETIRES_ON read: A break class is named that reproduces the false green on 0.28.3, or the gotcha is refuted in writing and the export output directory becomes one stable path per checkout, written down where every caller reads it. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

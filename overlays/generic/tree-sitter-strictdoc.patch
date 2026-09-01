@@ -1,0 +1,128 @@
+--- a/grammar/grammar.js
++++ b/grammar/grammar.js
+@@ -27,24 +27,30 @@
+
+   rules: {
+     source_file: ($) =>
+-      seq(
+-        "[DOCUMENT]",
+-        "\n",
+-        optional(
+-          seq("MID", ":", " ", field("mid", $.single_line_string), "\n"),
++      choice(
++        seq(
++          "[DOCUMENT]",
++          "\n",
++          optional(
++            seq("MID", ":", " ", field("mid", $.single_line_string), "\n"),
++          ),
++          "TITLE",
++          ":",
++          " ",
++          field("title", $.single_line_string),
++          "\n",
++          optional(field("config", $.document_config)),
++          optional(field("view", $.document_view)),
++          optional(field("grammar", $.document_grammar)),
++          optional(
++            field(
++              "section_and_requirement_list",
++              $.section_or_requirement_list,
++            ),
++          ),
++          optional($._eof),
+         ),
+-        "TITLE",
+-        ":",
+-        " ",
+-        field("title", $.single_line_string),
+-        "\n",
+-        optional(field("config", $.document_config)),
+-        optional(field("view", $.document_view)),
+-        optional(field("grammar", $.document_grammar)),
+-        optional(
+-          field("section_and_requirement_list", $.section_or_requirement_list),
+-        ),
+-        optional($._eof),
++        seq(field("grammar", $.standalone_grammar), optional($._eof)),
+       ),
+
+     ...document_config_rules,
+--- a/grammar/rules/document_grammar.js
++++ b/grammar/rules/document_grammar.js
+@@ -1,4 +1,7 @@
+ module.exports = {
++  standalone_grammar: ($) =>
++    seq("[GRAMMAR]", "\n", choice($.grammar_elements, $.import_from_file)),
++
+   document_grammar: ($) =>
+     seq(
+       "\n",
+@@ -144,6 +147,16 @@
+           " ",
+           field("relation_role", $.single_line_string),
+           "\n",
++          optional(
++            seq(
++              "    ",
++              "REVERSE_ROLE",
++              ":",
++              " ",
++              field("reverse_relation_role", $.single_line_string),
++              "\n",
++            ),
++          ),
+         ),
+       ),
+     ),
+@@ -166,6 +179,16 @@
+           " ",
+           field("relation_role", $.single_line_string),
+           "\n",
++          optional(
++            seq(
++              "    ",
++              "REVERSE_ROLE",
++              ":",
++              " ",
++              field("reverse_relation_role", $.single_line_string),
++              "\n",
++            ),
++          ),
+         ),
+       ),
+     ),
+--- a/grammar/rules/type_system.js
++++ b/grammar/rules/type_system.js
+@@ -1,7 +1,30 @@
+ module.exports = {
+   boolean_choice: () => choice("True", "False"),
+ 
+-  choice_option: () => field("option", token(/[\w\/-]+/)),
++  // StrictDoc's own ChoiceOption production is `(["])[^,]+\1|[^,()"]+`
++  // (backend/sdoc/grammar/grammar_grammar.py): a QUOTED run of anything but a
++  // comma, or an unquoted run of anything but a comma, parenthesis or quote.
++  // Upstream's `[\w/-]+` cannot express the quoted form at all, and quoting is
++  // the ONLY way to write an option containing a parenthesis, so a legal
++  // `SingleChoice("MIT (Expat)", ...)` failed to parse.
++  //
++  // ONLY THE QUOTED ARM IS ADDED, and the unquoted charset is left exactly as
++  // upstream wrote it. Transcribing StrictDoc's classes literally does not
++  // work: tree-sitter lexes by longest match over every token valid in the
++  // current state -- including error-recovery states, where all of them are --
++  // so a wider `choice_option` out-competes narrower tokens and RAISES the
++  // error count on files that parsed before. MEASURED against the corpus check
++  // (checks/strictdoc-grammar-corpus.nix): the quoted arm below costs ZERO
++  // regressions, while adding a single `.` to the unquoted arm takes
++  // strictdoc_04_release_notes.sdoc from 9 error nodes to 89 and from 76795
++  // error BYTES to 98406 -- a real loss, not recovery reshaping. Restricting
++  // it to a dot BETWEEN word runs (`[-\w/]+(?:[.][-\w/]+)*`) is worse still
++  // (108). An unquoted option containing a `.` therefore remains unparseable
++  // here; closing that needs a context restriction (an external scanner or a
++  // restructured field-type rule), not a wider charset. Do not widen this by
++  // eye -- widen it against the corpus check.
++  choice_option: () =>
++    field("option", token(choice(/"[-\w .\/()]+"/, /[-\w\/]+/))),
+ 
+   requirement_type: ($) => /[A-Z]+[_A-Z]*/,
+ 

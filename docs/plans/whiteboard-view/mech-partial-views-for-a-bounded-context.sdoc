@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: The canon is read in bounded chunks: partial views cut by root, closure, system or query for a model's context
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-PARTIAL-VIEWS-FOR-A-BOUNDED-CONTEXT
+TITLE: The canon is read in bounded chunks: partial views cut by root, closure, system or query for a model's context
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The canon is not meant to sit in any agent's context whole. A model reads a
+bounded chunk of it -- one node with its neighbours, one closure, one root,
+one system, one query's table -- and the rest stays on disk. Today only one
+bounded chunk exists: the one-node packet render.py --uid produces. Everything
+else is unbounded: the whole-canon payload is over a megabyte, the ready
+packet renders an entire closure (the sheet measured one at 57% of the
+corpus), and a view's page is meant for a person, not a context window.
+
+The mechanism to build: a loader that cuts the canon into chunks by the same
+selectors the view already understands -- a root, a closure, a system, a
+query word -- at a size a model can hold, with the fingerprint state and the
+backlinks of each chunk, so partial views serve an agent as the page serves a
+person. Which selectors, what a chunk carries, and how an agent asks for the
+next one are the design.
+<<<
+RATIONALE: >>>
+Raised by the operator on 2026-08-30 while bootstrapping a second agent onto the canon: the whole is not meant to be in every agent's full context, and nothing today loads a part of it differently for a partial view.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-WHITEBOARD-VIEW
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-PURPOSE
+  ROLE: Governed_By

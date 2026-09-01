@@ -1,0 +1,34 @@
+[DOCUMENT]
+TITLE: Whether the board renders plans or work
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-TUI-BOARD-SUBJECT
+TITLE: Whether the board renders plans or work
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: >>>
+The TUI's backend is specified against a real data layer rather than fixtures.
+<<<
+STATEMENT: >>>
+The kanban prototype's data model is the earlier overlay's -- TASK, PLAN,
+MILESTONE, a work STATUS spanning open through done, and blocking edges. The
+grammar in use has none of those: no work-status field anywhere, no milestone,
+and node types that describe design rather than work.
+
+A board over the PLAN would reintroduce the work store the plan deliberately
+does not keep. A board over the execution engine, fed by the plan at ingest, is
+the shape that survives MECH-PLAN-CHANGE-KINDS.
+<<<
+RATIONALE: >>>
+Recorded now because the divergence is invisible while the backend is fixtures
+and expensive once it is not. The prototype labels itself honestly -- fixture
+backend, no SDoc writes -- so nothing is wrong yet; this is only the fork that
+gets chosen when the fixtures are replaced.
+<<<
+NOTES: >>>
+Not a criticism of the prototype, which is deliberately unspecced at this
+layer. The operator raised the same gap independently.
+<<<

@@ -1,0 +1,42 @@
+[DOCUMENT]
+TITLE: The writer of the canon is scribe, as a CLI and as a library
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SCRIBE-NAMES-THE-WRITER
+TITLE: The writer of the canon is scribe, as a CLI and as a library
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: The writer is replaced by something that is not this pipeline, or upstream ships a writer that makes it redundant.
+STATEMENT: >>>
+The program that writes .sdoc files -- today dev/scripts/sdoc_cli.py, invoked
+as `sdoc` -- is SCRIBE. The name covers both forms of one thing: the
+command-line tool, and the Python library a consumer imports to reach the
+identical pipeline in-process. Scribe is the ONLY write path to the canon
+expected when this plan closes, and joints behave the same through either
+form.
+
+"sdoc" is no longer used for the writer. It names the file format and its
+grammar, nothing else. "strictdoc" names the upstream package.
+<<<
+RATIONALE: >>>
+Four things were called sdoc: the file type, the upstream package, the writer,
+and the contents. The writer needed its own name first because it is the thing
+the hook machinery attaches to, and a sentence like "the sdoc hooks the sdoc
+writes into the sdoc" was already being written. Candidates: scribe, quill,
+sdocw. Scribe won on carrying "writes the record under another's authority",
+which matches identity coming from the environment rather than from the tool.
+<<<
+NOTES: >>>
+Ruled by the operator on 2026-08-28. The binary and the script are still
+spelled sdoc; the rename is implementation and is owed, not done. The library
+form is PARTIAL today, measured the same day: sdoc_model.Graph imports cleanly
+and dev/scripts/fp-accept.py already drives it in-process, but the pipeline
+around it -- the argv guard, the prefix and filename checks, the restore map,
+verify and rollback, dry-run -- lives in sdoc_cli.py's main and does not. The
+ruling is that both forms fire the same joints, so a phase only the CLI runs
+is a defect to close, not a difference to document. AUTHORED_BY reads llm
+because the writer has no flag for the other value.
+<<<

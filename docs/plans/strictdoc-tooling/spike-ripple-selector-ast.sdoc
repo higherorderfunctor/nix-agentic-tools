@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Measure whether a typed selector AST beats a field-level contract flag for the ripple
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: SPIKE-RIPPLE-SELECTOR-AST
+TITLE: Measure whether a typed selector AST beats a field-level contract flag for the ripple
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+`SLICE-BEHAVIOUR-MODEL` derives invalidation from what a transition writes intersected with what a gate reads, at the granularity of a per-field contract flag, and records that the alternative — a typed selector AST — is the largest claim in the design with neither its tractability nor its over-approximation ever measured. The flag mechanism is the one with numbers behind it: it runs in 0.022 s and rejected both injected lies. This spike measures the AST on the same corpus and reports three things — whether it derives invalidation edges the flag cannot, at what evaluation cost, and how often it over-approximates. The comparison must run over one instance model so the two answers are the same question asked twice.
+<<<
+RATIONALE: >>>
+The slice settles on the flag and says flipping costs a type edit plus a regenerate, so this is cheap to run late and expensive to skip: an unmeasured alternative recorded as unmeasured is an argument that comes back every time the ripple is touched. Measuring it once ends that, whichever way it lands.
+<<<
+NOTES: >>>
+The corpus this runs against is the graph in this repository — 144 nodes, 92 Parent relations, 31 fingerprint entries — and the field catalogue the flag reads is `packages/strictdoc-grammar/values.nix`. State every measurement in this node when it is run; no result may cite a document outside this repository, since a reader of this graph cannot open one.
+
+Retyped from SPIKE to WORK on 2026-08-30: a probe is work, then evidence, then a decision (MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION; DEC-NODE-FAMILIES). Its STATUS was 'unrun'. Its RETIRES_ON read: Both mechanisms are run over the same instance model and either the AST derives a materially better invalidation set at acceptable cost, or the flag stands and the AST is declined in writing. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

@@ -1,0 +1,49 @@
+[DOCUMENT]
+TITLE: The wireline: one versioned JSON payload per root, computed from the export by a backed script
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-VIEW-WIRELINE
+TITLE: The wireline: one versioned JSON payload per root, computed from the export by a backed script
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+wireline.py --root UID reads the strictdoc JSON export, the grammar file
+and the worktree (to map a UID to its file) and writes one payload,
+schema whiteboard-view/1, that the renderer and nothing else consumes.
+
+What is in it. The tree: every narrative under the root, in Contains
+order, with its fields verbatim and its STATEMENT parsed per WIDGET into
+paragraphs, rows (text spans, link spans, the trailing bracket word and its
+"by"), glossary terms, legend entries or table rows. The nodes: every node
+the tree cites or links, with every field verbatim in grammar order, its
+relations in and out, its files and its fingerprint entries. The backlinks:
+for each node, which rows and which Cites point at it -- the table behind
+"lines on the sheet by type", data purely in sdoc and tallied here. The
+pairs: live (source type, role, target type) counts among the cited nodes,
+the edges diagram's data. For each Cites: unsigned, signed or drifted (the
+contract hash recomputed with the fingerprint module, imported not copied)
+and whether the target is superseded. The grammar: each type's fields,
+kinds and option lists, read from the grammar file because the export
+types every field as String. Ladders: each choice field's option list with
+a rank so a reader can order and colour badges without the grammar. And
+the checks: view-check findings, count first.
+
+Field values pass through verbatim; everything computed sits under a key
+that says so. The cache key is the newest .sdoc mtime, the grammar file,
+the root UID, the schema string and the script itself.
+<<<
+RATIONALE: >>>
+A TUI reads the same payload as the page; the payload is the contract that keeps the viewer's form open (DEC-VIEWER-FORM-UNDECIDED) while the view exists.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-VIEWS-ARE-REGENERABLE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-NARRATIVE-IS-THE-VIEW-NODE
+  ROLE: Governed_By
+- TYPE: File
+  VALUE: docs/sdoc/view/wireline.py

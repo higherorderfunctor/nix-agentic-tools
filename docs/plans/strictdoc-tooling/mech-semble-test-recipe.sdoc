@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: Make a customized semble testable without a devenv shell
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SEMBLE-TEST-RECIPE
+TITLE: Make a customized semble testable without a devenv shell
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Expose a documented way to build and exercise a grammar-customized semble.
+Today it takes a hand-written impure expression against the flake, and the
+invocation must scrub PYTHONPATH and redirect the cache.
+<<<
+RATIONALE: >>>
+Measured while verifying SLICE-SDOC-IN-SEMBLE. An installed semble exports
+PYTHONPATH, and that shadows any other build: pointing at a freshly built
+binary silently runs the installed one with the installed mappings. The failure
+presents as the new grammar not working, which is a false defect report waiting
+to happen. It already caused one.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

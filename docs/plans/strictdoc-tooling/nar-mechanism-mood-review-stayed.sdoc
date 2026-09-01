@@ -1,0 +1,532 @@
+[DOCUMENT]
+TITLE: Stayed mechanisms
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-MECHANISM-MOOD-REVIEW-STAYED
+TITLE: Stayed mechanisms
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+PLACE: screen
+STATEMENT: >>>
+The test's reason for leaving each one a mechanism.
+
+- [LINK: MECH-AGENT-IDENTITY-KEYS] -- It is the interface-settled design of an Acted-By trailer written by a commit-msg hook (what it names, what it is not, who reads it, what is out of scope); a hook that tomorrow failed to append the trailer… [MECHANISM: high]
+- [LINK: MECH-AGENTS-INFER-OVERLAY-CONVENTION-FROM-EXAMPLES] -- If agents stopped copying the nearest example tomorrow this node would be wrong, not violated, and its claim -- 'a written instruction loses to a working example every time', recorded by the RATIONALE as 'a… [MECHANISM: medium]
+- [LINK: MECH-ASTGREP-OVER-SDOC] -- If the semble-packaged grammar turned out not to load as an ast-grep dynamic language the node would be wrong (it already says 'Unproven'), never violated; it sketches how two existing capabilities could… [MECHANISM: high]
+- [LINK: MECH-AUTHORED-BY-GUARD] -- The node is the design of a check -- UID-keyed map, merge-base baseline, CI job with full history, FLIP versus NEW-HUMAN classes -- and it disclaims the rule's force itself ('this check reports a claim and… [MECHANISM: medium]
+- [LINK: MECH-BACKLOG-BEADS-MIGRATION] -- The node asserts nothing about the world beyond how membership is read ('an item is in the backlog when it carries Backlogged_In to this node'); it is a container whose content is its one inbound edge, so it… [MECHANISM: high]
+- [LINK: MECH-BACKLOG-STRICTDOC-TOOLING] -- 'This node holds no list. The edges are the list' -- it asserts only how membership is read, and its 90 inbound Backlogged_In edges are its entire content, so there is nothing here to violate or to be wrong… [MECHANISM: high]
+- [LINK: MECH-BACKLOG-WHITEBOARD-VIEW] -- The node asserts nothing about the world; it is the target the plan's Backlogged_In edges point at, and its one sentence about membership restates DEC-BACKLOG-IS-A-REGISTER-NODE, so there is no counterexample… [MECHANISM: high]
+- [LINK: MECH-BEHAVIOUR-MODEL-VERSIONING] -- If tomorrow a comparison rule for the schema/model stamp existed, this node would be WRONG (fix the node), not violated, and its claim (the JSON carries two versions, nothing compares them) is about the… [MECHANISM: medium]
+- [LINK: MECH-CHECK-SYSTEM-BOUNDARY] -- The node says of itself 'a position to argue with rather than a conclusion', so writing a gate in both systems tomorrow would not VIOLATE it -- no rule is in force -- yet its centre is a proposed boundary rule… [MECHANISM: low]
+- [LINK: MECH-CHOICE-ENCODER-PAIR-SPLIT] -- If tomorrow both halves of the ChoiceOption converter lived in one file with a check that they agree, the node would be WRONG (obsolete), not violated; its claim is about how the code is wired for every value… [MECHANISM: high]
+- [LINK: MECH-CHUNK-LEADING-WHITESPACE] -- Disagrees with the classifier. mixed_with: 'Measured on an 8762-byte document: of 17 AST chunks, roughly five begin on a blank line between nodes' -- the EVIDENCE fragment (undated; a later split should date… [MECHANISM: medium]
+- [LINK: MECH-CONTRACT-FIELDS-EDGE-TO-SEMANTIC-LAYER] -- If the semantic-layer plan decided tomorrow that contract-bearing fields belong to the grammar layer, this node would be WRONG (fix the node), and if nobody moves the edge it is merely incomplete, not violated… [MECHANISM: medium]
+- [LINK: MECH-CORPUS-CHECK-COUNTS-ERROR-NODES-NOT-SPAN] -- If checks/strictdoc-grammar-corpus.nix gated on byte span tomorrow, the node would be WRONG (obsolete), not violated -- descriptive; its centre is the universal claim that the ERROR-node count is a property of… [MECHANISM: medium]
+- [LINK: MECH-CORPUS-EDGE-MAP] -- If a dependency turned out to convert to a different role tomorrow the table would be corrected, not the corpus rejected -- it is a design of how the conversion assigns six roles, stated for every instance of… [MECHANISM: medium]
+- [LINK: MECH-CORPUS-SHAPE-MAP] -- If the corpus had 130 GRAIN rules instead of 127 the node would be wrong, not violated, and the 'becomes' column is the conversion's design of what every instance of each shape turns into -- descriptive on… [MECHANISM: low]
+- [LINK: MECH-CYCLE-CHECK] -- If cycle-check.py stopped detecting cycles tomorrow, the node's 'Implemented: ... iterative DFS ... CI gate: checks/strictdoc-cycle-check.nix' would be WRONG, not violated -- it describes a tool that exists… [MECHANISM: medium]
+- [LINK: MECH-DERIVE-CACHED-LAYERS] -- It designs a thing to build -- three summary layers regenerated from the JSON export -- and if the generator produced a wrong index the fix is to the generator against this design, so the node is a description… [MECHANISM: medium]
+- [LINK: MECH-DEVENV-MODULE-REBUILDS-EXTRACT] -- If the devenv module received the flake's instantiation tomorrow, the node would be WRONG (obsolete), not violated -- it describes how the module is wired (imports mkExtract.nix with its own package argument)… [MECHANISM: medium]
+- [LINK: MECH-DEVENV-TASK-SCRIPTS-FIXED-AT-EVAL] -- If devenv started rendering task bodies at run time tomorrow, the node would be WRONG (fix the node), not violated; its claim -- every task's exec is rendered at evaluation, so a task consuming what an earlier… [MECHANISM: high]
+- [LINK: MECH-DROPPED-SECTION-TOMBSTONES] -- It is the design of nine tombstone DECISION nodes and what each carries and retires on; if a tombstone tomorrow lacked its citation count the tombstone would be fixed against this design, so the node describes… [MECHANISM: high]
+- [LINK: MECH-DSL-CANDIDATE-ADMISSION-RULES] -- It says of itself 'PROPOSED SHAPE, one of three ... Not chosen', so if the DSL took another shape tomorrow nothing is violated and the node is not even wrong -- it records a design and its strengths/weaknesses… [MECHANISM: high]
+- [LINK: MECH-DSL-CANDIDATE-JIRA-TRANSITIONS] -- Same as its sibling: 'PROPOSED SHAPE ... Not chosen', recorded 'without endorsement', so no counterexample can violate it -- it is a universal description of a candidate design and how it would decompose onto… [MECHANISM: high]
+- [LINK: MECH-DSL-CANDIDATE-XSTATE-MACHINES] -- A proposed shape recorded as 'not chosen' and 'without endorsement': if the hook layer could not decompose a machine this way tomorrow the node would be wrong, not violated, and it describes a shape for every… [MECHANISM: high]
+- [LINK: MECH-DSL-CHECKS-NOTHING-BY-ITSELF] -- It describes how every DSL constructor behaves (a bare attrset literal, checked only by the option surface it reaches) and that emit.grammar stays a reachable bypass, so a constructor that started asserting… [MECHANISM: medium]
+- [LINK: MECH-DSL-CONDITION-LANGUAGE] -- A recommended design for a thing to build, explicitly not yet ruled: its 'must serialize' follows from Nix not running at hook time (a fact about the world, not a canon rule), and a condition language that… [MECHANISM: high]
+- [LINK: MECH-DSL-NAMED-CONSTRUCTORS-DO-NOT-SPAN] -- It states what rel.parent, rel.child and rel.file can and cannot write for every legal grammar shape; a fourth named constructor tomorrow would make the node wrong (outdated), not violated, and nothing in it… [MECHANISM: high]
+- [LINK: MECH-DSL-SHAPE-DIVERGES-FROM-SURFACE] -- The original claim (every DSL value fails to typecheck against the generated surface) was a universal description that went wrong and was amended in place with 'RESOLVED' -- a description's failure mode, not a… [MECHANISM: low]
+- [LINK: MECH-DUPLICATE-ELEMENT-TAG-SILENT] -- It describes how strictdoc 0.28.3 always handles two elements sharing a TAG (elements_by_type keeps the last, grammar.elements keeps both) and where emit.nix guards it, so an upstream release that rejected… [MECHANISM: medium]
+- [LINK: MECH-EMIT-LAYER-BOUNDARY] -- An architecture of an implemented thing -- emit is the renderer composed with denormalize, one entry point per node type -- so encoding creeping into the renderer tomorrow would first make the description… [MECHANISM: medium]
+- [LINK: MECH-ENFORCED-DENIAL-IS-A-PREFIX] -- It describes how patternType's deny branch always behaves (a prefix match, the same set upstream's lookahead rejects at a line start); if patternType switched to an equality test tomorrow the node would be… [MECHANISM: medium]
+- [LINK: MECH-EXPORT-FRAMES-VALIDATION-AS-PARSE-ERROR] -- A claim about every semantic rejection strictdoc export reports (the headline names the parse layer, the second line names the right one) plus how the negative-fixtures check tells the layers apart; an… [MECHANISM: medium]
+- [LINK: MECH-EXTRACT-WRAPPER-NO-FORMATTER] -- It describes what the wrapper's PATH carries on every invocation and why idempotence depends on the ambient profile rather than the package; adding alejandra tomorrow makes the node wrong (outdated), not… [MECHANISM: medium]
+- [LINK: MECH-FAIL-CLOSED-ARM-HAS-NO-GATE] -- It describes a standing property of the check set -- the refusal exists in normalize.py, and neither the surface-current check nor dev/tasks/check.nix exercises it -- so a gate added tomorrow makes the node… [MECHANISM: medium]
+- [LINK: MECH-FILE-RELATION-EXISTENCE] -- The bulk is the design of an implemented checker (file-check.py in cycle-check.py's shape, wired into nix flake check, plus the sdoc CLI's write-time half) and its measurements, so the checker stopping… [MECHANISM: low]
+- [LINK: MECH-FLOW-TEST-GIT-CHECKPOINTS] -- If a git-reading flow were tested tomorrow without a synthetic repository, the right response is to fix the node (it claimed 'cannot be tested the way the existing checks are'), so it is descriptive; and its… [MECHANISM: medium]
+- [LINK: MECH-FORMAT-NIX-DOWNGRADES-A-MISSING-FORMATTER] -- If format_nix() became fatal under --check tomorrow the node would simply be wrong (stale), not violated, so it describes how the tool behaves; and it describes every run without alejandra on PATH rather than… [MECHANISM: high]
+- [LINK: MECH-FP-CHECK] -- If fp-check hashed RATIONALE tomorrow the node would be wrong about its design rather than violated -- 'suspect' is a computed state the detector defines, not a norm on the world, and the field selection is… [MECHANISM: high]
+- [LINK: MECH-FP-ENTRY-RETIREMENT] -- If fp-accept grew a retirement path tomorrow the node would be satisfied-and-stale, not violated -- it is a defect description (fp-accept never removes entries, :71/:82) plus the design of a writer path to… [MECHANISM: high]
+- [LINK: MECH-FP-FIELD-TUNING] -- Nothing in the world can violate it and nothing can prove it wrong -- 'Revisit which fields a fingerprint covers ... after the prototype has been in use' is a deferred piece of WORK (something to do, dying… [MECHANISM: medium]
+- [LINK: MECH-FP-GIT-FLOW-HAZARDS] -- If squash-merge turned out not to preserve the hash, or a new hazard appeared, the response is to fix the node's enumeration, not the world, so it is descriptive; and the STATEMENT reasons structurally about… [MECHANISM: medium]
+- [LINK: MECH-FP-MAIN-LINEAGE] -- The node's centre is the design of a merge-result gate that does not yet exist as a checkpoint (NOTES: SLICE-CHECKPOINT-WIRING 'enumerates no merge-result checkpoint. This gate needs one'), so if the gate were… [MECHANISM: medium]
+- [LINK: MECH-FP-PREMERGE-GC] -- As a sketch the node's NOTES admit ('Not settled that a garbage collection is the right shape'), nothing today can be violated by it or proven wrong by it, so it sorts as a design proposal; but its single… [MECHANISM: low]
+- [LINK: MECH-GRAMMAR-ARBITRARY-GENERATOR] -- If someone hand-wrote a generator tomorrow nothing would be violated -- the node is a deferred design recommendation for property testing ('the shape worth building', 'Point it at the ROUND TRIP'), i.e. the… [MECHANISM: high]
+- [LINK: MECH-GRAMMAR-CHECKS-ARE-IN-FLAKE-CHECK] -- If the five checks were moved out of the flake's `checks` output tomorrow the node would be wrong (stale), not violated, so descriptive; its load-bearing claim 'there is no third state: nix flake check builds… [MECHANISM: medium]
+- [LINK: MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY] -- The heuristic's 'must' is a QUOTED invariant from dev/fragments/overlays/overlay-pattern.md, not this node's own force, and the operator's ruling in NOTES is owned by MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES;… [MECHANISM: medium]
+- [LINK: MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE] -- If dev/tasks/check.nix deferred to the flake checks tomorrow the node would be resolved-and-stale, not violated, so it is a defect description of how the two current implementations relate (flake reads… [MECHANISM: medium]
+- [LINK: MECH-GRAMMAR-SGRA-NOT-GENERATED] -- If the generate:sgra wiring or the model-equal check were removed tomorrow the title claim 'is generated and CI-gated' would be WRONG, not violated, so the body is a description of the wiring plus its history;… [MECHANISM: low]
+- [LINK: MECH-GRAMMAR-TEXT-ELEMENT-INJECTION] -- If strictdoc stopped injecting a default TEXT element tomorrow the node would be WRONG, not violated, and the claim is stated for every imported grammar lacking TEXT; the 'never' hits are non-normative prose… [MECHANISM: high]
+- [LINK: MECH-GRID-MIGRATION-UNCOSTED] -- Most of the node is the shape of a migration to be done (what a retype does to UIDs and edges, what gates it, that it is not a blocker) which can only be wrong, but it also carries a dated count and one… [MECHANISM: low]
+- [LINK: MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE] -- The node opens 'Abandoned' and asserts nothing of its own: its descriptive content restates MECH-ONE-NODE-PER-FILE and DEC-BACKLOG-IS-A-REGISTER-NODE, so nothing in it can be violated and it is kept only as a… [MECHANISM: medium]
+- [LINK: MECH-HOOK-MIDDLEWARE-INTERFACE] -- It is 'PROPOSED, NOT ACCEPTED', a design of the hook layer (joints, operations, option surface, handler protocol) that does not yet exist; if a built hook layer diverged the design would be wrong or… [MECHANISM: high]
+- [LINK: MECH-IDEMPOTENT-WRITER-UNCHANGED-IS-NOT-PROOF] -- The title and first and third paragraphs describe how any comparison-first writer behaves (wrong anchor, wrong path and correct file all log 'unchanged' and exit 0); if that were untrue the node would be… [MECHANISM: medium]
+- [LINK: MECH-JSON-EXPORT-DROPS-GRAMMAR-DETAIL] -- If a later strictdoc reported field TYPE, HUMAN_TITLE, PROPERTIES and REVERSE_ROLE faithfully the node would be WRONG, not violated, and the four lossy ways are stated for every field and every grammar the… [MECHANISM: medium]
+- [LINK: MECH-LAYER-ZERO-GRAMMAR-ADOPTION] -- The node is a list of held-open questions about an unwired sketch, and a question cannot be violated; the only descriptive claims ('Nothing imports either file, no check reads them') would be wrong if the… [MECHANISM: high]
+- [LINK: MECH-LINE-ANCHORED-DENIAL-UNENFORCED] -- If decompose.py stopped deciding denials by sibling alternatives, or FieldName's two answers were derived instead of registered, the node would be WRONG (stale), not violated: it describes how the surface… [MECHANISM: medium]
+- [LINK: MECH-LIST-SEPARATOR-SUPPRESSED] -- If extract.py started recording suppressed matches, or arpeggio stopped dropping them, the node would be WRONG, not violated, and the claim (shape derivable, separator not) holds for every separated list the… [MECHANISM: medium]
+- [LINK: MECH-MID-IS-PER-PARSE-RANDOM] -- If StrictDoc kept a stable mid on the next parse the node would be wrong, not violated, and the claim is about every parse of every .sgra (measured on 0.28.3 as proof), so descriptive-universal; medium because… [MECHANISM: medium]
+- [LINK: MECH-MULTILINE-FIELD-RULES] -- The body describes how strictdoc decides inline versus block (reserved names, position after TITLE/STATEMENT, non-string types) -- if strictdoc changed that the node would be wrong, not violated, and it holds… [MECHANISM: medium]
+- [LINK: MECH-MULTIPLECHOICE-QUOTING-ASYMMETRY] -- If upstream made MultipleChoice strip and re-add quotes like SingleChoice the node would be wrong, and the claim covers every option of both field kinds on 0.28.3 plus our emitter's standing rule of quoting… [MECHANISM: medium]
+- [LINK: MECH-NIX-REGEX-DIALECT-GAP] -- The centre is how builtins.match behaves (POSIX ERE, no lookahead/\S/backrefs) and the design lib/faithful.nix adopted in response (source + ere spellings, named rewrites, deny prefixes) -- both would be wrong… [MECHANISM: medium]
+- [LINK: MECH-PLAN-BEADS-SNAPSHOT] -- It sketches how the ingest handoff between a plan and beads works -- a design of a thing to build, and if beads were built differently the node would be wrong -- so descriptive-universal by the node's centre;… [MECHANISM: medium]
+- [LINK: MECH-PLAN-REFS-CHECK] -- It is the design of the checker that Guarantees INV-NO-EXTERNAL-PLAN-REFS -- what counts as outside, which relations are scanned, the CLI and flake-check shape -- and if the script stopped doing any of it this… [MECHANISM: high]
+- [LINK: MECH-PRETOOLUSE-BLIND-TO-BASH] -- The claim is that a PreToolUse envelope carries only tool_name and tool_input, so a tool-call hook binds a tool and never a path -- if Claude Code gave hooks path visibility tomorrow the node would be wrong,… [MECHANISM: medium]
+- [LINK: MECH-PROSE-UID-REFS-CAN-BREAK-SILENTLY] -- If strictdoc format stopped wrapping UIDs across lines, or a check started catching split tokens, the node would be wrong (fix the node), not violated, and its claim covers every prose UID reference, not just… [MECHANISM: high]
+- [LINK: MECH-READINESS-PREDICATE-RECONCILE] -- The body is the design of a shared module to build (four exports, named consumers, behaviour held constant, a done-when); if status.py kept its own predicate tomorrow the design would be unbuilt rather than… [MECHANISM: medium]
+- [LINK: MECH-READINESS-REPORT-FRONTIER] -- If status.py stopped seeding the closure walk with the root and stopped listing the whole closure, the node would be wrong (MECH-READY-QUERY already records it as subsumed), not violated; the claim is about… [MECHANISM: medium]
+- [LINK: MECH-README-ROWS-FOLLOW-DESCRIPTIONS-NOT-PACKAGES] -- If mkDescriptionRows mapped over the overlay package set tomorrow the node would be wrong (the bug fixed), not violated; it describes what the generator does for every package lacking a description, and… [MECHANISM: medium]
+- [LINK: MECH-READY-QUERY] -- A design of a function, a verdict record and a CLI front end to be built (interface-settled); a differently shaped ready.py tomorrow means the design was not followed, not that the world broke, and 'Ready… [MECHANISM: high]
+- [LINK: MECH-READY-QUERY-GRAPH-REUSE] -- A refactor proposal about the code's shape (factor cycle-check's adjacency walk into sdoc_fp.py for MECH-READY-QUERY); reimplementing the walk tomorrow would leave the proposal unbuilt, not the world in… [MECHANISM: high]
+- [LINK: MECH-RELATION-TARGET-TYPE-LINT] -- If relation-target-check.py stopped running, the node's account of the checker (three eval-time checks, one corpus check, non-zero exit, CI gate, no allowlist) would be wrong rather than violated, and the node… [MECHANISM: low]
+- [LINK: MECH-RENDER-CACHE] -- If a built cache regenerated a chunk whose inputs had not moved, the cache would be buggy against this design and the design would still stand -- the node describes how the render cache always behaves (records… [MECHANISM: high]
+- [LINK: MECH-REQIF-PIN-HAS-NO-SWEEP] -- Describes how an inline pin behaves under mkUpdateScript for any such pin (never swept; a release outgrowing it fails the build, the dependency moving on does not); when the pin was removed (MOOT 2026-08-27)… [MECHANISM: medium]
+- [LINK: MECH-RESERVED-FIELD-DECLARATION-LIES] -- A claim about how strictdoc's document tokenizer always treats a reserved name's declared type (ignores it, matching UID and MID with its own hardcoded expression); if a release honoured the declaration the… [MECHANISM: high]
+- [LINK: MECH-RUNTIME-WRITE-GUARD] -- The body is the design of an implemented guard (flags derived from the grammar minus a guarded set, an argv scan that names the owner, placement in the CLI not the grammar, scope-outs, and what it cannot… [MECHANISM: medium]
+- [LINK: MECH-SCRIBE-MOVE-BYPASSES-THE-MODEL] -- A claim about every `scribe move` (renames on disk outside Graph, pending() and save(); the library form has no move); if move were routed through the save path the node would be wrong, not violated. [MECHANISM: medium]
+- [LINK: MECH-SCRIBE-NEW-TOUCHES-DISK-UNDER-DRY-RUN] -- A claim about every `scribe new` (writes a header-only skeleton to disk and reloads before validation, under --dry-run too, unlinking at the end); if new became a pure in-memory proposal the node would be wrong,… [MECHANISM: medium]
+- [LINK: MECH-SDOC-CACHE-DIR-FOR-WORKTREES] -- If strictdoc_config.py stopped passing dir_for_sdoc_cache="$TMPDIR" tomorrow the node would be wrong about what the config does, not violated, and the claim covers every command and every worktree. [MECHANISM: high]
+- [LINK: MECH-SDOC-CI-CHECK] -- It designs a gate (an export that fails the build on non-zero exit) now provided by two existing checks; if those checks stopped gating tomorrow the NOTES would be wrong about how the gate is provided, while… [MECHANISM: medium]
+- [LINK: MECH-SDOC-EDIT-VIA-MODEL] -- It is the design of dev/scripts/sdoc_model.py (API, fixed call sequence, three obligations), a thing that now exists; if the module diverged tomorrow either the design or the build is wrong, nothing is… [MECHANISM: high]
+- [LINK: MECH-SDOC-LAYOUT-CHECK] -- It designs a flake check to build; the rules it would enforce live elsewhere — MECH-ONE-NODE-PER-FILE and DEC-NODE-FILE-NAMING state them and MECH-ONE-NODE-PER-FILE names this node as "the guard that would… [MECHANISM: medium]
+- [LINK: MECH-SDOC-LEAN-FORMATS] -- It describes what strictdoc_config.py registers and why; re-registering HTMLFormat tomorrow is a change the node itself anticipates as "a one-line revert here", i.e. the node would be wrong, not violated. [MECHANISM: high]
+- [LINK: MECH-SEMANTICS-DEFINITION-BOUNDARY] -- A two-layer architecture (definition layer versus instance layer) plus a TODO; if tomorrow a concept sat in the wrong layer the classification would be wrong or incomplete, not violated, and the layering is a… [MECHANISM: medium]
+- [LINK: MECH-SEMBLE-EXTRA-GRAMMARS] -- If the patched loader tomorrow stopped needing a language attribute, this node would be WRONG rather than violated, so the 'must' is a description of the implemented mechanism's own interface (what the ctypes… [MECHANISM: high]
+- [LINK: MECH-SEMBLE-PATH-MAPPINGS] -- If semble tomorrow added .sdoc to a default extension set or changed first-match-wins, the right response would be to fix this node, not the world, so it is a description of how the tool always behaves, and… [MECHANISM: high]
+- [LINK: MECH-SGRA-ADMITS-NO-COMMENTS] -- A standing property of the .sgra grammar (no comment production anywhere; nothing admitted before ) and its consequence for every generated .sgra; if upstream added comment syntax tomorrow the node would be… [MECHANISM: medium]
+- [LINK: MECH-SGRA-SCANNED-PROJECT-WIDE] -- If strictdoc export stopped scanning unreferenced .sgra files tomorrow the node would be wrong, not violated, and its title claims what the export always does; the only support is one dated measurement on… [MECHANISM: medium]
+- [LINK: MECH-SIGNATURE-REVOCATION] -- It is the design of a thing to be built (three value-slot states, a fifth fp-check case tested after unbacked, two refusals, minimal on-disk record); if fp-accept behaved otherwise the implementation would not… [MECHANISM: high]
+- [LINK: MECH-SLICE-CANNOT-BE-SUPERSEDED] -- If the grammar declared Superseded_By on SLICE tomorrow the node would be wrong, not violated, and its self-declared remaining job is to be the ledger of case-3 instances (count: zero), which asserts nothing… [MECHANISM: high]
+- [LINK: MECH-SLICE-IS-WORK-NOT-A-USE-CASE] -- It is a classification reading of two node types (mood, not subject); if a slice turned out not to be imperative the node would be wrong, and the 'MUST WORK' hit is the use case's mood being quoted, not a rule… [MECHANISM: medium]
+- [LINK: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION] -- NOTES says it is recorded as a reading, not a ruling, and it is not ratified; if a spike were found to fit one cell the node would be wrong, not violated, and it is about every spike. [MECHANISM: high]
+- [LINK: MECH-STOP-HOOK-LIST-IS-HARDCODED] -- It describes how lib/validate-at-stop.sh always behaves (a hardcoded list that a new git-hook never reaches); if the list were derived tomorrow the node would be wrong/obsolete, not violated, and the 'never'… [MECHANISM: high]
+- [LINK: MECH-STRICTDOC-DEVENV-MODULE] -- A design of a module that now exists (ai.strictdoc.enable/package/grammars, generate:sgra defined in the module); if the module differed the node would be wrong, not violated. [MECHANISM: high]
+- [LINK: MECH-STRICTDOC-DEVENV-MODULE-NOT-PUBLISHED] -- It describes how the flake's collectFacet plus checks/options-doc.nix are constructed such that a devenv-only ai.* facet fails by construction; if options-doc stopped demanding parity the node would be wrong,… [MECHANISM: high]
+- [LINK: MECH-STRICTDOC-UPSTREAM-FLAKE] -- A design of a change that was built (re-export upstream's flake unchanged on the plain-attrset-update seam) plus its implementation record; if the overlay did something else the node would be wrong, not… [MECHANISM: high]
+- [LINK: MECH-STRICTDOC-VERSION-SMOKE] -- It describes a gap in the current architecture (the installCheckPhase version assertion is gone because the seam extends by // not overrideAttrs); if something asserted the version tomorrow the node would be… [MECHANISM: high]
+- [LINK: MECH-TESTS-AS-CONTRACT] -- Genuinely mixed; the right action is a SPLIT, not a retype, and the verdict here only says which half keeps the UID until then. mixed_with (rule half, would become an INV-/REQ- node): (1) 'Once a flow's… [MECHANISM: low]
+- [LINK: MECH-TEXTX-ASGN-ATTR-NAME] -- The title claims how textx's peg assignment node always behaves (carries _attr_name; pair by name, not position); if textx changed the node would be wrong, not violated; but it opens 'Measured on textx as… [MECHANISM: medium]
+- [LINK: MECH-TREE-SITTER-CHOICE-OPTION-CANNOT-LEX-A-DOT] -- The title describes how the patched grammar always behaves (the unquoted arm is + so a dot never parses) and the cause is how tree-sitter always lexes (longest match in error recovery); if the grammar were… [MECHANISM: medium]
+- [LINK: MECH-TREEFMT-SDOC] -- If strictdoc format started writing .sgra tomorrow or treefmt stopped deciding by mtime, this node would be WRONG and its wrapper design would need revising, not the world corrected, so it is a design of a… [MECHANISM: medium]
+- [LINK: MECH-UPSTREAM-GRAMMAR-CASES] -- If upstream shipped .sgra fixtures on disk tomorrow the node would be WRONG (its premise for hand-conversion would fail) rather than violated, so it is descriptive; it is universal in that it describes an… [MECHANISM: medium]
+- [LINK: MECH-VIEW-CHECK] -- If view-check.py stopped reporting a Contains cycle tomorrow, this node would be WRONG about what the script does while the rule itself would still stand in DEC-NARRATIVE-IS-THE-VIEW-NODE, and… [MECHANISM: medium]
+- [LINK: MECH-VIEW-RENDERER] -- If render.py accepted a foreign schema or drew a card differently tomorrow, the node would be WRONG about the tool and the tool would be fixed to match the design, not the world corrected against a norm, so it… [MECHANISM: high]
+- [LINK: MECH-VIEW-TASK] -- If the task tomorrow left the page somewhere other than output/view/ the node would be WRONG and the task corrected to the design, and if someone hand-edited the published page the violated node would be… [MECHANISM: high]
+- [LINK: MECH-VIEW-WIRELINE] -- If wireline.py tomorrow omitted the backlinks table or keyed its cache differently, the node would be WRONG about the script and the script brought back to the design, not a norm enforced against the world, so… [MECHANISM: high]
+<<<
+PARENT_FP: >>>
+MECH-AGENT-IDENTITY-KEYS:0000000
+MECH-AGENTS-INFER-OVERLAY-CONVENTION-FROM-EXAMPLES:0000000
+MECH-ASTGREP-OVER-SDOC:0000000
+MECH-AUTHORED-BY-GUARD:0000000
+MECH-BACKLOG-STRICTDOC-TOOLING:0000000
+MECH-BEHAVIOUR-MODEL-VERSIONING:0000000
+MECH-CHECK-SYSTEM-BOUNDARY:0000000
+MECH-CHOICE-ENCODER-PAIR-SPLIT:0000000
+MECH-CHUNK-LEADING-WHITESPACE:0000000
+MECH-CONTRACT-FIELDS-EDGE-TO-SEMANTIC-LAYER:0000000
+MECH-CORPUS-CHECK-COUNTS-ERROR-NODES-NOT-SPAN:0000000
+MECH-CORPUS-EDGE-MAP:0000000
+MECH-CORPUS-SHAPE-MAP:0000000
+MECH-CYCLE-CHECK:0000000
+MECH-DERIVE-CACHED-LAYERS:0000000
+MECH-DEVENV-MODULE-REBUILDS-EXTRACT:0000000
+MECH-DEVENV-TASK-SCRIPTS-FIXED-AT-EVAL:0000000
+MECH-DROPPED-SECTION-TOMBSTONES:0000000
+MECH-DSL-CANDIDATE-ADMISSION-RULES:0000000
+MECH-DSL-CANDIDATE-JIRA-TRANSITIONS:0000000
+MECH-DSL-CANDIDATE-XSTATE-MACHINES:0000000
+MECH-DSL-CHECKS-NOTHING-BY-ITSELF:0000000
+MECH-DSL-CONDITION-LANGUAGE:0000000
+MECH-DSL-NAMED-CONSTRUCTORS-DO-NOT-SPAN:0000000
+MECH-DSL-SHAPE-DIVERGES-FROM-SURFACE:0000000
+MECH-DUPLICATE-ELEMENT-TAG-SILENT:0000000
+MECH-EMIT-LAYER-BOUNDARY:0000000
+MECH-ENFORCED-DENIAL-IS-A-PREFIX:0000000
+MECH-EXPORT-FRAMES-VALIDATION-AS-PARSE-ERROR:0000000
+MECH-EXTRACT-WRAPPER-NO-FORMATTER:0000000
+MECH-FAIL-CLOSED-ARM-HAS-NO-GATE:0000000
+MECH-FILE-RELATION-EXISTENCE:0000000
+MECH-FLOW-TEST-GIT-CHECKPOINTS:0000000
+MECH-FORMAT-NIX-DOWNGRADES-A-MISSING-FORMATTER:0000000
+MECH-FP-CHECK:0000000
+MECH-FP-ENTRY-RETIREMENT:0000000
+MECH-FP-FIELD-TUNING:0000000
+MECH-FP-GIT-FLOW-HAZARDS:0000000
+MECH-FP-MAIN-LINEAGE:0000000
+MECH-FP-PREMERGE-GC:0000000
+MECH-GRAMMAR-ARBITRARY-GENERATOR:0000000
+MECH-GRAMMAR-CHECKS-ARE-IN-FLAKE-CHECK:0000000
+MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY:0000000
+MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE:0000000
+MECH-GRAMMAR-SGRA-NOT-GENERATED:0000000
+MECH-GRAMMAR-TEXT-ELEMENT-INJECTION:0000000
+MECH-GRID-MIGRATION-UNCOSTED:0000000
+MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE:0000000
+MECH-HOOK-MIDDLEWARE-INTERFACE:0000000
+MECH-IDEMPOTENT-WRITER-UNCHANGED-IS-NOT-PROOF:0000000
+MECH-JSON-EXPORT-DROPS-GRAMMAR-DETAIL:0000000
+MECH-LAYER-ZERO-GRAMMAR-ADOPTION:0000000
+MECH-LINE-ANCHORED-DENIAL-UNENFORCED:0000000
+MECH-LIST-SEPARATOR-SUPPRESSED:0000000
+MECH-MID-IS-PER-PARSE-RANDOM:0000000
+MECH-MULTILINE-FIELD-RULES:0000000
+MECH-MULTIPLECHOICE-QUOTING-ASYMMETRY:0000000
+MECH-NIX-REGEX-DIALECT-GAP:0000000
+MECH-PLAN-BEADS-SNAPSHOT:0000000
+MECH-PLAN-REFS-CHECK:0000000
+MECH-PRETOOLUSE-BLIND-TO-BASH:0000000
+MECH-PROSE-UID-REFS-CAN-BREAK-SILENTLY:0000000
+MECH-READINESS-PREDICATE-RECONCILE:0000000
+MECH-READINESS-REPORT-FRONTIER:0000000
+MECH-README-ROWS-FOLLOW-DESCRIPTIONS-NOT-PACKAGES:0000000
+MECH-READY-QUERY-GRAPH-REUSE:0000000
+MECH-READY-QUERY:0000000
+MECH-RELATION-TARGET-TYPE-LINT:0000000
+MECH-RENDER-CACHE:0000000
+MECH-REQIF-PIN-HAS-NO-SWEEP:0000000
+MECH-RESERVED-FIELD-DECLARATION-LIES:0000000
+MECH-RUNTIME-WRITE-GUARD:0000000
+MECH-SCRIBE-MOVE-BYPASSES-THE-MODEL:0000000
+MECH-SCRIBE-NEW-TOUCHES-DISK-UNDER-DRY-RUN:0000000
+MECH-SDOC-CACHE-DIR-FOR-WORKTREES:0000000
+MECH-SDOC-CI-CHECK:0000000
+MECH-SDOC-EDIT-VIA-MODEL:0000000
+MECH-SDOC-LAYOUT-CHECK:0000000
+MECH-SDOC-LEAN-FORMATS:0000000
+MECH-SEMANTICS-DEFINITION-BOUNDARY:0000000
+MECH-SEMBLE-EXTRA-GRAMMARS:0000000
+MECH-SEMBLE-PATH-MAPPINGS:0000000
+MECH-SGRA-ADMITS-NO-COMMENTS:0000000
+MECH-SGRA-SCANNED-PROJECT-WIDE:0000000
+MECH-SIGNATURE-REVOCATION:0000000
+MECH-SLICE-CANNOT-BE-SUPERSEDED:0000000
+MECH-SLICE-IS-WORK-NOT-A-USE-CASE:0000000
+MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION:0000000
+MECH-STOP-HOOK-LIST-IS-HARDCODED:0000000
+MECH-STRICTDOC-DEVENV-MODULE-NOT-PUBLISHED:0000000
+MECH-STRICTDOC-DEVENV-MODULE:0000000
+MECH-STRICTDOC-UPSTREAM-FLAKE:0000000
+MECH-STRICTDOC-VERSION-SMOKE:0000000
+MECH-TESTS-AS-CONTRACT:0000000
+MECH-TEXTX-ASGN-ATTR-NAME:0000000
+MECH-TREE-SITTER-CHOICE-OPTION-CANNOT-LEX-A-DOT:0000000
+MECH-TREEFMT-SDOC:0000000
+MECH-UPSTREAM-GRAMMAR-CASES:0000000
+MECH-VIEW-CHECK:0000000
+MECH-VIEW-RENDERER:0000000
+MECH-VIEW-TASK:0000000
+MECH-VIEW-WIRELINE:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-AGENT-IDENTITY-KEYS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-AGENTS-INFER-OVERLAY-CONVENTION-FROM-EXAMPLES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-ASTGREP-OVER-SDOC
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-AUTHORED-BY-GUARD
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-BEHAVIOUR-MODEL-VERSIONING
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-CHECK-SYSTEM-BOUNDARY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-CHOICE-ENCODER-PAIR-SPLIT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-CHUNK-LEADING-WHITESPACE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-CONTRACT-FIELDS-EDGE-TO-SEMANTIC-LAYER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-CORPUS-CHECK-COUNTS-ERROR-NODES-NOT-SPAN
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-CORPUS-EDGE-MAP
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-CORPUS-SHAPE-MAP
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-CYCLE-CHECK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-DERIVE-CACHED-LAYERS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-DEVENV-MODULE-REBUILDS-EXTRACT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-DEVENV-TASK-SCRIPTS-FIXED-AT-EVAL
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-DROPPED-SECTION-TOMBSTONES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-DSL-CANDIDATE-ADMISSION-RULES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-DSL-CANDIDATE-JIRA-TRANSITIONS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-DSL-CANDIDATE-XSTATE-MACHINES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-DSL-CHECKS-NOTHING-BY-ITSELF
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-DSL-CONDITION-LANGUAGE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-DSL-NAMED-CONSTRUCTORS-DO-NOT-SPAN
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-DSL-SHAPE-DIVERGES-FROM-SURFACE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-DUPLICATE-ELEMENT-TAG-SILENT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-EMIT-LAYER-BOUNDARY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-ENFORCED-DENIAL-IS-A-PREFIX
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-EXPORT-FRAMES-VALIDATION-AS-PARSE-ERROR
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-EXTRACT-WRAPPER-NO-FORMATTER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FAIL-CLOSED-ARM-HAS-NO-GATE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FILE-RELATION-EXISTENCE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FLOW-TEST-GIT-CHECKPOINTS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FORMAT-NIX-DOWNGRADES-A-MISSING-FORMATTER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FP-CHECK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FP-ENTRY-RETIREMENT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FP-FIELD-TUNING
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FP-GIT-FLOW-HAZARDS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FP-MAIN-LINEAGE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-FP-PREMERGE-GC
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-GRAMMAR-ARBITRARY-GENERATOR
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-GRAMMAR-CHECKS-ARE-IN-FLAKE-CHECK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-GRAMMAR-GATES-ARE-WRITTEN-TWICE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-GRAMMAR-SGRA-NOT-GENERATED
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-GRAMMAR-TEXT-ELEMENT-INJECTION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-GRID-MIGRATION-UNCOSTED
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-HOOK-MIDDLEWARE-INTERFACE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-IDEMPOTENT-WRITER-UNCHANGED-IS-NOT-PROOF
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-JSON-EXPORT-DROPS-GRAMMAR-DETAIL
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-LAYER-ZERO-GRAMMAR-ADOPTION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-LINE-ANCHORED-DENIAL-UNENFORCED
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-LIST-SEPARATOR-SUPPRESSED
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-MID-IS-PER-PARSE-RANDOM
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-MULTILINE-FIELD-RULES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-MULTIPLECHOICE-QUOTING-ASYMMETRY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-NIX-REGEX-DIALECT-GAP
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-PLAN-BEADS-SNAPSHOT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-PLAN-REFS-CHECK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-PRETOOLUSE-BLIND-TO-BASH
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-PROSE-UID-REFS-CAN-BREAK-SILENTLY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-READINESS-PREDICATE-RECONCILE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-READINESS-REPORT-FRONTIER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-README-ROWS-FOLLOW-DESCRIPTIONS-NOT-PACKAGES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-READY-QUERY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-READY-QUERY-GRAPH-REUSE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-RELATION-TARGET-TYPE-LINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-RENDER-CACHE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-REQIF-PIN-HAS-NO-SWEEP
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-RESERVED-FIELD-DECLARATION-LIES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-RUNTIME-WRITE-GUARD
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-MOVE-BYPASSES-THE-MODEL
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-NEW-TOUCHES-DISK-UNDER-DRY-RUN
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SDOC-CACHE-DIR-FOR-WORKTREES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SDOC-CI-CHECK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SDOC-EDIT-VIA-MODEL
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SDOC-LAYOUT-CHECK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SDOC-LEAN-FORMATS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SEMANTICS-DEFINITION-BOUNDARY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SEMBLE-EXTRA-GRAMMARS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SEMBLE-PATH-MAPPINGS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SGRA-ADMITS-NO-COMMENTS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SGRA-SCANNED-PROJECT-WIDE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SIGNATURE-REVOCATION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SLICE-CANNOT-BE-SUPERSEDED
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SLICE-IS-WORK-NOT-A-USE-CASE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-STOP-HOOK-LIST-IS-HARDCODED
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-STRICTDOC-DEVENV-MODULE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-STRICTDOC-DEVENV-MODULE-NOT-PUBLISHED
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-STRICTDOC-UPSTREAM-FLAKE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-STRICTDOC-VERSION-SMOKE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-TESTS-AS-CONTRACT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-TEXTX-ASGN-ATTR-NAME
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-TREE-SITTER-CHOICE-OPTION-CANNOT-LEX-A-DOT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-TREEFMT-SDOC
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-UPSTREAM-GRAMMAR-CASES
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-VIEW-CHECK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-VIEW-RENDERER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-VIEW-TASK
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-VIEW-WIRELINE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Cites

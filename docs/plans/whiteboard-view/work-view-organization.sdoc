@@ -1,0 +1,66 @@
+[DOCUMENT]
+TITLE: Rebuild the view so its organization comes from the canon and it reads like v1
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-VIEW-ORGANIZATION
+TITLE: Rebuild the view so its organization comes from the canon and it reads like v1
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+Land the grammar (PLACE, Over, the widget vocabulary), migrate the
+semantic-layer tree to declare its places and draw v1's Start, rebuild the
+wireline to schema whiteboard-view/2 over every root and every node, add
+the check rules the new fields need, rewrite the renderer around PLACE and
+the sixteen widgets with routes from whole UIDs and system switches, make
+the task render the whole canon with both wrappers and serve it, and hold
+the result against the 82-element inventory of v1 screen by screen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NARRATIVE-DECLARES-ITS-PLACE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-IS-A-TYPE-SET
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-VIEWS-ARE-REGENERABLE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-NARRATIVE-PLACE-AND-OVER
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-ROW-SOURCE-LINE
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-VIEW-QUERIES
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-VIEW-SERVE
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-VIEW-PLACE-MIGRATION
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-VIEW-WIRELINE
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-VIEW-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-VIEW-RENDERER
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-VIEW-TASK
+  ROLE: Crosses
+- TYPE: Child
+  VALUE: EV-PLACE-FIELD-FIXTURE
+  ROLE: Produces
+- TYPE: Child
+  VALUE: EV-COMPOSITE-NARRATIVE-COSTS
+  ROLE: Produces
+- TYPE: Child
+  VALUE: EV-VIEW-ORGANIZATION-FIRST-RENDER
+  ROLE: Produces

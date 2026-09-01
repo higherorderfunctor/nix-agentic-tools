@@ -1,0 +1,57 @@
+[DOCUMENT]
+TITLE: The one-node-per-file layout has no executable guard
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-LAYOUT-CHECK
+TITLE: The one-node-per-file layout has no executable guard
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A check over docs/**/*.sdoc and **/.sdoc/*.sdoc asserting three things per
+file: exactly one node tag, a basename equal to the node's UID lowercased plus
+.sdoc, and a document TITLE equal to the node's TITLE. Wired into flake.nix
+beside strictdoc-cycle-check and strictdoc-fp-check, so it runs in nix flake
+check.
+
+A fourth assertion belongs here too, once the layout half is working: the
+backlog pair. A node at DEPTH sketch must carry Backlogged_In to its own plan's
+register, and a node above sketch must not carry one. The two halves are the
+same check because they are the same failure -- somebody filing without
+attaching, or grooming without detaching -- and the DEPTH == sketch query is
+what makes it decidable without a second source of truth.
+
+None of the four is enforced by anything today. StrictDoc parses a multi-node
+document, a mismatched filename and a divergent document title without
+complaint, and it does not know what Backlogged_In means, so all of it holds
+only for as long as every session remembers it.
+<<<
+RATIONALE: >>>
+INV-GUARDS-MUST-EXECUTE is the reason this is a node rather than a paragraph in
+the skill. A layout rule that only prose enforces decays the first time a
+session writes a node the way it wrote them before the carve, and the failure is
+silent: the graph still exports, the edges still resolve, and only the context
+cost goes back up.
+
+Cheap to write because the carve already proved every predicate. The
+verification pass over all 161 files compared basename to UID and document TITLE
+to node TITLE and found zero exceptions, and the backlog wiring was verified as
+a set equality in both directions across all 81 sketch nodes. The check starts
+green, so its first red is a real regression rather than a backlog of existing
+violations.
+<<<
+NOTES: >>>
+Filed 2026-08-27 by the carve session. Not built in that session because adding
+a flake check is implementation work and the carve was a migration.
+
+The natural home is checks/strictdoc-layout-check.nix, alongside the eight
+existing strictdoc-* checks. Note that a runCommandLocal derivation sets
+allowSubstitutes = false and would re-execute on every flake check rather than
+being fetched from the cache.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

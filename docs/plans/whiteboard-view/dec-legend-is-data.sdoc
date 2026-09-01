@@ -1,0 +1,43 @@
+[DOCUMENT]
+TITLE: A view's verdict words, their colours and their meanings are rows in a legend narrative, never a grammar field and never renderer knowledge
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-LEGEND-IS-DATA
+TITLE: A view's verdict words, their colours and their meanings are rows in a legend narrative, never a grammar field and never renderer knowledge
+AUTHORED_BY: llm
+STATUS: superseded
+RETIRES_ON: Two views need to share one verdict vocabulary and repeating the legend proves to drift.
+STATEMENT: >>>
+The words a view's rows may carry in their trailing bracket -- WORKS, GAP,
+OPEN and the like -- are data. They live in one narrative whose WIDGET is
+legend, a child of the root, one row per word in the form
+"- WORD: colour: what the word means". The renderer reads the legend for
+colours and labels; a colour is a name from the renderer's own small
+vocabulary (green, slate, amber, blue, red, teal, violet, grey), each mapped
+to a token that passes the colour-vision validator in both themes. A
+bracket word that is not in the legend is a view-check finding.
+
+There is no VERDICT field in the grammar. A verdict is a snapshot's opinion
+about a line, not a node's state, and the vocabulary belongs to the view that
+uses it: a whiteboard over the semantic layer says WORKS and FALLS OUT, the
+rules index says STRICTDOC, SCRIPT and UNBUILT, and neither needs a grammar
+edit to say so.
+<<<
+RATIONALE: >>>
+A verdict field would have overlapped three rulings (the authorship ladder's
+"seen and let stand", the open decision as the question, supersession as
+liveness) and baked one project's words into the one grammar every project
+shares. Colour by position was the cheaper alternative and was rejected
+because the operator asked for the way data is shown to be feedable from
+sdoc.
+<<<
+NOTES: >>>
+Ruled 2026-08-30 as a first-pass decision under the operator's delegation of that day ("I'll trust you to take first pass at making decisions"); overrule by superseding. AUTHORED_BY reads llm because the writer has no flag for the human rungs.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LEGEND-IS-DATA-WHERE-PLACED
+  ROLE: Superseded_By

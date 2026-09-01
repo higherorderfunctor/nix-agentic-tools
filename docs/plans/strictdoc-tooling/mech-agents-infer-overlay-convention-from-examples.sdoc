@@ -1,0 +1,35 @@
+[DOCUMENT]
+TITLE: Agents keep putting wrapping in overlays because the examples do
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-AGENTS-INFER-OVERLAY-CONVENTION-FROM-EXAMPLES
+TITLE: Agents keep putting wrapping in overlays because the examples do
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A behavioural defect rather than a code one. The convention is that an overlay
+converts and a module wraps, and agents have repeatedly done the opposite --
+most recently the strictdoc grammar extractor, which shipped a wrapped
+environment in the overlay.
+
+The cause is not a missing rule; it is that the nearest example teaches the
+opposite. An agent looking for the pattern finds overlays/kiro-cli.nix doing its
+wrapping in the overlay and copies it. A written instruction loses to a working
+example every time.
+
+Fix in the same pass as MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES -- once the
+examples agree with the convention, the inference stops being wrong. State it in
+the overlay fragment as well, but do not expect the prose alone to hold.
+<<<
+RATIONALE: >>>
+Recorded because the operator noticed it as a pattern across sessions rather
+than as one agent's mistake, and because the remedy is to change what the tree
+teaches rather than to write the rule down more firmly.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

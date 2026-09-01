@@ -1,0 +1,44 @@
+[DOCUMENT]
+TITLE: An enforced denial rejects every word starting with it, and only the exact word was measured
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-ENFORCED-DENIAL-IS-A-PREFIX
+TITLE: An enforced denial rejects every word starting with it, and only the exact word was measured
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+patternType's addCheck branch rejects a value whose PREFIX is a denied word --
+`builtins.match "(${d}).*"` -- so enforcing RELATIONS also rejects a field
+titled RELATIONSHIP or RELATIONS_2.
+
+That is the faithful transcription. `(?!^RELATIONS)` denies a prefix too: the
+caret constrains where the lookahead applies, not how much of the input it
+covers, so upstream rejects exactly the same set at a line start. RequirementType
+already relies on the same reading, which is why DOCUMENT_FROM_FILE is reserved
+along with DOCUMENT.
+
+What was MEASURED is narrower than what is enforced. The defect behind the
+enforcement was measured on the exact word RELATIONS: a grammar declaring that
+field exports clean and its documents then fail to parse. Nobody has run the
+same experiment on RELATIONSHIP, so it is possible -- not likely, but untested
+-- that the document grammar recovers on a longer word and the type is stricter
+than the parser.
+
+Fix shape: render a grammar declaring a RELATIONSHIP field, export it, and read
+a document that uses it. If it parses, the two denial kinds want different
+enforcement -- a prefix test for the reserved-keyword kind and an equality test
+for this one -- and patternType needs the second branch.
+<<<
+RATIONALE: >>>
+Noticed while wiring the enforcement: `deny` was reused because patternType
+already carried the branch, and reuse imported prefix semantics along with it.
+That is the right default, but it widens a rejection past the measurement that
+justified it, and the widening is invisible in the generated file.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

@@ -1,0 +1,19 @@
+[DOCUMENT]
+TITLE: How to read the verdicts
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-MECHANISM-MOOD-REVIEW-LEGEND
+TITLE: How to read the verdicts
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: legend
+PLACE: card
+STATEMENT: >>>
+- REQUIREMENT: green: retyped to a requirement; it can be violated: Confidence
+- EVIDENCE: teal: retyped to evidence; it records what was observed once: Confidence
+- HELD: amber: low confidence; the operator rules, and a split is the likely answer: Proposed retype
+- MECHANISM: slate: stayed a mechanism; how something always behaves: Confidence
+<<<

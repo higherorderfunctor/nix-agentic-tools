@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: Render the view system's own design through its own pipeline
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-VIEW-SELF-HOSTED
+TITLE: Render the view system's own design through its own pipeline
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+Give the view system's own root its tabs -- a legend, the data model, the programs, the rules inventory, the paths and the edges -- and render it through the same task as the whiteboard, so the plan reads in the page shape it defines. Done 2026-08-30.
+<<<
+PARENT_FP: >>>
+DEC-VIEWS-ARE-REGENERABLE:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-VIEWS-ARE-REGENERABLE
+  ROLE: Governed_By
+- TYPE: Child
+  VALUE: EV-VIEW-SELF-HOST-RENDER
+  ROLE: Produces

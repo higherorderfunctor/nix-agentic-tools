@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: Every PARENT_FP entry should have a matching relation
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: MECH-FP-RELATION-LINT
+TITLE: Every PARENT_FP entry should have a matching relation
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+A node recording a fingerprint for a parent asserts a dependency on that
+parent's contract, so it should also carry an edge to it. Nothing enforces
+that today, and several nodes in this graph already have a fingerprint with no
+corresponding relation.
+<<<
+RATIONALE: >>>
+Without the lint the two can disagree silently, and the edge is what the
+traversal follows. A fingerprint the traversal cannot reach is invisible to both
+the drift check and the render cache.
+<<<
+NOTES: >>>
+Realized as fp-check's "unbacked" case (dev/scripts/fp-check.py) rather than
+a separate binary -- the check already walks every PARENT_FP entry against
+the node's RELATIONS, so a second pass over the same data would just be the
+first one run twice. Its first real run over this repo's own graph found 5
+pre-existing violations; see SLICE-FP-DETECTOR's NOTES.
+
+Retyped from MECHANISM to REQUIREMENT on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with high confidence after a second opinion: it can be violated: a counterexample would be fixed in the world, not in this node. Noted for a later split: STATEMENT 'Nothing enforces that today, and several nodes in this graph already have a fingerprint with no corresponding relation' is a stale dated observation (evidence, now contradicted by the NOTES' realization); NOTES 'Its first real run over this repo's own graph found 5 pre-existing violations' is a count (evidence); NOTES 'Realized as fp-check's unbacked case rather than a separate binary' is the mechanism that enforces it. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
+<<<

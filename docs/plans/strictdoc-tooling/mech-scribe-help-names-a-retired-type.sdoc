@@ -1,0 +1,21 @@
+[DOCUMENT]
+TITLE: The scribe command's help still argues from a retired node type
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-HELP-NAMES-A-RETIRED-TYPE
+TITLE: The scribe command's help still argues from a retired node type
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The scribe command's own help epilogue still argues from INVARIANT, a node type
+retired by the 2026-08-30 migration, and its sentence about which types carry
+DEPTH has been garbled by successive edits. The text is generated prose around
+a grammar-derived surface, so it drifted without any check noticing.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

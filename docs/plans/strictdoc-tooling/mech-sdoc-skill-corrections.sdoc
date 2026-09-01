@@ -1,0 +1,56 @@
+[DOCUMENT]
+TITLE: Correct the sdoc skill and README where they are now false
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: MECH-SDOC-SKILL-CORRECTIONS
+TITLE: Correct the sdoc skill and README where they are now false
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+Correct the sdoc skill and the design-graph README where they are now false.
+
+DONE 2026-08-27 in commit e8aa43b0, with a follow-up correcting the correction.
+What landed: docs/sdoc/grammar.sgra marked GENERATED from values.nix and gated
+by a required check; docs/spec added to the Layout table; the governance-field
+count fixed from three to four; the STATUS enum recorded as polymorphic; the
+auto-uid rule INVERTED to say UIDs are hand-chosen and semantic, per the
+operator's ruling the same day; the File-relation ROLE claim demoted from parser
+rule to house convention, measured; format's missing --output-dir and its
+inability to write a .sgra recorded; the cache literal corrected to Output/_cache
+with STRICTDOC_CACHE_DIR noted as overriding rather than inert; and the "what
+does not exist yet" paragraph rewritten, since suspect-link detection, the
+readiness query and a derived view all shipped.
+
+What did NOT land, and why. The manage-new rule was corrected twice: the first
+attempt asserted that the command cannot work here, which an independent review
+measured false, and the reason this node had already recorded -- prefix-plus-
+counter UIDs and TBD-filled fields -- was the correct one all along. The rule
+now says the command works and should still not be used, for that reason.
+<<<
+RATIONALE: >>>
+A skill that is loaded by every session and is wrong is worse than no skill: its
+statements read as verified. Two of its claims would have sent an agent to
+hand-edit a generated file and to run a UID minter whose output this corpus
+immediately renames.
+<<<
+NOTES: >>>
+Raised to implemented rather than verified: the session that corrected the skill
+is the session that wrote this, and verified requires an independent read.
+
+An independent review of that work found one blocker in it -- see the manage-new
+paragraph above -- which is itself the argument for the implemented/verified
+split existing at all.
+
+Deliberately still open, and NOT part of this node: the skill says nothing about
+the sys.path line strictdoc_config.py needs, because SLICE-CHECKPOINT-WIRING
+measured that fixed upstream at 0.28.3.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with high confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: No rule sentence. The node is WORK-shaped (a completed slice) and this record is the evidence it left behind; its Guarantees edge to INV-GUARDS-MUST-EXECUTE is odd for evidence. A reader could sort "what the skill now says" as a description of the skill's current content and call it MECHANISM. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: INV-GUARDS-MUST-EXECUTE
+  ROLE: Guarantees

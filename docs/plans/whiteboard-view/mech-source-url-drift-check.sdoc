@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: An evidence node whose SOURCE is a URL goes dirty when the page behind it changes
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SOURCE-URL-DRIFT-CHECK
+TITLE: An evidence node whose SOURCE is a URL goes dirty when the page behind it changes
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+An EVIDENCE node may name an external source -- a vendor's documentation
+page, a paper, a changelog -- in SOURCE. Nothing today notices when that
+page changes. The mechanism: a check fetches each URL-shaped SOURCE, hashes
+the fetched body (normalised enough to ignore trivial churn), records the
+hash beside the entry, and reports the node as drifted when the hash moves,
+the way the fingerprint check reports a child whose parent's contract moved.
+Whether the hash lives in the node, in a sidecar, or in the export cache is
+the design question; so is what counts as trivial churn and whether the
+fetch runs in nix flake check at all (it cannot, offline) or only in a
+devenv task.
+<<<
+RATIONALE: >>>
+The operator's suggestion of 2026-08-30: a URL reference that can go dirty is not a bad idea as a special case, because upstream documentation changes underneath a citation.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-WHITEBOARD-VIEW
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Governed_By

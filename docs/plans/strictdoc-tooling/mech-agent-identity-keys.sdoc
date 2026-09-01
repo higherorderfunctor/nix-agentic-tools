@@ -1,0 +1,70 @@
+[DOCUMENT]
+TITLE: Give agents their own signing identity
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-AGENT-IDENTITY-KEYS
+TITLE: Give agents their own signing identity
+DEPTH: interface-settled
+AUTHORED_BY: human
+STATEMENT: >>>
+An acting identity is a commit-message trailer written by a hook from the environment. It is not a key, not the git author or committer, and not a field on any node.
+
+The trailer names three things the session already knows. Measured in an agent process on 2026-08-27: AI_AGENT=claude-code_2-1-241_agent gives the harness, its version and the role; CLAUDE_CODE_SESSION_ID gives the run; CLAUDE_CODE_CHILD_SESSION=1 marks a subagent, which is the kind of actor that signed the five contracts reverted in 9958f190. A commit-msg-stage hook reads them and appends an Acted-By trailer carrying class, harness and run, so the model never writes it and cannot forget it. commit-msg rather than prepare-commit-msg, because the latter's output is still editable before the commit is made. This repository already installs a prek-managed commit-msg hook for convco, so the wiring point exists.
+
+Absence is a third state. A commit with no trailer is unattributed, not the operator's. The operator's own commits are stamped by the same hook from an environment carrying no agent marker, and that inference is only as strong as whatever launches the session. The prek hooks are local-only and bypassable with --no-verify, so the stamp is evidence, not proof.
+
+A verifier reads git, not the graph: blame the PARENT_FP line in porcelain mode to get the commit, then read that commit's trailer. PARENT_FP entries are UID:hash and carry no signer, and putting one there would store a per-event fact in a per-node field.
+
+No new sdoc field, and AUTHORED_BY is unchanged. AUTHORED_BY is the class of a node's statement author; this is the identity of a single act. A rule keyed on grade reads the first, an audit of who turned a key reads the second. This is also what makes MECH-AUTHORED-BY-GUARD enforceable at a checkpoint rather than only inside the acting session.
+
+Scope is the branch: attribution durable across a branch's own history, which is where the review that catches a bad signature happens. Out of scope, deliberately -- cryptographic signing and key issuance; any rule about who may sign what, which is DEC-FP-ACCEPT-AUTHORITY's; and whether attribution must survive the squash to main.
+<<<
+RATIONALE: >>>
+Per-agent SSH keys were the original shape and buy nothing available here. Nothing on this branch is signed -- 71 of 71 commits report %G? = N -- and the operator's git config declares no gpg.format, no user.signingkey and no commit.gpgsign, so this would be commit signing established from zero. It would not be unforgeable at the end of it: the agent process runs as UNIX user caubut, which owns ~/.ssh/id_ed25519 at mode 0600, so a key the agent can use is a key the agent can substitute. Cryptographic separation needs the operator's key held where the agent cannot reach it, and one machine under one user does not offer that.
+
+The threat is confusion, not forgery. The five signatures were written by an agent that misread its authority, not one that lied about who it was. Attribution answers confusion; only a real principal boundary answers forgery, and there is none to be had here.
+
+The trailer is written by a hook because the convention version has already failed at exactly this. The harness asks the model to add Co-Authored-By, nothing in this repository asks for or checks it, and 41 of the branch's 71 commits carry it while 30 do not -- the 30 including 9958f190 and the rest of the fingerprint incident. A carrier the model writes measured 58% on a branch that is almost entirely model-written.
+<<<
+NOTES: >>>
+Probably belongs to the beads work rather than here, and is likely to get lost there. Tracked in this plan so it survives, not because this is its home.
+
+Measured 2026-08-27 on feat/strictdoc-trial from its fork point ec980d15, 71 commits.
+
+Author and committer are the operator on 71 of 71, so the committer field carries no information today and is available. It is not durable: 41 of 71 commits already have committer-time != author-time, meaning they were re-created and their committer replaced by whoever rebased. Controlled test in a scratch repo -- a commit with committer "claude-code agent" plus an Acted-By trailer keeps both through a fast-forward rebase; git rebase --root --force-rebase resets the committer to the rebaser and leaves the trailer intact. That is why the trailer is the carrier and the committer is not.
+
+Same test, squashed: both gone, and blame on the agent-written line resolves to the operator's single squash commit. Per-line attribution does not survive a squash by construction, whatever the message says, and this repository squash-merges only. MECH-FP-GIT-FLOW-HAZARDS says "Squash is SAFE", which holds for the content hash and is false for attribution.
+
+Positive control for the reader: the same trailer query returned the value on the rebased commit and empty on the squashed one, so an empty result is a real absence rather than a broken query.
+
+Verifier walk-through on the incident line itself -- git blame 9958f190 --porcelain -L85,85 -- docs/plans/strictdoc-tooling/01-tooling.sdoc gives 9958f190, whose author-mail and committer-mail are both the operator's. The mechanism works and returns the operator for an agent action, which is the defect. git blame prints the author by default; committer appears only under --porcelain, so any check must ask for it.
+
+That path is HISTORICAL and the revision is load-bearing: the one-node-per-file carve deleted 01-tooling.sdoc, so the walk-through only runs pinned at 9958f190. The line is now mech-fp-check.sdoc:21, but blaming it there returns the carve commit 74c6f635 rather than the incident commit, because the carve is a copy that neither plain blame nor -C -C traverses. Re-anchoring is therefore not available; pin the revision instead.
+
+AI_AGENT is not defined anywhere in this repository -- it comes from the operator's environment. The hook can read it and cannot guarantee it.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Who may sign what, and whether an acting identity grants or withholds authority. This mechanism makes the actor legible and nothing more; DEC-FP-ACCEPT-AUTHORITY is open and unaffected.
+
+- Whether attribution must survive the squash to main, and what carrier could do it. Measured that neither committer nor trailer survives, so the answer is a statement about what the record is for -- and it meets MECH-FP-PREMERGE-GC and MECH-FP-GIT-FLOW-HAZARDS.
+
+- The vocabulary of the actor class. The trailer carries whatever the environment names; whether that vocabulary is AUTHORED_BY's llm/human, a finer grading, or something else is a semantics call, not plumbing.
+
+- Whether an unattributed commit should be refused rather than recorded. The plumbing only distinguishes the three states; turning 'unattributed' into a gate is a rule.
+
+- Whether the operator's own commits should be positively stamped at all, given the stamp is inferred from an absent agent marker rather than asserted.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
+<<<

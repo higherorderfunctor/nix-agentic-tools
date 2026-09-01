@@ -1,0 +1,35 @@
+[DOCUMENT]
+TITLE: Decide what belongs in flake checks versus devenv tasks
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-CHECK-SYSTEM-BOUNDARY
+TITLE: Decide what belongs in flake checks versus devenv tasks
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Repo-wide, and a tangent from milestone one rather than part of it. Two check
+systems exist -- the flake's checks output and devenv tasks -- and there is no
+stated rule for which gets what. The grammar milestone ended up writing five of
+its six acceptance arms in both.
+
+A position to argue with rather than a conclusion: the flake output is the gate,
+because it is what CI builds and what a consumer can run; devenv tasks are for
+things a person triggers while working, and should defer to the flake check
+rather than restate it. On that reading the duplication is simply wrong and the
+devenv side should shell out, which one arm already does.
+
+Interacts with the standing intention to move checks into packages/<package>
+rather than leaving them in one large evaluation test.
+<<<
+RATIONALE: >>>
+The operator did not know the repository had two check systems until this
+milestone produced duplicate gates in both, which is itself the argument for
+writing the boundary down.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

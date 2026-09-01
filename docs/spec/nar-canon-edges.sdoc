@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: Edges
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-CANON-EDGES
+TITLE: Edges
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: edges
+PLACE: tab
+TAGS: nodes, edges
+STATEMENT: >>>
+Which kinds of node point at which over the whole canon, with the live count on each arrow, drawn over the systems switched on. An arrow runs from the node that depends to the node depended on, which is the direction a Parent relation is written; a Child role -- Contains, Produces -- runs from the owner down and is never a dependency. The parser checks only that a role is registered on the source type and that the target exists; direction, target type and cycles are this repository's own rules.
+<<<
+PARENT_FP: NAR-TERM-CANON:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites

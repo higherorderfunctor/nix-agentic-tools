@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: First render of the semantic-layer root through the view pipeline
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-VIEW-PIPELINE-FIRST-RENDER
+TITLE: First render of the semantic-layer root through the view pipeline
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: devenv tasks run --mode before view:render --input root=NAR-SEMANTIC-LAYER; docs/sdoc/view/
+STATEMENT: >>>
+The first render of the semantic-layer root through the built pipeline, measured on 2026-08-30 at canon commit 79af09dd with the view code and the narratives still uncommitted in the working tree.
+
+The task: devenv tasks run --mode before view:render --input root=NAR-SEMANTIC-LAYER exited 0 in 19.8 s wall on a cold devenv evaluation and 1.6 s warm; the export, the check, the wireline and the render together take under two seconds of that.
+
+The payload for [LINK: NAR-SEMANTIC-LAYER]: 40 narratives in the tree (22 prose, 14 rows, 1 legend, 1 tally, 1 glossary, 1 edges), 295 rows, 28 glossary terms, 253 Cites of which 251 carry a placeholder fingerprint and 2 are undeclared, 105 node cards, 659 backlinks, 18 live relation pairs. Row words: WORKS 90, GAP 90, UNADDRESSED 40, OPEN 36, FALLS OUT 34. Of the 70 row brackets that name a "by", 60 link a UID.
+
+The check: 6 findings, none of them the view code's. Three cited-node-superseded, where [LINK: NAR-SEMANTIC-LAYER-ALLOWED-EDGES], [LINK: NAR-SEMANTIC-LAYER-GAP-GRAMMAR-CANNOT-SPELL-THE-VOCABULARY] and [LINK: MECH-SEMANTIC-LAYER-WHITEBOARD] cite the superseded [LINK: DEC-NODE-TYPE-GRID], as the sheet did on its day; three nothing-depends-on-a-narrative, where [LINK: MECH-RENDER-GENERATOR-OUTSIDE-REPO] by Assumes and [LINK: SLICE-SEMANTIC-LAYER-RENDER] and [LINK: SLICE-WORKFLOW-DSL] by Crosses still point at the sheet since its retype to NARRATIVE. One note: [LINK: NAR-WHITEBOARD-VIEW] is a root of its own. All six are facts of the strictdoc-tooling plan, listed on the page's start screen and left to that plan.
+
+The page: output/view/nar-semantic-layer.html, about 630 KB, self-contained. Screenshots at 390 px, viewed: /tmp/claude-1000/-home-caubut-Documents-projects-nix-agentic-tools/3dc654a0-2cd2-4447-a890-5bfe23555a4b/scratchpad/wf2/shots-final/sl-start.png, sl-topics.png, sl-types.png, sl-edges.png, sl-node.png, sl-row17.png, and sl-edges-1100.png at 1100 px. Three renderer defects were found by looking and fixed in the same pass: inline links spliced a node's whole title into the sentence, a node's fields were drawn pre-wrapped so hard-wrapped source lines shredded at 390 px, and a hand-laid figure inside a field widened every field beside it.
+<<<

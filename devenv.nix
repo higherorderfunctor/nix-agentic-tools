@@ -150,6 +150,29 @@
       echo "ai.shell test vector passed"
     '';
   };
+
+  # Interpreter for packages/strictdoc-grammar/extract/ (SLICE-GRAMMAR-FROM-NIX).
+  # A plain `python3` plus `ast_grep_py`, which the normalizer uses to match and
+  # capture over the faithful surface's Nix source in process — ast-grep is
+  # tree-sitter based and ships a Nix grammar, so nothing else is needed.
+  #
+  # A SUPERSET of the bare `python3` this list used to carry, so the operator-run
+  # `fixtures/kiro-primitives` suites still resolve their interpreter. Kept as one
+  # entry rather than two so a single `python3` is on PATH and it is never
+  # ambiguous which one a script got.
+  #
+  # It deliberately does NOT carry strictdoc's own modules. That is what
+  # `ai.strictdoc.enable` installs — packages/strictdoc-grammar/lib/mkExtract.nix
+  # wraps upstream's OWN venv interpreter, because `python3Packages.strictdoc`
+  # does not exist and `withPackages` cannot reach the grammar builder.
+  grammarPython = pkgs.python3.withPackages (ps: [ps.ast-grep-py]);
+
+  # The typed `.sgra` surface, imported here for ONE reason: its consumer DSL.
+  # `ai.strictdoc.grammars.<name>.elements` is declared with the NORMALIZED
+  # type, and packages/strictdoc-grammar/values.nix is written against the sugar
+  # over it — so the DSL has to be handed in from the call site. Everything else
+  # about the surface is the module's business, not this file's.
+  sdocGrammar = import ./packages/strictdoc-grammar/lib {inherit lib;};
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
@@ -158,6 +181,12 @@ in {
     ./packages/copilot-cli/modules/devenv
     ./packages/kiro-cli/modules/devenv
     ./packages/semble/modules/devenv
+    # `ai.strictdoc` (MECH-STRICTDOC-DEVENV-MODULE). Imported by PATH rather
+    # than reached through `flake.devenvModules`: the package barrel
+    # deliberately does not publish this facet, because checks/options-doc.nix
+    # diffs the published devenv option tree against the home-manager one
+    # option for option, and this module has no home-manager half by ruling.
+    ./packages/strictdoc-grammar/modules/devenv
     # NOTE: the stacked-workflows devenv module is NOT imported here. Enabling
     # it would fan its skills into `ai.skills` UNPREFIXED (stack-*), which, once
     # installed user-global via nixos-config, would silently shadow the
@@ -201,8 +230,24 @@ in {
     # the packages it explains rather than being read as an LSP concern.
     ++ lib.optionals (!isCI) [
       jq
-      python3
+      grammarPython
     ]
+    # strictdoc CLI for the sdoc skill's required format/export loop and for
+    # dev/scripts/fp-check.py, fp-accept.py (SLICE-FP-DETECTOR) and
+    # cycle-check.py (MECH-CYCLE-CHECK). Interactive only --
+    # checks/strictdoc-fp-check.nix and checks/strictdoc-cycle-check.nix pull
+    # it via nativeBuildInputs, not devShell PATH. (checks/
+    # strictdoc-grammar-corpus.nix, named here until 2026-08-25, needs no
+    # strictdoc at all: it exercises the patched tree-sitter grammar against a
+    # pinned fetch of strictdoc's own .sdoc docs.)
+    #
+    # strictdoc itself and the grammar-surface runner are NOT listed here. They
+    # come from `ai.strictdoc.enable` below, which is the module that owns the
+    # wrap. `pkgs.ast-grep` stays: it is the matcher CLI, for writing and
+    # testing rules by hand before the normalizer embeds them, and it is not
+    # part of the extractor's environment (that one carries ast_grep_py, the
+    # library).
+    ++ lib.optionals (!isCI) [pkgs.ast-grep]
     # LSP servers (in PATH for ENABLE_LSP_TOOL and MCP bridging) —
     # interactive-only, dropped from the diagnostic closure (~1GB: nixd pulls
     # llvm, marksman pulls dotnet). See the isCI note above.
@@ -251,13 +296,16 @@ in {
       programs.semble = {
         enable = !isCI;
         # Use this flake's pinned nixpkgs grammars directly; the Cachix nixpkgs
-        # follow already supplies their store paths. If a future grammar needs a
-        # custom derivation, also expose that grammar alone in flake packages so
-        # the authenticated package sweep publishes it. Do not expose the
-        # grammar-patched Semble derivation.
+        # follow already supplies their store paths. tree-sitter-strictdoc is
+        # the one custom derivation this covers today — absent from nixpkgs,
+        # so it is exposed alone in flake packages
+        # (pkgs.ai.generic.tree-sitter-strictdoc) so the authenticated package
+        # sweep publishes it. Do not expose the grammar-patched Semble
+        # derivation.
         grammars = with pkgs.tree-sitter-grammars; [
           tree-sitter-awk
           tree-sitter-jq
+          pkgs.ai.generic.tree-sitter-strictdoc
         ];
         mcp.pathMappings = [
           {
@@ -290,6 +338,11 @@ in {
             content = "docs";
             language = "markdown";
             patterns = ["*.md.fixture"];
+          }
+          {
+            content = "docs";
+            language = "strictdoc";
+            patterns = ["*.sdoc" "*.sgra"];
           }
         ];
         # AGENTS.md already carries the repository's Semble search workflow from
@@ -392,7 +445,70 @@ in {
         # an edit would otherwise be served from a stale eval cache).
         index-repo-docs = traceSource.tracedPath ./dev/skills/index-repo-docs;
         repo-review = traceSource.tracedPath ./dev/skills/repo-review;
+        sdoc = traceSource.tracedPath ./dev/skills/sdoc;
       };
+
+    # strictdoc plus the grammar-surface runner
+    # (packages/strictdoc-grammar/modules/devenv). Interactive only, on the
+    # same reasoning as the LSP servers above: the sdoc skill's format/export
+    # loop and milestone one's generation are both locally invoked, and CI
+    # reaches strictdoc through nativeBuildInputs on the checks rather than
+    # through this shell's PATH.
+    #
+    # `package` is left at its default, which is deliberate rather than
+    # incidental: the two generated layers of the option surface are extracted
+    # from ONE strictdoc release's own grammar string, so overriding it
+    # type-checks values against a grammar nothing runs.
+    strictdoc = {
+      enable = !isCI;
+
+      # docs/sdoc/grammar.sgra is GENERATED, by the operator's 2026-08-27
+      # ruling on MECH-GRAMMAR-SGRA-NOT-GENERATED: every `.sgra` in this
+      # repository comes through this module. Do not hand-edit the file —
+      # `nix flake check`'s strictdoc-grammar-model-equal diffs it against
+      # what values.nix renders, and it is the render that wins.
+      #
+      # Write it with: devenv tasks run generate:sgra
+      #
+      # Declared unconditionally, which costs nothing in CI: the module reads
+      # `grammars` only from inside its `mkIf cfg.enable`, so with `enable`
+      # false nothing forces `rendered` and no grammar is rendered during a
+      # `devenv test`. The flake check renders its own copy from the flake's
+      # `self` regardless.
+      grammars.repo = {
+        target = "docs/sdoc/grammar.sgra";
+        elements = import ./packages/strictdoc-grammar/values.nix {
+          inherit (sdocGrammar) dsl;
+        };
+      };
+
+      # ── PROPOSAL, NOT WIRED ────────────────────────────────────────────
+      #
+      # A layer-0 two-grammar split under consideration: `plan` for disposable
+      # work decomposition, `spec` for the durable knowledge a finished plan
+      # dissolves into. Written out in full at
+      # packages/strictdoc-grammar/values/{plan,spec}.nix, whose headers carry
+      # the reasoning.
+      #
+      # Left commented deliberately. Uncommenting renders two more `.sgra`
+      # files into docs/sdoc/ on the next `generate:sgra`, and neither has a
+      # corpus, an alias registered in StrictDoc's project config, or a check
+      # that reads it. Enabling it is a decision, not a formality.
+      #
+      # grammars.plan = {
+      #   target = "docs/sdoc/plan.sgra";
+      #   elements = import ./packages/strictdoc-grammar/values/plan.nix {
+      #     inherit (sdocGrammar) dsl;
+      #   };
+      # };
+      #
+      # grammars.spec = {
+      #   target = "docs/sdoc/spec.sgra";
+      #   elements = import ./packages/strictdoc-grammar/values/spec.nix {
+      #     inherit (sdocGrammar) dsl;
+      #   };
+      # };
+    };
   };
 
   # ── treefmt ────────────────────────────────────────────────────────────
@@ -600,7 +716,7 @@ in {
 
   # ── Tasks ─────────────────────────────────────────────────────────────
   tasks = let
-    checkTasks = (import ./dev/tasks/check.nix {}).tasks;
+    checkTasks = (import ./dev/tasks/check.nix {inherit pkgs;}).tasks;
     generateTasks = (import ./dev/tasks/generate.nix {inherit lib pkgs instr;}).tasks;
   in
     checkTasks

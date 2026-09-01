@@ -1,0 +1,34 @@
+[DOCUMENT]
+TITLE: Settled architecture lives in a .sdoc directory beside the code
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-ARCH-COLOCATION
+TITLE: Settled architecture lives in a .sdoc directory beside the code
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: >>>
+A source-comment extractor exists, at which point these nodes either move into
+the source files they describe or stay put and the extractor feeds them.
+<<<
+STATEMENT: >>>
+Architecture nodes that describe a specific package live in a .sdoc directory
+next to that package, not under docs/plans. Each node names the source file it
+describes with a File relation. Line anchors are recorded in prose until an
+extractor can carry them.
+
+The competing option, deferred: keep every node under docs/ and rely on general
+source extractors to associate them with code. That option needs the extractor
+to exist first, so it cannot be chosen today.
+<<<
+RATIONALE: >>>
+Colocation works with no tooling. Plans decay and are collected; settled
+architecture about a package should outlive the plan that produced it and should
+move with the package if it moves.
+<<<
+NOTES: >>>
+Human acceptance needed. Both options are live and the choice is reversible: the
+nodes carry global UIDs, so relocating them changes no edge.
+<<<

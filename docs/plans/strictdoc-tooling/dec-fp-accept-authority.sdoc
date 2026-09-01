@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: Who may sign a fingerprint should depend on the grade, not be human-only
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-FP-ACCEPT-AUTHORITY
+TITLE: Who may sign a fingerprint should depend on the grade, not be human-only
+AUTHORED_BY: human
+STATUS: open
+RETIRES_ON: >>>
+A real drift event produces enough edges to make the current rule painful,
+which is the first evidence of where the line actually belongs.
+<<<
+STATEMENT: >>>
+Human-only signing is the current rule and is too blunt. If a couple of nodes
+change in a way that touches a hundred edges without meaning anything, and both
+ends are llm-authored and llm-graded, an agent should be able to re-sign those
+without raising them.
+
+The line is authority, not effort. A contract the operator authored or accepted
+escalates to the operator. One that has only ever been llm-graded does not.
+<<<
+RATIONALE: >>>
+The failure mode of human-only is not that it is unsafe, it is that it floods.
+A queue of a hundred no-impact acceptances trains the operator to approve
+without reading, which is the same rubber stamp the rule exists to prevent,
+arrived at from the other direction.
+<<<
+NOTES: >>>
+Unsettled: whether the deciding field is the PARENT's authority, the CHILD's,
+or either end being human. The parent owns the contract that moved; the child
+owns the assumption that may no longer hold. Both readings are defensible and
+the answer probably wants a real drift event to look at.
+
+AUTHORED_BY already carries the distinction, so this likely needs no new field.
+<<<

@@ -1,0 +1,18 @@
+[DOCUMENT]
+TITLE: Every root, tab, screen, row and node is addressable by a route derived from its UID
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-EVERY-PART-HAS-A-ROUTE
+TITLE: Every root, tab, screen, row and node is addressable by a route derived from its UID
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Every root, tab, screen, row and node on the page has a route a link can carry: the whole UID lowercased for a narrative or node, with a row number or a preselected legend word appended where one applies. A route is never derived by stripping a prefix, because a tree may contain narratives from another directory whose UIDs share nothing with the root's.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NARRATIVE-DECLARES-ITS-PLACE
+  ROLE: Governed_By

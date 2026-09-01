@@ -1,0 +1,80 @@
+[DOCUMENT]
+TITLE: Classify what changed before reaching for supersession
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SUPERSESSION-RULE
+TITLE: Classify what changed before reaching for supersession
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: >>>
+The operator reads it and turns the status, or a second genuine
+abandoned-and-replaced case on a non-DECISION node forces the relation to be
+extended and this rule with it.
+<<<
+STATEMENT: >>>
+Three different events keep getting treated as one, and only the third is
+supersession. Classify before reaching for a mechanism.
+
+A contract moved. That is a PARENT_FP hash transition, signed by the operator at
+pull-request review. Not supersession.
+
+A description went wrong or went stale. Rewrite the statement, put the retired
+shape in NOTES and the reason in the commit. Not supersession. This is permitted
+on every node type except an accepted DECISION, whose statement is frozen.
+
+A thing was abandoned and different work replaced it. That is supersession.
+
+For a DECISION the machinery exists and is unchanged: STATUS becomes superseded,
+Superseded_By points at the successor, Supersedes points back.
+
+For every other node type there is no relation, so supersession is written as
+prose and the instance is logged: rewrite the statement to say the work was
+abandoned, name the successor UID in the first sentence, and record it against
+MECH-SLICE-CANNOT-BE-SUPERSEDED. This is deliberately worse than the DECISION
+path so that instances accumulate as evidence instead of being smoothed over.
+
+Extend Superseded_By and Supersedes to MECHANISM, SLICE, INVARIANT and SPIKE
+when the second genuine instance appears. One instance is an anecdote; two is a
+pattern, and two is also enough to see whether liveness means the same thing for
+each type.
+
+When it is extended, liveness is a QUERY and not a field: a node is live when
+nothing points at it with Supersedes. No new enum value and no new field. DEPTH
+is a design-maturity axis and a superseded node may have been fully implemented,
+so folding superseded into DEPTH would destroy that distinction. The readiness
+query must then skip superseded nodes, or a retired slice keeps blocking its
+successor. That is the one place the extension is not free, and the reason the
+trigger above waits for evidence.
+<<<
+RATIONALE: >>>
+Written after the machinery was hit twice in three days and read wrong once.
+SLICE-STRICTDOC-OVERLAY was NOT superseded: the deliverable, an overlay keeping
+strictdoc current, still exists and still ships, and what changed was the
+implementation shape. Rewriting it in place was correct and the worry about a
+lost transition was a misdiagnosis, because there was no transition of work to
+lose. Getting that classification wrong is what makes the gap look bigger than
+it is.
+
+The trigger is set at the second instance rather than the first because the cost
+of extending fell after milestone one: the grammar is generated from a typed Nix
+surface now, so adding a relation role is a typed edit and a regeneration rather
+than a hand-edited .sgra. A rule written before that landed would price this
+wrong.
+<<<
+NOTES: >>>
+Authorized by the operator on 2026-08-27 -- "i'm fine if you make up a well
+thought out supercede rule for this plan given its friction" -- and written as
+open rather than accepted because they authorized the rule without reading the
+text, and an accepted statement is frozen.
+
+Scoped to this plan. Whether settled architecture under **/.sdoc/ retires the
+same way is DEC-PLAN-LIFECYCLE-OPEN's question, not this one.
+
+Measured 2026-08-27: zero nodes in the corpus are superseded, and the grammar
+declares Superseded_By and Supersedes on DECISION only. MECHANISM, SLICE and
+INVARIANT carry Governed_By, Assumes and Proven_By pairs; SPIKE carries only
+Governed_By and Governs.
+<<<

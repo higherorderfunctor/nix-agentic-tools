@@ -1,0 +1,34 @@
+[DOCUMENT]
+TITLE: Ingest to beads freezes the plan
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-PLAN-BEADS-SNAPSHOT
+TITLE: Ingest to beads freezes the plan
+DEPTH: sketch
+AUTHORED_BY: human
+STATEMENT: >>>
+SUPERSEDED by MECH-PLAN-CHANGE-KINDS: too strong. At ingest the plan is snapshotted immutably and execution state moves to beads.
+The plan does not track progress after that point, and beads is the only thing
+whose state changes.
+<<<
+RATIONALE: >>>
+Keeps one work state rather than two, which is the sync problem that would
+otherwise appear the moment both a plan and an execution engine model an
+in-progress item.
+<<<
+NOTES: >>>
+Supporting the with-beads and without-beads shapes simultaneously is explicitly
+out of the author's scope. The current awkward state, where the plan carries
+some execution-adjacent state because beads does not exist yet, is temporary and
+should not be designed around.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-PLAN-LIFECYCLE-OPEN
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

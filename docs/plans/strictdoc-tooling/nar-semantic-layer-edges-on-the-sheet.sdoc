@@ -1,0 +1,20 @@
+[DOCUMENT]
+TITLE: On the sheet
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-EDGES-ON-THE-SHEET
+TITLE: On the sheet
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+PLACE: section
+STATEMENT: >>>
+The sheet's own lines on which relations are allowed, mirrored from the topic; each line links home to its place among its neighbours.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-ALLOWED-EDGES
+  ROLE: Over

@@ -1,0 +1,284 @@
+[DOCUMENT]
+TITLE: Define the behaviour model in Nix and render it for review
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: SLICE-BEHAVIOUR-MODEL
+TITLE: Define the behaviour model in Nix and render it for review
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Define, as a typed Nix option tree layered over the generated grammar surface, what a
+state, a move, a trigger, a gate and a flow ARE for any sdoc model, and render one
+evaluation of it into artifacts a person can read.
+
+WHERE IT LIVES. A new package, packages/strictdoc-behaviour, beside
+packages/strictdoc-grammar rather than inside it: general purpose, intended for
+publication, carrying the option types, a hand-written DSL over them, the emitters and
+a foreign fixture. This repository's own behaviour values are a consumer file beside
+the package, exactly the relationship values.nix has to the grammar surface. A devenv
+module declares ai.strictdoc.behaviours.<name>, named for the tool the way
+ai.strictdoc.grammars already is, with a grammar attribute naming a key in
+ai.strictdoc.grammars and target paths for the emitted artifacts. Both modules declare
+into one namespace and devenv.nix imports both.
+
+HOW IT DIVERGES FROM MILESTONE ONE, and why that is the reason it is a separate
+milestone. The grammar surface is GENERATED because strictdoc owns the definition of
+what a .sgra file may contain, and a hand-written one would not notice an upstream
+addition. Nothing upstream defines a behaviour model: strictdoc has no lifecycle, no
+transition, no gate and no checkpoint. So there is no extractor here, no faithful
+layer, no normalized layer and no surface-currency check. The option tree is
+hand-written, and its only external constraint is the grammar it is layered over.
+
+What DOES transfer is the discipline. One typed surface with a hand-written DSL that is
+sugar and cannot weaken it. lib.types.attrTag for the genuine unions -- trigger kind,
+subject kind, relation kind -- so an illegal combination is untypeable rather than
+asserted. Every cross-entity rule in one apply per module that deepSeq forces the merged
+value, resolves every id, cross-checks against the grammar, collects all errors and
+throws once, because addCheck is silently never called on a submodule and a nested guard
+does not run. The consumer value declared with the option TYPE at the module seam, since
+a DSL asserts nothing by itself and a consumer handing raw values to an emitter passes
+through no check at all. Generated artifacts committed, with a check that regenerates
+and diffs.
+
+One shape is deliberately inverted. The grammar surface uses LISTS because strictdoc
+enforces element, field and relation order. The behaviour model has no order to
+preserve, and list options merge by concatenation, which makes a list the wrong carrier
+for anything a consumer overrides or specialises. Every behaviour entity is keyed by
+attribute name and referenced by that name.
+
+THE GRAMMAR IS AN INPUT, NOT A COPY. The behaviour surface consumes the CHECKED grammar
+value -- the total one that comes back from the grammar package's own check step, with
+every optional key present -- and derives its vocabulary from it: the element tags, the
+fields each element carries, each single-choice field's option set, and the relation
+roles. A state naming a value the grammar does not declare, a state field the element
+does not carry, an element that does not exist, or a role nothing declares is an
+evaluation error naming the vocabulary the grammar does declare. Nothing about the
+grammar is retyped here, and this cross-check is why milestone three sits after
+milestone one rather than beside it.
+
+WHAT THE SURFACE DECLARES. Actors. Commands, which are requests and may be refused.
+Events, which are accepted facts, including external ones such as landing in main.
+Lifecycles, each with a subject, its state fields, its initial and terminal states, and
+its transitions. Transitions, each with a trigger, a from and a to, its gates, what it
+writes and what it emits. Operations, which mutate without moving a state field.
+Gates and invariants, each declaring what it must SEE. Milestones, which are achieved
+facts that can go stale. Checkpoints, each a record of when it fires and what it can
+see. Validators, each naming a checkpoint and its status. Flows. Relation contracts:
+which node types a role may point at, whether the relation admits cycles, and whether a
+change propagates across it.
+
+A subject is an element tag OR a relation role. That costs one union arm and keeps the
+per-edge signing machine -- one PARENT_FP entry moving between absent, never signed,
+signed and drifted -- expressible without anyone having to write one. Which carrier this
+instance uses, a machine on the edge or a milestone on one end, is milestone five's.
+
+Gate placement is DERIVED and never declared: a gate may run at every checkpoint whose
+sees covers its needs. An empty run set is REPORTED, not fatal. That is measured rather
+than cautious: the authorship guard needs both a git base ref and the acting identity,
+no seam sees both, and four independent representations derive an empty set for it
+today, so a strict mode would fail this repository's own model on day one. Corpus first,
+gate second. Whether an empty run set ever becomes fatal is milestone four's.
+
+Three eval-time checks the surface owes, all measured absent from every prototype and
+measured doable in 0.05 s: a state no transition can reach, a lifecycle with no initial
+or no terminal state, and two transitions firing on one trigger.
+
+THREE SHAPES SETTLED HERE, each against a measured alternative, each cheap to flip
+afterwards because flipping is a type edit plus a regenerate.
+
+State is a TUPLE over the element's declared state fields, with initial, terminal, and
+the rule that a transition may not write a field it does not constrain in from. The
+alternative was one lifecycle region per single-choice field, where a transition moves
+one region and a second region moves only on a completion trigger. Both are proven at
+instance scale, 13 of 13 negatives in 0.04 s and 7 of 7 in 0.038 s. The tuple wins on
+the defects: the region shape turns a spike's single atomic write into a completion
+chain whose intermediate snapshot its own invariant forbids, has no transaction
+primitive at all, and is violated today by a live unrun-and-sketch node in this corpus.
+The tuple's two measured defects -- no reachability, and a sketch-to-verified leap
+accepted -- are two of the three eval checks named above.
+
+The ripple is DERIVED from what a transition writes intersected with what a gate reads,
+at the granularity the field catalogue already carries: a per-field contract flag. The
+alternative was a typed selector AST. Both derive the same invalidation edges; the flag
+version exists, runs in 0.022 s and rejected both injected lies, while the AST is the
+single largest unmeasured claim the prototype trees lean on, with neither its
+tractability nor its over-approximation ever measured. WHICH fields are contract stays
+empty here.
+
+A flow is an ORDERED LIST OF QUALIFIED TRANSITION REFERENCES, each carrying only what
+the transition does not already say: the expected outcome, taken or refused by a named
+gate. It never restates a from, a to or a gate list. Measured against the alternative
+tagged-step union: 25 of 34 authored steps restated their referenced transition, and a
+transition edit produced a fresh "this flow never expects gate X" gap, so restatement
+drifts by construction. Measured for the outcome field: without it no flow can express
+a refusal, and 8 of 12 gates have no rejected path. Nothing executes a flow -- the tool
+executes transitions, one verb to one transition -- so this is the cheapest of the three
+to be wrong about. Optional, parallel, choose, loop, wait and compensation stay out
+until an instance flow needs one, and if recursion ever returns it must pass through a
+submodule, because a self-recursive listOf inside an attrTag infinite-recurses at option
+evaluation.
+
+WHAT ONE EVALUATION EMITS. A neutral JSON model carrying a schema version, a model
+version and the resolved model -- the interchange form milestone four consumes, and
+necessary rather than convenient because Python cannot evaluate Nix. Then, read from
+that JSON and never from the Nix: a statechart per element as mermaid, a sequence
+diagram per flow, a transition against gate matrix, a gate against checkpoint matrix
+carrying the derived run sets with empty rows marked, a change-impact list, and a report
+of what is still only prose -- a gate with no validator, a validator marked planned, a
+transition no flow covers, an event no consumer reads. Every view is presentation and
+none is authoritative.
+
+The views are committed markdown with mermaid fences under the package's docs, written
+by a devenv task in the same idempotent temp-file-and-rename shape as generate:sgra, and
+invoked separately from anything that regenerates its inputs. They do not go inside
+strictdoc's own site: mermaid renders on its markdown backend only, and this corpus does
+not survive the default HTML export at all.
+
+WHAT STAYS EMPTY. No states, no transitions, no gates, no actors, no commands, no
+events, no flows, no checkpoints and no validator list. All of those are instance data.
+The values shipped with this milestone are a TRANSCRIPTION of what this corpus does
+today, taken from the spike's measurement and carrying no endorsement of it: they exist
+so the diagrams have something to render and the negative fixtures something to reject.
+Milestone five replaces them, and it is where the rules themselves get written.
+
+Consumer surface the operator reviews before implementation: the option tree, and this
+repository's transcription rendered through it. Reviewed after: every view regenerating
+from one evaluation; a transition edit updating exactly the views that depend on it and
+no others; a state value the grammar does not declare rejected at evaluation with the
+grammar's own vocabulary in the diagnostic; and the gate against checkpoint table
+showing the authorship guard with an empty run set.
+<<<
+RATIONALE: >>>
+The operator's stated reason for the whole roadmap is that the semantics cannot be
+reasoned about without a DSL to see them. That is why this milestone delivers a surface
+and its rendering together rather than in sequence: the rendering is not documentation
+of the model, it is the reviewable form of it.
+
+It is also why the three shape questions are settled here rather than brought to the
+operator one at a time before any surface exists. Bringing them separately asks for a
+prose judgement about prose, which is the exact failure mode the roadmap was opened to
+end. Each of the three has two answers that were built and measured, each answer has a
+measured defect, and the call is recorded with the losing argument attached -- so the
+operator argues with a rendered model of their own graph instead of with a menu, and
+flipping any one of the three afterwards costs a type edit and a regenerate.
+
+Every part of this was prototyped in the spike and its review: both state shapes, both
+flow shapes, both ripple mechanisms, four independent representations of gate placement
+that derive the same result including that the authorship guard can run nowhere today,
+and eight rendered views from one 0.055 s evaluation.
+
+Generation is not the transferable part of milestone one. That surface is generated
+because strictdoc owns the grammar and ships roughly three releases a month, so drift is
+the risk. No upstream owns a behaviour model, so there is nothing to extract and nothing
+to drift against; what transfers is the layering discipline, the union types, the single
+forcing apply, and the module seam that makes the types unavoidable.
+<<<
+PARENT_FP: >>>
+DEC-EXECUTABLE-RULES-ROADMAP:0000000
+DEC-LOCAL-IMPLEMENTABILITY:0000000
+<<<
+NOTES: >>>
+Vocabulary adopted from the outside research: a command is a request and may be refused;
+an event is an accepted fact; a milestone is an achieved fact that can go stale; a
+gate's evidence records what it depended on. The instance's signed edge is carried as
+evidence that can go stale rather than as a node type of its own. That contest is now
+resolved at the level this milestone owns -- the subject union admits a relation role,
+so both carriers stay expressible -- and which one this instance uses is milestone
+five's.
+
+MEASURED WHILE GROOMING, 2026-08-27. The cross-check input already exists and needs
+nothing built. One nix eval over the committed packages/strictdoc-grammar/values.nix
+yields the five element tags, every single-choice field's option set (DECISION carries
+AUTHORED_BY and STATUS; MECHANISM, SLICE and INVARIANT carry DEPTH and AUTHORED_BY;
+SPIKE carries DEPTH, AUTHORED_BY and STATUS) and every parent relation role. Positive
+and negative control on the same walk: MECHANISM.DEPTH set to verified is accepted, and
+set to done it throws naming all six declared values. The grammar package's check step
+returns the TOTAL merged value with every optional key present and explicitly null, so
+the behaviour surface never has to handle an absent key.
+
+THREE CROSSED MECHANISMS ARE VALIDATORS, AND THE EDGES LOOK MISPLACED. MECH-READY-QUERY,
+MECH-READINESS-PREDICATE-RECONCILE and MECH-RELATION-TARGET-TYPE-LINT are things that
+RUN, which the roadmap puts in milestone four -- three is the surface, four is the
+implementation -- and SLICE-CHECKPOINT-WIRING already crosses the comparable validators.
+Milestone three owns their DECLARATIONS: the closure-ready gate and what it must see,
+and the role-to-target-type table as model data. Measured consequence of leaving them
+here: status.py reports this slice BLOCKED on MECH-RELATION-TARGET-TYPE-LINT and
+MECH-READINESS-PREDICATE-RECONCILE at sketch, so the surface cannot be handed off until
+two validators it does not build are designed. Reviewing those two edges is owed.
+
+EDGES OWED IN. MECH-CONTRACT-FIELDS-EDGE-TO-SEMANTIC-LAYER says the Governed_By edge to
+DEC-FP-FIELDS-CONFIGURABLE and its PARENT_FP entry belong to the milestone that delivers
+the semantic layer, which is this one; only the operator changes the PARENT_FP half.
+MECH-DIRTY-EDGE-ON-OPTION-CHANGE scopes itself here too. Both are carried by the ripple
+mechanism settled above.
+
+DEVENV GOTCHA THE WRITE TASK MUST RESPECT. devenv renders every task's exec into a
+script at evaluation and runs the graph afterwards, so a task that consumes what an
+earlier task in the same run regenerates sees the pre-run value and succeeds while
+writing a stale artifact (MECH-DEVENV-TASK-SCRIPTS-FIXED-AT-EVAL, measured 2026-08-27
+while wiring generate:sgra). The behaviour artifacts are rendered at evaluation the same
+way, so regenerating and writing are two invocations.
+
+WHY THE VIEWS ARE NOT IN STRICTDOC'S SITE. Mermaid is always on in strictdoc's HTML but
+markdown-backend only, with no RST directive; and this corpus exits 1 on the default
+export because node prose reaches docutils, so only the JSON path is ever green
+(MECH-DEFAULT-EXPORT-IS-RED-ON-RST). Committed markdown is the only surface the operator
+can currently read without a server.
+
+WHAT REMAINS PROSE AFTER THIS MILESTONE, and it is the point rather than a shortfall:
+which transitions are RIGHT. The values this milestone ships describe what the corpus
+does today, not what it should do. Judgement gates stay judgement -- signing authority,
+independence, whether a retirement condition is met -- until an identity primitive
+exists, and MECH-AGENT-IDENTITY-KEYS is load-bearing for exactly that reason.
+
+Model and grammar version compatibility is unbuilt in every prototype tree and is the
+one piece of plumbing here with no measured precedent; a version stamp is in the emitted
+JSON above, the compatibility RULE is not.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Every state, transition, gate, actor, command, event, flow, checkpoint and validator. The surface declares the TYPES; the vocabulary is instance data and milestone five writes it.
+
+- Which fields are contract-bearing. The ripple mechanism is settled (writes intersected with reads, at field granularity); the field SET is DEC-FP-FIELDS-CONFIGURABLE and stays empty here.
+
+- Whether DEPTH may regress, and who may move it. The type admits a transition in either direction; no direction is declared.
+
+- Who may sign, what independent means, and whether signing authority keys on grade. DEC-FP-ACCEPT-AUTHORITY is open and the gate is declared with no check.
+
+- Whether the per-edge signing machine is a lifecycle on the relation or a milestone on one end. The subject union admits both; neither is chosen.
+
+- Whether an empty gate run set ever becomes fatal, and at which checkpoints each gate is actually wired. Milestone four owns the wiring; milestone three only derives where a gate COULD run.
+
+- The checkpoint list itself. The derivation (a gate runs where its needs fit what a checkpoint sees) is definitional; which checkpoints exist is harness data the instance supplies.
+
+- The behaviour values shipped with this milestone are a transcription of what the corpus does today, taken from the spike's measurement. They carry no endorsement and exist only so the diagrams render and the negatives reject.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-EXECUTABLE-RULES-ROADMAP
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-LOCAL-IMPLEMENTABILITY
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-READY-QUERY
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-READINESS-PREDICATE-RECONCILE
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-RELATION-TARGET-TYPE-LINT
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: SLICE-GRAMMAR-FROM-NIX
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: SPIKE-EXECUTABLE-RULES
+  ROLE: Proven_By

@@ -1,0 +1,34 @@
+[DOCUMENT]
+TITLE: A settled ruling stays visible at every entry point until the corpus is migrated, and drift is corrected on sight
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: INV-SETTLED-STAYS-VISIBLE
+TITLE: A settled ruling stays visible at every entry point until the corpus is migrated, and drift is corrected on sight
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+A ruling that is accepted but not yet applied to the corpus stays VISIBLE from
+every entry point a session reads first -- the skill, the README, and the node
+that owns the migration -- and contributors read and cite nodes THROUGH the
+ruling, never through the legacy spelling the corpus still carries.
+
+Settled vocabulary is used consistently once it is settled. Drift is corrected
+on sight, in one clause, and that includes drift in the operator's own words:
+the correction is how the term gets learned.
+<<<
+RATIONALE: >>>
+A corpus lags its rulings by design -- migration is a deliberate, costed move
+and not a drift. The hazard is that between ruling and migration the old
+spelling is everywhere and the new meaning is in one node, so a session reading
+the corpus at face value re-derives the pre-ruling world and argues from it.
+Visibility at the entry points is the cheapest defence, and correcting drift
+aloud is what stops a term from decaying back into the old one.
+<<<
+NOTES: >>>
+Recorded 2026-08-28 at the operator's request, as one of four contributor-communication requirements (INV-DECISIONS-ARRIVE-AS-CARDS, INV-LISTS-WHERE-THE-READER-UNPACKS, INV-FILE-DO-NOT-NARRATE, INV-SETTLED-STAYS-VISIBLE). The rule is the operator's; AUTHORED_BY reads llm because the writer has no flag for the other value. An INVARIANT is read as a REQUIREMENT under DEC-INVARIANT-IS-A-REQUIREMENT; the grammar type is kept so the grid is not half-applied. The sdoc skill's backlog protocol is the procedure these four are the requirement for.
+
+Retyped from INVARIANT to REQUIREMENT on 2026-08-30 (DEC-INVARIANT-IS-A-REQUIREMENT; DEC-NODE-FAMILIES). The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<

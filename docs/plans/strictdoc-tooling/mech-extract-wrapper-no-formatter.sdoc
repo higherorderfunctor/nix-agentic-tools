@@ -1,0 +1,46 @@
+[DOCUMENT]
+TITLE: The extraction wrapper carries no Nix formatter, so generation is only idempotent by accident
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-EXTRACT-WRAPPER-NO-FORMATTER
+TITLE: The extraction wrapper carries no Nix formatter, so generation is only idempotent by accident
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+overlays/dev-tools/strictdoc-grammar-extract.nix puts strictdoc's dependency
+closure and ast-grep on the wrapper's PATH. It does not put alejandra there.
+
+Generated Nix has to come out already formatted, or treefmt rewrites it and the
+next --check reads that rewrite as drift. extract.py therefore shells out to
+alejandra and warns when it is missing. In a devenv shell it resolves from the
+ambient PATH, which is why generation is currently idempotent -- verified,
+treefmt reports 0 changed and --check exits 0 -- but that is the operator's
+profile doing the work, not the package.
+
+Two ways to close it: add alejandra to the wrapper's --suffix PATH, or have the
+generator emit alejandra's canonical form directly. The first is one line and
+makes the warning unreachable.
+<<<
+RATIONALE: >>>
+Noticed because the warning path is the one that runs in CI, where the wrapper
+is the whole environment. A CI regeneration would silently produce a file that
+the repository's own formatter immediately changes.
+<<<
+NOTES: >>>
+The FILE moved 2026-08-27 and the finding did not. The wrapper is now
+packages/strictdoc-grammar/lib/mkExtract.nix, the overlay having been deleted
+outright (MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY); alejandra is still deliberately
+absent from it, and the header now says so in as many words rather than leaving
+it to be noticed. The workaround is still per-caller:
+checks/strictdoc-grammar-surface-current.nix names alejandra in
+nativeBuildInputs. Neither of the two ways to close it has been taken. Read
+together with MECH-FORMAT-NIX-DOWNGRADES-A-MISSING-FORMATTER, the same defect
+seen from the generator's side.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

@@ -1,0 +1,146 @@
+[DOCUMENT]
+TITLE: Reject an AUTHORED_BY flip on a node already merged to main
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-AUTHORED-BY-GUARD
+TITLE: Reject an AUTHORED_BY flip on a node already merged to main
+DEPTH: interface-settled
+AUTHORED_BY: human
+STATEMENT: >>>
+A static check over committed trees that reports every node claiming
+AUTHORED_BY: human, classified by what a baseline tree said about the same node.
+
+Build a map of UID to AUTHORED_BY from every .sdoc file in a tree -- plans,
+docs/spec, and the co-located packages/*/.sdoc alike -- and build it twice, once
+at the baseline and once at the candidate. Key by UID across the whole tree,
+never per file: grooming moves a node between files with its UID intact, and a
+per-file or line-diff view reads that move as a fresh claim. Every node whose
+candidate value is human falls into one of two classes. A FLIP is a node the
+baseline carried as llm. A NEW-HUMAN is a node the baseline tree does not carry
+at all. A flip fails the check; a new-human node is listed and does not.
+
+The baseline is the merge base of the branch and origin/main, not origin/main's
+tip. It attributes exactly the changes this branch made and is unmoved by main
+advancing underneath a long-lived branch. It moves only when the branch rebases,
+and then it moves forward past claims that have already reached main, which is
+correct -- those are main's now, and re-reporting them would train the reader to
+skip the report. On the branch's first restacked pull request the baseline
+carries no .sdoc file at all, so every human node in it reports as new-human;
+that is the intended reading of a first appearance, not noise to suppress.
+
+The checkpoint is a CI job checked out with full history. It cannot be a nix
+flake check: the flake source tree has no .git, so nothing running under nix
+flake check can see a baseline. The same comparison may run in the pre-commit
+hook against the previous commit, and there it is a convenience only -- the hook
+suite is disabled under CI, and squash merge erases the per-commit record it
+would produce.
+
+Permanently out of scope on this side: who made the change. A committed tree
+carries no evidence of the actor, so this check reports a claim and never
+authorizes one. That is the line with MECH-RUNTIME-WRITE-GUARD, which sees the
+actor and the write it is making and no history. Neither sees both, so an
+entitled flip and an unentitled one are indistinguishable to either, and this
+milestone therefore ships no override token: anything it could accept would be
+forgeable by exactly the party the check guards against. Whether a failing check
+blocks a merge is not settled here either -- promoting the job to a required
+status check is a ruleset change, which only the operator can make.
+<<<
+RATIONALE: >>>
+AUTHORED_BY is the operator's key, and the only thing standing against an agent
+turning it is a rule in the authoring skill. INV-GUARDS-MUST-EXECUTE measured
+that class: the sibling rule against editing PARENT_FP failed, and an agent
+signed five contracts under the operator's committer identity. Something that
+runs is what replaces guidance.
+
+Detection without authorization is worth shipping on its own. The enforcement
+actually available today is making every appearance of the operator's key
+visible at the place acceptance is turned -- pull-request review, per
+DEC-LONG-LIVED-BRANCH -- and a per-pull-request list of nodes claiming that key
+is correct without knowing who acted. Withholding the mechanism until it can
+also authorize leaves the key unwatched through all of milestones one to four,
+and authorization waits on MECH-AGENT-IDENTITY-KEYS.
+
+The comparison is UID-keyed against a merge base rather than a diff against main
+because both cheaper readings are wrong in measured ways: a line diff cannot
+distinguish a groom from a birth, and main's tip drifts for reasons that have
+nothing to do with the branch.
+<<<
+NOTES: >>>
+Measured 2026-08-27 on feat/strictdoc-trial at bc646f12, merge base ec980d15.
+
+origin/main carries 0 .sdoc files; the branch carries 9 across three locations.
+Every one of the 139 nodes is a first appearance against main today, so the
+llm-to-human transition the earlier statement described has no subject yet.
+Over the branch's 71 commits: 0 flips and 31 nodes born human, introduced in 13
+commits. Creation, not flipping, is what happens.
+
+Why UID-keyed. Commit 4e3f15f4 adds three "+AUTHORED_BY: human" lines: one is a
+new node (MECH-PLAN-CHANGE-KINDS) and two are DEC-SYSTEM-PURPOSE and
+DEC-PLAN-SINGLE-OWNER relocating from 02-plan-lifecycle.sdoc into
+docs/spec/01-plan-model.sdoc. The UID-keyed comparison reports one. Positive
+control: the same line scan reports three on 7f6719db, where all three are
+genuine new nodes. Thirteen such relocations occurred across the branch.
+
+Why the actor is invisible here. All 71 commits are authored and committed as
+the operator and none is signed (%G? = N for all 71), while 31 of the nodes were
+written in agent sessions. The 13 commits that introduced them carry no
+Co-Authored-By trailer at all; positive control, the same grep finds
+"Co-Authored-By: Claude Opus 5 (1M context)" on bc646f12 and 41 such lines
+elsewhere on the branch. Commit metadata is not evidence of who acted.
+
+Cost. 0.079 s to compare a 109-node baseline against a 139-node candidate over 9
+files (git ls-tree plus one git show per file), 0.063 s against the empty
+baseline.
+
+Implementation gotcha. The scan pairs each "UID:" line with the following
+"AUTHORED_BY:" line. Both are single-line and field order is enforced, so this
+holds under the current grammar and would break silently if the grammar
+reordered them. The candidate side can be cross-checked against the JSON export,
+which carries AUTHORED_BY for all 139 nodes and agreed exactly with the text
+scan (139 nodes, 31 human). The baseline side gets no such cross-check --
+exporting a historical tree would require checking it out.
+
+Post-carve. The one-node-per-file carve (667d0404 to ccad4c9d, all 2026-08-27,
+after the bc646f12 measurement above) took the branch from 9 .sdoc files holding
+139 nodes to 161 files holding 161 nodes, across the same three locations. The
+cost model is one `git show` per file, so the 0.079 s figure scales with file
+count and must be re-measured; the 31-human figure is unchanged. This paragraph
+was written by a model, recorded here rather than left implicit for the same
+reason this node exists.
+
+Placement evidence. The flake source store path holds the .sdoc files and no
+.git, which is why checks/strictdoc-fp-check.nix and
+checks/strictdoc-cycle-check.nix run over ${self} with no history. The precedent
+for a history-needing gate in this repo is the gitleaks job at
+.github/workflows/ci.yml:718 with fetch-depth: 0. The pre-commit path is gated at
+devenv.nix:607 (git-hooks.hooks = lib.optionalAttrs (!isCI)).
+
+Refines SLICE-CHECKPOINT-WIRING, which records this guard as unenforceable until
+agents have their own identity. The detection half needs only history and is
+enforceable at the CI checkpoint now; only authorization needs the actor.
+
+LEFT TO THE OPERATOR, deliberately. This milestone settles the plumbing;
+each of these is a rule about how this instance works and milestone five is
+where they get written.
+
+- Whether a reported flip blocks a merge -- promoting the CI job to a required status check is a ruleset change and the operator's alone.
+
+- What an entitled flip by the operator looks like: whether it is accompanied by anything at all, and what form an override takes once MECH-AGENT-IDENTITY-KEYS makes one authenticatable.
+
+- Whether AUTHORED_BY may move human back to llm, and whether an agent rewriting a human-authored statement must make it do so.
+
+- Whether new-human nodes accumulate an acceptance record once reviewed, or are simply re-listed against each pull request's own merge base until they land in main.
+
+- Whether the key means 'the operator wrote these words' or 'the operator originated this node' -- the guard's direction is one-sided either way, but the second reading leaves the words under the key free to drift.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
+<<<

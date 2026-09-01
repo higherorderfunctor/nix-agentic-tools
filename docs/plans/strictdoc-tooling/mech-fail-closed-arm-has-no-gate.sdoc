@@ -1,0 +1,40 @@
+[DOCUMENT]
+TITLE: The unrecognised-shape refusal is demonstrated but nothing runs it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-FAIL-CLOSED-ARM-HAS-NO-GATE
+TITLE: The unrecognised-shape refusal is demonstrated but nothing runs it
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+SLICE-GRAMMAR-FROM-NIX's acceptance list includes "an unrecognised grammar shape
+failing the extractor", and the mechanism works: a pattern carrying an inline
+group Nix's regex engine cannot express makes normalize.py exit 2 with a message
+naming the shape, against exit 0 on the unmodified surface. Nothing exercises it
+on a schedule. checks/strictdoc-grammar-surface-current.nix says outright that
+its --input stays the COMMITTED faithful surface precisely so a mutation cannot
+raise the refusal instead of reporting drift, and dev/tasks/check.nix runs the
+same two invocations and nothing more.
+
+So the arm that makes the whole drift argument work -- upstream changes shape,
+we refuse rather than emit a wrong surface -- is proven once by hand and then
+untested forever.
+<<<
+RATIONALE: >>>
+Found while verifying milestone one, and deliberately not fixed there: adding a
+gate is work with a design question in it (a fixture carrying a deliberately
+unrepresentable pattern has to live somewhere and be kept current), not a
+correction to the node.
+<<<
+NOTES: >>>
+Measured 2026-08-27 in a scratch copy: one pattern replaced with an inline-group
+form gives exit 2 and the diagnostic; the unmodified copy gives exit 0. Both
+arms present, so a check would only need to pin the fixture.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

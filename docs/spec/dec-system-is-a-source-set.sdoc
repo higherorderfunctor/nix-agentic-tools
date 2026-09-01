@@ -1,0 +1,78 @@
+[DOCUMENT]
+TITLE: A system is a named set of source directories; membership is computed from a node's path and a node may be in more than one
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SYSTEM-IS-A-SOURCE-SET
+TITLE: A system is a named set of source directories; membership is computed from a node's path and a node may be in more than one
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A body of nodes must be a system that no set of source directories can name -- membership assigned by hand, or one file holding two systems.
+STATEMENT: >>>
+The canon is read as SYSTEMS a person can switch on and off, and a system is a
+named set of SOURCE DIRECTORIES -- the part of the repository a body of nodes
+documents -- never a set of node types.
+
+A system is a row of [LINK: NAR-CANON-SYSTEMS], a durable table in the spec:
+its name, the source prefixes it holds, whether it may be switched off, and
+what it is for. A node belongs to a system when its file's path begins with
+one of that system's prefixes. Membership is computed from the path alone and
+is a SET, not a partition: a prefix that contains another puts a node in both.
+
+A node shows when any system holding it is on. An edge shows when both its
+ends show. A relation ROLE gates nothing, because a role says what kind of
+claim an edge makes and not which part of the repository it belongs to.
+
+A system whose switch reads `always` cannot be turned off. The shared model in
+`docs/spec/` is cited by every other system, so hiding it would empty the
+screens that present it rather than narrow them.
+
+Switching changes what is shown and never what was rendered: the payload is
+the same file whatever the switches say.
+<<<
+RATIONALE: >>>
+[LINK: DEC-SYSTEM-IS-A-TYPE-SET] read the operator's ask for switchable systems
+as a partition of node TYPES and shipped switches named canon, whiteboard and
+work. Three things were wrong with it, and only the first is a matter of taste.
+
+It answered the wrong question. The operator's systems are the parts of the
+repository being documented -- the canon's tooling, the view that renders it,
+beads next, and the rest of the repo after that -- so the axis is the subject,
+not the grammar. A type switch cuts ACROSS every one of them: with whiteboard
+off, 10 of the view plan's 59 nodes went and every narrative in every unrelated
+part of the repository went with them. No combination of the three switches
+isolated one part.
+
+It could not name a part of the repository that has no narrative.
+`docs/plans/beads-migration/` is 20 nodes and holds no root, so under a type
+axis and a root-per-tab strip it was unreachable however the switches were set.
+
+And it took the word canon for a proper subset of the canon, contradicting
+[LINK: DEC-CANON-NAMES-THE-COMMITTED-CONTENTS] one level down: switching canon
+off did not switch off the canon, and switching it on did not show it.
+
+Membership by path costs nothing. The export already carries every node's file,
+and dir_class was already derived from it for the node index's facets, so this
+moves an axis the payload had into the switches instead of computing a new one.
+It also makes documenting the next part of the repository one row in a table
+rather than a change to a script.
+<<<
+NOTES: >>>
+Ruled 2026-08-30 as a first-pass decision under the operator's standing
+delegation, on their reading of the render: "my intent was there are different
+semantic modules (core - cannon, whiteboard - the renderer, beads for future)
+... you could turn various projects on and off and get the aggregate of all
+those sdocs populating the contents of each tab." Overrule by superseding.
+
+AUTHORED_BY reads llm because the writer has no flag for the human rungs.
+
+This decides the axis only. Which words label a switch is the table's, and the
+tab strip that presents the aggregate is
+[LINK: DEC-NARRATIVE-DECLARES-ITS-PLACE] and the view renderer's.
+[LINK: DEC-SYSTEM-TAG-ON-EVERY-ELEMENT] asked whether a node could name a
+system by hand when its TYPE placed it wrongly; under this decision the
+question is whether a node can belong to a system its PATH does not place it
+in, which the beads import may still raise.
+<<<

@@ -1,0 +1,171 @@
+[DOCUMENT]
+TITLE: A command-line tool that is the only writer of sdoc files
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: SLICE-SDOC-CLI
+TITLE: A command-line tool that is the only writer of sdoc files
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+Build the command-line tool that produces and edits sdoc documents. Its option
+surface is DERIVED from the generated grammar: one flag per field a node type
+declares, one per relation role it may make, and choices constrained to that
+field's word list. Nothing about what a node may contain is typed by a person.
+
+Writing verbs are new, set, relate, unrelate, move and delete. Reading verbs are
+show, list and check. Every writing verb loads the whole graph, applies the
+change in memory, validates the graph as it would be AFTER the write, formats
+through the same code path, and only then replaces the file. A command that
+cannot validate does not write. Every writing verb takes --dry-run and prints
+the diff instead.
+
+UIDs are passed in by the author and never minted -- they are hand-chosen and
+semantic by the operator's 2026-08-27 ruling, and the tool refuses a name whose
+prefix does not match the node type. Required fields are filled from arguments,
+so a TBD never lands.
+
+NO SEMANTIC RULES APPLY AT THIS MILESTONE, and that is the scope boundary. The
+tool enforces exactly what the GRAMMAR says -- the node types, which fields are
+required, each choice field's word list, and which relation roles a type may
+declare. It enforces nothing about how this instance USES them. Who may sign,
+whether DEPTH may regress, when deleting is legitimate, and where direct edits
+are denied are all instance semantics, and milestone five is where they are
+written.
+
+delete exists in the tool and is deliberately NOT taught by the sdoc skill. The
+verb is available to someone who wants it; nothing points an agent at it.
+
+Moved out of this milestone rather than dropped: denying direct edits of sdoc
+and grammar files in the agent harness before the edit tool runs. That is a
+checkpoint, and milestone four owns checkpoints.
+<<<
+RATIONALE: >>>
+In the operator's words, the root failure is a model producing incorrect formats
+with nothing validating the write; the tool takes the model's hands off the
+files. Measured: creating a node in-process costs 0.35 s, validating the whole
+graph 0.3 s, and strictdoc's node model writes any field in grammar order --
+nothing here waits on the behaviour model.
+
+Deriving the option surface from the grammar rather than hand-writing it is what
+makes the milestone small. The five node types are genuinely asymmetric -- a
+DECISION carries no DEPTH and no File relation, a SPIKE is the only type
+carrying both a DEPTH and a STATUS with a different word list under the same
+name, an INVARIANT cannot point at a file -- and that asymmetry is exactly what
+gets hand-written wrong.
+<<<
+PARENT_FP: DEC-EXECUTABLE-RULES-ROADMAP:0000000
+NOTES: >>>
+SCOPE SETTLED BY THE OPERATOR 2026-08-27, and it collapsed. Their framing: the
+grammar defines the CLI options for everything but delete, the tool runs format
+and validation, and that is the milestone -- "simple cli to produce docs from
+options. no semantic rules apply yet."
+
+Three questions raised against the draft verb list were ruled INSTANCE SEMANTICS
+and are not this milestone's: whether deleting is legitimate, whether raising
+DEPTH is an ordinary edit or a lifecycle move, and whether to ship the harness
+denial given it is absent in eleven of twenty-three worktrees. All three sit
+with milestone five.
+
+Build on strictdoc's own machinery rather than re-implementing writes: manage
+new for scaffolding, set_field_value for fields, the writer for formatting. Two
+measured constraints on that. set_field_value performs NO value validation --
+DEPTH='totally-not-a-depth' and a None on a required STATEMENT both serialise
+cleanly and reach disk -- so the validation has to be the tool's, not the
+model's. And single-line versus block form is chosen from the grammar rather
+than from what was parsed, so a PARENT_FP written through the model is always a
+block while the corpus carries inline single-entry values; that is hash-neutral
+because PARENT_FP is in EXCLUDED_FIELDS, but it is a visible diff.
+
+Validating the whole graph per command costs about a second on this corpus and
+about two at five thousand nodes when strictdoc's cache is warm, which needs the
+working copy at a stable path; a fresh temporary copy pays the cold cost.
+
+Prefix-to-type agreement is unenforced today: a MECHANISM named SLICE-... exports
+exit 0 and lands in the JSON unremarked. The tool is where that closes.
+
+IMPLEMENTED 2026-08-27 as dev/scripts/sdoc_cli.py, reachable as `scribe` in
+the dev shell through packages/strictdoc-grammar/lib/mkScribe.nix.
+
+The option surface is derived, and the asymmetry this slice's RATIONALE
+predicted is what comes out: `scribe new DECISION --help` offers no --depth,
+no File role and STATUS as open|accepted|rejected|superseded, while `sdoc
+new SPIKE --help` offers both a --depth and a --status of
+unrun|run|blocked. Relation roles are per type too -- --role Crosses is
+rejected on a MECHANISM, which does not declare it.
+
+All nine verbs are exercised. Prefix-to-type agreement now closes: `new
+MECHANISM --uid SLICE-WRONG` exits 1, where strictdoc exports it clean.
+
+Deliberately NOT shipped, and each has a home: the harness denial before the
+edit tool runs (milestone four owns checkpoints), and whether deleting is
+legitimate, whether raising DEPTH is a lifecycle move and who may sign
+(milestone five owns instance semantics). `delete` exists and the sdoc skill
+does not teach it.
+
+Two judgement calls made under the operator's "you pick, I will tune later",
+both cheap to reverse. A File relation is written with the deprecated
+`VALUE:` spelling rather than `PATH:`, because all three in the corpus carry
+VALUE and file-check.py reads that key. And `--dry-run` prints a unified
+diff rather than the rendered node.
+
+The whole-graph reload after each write, which is what makes "a command that
+cannot validate does not write" true rather than intended, costs about 0.25 s
+against the warm cache.
+
+FOUND BY AN INDEPENDENT REVIEW OF THIS MILESTONE, and it defeated the
+rollback for a whole class of failures. TraceabilityIndexBuilder.create does
+not RAISE on a semantic error -- it prints and calls sys.exit(1). Duplicate
+UIDs across documents, grammar validation and node validation all take that
+path. SystemExit derives from BaseException, so the `except Exception` the
+first cut wrapped the reload in caught NONE of them: the write stayed on disk
+and the process exited 1 with strictdoc's bare `error:` line instead of the
+rollback this slice promises.
+
+MECH-SDOC-EDIT-VIA-MODEL's own NOTES already carried the warning -- "do not
+validate by rebuilding the index" -- and it was heeded for per-field
+validation and then missed for the safety net, which reaches the builder
+anyway. Reproduced by landing a duplicate UID between the load and the verify,
+which is the ordinary shape of two sessions in one repository, and fixed by
+catching BaseException in verify() and routing every load through load_graph.
+
+Two more from the same review. Rejecting a `>>>` line at column zero was a
+FALSE POSITIVE -- measured, a bare `>>>` inside a block round-trips intact,
+because only the closing marker is matched at column zero -- so the rule is
+`<<<` only and legitimate prose stops being refused. And the guarded set is
+now actually validated against the loaded grammar, which
+MECH-RUNTIME-WRITE-GUARD's STATEMENT already promised and the first cut did
+not do; a guard built out of an absence is exactly the kind that dies
+silently when a field is renamed.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-EXECUTABLE-RULES-ROADMAP
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-RUNTIME-WRITE-GUARD
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SDOC-EDIT-VIA-MODEL
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SDOC-LEAN-FORMATS
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SDOC-CACHE-DIR-FOR-WORKTREES
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-FILE-RELATION-EXISTENCE
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: SLICE-GRAMMAR-FROM-NIX
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: SPIKE-EXECUTABLE-RULES
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: dev/scripts/sdoc_cli.py

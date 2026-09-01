@@ -1,0 +1,150 @@
+[DOCUMENT]
+TITLE: Step zero -- an overlay that keeps strictdoc current from upstream's flake
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: SLICE-STRICTDOC-OVERLAY
+TITLE: Step zero -- an overlay that keeps strictdoc current from upstream's flake
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+strictdoc comes from upstream's own flake, so every session, check and devShell
+in this repository runs the current version and the nixpkgs version stops being
+a topic. Shape: a flake input named `strictdoc`
+(github:strictdoc-project/strictdoc, tracking main, deliberately without a
+nixpkgs `follows`), and overlays/dev-tools/strictdoc.nix as a thin re-export of
+`inputs.strictdoc.packages.<system>.default`, extended by plain attrset update
+so upstream's drvPath and outPath survive byte for byte. That overlay is the
+seam: `pkgs.ai.devTools.strictdoc` is the attribute every consumer takes, and
+the strictdoc-using flake checks and the devShell take it.
+
+There is no first-party build. No `strictdoc-sources.json` sidecar, no override
+of the nixpkgs derivation, no dependency adjustments and no update-targets row:
+upstream's flake is a uv2nix set built from the repository's own uv.lock, and
+the update owner is `passthru.updateFlakeInput = "strictdoc"`, which
+checks.update-targets-parity accepts and the ordinary flake-input sweep serves.
+The cache-hit-parity row stays.
+
+No operator review before implementation: this is plumbing, not a consumer
+surface. Reviewed after: `strictdoc version` in the devShell and in the checks
+reports what the pinned input builds, and the input sweep bumps it on its own.
+
+Tracking main rather than a release is not a per-package call here -- it is what
+taking upstream's own flake means. The operator accepted that consequence when
+the switch was proposed, holding a pin to `refs/tags/<release>` as the
+contingency if main ever misbehaves.
+<<<
+RATIONALE: >>>
+Standing rule from the operator: any package used seriously gets an overlay
+that tracks the latest release or main -- update cadence is never a
+consideration, and the version in nixpkgs is never an input. Several sessions
+noted the version gap and none built the overlay; this node exists so the next
+session builds it rather than noting it again. Everything after it -- the
+grammar gate, the CLI, the behaviour model -- is measured against what upstream's
+flake builds and should run on it.
+<<<
+PARENT_FP: DEC-EXECUTABLE-RULES-ROADMAP:0000000
+NOTES: >>>
+STATEMENT REWRITTEN IN PLACE 2026-08-27, not superseded. What this node
+originally specified was a first-party override of the nixpkgs derivation,
+carrying its version and source from a `strictdoc-sources.json` sidecar plus
+two dependency adjustments: reqif pinned forward to 0.1.0, and pygments relaxed
+off the release's exact pin. Both adjustments turned out to be DEAD rather than
+merely unnecessary once the package came from upstream's uv2nix set, which
+resolves every Python dependency from the repository's own uv.lock; the sidecar,
+the update-targets row and the tagPrefix wrinkle went with them. The STATEMENT
+above now describes the shape that actually ships. Everything below is the
+history of the shape it replaced, kept because the measurements in it are real.
+
+Rewritten rather than superseded because the graph cannot express supersession
+for a slice. `Superseded_By` is declared only on DECISION in
+docs/sdoc/grammar.sgra, so there is no relation to point from a retired slice at
+what replaced it, and adding one would be a grammar change rather than the
+transcription this was. Only an accepted DECISION's STATEMENT is frozen -- a
+slice's is not -- so rewriting in place is permitted; it just loses the
+transition, which is the gap logged as MECH-SLICE-CANNOT-BE-SUPERSEDED in the
+plan backlog.
+
+Precedents the retired first-party build followed: the thin Python override in
+overlays/git-tools/git-revise.nix, the release-tracking update-targets row for
+beads, the cache-hit-parity registry, and
+overlays/generic/tree-sitter-strictdoc.nix for the fuzz-free patch flags should
+a patch ever appear. Group: dev-tools, the same class as beads.
+
+Implemented 2026-08-25 and retired two days later:
+overlays/dev-tools/strictdoc.nix plus its strictdoc-sources.json sidecar,
+registered in overlays/default.nix
+(pkgs.ai.devTools.strictdoc, flattened to the .#strictdoc flake package), with
+an update-targets row and a cache-hit-parity row. The two strictdoc-using
+checks (strictdoc-fp-check, strictdoc-cycle-check) and the devShell now take
+pkgs.ai.devTools.strictdoc instead of the nixpkgs attribute. No patches, so
+the fuzz-free flags did not come up.
+
+Measured: the pin moves 0.27.1 (nixpkgs) to 0.28.3 (upstream latest), and the
+built binary reports 0.28.3. Upstream tags releases BARE -- 0.28.3, not
+v0.28.3 -- so both the archive URL and the version check pass tagPrefix = "";
+that is the one place this row differs from beads. Two dependency adjustments
+were needed and no more: reqif, which nixpkgs carries at 0.0.54 against the
+release's `reqif >= 0.1.0, == 0.1.*`, pinned inline at 0.1.0 because
+mkUpdateScript rebuilds the sidecar from scratch and would erase a second
+package's pin; and pygments, added to pythonRelaxDeps rather than overridden,
+because the release pins it exactly at 2.21.0 against the pin's 2.20.0 and
+overriding it would fork the closure of the whole Python set for one
+patch-level move. The version claim is asserted in the derivation's
+installCheckPhase rather than left to a session to notice, and that assertion
+was positive-controlled: pointed at a version the binary does not report, the
+build fails in installCheckPhase.
+
+The whole design corpus formats and exports clean under 0.28.3, so the bump is
+not a migration: nothing in the grammar or the existing nodes needed changing
+to move off the nixpkgs version.
+
+CUT OVER 2026-08-27, two days later: the first-party build is gone and
+overlays/dev-tools/strictdoc.nix now re-exports upstream's OWN flake package
+unchanged, on the same plain-attrset-update contract as overlays/semble.nix.
+See MECH-STRICTDOC-UPSTREAM-FLAKE in the plan backlog for the switch's own
+record, and MECH-STRICTDOC-VERSION-SMOKE for what it cost.
+
+What changed and what it settles. Upstream's flake is a uv2nix set built from
+the repository's own uv.lock, which pins every Python dependency to the exact
+artifact the release was tested against, so BOTH dependency adjustments are
+dead rather than merely unnecessary here: reqif comes from uv.lock at the
+version the constraint wants, and pygments needs no relaxation because nothing
+is resolving it against a nixpkgs pin. The sidecar, the tagPrefix = "" wrinkle,
+the meta.changelog repointing and the update-targets row all went with them.
+The update owner is now passthru.updateFlakeInput = "strictdoc", which
+checks.update-targets-parity accepts and the ordinary flake-input sweep serves
+(config/generate-update-ninja.nix derives its targets from flake.lock, so the
+input needed no registration anywhere).
+
+The cache-hit-parity row stays and still holds. It now holds TRIVIALLY -- the
+derivation closes over upstream's locked nixpkgs, so its store path cannot vary
+with a consumer's pin -- but a row that passes for a structural reason is still
+what would catch a later edit reintroducing a final-bound wrapper, so it was
+not removed.
+
+One thing the switch DID force, and it is the only consumer that noticed. The
+package is mkApplication over a virtual environment: $out holds bin/strictdoc
+and nothing else -- no interpreter, no site-packages -- and its `dependencies`
+is a uv2nix name-to-extras ATTRSET, not nixpkgs' list of derivations.
+The grammar extractor's wrapper consumed both of those, so it could not survive
+unchanged; it now wraps the venv interpreter named by that script's shebang,
+with ast_grep_py spliced onto PYTHONPATH. That wrapper has since left overlays/
+altogether -- it is packages/strictdoc-grammar/lib/mkExtract.nix, and its build
+inputs come from the consumer's pkgs rather than an overlay's isolated ourPkgs.
+See MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY.
+MEASURED: upstream's interpreter is 3.14.6 against ourPkgs' 3.14.7, the splice
+imports clean, and the grammar builder returns the same 4adcdb05... grammar the
+implementation brief records.
+
+Retyped from SLICE to WORK on 2026-08-30 under DEC-SLICE-DECOMPOSES-TO-WORK and DEC-NODE-FAMILIES. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-EXECUTABLE-RULES-ROADMAP
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: SPIKE-EXECUTABLE-RULES
+  ROLE: Proven_By

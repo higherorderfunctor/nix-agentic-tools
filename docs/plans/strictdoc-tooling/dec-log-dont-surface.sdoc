@@ -1,0 +1,33 @@
+[DOCUMENT]
+TITLE: Incidental findings go to the backlog, not to session output
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-LOG-DONT-SURFACE
+TITLE: Incidental findings go to the backlog, not to session output
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+The backlog grows faster than it is groomed, which would mean the filter is
+letting too much through and the threshold needs restating.
+<<<
+STATEMENT: >>>
+A model working in this repository may add backlog nodes on its own initiative,
+without asking. It should.
+
+Session output raises a finding only when it matters SOON -- it changes the
+decision in front of the operator, or it blocks the work in hand. Everything
+else, the whole class of "one more thing you should know", is written to the
+plan's backlog document and not spoken. A finding that is logged is not lost, so
+mentioning it costs attention while logging it costs nothing.
+
+This applies to planning and implementation sessions alike.
+<<<
+RATIONALE: >>>
+The operator's judgment budget is the scarce resource, not disk or tokens.
+Surfacing everything spends that budget on things that are not urgent, and the
+predictable result is that genuinely urgent findings get skimmed along with the
+rest.
+<<<

@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: What the whiteboard migration produced, counted from the export
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-WHITEBOARD-MIGRATION-COUNTS
+TITLE: What the whiteboard migration produced, counted from the export
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: strictdoc export --formats=json; sdoc check; dev/scripts/fp-check.py, cycle-check.py, file-check.py
+STATEMENT: >>>
+What the migration of the whiteboard sheet into narratives produced, measured on 2026-08-30 from the JSON export after the tree was built through the scribe.
+
+The tree under [LINK: NAR-SEMANTIC-LAYER] in the strictdoc-tooling plan: 32 new narratives (the root, a legend, a tally tab with seven type cards, a topics tab with thirteen sections, a gaps tab with five cards, an edges tab and a glossary), plus the seven term narratives of the spec that the glossary contains and the retyped sheet [LINK: MECH-SEMANTIC-LAYER-WHITEBOARD] kept as the last tab: 40 narratives in all. 145 rows across the thirteen sections carry the sheet's lines under five legend words; the sheet itself keeps its 150. 28 working terms in the glossary. 244 Cites from the new narratives, every one with a placeholder fingerprint entry; nothing is signed.
+
+The canon later the same day, from a fresh export that exits 0, after the view organization work, the mechanism mood review and the whiteboard-view re-cut that followed the migration: sdoc check 334 nodes, 0 findings, 28 notes (one per node retyped in place); fp-check 502 entries, 0 signed, 502 never signed, 0 suspect; cycle-check 771 role-carrying edges, 0 cycles; file-check 20 File relations, 0 findings.
+<<<
+NOTES: >>>
+The canon counts were first taken before this node and its five siblings ([LINK: WORK-VIEW-PIPELINE], [LINK: WORK-VIEW-SELF-HOSTED], [LINK: WORK-WHITEBOARD-AS-NARRATIVES], [LINK: EV-VIEW-PIPELINE-FIRST-RENDER], [LINK: EV-VIEW-SELF-HOST-RENDER]) existed, and read 270 nodes, 321 entries and 542 edges; those six nodes carry seven Cites and fingerprint entries between them, which is the whole difference. Re-taken on 2026-08-30 with all six in the export.
+
+The first reading with all six in the export was 276 nodes, 328 entries, 549 edges and 14 File relations, with one note (the sheet's retype). Three later passes on 2026-08-30 grew the corpus past it: the mechanism mood review (the five [LINK: NAR-MECHANISM-MOOD-REVIEW] narratives, 134 Cites and fingerprint entries between them, and 27 retype notes), the view organization work (the PLACE migration's Start cards under [LINK: NAR-SEMANTIC-LAYER], the seven type screens moved to the spec, the canon root's tree, and this plan's decisions, requirements and use cases of that day) and the whiteboard-view re-cut. The statement now carries the reading taken after all three: 334 nodes, 502 entries, 771 edges, 20 File relations, 28 notes.
+<<<

@@ -1,0 +1,83 @@
+[DOCUMENT]
+TITLE: Moving a node between files
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-ON-DISK-MOVES
+TITLE: Moving a node between files
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+PLACE: screen
+STATEMENT: >>>
+Retention class changes by file move; what survives collection; where a backlog item lives.
+
+- A node changes retention class only by moving its file; the UID never changes. Thirteen relocations have held. A dangling relation is fatal; a dangling fingerprint is silent; both are scanned.
+> a node changes class only by moving its file; UID never changes; 13 relocations held; dangling Parent = fatal, dangling PARENT_FP = silent, both scanned [WORKS]
+- The grid says what survives when a plan is collected — its claims — but not where a surviving claim goes.
+[LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]
+> grid says WHAT survives collection (claims), never WHERE a surviving claim lives [UNADDRESSED]
+- Two nodes still say handover freezes the whole plan. A later mechanism narrowed that to the scope handed over.
+[LINK: DEC-PLAN-LIFECYCLE-OPEN] [LINK: MECH-PLAN-BEADS-SNAPSHOT] [LINK: MECH-PLAN-CHANGE-KINDS] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] [LINK: NAR-SEMANTIC-LAYER-TYPE-MECHANISM]
+> DEC-PLAN-LIFECYCLE-OPEN STATEMENT and MECH-PLAN-BEADS-SNAPSHOT still say "ingest freezes the plan" [FALLS OUT: MECH-PLAN-CHANGE-KINDS]
+- Is a backlog item canon (reviewed) or beads (private)? An unreviewed sketch node sitting on the branch is neither.
+[LINK: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT]
+> a backlog item: canon (reviewed) or beads (private)? an unreviewed sketch node on the branch is neither [GAP]
+- The beads-migration plan's authoritative source is a rendered artifact plus private markdown, neither in the repo. Which one wins is undecided.
+[LINK: DEC-SOURCE-OUT-OF-REPO] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]
+> beads-migration plan's source = an artifact + private markdown, neither in repo; which wins [OPEN: DEC-SOURCE-OUT-OF-REPO]
+- The reason given for putting architecture beside code — 'plans decay and are collected' — is the lean that was since dropped. The placement itself still stands.
+[LINK: DEC-ARCH-COLOCATION] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION]
+> DEC-ARCH-COLOCATION's reason ("plans decay and are collected") is the dropped lean; placement stands [OPEN: DEC-ARCH-COLOCATION]
+- Scribe's move renames a file outside its load-change-save pipeline, so no joint fires. The library form has no move at all.
+> scribe move renames outside load|change|save, so no joint fires; the library form has no move [GAP]
+<<<
+PARENT_FP: >>>
+DEC-ARCH-COLOCATION:0000000
+DEC-PLAN-LIFECYCLE-OPEN:0000000
+MECH-PLAN-BEADS-SNAPSHOT:0000000
+MECH-PLAN-CHANGE-KINDS:0000000
+NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT:0000000
+NAR-SEMANTIC-LAYER-TYPE-DECISION:0000000
+NAR-SEMANTIC-LAYER-TYPE-MECHANISM:0000000
+NAR-TERM-BEADS:0000000
+NAR-TERM-CANON:0000000
+NAR-TERM-JOINT:0000000
+NAR-TERM-SCRIBE:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-MEMBERSHIP-AND-COLLECTION-CONTRADICT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-PLAN-LIFECYCLE-OPEN
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-PLAN-BEADS-SNAPSHOT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: MECH-PLAN-CHANGE-KINDS
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-DECISION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-MECHANISM
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-ARCH-COLOCATION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-JOINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-SCRIBE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-BEADS
+  ROLE: Cites

@@ -1,0 +1,18 @@
+[DOCUMENT]
+TITLE: The canon-adoption plan's backlog register
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-BACKLOG-CANON-ADOPTION
+TITLE: The canon-adoption plan's backlog register
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The linchpin every ungroomed item in this plan points at. An item is in the
+backlog when it carries Backlogged_In to this node, and the plan's backlog is
+the inbound Backlogs set. This node holds no list (DEC-BACKLOG-IS-A-REGISTER-NODE).
+The plan: bring the rest of the repository's knowledge into the canon and
+retire the places it lives today.
+<<<

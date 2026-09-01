@@ -46,6 +46,7 @@ _: {
     gh = {consumerPath = ["ai" "devTools" "gh"];};
     glab = {consumerPath = ["ai" "devTools" "glab"];};
     oxlint = {consumerPath = ["ai" "devTools" "oxlint"];};
+    strictdoc = {consumerPath = ["ai" "devTools" "strictdoc"];};
     tsgolint = {consumerPath = ["ai" "devTools" "tsgolint"];};
 
     # ── Generic supporting packages — live at `consumerPkgs.ai.generic.<name>` ──
@@ -73,6 +74,7 @@ _: {
     otel-tui = {consumerPath = ["ai" "generic" "otel-tui"];};
     pnpm_10 = {consumerPath = ["ai" "generic" "pnpm_10"];};
     pnpm_11 = {consumerPath = ["ai" "generic" "pnpm_11"];};
+    tree-sitter-strictdoc = {consumerPath = ["ai" "generic" "tree-sitter-strictdoc"];};
 
     # ── agnix + its mainProgram-override siblings ──
     # agnix itself is a flatDrvs entry at `consumerPkgs.ai.agnix`; the

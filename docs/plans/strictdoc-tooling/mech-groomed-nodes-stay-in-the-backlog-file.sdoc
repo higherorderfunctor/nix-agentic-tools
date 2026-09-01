@@ -1,0 +1,61 @@
+[DOCUMENT]
+TITLE: Grooming no longer moves a node between files
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-GROOMED-NODES-STAY-IN-THE-BACKLOG-FILE
+TITLE: Grooming no longer moves a node between files
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Abandoned. MECH-ONE-NODE-PER-FILE replaced the work this node scheduled.
+
+The problem was that the backlog protocol defined grooming as moving a node into
+a numbered document in the same plan, and the 2026-08-27 grooming pass raised
+DEPTH on eighteen nodes and moved none of them, leaving a backlog document full
+of interface-settled nodes whose name no longer described it. The work was
+deciding which numbered document each of the eighteen belonged to, and moving
+them.
+
+The carve dissolved it rather than doing it. Every node is its own file now, so
+there is no backlog document to be misnamed, no numbered document to move into,
+and no file-level signal to lose: opening a file tells you about exactly one
+node. What replaced the file-level signal is an edge -- an item carries
+Backlogged_In to its plan's register, per DEC-BACKLOG-IS-A-REGISTER-NODE -- so
+the backlog is readable by traversal rather than by opening a directory.
+<<<
+RATIONALE: >>>
+Kept rather than deleted, per DEC-NO-DELETES-YET, and rewritten in place rather
+than superseded, which DEC-SUPERSESSION-RULE permits on a MECHANISM and which is
+the only path available anyway: Superseded_By exists on DECISION alone.
+
+The original reason for logging instead of acting still reads correctly and is
+worth preserving, because it is why the eighteen nodes were still sitting in one
+file when the carve found them. Moving eighteen nodes between files in the same
+pass that rewrote their contents would have made the diff unreviewable, on a
+branch whose whole review model is the carve-up into pull requests. The carve
+avoided that by moving all 161 nodes and rewriting none of them.
+<<<
+NOTES: >>>
+The UID preserves the retired shape and the TITLE no longer does. Renaming
+either was not an option: the filename tracks the UID, the UID is hand-chosen
+and never changes, and that invariant is exactly what let the carve move every
+node without breaking a citation.
+
+Logged against MECH-SLICE-CANNOT-BE-SUPERSEDED as an instance of a non-DECISION
+node being superseded in prose. That makes two events for that node to weigh,
+not one.
+
+The rough split by subject recorded at the time of logging -- readiness and
+predicate nodes with the tooling document, plan-refs and lifecycle nodes with
+the lifecycle document, CLI, guard and signing nodes with the executable-rules
+document -- has no destinations left to name. It is kept only as evidence that
+the grouping was a judgement per node, which is part of why a flat directory
+plus edges was the cheaper answer.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: use case
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-TYPE-USE-CASE
+TITLE: use case
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: prose
+PLACE: screen
+TAGS: USE_CASE
+STATEMENT: >>>
+One path that must work. A fitness test: hold the design against it and a conflict becomes findable rather than felt.
+
+Also: the coverage family of its own ([LINK: DEC-NODE-FAMILIES]), neither violated nor wrong but covered or uncovered by what it points at with Covered_By. On the sheet's day it was the empty cell, with no grammar type to spell it; since 2026-08-30 the grammar spells it under the UC- prefix, and the first three live in the whiteboard-view plan.
+
+State: DEPTH.
+<<<
+PARENT_FP: DEC-NODE-FAMILIES:0000000
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NODE-FAMILIES
+  ROLE: Cites

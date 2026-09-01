@@ -1,0 +1,34 @@
+[DOCUMENT]
+TITLE: A decision brought to the operator is a card: reasoning, options with the discriminating argument, one explicit ask
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: INV-DECISIONS-ARRIVE-AS-CARDS
+TITLE: A decision brought to the operator is a card: reasoning, options with the discriminating argument, one explicit ask
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+A decision brought to the operator arrives as a CARD, and a card has a fixed
+shape:
+
+  1. the reasoning, in prose, BEFORE any ask -- consequences are not reasons;
+  2. the options, each with the argument that discriminates it from the others;
+  3. the ask, and one explicit line stating what the operator is required to do.
+
+One decision per turn. A paragraph that carries several decisions, or an essay
+the reader must unpack to find the question, violates this rule regardless of
+how sound its content is. A menu without the discriminating argument is a coin
+flip dressed as a choice and violates it too.
+<<<
+RATIONALE: >>>
+The operator's judgment budget is the scarce resource in every session. A card
+spends it on exactly one judgment; an essay spends it on locating the judgment
+first, and that cost is paid before any thinking about the answer begins.
+<<<
+NOTES: >>>
+Recorded 2026-08-28 at the operator's request, as one of four contributor-communication requirements (INV-DECISIONS-ARRIVE-AS-CARDS, INV-LISTS-WHERE-THE-READER-UNPACKS, INV-FILE-DO-NOT-NARRATE, INV-SETTLED-STAYS-VISIBLE). The rule is the operator's; AUTHORED_BY reads llm because the writer has no flag for the other value. An INVARIANT is read as a REQUIREMENT under DEC-INVARIANT-IS-A-REQUIREMENT; the grammar type is kept so the grid is not half-applied. The sdoc skill's backlog protocol is the procedure these four are the requirement for.
+
+Retyped from INVARIANT to REQUIREMENT on 2026-08-30 (DEC-INVARIANT-IS-A-REQUIREMENT; DEC-NODE-FAMILIES). The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<

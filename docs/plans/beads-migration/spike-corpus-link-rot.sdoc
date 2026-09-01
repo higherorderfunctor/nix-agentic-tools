@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: Link rot in the source corpus
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: SPIKE-CORPUS-LINK-ROT
+TITLE: Link rot in the source corpus
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+212 of 865 internal links dangle, 25 percent. 49 of 90 distinct targets resolve
+to nothing. The split is 123 references across 9 dropped sections, 80 references
+to register-row anchors that markdown cannot address below file granularity, and
+9 to symbol anchors. One provenance row cites a dropped section in the very row
+recording that it was dropped.
+<<<
+RATIONALE: >>>
+This is the failure StrictDoc fails closed on. No hypothesis is needed about
+whether validation helps here.
+<<<
+NOTES: >>>
+Retyped from SPIKE to EVIDENCE on 2026-08-30: a probe is work, then evidence, then a decision (MECH-SPIKE-IS-A-PIPELINE-TO-A-DECISION; DEC-NODE-FAMILIES). Its STATUS was 'run'. Its RETIRES_ON read: The corpus is converted, after which dangling references are export errors rather than a measurement. The UID keeps its retired prefix: DEC-UID-OUTLIVES-TYPE.
+<<<

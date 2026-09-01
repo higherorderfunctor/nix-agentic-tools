@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: The cheap rebuild accepts deleting a node the canon still links to
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-CHEAP-REBUILD-SKIPS-INLINE-LINKS
+TITLE: The cheap rebuild accepts deleting a node the canon still links to
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: live 377-node canon plus three rolled-back mutations on an isolated copy; strictdoc 0.28.3; 2026-08-31
+STATEMENT: >>>
+The cheap rebuild over already-parsed documents does not validate inline link
+references, and the earlier design rested on the belief that it did.
+
+Measured on the live 377-node canon, twice independently and then confirmed
+directly: after a full load pending_inline_links is 0 and 242 nodes carry
+incoming links; after a rebuild over the same held documents it is 579 and
+zero nodes do. The corpus holds 579 inline links across 59 files and 10 UIDs
+that nothing but an inline link names.
+
+Consequences measured, each rolled back: deleting a node referenced only by an
+inline link PASSES the cheap rebuild in 0.021 s and is caught by the full
+reload in 0.69 s; a statement gaining a link to a nonexistent UID PASSES
+cheap and is caught by full; a UID rename on an inline-referenced node does
+the same. The verb writing prose is the most common one, so it was also the
+worst affected.
+
+The cause is structural, not a bug: the drain and check are in the outer
+create() at traceability_index_builder.py:266-278, while the append is at
+:643, inside the half the cheap rebuild runs.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-DEFERRED-RELOAD-IS-FULL
+  ROLE: Governed_By

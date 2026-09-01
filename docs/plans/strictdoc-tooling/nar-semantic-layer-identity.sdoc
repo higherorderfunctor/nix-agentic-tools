@@ -1,0 +1,84 @@
+[DOCUMENT]
+TITLE: Who is acting
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[NARRATIVE]
+UID: NAR-SEMANTIC-LAYER-IDENTITY
+TITLE: Who is acting
+DEPTH: sketch
+AUTHORED_BY: llm
+WIDGET: rows
+PLACE: screen
+STATEMENT: >>>
+The ssh key, its class (human or agent), and what authority each class has.
+
+- Identity is the ssh key that made the write. How that key is read, a table mapping key fingerprints to a class — human or agent — and a default for unknown keys all live in one config block. Scribe writes under that authority.
+[LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> identity = the acting ssh key; class = a table key-fingerprint -> human|llm with a default; canon.actors = {extractor; classes; default}; scribe writes under that authority [WORKS]
+- Where the key-to-class table lives, which class — human or agent — may edit it, and whether two classes are enough — all unwritten.
+[LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> class table: where it lives, which class may edit it, finer vocabulary than human|llm [GAP]
+- Telling human from agent by which channel the edit came through — harness hooks, the CLI, a hook that refuses before a tool runs (PreToolUse), the Stop hook — is dissolved. The class is checked at the joint, and a canon check catches edits made around scribe.
+> channel discriminators: harness hook fires only in an agent session; CLI cannot tell who; PreToolUse deny; Stop hook [FALLS OUT: class check at the joint; canon check catches edits around scribe]
+- Attributing writes through a commit trailer read from environment variables is dissolved. The agent holds its own key in its sandbox; an unknown key falls to the default class.
+> Acted-By trailer from env vars; "per-agent keys buy nothing"; no trailer = unattributed; "override token is forgeable" [FALLS OUT: identity:llm holds its own key in a VM; unknown key -> default class]
+- Two distinct things, both kept: the class of whoever wrote a node's statement (AUTHORED_BY), and the identity of whoever performs each act (the key).
+> per-node class (AUTHORED_BY = class of the statement's author) + per-act identity (the key): two things, keep both [WORKS]
+- How an agent may treat a node depends on the writer's rung: undo freely at the bottom, undo but report above that, and stop to ask at the top.
+> ladder treatment by class: FREE identity:llm may undo; SOFT undo must be reported; HARD identity:llm stops and asks [WORKS]
+- About ten nodes say 'ruled by the operator' yet read AUTHORED_BY: llm. A human ruling carried by an agent's write has no form in the model.
+[LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> relayed rulings: ~10 nodes "ruled by the operator, AUTHORED_BY llm"; human authority carried by an llm write has no form [GAP]
+- Who may clear a dirty edge — accept that a parent's contract changed — depends on the rungs of both ends: an agent if both are below llm-accepted, otherwise a human. Which end's authorship decides is undecided.
+[LINK: DEC-FP-ACCEPT-AUTHORITY] [LINK: NAR-SEMANTIC-LAYER-TYPE-DECISION] [LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> clearing a dirty edge (child's fingerprint stale vs parent): identity:llm if both ends' AUTHORED_BY < llm-accepted, else identity:human; whose key decides, parent's or child's? [OPEN: DEC-FP-ACCEPT-AUTHORITY]
+- Whoever signs a contract should not be whoever wrote it. Nothing enforces that.
+[LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER]
+> signer independence: signer key != author key of the contract [GAP]
+- Whether a spawned sub-agent shares the sandbox's key is unsaid. After a squash merge, main records the merger's key, not the signer's; whether that is enough is unsaid too.
+[LINK: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER] [LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]
+> does a spawned agent share the VM's key? after squash main records the merger's key, not the signer's; does that suffice? [UNADDRESSED]
+- 'Only a human signs' can be checked before a scribe write or before a push — never at merge, where there is no joint.
+[LINK: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT]
+> "only identity:human signs" checkable at scribe.change and git.push pre, never at merge [WORKS]
+- The four contributor-communication requirements — cards, lists, file-do-not-narrate, settled-stays-visible — are the rules for how an agent addresses a human.
+[LINK: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT]
+> contributor-communication REQUIREMENTs (cards, file-do-not-narrate, lists, settled-stays-visible) = how identity:llm addresses identity:human [WORKS]
+<<<
+PARENT_FP: >>>
+DEC-FP-ACCEPT-AUTHORITY:0000000
+NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER:0000000
+NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT:0000000
+NAR-SEMANTIC-LAYER-TYPE-DECISION:0000000
+NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT:0000000
+NAR-TERM-CANON:0000000
+NAR-TERM-JOINT:0000000
+NAR-TERM-SCRIBE:0000000
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-IDENTITY-HAS-NO-CARRIER
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: DEC-FP-ACCEPT-AUTHORITY
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-DECISION
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-GAP-MERGE-BOUNDARY-IS-NOT-A-JOINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-SEMANTIC-LAYER-TYPE-REQUIREMENT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-JOINT
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-SCRIBE
+  ROLE: Cites
+- TYPE: Parent
+  VALUE: NAR-TERM-CANON
+  ROLE: Cites

@@ -1,0 +1,40 @@
+[DOCUMENT]
+TITLE: Move package wrapping out of overlays and into modules, repo-wide
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: MECH-OVERLAY-WRAPPING-BELONGS-IN-MODULES
+TITLE: Move package wrapping out of overlays and into modules, repo-wide
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Repo-wide, not attached to any milestone. An overlay should be the faithful
+conversion of an upstream package and nothing more; wrapping -- environment,
+flags, configuration -- belongs in the module that consumes it. That is the
+operator's convention and it is not currently applied consistently:
+overlays/kiro-cli.nix does its wrapping in the overlay, which is why it read as
+the example to follow.
+
+Sweep the overlays, list what wraps rather than converts, and move each into its
+module. The operator wants to inspect that list rather than have an agent decide
+edge cases against a stated invariant, so this is HITL at the point of sweeping,
+not a mechanical migration.
+
+One open question to answer first, because it changes the shape: if the devenv
+module and the home-manager module wrap identically, does that build two
+derivations, and can they share one?
+<<<
+RATIONALE: >>>
+Overlays that wrap are the reason a consumer cannot take the package plainly,
+and the reason an agent reading the tree infers the wrong convention from the
+nearest example. Both showed up during milestone one.
+<<<
+NOTES: >>>
+Retyped from MECHANISM to REQUIREMENT on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it can be violated: a counterexample would be fixed in the world, not in this node. Noted for a later split: The sweep ('list what wraps rather than converts, and move each into its module', HITL at the point of sweeping) is work, and the open question about whether devenv and home-manager modules can share one wrapped derivation is a design question. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

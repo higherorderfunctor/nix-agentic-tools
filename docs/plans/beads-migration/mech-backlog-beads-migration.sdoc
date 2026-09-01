@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: The beads-migration plan's backlog register
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-BACKLOG-BEADS-MIGRATION
+TITLE: The beads-migration plan's backlog register
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The linchpin every ungroomed item in this plan points at. An item is in the
+backlog when it carries Backlogged_In to this node, and the plan's backlog is
+the inbound Backlogs set.
+
+This node holds no list. The edges are the list.
+<<<
+RATIONALE: >>>
+One register per plan, so that the backlog is scoped the way the plan is and no
+edge has to cross a plan boundary to reach it. This plan carries one ungroomed
+item today, which does not make the register optional: an item with nothing to
+attach to is exactly the case the edge exists to prevent.
+<<<
+NOTES: >>>
+Created 2026-08-27 alongside the equivalent register in the strictdoc-tooling
+plan. The reasoning behind the shape is recorded there and is deliberately not
+cited across the plan boundary, since INV-NO-EXTERNAL-PLAN-REFS is what keeps a
+plan collectable.
+<<<

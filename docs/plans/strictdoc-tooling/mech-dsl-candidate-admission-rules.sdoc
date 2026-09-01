@@ -1,0 +1,76 @@
+[DOCUMENT]
+TITLE: Candidate shape: a flat rule list with a per-site action, Kubernetes-admission style
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-DSL-CANDIDATE-ADMISSION-RULES
+TITLE: Candidate shape: a flat rule list with a per-site action, Kubernetes-admission style
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+PROPOSED SHAPE, one of three, from the 2026-08-29 prior-art spike
+(SPIKE-DSL-PRIOR-ART). Not chosen. All three show the SAME worked example so
+they compare by eye: a DECISION whose STATUS moves from open to accepted only
+when a guard holds, a dirty-edge rule over one relation role, one gate CI can
+call, and one actor primitive keyed on an ssh identity.
+
+WHAT IT BORROWS. Kubernetes ValidatingAdmissionPolicy: a flat list of rules, each with a match, an expression, and a per-binding action (Deny | Warn | Audit). No lifecycle object at all; a lifecycle is just rules on STATUS changes, and the site is explicit on every rule.
+
+THE SHAPE.
+
+  { c, ... }: {
+    canon.rules.decision-accept = {
+      match = { nodeType = "DECISION"; field = "STATUS"; to = "accepted"; };
+      when = c.and [
+        (c.eq (c.var "before.STATUS") "open")                # the "from" state is just a clause
+        (c.eq (c.var "actor.class") "human")
+        (c.every "Governed_By"
+          (c.inList (c.var "target.DEPTH") [ "interface-settled" "implemented" "verified" ]))
+      ];
+      actions."scribe.change" = "deny";                      # deny | warn | audit, per joint
+      message = "every governing node must be at least interface-settled";
+    };
+    canon.rules.no-stale-edges = {
+      match = { relation = "Governed_By"; };
+      when = c.eq (c.var "edge.stale") false;
+      actions = { "git.commit" = "warn"; check = "deny"; };  # legal in the canon, fatal at check
+    };
+    canon.ripple.Governed_By = { onFields = [ "STATEMENT" ]; clearedBy = [ "human" ]; };
+    canon.actors = {
+      extractor = "ssh-signing-key";
+      classes.human = [ "SHA256:AbCd..." ];
+      default = "agent";
+    };
+    # CI runs:  scribe check     (every rule whose check action is "deny")
+  }
+
+HOW IT DECOMPOSES ONTO THE HOOK LAYER (MECH-HOOK-MIDDLEWARE-INTERFACE).
+Each rule -> one hook per key in actions: deny -> PRE handler (stop), warn/audit -> POST handler that records; the check key -> membership in `scribe check`.
+match -> the hook's filter (node type, field, to) evaluated by the generic evaluator before when.
+ripple and actors -> as in the other candidates; there is nothing else to compile.
+<<<
+NOTES: >>>
+STRENGTHS.
+- One construct, and each rule is literally one hook; the DSL-to-L2 mapping is a table, not a compiler.
+- Site tiering the operator asked for (dirty allowed, warn at commit, deny at merge) is written on the rule itself, in the runtime's own words.
+- Smallest option surface to type and document; the flake check for it is a few assertions.
+
+WEAKNESSES.
+- No lifecycle object, so Nix cannot check reachability or 'no two transitions on one trigger'; the from state is a clause Nix cannot see through.
+- Nothing to draw: the state graph exists only in the reader's head, which defeats 'easy to read and reason about'.
+- Augment is fine (add a rule) but overshadow is coarse: mkForce replaces a whole rule, and two rules on the same match compose by AND with no way to say 'instead'.
+
+Recorded from the spike's synthesis without endorsement; the operator weighs the three by reading the shapes.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-LAYER-STACK
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-DSL-SHAPE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: SPIKE-DSL-PRIOR-ART
+  ROLE: Proven_By

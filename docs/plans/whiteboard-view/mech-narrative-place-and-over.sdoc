@@ -1,0 +1,35 @@
+[DOCUMENT]
+TITLE: The grammar carries PLACE, Over and the widget vocabulary on NARRATIVE, and PLACE is outside the contract hash
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-NARRATIVE-PLACE-AND-OVER
+TITLE: The grammar carries PLACE, Over and the widget vocabulary on NARRATIVE, and PLACE is outside the contract hash
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+packages/strictdoc-grammar/values.nix gives NARRATIVE a PLACE field (tab,
+screen, section, card; optional; after WIDGET), a WIDGET word list of
+sixteen -- prose, callout, rows, table, facts, glossary, legend, stack,
+grid, ladder, strip, tally, index, list, edges, fingerprints -- and an Over
+relation (Parent, reverse Shown_By). generate:sgra renders it; the scribe
+grows --place, --over and the new widget words from the grammar. The
+fingerprint module's excluded fields gain PLACE, so placement never enters
+a contract; Over is a relation and was never in one.
+<<<
+NOTES: >>>
+Landed 2026-08-30. The exclusion is a constant in dev/scripts/sdoc_fp.py, which DEC-FP-FIELDS-CONFIGURABLE says should be an option; noted, not fixed here.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NARRATIVE-DECLARES-ITS-PLACE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-WIDGET-SUBJECT-IS-ITS-OVER-TARGET
+  ROLE: Governed_By
+- TYPE: File
+  VALUE: packages/strictdoc-grammar/values.nix
+- TYPE: File
+  VALUE: dev/scripts/sdoc_fp.py
