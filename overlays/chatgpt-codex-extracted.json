@@ -5634,6 +5634,11 @@
     {
       "default": false,
       "maturity": "under development",
+      "name": "local_thread_store_shared_compression"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
       "name": "mcp_2026_07_28"
     },
     {
@@ -5672,6 +5677,11 @@
       "name": "non_prefixed_mcp_tool_names"
     },
     {
+      "default": false,
+      "maturity": "under development",
+      "name": "omit_app_server_notification_media"
+    },
+    {
       "default": true,
       "maturity": "stable",
       "name": "personality"
@@ -5690,6 +5700,11 @@
       "default": true,
       "maturity": "stable",
       "name": "plugins"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "powershell_shell_version"
     },
     {
       "default": false,
@@ -5830,6 +5845,11 @@
       "default": false,
       "maturity": "under development",
       "name": "skip_host_skill_discovery"
+    },
+    {
+      "default": true,
+      "maturity": "stable",
+      "name": "sleep_tool"
     },
     {
       "default": true,
@@ -6035,7 +6055,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.151.0",
+    "codexVersion": "0.152.0",
     "extractorSchema": 1
   }
 }
