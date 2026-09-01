@@ -14,7 +14,8 @@
 # reproduce it, and recording that value would put a plausible, WRONG
 # hash in the sidecar. This is the shape `overlays/generic/bruno.nix`
 # documents: `platforms = {}` records the version alone and
-# `vu.mkGoSrcVendorFix` restores `srcHash` then `vendorHash` as
+# `vu.mkGoUpdateExtract` (with `srcFromSidecar = true`) restores
+# `srcHash`, then derives `goFloor`, then restores `vendorHash`, as
 # `extraExtract` immediately afterwards. Both reads below are therefore
 # `sources.<key> or lib.fakeHash` — the `or` covers exactly that window.
 #
@@ -103,19 +104,28 @@
   # subtree.
   sourcesFile = "overlays/dev-tools/glab-sources.json";
 
-  fixHashes = vu.mkGoSrcVendorFix {
+  # `srcFromSidecar` because glab passes `platforms = {}` to
+  # mkUpdateScript (see below): nixpkgs' fetcher carries a `postFetch`,
+  # so the prefetch path cannot produce a usable src hash and a fixer has
+  # to. That is exactly the case whose correct order — src, THEN floor,
+  # THEN vendor — the old welded `mkGoSrcVendorFix` could not express.
+  #
+  # `extraAfter` carries the config-key schema dump, which COMPILES this
+  # module's Go against the vendor tree and therefore has to follow both
+  # the floor (for the toolchain) and the vendor fix (for `.goModules`).
+  goUpdate = vu.mkGoUpdateExtract {
     attr = "glab";
+    extraAfter = vu.mkExtractRegen {
+      attr = "glab";
+      dest = "overlays/dev-tools/glab-extracted.json";
+      pkgs = ourPkgs;
+    };
     pkgs = ourPkgs;
     pname = "glab";
+    srcFromSidecar = true;
     inherit sourcesFile;
   };
-
-  fixGoFloor = vu.mkGoFloorFix {
-    attr = "glab";
-    pkgs = ourPkgs;
-    pname = "glab";
-    inherit sourcesFile;
-  };
+  inherit (goUpdate) fixGoFloor fixSrcHash fixVendorHash;
 
   # ── The package ──────────────────────────────────────────────────
   # Split in two so the schema extract below can read `.src` and
@@ -143,34 +153,25 @@
 
       # Merge, never replace: buildGoModule hangs `goModules` and
       # `overrideModAttrs` here, module.nix warns loudly when an overlay
-      # drops them, and `fixHashes` builds `.goModules` through this very
-      # attrset. See the nix-standards fragment.
+      # drops them, and `fixVendorHash` builds `.goModules` through this
+      # very attrset. See the nix-standards fragment.
       passthru =
         (prev.passthru or {})
         // {
-          inherit fixGoFloor fixHashes goFloor;
+          inherit fixGoFloor fixSrcHash fixVendorHash goFloor;
+          goUpdateExtract = goUpdate.extract;
           updateScript = vu.mkUpdateScript {
-            # ORDER IS FORCED, and this is the only extracted package where
-            # that is true. `fixHashes` must land FIRST: until it has
-            # written the real `srcHash` and `vendorHash`, the sidecar still
-            # holds `lib.fakeHash`, and both `fixGoFloor` and the extract
-            # below build `glabBase.src` — so they would fail on the hash
-            # mismatch rather than produce a floor or a schema. The other
-            # three extracted packages fetch a prebuilt binary and have no
-            # hash to restore, so they pass `mkExtractRegen` alone.
+            # ORDER IS FORCED and glab is the only package where all
+            # four stages are in play, but it is no longer restated
+            # here — `vu.mkGoUpdateExtract` owns it, and `goUpdate`
+            # above says which axes glab sits on.
             #
-            # `fixGoFloor` then precedes the extract for the same reason it
-            # follows `fixHashes`: the schema dump COMPILES this module, so
-            # it needs the toolchain the freshly-written floor selects.
-            extraExtract = ''
-              ${fixHashes}
-              ${fixGoFloor}
-              ${vu.mkExtractRegen {
-                attr = "glab";
-                dest = "overlays/dev-tools/glab-extracted.json";
-                pkgs = ourPkgs;
-              }}
-            '';
+            # The order it emits is src -> floor -> vendor -> extract.
+            # The version this file used to hand-write was
+            # src+vendor -> floor -> extract, which put the Go-compiling
+            # vendor build BEFORE the floor that selects its toolchain
+            # and held glab back on every sweep from 1.116.0 onward.
+            extraExtract = "${goUpdate.extract}";
             pkgs = ourPkgs;
             platforms = {};
             pname = "glab";

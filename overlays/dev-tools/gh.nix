@@ -72,19 +72,13 @@
   # subtree.
   sourcesFile = "overlays/dev-tools/gh-sources.json";
 
-  fixVendorHash = vu.mkGoVendorFix {
+  goUpdate = vu.mkGoUpdateExtract {
     attr = "gh";
     pkgs = ourPkgs;
     pname = "gh";
     inherit sourcesFile;
   };
-
-  fixGoFloor = vu.mkGoFloorFix {
-    attr = "gh";
-    pkgs = ourPkgs;
-    pname = "gh";
-    inherit sourcesFile;
-  };
+  inherit (goUpdate) fixGoFloor fixVendorHash;
 
   # DERIVED from the pinned source's go.mod by `fixGoFloor`, never
   # hand-written. See `vu.mkGoFloorFix` for why, and
@@ -119,13 +113,12 @@ in
       (prev.passthru or {})
       // {
         inherit fixGoFloor fixVendorHash goFloor;
+        goUpdateExtract = goUpdate.extract;
         updateScript = vu.ghArchiveUpdateScript {
-          # ORDER: hash fixer first, then the floor. `fixGoFloor` builds
-          # `.src`, so anything restoring a src hash lands before it.
-          extraExtract = ''
-            ${fixVendorHash}
-            ${fixGoFloor}
-          '';
+          # ORDER is owned by `vu.mkGoUpdateExtract`, not restated
+          # here. It was restated here, and it was wrong: the vendor
+          # fixer compiles Go and so must follow the floor fixer.
+          extraExtract = "${goUpdate.extract}";
           pkgs = ourPkgs;
           pname = "gh";
           repo = "cli/cli";
