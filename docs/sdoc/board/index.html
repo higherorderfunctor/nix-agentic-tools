@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SDoc Board</title>
+    <link rel="icon" href="data:," />
+    <link
+      rel="stylesheet"
+      crossorigin="anonymous"
+      href="https://cdn.jsdelivr.net/npm/@perspective-dev/viewer@5.3.0/dist/css/pro-dark.css"
+    />
+    <link rel="stylesheet" href="/assets/theme.css" />
+    <link rel="stylesheet" href="/assets/app.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <i></i><i></i><i></i><i></i>
+        </span>
+        <span>
+          <strong>SDOC BOARD</strong>
+          <small id="project-name">connecting to the scribe</small>
+        </span>
+      </div>
+
+      <nav class="view-switch" aria-label="View">
+        <button id="switch-board" type="button" class="is-active">Board</button>
+        <button id="switch-perspective" type="button">Perspective</button>
+      </nav>
+
+      <dl class="stats" aria-label="Canon counts">
+        <div>
+          <dt>nodes</dt>
+          <dd id="node-count">—</dd>
+        </div>
+        <div>
+          <dt>relations</dt>
+          <dd id="edge-count">—</dd>
+        </div>
+        <div>
+          <dt>types</dt>
+          <dd id="type-count">—</dd>
+        </div>
+        <div>
+          <dt>gen</dt>
+          <dd id="generation">—</dd>
+        </div>
+      </dl>
+
+      <div class="global-actions">
+        <div class="status" role="status" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="status-text">connecting</span>
+        </div>
+        <button id="refresh" type="button" title="Refetch from the daemon">
+          Refresh
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section id="view-board" class="view board-view" aria-label="Board view">
+        <div class="canvas-shell" aria-label="Canon graph">
+          <div id="legend" class="legend" aria-label="Node type legend"></div>
+          <div class="viewport-actions" aria-label="Viewport controls">
+            <button id="zoom-out" type="button" title="Zoom out">−</button>
+            <button id="zoom-in" type="button" title="Zoom in">+</button>
+            <button id="fit-view" type="button">Fit</button>
+          </div>
+          <svg
+            id="graph"
+            role="img"
+            aria-label="Read-only StrictDoc relation graph"
+          >
+            <defs>
+              <pattern
+                id="grid"
+                width="28"
+                height="28"
+                patternUnits="userSpaceOnUse"
+              >
+                <circle cx="1" cy="1" r="1" class="grid-dot"></circle>
+              </pattern>
+              <marker
+                id="arrow"
+                viewBox="0 0 10 10"
+                refX="9"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 0 L 10 5 L 0 10 z"></path>
+              </marker>
+            </defs>
+            <rect
+              class="canvas-background"
+              width="100%"
+              height="100%"
+              fill="url(#grid)"
+            ></rect>
+            <g id="viewport">
+              <g id="edges"></g>
+              <g id="nodes"></g>
+            </g>
+          </svg>
+          <p class="canvas-help">
+            Drag the canvas · wheel to zoom · select a card to inspect
+          </p>
+        </div>
+
+        <aside id="inspector" class="inspector" aria-live="polite">
+          <div id="inspector-empty" class="inspector-empty">
+            <span class="empty-mark" aria-hidden="true">◇</span>
+            <h1>Read the canon</h1>
+            <p>
+              Select any card to see all fields, source location, and declared
+              relations.
+            </p>
+            <p class="read-only">
+              Read only · one resident scribe · no mutations
+            </p>
+          </div>
+          <div id="inspector-content" hidden></div>
+        </aside>
+      </section>
+
+      <section
+        id="view-perspective"
+        class="view perspective-view"
+        aria-label="Perspective view"
+        hidden
+      >
+        <div class="table-switch" aria-label="Table">
+          <button id="table-nodes" type="button" class="is-active">
+            Nodes
+          </button>
+          <button id="table-relations" type="button">Relations</button>
+          <span class="table-hint"
+            >one row per node · one row per declared relation</span
+          >
+        </div>
+        <perspective-viewer id="viewer" theme="Aurora"></perspective-viewer>
+      </section>
+
+      <div id="loading" class="loading">
+        <span class="spinner" aria-hidden="true"></span>
+        <strong id="loading-title">Asking the scribe daemon</strong>
+        <small id="loading-detail">One resident graph, no re-parse</small>
+      </div>
+
+      <div id="no-daemon" class="no-daemon" hidden>
+        <strong>No scribe daemon is answering.</strong>
+        <pre id="no-daemon-detail"></pre>
+        <button id="retry" type="button">Retry</button>
+      </div>
+    </main>
+
+    <div id="error" class="error" hidden></div>
+    <script type="module" src="/assets/app.js"></script>
+  </body>
+</html>

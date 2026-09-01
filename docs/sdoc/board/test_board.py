@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+"""Contracts for the adapter and the read-only HTTP boundary.
+
+Hermetic on purpose: the adapter is fed a fixture export, and the server a
+fake source, so the suite runs under any python3 with no daemon and no
+strictdoc. The live path (daemon -> export -> adapt -> serve) is exercised
+by hand against the resident scribe; EV-SDOC-BOARD-MERGED-SMOKE records one
+such run.
+"""
+
+from __future__ import annotations
+
+import json
+import threading
+import unittest
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from adapter import ROWS_SCHEMA, SNAPSHOT_SCHEMA, adapt
+from server import build_server
+from source import NoDaemon, Payloads
+
+FIXTURE_INDEX = {
+    "_COMMENT": "fixture",
+    "DOCUMENTS": [
+        {
+            "_NODE_TYPE": "DOCUMENT",
+            "TITLE": "A decision",
+            "GRAMMAR": [],
+            "NODES": [
+                {
+                    "_TOC": "1",
+                    "_NODE_TYPE": "DECISION",
+                    "UID": "DEC-FIX-ONE",
+                    "TITLE": "A decision",
+                    "AUTHORED_BY": "llm",
+                    "STATUS": "accepted",
+                    "STATEMENT": "One choice.",
+                }
+            ],
+        },
+        {
+            "_NODE_TYPE": "DOCUMENT",
+            "TITLE": "A mechanism",
+            "GRAMMAR": [],
+            "NODES": [
+                {
+                    "_TOC": "1",
+                    "_NODE_TYPE": "MECHANISM",
+                    "UID": "MECH-FIX-TWO",
+                    "TITLE": "A mechanism",
+                    "AUTHORED_BY": "llm",
+                    "DEPTH": "sketch",
+                    "STATEMENT": "How it behaves.",
+                    "RELATIONS": [
+                        {"TYPE": "Parent", "VALUE": "DEC-FIX-ONE", "ROLE": "Governed_By"},
+                        {"TYPE": "Parent", "VALUE": "DEC-FIX-GONE", "ROLE": "Governed_By"},
+                        {"TYPE": "File", "VALUE": "docs/sdoc/board/server.py"},
+                    ],
+                }
+            ],
+        },
+    ],
+}
+FIXTURE_PATHS = {
+    "DEC-FIX-ONE": "docs/plans/fixture/dec-fix-one.sdoc",
+    "MECH-FIX-TWO": "docs/plans/fixture/mech-fix-two.sdoc",
+}
+FIXTURE_GRAMMAR = {
+    "DECISION": {"prefix": "DEC-", "fields": [], "roles": []},
+    "MECHANISM": {"prefix": "MECH-", "fields": [], "roles": []},
+}
+FIXTURE_PROJECT = {"name": "fixture", "root": "/fixture", "generation": 7}
+
+
+def adapted():
+    return adapt(FIXTURE_INDEX, FIXTURE_PATHS, FIXTURE_GRAMMAR, FIXTURE_PROJECT)
+
+
+class AdapterContractTest(unittest.TestCase):
+    def test_snapshot_resolves_edges_and_reports_the_dangling_one(self) -> None:
+        snapshot = adapted()["snapshot"]
+        self.assertEqual(snapshot["schema"], SNAPSHOT_SCHEMA)
+        self.assertEqual(snapshot["stats"]["nodes"], 2)
+        self.assertEqual(snapshot["stats"]["edges"], 1)
+        self.assertEqual(
+            snapshot["edges"][0],
+            {
+                "id": "MECH-FIX-TWO:DEC-FIX-ONE:Parent:Governed_By:0",
+                "source": "MECH-FIX-TWO",
+                "target": "DEC-FIX-ONE",
+                "type": "Parent",
+                "role": "Governed_By",
+            },
+        )
+        self.assertEqual(
+            [d["kind"] for d in snapshot["diagnostics"]], ["unresolved-relation"]
+        )
+        self.assertEqual(snapshot["diagnostics"][0]["target"], "DEC-FIX-GONE")
+
+    def test_snapshot_nodes_carry_state_path_and_files(self) -> None:
+        snapshot = adapted()["snapshot"]
+        by_id = {node["id"]: node for node in snapshot["nodes"]}
+        decision = by_id["DEC-FIX-ONE"]
+        mechanism = by_id["MECH-FIX-TWO"]
+        self.assertEqual(decision["state"], {"field": "STATUS", "value": "accepted"})
+        self.assertEqual(mechanism["state"], {"field": "DEPTH", "value": "sketch"})
+        self.assertEqual(
+            mechanism["source"]["path"], "docs/plans/fixture/mech-fix-two.sdoc"
+        )
+        self.assertEqual(mechanism["files"], ["docs/sdoc/board/server.py"])
+        self.assertNotIn("RELATIONS", mechanism["fields"])
+        self.assertNotIn("_NODE_TYPE", mechanism["fields"])
+
+    def test_rows_share_one_key_set_per_table(self) -> None:
+        rows = adapted()["rows"]
+        self.assertEqual(rows["schema"], ROWS_SCHEMA)
+        node_keys = [tuple(row.keys()) for row in rows["nodes"]]
+        self.assertEqual(len(set(node_keys)), 1)
+        relation_keys = [tuple(row.keys()) for row in rows["relations"]]
+        self.assertEqual(len(set(relation_keys)), 1)
+        # STATUS exists only on the DECISION; the MECHANISM row must still
+        # carry the key (null), or Perspective would drop the column.
+        mech_row = next(r for r in rows["nodes"] if r["UID"] == "MECH-FIX-TWO")
+        self.assertIn("STATUS", mech_row)
+        self.assertIsNone(mech_row["STATUS"])
+
+    def test_relations_table_is_one_denormalized_row_per_declaration(self) -> None:
+        rows = adapted()["rows"]["relations"]
+        self.assertEqual(len(rows), 3)  # resolved + dangling + File
+        resolved = next(r for r in rows if r["TARGET"] == "DEC-FIX-ONE")
+        self.assertEqual(resolved["SOURCE_TYPE"], "MECHANISM")
+        self.assertEqual(resolved["ROLE"], "Governed_By")
+        self.assertEqual(resolved["TARGET_TYPE"], "DECISION")
+        self.assertEqual(resolved["TARGET_TITLE"], "A decision")
+        self.assertEqual(resolved["TARGET_STATE"], "accepted")
+        self.assertTrue(resolved["RESOLVED"])
+        dangling = next(r for r in rows if r["TARGET"] == "DEC-FIX-GONE")
+        self.assertFalse(dangling["RESOLVED"])
+        self.assertIsNone(dangling["TARGET_TYPE"])
+        file_row = next(r for r in rows if r["TYPE"] == "File")
+        self.assertEqual(file_row["TARGET"], "docs/sdoc/board/server.py")
+
+    def test_counts_come_from_resolved_edges_only(self) -> None:
+        rows = adapted()["rows"]["nodes"]
+        by_uid = {row["UID"]: row for row in rows}
+        self.assertEqual(by_uid["MECH-FIX-TWO"]["OUT_COUNT"], 1)
+        self.assertEqual(by_uid["MECH-FIX-TWO"]["FILE_COUNT"], 1)
+        self.assertEqual(by_uid["DEC-FIX-ONE"]["IN_COUNT"], 1)
+
+
+class FakeSource:
+    """Duck-typed DaemonSource: canned payloads, or a canned refusal."""
+
+    def __init__(self, refuse: Exception | None = None) -> None:
+        self.refuse = refuse
+        body = adapted()
+        self.canned = Payloads(
+            generation=FIXTURE_PROJECT["generation"],
+            snapshot=json.dumps(body["snapshot"]).encode("utf-8"),
+            rows=json.dumps(body["rows"]).encode("utf-8"),
+        )
+
+    def describe(self) -> dict:
+        if self.refuse is not None:
+            raise self.refuse
+        return {"root": "/fixture", "generation": 7, "dirty": False, "nodes": 2}
+
+    def payloads(self) -> Payloads:
+        if self.refuse is not None:
+            raise self.refuse
+        return self.canned
+
+
+class ServerContractTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.server = build_server(FakeSource(), "127.0.0.1", 0)
+        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
+        host, port = cls.server.server_address[:2]
+        cls.base_url = f"http://{host}:{port}"
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join(timeout=5)
+
+    def test_api_routes_serve_both_payloads_and_health(self) -> None:
+        with urllib.request.urlopen(f"{self.base_url}/api/graph") as response:
+            self.assertEqual(response.status, 200)
+            self.assertEqual(json.load(response)["schema"], SNAPSHOT_SCHEMA)
+        with urllib.request.urlopen(f"{self.base_url}/api/rows") as response:
+            self.assertEqual(json.load(response)["schema"], ROWS_SCHEMA)
+        with urllib.request.urlopen(f"{self.base_url}/api/health") as response:
+            health = json.load(response)
+        self.assertTrue(health["ok"])
+        self.assertEqual(health["generation"], 7)
+
+    def test_static_routes_are_allowlisted(self) -> None:
+        with urllib.request.urlopen(f"{self.base_url}/") as response:
+            self.assertIn(b"SDOC BOARD", response.read())
+        for leaked in ("/server.py", "/source.py", "/adapter.py", "/test_board.py"):
+            with self.assertRaises(urllib.error.HTTPError) as error:
+                urllib.request.urlopen(f"{self.base_url}{leaked}")
+            self.assertEqual(error.exception.code, 404)
+            error.exception.close()
+
+    def test_mutating_methods_are_rejected(self) -> None:
+        request = urllib.request.Request(
+            f"{self.base_url}/api/graph", data=b"{}", method="POST"
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(request)
+        self.assertEqual(error.exception.code, 405)
+        self.assertEqual(error.exception.headers["Allow"], "GET, HEAD")
+        error.exception.close()
+
+    def test_no_daemon_is_a_503_carrying_the_remedy(self) -> None:
+        refusing = build_server(
+            FakeSource(refuse=NoDaemon("no scribe daemon on /some.sock.\n  start one with:  devenv up scribe")),
+            "127.0.0.1",
+            0,
+        )
+        thread = threading.Thread(target=refusing.serve_forever, daemon=True)
+        thread.start()
+        host, port = refusing.server_address[:2]
+        try:
+            with self.assertRaises(urllib.error.HTTPError) as error:
+                urllib.request.urlopen(f"http://{host}:{port}/api/graph")
+            self.assertEqual(error.exception.code, 503)
+            body = json.load(error.exception)
+            error.exception.close()
+            self.assertEqual(body["error"], "no-daemon")
+            self.assertIn("devenv up scribe", body["detail"])
+        finally:
+            refusing.shutdown()
+            refusing.server_close()
+            thread.join(timeout=5)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,124 @@
+/* "Aurora" -- a registered Perspective theme on beadboard's palette
+ * (assets/app.css holds the same tokens for the rest of the page).
+ *
+ * The mechanism, for @perspective-dev/viewer 5.3: a theme is a plain CSS
+ * rule carrying a QUOTED --psp-theme-name; the viewer walks
+ * document.styleSheets and collects every such rule whose selector matches
+ * it, which is why the bare `perspective-viewer` selector below is
+ * load-bearing -- an [theme="Aurora"]-only rule never matches before the
+ * theme is active and so is never discovered. index.html loads the CDN
+ * pro-dark.css first (crossorigin, also load-bearing: a cross-origin sheet
+ * without CORS is skipped silently) for the icon, label and default
+ * variables this file does not restate. The viewer applies the theme via
+ * its `theme` attribute / restore({theme}); popup elements are separate
+ * top-level custom elements outside the viewer and are themed in the second
+ * block. */
+
+perspective-viewer,
+perspective-viewer[theme="Aurora"],
+perspective-viewer [theme="Aurora"] {
+  --psp-theme-name: "Aurora";
+}
+
+perspective-viewer[theme="Aurora"],
+perspective-viewer [theme="Aurora"] {
+  background-color: #111820;
+  color: #e6f7ff;
+  --psp--color: #e6f7ff;
+  --psp--background-color: #111820;
+  --psp-active--color: #64ffda;
+  --psp-active--background: rgb(100 255 218 / 18%);
+  --psp-inactive--color: #6b8fa8;
+  --psp-inactive--border-color: #233543;
+  --psp-error--color: #fb7185;
+  --psp-warning--color: #111820;
+  --psp-warning--background: #fbbf24;
+  --psp-calendar--filter: invert(1);
+  --psp-input--filter: invert(1);
+  --psp-icon--select-arrow--mask-image: var(
+    --psp-icon--select-arrow-light--mask-image
+  );
+  --psp-icon--select-arrow-hover--mask-image: var(
+    --psp-icon--select-arrow-dark--mask-image
+  );
+  --psp-interface-monospace--font-family:
+    "JetBrains Mono", "Cascadia Code", ui-monospace, SFMono-Regular, Menlo,
+    Consolas, monospace;
+
+  --psp-expression--operator--color: #a8c5d9;
+  --psp-expression--function--color: #64ffda;
+  --psp-expression--error--color: #fb7185;
+  --psp-code-editor--symbol--color: #e6f7ff;
+  --psp-code-editor--literal--color: #7dd3fc;
+  --psp-code-editor--operator--color: #4ade80;
+  --psp-code-editor--comment--color: #6b8fa8;
+  --psp-code-editor--column--color: #a78bfa;
+
+  --psp-datagrid--pos-cell--color: #4ade80;
+  --psp-datagrid--neg-cell--color: #fb7185;
+
+  /* The same accents the Board's cards use, so a type keeps its color when
+   * the reader crosses views. */
+  --psp-charts--series--color: #64ffda;
+  --psp-charts--series-1--color: #64ffda;
+  --psp-charts--series-2--color: #a78bfa;
+  --psp-charts--series-3--color: #fbbf24;
+  --psp-charts--series-4--color: #fb7185;
+  --psp-charts--series-5--color: #4ade80;
+  --psp-charts--series-6--color: #7dd3fc;
+  --psp-charts--series-7--color: #fdba74;
+  --psp-charts--series-8--color: #d8b4fe;
+  --psp-charts--series-9--color: #86efac;
+  --psp-charts--series-10--color: #66728f;
+  --psp-datagrid--series-1--color: #64ffda;
+  --psp-datagrid--series-2--color: #a78bfa;
+  --psp-datagrid--series-3--color: #fbbf24;
+  --psp-datagrid--series-4--color: #fb7185;
+  --psp-datagrid--series-5--color: #4ade80;
+  --psp-datagrid--series-6--color: #7dd3fc;
+  --psp-datagrid--series-7--color: #fdba74;
+  --psp-datagrid--series-8--color: #d8b4fe;
+  --psp-datagrid--series-9--color: #86efac;
+  --psp-datagrid--series-10--color: #66728f;
+  --psp-charts--gridline--color: #1c2a35;
+  --psp-charts--axis-ticks--color: #a8c5d9;
+  --psp-charts--axis-lines--color: #6b8fa8;
+  --psp-charts--legend--color: #a8c5d9;
+  --psp-charts--legend--background: #111820;
+  --psp-charts--tooltip--color: #e6f7ff;
+  --psp-charts--tooltip--background: #1c2a35;
+  --psp-charts--tooltip--border-color: #233543;
+  --psp-charts--treemap--labels: #e6f7ff;
+  --psp-charts--treemap--hover-highlight: #64ffda;
+  --psp-charts--gradient--background: linear-gradient(
+    #fb7185 0%,
+    #111820 50%,
+    #64ffda 100%
+  );
+
+  --psp-openlayers--tile-url: "http://{a-c}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
+  --psp-openlayers--attribution--filter: invert(1) hue-rotate(180deg);
+  --psp-openlayers--element--background: #111820;
+}
+
+/* Popup custom elements are NOT viewer descendants; without this block they
+ * would render as light Pro dropdowns over a dark page. */
+perspective-context-menu[theme="Aurora"],
+perspective-copy-menu[theme="Aurora"],
+perspective-export-menu[theme="Aurora"],
+perspective-dropdown[theme="Aurora"],
+perspective-date-column-style[theme="Aurora"],
+perspective-datetime-column-style[theme="Aurora"],
+perspective-number-column-style[theme="Aurora"],
+perspective-string-column-style[theme="Aurora"] {
+  background-color: #111820;
+  color: #e6f7ff;
+  --psp--color: #e6f7ff;
+  --psp--background-color: #111820;
+  --psp-active--color: #64ffda;
+  --psp-inactive--color: #6b8fa8;
+  --psp-inactive--border-color: #233543;
+  --psp-calendar--filter: invert(1);
+  --psp-input--filter: invert(1);
+  border: 1px solid #233543;
+}

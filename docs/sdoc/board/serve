@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
+
+# The server talks to the scribe daemon over its socket and imports nothing
+# from strictdoc, so any python3 serves -- no devenv shell required. The
+# spike's launcher resolved StrictDoc's own interpreter; that need died with
+# the in-process workspace.
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec python3 "$script_dir/server.py" "$@"
