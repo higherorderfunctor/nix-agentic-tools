@@ -49,20 +49,25 @@ Run a test command or formatter across commits in the current stack.
 3. **Determine the target revset.** This is a coverage decision — get it right
    before worrying about speed.
 
-   An explicit revset argument always wins. `--stack` and `--tip` come next.
-   With none of those, read the structure of the work — every PR/MR needs its
-   own branch, so branch refs inside the stack count the PRs:
+   Precedence, highest first: an explicit revset argument, then `--stack` /
+   `--tip`, then the mode default. **The mode default differs**: run mode
+   defaults to the tip (the table below), fix mode defaults to `stack()` (see
+   Fix Mode, step 6). So in `--fix` the table below does not apply unless
+   `--tip` or an explicit revset was given.
+
+   With no revset and no flag, read the structure of the work — every PR/MR
+   needs its own branch, so branch refs inside the stack count the PRs:
 
    ```bash
    git branchless query 'stack()' | wc -l              # commits in the stack
    git branchless query 'stack() & branches()'         # and their branches
    ```
 
-   | Branches in stack | Situation                       | Revset           |
-   | ----------------- | ------------------------------- | ---------------- |
-   | stack() is empty  | Nothing draft — you are on main | `@`              |
-   | 0 or 1            | One PR/MR, several WIP commits  | `heads(stack())` |
-   | 2+                | A stack of independent PRs/MRs  | `stack()`        |
+   | Branches in stack  | Situation                       | Revset           |
+   | ------------------ | ------------------------------- | ---------------- |
+   | `stack()` is empty | Nothing draft — you are on main | `@`              |
+   | 0 or 1             | One PR/MR, several WIP commits  | `heads(stack())` |
+   | 2+                 | A stack of independent PRs/MRs  | `stack()`        |
 
    Check the empty case first and mechanically — on `main`, `heads(stack())`
    resolves to zero commits and would test nothing at all.

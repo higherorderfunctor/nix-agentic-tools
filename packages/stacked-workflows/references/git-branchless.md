@@ -378,7 +378,8 @@ symlinks (pointing to a file, not a directory) work fine.
 **`git test run`** — Run a command across commits.
 
 ```bash
-git test run -x 'nix fmt -- --check'          # test current stack
+git test run -x 'cmd' 'heads(stack())'         # the tip -- usual choice
+git test run -x 'cmd' 'stack()'                # every commit in the stack
 git test run -x 'make test' 'draft()'          # test all drafts
 git test run -x 'cmd' --jobs 4                 # bounded parallelism
 git test run -x 'cmd' --strategy worktree      # isolated worktrees
@@ -511,6 +512,9 @@ must set per command** — the default below is Nix's, and leaving it there for 
 cheap command needlessly serializes the run:
 
 ```bash
+# 0. The revset you are about to test, from "Choosing the test revset" above.
+revset='heads(stack())'
+
 # 1. What ONE job of YOUR command costs, from the table above.
 #    nix ~3500 | cargo, go ~1500 | npm, pytest ~400 | formatters ~100
 footprint_mb=3500
