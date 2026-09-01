@@ -239,6 +239,7 @@ mergetool
 metacharacter
 misattributes
 miscited
+misordered
 mlen
 modelcontextprotocol
 modfmt

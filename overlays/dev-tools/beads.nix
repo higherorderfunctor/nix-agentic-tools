@@ -21,44 +21,34 @@
   doltSources = builtins.fromJSON (builtins.readFile ./beads-dolt-sources.json);
   doltSourcesFile = "overlays/dev-tools/beads-dolt-sources.json";
 
-  beadsFixVendorHash = vu.mkGoVendorFix {
+  beadsGoUpdate = vu.mkGoUpdateExtract {
     attr = "beads";
     pkgs = ourPkgs;
     pname = "beads";
     sourcesFile = beadsSourcesFile;
   };
-
-  beadsFixGoFloor = vu.mkGoFloorFix {
-    attr = "beads";
-    pkgs = ourPkgs;
-    pname = "beads";
-    sourcesFile = beadsSourcesFile;
-  };
+  beadsFixGoFloor = beadsGoUpdate.fixGoFloor;
+  beadsFixVendorHash = beadsGoUpdate.fixVendorHash;
 
   beadsGoFloor = beadsSources.goFloor or vu.goFloorUnknown;
 
-  doltFixVendorHash = vu.mkGoVendorFix {
-    attr = "beads.dolt";
-    pkgs = ourPkgs;
-    pname = "beads-dolt";
-    sourcesFile = doltSourcesFile;
-  };
-
-  doltFixGoFloor = vu.mkGoFloorFix {
+  doltGoUpdate = vu.mkGoUpdateExtract {
     attr = "beads.dolt";
     goModPath = "go/go.mod";
     pkgs = ourPkgs;
     pname = "beads-dolt";
     sourcesFile = doltSourcesFile;
   };
+  doltFixGoFloor = doltGoUpdate.fixGoFloor;
+  doltFixVendorHash = doltGoUpdate.fixVendorHash;
 
   doltGoFloor = doltSources.goFloor or vu.goFloorUnknown;
 
   doltUpdateScript = vu.ghArchiveUpdateScript {
-    extraExtract = ''
-      ${doltFixVendorHash}
-      ${doltFixGoFloor}
-    '';
+    # ORDER is owned by `vu.mkGoUpdateExtract`, not restated here. It was
+    # restated here, and it was wrong: the vendor fixer compiles Go and
+    # so must follow the floor fixer.
+    extraExtract = "${doltGoUpdate.extract}";
     pkgs = ourPkgs;
     pname = "beads-dolt";
     repo = "dolthub/dolt";
@@ -82,16 +72,17 @@
         // {
           fixGoFloor = doltFixGoFloor;
           fixVendorHash = doltFixVendorHash;
+          goUpdateExtract = doltGoUpdate.extract;
           goFloor = doltGoFloor;
           updateScript = doltUpdateScript;
         };
     });
 
   beadsUpdateScript = vu.ghArchiveUpdateScript {
-    extraExtract = ''
-      ${beadsFixVendorHash}
-      ${beadsFixGoFloor}
-    '';
+    # ORDER is owned by `vu.mkGoUpdateExtract`, not restated here. It was
+    # restated here, and it was wrong: the vendor fixer compiles Go and
+    # so must follow the floor fixer.
+    extraExtract = "${beadsGoUpdate.extract}";
     pkgs = ourPkgs;
     pname = "beads";
     repo = "gastownhall/beads";
@@ -181,6 +172,12 @@ in
       // {
         fixGoFloor = beadsFixGoFloor;
         goFloor = beadsGoFloor;
+        # BEADS' OWN chain, not the pair wrapper. `fixVendorHash` below
+        # is deliberately the pair script (it repairs both sidecars in
+        # one run), but `checks/go-floor-extract-order.nix` has to read a
+        # FLAT chain — a pair wrapper only contains the sub-script paths
+        # and would hide the ordering it exists to gate.
+        goUpdateExtract = beadsGoUpdate.extract;
         inherit fixVendorHash updateScript;
         # The lifecycle module must launch the exact Dolt paired with this
         # Beads build. Exposing that already-used dependency as metadata avoids

@@ -133,12 +133,13 @@
   # subtree.
   sourcesFile = "overlays/generic/oh-my-posh-sources.json";
 
-  fixVendorHash = vu.mkGoVendorFix {
+  goUpdate = vu.mkGoUpdateExtract {
     attr = "oh-my-posh";
+    inherit goModPath sourcesFile;
     pkgs = ourPkgs;
     pname = "oh-my-posh";
-    inherit sourcesFile;
   };
+  inherit (goUpdate) fixGoFloor fixVendorHash;
 
   # This project keeps its Go module under `src/`, NOT at the repo root —
   # the one place the floor mechanism is not uniform across the seven Go
@@ -146,13 +147,6 @@
   # constant. Both the fixer and `checks/go-floor-drift.nix` read it from
   # `passthru.goModPath` below, so they cannot disagree.
   goModPath = "src/go.mod";
-
-  fixGoFloor = vu.mkGoFloorFix {
-    attr = "oh-my-posh";
-    pkgs = ourPkgs;
-    pname = "oh-my-posh";
-    inherit goModPath sourcesFile;
-  };
 
   # DERIVED from the pinned source's src/go.mod by `fixGoFloor` above,
   # never hand-written — see gluetun.nix for the rationale, and
@@ -198,13 +192,13 @@ in
       (prev.passthru or {})
       // {
         inherit fixGoFloor fixVendorHash goFloor goModPath;
+        goUpdateExtract = goUpdate.extract;
         updateScript = vu.ghArchiveUpdateScript {
-          # ORDER: hash fixer first, then the floor. `fixGoFloor` builds
-          # `.src`, so anything restoring a src hash lands before it.
-          extraExtract = ''
-            ${fixVendorHash}
-            ${fixGoFloor}
-          '';
+          # ORDER is owned by `vu.mkGoUpdateExtract`, not restated here.
+          # It was restated here, and it was wrong: the vendor fixer
+          # compiles Go and so must follow the floor fixer, not precede
+          # it. See that helper's header.
+          extraExtract = "${goUpdate.extract}";
           pkgs = ourPkgs;
           pname = "oh-my-posh";
           repo = "JanDeDobbeleer/oh-my-posh";

@@ -86,19 +86,13 @@
   # subtree.
   sourcesFile = "overlays/generic/gluetun-sources.json";
 
-  fixVendorHash = vu.mkGoVendorFix {
+  goUpdate = vu.mkGoUpdateExtract {
     attr = "gluetun";
     pkgs = ourPkgs;
     pname = "gluetun";
     inherit sourcesFile;
   };
-
-  fixGoFloor = vu.mkGoFloorFix {
-    attr = "gluetun";
-    pkgs = ourPkgs;
-    pname = "gluetun";
-    inherit sourcesFile;
-  };
+  inherit (goUpdate) fixGoFloor fixVendorHash;
 
   # DERIVED from the pinned source's go.mod by `fixGoFloor` above, never
   # hand-written. This used to be the literal `"1.25.0"`, which was
@@ -126,13 +120,12 @@ in
 
     passthru = {
       inherit fixGoFloor fixVendorHash goFloor;
+      goUpdateExtract = goUpdate.extract;
       updateScript = vu.ghArchiveUpdateScript {
-        # ORDER: hash fixer first, then the floor. `fixGoFloor` builds
-        # `.src`, so anything restoring a src hash has to land before it.
-        extraExtract = ''
-          ${fixVendorHash}
-          ${fixGoFloor}
-        '';
+        # ORDER is owned by `vu.mkGoUpdateExtract`, not restated
+        # here. It was restated here, and it was wrong: the vendor
+        # fixer compiles Go and so must follow the floor fixer.
+        extraExtract = "${goUpdate.extract}";
         pkgs = ourPkgs;
         pname = "gluetun";
         repo = "passteque/gluetun";

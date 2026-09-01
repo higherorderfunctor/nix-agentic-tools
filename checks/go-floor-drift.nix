@@ -82,11 +82,18 @@
       echo "ok — ${name} floor $recorded matches ${goModPath}" > "$out"
     '';
   # ── Positive controls for the shared parser ──────────────────────
-  # None of the eight packages currently carries a `toolchain` directive,
-  # so that half of `go_floor_of` is DORMANT — exercised by nothing, and
-  # therefore free to rot until the first package that needs it. Same
-  # reasoning `checks/go-toolchain-floor.nix` gives for covering all three
-  # of its branches rather than only the one in use.
+  # These used to be justified by "none of the eight packages carries a
+  # `toolchain` directive, so that half of `go_floor_of` is DORMANT".
+  # THAT WAS FALSE when written and is corrected here: `gh` is pinned to
+  # cli/cli, whose go.mod says `go 1.26.0` + `toolchain go1.26.7`, and
+  # gh's recorded floor of 1.26.7 is derived from the TOOLCHAIN line —
+  # the `go` line alone would have produced 1.26.0. So the max-of-two
+  # branch is live in production, not dormant.
+  #
+  # The controls are still worth having, for the ordinary reason: they
+  # pin the parser's behavior on inputs no currently-pinned package
+  # happens to exercise, so a future upstream shape does not silently
+  # change what "the floor" means.
   #
   # The ordering case is the one worth having: a string compare puts
   # "1.9" ABOVE "1.26", which is the identical trap `goToolchainForFloor`

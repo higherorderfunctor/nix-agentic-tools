@@ -268,6 +268,7 @@
       fragmentsChecks = import ./checks/fragments-eval.nix {inherit lib pkgs;};
       glabExtractedCheck = import ./checks/glab-extracted.nix {inherit pkgs self;};
       goFloorDriftChecks = import ./checks/go-floor-drift.nix {inherit lib pkgs self;};
+      goFloorExtractOrderChecks = import ./checks/go-floor-extract-order.nix {inherit lib pkgs self;};
       goToolchainFloorChecks = import ./checks/go-toolchain-floor.nix {inherit inputs lib pkgs;};
       instructionsDriftCheck = import ./checks/instructions-drift.nix {inherit pkgs self;};
       instructionMaterializationCheck = {
@@ -297,7 +298,7 @@
       updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit inputs lib pkgs self updateRegistry;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // beadsContractsCheck // beadsLifecycleCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // claudeMemoryCollisionGuardCheck // claudeSettingsSchemaCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // doubledWordsCheck // doubledWordsFixturesCheck // facetMockChecks // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goFloorDriftChecks // goToolchainFloorChecks // instructionMaterializationCheck // instructionsDriftCheck // isolatePrekHooksCheck // kiroExtractedCheck // kiroFhsContractCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // repoValidationChecks // sembleTemplatesCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);
+      bareCommandsCheck // beadsContractsCheck // beadsLifecycleCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // claudeMemoryCollisionGuardCheck // claudeSettingsSchemaCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // doubledWordsCheck // doubledWordsFixturesCheck // facetMockChecks // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goFloorDriftChecks // goFloorExtractOrderChecks // goToolchainFloorChecks // instructionMaterializationCheck // instructionsDriftCheck // isolatePrekHooksCheck // kiroExtractedCheck // kiroFhsContractCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // repoValidationChecks // sembleTemplatesCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.

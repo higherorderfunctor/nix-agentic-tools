@@ -311,9 +311,10 @@ Debugging entry points when a bump PR still goes red:
   it failed.
 - **Check ordering** for a package whose extract builds from source rather than
   probing a prebuilt binary. glab is the only one today: its extract realizes
-  `src` and `goModules`, which hold `lib.fakeHash` until `fixHashes` has run, so
-  `mkExtractRegen` must come AFTER it. Reversed, it fails on the hash mismatch
-  instead of producing a schema.
+  `src` and `goModules`, which hold `lib.fakeHash` until the src and vendor
+  fixers have run, so `mkExtractRegen` must come AFTER them — it is passed as
+  `mkGoUpdateExtract`'s `extraAfter` for exactly that reason. Reversed, it fails
+  on the hash mismatch instead of producing a schema.
 - **Check visibility of the new sources.json.** The regeneration `nix build`s
   against the dirty worktree, so flake eval only sees the just-written sidecar
   because it is a TRACKED file that has been modified. An untracked one is

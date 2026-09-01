@@ -582,8 +582,10 @@ Diagnosing it from the pipeline side:
   re-run a fixer.
 - **Ordering matters for an extract built FROM SOURCE.** `glab` is the only one:
   its extract realizes `src` and `goModules`, which hold `lib.fakeHash` until
-  `fixHashes` has run, so `mkExtractRegen` is chained AFTER it. The other three
-  probe a prebuilt binary and have no hash to restore.
+  the src and vendor fixers have run, so `mkExtractRegen` is chained AFTER them
+  (as `vu.mkGoUpdateExtract`'s `extraAfter`). It also COMPILES Go, so it must
+  follow the floor fixer too. The other three probe a prebuilt binary and have
+  no hash to restore.
 - **A green drift check with a red `checks.formatting`** points at the `nix fmt`
   step inside the hook, not at the extraction — see the sidecar-formatting note
   earlier in this fragment.

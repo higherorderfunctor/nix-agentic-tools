@@ -2,17 +2,30 @@
 # overlays/lib.nix, the seam that fills a Go-version gap between a
 # package's go.mod floor and this repo's nixpkgs pin.
 #
-# WHY A CHECK AND NOT A LIVE CONSUMER. Every Go package this repo carries
-# currently declares a floor at or below our pin's `go`, so the helper
-# resolves to `ourPkgs.go` for all of them and the go-overlay input never
-# instantiates on the package path. That is the design working — the seam
-# is self-clearing — but it would ship the input DORMANT, which is the
+# WHY A CHECK AND NOT A LIVE CONSUMER. This was written when every Go
+# package declared a floor at or below our pin's `go`, so the helper
+# resolved to `ourPkgs.go` for all of them and the go-overlay input never
+# instantiated on the package path.
+#
+# THAT IS NOW ENDING, and the next sweep is what ends it. gitlab-org/cli
+# v1.116.0 and JanDeDobbeleer/oh-my-posh v31.1.x both declare
+# `go 1.27.0`, against a pin whose `pkgs.go` is 1.26.7 — so once
+# `mkGoFloorFix` records those floors, glab and oh-my-posh resolve to
+# go-bin 1.27.0 and the seam is live in production. (Until 2026-09-01 it
+# could not get there at all: the vendor fixer compiled Go BEFORE the
+# floor was written, so both packages were held back on every sweep. See
+# `vu.mkGoUpdateExtract` and `checks/go-floor-extract-order.nix`.)
+#
+# Keep this check anyway. Branch coverage of a selector is not made
+# redundant by one package happening to exercise one branch, and the
+# throw branch still has no live consumer. What is no longer true is the
+# claim that the input would ship DORMANT without it — that was the
 # same dead-code rule that kept `ghArchiveUpdateScript` and
 # `mkGoVendorFix` out of the tree until a slice exercised them. Shipping a
 # live-but-redundant toolchain override to "use" the input would be
 # strictly worse: it is exactly the silent-downgrade pin the helper exists
 # to prevent. So the input is exercised here instead, on the real path —
-# real go-bin, real 127-release version table, real selection — with only
+# real go-bin, real 131-release version table, real selection — with only
 # the "our pin is behind" CONDITION simulated.
 #
 # Eval-only: nothing below builds a toolchain. Only `.version` and

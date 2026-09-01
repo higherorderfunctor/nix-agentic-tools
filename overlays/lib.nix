@@ -1192,10 +1192,12 @@ rec {
   # `--option allow-import-from-derivation false`.
   #
   # PRERELEASES ARE FILTERED OUT, and that is load-bearing rather than
-  # tidiness. go-bin carries 26 of them (1.17rc1 … 1.27rc2) alongside 127
-  # releases, and `go-bin.latest` is currently a PRERELEASE (1.27rc2) —
-  # which is one reason the selection resolves against `versions` instead
-  # of any moving `latest`/`latestStable` selector. Nix's component
+  # tidiness. go-bin carries 31 of them (1.17beta1 … 1.27rc3) alongside 131
+  # releases (measured 2026-09-01). `go-bin.latest` reads 1.27.0 today,
+  # but it HAS been a prerelease — it was 1.27rc2 when this was written —
+  # which is why the selection resolves against `versions` rather than
+  # any moving `latest`/`latestStable` selector: those are correct only
+  # some of the time, and silently. Nix's component
   # comparison also sorts "1.27rc1" ABOVE "1.27.0" (a non-numeric
   # component loses a string compare to a numeric one), so an unfiltered
   # "lowest satisfying" would hand a package an rc toolchain the first
@@ -1313,9 +1315,46 @@ rec {
   # it, unlike `vendorHash`, which can be invalidated with no version
   # bump and therefore also needs a standalone `passthru` escape hatch.
   #
-  # ORDER: run this AFTER any hash fixer. It builds `.src`, so a package
-  # whose `srcHash` also lives in the sidecar (glab) must have that
-  # restored first or this fails on the src mismatch instead.
+  # ORDER: AFTER the SRC hash fixer, and BEFORE the vendor fixer. Both
+  # halves are load-bearing and the second one was missing until
+  # 2026-09-01, which is the whole reason `mkGoUpdateExtract` below now
+  # owns the sequence instead of each overlay restating it.
+  #
+  #   AFTER the src fixer, because this builds `.src` — a package whose
+  #   `srcHash` also lives in the sidecar (glab) must have that restored
+  #   first or this fails on the src mismatch instead.
+  #
+  #   BEFORE the vendor fixer, because that one builds `.goModules`,
+  #   which COMPILES Go under the toolchain `goToolchainForFloor`
+  #   selects. `mkUpdateScript`'s `buildCandidate` rebuilds the sidecar
+  #   from scratch (`jq -n '{version: $v}'`), so at that moment `goFloor`
+  #   is not stale — it is ABSENT, reads as `goFloorUnknown` ("0"), and
+  #   every toolchain satisfies it, so the selector returns `ourGo`. A
+  #   bump that raises the floor past our pin then dies with
+  #   `go.mod requires go >= X (running go <ourGo>)` before the floor
+  #   fixer it needed ever runs. Measured 2026-09-01: glab 1.116.0 and
+  #   oh-my-posh 31.1.1 both wanted go 1.27.0 against ourGo 1.26.7, and
+  #   both were HELD BACK on every sweep.
+  #
+  # The header used to say only "run this AFTER any hash fixer", and the
+  # over-general half of that is what propagated. FOUR overlays carried a
+  # paraphrase of it — gh, gluetun, oh-my-posh, otel-tui, each spelling it
+  # "ORDER: hash fixer first, then the floor" — while beads carried no
+  # such comment on either of its two chains and glab carried a longer,
+  # different one. Seven CHAINS across six files ended up vendor-before-
+  # floor; only four of them said why. (An earlier draft of this comment
+  # said "six overlays copied it verbatim". Measured against the tree: the
+  # verbatim string appeared exactly once, in this file.)
+  #
+  # In every paraphrasing overlay the justification was vacuous anyway:
+  # `mkGoVendorFix` restores no src hash, so nothing was being ordered
+  # before it for the stated reason.
+  #
+  # NOTE that preserving `goFloor` across the sidecar rewrite is NOT an
+  # alternative fix, however much smaller the diff looks. The committed
+  # floors were 1.26.5 (glab) and 1.26.0 (oh-my-posh); measured, BOTH
+  # still select ourGo 1.26.7. Only deriving the floor from the fresh
+  # source before the vendor build changes the outcome.
   #
   #   attr:       flake package attribute (built through `.#<attr>.src`)
   #   goModPath:  go.mod location inside src — NOT always the root;
@@ -1426,28 +1465,134 @@ rec {
     echo "${attr}: wrote ${dest}"
   '';
 
-  # Hash fixer for a buildGoModule package whose src ALSO comes from the
-  # sidecar rather than from a prefetch — the Go counterpart of
-  # `mkNpmDepsFix`. Restores `srcHash` then `vendorHash`.
+  # THE `extraExtract` CHAIN for a sidecar-pinned Go package. One call
+  # emits every fixer that package needs, IN THE ONE LEGAL ORDER, so no
+  # overlay ever restates a sequence again.
   #
-  # `mkGoVendorFix` is not enough for such a package: it assumes the src
-  # hash arrived from `mkUpdateScript`'s prefetch path, which is only
-  # true when `src` is a plain fetch of a URL. An overlay that re-points
-  # an upstream fetcher carrying a `postFetch` gets a hash over the
-  # POST-postFetch tree, which `nix-prefetch-url --unpack` cannot
-  # reproduce. `overlays/dev-tools/glab.nix` is the current consumer:
-  # nixpkgs' glab fetches with `leaveDotGit` and a `postFetch` that
-  # records COMMIT and then strips `.git`.
+  # It replaced `mkGoSrcVendorFix` (src+vendor welded into one script),
+  # which could not express the correct order at all — see below.
   #
-  # The order is forced for the same reason it is in `mkNpmDepsFix`:
-  # `goModules` is derived FROM `src`, so a stale `srcHash` fails the
-  # vendor build on the SRC mismatch and never reaches the vendor one.
-  mkGoSrcVendorFix = args:
-    mkHashFix (args
-      // {
-        name = "src-vendor";
-        targets = [hashFixTargets.src hashFixTargets.goVendor];
-      });
+  # WHY THIS EXISTS. Every Go overlay used to hand-write
+  # `extraExtract = "''${fixVendorHash}\n''${fixGoFloor}"`, and all seven
+  # CHAINS got it backwards — seven across SIX files, because beads owns
+  # two (its own and beads-dolt's). The vendor fixer builds `.goModules`, which
+  # COMPILES Go under the toolchain `goToolchainForFloor` picks from the
+  # sidecar's `goFloor`; the floor fixer is what WRITES that key. Since
+  # `mkUpdateScript`'s `buildCandidate` rebuilds the sidecar from scratch
+  # (`jq -n '{version: $v}'`), the floor is ABSENT — not stale — for the
+  # whole window, reads as `goFloorUnknown` ("0"), and the selector
+  # returns `ourGo`. A release that raises its go.mod floor past our pin
+  # therefore dies with `go.mod requires go >= X` inside the vendor
+  # fixer, before the floor fixer that would have fixed it ever runs.
+  #
+  # Measured 2026-09-01: glab 1.116.0 and oh-my-posh 31.1.1 both declare
+  # `go 1.27.0`, ourGo was 1.26.7, go-bin had 1.27.0 available the whole
+  # time, and both packages were HELD BACK on every 4x/day sweep.
+  #
+  # THE ORDER, and why each edge is real:
+  #
+  #   [src fixer]  -> floor fixer -> [guard] -> vendor fixer -> [extraAfter]
+  #
+  #   src BEFORE floor    the floor fixer builds `.src`; a package whose
+  #                       srcHash lives in the sidecar holds `lib.fakeHash`
+  #                       until the src fixer has run.
+  #   floor BEFORE vendor the vendor fixer compiles Go. This is the edge
+  #                       that was missing.
+  #   vendor BEFORE extra `extraAfter` is for a package whose extract also
+  #                       compiles Go against the vendor tree (glab's
+  #                       config-key schema dump), so it needs both the
+  #                       toolchain the floor selects AND `.goModules`.
+  #
+  # `extraAfter` RUNS IN A CHILD PROCESS now, which it did not before.
+  # It used to be spliced inline into `mkUpdateScript`'s own shell, where
+  # `$latest`, `$current` and `$tmp` were in scope; it is now inside this
+  # `writeShellScript`, which does not export them. A snippet that reads
+  # one would die under `set -u`. Today's only consumer,
+  # `mkExtractRegen`, is self-contained. Keep it that way, or export
+  # what a future one needs.
+  #
+  # `srcFromSidecar` is the ONLY axis packages differ on, and it is
+  # decided by one thing: whether `mkUpdateScript` was given
+  # `platforms = {...}` (it prefetches the src hash itself — gh, gluetun,
+  # oh-my-posh, otel-tui, beads) or `platforms = {}` (the src hash comes
+  # from a fixer — glab, whose upstream fetcher carries a `postFetch`
+  # that `nix-prefetch-url --unpack` cannot reproduce).
+  #
+  # RETURNS a record, not a string: `extract` for `extraExtract`, plus
+  # the individual fixers for `passthru`. `fixVendorHash` MUST keep that
+  # exact name in passthru — `fix_sidecar_hashes`
+  # (dev/scripts/update-common.sh) discovers it with a bare
+  # `p.fixVendorHash or null` to self-heal a vendor hash invalidated by
+  # an input bump with no version change. glab previously exposed only a
+  # combined `fixHashes` and was silently outside that roster.
+  #
+  # HALF of glab's exposure is still unreachable, and that is a known gap
+  # rather than a fixed one. `fix_sidecar_hashes` discovers `fixVendorHash`
+  # and `fixNpmDepsHash` only, so `fixSrcHash` has no caller: a nixpkgs
+  # fetcher change that invalidates glab's `srcHash` with no version bump
+  # still cannot self-heal. It presents confusingly, too — `fixVendorHash`
+  # builds `.goModules`, the `-source` FOD mismatches first, and
+  # `fodHashFixFn` reports "goModules build failed without a
+  # '-go-modules' hash mismatch". Bruno's `mkNpmDepsFix` avoids this by
+  # restoring src+deps in ONE script; the Go side deliberately split them
+  # so the floor fix could sit between, which is the trade.
+  mkGoUpdateExtract = {
+    attr,
+    extraAfter ? "",
+    goModPath ? "go.mod",
+    pkgs,
+    pname,
+    sourcesFile ? "overlays/${pname}-sources.json",
+    srcFromSidecar ? false,
+  }: let
+    fixSrcHash = mkHashFix {
+      inherit attr pkgs pname sourcesFile;
+      name = "src";
+      targets = [hashFixTargets.src];
+    };
+    fixGoFloor = mkGoFloorFix {inherit attr goModPath pkgs pname sourcesFile;};
+    fixVendorHash = mkGoVendorFix {inherit attr pkgs pname sourcesFile;};
+
+    # Tripwire, not a safety net — by construction it cannot fire in the
+    # chain below, because the floor fixer is two lines above it. It
+    # exists so that if anyone ever reorders these again, the failure is
+    # ONE self-describing line instead of what this bug actually looked
+    # like: `goModules build failed without a '-go-modules' hash
+    # mismatch` followed by a wall of nix output whose only real clue was
+    # a `go.mod requires go >= X` buried in the last eight log lines.
+    assertFloorPresent = pkgs.writeShellScript "assert-go-floor-${pname}" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      if ! ${pkgs.jq}/bin/jq -e 'has("goFloor")' "${sourcesFile}" >/dev/null; then
+        echo "${pname}: ${sourcesFile} has no goFloor, but the vendor fixer is about to compile Go." >&2
+        echo "  The floor fixer must run BEFORE the vendor fixer. See mkGoUpdateExtract in overlays/lib.nix." >&2
+        exit 1
+      fi
+    '';
+  in {
+    inherit fixGoFloor fixSrcHash fixVendorHash;
+
+    # A single writeShellScript rather than a concatenated snippet, so
+    # `checks/go-floor-extract-order.nix` has ONE flat file to read the
+    # order out of. A package that composes its updateScript from
+    # sub-scripts (beads runs two) would otherwise hide the ordering
+    # behind a wrapper the check cannot see through.
+    extract = pkgs.writeShellScript "go-update-extract-${pname}" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      ${
+        if srcFromSidecar
+        then "${fixSrcHash}"
+        else "# src hash came from mkUpdateScript's prefetch"
+      }
+      ${fixGoFloor}
+      ${assertFloorPresent}
+      ${fixVendorHash}
+      ${extraAfter}
+    '';
+  };
 
   # Vendor-hash fixer for buildGoModule packages pinned via a sidecar:
   # builds `<attr>.goModules` through the full flake overlay stack with
@@ -1489,8 +1634,9 @@ rec {
   # that sources `fodHashFixFn`'s `fix_fod_hash` and then calls it once
   # per target, in the order given.
   #
-  # Extracted when a THIRD caller appeared: `mkGoVendorFix`,
-  # `mkNpmDepsFix` and `mkGoSrcVendorFix` differ only in the script name
+  # Extracted when a THIRD caller appeared. The callers today are
+  # `mkGoVendorFix`, `mkNpmDepsFix` and the src-only fixer
+  # `mkGoUpdateExtract` builds internally; they differ only in the name
   # and in which (attrPath, drvPattern, key) triples they replay, and
   # three copies of the same `set -euETo pipefail` + interpolate +
   # call-in-order body is the duplication this file exists to prevent.

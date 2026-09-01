@@ -143,7 +143,7 @@ _: {
     # mutates the tree the hash covers. Both therefore pass
     # `platforms = {}` (version only) and thread an `extraExtract` fixer
     # that restores `srcHash` FIRST and then the deps hash —
-    # `fixNpmDepsHash` for bruno, `fixHashes` (vu.mkGoSrcVendorFix) for
+    # `fixNpmDepsHash` for bruno, `fixSrcHash` + `fixVendorHash` for
     # glab. Nothing extra is needed here either.
     #
     # glab is also the one row whose version check is NOT a GitHub one: the
