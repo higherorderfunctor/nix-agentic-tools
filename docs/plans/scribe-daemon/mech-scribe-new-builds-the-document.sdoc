@@ -1,0 +1,69 @@
+[DOCUMENT]
+TITLE: A create builds its document in memory, so it batches like every other write
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-NEW-BUILDS-THE-DOCUMENT
+TITLE: A create builds its document in memory, so it batches like every other write
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+A create builds its document in memory and then behaves like every other
+write: the mutation applies to the held graph, the checks run, the file is
+rendered and parsed, and only the whole-graph reload is deferred.
+
+Three things have to be true of a document built this way, and each is done
+the way the loader does it rather than approximated.
+
+THE GRAMMAR IS RESOLVED, NOT REBUILT. The reader leaves IMPORT_FROM_FILE as a
+name with no elements; the index builder is what resolves it. That step runs
+here for the one new document, through the same two lookups -- the project's
+alias table, then the tree's map of parsed grammar files -- so the elements
+are the one shared list every other document already points at. Note that
+update_with_elements re-parents that shared list to the new grammar. It is
+upstream's own call and upstream's own side effect: the loader runs it once
+per document over the same list, so after any load those parents point at
+whichever document was processed last, and nothing may depend on which. The
+only reader of a grammar element's parent is validate_grammar_element, which
+this path does not reach.
+
+THE META IS MIRRORED, AND THE MIRROR IS UNDER CONTRACT. Every DocumentMeta
+field is a join of the repository root's own basename with the document's
+directory, so all of it derives from the path -- but deriving it means copying
+DocumentFinder, which is the one thing this module otherwise refuses to do.
+What makes that safe is a comparison rather than care: a contract builds a
+document in memory, reloads the corpus for real, and asserts every meta field
+identical. See [LINK: EV-SCRIBE-NEW-IN-ONE-LOAD].
+
+THE DOCUMENT IS REGISTERED IN ALL THREE CONTAINERS a lookup goes through:
+document_list, map_docs_by_paths, map_docs_by_rel_paths. No index surgery is
+needed beyond that, because get_node_by_uid_weak WALKS document_list rather
+than reading the graph database -- which is why a node created in a batch is
+already a valid relation target for the next write in the same batch, and why
+a second create cannot reuse its UID.
+
+ONE RULE HAD TO BE STATED THAT USED TO HOLD BY ACCIDENT. A document written
+where DocumentFinder does not look -- under a directory named output, or
+outside the project's include masks -- reaches the disk and is then simply
+absent after the next reload. The shape this replaces caught that without
+meaning to, by looking the new document up in a reloaded tree and failing to
+find it. A create now refuses such a destination outright, before anything is
+built.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-DEFERRED-RELOAD-IS-FULL
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-VALIDATES-BEFORE-WRITING
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-RECONCILE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: EV-SCRIBE-NEW-IN-ONE-LOAD
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: dev/scripts/sdoc_model.py

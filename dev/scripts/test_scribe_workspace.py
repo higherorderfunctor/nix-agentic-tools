@@ -70,6 +70,57 @@ def any_node(workspace: Workspace) -> str:
     raise AssertionError("corpus copy has no usable node")
 
 
+# Every field DocumentMeta carries. The derived-versus-rebuilt comparison is
+# what makes hand-mirroring DocumentFinder safe, so it must be exhaustive --
+# a list that quietly omits a field is a contract that quietly stops checking.
+META_FIELDS = (
+    "level",
+    "file_tree_mount_folder",
+    "document_filename",
+    "document_filename_base",
+    "input_doc_full_path",
+    "input_doc_rel_path",
+    "input_doc_dir_rel_path",
+    "input_doc_assets_dir_rel_path",
+    "output_document_dir_full_path",
+    "output_document_dir_rel_path",
+    "output_document_full_path",
+)
+
+
+def meta_value(meta, name: str):
+    """One meta field, unwrapped so it can be compared AND printed.
+
+    SDocRelativePath defines no equality and raises AssertionError from both
+    __str__ and __repr__, so comparing two of them is identity and an
+    assertion message that interpolated one would die reporting the failure
+    rather than reporting it.
+    """
+    value = getattr(meta, name)
+    if hasattr(value, "relative_path"):
+        return (value.relative_path, value.relative_path_posix)
+    return value
+
+
+def create(workspace: Workspace, path: Path, uid: str, tag: str = "MECHANISM", **overrides):
+    """Create one node through the ordinary write path."""
+    values = {
+        "UID": uid,
+        "TITLE": f"Contract node {uid}",
+        "DEPTH": "sketch",
+        "AUTHORED_BY": "llm",
+        "STATEMENT": "Written by a contract.",
+    }
+    relations = overrides.pop("_relations", [])
+    values.update(overrides)
+    workspace.write(
+        lambda g: g.add_node(
+            g.new_document(path, values["TITLE"]), tag, values, relations
+        ),
+        precheck=refuse_dangling_links,
+    )
+
+
 def inline_linked_node(workspace: Workspace):
     """A node something points at with [LINK:] -- the class the cheap
     rebuild used to accept deleting."""
@@ -293,6 +344,146 @@ def test_concurrent_writes(root: Path) -> None:
     assert field_value(fresh.node(uids[1]), "TITLE") == "Writer B", "writer B was lost"
 
 
+@contract("a create is a deferred write, and a batch of them pays ONE reload")
+def test_create_defers(root: Path) -> None:
+    workspace = Workspace(root)
+    plan = root / "docs" / "plans" / "scribe-daemon"
+    start = workspace.current().number
+    uids = [f"MECH-CONTRACT-BATCH-{n}" for n in range(3)]
+    for uid in uids:
+        create(workspace, plan / f"{uid.lower()}.sdoc", uid)
+    assert workspace._generation.number == start, "a create inside the batch reloaded"
+    assert workspace._dirty, "a create did not mark the graph dirty"
+    for uid in uids:
+        assert (plan / f"{uid.lower()}.sdoc").is_file(), f"{uid} was not written"
+
+    after = workspace.current()
+    assert after.number == start + 1, "the batch of creates cost more than one reload"
+    for uid in uids:
+        assert after.graph.has_node(uid), f"{uid} is missing after the reload"
+
+
+@contract("a document built in memory is field-for-field what a rebuild builds")
+def test_new_document_matches_rebuild(root: Path) -> None:
+    workspace = Workspace(root)
+
+    # Three depths, because every derived field is a join of the root's own
+    # basename with the document's directory: a plan directory, a shallower
+    # one, and the root itself, where the empty-directory branch is taken.
+    paths = {
+        "MECH-CONTRACT-DEEP": root / "docs" / "plans" / "scribe-daemon" / "mech-contract-deep.sdoc",
+        "MECH-CONTRACT-MID": root / "docs" / "spec" / "mech-contract-mid.sdoc",
+        "MECH-CONTRACT-ROOT": root / "mech-contract-root.sdoc",
+    }
+    for uid, path in paths.items():
+        create(workspace, path, uid)
+
+    held = workspace._held()
+    built = {uid: held.index.document_tree.map_docs_by_paths[str(path)]
+             for uid, path in paths.items()}
+
+    # The grammar is the SHARED element list, not a copy of it. Checked by
+    # identity against a document that came off the disk, which is the whole
+    # reason the reload was avoidable.
+    neighbour = next(d for d in held.documents if d not in built.values())
+    for uid, document in built.items():
+        assert document.grammar.elements is neighbour.grammar.elements, (
+            f"{uid} got its own element list instead of the shared one"
+        )
+        assert set(document.grammar.elements_by_type) == set(
+            neighbour.grammar.elements_by_type
+        ), f"{uid} resolved a different set of element tags"
+
+    renders = {uid: held.render(document) for uid, document in built.items()}
+
+    rebuilt = workspace.reload().graph
+    by_path = {Path(d.meta.input_doc_full_path): d for d in rebuilt.documents}
+    for uid, path in paths.items():
+        document = by_path.get(path)
+        assert document is not None, f"{uid} is not in the rebuilt tree"
+        mine, theirs = built[uid].meta, document.meta
+        for name in META_FIELDS:
+            assert meta_value(mine, name) == meta_value(theirs, name), (
+                f"{uid}: meta field {name} differs from the rebuild: "
+                f"{meta_value(mine, name)!r} vs {meta_value(theirs, name)!r}"
+            )
+        assert renders[uid] == rebuilt.render(document), (
+            f"{uid} renders differently once it has been read back"
+        )
+
+
+@contract("a node created in a batch can be the next write's relation target")
+def test_created_node_is_a_target(root: Path) -> None:
+    workspace = Workspace(root)
+    plan = root / "docs" / "plans" / "scribe-daemon"
+    start = workspace.current().number
+    create(workspace, plan / "mech-contract-lane.sdoc", "MECH-CONTRACT-LANE")
+    create(
+        workspace,
+        plan / "work-contract-rider.sdoc",
+        "WORK-CONTRACT-RIDER",
+        tag="WORK",
+        _relations=[("Crosses", "MECH-CONTRACT-LANE")],
+    )
+    assert workspace._generation.number == start, "the pair of creates reloaded"
+    text = (plan / "work-contract-rider.sdoc").read_text(encoding="utf8")
+    assert "MECH-CONTRACT-LANE" in text, "the relation to the fresh node was lost"
+
+
+@contract("a refused create leaves no file behind")
+def test_refused_create_leaves_nothing(root: Path) -> None:
+    workspace = Workspace(root)
+    plan = root / "docs" / "plans" / "scribe-daemon"
+
+    # POSITIVE CONTROL: the same call with a resolvable link is accepted.
+    other = any_node(workspace)
+    good = plan / "mech-contract-sound.sdoc"
+    create(
+        workspace, good, "MECH-CONTRACT-SOUND",
+        STATEMENT=f"Points at [LINK: {other}] which exists.",
+    )
+    assert good.is_file(), "positive control failed: a sound create wrote nothing"
+
+    bad = plan / "mech-contract-dangling.sdoc"
+    try:
+        create(
+            workspace, bad, "MECH-CONTRACT-DANGLING",
+            STATEMENT="Points at [LINK: NO-SUCH-UID-ANYWHERE].",
+        )
+    except WorkspaceError as exc:
+        assert "NO-SUCH-UID-ANYWHERE" in str(exc)
+        assert not bad.exists(), "a refused create left a skeleton on disk"
+        return
+    raise AssertionError("a create carrying a dangling inline link was accepted")
+
+
+@contract("a create the loader could not read back is refused, not silently lost")
+def test_unreadable_destination_refused(root: Path) -> None:
+    workspace = Workspace(root)
+
+    # POSITIVE CONTROL: the same node one directory over is accepted AND is
+    # still there after the reload -- which is what the refusal below is
+    # protecting, and what the assertion on `output/` cannot show by itself.
+    good = root / "docs" / "plans" / "scribe-daemon" / "mech-contract-kept.sdoc"
+    create(workspace, good, "MECH-CONTRACT-KEPT")
+    assert workspace.current().graph.has_node("MECH-CONTRACT-KEPT"), (
+        "positive control failed: an ordinary create did not survive the reload"
+    )
+
+    # strictdoc prunes `output` and `Output` from its walk unconditionally, so
+    # a document written there is written and then simply gone. Measured with
+    # the guard removed: the file lands on disk and has_node is False after the
+    # next reload.
+    lost = root / "output" / "mech-contract-lost.sdoc"
+    try:
+        create(workspace, lost, "MECH-CONTRACT-LOST")
+    except WorkspaceError as exc:
+        assert "never reads" in str(exc), f"refused for the wrong reason: {exc}"
+        assert not lost.exists(), "a refused create wrote the file anyway"
+        return
+    raise AssertionError("a create into an unread directory was accepted")
+
+
 CONTRACTS = [
     test_read_is_free,
     test_write_defers,
@@ -304,6 +495,11 @@ CONTRACTS = [
     test_external_change_detected,
     test_no_wedge,
     test_concurrent_writes,
+    test_create_defers,
+    test_new_document_matches_rebuild,
+    test_created_node_is_a_target,
+    test_refused_create_leaves_nothing,
+    test_unreadable_destination_refused,
 ]
 
 

@@ -431,23 +431,13 @@ def do_new(graph, args, root: Path) -> int:
     if path.exists():
         raise SdocError(f"{path} already exists")
 
-    graph.create_document(path, values["TITLE"])
-    try:
-        # Reload so the new document is parsed with the @repo grammar
-        # resolved -- the alias is resolved by the index builder, not the
-        # reader, so a document built purely in memory would need its
-        # grammar and meta wired by hand.
-        reloaded = load_graph(root)
-        document = next(
-            d for d in reloaded.documents if Path(d.meta.input_doc_full_path) == path
-        )
-        reloaded.add_node(document, tag, values, relations)
-        return finish(reloaded, args, root, created=path)
-    except BaseException:
-        # BaseException, so a SystemExit out of the reload cannot strand a
-        # header-only .sdoc that no verb would ever pick up again.
-        path.unlink(missing_ok=True)
-        raise
+    # Built in memory, so a create is a proposal like every other edit: it
+    # joins pending() and reaches the disk only in save(). Nothing is written
+    # by a refused create, and --dry-run now leaves no skeleton behind either.
+    # Graph.new_document is where the grammar alias and the meta get resolved
+    # without a reload.
+    graph.add_node(graph.new_document(path, values["TITLE"]), tag, values, relations)
+    return finish(graph, args, root)
 
 
 def do_set(graph, args, root: Path) -> int:
@@ -663,7 +653,7 @@ def verify(root: Path, restore: dict[Path, str | None]) -> None:
         ) from exc
 
 
-def finish(graph, args, root: Path, *, created: Path | None = None) -> int:
+def finish(graph, args, root: Path) -> int:
     # Running inside a resident workspace: it owns saving and verification,
     # and doing either here would pay the full reload the daemon exists to
     # defer. The handler has already mutated the graph, which is all the
@@ -672,12 +662,10 @@ def finish(graph, args, root: Path, *, created: Path | None = None) -> int:
         return 0
     if getattr(args, "dry_run", False):
         print_diff(graph, root)
-        if created is not None:
-            created.unlink(missing_ok=True)
         return 0
+    # source_bytes answers None for a path that does not exist yet, which is
+    # exactly the rollback a create wants: undo it by removing the file.
     restore = {path: source_bytes(path) for path in graph.pending()}
-    if created is not None:
-        restore[created] = None
     removed = {path for path, content in graph.pending().items() if content is None}
     written = graph.save()
     verify(root, restore)

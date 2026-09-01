@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import posixpath
 import tempfile
 import os
 import sys
@@ -45,6 +46,7 @@ from typing import Iterator
 
 from strictdoc.backend.sdoc.document_reference import DocumentReference
 from strictdoc.backend.sdoc.models.document import SDocDocument
+from strictdoc.backend.sdoc.models.document_grammar import DocumentGrammar
 from strictdoc.backend.sdoc.models.grammar_element import GrammarElement
 from strictdoc.backend.sdoc.models.node import SDocNode, SDocNodeField
 from strictdoc.backend.sdoc.models.reference import (
@@ -53,11 +55,16 @@ from strictdoc.backend.sdoc.models.reference import (
     FileReference,
     ParentReqReference,
 )
+from strictdoc.backend.sdoc.reader import SDReader
 from strictdoc.backend.sdoc.validations.sdoc_validator import SDocValidator
 from strictdoc.backend.sdoc.writer import SDWriter
+from strictdoc.core.document_meta import DocumentMeta
 from strictdoc.core.project_config import ProjectConfigLoader
 from strictdoc.core.traceability_index_builder import TraceabilityIndexBuilder
 from strictdoc.helpers.parallelizer import NullParallelizer
+from strictdoc.helpers.path_filter import PathFilter
+from strictdoc.helpers.paths import SDocRelativePath
+from strictdoc.helpers.textx import drop_textx_meta
 
 # MECH-RUNTIME-WRITE-GUARD: two fields are the operator's, and what enforces
 # that is the absence of a code path rather than a check in front of one.
@@ -356,20 +363,193 @@ class Graph:
             f"Declared roles: {', '.join(roles) or '(none)'}"
         )
 
-    def create_document(self, path: Path, title: str) -> None:
-        """Write the two invariant header blocks for a new one-node file.
+    def new_document(self, path: Path, title: str) -> SDocDocument:
+        """Build a one-node document IN MEMORY, wired as a reload would wire it.
 
-        The node itself is added through the model on the next load. This
-        five-line skeleton is the only sdoc text this tool templates, and it
-        is deliberate: the @repo alias resolves during the index build, so a
-        document constructed purely in memory would have to be handed a
-        grammar and a meta by hand -- exactly the wiring the model exists to
-        avoid getting wrong.
+        This is what lets `new` batch like every other write. The skeleton
+        used to reach DISK first and the whole corpus was then re-read, because
+        the `@repo` alias is resolved by the index builder and not by the
+        reader. That reload re-parsed 382 files to obtain a reference to an
+        object already in memory: the corpus holds 382 DocumentGrammar objects
+        around exactly ONE shared element list.
+
+        Three things have to be true of the result, and each is done the way
+        the loader does it rather than approximated:
+
+        * the grammar is resolved through the SAME lookup the index builder
+          uses -- the project's alias table, then the document tree's map of
+          parsed grammar files -- so the elements ARE that one shared list;
+        * the meta is derived from the path. This is the one place this module
+          mirrors the loader instead of calling it, and the mirror is held
+          honest by a contract rather than by care: every meta field of a
+          document built here is compared against a genuine rebuild
+          (MECH-SCRIBE-NEW-BUILDS-THE-DOCUMENT, EV-SCRIBE-NEW-IN-ONE-LOAD);
+        * the document is registered in all three containers a lookup goes
+          through. get_node_by_uid_weak WALKS document_list rather than reading
+          the graph database, so a node created here is visible to the rest of
+          the batch with no index surgery at all -- which is why creating one
+          node and relating the next to it still works without a reload.
+
+        Nothing reaches the disk here. The document joins `pending()` through
+        add_node like any other edit, and `save()` creates its directory.
         """
         if path.exists():
             raise SdocError(f"{path} already exists")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(DOCUMENT_SKELETON.format(title=title), encoding="utf8")
+        tree = self.index.document_tree
+        if str(path) in tree.map_docs_by_paths:
+            raise SdocError(f"{path} is already a document in this graph")
+
+        self._refuse_unreadable_destination(self._relative(path))
+
+        document = SDReader.read(DOCUMENT_SKELETON.format(title=title), str(path))
+        # The loader strips textX's parse metadata off every document it reads;
+        # it is unpicklable and unused, and a document that kept it would be
+        # the one object in the tree that could not go through the parse cache.
+        drop_textx_meta(document)
+        document.assign_meta(self._document_meta(path))
+        self._resolve_grammar(document)
+
+        tree.document_list.append(document)
+        tree.map_docs_by_paths[str(path)] = document
+        tree.map_docs_by_rel_paths[
+            os.path.join(
+                document.meta.output_document_dir_rel_path.relative_path,
+                f"{document.meta.document_filename_base}.html",
+            )
+        ] = document
+        return document
+
+    def _relative(self, path: Path) -> Path:
+        try:
+            return path.relative_to(self.root)
+        except ValueError as exc:
+            raise SdocError(f"{path} is outside the project root {self.root}") from exc
+
+    def _refuse_unreadable_destination(self, relative: Path) -> None:
+        """Refuse a destination the loader would not read back.
+
+        A document written where DocumentFinder does not look reaches the disk
+        and is then simply absent after the next reload: the create reports
+        success and the node is gone. The shape this replaces caught that by
+        ACCIDENT -- it looked the new document up in a reloaded tree and did
+        not find it -- so building in memory has to state the rule instead of
+        inheriting it.
+
+        Both rules are FileFinder's. Directories named `output` in either case
+        are pruned unconditionally, along with the project's own output
+        directory; the include and exclude masks decide the rest, and they go
+        through strictdoc's own PathFilter rather than a second reading of its
+        glob dialect.
+        """
+        pruned = {"output", "Output", os.path.basename(str(self.config.output_dir or ""))}
+        for part in relative.parts[:-1]:
+            if part in pruned:
+                raise SdocError(
+                    f"{relative.as_posix()} is under {part!r}, a directory "
+                    f"strictdoc never reads -- the file would be written and "
+                    f"then vanish at the next load"
+                )
+        posix = relative.as_posix()
+        if PathFilter(self.config.exclude_doc_paths, positive_or_negative=False).match(posix):
+            raise SdocError(
+                f"{posix} is matched by the project's exclude_doc_paths, so "
+                f"the document would be written and never read back"
+            )
+        if not PathFilter(self.config.include_doc_paths, positive_or_negative=True).match(posix):
+            raise SdocError(
+                f"{posix} is outside the project's include_doc_paths, so the "
+                f"document would be written and never read back"
+            )
+
+    def _document_meta(self, path: Path) -> DocumentMeta:
+        """The meta DocumentFinder would have built for this path.
+
+        Mirrored from core/file_system/document_finder.py's _build_document_tree
+        and the File/Folder levels FileFinder assigns. Every value it derives
+        comes from the path and the project root:
+
+        * `level` is the folder's depth plus one, which is just the number of
+          components in the repository-relative path;
+        * `file_tree_mount_folder` is the basename of the input path, which
+          here is the repository root -- so it changes with the checkout's
+          directory name, and must not be hard-coded;
+        * the assets and output paths are joins of those two.
+
+        The `_assets` branch uses "/".join where the other uses os.path.join,
+        which is upstream's own asymmetry and is preserved deliberately: on
+        POSIX they agree, and diverging from the source would make the contract
+        that compares the two harder to read, not easier.
+        """
+        relative = self._relative(path)
+        mount = self.root.name
+        directory = "" if str(relative.parent) == "." else str(relative.parent)
+        output_dir_rel = SDocRelativePath(
+            os.path.join(mount, directory) if directory else mount
+        )
+        return DocumentMeta(
+            level=len(relative.parts),
+            file_tree_mount_folder=mount,
+            document_filename=path.name,
+            document_filename_base=path.stem,
+            input_doc_full_path=str(path),
+            input_doc_rel_path=SDocRelativePath(str(relative)),
+            input_doc_dir_rel_path=SDocRelativePath(directory),
+            input_doc_assets_dir_rel_path=SDocRelativePath(
+                os.path.join(mount, directory, "_assets")
+                if directory
+                else "/".join((mount, "_assets"))
+            ),
+            output_document_dir_full_path=os.path.join(
+                self.config.export_output_html_root, output_dir_rel.relative_path
+            ),
+            output_document_dir_rel_path=output_dir_rel,
+        )
+
+    def _resolve_grammar(self, document: SDocDocument) -> None:
+        """Point a freshly parsed document's grammar at the shared elements.
+
+        The reader leaves `[GRAMMAR] IMPORT_FROM_FILE` unresolved -- a name and
+        no elements -- and the index builder is what turns it into the parsed
+        grammar. This is that step, over the grammars the held tree already
+        parsed, for one document.
+
+        `update_with_elements` re-parents every element in the SHARED list to
+        this grammar. That is upstream's own call and upstream's own side
+        effect: the loader runs it once per document over the same list, so
+        after any load those parents point at whichever document happened to be
+        processed last. Nothing may depend on which one -- and nothing does,
+        because the only reader of a grammar element's parent is
+        validate_grammar_element, which our write path does not reach.
+        """
+        grammar = document.grammar
+        if grammar is None or grammar.import_from_file is None:
+            return
+        alias = grammar.import_from_file
+        if alias.startswith("@"):
+            filename = self.config.grammars.get(alias)
+            if filename is None:
+                raise SdocError(
+                    f"the project config declares no grammar alias {alias!r}; "
+                    f"it has {', '.join(sorted(self.config.grammars)) or '(none)'}"
+                )
+        else:
+            filename = posixpath.join(
+                document.meta.input_doc_dir_rel_path.relative_path_posix, alias
+            )
+        source = self.index.document_tree.get_grammar_by_filename(filename)
+        if source is None:
+            raise SdocError(
+                f"the grammar file {filename!r} that {alias!r} names is not in "
+                f"the loaded tree"
+            )
+        grammar.update_with_elements(source.elements)
+        if not grammar.has_text_element():
+            grammar.add_element_first(
+                DocumentGrammar.create_default_text_element(
+                    grammar, enable_mid=document.config.enable_mid is True
+                )
+            )
+        grammar.parent = document
 
     def add_node(
         self,
@@ -486,6 +666,11 @@ class Graph:
                 path.unlink()
                 written.append(path)
                 continue
+            # A document built by new_document has never touched the disk, so
+            # its directory may not exist yet and mkstemp would fail on it.
+            # Made here rather than at creation time, so a refused create --
+            # and a --dry-run -- leave the tree exactly as they found it.
+            path.parent.mkdir(parents=True, exist_ok=True)
             # A UNIQUE temp name, not a deterministic one. Two writers on the
             # same file -- a second scribe process, or fp-accept alongside one
             # -- collided on a fixed `.<name>.sdoc-tmp`: one got ENOENT from

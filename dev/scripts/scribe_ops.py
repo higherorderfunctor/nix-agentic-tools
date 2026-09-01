@@ -175,13 +175,17 @@ def _written(workspace: Workspace, mutate, precheck) -> dict:
 
 
 def _new(workspace: Workspace, params: dict, fields: dict) -> dict:
-    """Create a node in a file of its own.
+    """Create a node in a file of its own -- an ordinary deferred write.
 
-    The skeleton reaches disk before the node does, because the `@repo`
-    grammar alias is resolved by the index builder and not by the reader, so
-    a document assembled purely in memory would need its grammar and meta
-    wired by hand. That is why this reloads rather than deferring, and why
-    adopting a document in memory is filed as follow-up work.
+    The document is built in memory by Graph.new_document, so this goes
+    through workspace.write() like every other verb and defers its reload.
+    It used to write a header-only skeleton to disk and re-read the whole
+    corpus, to resolve the `@repo` alias on the file it had just created:
+    about 780 ms per node, against 6 ms for a set.
+
+    The checks that can be answered without mutating anything stay OUT of the
+    write, deliberately. A refusal raised inside `mutate` discards the held
+    graph, so the next read pays a reload for a create that never began.
     """
     graph = workspace._held()
     tag = _need(params, "type")
@@ -204,28 +208,10 @@ def _new(workspace: Workspace, params: dict, fields: dict) -> dict:
     if path.exists():
         raise SdocError(f"{path} already exists")
 
-    graph.create_document(path, values.get("TITLE", uid))
-    try:
-        reloaded = workspace._guarded(
-            lambda: __import__("sdoc_model").open_graph(workspace.root, output_dir=workspace.output_dir)
-        )
-        document = next(
-            d for d in reloaded.documents if Path(d.meta.input_doc_full_path) == path
-        )
-        reloaded.add_node(document, tag, values, relations)
-        refuse_dangling_links(reloaded)
-        written = reloaded.save()
-    except BaseException:
-        path.unlink(missing_ok=True)
-        workspace._discard()
-        raise
-    # ADOPT the graph we just paid for rather than throwing it away. The
-    # reload was needed to resolve the @repo alias on the new document; it
-    # is also a complete, current graph, so publishing it leaves the
-    # workspace clean and the next read free. Discarding here made `new`
-    # cost TWO loads -- this one, and another at whatever came next.
-    workspace._adopt(reloaded)
-    return {"written": [str(p.relative_to(workspace.root)) for p in written]}
+    def mutate(g):
+        g.add_node(g.new_document(path, values.get("TITLE", uid)), tag, values, relations)
+
+    return _written(workspace, mutate, refuse_dangling_links)
 
 
 def _move(workspace: Workspace, uid: str, destination: Path) -> dict:

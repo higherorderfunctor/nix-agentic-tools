@@ -3,8 +3,9 @@
 """scribe_workspace -- one held graph per workspace (MECH-SCRIBE-WORKSPACE,
 MECH-SCRIBE-RECONCILE, docs/plans/scribe-daemon/).
 
-Loading dominates everything else: one load is ~0.55 s, `scribe show` is
-1.05 s wall, and `scribe new` pays THREE loads. A resident process pays once.
+Loading dominates everything else: one load is ~0.55 s and `scribe show` was
+1.05 s wall. A resident process pays once, and every verb -- `new` included --
+is a write against the held graph.
 
 NOTHING IS WRITTEN UNTIL IT IS KNOWN TO BE VALID
 ------------------------------------------------
@@ -230,17 +231,6 @@ class Workspace:
 
             self._dirty = True
             return written
-
-    def _adopt(self, graph: Graph) -> Generation:
-        """Publish a graph someone else already built from disk.
-
-        `new` has to reload mid-operation to resolve the grammar alias on the
-        document it just created. That reload is a complete current graph, so
-        throwing it away and reloading again at the next read pays for the
-        same work twice.
-        """
-        with self._lock:
-            return self._republish(graph)
 
     def reload(self) -> Generation:
         """Rebuild now rather than at the next read."""

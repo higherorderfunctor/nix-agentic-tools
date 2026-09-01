@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-SCRIBE-NEW-DOES-NOT-BATCH
 TITLE: Creating a node still costs a reload each, where every other write batches
-DEPTH: needs-design
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Every other write defers its reload, so a run of them pays one. `new` does
@@ -35,6 +35,26 @@ made safe by a contract rather than by care: adopt, then full-reload, then
 compare EVERY meta field. A prior probe did this round trip and got 10 of 10
 fields identical to a genuine rebuild at about 25 ms.
 <<<
+NOTES: >>>
+DONE 2026-09-01. Graph.new_document builds the document in memory -- grammar
+resolved through the index builder's own two lookups onto the shared element
+list, meta derived from the path, and the document registered in all three
+containers -- so `new` goes through workspace.write() like every other verb.
+Three creates: 2327 ms to 16 ms, against 18 ms for three sets.
+
+The meta was the open part and is now closed by contract rather than by care:
+11 of 11 fields identical to a genuine rebuild at four depths, with a
+positive control that fails the comparison when the derivation is broken.
+
+Two things fell out. A create is now a pure in-memory proposal, so --dry-run
+leaves nothing behind and a refused create writes no skeleton. And one rule
+that used to hold by accident had to be stated: a destination the loader does
+not walk is refused, because the file would otherwise be written and then
+silently vanish at the next reload.
+
+The mechanism is [LINK: MECH-SCRIBE-NEW-BUILDS-THE-DOCUMENT]; five contracts
+in dev/scripts/test_scribe_workspace.py hold it, taking that file to 15.
+<<<
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-SCRIBE-DEFERRED-RELOAD-IS-FULL
@@ -42,3 +62,6 @@ RELATIONS:
 - TYPE: Parent
   VALUE: MECH-SCRIBE-RECONCILE
   ROLE: Crosses
+- TYPE: Child
+  VALUE: EV-SCRIBE-NEW-IN-ONE-LOAD
+  ROLE: Produces
