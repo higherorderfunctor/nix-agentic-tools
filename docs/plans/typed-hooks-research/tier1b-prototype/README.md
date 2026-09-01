@@ -77,9 +77,7 @@ would have caught the Kiro empty-`prompt` regression.
   "hook": "claude-pretooluse-bash-guard.sh", // a file in hooks-under-test/
   "setup": { "cwdFiles": [".needs-tests"] }, // optional: temp cwd seeded with marker files,
   //           spliced into stdin.cwd (for side-channel hooks)
-  "stdin": {
-    /* the JSON payload piped to the hook */
-  },
+  "stdin": {/* the JSON payload piped to the hook */},
   "expect": {
     "exit": 0, // required exit code
     "stdoutEmpty": true, // optional: assert stdout is empty

@@ -1515,8 +1515,11 @@ hook format.
   `project_id` (routes/memory.ts — only tenant/user*id scoping). Only the
   in-process `Memory` SDK (and the MCP tool layer) accept
   `{user_id, project_id}`. So hook writes/reads use a tiny bun script
-  `import { Memory }` with
-  `OM_PG*\*`env (→ same Postgres):`add(content,{project_id})`/`search(query,{project_id})`. The daemon is the MODEL's frontend; hooks go straight to Postgres via the SDK (same store). Ship an `openmemory-mem`helper binary (SDK add/query) from the openmemory package, or invoke bun with`NODE_PATH`into its`node_modules`.
+  `import { Memory }` with `OM_PG*\*`env (→ same
+  Postgres):`add(content,{project_id})`/`search(query,{project_id})`. The daemon
+  is the MODEL's frontend; hooks go straight to Postgres via the SDK (same
+  store). Ship an `openmemory-mem`helper binary (SDK add/query) from the
+  openmemory package, or invoke bun with`NODE_PATH`into its`node_modules`.
 - **Model-side scoping.** The daemon can't see the client cwd, so the model's
   own `openmemory_store_project`/`_query` calls are best-effort — inject the
   current `project_id` via the SessionStart banner/steering so the model echoes
