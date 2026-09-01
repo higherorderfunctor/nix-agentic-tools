@@ -602,6 +602,14 @@ in {
     command = "${pkgs.ai.mcpServers.agnix-mcp}/bin/agnix-mcp";
   };
 
+  # ── Processes ───────────────────────────────────────────────────────────
+  # The board app (MECH-SDOC-BOARD-SERVER): loopback HTTP over the resident
+  # scribe. A process rather than a task so `devenv up board`, `-d` and
+  # `devenv processes down` manage it without holding a pane — same lifecycle
+  # as processes.scribe, which the ai.strictdoc module declares. Independent
+  # of the scribe: with no daemon it serves the refusal page until one is up.
+  processes.board.exec = ''"$DEVENV_ROOT"/docs/sdoc/board/serve --root "$DEVENV_ROOT"'';
+
   # ── Shell Init ──────────────────────────────────────────────────────────
   enterShell = ''
     for dir in .claude/skills .github/skills .kiro/skills; do
