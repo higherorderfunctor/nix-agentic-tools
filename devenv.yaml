@@ -29,7 +29,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   nix-fast-build:
-    url: github:Mic92/nix-fast-build/6d2dd14d2b7ae436c3f1c7f96e932b2dda738973
+    url: github:Mic92/nix-fast-build/1731201c3f9f68cb41a0583cfd4b050c947b68cf
     inputs:
       nixpkgs:
         follows: nixpkgs
