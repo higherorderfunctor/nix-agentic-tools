@@ -50,23 +50,31 @@ Run a test command or formatter across commits in the current stack.
    before worrying about speed.
 
    An explicit revset argument always wins. `--stack` and `--tip` come next.
-   With none of those, read the structure of the work:
+   With none of those, read the structure of the work — every PR/MR needs its
+   own branch, so branch refs inside the stack count the PRs:
 
    ```bash
-   git branchless query 'stack() & branches()' | wc -l
+   git branchless query 'stack()' | wc -l              # commits in the stack
+   git branchless query 'stack() & branches()'         # and their branches
    ```
 
-   Every PR/MR needs its own branch, so that count _is_ the number of PRs in the
-   stack:
+   | Branches in stack | Situation                       | Revset           |
+   | ----------------- | ------------------------------- | ---------------- |
+   | stack() is empty  | Nothing draft — you are on main | `@`              |
+   | 0 or 1            | One PR/MR, several WIP commits  | `heads(stack())` |
+   | 2+                | A stack of independent PRs/MRs  | `stack()`        |
 
-   | Count  | Situation                      | Revset           |
-   | ------ | ------------------------------ | ---------------- |
-   | 0 or 1 | One PR/MR, several WIP commits | `heads(stack())` |
-   | 2+     | A stack of independent PRs/MRs | `stack()`        |
+   Check the empty case first and mechanically — on `main`, `heads(stack())`
+   resolves to zero commits and would test nothing at all.
 
    Use `heads(stack())` rather than `@` for the tip: it stays correct when the
-   user has navigated back with `git prev`. If `stack()` is empty (nothing draft
-   — you are on `main`), fall back to `@`.
+   user has navigated back with `git prev`, where `@` is a middle commit.
+
+   **When the count is 2+, name the branches you found in your report.** The
+   count cannot tell a real PR stack from one PR plus a stale branch left over
+   from earlier work — both look like 2. Over-testing is the safe direction, so
+   still default to `stack()`, but listing the names lets the user spot a stale
+   branch immediately instead of wondering why seven commits are being tested.
 
    **Why the tip is the default.** In a single PR only the merged result ships:
    the tip is what reviewers read and what CI gates, and the commits underneath
@@ -76,9 +84,7 @@ Run a test command or formatter across commits in the current stack.
    things to validate.
 
    **Say which revset you chose and why, before running.** Widening and
-   narrowing are both coverage changes, and a silent one is a bug. If the count
-   is ambiguous — say, branches left over from earlier work — ask the user
-   instead of guessing.
+   narrowing are both coverage changes, and a silent one is a bug.
 
 4. **Reject `nix` per-commit testing.** If the command is a Nix command
    (`nix flake check`, `nix build`, …) _and_ the revset covers more than one
@@ -110,7 +116,8 @@ Run a test command or formatter across commits in the current stack.
    fi
    footprint_mb=3500          # nix; see the footprint table in the reference
    jobs=$(( avail_mb * 70 / 100 / footprint_mb ))
-   [ "$jobs" -lt 1 ] && jobs=1
+   if [ "$jobs" -lt 1 ]; then jobs=1; fi
+   echo "$jobs"
    ```
 
    Then clamp `jobs` to the commit count and to the physical CPU count. When the

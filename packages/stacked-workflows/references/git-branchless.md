@@ -490,7 +490,8 @@ else
 fi
 footprint_mb=3500                                   # from the table above
 jobs=$(( avail_mb * 70 / 100 / footprint_mb ))      # keep 30% headroom
-[ "$jobs" -lt 1 ] && jobs=1
+if [ "$jobs" -lt 1 ]; then jobs=1; fi
+echo "$jobs"
 ```
 
 **Nix does not fit per-commit testing at any `--jobs` value.** At `--jobs 0` a
