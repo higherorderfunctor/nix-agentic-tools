@@ -27,7 +27,6 @@
   mcp-language-server = import ./mcp-language-server;
   mcp-proxy = import ./mcp-proxy;
   nixos-mcp = import ./nixos-mcp;
-  openmemory-mcp = import ./openmemory-mcp;
   sequential-thinking-mcp = import ./sequential-thinking-mcp;
   serena-mcp = import ./serena-mcp;
   semble = import ./semble;

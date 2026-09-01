@@ -33,7 +33,6 @@ _: {
     # realize a different derivation from the one the local-only CI job tests.
     kiro-cli-workflows = {consumerPath = ["ai" "kiro-cli-workflows"];};
     kiro-gateway = {consumerPath = ["ai" "kiro-gateway"];};
-    kiro-memory-distiller = {consumerPath = ["ai" "kiro-memory-distiller"];};
     semble = {consumerPath = ["ai" "semble"];};
 
     # ── Git tools — live at `consumerPkgs.ai.gitTools.<name>` ──
@@ -96,7 +95,6 @@ _: {
     mcp-language-server = {consumerPath = ["ai" "mcpServers" "mcp-language-server"];};
     mcp-proxy = {consumerPath = ["ai" "mcpServers" "mcp-proxy"];};
     nixos-mcp = {consumerPath = ["ai" "mcpServers" "nixos-mcp"];};
-    openmemory-mcp = {consumerPath = ["ai" "mcpServers" "openmemory-mcp"];};
     serena-mcp = {consumerPath = ["ai" "mcpServers" "serena-mcp"];};
     semble-mcp = {consumerPath = ["ai" "mcpServers" "semble-mcp"];};
     sympy-mcp = {consumerPath = ["ai" "mcpServers" "sympy-mcp"];};

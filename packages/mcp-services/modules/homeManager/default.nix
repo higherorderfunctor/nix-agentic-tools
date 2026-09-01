@@ -55,7 +55,6 @@
     "gitlab-mcp"
     "kagi-mcp"
     "nixos-mcp"
-    "openmemory-mcp"
     "sequential-thinking-mcp"
     "serena-mcp"
     "sympy-mcp"
@@ -328,9 +327,13 @@ in {
     systemd.user.services = mkIf pkgs.stdenv.isLinux (mapAttrs' (name: srv: let
       serverDef = serverFiles.${name};
       srvEnv = effectiveEnvFor name srv "http";
-      # Optional per-server ExecStartPre (e.g. openmemory pre-creating its
-      # dimensioned pgvector table before the daemon inits — see the server
-      # module's settingsToPreStart). Absent → no ExecStartPre.
+      # Optional per-server ExecStartPre, contributed by a server module's
+      # `settingsToPreStart`, for setup that must happen before the daemon
+      # inits. NO SERVER DECLARES ONE TODAY: openmemory-mcp was the only
+      # producer and was removed 2026-09-01. The seam is kept because it is
+      # a generic schema hook rather than openmemory-specific code, and
+      # `optionalAttrs (preStart != [])` below already makes the absent
+      # case free. Absent → no ExecStartPre.
       preStart =
         if serverDef ? settingsToPreStart
         then

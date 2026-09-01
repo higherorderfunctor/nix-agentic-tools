@@ -56,10 +56,6 @@ _: let
       description = "NixOS and Nix documentation";
       credentials = "None";
     };
-    openmemory-mcp = {
-      description = "Persistent memory + vector search";
-      credentials = "None";
-    };
     sequential-thinking-mcp = {
       description = "Step-by-step reasoning";
       credentials = "None";

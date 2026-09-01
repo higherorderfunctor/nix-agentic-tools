@@ -341,41 +341,6 @@
   soleSame = a: b:
     builtins.length a == 1 && builtins.length b == 1 && builtins.head a == builtins.head b;
 
-  # STAGE 3 auto-memory generator (packages/kiro-cli/lib/autoMemory.nix). A tiny
-  # two-bin stub stands in for the distiller so these emission/parity tests don't
-  # depend on building the real overlay package (its bins + behavior are covered
-  # by the distiller's own suite and the overlay build).
-  kiroMemStub = pkgs.runCommand "kiro-memory-distiller-stub" {} ''
-    mkdir -p "$out/bin"
-    for b in kiro-memory-distiller kiro-memory-flush kiro-memory-recall; do
-      printf '#!/bin/sh\nexit 0\n' > "$out/bin/$b"
-      chmod +x "$out/bin/$b"
-    done
-  '';
-  # STAGE 5b: the recall/backend wiring puts openmemory-mem (a bin of openmemory-mcp)
-  # on the wrapper PATH. A tiny stub stands in so the eval tests don't build the real
-  # MCP server package.
-  omMemStub = pkgs.runCommand "openmemory-mcp-stub" {} ''
-    mkdir -p "$out/bin"
-    printf '#!/bin/sh\nexit 0\n' > "$out/bin/openmemory-mem"
-    chmod +x "$out/bin/openmemory-mem"
-  '';
-  kiroAutoMem = args:
-    import ./../packages/kiro-cli/lib/autoMemory.nix ({
-        inherit lib;
-        pkgs =
-          pkgs
-          // {
-            ai =
-              (pkgs.ai or {})
-              // {
-                kiro-memory-distiller = kiroMemStub;
-                mcpServers = (pkgs.ai.mcpServers or {}) // {openmemory-mcp = omMemStub;};
-              };
-          };
-      }
-      // args);
-
   # ── The unrecognized-key guard on the freeform nativeSettings tail ────
   #
   # These four cases exist because the guard is built ONCE
@@ -501,9 +466,11 @@
   # ── Kiro file/materializer helpers ────────────────────────────────
   # Steering now lives in the common runtime file map. Strip its native prefix
   # in tests that care about the logical steering filenames rather than the
-  # backend target. The empty legacy materializer remains only to retire copies
-  # that a previous generation recorded as owned.
-  matLib = aiBase.materialize;
+  # backend target.
+  #
+  # `matLib = aiBase.materialize;` used to sit here. Its only consumer was the
+  # kiro auto-memory suite, removed with that subsystem on 2026-09-01, and
+  # deadnix caught it as an unused binding.
   kiroSteeringFiles = evaluated: let
     prefix = "${evaluated.config.ai.kiro.configDir}/steering/";
   in
@@ -7287,233 +7254,6 @@ in {
       && lib.hasInfix "Review code carefully" (agentFile.text or "")
   );
 
-  # ── STAGE 3: kiro auto-memory wiring (lib/autoMemory.nix) ────
-  # The generator produces reusable values for ai.kiro.hooks / ai.kiro.rules.
-  # These assert the emitted v3 hook envelope + steering anchor and that HM and
-  # devenv emit BYTE-IDENTICAL sources (B5 structural parity, no new module axis).
-
-  # HM: the hook envelope reaches .kiro/hooks/kiro-memory.json with all three v3
-  # lifecycle triggers and the per-role wrapper commands.
-  module-kiro-auto-memory-hm-emits-hooks = mkTest "kiro-auto-memory-hm-emits-hooks" (
-    let
-      mem = kiroAutoMem {home = "/home/tester";};
-      result = evalHm {
-        ai.kiro = {
-          enable = true;
-          hooksJson = mem.hooks;
-        };
-      };
-      hookText = hmHookWriteScript result;
-    in
-      lib.hasInfix ''"version":"v1"'' hookText
-      && lib.hasInfix ''"trigger":"Stop"'' hookText
-      && lib.hasInfix ''"trigger":"SessionStart"'' hookText
-      && lib.hasInfix ''"trigger":"Manual"'' hookText
-      && lib.hasInfix ''"trigger":"UserPromptSubmit"'' hookText
-      && lib.hasInfix ''"type":"command"'' hookText
-      && lib.hasInfix "kiro-memory-stop" hookText
-      && lib.hasInfix "kiro-memory-flush" hookText
-      && lib.hasInfix "kiro-memory-manual" hookText
-      && lib.hasInfix "kiro-memory-recall" hookText
-  );
-
-  # HM: the steering anchor reaches the kiro-auto-memory.md steering
-  # entry with `inclusion: always` (no matcher) and the anchor body.
-  module-kiro-auto-memory-hm-emits-steering = mkTest "kiro-auto-memory-hm-emits-steering" (
-    let
-      mem = kiroAutoMem {home = "/home/tester";};
-      result = evalHm {
-        ai.kiro = {
-          enable = true;
-          inherit (mem) rules;
-        };
-      };
-      steerText = ((kiroSteeringFiles result)."kiro-auto-memory.md" or {}).text or "";
-    in
-      lib.hasInfix "inclusion: always" steerText
-      && lib.hasInfix "Persistent project memory" steerText
-  );
-
-  # Hooks retain byte parity. The unscoped rule deliberately lowers to Kiro HM
-  # steering but joins the shared repository-root AGENTS.md under devenv.
-  module-kiro-auto-memory-hm-devenv-parity = mkTest "kiro-auto-memory-hm-devenv-parity" (
-    let
-      mem = kiroAutoMem {home = "/home/tester";};
-      hm = evalHm {
-        ai.kiro = {
-          enable = true;
-          hooksJson = mem.hooks;
-          inherit (mem) rules;
-        };
-      };
-      dv = evalDevenv {
-        ai.kiro = {
-          enable = true;
-          hooksJson = mem.hooks;
-          inherit (mem) rules;
-        };
-      };
-      # BOTH backends install the hook as a REAL file (kiro v3 skips symlinked
-      # hooks — verified live on 2.13.0), and both now do it through the SHARED
-      # materializer: HM via the activation pair, devenv via the
-      # `ai:kiro:materialize-hooks` task. Parity is by construction (both lower
-      # `mem.hooks."kiro-memory"` through `mkHookEntries`): assert each backend's
-      # writer carries the generator output verbatim, byte-for-byte, via the same
-      # heredoc-extraction idiom the steering half uses below.
-      hmHook = hmHookWriteScript hm;
-      dvHook = dvHookTaskExec dv;
-      expectedHookBody =
-        matLib.stripTrailingNewline
-        (builtins.unsafeDiscardStringContext mem.hooks."kiro-memory");
-      hmHookBody = matHeredocBody hmHook "kiro-memory.json";
-      dvHookBody = matHeredocBody dvHook "kiro-memory.json";
-      hmSteerFiles = kiroSteeringFiles hm;
-      dvSteerFiles = kiroSteeringFiles dv;
-      hmSteer = (hmSteerFiles."kiro-auto-memory.md" or {}).text or "";
-      dvAgents = (dv.config.files."AGENTS.md" or {}).text or "";
-    in
-      hmHook
-      != ""
-      && hmHookBody == expectedHookBody
-      && dvHookBody == expectedHookBody
-      && lib.hasInfix ".kiro/hooks" hmHook
-      && lib.hasInfix ".kiro/hooks" dvHook
-      # The devenv task runs in the caller's cwd (direnv activates in
-      # subdirectories), so the relative hook write must be anchored to
-      # the project root.
-      && lib.hasInfix ''cd "$DEVENV_ROOT"'' dvHook
-      && hmSteer != ""
-      && lib.hasInfix "Persistent project memory" (hm.config.home.file.".kiro/steering/kiro-auto-memory.md".text or "")
-      && lib.hasInfix "Persistent project memory" dvAgents
-      && !(lib.hasInfix "inclusion:" dvAgents)
-      && !(dvSteerFiles ? "kiro-auto-memory.md")
-  );
-
-  # HOME is baked into the wrappers: a different `home` (and the null fail-loud
-  # branch) yields a different hook envelope via different wrapper store paths —
-  # proving the S9/D25 HOME contract is load-bearing, not a no-op.
-  module-kiro-auto-memory-home-baked = mkTest "kiro-auto-memory-home-baked" (
-    let
-      a = (kiroAutoMem {home = "/home/alice";}).hooks."kiro-memory";
-      b = (kiroAutoMem {home = "/home/bob";}).hooks."kiro-memory";
-      unset = (kiroAutoMem {home = null;}).hooks."kiro-memory";
-      empty = (kiroAutoMem {home = "";}).hooks."kiro-memory";
-    in
-      a
-      != b
-      && a != unset
-      && b != unset
-      # Regression guard: an empty-string `home` must NOT bake `export HOME=''`
-      # (silent cwd-relative memory-loss) — it takes the same guard-only path as
-      # null, so its output is byte-identical to the null case.
-      && empty == unset
-  );
-
-  # STAGE 5b backend wiring: the recall wrapper must (a) prepend the openmemory-mem
-  # bin dir to PATH, (b) bake the non-secret omEnv, and (c) cat the password FILE at
-  # runtime — never bake the secret into the store. The wrapper is a store path
-  # referenced from the (context-carrying) hook JSON, so passing that JSON as a build
-  # input realizes all four wrappers; then grep the recall one on disk.
-  module-kiro-auto-memory-backend-wiring = let
-    mem = kiroAutoMem {
-      home = "/home/tester";
-      omEnv = {
-        OM_PG_HOST = "db.example";
-        OM_USER_ID = "dev-no-auth";
-      };
-      omPgPasswordFile = "/run/secrets/om-pg";
-    };
-    # fromJSON rejects a context-carrying string, and the JSON holds the wrapper
-    # store paths — so strip context to PARSE (safe: the path is only used as a grep
-    # target; the wrappers are realized via hookFile's retained context below).
-    envelope = builtins.fromJSON (builtins.unsafeDiscardStringContext mem.hooks."kiro-memory");
-    cmdFor = trigger:
-      (lib.findFirst (h: h.trigger == trigger)
-        (throw "no ${trigger} hook")
-        envelope.hooks).action.command;
-    recallCmd = cmdFor "UserPromptSubmit";
-    # The write-path wrappers (Stop/SessionStart/Manual) also shell to openmemory-mem
-    # (`add`), so they must share the SAME PATH + secret wiring — grep one to catch a
-    # future per-wrapper refactor that drops it from the write side (P8).
-    stopCmd = cmdFor "Stop";
-  in
-    pkgs.runCommand "module-test-kiro-auto-memory-backend-wiring" {
-      # writeText persists the context-carrying hook JSON (as real HM does), so its
-      # build realizes all four wrapper store paths — then the cmd paths exist on disk.
-      hookFile = pkgs.writeText "kiro-memory-hooks.json" mem.hooks."kiro-memory";
-    } ''
-      fail() {
-        echo "FAIL: kiro-auto-memory-backend-wiring: $1" >&2
-        exit 1
-      }
-      w=${recallCmd}
-      grep -q 'export PATH=' "$w" || fail "recall: no PATH prepend"
-      grep -q 'openmemory-mcp-stub' "$w" || fail "recall: openmemory-mem bin dir not on PATH"
-      grep -q 'OM_PG_HOST=' "$w" || fail "recall: omEnv OM_PG_HOST not baked"
-      grep -q 'OM_USER_ID=' "$w" || fail "recall: omEnv OM_USER_ID not baked"
-      # Runtime form is `OM_PG_PASSWORD="$(cat …)"` (double-quote); a baked secret
-      # would be single-quoted by escapeShellArg (`OM_PG_PASSWORD='…'`).
-      grep -q 'OM_PG_PASSWORD="' "$w" || fail "recall: password not read at runtime"
-      grep -q '/run/secrets/om-pg' "$w" || fail "recall: password file path missing"
-      if grep -q "OM_PG_PASSWORD='" "$w"; then fail "recall: password baked into store"; fi
-      # A write-path wrapper shares the wiring (openmemory-mem `add` + the same secret).
-      s=${stopCmd}
-      grep -q 'openmemory-mcp-stub' "$s" || fail "stop: openmemory-mem bin dir not on PATH"
-      grep -q 'OM_PG_PASSWORD="' "$s" || fail "stop: password not read at runtime"
-      if grep -q "OM_PG_PASSWORD='" "$s"; then fail "stop: password baked into store"; fi
-      echo PASS > "$out"
-    '';
-
-  # D33: Manual `/remember` must FORCE an immediate distill — its wrapper bakes
-  # KIRO_MEMORY_FORCE=1 (which distiller main() honors, bypassing the debounce),
-  # while the per-turn Stop wrapper must stay debounced (no FORCE). Realize both
-  # wrappers on disk and grep them — this locks the per-wrapper distinction so a
-  # future refactor cannot collapse Manual back onto the debounced Stop path (the
-  # STAGE-6-surfaced gap where /remember silently no-op'd after a recent Stop).
-  module-kiro-auto-memory-manual-forces = let
-    mem = kiroAutoMem {home = "/home/tester";};
-    envelope = builtins.fromJSON (builtins.unsafeDiscardStringContext mem.hooks."kiro-memory");
-    cmdFor = trigger:
-      (lib.findFirst (h: h.trigger == trigger)
-        (throw "no ${trigger} hook")
-        envelope.hooks).action.command;
-    manualCmd = cmdFor "Manual";
-    stopCmd = cmdFor "Stop";
-  in
-    pkgs.runCommand "module-test-kiro-auto-memory-manual-forces" {
-      hookFile = pkgs.writeText "kiro-memory-hooks.json" mem.hooks."kiro-memory";
-    } ''
-      fail() {
-        echo "FAIL: kiro-auto-memory-manual-forces: $1" >&2
-        exit 1
-      }
-      m=${manualCmd}
-      grep -q 'export KIRO_MEMORY_FORCE=1' "$m" \
-        || fail "manual: /remember must force an immediate distill (KIRO_MEMORY_FORCE=1 not baked)"
-      s=${stopCmd}
-      if grep -q 'KIRO_MEMORY_FORCE' "$s"; then
-        fail "stop: per-turn Stop must stay debounced (KIRO_MEMORY_FORCE leaked into the stop wrapper)"
-      fi
-      echo PASS > "$out"
-    '';
-
-  # STAGE 5b: a secret smuggled via EITHER env or omEnv would bake into the world-
-  # readable store (bakedEnv = env // omEnv), so the generator asserts against the
-  # merged set — evaluation must FAIL (tryEval success=false) for both routes.
-  module-kiro-auto-memory-rejects-baked-password = mkTest "kiro-auto-memory-rejects-baked-password" (
-    let
-      throws = args: !(builtins.tryEval (kiroAutoMem args).hooks."kiro-memory").success;
-    in
-      throws {
-        home = "/home/tester";
-        omEnv = {OM_PG_PASSWORD = "leak";};
-      }
-      && throws {
-        home = "/home/tester";
-        env = {OM_PG_PASSWORD = "leak";};
-      }
-  );
-
   # ── Task 5 (A4): Kiro HM/devenv fanout absorption ────────────
 
   # HM: package installation — verify home.packages populated.
@@ -8904,7 +8644,7 @@ in {
 
   # HM+devenv: records sharing a `file` co-locate into ONE envelope (N hooks in
   # one file — the typed path off the raw `hooksJson` escape hatch, e.g.
-  # autoMemory's set in kiro-memory.json). A record without `file` keeps its own
+  # several hooks sharing one kiro-memory.json). A record without `file` keeps its own
   # <name>.json (back-compat); the Nix-only `file` key is stripped from output.
   # PR #433 moved HM hook delivery to home.activation real files (kiro v3 skips
   # store symlinks), so each envelope is read back out of its activation-script
@@ -9942,7 +9682,6 @@ in {
       && servers ? gitlab-mcp
       && servers ? kagi-mcp
       && servers ? nixos-mcp
-      && servers ? openmemory-mcp
       && servers ? sequential-thinking-mcp
       && servers ? serena-mcp
       && servers ? sympy-mcp
@@ -10093,76 +9832,6 @@ in {
       result = evalHm {};
     in
       !(result.config.home.activation ? mcpRestartOnSecretRotation)
-  );
-
-  # openmemory devAllowNoAuth is a discoverable typed setting (guards the
-  # no-auth serve knob added for the HTTP daemon flip). Its emission into
-  # OM_DEV_ALLOW_NO_AUTH lives in the isLinux-gated systemd http env, so it
-  # is verified separately by a settingsToEnv eval; this test stays
-  # platform-independent by asserting on the evaluated option value.
-  module-mcp-services-openmemory-dev-allow-no-auth = mkTest "mcp-services-openmemory-dev-allow-no-auth" (
-    let
-      result = evalHm {
-        services.mcp-servers.servers.openmemory-mcp = {
-          enable = true;
-          settings.devAllowNoAuth = true;
-        };
-      };
-    in
-      result.config.services.mcp-servers.servers.openmemory-mcp.settings.devAllowNoAuth == true
-  );
-
-  # Enabling openmemory-mcp emits a NATIVE-HTTP mcpConfig entry (not a
-  # bridge) pointing at openmemory-mcp-serve's /mcp -- the daemon URL the
-  # consumer inherits for the stdio->http flip.
-  module-mcp-services-openmemory-http-entry = mkTest "mcp-services-openmemory-http-entry" (
-    let
-      result = evalHm {
-        services.mcp-servers.servers.openmemory-mcp.enable = true;
-      };
-      entry = result.config.services.mcp-servers.mcpConfig.mcpServers.openmemory-mcp or null;
-    in
-      entry
-      != null
-      && entry.type == "http"
-      && lib.hasSuffix ":19758/mcp" entry.url
-  );
-
-  # ── service.host must reach the actual bind ────────────────────────
-  #
-  # `service.host` reads as a security control and defaults to loopback, but
-  # for openmemory it was declared, documented, and then silently discarded:
-  # settingsToEnv emitted OM_PORT and nothing else, and upstream's daemon
-  # calls `listen(port)` with no host, so it bound every interface. A running
-  # instance was reachable over both LAN IPv4 and a routable global IPv6
-  # address, unauthenticated. The overlay patches OM_HOST in (see
-  # overlays/mcp-servers/openmemory-mcp.nix); these assert the module
-  # actually emits it.
-  module-mcp-services-openmemory-binds-loopback-by-default = mkTest "mcp-services-openmemory-binds-loopback-by-default" (
-    let
-      result = evalHm {
-        services.mcp-servers.servers.openmemory-mcp.enable = true;
-      };
-      env = result.config.systemd.user.services.mcp-openmemory-mcp.Service.Environment or [];
-      omHost = lib.findFirst (lib.hasPrefix "OM_HOST=") null env;
-    in
-      omHost != null && lib.hasInfix "127.0.0.1" omHost
-  );
-
-  # ...and that it still follows an explicit opt-in to a wider bind, so the
-  # option is a real knob rather than a hardcoded loopback.
-  module-mcp-services-openmemory-host-override = mkTest "mcp-services-openmemory-host-override" (
-    let
-      result = evalHm {
-        services.mcp-servers.servers.openmemory-mcp = {
-          enable = true;
-          service.host = "0.0.0.0";
-        };
-      };
-      env = result.config.systemd.user.services.mcp-openmemory-mcp.Service.Environment or [];
-      omHost = lib.findFirst (lib.hasPrefix "OM_HOST=") null env;
-    in
-      omHost != null && lib.hasInfix "0.0.0.0" omHost
   );
 
   # Bridge servers run mcp-proxy, whose own --host default IS loopback — so
@@ -12170,34 +11839,6 @@ in {
 
       echo PASS > "$out"
     '';
-
-  # openmemory-mcp: the postgres+http serve daemon contributes an ExecStartPre
-  # (settingsToPreStart) that pre-creates the dimensioned pgvector table — the
-  # upstream HNSW-dimension bug workaround. Assert it fires ONLY for the postgres
-  # metadata+vector backend in http mode (one script), and is empty for stdio
-  # mode and for the default sqlite backend. Eval-only: `"${writeShellScript …}"`
-  # yields the store-path string without building, so no IFD.
-  module-openmemory-pgvector-prestart = let
-    srv = mcpLib.loadServer "openmemory-mcp";
-    mkPre = settings: mode:
-      srv.settingsToPreStart pkgs (mcpLib.mkCfgShim {
-        evaluatedSettings = mcpLib.evalSettings "openmemory-mcp" settings;
-        port = 19758;
-        host = "127.0.0.1";
-      })
-      mode;
-    pgSettings = {
-      metadataBackend.postgres = {db = "test";};
-      vectorBackend.postgres = {};
-      vecDim = 768;
-    };
-  in
-    mkTest "openmemory-pgvector-prestart" (
-      (srv ? settingsToPreStart)
-      && builtins.length (mkPre pgSettings "http") == 1
-      && mkPre pgSettings "stdio" == []
-      && mkPre {} "http" == []
-    );
 
   module-beads-credential-url-rejected = mkTest "beads-credential-url-rejected" (
     let

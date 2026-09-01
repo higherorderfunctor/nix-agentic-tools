@@ -1,6 +1,11 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-24 (commit pending — Bruno's 4.1+ SQLite shim now
+> **Last verified:** 2026-09-01 (commit pending — `openmemory-mcp` and
+> `kiro-memory-distiller` were retired, which removes BOTH worked examples of
+> the "an overlay must not import build sources from `packages/`" rule and the
+> only `updateTargetExempt` consumer. Both rules are kept, explicitly
+> unillustrated, since an unillustrated rule is the easiest kind to violate by
+> accident). Prior: 2026-08-24 (commit pending — Bruno's 4.1+ SQLite shim now
 > covers only the interval where its sidecar leads nixpkgs, and sidecar hash
 > drift distinguishes the package updater's early exit from CI's automatic
 > repair and an out-of-band fixer). Prior: 2026-08-24 (commit pending — Beads
@@ -104,8 +109,14 @@ Repo-local implementation sources consumed by an overlay derivation belong
 beside that derivation under `overlays/`, even when a package module is their
 only runtime consumer. An overlay must not import build sources from
 `packages/`: that outbound edge prevents lifting the overlay tree as a clean
-directory move. The auto-memory sources are the worked examples:
-`overlays/kiro-memory-distiller/` and `overlays/mcp-servers/openmemory-mem/`.
+directory move.
+
+The worked examples were `overlays/kiro-memory-distiller/` and
+`overlays/mcp-servers/openmemory-mem/`, both removed on 2026-09-01. NO OVERLAY
+CARRIES REPO-LOCAL BUILD SOURCES TODAY, so the rule is currently unillustrated —
+which is exactly when it is easiest to violate by accident. The next overlay
+that needs a repo-local `.ts`/`.py`/`.sh` implementation file puts it beside the
+overlay under `overlays/`, not under `packages/`.
 
 ### Direct external-flake derivations
 
@@ -143,9 +154,10 @@ flake-input owner instead.
 These are package properties, not a second name registry:
 `passthru.updateFlakeInput = "<input>"` is accepted only when the named root
 flake input exists, while `passthru.updateTargetExempt = "<reason>"` must carry
-a non-empty explanation. The latter is for derivations such as the
-repository-local `kiro-memory-distiller`, whose version labels its in-tree
-implementation but has no upstream release to sweep.
+a non-empty explanation. The latter is for a derivation whose version labels an
+in-tree implementation with no upstream release to sweep. Its only instance, the
+repository-local `kiro-memory-distiller`, was removed on 2026-09-01, so
+`updateTargetExempt` currently has no consumer.
 
 ### Thin overrides of a nixpkgs package
 

@@ -99,13 +99,6 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
   - Read:
     [`packages/kimchi/docs/kimchi-factory.md`](packages/kimchi/docs/kimchi-factory.md)
 
-- **`kiro-cli`**
-  - Match: `overlays/kiro-memory-distiller.nix`,
-    `overlays/kiro-memory-distiller/**`,
-    `overlays/mcp-servers/openmemory-mem/**`, `packages/kiro-cli/**`
-  - Read:
-    [`packages/kiro-cli/docs/kiro-auto-memory.md`](packages/kiro-cli/docs/kiro-auto-memory.md)
-
 - **`kiro-wrapper`**
   - Match: `checks/kiro-fhs-contract.nix`, `checks/kiro-wrapper-argv.nix`,
     `lib/idempotentFlags.nix`, `overlays/kiro-cli.nix`,
