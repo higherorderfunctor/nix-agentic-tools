@@ -1,0 +1,54 @@
+[DOCUMENT]
+TITLE: Edges convey the relation role: per-grammar colour and dash, legend, bold labels
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-BOARD-EDGE-STYLES
+TITLE: Edges convey the relation role: per-grammar colour and dash, legend, bold labels
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Operator directive, 2026-09-01, recorded for review before any
+implementation. The Board's edges must convey the RELATION ROLE, not just
+direction: today every edge is one teal, with gold-in/teal-out only on
+selection, and that is less meaning than the canvas could carry.
+
+What the operator asked for:
+
+- Colour and line style (dashed included) per role. Scope the assignment per
+  SOURCE grammar element: an edge's style comes from its source node type's
+  role table, so duplicates are allowed across grammars as long as each role
+  is unique WITHIN one grammar. Do not chase a perfect global palette.
+- On selection, the in/out emphasis should use the edge's own role style
+  rather than the fixed gold/teal pair.
+- Legend: new or updated, bottom-left corner, showing each grammar's
+  role-to-style mapping; move the drag-help box (bottom-centre or similar).
+- Relation labels on the lines: bold, keeping the current dark halo
+  (paint-order stroke) -- preferred over the beadboard screenshot's label
+  treatment (docs/screenshots/image-8.png in jordanhindo/beadboard).
+
+Proposal to review (NOT implemented):
+
+- Two style axes: colour = the role; dash pattern as a second axis to
+  separate role families (for example dashed for the Child-direction
+  structural roles Contains and Produces, solid for dependency roles,
+  dotted for Cites/annotation), so colour dupes still read apart.
+- Assignment is DECLARED, not hashed. Option A: a ROLE_STYLES map in
+  board.js keyed "TYPE/role", seeded from the existing type accents --
+  smallest change, style lives in code. Option B: declare the table in the
+  canon as a narrative (the NAR-CANON-COLOURS precedent), so the style is
+  data the renderer reads -- matches content-never-in-the-renderer, costs a
+  payload field. The operator picks A or B after studying the grammars in
+  the new Grammars view.
+- Legend draws a short line sample per role (colour + dash + arrowhead) so
+  the style is shown, not described.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-CANVAS
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-WHITEBOARD-VIEW
+  ROLE: Backlogged_In

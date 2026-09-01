@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: A plan view: the work hierarchy as its own lens
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-BOARD-PLAN-VIEW
+TITLE: A plan view: the work hierarchy as its own lens
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Operator idea, 2026-09-01, filed so it is not lost: the Board conveys only
+so much in its current state, so a future session likely adds a plan-style
+view -- the work hierarchy (WORK nodes, their Crosses lanes, Produces
+evidence, plan membership) rendered as a hierarchy rather than the flat
+relation canvas. Shape undecided; it would be another lens under
+DEC-SDOC-BOARD-ONE-APP-TWO-VIEWS's switcher. Do not start without the
+operator.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-ONE-APP-TWO-VIEWS
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-WHITEBOARD-VIEW
+  ROLE: Backlogged_In
