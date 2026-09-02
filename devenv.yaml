@@ -17,7 +17,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   go-overlay:
-    url: github:purpleclay/go-overlay/34bdca05fbef02ce7dd69873fbe45197d6fdd2c4
+    url: github:purpleclay/go-overlay/fe48ae4f56981f9f7c2bf03d4951fb0aa6e2095b
     inputs:
       nixpkgs:
         follows: nixpkgs
