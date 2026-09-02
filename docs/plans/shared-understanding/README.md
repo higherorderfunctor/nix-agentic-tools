@@ -45,6 +45,35 @@ branch: **promote a shared understanding between human and LLM.**
   never edit — an accepted decision, log findings to
   `MECH-BACKLOG-SHARED-UNDERSTANDING` instead of narrating them.
 
+## Session prompt
+
+Copy-paste to start a session from the primary checkout. At the end of a
+session, ask for this prompt again — it lives here so it survives the session.
+
+```
+Grooming session on the shared-understanding plan — HITL, I drive.
+
+Branch feat/strictdoc-trial, worktree:
+  /home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-trial
+Edit there by absolute path only; never author in this checkout.
+
+Bootstrap, in order:
+1. Read the project_strictdoc_trial memory (latest session block first).
+2. Invoke the sdoc skill (authoritative copy: <worktree>/dev/skills/sdoc/SKILL.md).
+3. Read <worktree>/docs/plans/shared-understanding/README.md — the plan's own
+   bootstrap — then `scribe show WORK-SHARED-UNDERSTANDING`.
+
+The board app: `devenv up -d scribe board` from a shell in the worktree if not
+already up; http://127.0.0.1:8765/?view=plan renders this plan.
+
+Rules: I pick what we work on — never pick for me. Work items only; nothing
+converts to spec/presentation without me. Ambiguities stay verbatim in NOTES.
+Decisions come to me as plain-language cards, one per turn. Never fp-accept,
+never AUTHORED_BY. Log incidental findings to MECH-BACKLOG-SHARED-UNDERSTANDING,
+don't narrate them. Terse responses; explain designs, don't change them unasked.
+Commit as you go on the branch.
+```
+
 ## Origin
 
 Carved 2026-09-01 from one operator dump (session scratchpad,
