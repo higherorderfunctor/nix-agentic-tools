@@ -1,6 +1,7 @@
 export const CARD = Object.freeze({ width: 244, height: 102 });
 
 const DEFAULTS = Object.freeze({
+  card: CARD,
   columnGap: 28,
   margin: 90,
   maxRows: 32,
@@ -175,7 +176,7 @@ export function layoutGraph(snapshot, options = {}) {
   });
   orderBuckets(buckets, edges, config.sweeps);
 
-  const rowStep = CARD.height + config.rowGap;
+  const rowStep = config.card.height + config.rowGap;
   const tallest = Math.max(
     1,
     ...buckets.map((bucket) => Math.min(config.maxRows, bucket.length)),
@@ -187,7 +188,7 @@ export function layoutGraph(snapshot, options = {}) {
     rankStarts[rankIndex] = nextRankX;
     const columns = Math.max(1, Math.ceil(bucket.length / config.maxRows));
     nextRankX +=
-      columns * CARD.width +
+      columns * config.card.width +
       Math.max(0, columns - 1) * config.columnGap +
       config.rankGap;
   });
@@ -203,7 +204,9 @@ export function layoutGraph(snapshot, options = {}) {
       const columnHeight = rowsInColumn * rowStep - config.rowGap;
       const yStart = config.margin + (contentHeight - columnHeight) / 2;
       positions[id] = {
-        x: rankStarts[rankIndex] + column * (CARD.width + config.columnGap),
+        x:
+          rankStarts[rankIndex] +
+          column * (config.card.width + config.columnGap),
         y: yStart + row * rowStep,
         rank: rankIndex,
         component: componentOf.get(id),

@@ -38,6 +38,31 @@
     "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace,
     SFMono-Regular, Menlo, Consolas, monospace;
 
+  /* Type ramp. --fs-base is the ONE knob: every font-size outside Perspective
+   * is a frozen multiple of it (the ratios are the pre-token ramp over its
+   * 12px body, so --fs-9 is what used to be 9px and --fs-12 is the body) and
+   * type-coupled geometry is in em so it rides along. The default lands the
+   * smallest step (7/12, the Graph card's state badge) on exactly 12px; any
+   * plain px retunes it. Perspective's datagrid cells are NOT on this ramp:
+   * its shadow stylesheet scales them from the browser default it inherits,
+   * which is why body and .perspective-view set no font-size. */
+  --fs-base: calc(12px * 12 / 7);
+  --fs-7: calc(var(--fs-base) * 7 / 12);
+  --fs-7-5: calc(var(--fs-base) * 7.5 / 12);
+  --fs-8: calc(var(--fs-base) * 8 / 12);
+  --fs-9: calc(var(--fs-base) * 9 / 12);
+  --fs-10: calc(var(--fs-base) * 10 / 12);
+  --fs-11: calc(var(--fs-base) * 11 / 12);
+  --fs-12: var(--fs-base);
+  --fs-13: calc(var(--fs-base) * 13 / 12);
+  --fs-14: calc(var(--fs-base) * 14 / 12);
+  --fs-17: calc(var(--fs-base) * 17 / 12);
+  --fs-18: calc(var(--fs-base) * 18 / 12);
+  --fs-42: calc(var(--fs-base) * 42 / 12);
+
+  /* The chrome row's height, shared with the workspace that fills the rest. */
+  --topbar-height: calc(var(--fs-base) * 64 / 12);
+
   font-family: var(--font-sans);
 }
 
@@ -65,7 +90,7 @@ button {
   background: var(--surface-tertiary);
   color: var(--text-primary);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 700;
   letter-spacing: 0.04em;
   cursor: pointer;
@@ -86,17 +111,18 @@ button:focus-visible {
   display: grid;
   grid-template-columns: auto auto 1fr auto;
   align-items: stretch;
-  height: 64px;
+  height: var(--topbar-height);
   border-bottom: 1px solid var(--border-default);
   background: var(--surface-elevated);
   box-shadow: 0 8px 30px rgb(0 0 0 / 30%);
+  font-size: var(--fs-12);
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 20px;
+  gap: 1em;
+  padding: 0 calc(20em / 12);
   border-right: 1px solid var(--border-subtle);
 }
 
@@ -106,49 +132,49 @@ button:focus-visible {
 }
 
 .brand strong {
-  font-size: 14px;
+  font-size: var(--fs-14);
   letter-spacing: 0.065em;
 }
 
 .brand small {
   max-width: 200px;
-  margin-top: 3px;
+  margin-top: calc(3em / 9);
   overflow: hidden;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .brand-mark {
   display: grid;
-  grid-template-columns: repeat(2, 7px);
-  gap: 3px;
-  width: 34px;
-  height: 34px;
+  grid-template-columns: repeat(2, calc(7em / 12));
+  gap: 0.25em;
+  width: calc(34em / 12);
+  height: calc(34em / 12);
   place-content: center;
   border: 1px solid var(--border-default);
   background: var(--surface-primary);
 }
 
 .brand-mark i {
-  width: 7px;
-  height: 7px;
+  width: calc(7em / 12);
+  height: calc(7em / 12);
   border: 1px solid var(--accent-info);
 }
 
 .view-switch {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 16px;
+  gap: calc(4em / 12);
+  padding: 0 calc(16em / 12);
   border-right: 1px solid var(--border-subtle);
 }
 
 .view-switch button {
-  height: 34px;
-  padding: 0 18px;
+  height: calc(34em / 12);
+  padding: 0 1.5em;
   border-color: transparent;
   border-radius: 9px;
   background: transparent;
@@ -164,19 +190,19 @@ button:focus-visible {
 .stats {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8em / 12);
   min-width: 0;
   margin: 0;
-  padding: 0 20px;
+  padding: 0 calc(20em / 12);
   overflow: hidden;
 }
 
 .stats div {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  min-width: 96px;
-  padding: 9px 12px;
+  gap: calc(10em / 12);
+  min-width: 8em;
+  padding: 0.75em 1em;
   border: 1px solid var(--border-subtle);
   background: var(--surface-primary);
 }
@@ -184,7 +210,7 @@ button:focus-visible {
 .stats dt {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -193,35 +219,35 @@ button:focus-visible {
   margin: 0;
   color: var(--accent-info);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 800;
 }
 
 .global-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 16px;
+  gap: 1em;
+  padding: 0 calc(16em / 12);
   border-left: 1px solid var(--border-subtle);
 }
 
 .global-actions button {
-  height: 34px;
-  padding: 0 14px;
+  height: calc(34em / 12);
+  padding: 0 calc(14em / 12);
 }
 
 .status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.8em;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-10);
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: 0.8em;
+  height: 0.8em;
   border-radius: 50%;
   background: var(--accent-warning);
   box-shadow: 0 0 12px rgb(251 191 36 / 60%);
@@ -241,7 +267,7 @@ html[data-status="error"] .status-dot {
 
 .workspace {
   position: relative;
-  height: calc(100% - 64px);
+  height: calc(100% - var(--topbar-height));
 }
 
 .view {
@@ -253,6 +279,7 @@ html[data-status="error"] .status-dot {
 .board-view {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 350px;
+  font-size: var(--fs-12);
 }
 
 .canvas-shell {
@@ -265,11 +292,13 @@ html[data-status="error"] .status-dot {
     var(--surface-backdrop);
 }
 
+/* board.js reads this computed size to scale the card geometry it draws. */
 #graph {
   display: block;
   width: 100%;
   height: 100%;
   cursor: grab;
+  font-size: var(--fs-12);
   touch-action: none;
   user-select: none;
 }
@@ -289,9 +318,9 @@ html[data-status="error"] .status-dot {
   left: 16px;
   display: flex;
   flex-wrap: wrap;
-  gap: 7px 12px;
+  gap: calc(7em / 12) 1em;
   max-width: calc(100% - 140px);
-  padding: 8px 11px;
+  padding: calc(8em / 12) calc(11em / 12);
   border: 1px solid var(--border-subtle);
   border-radius: 9px;
   background: rgb(7 10 14 / 88%);
@@ -302,16 +331,16 @@ html[data-status="error"] .status-dot {
 .legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: calc(5em / 9);
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
   letter-spacing: 0.04em;
 }
 
 .legend-item::before {
-  width: 7px;
-  height: 7px;
+  width: calc(7em / 9);
+  height: calc(7em / 9);
   border-radius: 2px;
   background: var(--accent);
   content: "";
@@ -324,13 +353,13 @@ html[data-status="error"] .status-dot {
   top: 16px;
   right: 16px;
   display: flex;
-  gap: 7px;
+  gap: calc(7em / 12);
 }
 
 .viewport-actions button {
-  height: 30px;
-  min-width: 30px;
-  padding: 0 10px;
+  height: 2.5em;
+  min-width: 2.5em;
+  padding: 0 calc(10em / 12);
   background: rgb(7 10 14 / 88%);
 }
 
@@ -340,12 +369,12 @@ html[data-status="error"] .status-dot {
   bottom: 12px;
   left: 16px;
   margin: 0;
-  padding: 6px 9px;
+  padding: 0.6em 0.9em;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: rgb(7 10 14 / 80%);
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: var(--fs-10);
   pointer-events: none;
 }
 
@@ -367,12 +396,12 @@ html[data-status="error"] .status-dot {
 .edge-label {
   fill: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: var(--fs-8);
   letter-spacing: 0.02em;
   paint-order: stroke;
   stroke: var(--surface-backdrop);
   stroke-linejoin: round;
-  stroke-width: 4px;
+  stroke-width: 0.5em;
   text-anchor: middle;
   transition:
     opacity 120ms ease,
@@ -433,19 +462,19 @@ html[data-status="error"] .status-dot {
 
 .node-card .card-type {
   fill: var(--accent);
-  font-size: 8px;
+  font-size: var(--fs-8);
   font-weight: 800;
   letter-spacing: 0.1em;
 }
 
 .node-card .card-id {
   fill: var(--text-tertiary);
-  font-size: 7.5px;
+  font-size: var(--fs-7-5);
 }
 
 .node-card .card-title {
   fill: var(--text-primary);
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 700;
 }
 
@@ -458,7 +487,7 @@ html[data-status="error"] .status-dot {
 
 .node-card .card-state {
   fill: var(--text-secondary);
-  font-size: 7px;
+  font-size: var(--fs-7);
   letter-spacing: 0.04em;
 }
 
@@ -505,27 +534,27 @@ html[data-status="error"] .status-dot {
 
 .empty-mark {
   color: var(--accent-info);
-  font-size: 42px;
+  font-size: var(--fs-42);
 }
 
 .inspector-empty h1 {
-  margin: 16px 0 7px;
-  font-size: 18px;
+  margin: calc(16em / 18) 0 calc(7em / 18);
+  font-size: var(--fs-18);
 }
 
 .inspector-empty p {
   max-width: 250px;
   margin: 0;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: var(--fs-12);
   line-height: 1.55;
 }
 
 .inspector-empty .read-only {
-  margin-top: 24px;
+  margin-top: calc(24em / 9);
   color: var(--text-disabled);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
   text-transform: uppercase;
 }
 
@@ -541,14 +570,14 @@ html[data-status="error"] .status-dot {
   justify-content: space-between;
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
   font-weight: 800;
   letter-spacing: 0.1em;
 }
 
 .inspector-head h1 {
-  margin: 11px 0 7px;
-  font-size: 17px;
+  margin: calc(11em / 17) 0 calc(7em / 17);
+  font-size: var(--fs-17);
   line-height: 1.25;
 }
 
@@ -557,11 +586,11 @@ html[data-status="error"] .status-dot {
   overflow-wrap: anywhere;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
 }
 
 .inspector-source {
-  margin-top: 12px;
+  margin-top: calc(12em / 9);
   color: var(--text-disabled);
 }
 
@@ -571,15 +600,15 @@ html[data-status="error"] .status-dot {
 }
 
 .inspector-section h2 {
-  margin: 0 0 12px;
+  margin: 0 0 calc(12em / 9);
   color: var(--text-tertiary);
-  font-size: 9px;
+  font-size: var(--fs-9);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .field {
-  margin-bottom: 15px;
+  margin-bottom: 1.25em;
 }
 
 .field:last-child {
@@ -587,24 +616,24 @@ html[data-status="error"] .status-dot {
 }
 
 .field dt {
-  margin-bottom: 5px;
+  margin-bottom: 0.625em;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: var(--fs-8);
   letter-spacing: 0.08em;
 }
 
 .field dd {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--fs-11);
   line-height: 1.5;
   white-space: pre-wrap;
 }
 
 .relation-list {
   display: grid;
-  gap: 7px;
+  gap: calc(7em / 12);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -613,13 +642,13 @@ html[data-status="error"] .status-dot {
 .relation-list li {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 7px;
-  padding: 8px 9px;
+  gap: 0.7em;
+  padding: 0.8em 0.9em;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: var(--surface-input);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--fs-10);
   cursor: pointer;
 }
 
@@ -630,7 +659,7 @@ html[data-status="error"] .status-dot {
 .relation-role {
   color: var(--accent-info);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: var(--fs-8);
 }
 
 .relation-target {
@@ -642,6 +671,7 @@ html[data-status="error"] .status-dot {
 .plan-view {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 350px;
+  font-size: var(--fs-12);
 }
 
 .plan-shell {
@@ -655,7 +685,7 @@ html[data-status="error"] .status-dot {
 
 .plan-tree {
   display: grid;
-  gap: 8px;
+  gap: calc(8em / 12);
 }
 
 .plan-group {
@@ -667,8 +697,8 @@ html[data-status="error"] .status-dot {
 .plan-group > summary {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: calc(10em / 12);
+  padding: calc(10em / 12) calc(14em / 12);
   cursor: pointer;
   list-style: none;
 }
@@ -676,7 +706,7 @@ html[data-status="error"] .status-dot {
 .plan-group > summary::before {
   color: var(--text-tertiary);
   content: "▸";
-  font-size: 11px;
+  font-size: var(--fs-11);
 }
 
 .plan-group[open] > summary::before {
@@ -686,26 +716,26 @@ html[data-status="error"] .status-dot {
 .plan-group-dir {
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 700;
 }
 
 .plan-group-count {
   color: var(--text-disabled);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-10);
 }
 
 .plan-group-body {
   display: grid;
-  gap: 2px;
-  padding: 4px 10px 12px;
+  gap: calc(2em / 12);
+  padding: calc(4em / 12) calc(10em / 12) 1em;
 }
 
 .plan-branch > summary {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.5em;
   cursor: pointer;
   list-style: none;
 }
@@ -713,7 +743,7 @@ html[data-status="error"] .status-dot {
 .plan-branch > summary::before {
   color: var(--text-tertiary);
   content: "▸";
-  font-size: 10px;
+  font-size: var(--fs-10);
 }
 
 .plan-branch[open] > summary::before {
@@ -721,23 +751,23 @@ html[data-status="error"] .status-dot {
 }
 
 .plan-leaf {
-  padding-left: 16px;
+  padding-left: calc(16em / 12);
 }
 
 .plan-nest {
   display: grid;
-  gap: 2px;
-  padding-left: 24px;
+  gap: calc(2em / 12);
+  padding-left: 2em;
   border-left: 1px solid var(--border-subtle);
-  margin-left: 4px;
+  margin-left: calc(4em / 12);
 }
 
 .plan-row {
   display: flex;
   align-items: baseline;
-  gap: 9px;
+  gap: 0.75em;
   min-width: 0;
-  padding: 4px 9px;
+  padding: calc(4em / 12) 0.75em;
   border: 1px solid transparent;
   border-radius: 6px;
   background: none;
@@ -759,8 +789,8 @@ html[data-status="error"] .status-dot {
 
 .plan-dot {
   flex: none;
-  width: 8px;
-  height: 8px;
+  width: calc(8em / 12);
+  height: calc(8em / 12);
   border-radius: 2px;
   background: var(--accent);
 }
@@ -769,17 +799,15 @@ html[data-status="error"] .status-dot {
   flex: none;
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 700;
 }
 
-/* 12px is what the Perspective tab's datagrid cells render at: the viewer's
- * :host is 0.75em of the page's 16px default and the cells are 1em of that.
- * The rest of the plan ramp steps down from here. */
+/* The body step; the rest of the plan ramp steps down from here. */
 .plan-title {
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--fs-12);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -789,7 +817,7 @@ html[data-status="error"] .status-dot {
   margin-left: auto;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
 }
 
 /* ---- grammars view ---------------------------------------------------- */
@@ -797,6 +825,7 @@ html[data-status="error"] .status-dot {
 .grammars-view {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 350px;
+  font-size: var(--fs-12);
 }
 
 .grammar-shell {
@@ -809,10 +838,10 @@ html[data-status="error"] .status-dot {
 }
 
 .grammar-hint {
-  margin: 0 0 14px;
+  margin: 0 0 calc(14em / 9);
   color: var(--text-disabled);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -825,8 +854,8 @@ html[data-status="error"] .status-dot {
 
 .grammar-card {
   display: grid;
-  gap: 12px;
-  padding: 14px 14px 12px;
+  gap: 1em;
+  padding: calc(14em / 12) calc(14em / 12) 1em;
   border: 1px solid var(--border-subtle);
   border-left: 3px solid var(--accent);
   border-radius: 9px;
@@ -852,13 +881,13 @@ html[data-status="error"] .status-dot {
 
 .grammar-card-head {
   display: grid;
-  gap: 4px;
+  gap: calc(4em / 12);
 }
 
 .grammar-card-tag {
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 800;
   letter-spacing: 0.08em;
 }
@@ -866,25 +895,25 @@ html[data-status="error"] .status-dot {
 .grammar-card-prefix {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
 }
 
 .grammar-card-facts {
   display: flex;
-  gap: 14px;
+  gap: calc(14em / 12);
   margin: 0;
 }
 
 .grammar-card-facts div {
   display: flex;
   align-items: baseline;
-  gap: 5px;
+  gap: calc(5em / 12);
 }
 
 .grammar-card-facts dt {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: var(--fs-8);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -893,20 +922,20 @@ html[data-status="error"] .status-dot {
   margin: 0;
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 800;
 }
 
 .grammar-field-list {
   display: grid;
-  gap: 7px;
+  gap: calc(7em / 12);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .grammar-field {
-  padding: 8px 9px;
+  padding: calc(8em / 12) 0.75em;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: var(--surface-input);
@@ -915,27 +944,27 @@ html[data-status="error"] .status-dot {
 .grammar-field-head {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: calc(8em / 12);
 }
 
 .grammar-field-name {
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 700;
 }
 
 .grammar-field-kind {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
 }
 
 .grammar-required,
 .grammar-optional {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: var(--fs-8);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -951,17 +980,17 @@ html[data-status="error"] .status-dot {
 .grammar-options {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 7px;
+  gap: calc(4em / 12);
+  margin-top: calc(7em / 12);
 }
 
 .grammar-option {
-  padding: 2px 7px;
+  padding: 0.25em 0.875em;
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: var(--fs-8);
 }
 
 /* The Board inspector's type name links into this view. */
@@ -973,11 +1002,11 @@ html[data-status="error"] .status-dot {
   background: none;
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
   font-weight: 800;
   letter-spacing: 0.1em;
   text-decoration: underline dotted;
-  text-underline-offset: 3px;
+  text-underline-offset: calc(3em / 9);
 }
 
 .type-link:hover,
@@ -1001,12 +1030,13 @@ html[data-status="error"] .status-dot {
 .table-switch {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4em / 12);
+  font-size: var(--fs-12);
 }
 
 .table-switch button {
-  height: 30px;
-  padding: 0 16px;
+  height: 2.5em;
+  padding: 0 calc(16em / 12);
   border-color: transparent;
   border-radius: 8px;
   background: var(--surface-primary);
@@ -1020,10 +1050,10 @@ html[data-status="error"] .status-dot {
 }
 
 .table-hint {
-  margin-left: 12px;
+  margin-left: calc(12em / 9);
   color: var(--text-disabled);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-9);
 }
 
 perspective-viewer {
@@ -1044,26 +1074,27 @@ perspective-viewer {
   display: grid;
   align-content: center;
   justify-items: center;
-  gap: 8px;
+  gap: calc(8em / 12);
   text-align: center;
   background: rgb(7 10 14 / 92%);
+  font-size: var(--fs-12);
 }
 
 .loading strong,
 .no-daemon strong {
-  font-size: 14px;
+  font-size: var(--fs-14);
   letter-spacing: 0.05em;
 }
 
 .loading small {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--fs-11);
 }
 
 .spinner {
-  width: 34px;
-  height: 34px;
-  margin-bottom: 6px;
+  width: calc(34em / 12);
+  height: calc(34em / 12);
+  margin-bottom: 0.5em;
   border: 2px solid var(--border-default);
   border-top-color: var(--accent-info);
   border-radius: 50%;
@@ -1078,21 +1109,21 @@ perspective-viewer {
 
 .no-daemon pre {
   max-width: min(90vw, 640px);
-  margin: 6px 0 10px;
-  padding: 14px 18px;
+  margin: calc(6em / 11) 0 calc(10em / 11);
+  padding: calc(14em / 11) calc(18em / 11);
   overflow: auto;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--surface-input);
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-11);
   text-align: left;
   white-space: pre-wrap;
 }
 
 .no-daemon button {
-  padding: 8px 22px;
+  padding: calc(8em / 12) calc(22em / 12);
 }
 
 .error {
@@ -1101,7 +1132,7 @@ perspective-viewer {
   right: 18px;
   bottom: 18px;
   max-width: 520px;
-  padding: 13px 16px;
+  padding: calc(13em / 11) calc(16em / 11);
   border: 1px solid var(--accent-danger);
   border-radius: 8px;
   background: color-mix(
@@ -1111,7 +1142,7 @@ perspective-viewer {
   );
   color: #ffd4dd;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-11);
   box-shadow: 0 12px 36px rgb(0 0 0 / 42%);
 }
 
