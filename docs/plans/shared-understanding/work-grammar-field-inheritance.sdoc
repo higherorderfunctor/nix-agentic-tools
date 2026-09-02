@@ -10,15 +10,31 @@ TITLE: Shared fields inherited across every grammar file
 DEPTH: sketch
 AUTHORED_BY: llm
 STATEMENT: >>>
-Inheritance in the Nix grammar tooling: declare a shared surface once and
-have every grammar file inherit it -- the operator's example is authorship
-(AUTHORED_BY) across all nodes of all grammars. Lives in the values.nix /
-packages/strictdoc-grammar layer, where the .sgra files are rendered from.
+A set of shared fields present on every node in every grammar file;
+authorship (AUTHORED_BY) is the operator's example. The Nix grammar layer
+(values.nix / packages/strictdoc-grammar, where the .sgra files are rendered
+from) fans them out: a helper that adds the subset to every grammar, or,
+as the MVP, the consumer adds them by hand. First-party strictdoc support
+would be nicer. This is about reused fields only. It is NOT the delivery
+mechanism for annotations (WORK-ANNOTATION-NODES) and has nothing to do
+with them.
 <<<
 NOTES: >>>
 Verbatim: "inheritance - nix special tooling. like authorship across all
 nodes all grammars." Read as: shared field/semantic definitions composed
 into each rendered grammar, not strictdoc-level inheritance. Flag if wrong.
+
+Operator, 2026-09-01, verbatim: "field inheritance was meant like all
+nodes, in any grammar. nix fans out (like a subset of fields added to
+every grammar with a helper or even the consumer could just do it mvp)
+but first-party support would be nice. this is for reused fields like
+authorship, nothing to do with annotations itself."
+
+Changed 2026-09-01: the earlier reading "not strictdoc-level inheritance"
+is amended -- Nix fan-out is the route (helper, or by hand as MVP), and
+first-party strictdoc support is the nicer end state, not excluded. Neither
+the STATEMENT nor these NOTES tied this item to annotations; the
+clarification confirms there is no such tie, and the STATEMENT now says so.
 <<<
 RELATIONS:
 - TYPE: Parent

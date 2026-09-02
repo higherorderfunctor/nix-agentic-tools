@@ -10,24 +10,32 @@ TITLE: Split the grammar into spec, plan and annotations files
 DEPTH: sketch
 AUTHORED_BY: llm
 STATEMENT: >>>
-Split the one grammar into multiple .sgra files grouping functionality, with
-cross-grammar relations. The operator's proposed divide, explicitly not
-settled: spec.sgra holds the definition family (MECHANISM, DECISION,
-EVIDENCE, REQUIREMENT) and probably coverage (USE_CASE); plan.sgra holds
-WORK, though they could hear an argument to merge it with spec;
+Split the one grammar into multiple .sgra files grouping functionality,
+with cross-grammar relations. The operator's proposed divide, explicitly
+not settled: spec.sgra holds the definition family (MECHANISM, DECISION,
+EVIDENCE, REQUIREMENT) and probably coverage (USE_CASE); plan.sgra
+holds WORK, though they could hear an argument to merge it with spec;
 review/annotations.sgra holds the annotation class (WORK-ANNOTATION-NODES).
 
-First a spike: PROVE strictdoc resolves a relation whose two ends import
-different grammar files -- the operator assumes it works, and the session-5
-two-grammar sketch (packages/strictdoc-grammar/values/{plan,spec}.nix, wired
-to nothing) recorded the same assumption as UNVERIFIED. Note for grooming:
-DEC-ONE-GRAMMAR (accepted) currently rules ONE grammar; acting on this item
-means superseding it, which is the operator's call, not this node's.
+The multi-grammar assumption is UNVERIFIED. The operator
+assumed strictdoc allows it because its online docs bake grammars
+directly into .sdoc documents, and names that an assumption, not a
+measurement. A spike is agreed as needed and precedes any cut: two
+grammar files, one relation whose two ends import different grammar
+files -- does strictdoc resolve it. The session-5 two-grammar sketch
+(packages/strictdoc-grammar/values/{plan,spec}.nix, wired to nothing)
+recorded the same assumption as UNVERIFIED. Note for grooming:
+DEC-ONE-GRAMMAR (accepted) currently rules ONE grammar; acting on this
+item means superseding it, which is the operator's call, not this node's.
 <<<
 NOTES: >>>
 Ambiguity the operator flagged themselves -- USE_CASE's home: "coverage: use
 case? I think it slots here as a form of contract but could also be seen as
 work (test coverage)."
+
+Operator, 2026-09-01, verbatim: "sounds like a spike is needed. i assumed
+yes as they bake grammars directly into sdocs in their online docs. that's
+why i assumed yes. but it is an assumption."
 <<<
 RELATIONS:
 - TYPE: Parent

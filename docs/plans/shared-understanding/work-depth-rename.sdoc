@@ -10,11 +10,31 @@ TITLE: Rename DEPTH and give the ladder real semantics
 DEPTH: sketch
 AUTHORED_BY: llm
 STATEMENT: >>>
-Rename DEPTH and give its ladder real semantics. The operator likes the
-grading but calls the name horrible and the rung semantics unrememberable.
-Deliverables: a name, a per-rung meaning worth remembering, and the
-lifecycle/FSM view in the grammar tab that renders it
+The field now named DEPTH (sketch / needs-design / needs-spike /
+interface-settled / implemented / verified) needs a new name. The
+operator likes the grading, calls the name horrible and the rung semantics
+unrememberable; they used "depth" descriptively and did not expect it to
+become the field name. Their descriptive uses so far: a single plan branch
+getting too long, which they want rules around; a settled node getting
+too detailed, which should consider splitting ("cluster?"), with the huge
+nix-eval check that should have been split long ago as the example. They
+call that sense closer to LENGTH than depth. Other places they used the
+word are unrecalled; they want more information before weighing it.
+
+Deliverables: a name, a per-rung meaning worth remembering,
+and the lifecycle/FSM view in the grammar tab that renders it
 (WORK-GRAMMAR-TAB-LIFECYCLE-VIEW).
+<<<
+NOTES: >>>
+Operator, 2026-09-01, verbatim: "DEPTH field is horrible. i was likely
+using depth descriptively but didn't expect it to be the field name. need
+a new name. i've likely used depth descriptively to talk about like a
+single plan branch getting too long should have some rules around it, or
+like a part of the settled spec like nodes likewise getting too detailed
+via depth should maybe consider splitting (cluster?). like the nix-eval
+check is huge and should have been split long ago. not quite depth,
+more length, but same analogy. i've likely used it in other places but
+i'd need more info to weigh as a reminder."
 <<<
 RELATIONS:
 - TYPE: Parent

@@ -10,22 +10,31 @@ TITLE: An annotation class: question, contradiction, comment, gap, known issue
 DEPTH: sketch
 AUTHORED_BY: llm
 STATEMENT: >>>
-An annotation class attachable to ANY node, chainable for threads. The
-operator names five kinds as A SUBSET of what might be possible based on
-semantic rules yet to be come up with -- the class is open-ended, not this
-enumeration: question (needs clarity), contradiction (conflicting nodes, not
-main), comment (anything, like a preference on the impl), gap
-(non-exhaustive coverage, not main), known issue (accepted gap). These need
-not be separate node types -- a field suffices unless a specific shape earns
-its keep as a forcing function; the operator's stated preference (not a
-ruling): split when the semantics are very different. This supersedes the
-earlier sidecar-for-edge-fields design.
+An annotation is a node, in its own grammar file (assuming multiple
+grammars are allowed -- see WORK-GRAMMAR-FILE-SPLIT, itself unverified),
+that relates to one or more nodes in any grammar in the graph to annotate
+them. Chainable for threads. Kinds named so far: gaps, review comments,
+the operator's open questions about something, conflicts between two nodes
+that the LLM finds, and possibly the dirty-edges system. Last session's
+list -- question, contradiction, comment, gap, known issue -- was the
+operator's first pass at the same set. The class is open-ended, not this
+enumeration. This supersedes the earlier sidecar-for-edge-fields design.
 
-Lifecycle, not settled: leaning NOT persisted to main -- work happens on a
-long-lived branch and completed plans go to main, because some plans cannot
-be specced upfront (needs spike or research) -- but the operator wants clean
-history and has not committed. One rule they did state: work cannot start
-while conflicts are open.
+Open fork on shape: distinct node types when the annotation kinds carry
+different content, or one type with an annotation-kind field when the
+content is the same. The operator's stated preference (not a ruling):
+split when the semantics are very different.
+
+Special semantics are under consideration, none settled. "Not merged to
+main" was said under uncertainty. Alternatives the operator has since
+named: a plan cannot be ready to execute while certain annotations (gaps)
+are attached to it; or a plan is blocked only at the point of the conflict
+until it is resolved, not as a whole.
+
+To reconcile at grooming, undecided here: the grammar already carries an
+empty COMMENTARY element (STANDING open/closed/withdrawn, CLOSES_ON, EDGE;
+DEC-COMMENTARY-IS-THE-FIFTH-FAMILY is open, nothing is one yet). Whether
+this annotation class extends, supersedes, or coexists with it is not ruled.
 <<<
 NOTES: >>>
 Verbatim on the open-ended class: "In the past I mentioned a class of nodes
@@ -46,6 +55,30 @@ COMMENTARY element (STANDING open/closed/withdrawn, CLOSES_ON, EDGE;
 DEC-COMMENTARY-IS-THE-FIFTH-FAMILY is open, nothing is one yet). The dump
 does not mention it -- whether this annotation class extends, supersedes, or
 coexists with COMMENTARY is unasked and unanswered.
+
+Operator, 2026-09-01, verbatim: "annotations is meant to be one or more
+nodes, in their own grammar, that can reference any node, in any grammar,
+in the graph, assuming multiple grammars allowed (see 3). [...] the
+annotations is meant to be like literally a node with relation to some
+other node or nodes to annotate things like gaps, or review comments, or
+my open questions about something, conflicts between two nodes (llm finds),
+maybe even be the dirty edges system. the fields may have been about how to
+handle different annotation types. diff node types if content different,
+or same with just like a field on annotation type if same content. i
+gave a list last session of a couple ideas. i was considering special
+semantics around it. i originally said not merge to main, but that was
+under 'i'm not sure about that'. it could be a plan cannot be ready to
+execute with certain nodes like gaps. or at least the plan is blocked at
+the point of conflict until resolved, not whole plan."
+
+Changed 2026-09-01: the STATEMENT no longer records "work cannot start while
+conflicts are open" as a stated rule, nor tags contradiction and gap as
+"not main". The operator has downgraded both: "not merged to main" was
+said under uncertainty, and the whole-plan block is now one alternative
+beside a block at the point of conflict only. The annotation's shape is
+now fixed as a node in its own grammar file with relations to its targets;
+the earlier "a field suffices" wording is replaced by the explicit fork
+between distinct node types and one type with a kind field.
 <<<
 RELATIONS:
 - TYPE: Parent
