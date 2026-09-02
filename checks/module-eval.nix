@@ -932,6 +932,105 @@ in {
       )
   );
 
+  # ── Structural gate: every enabled runtime installs SOMETHING ──
+  #
+  # This is the test that would have caught `claude`. Installation used to be
+  # a per-factory `home.packages` / `packages` write with no shared
+  # requirement, and claude's was missing from BOTH backends — invisible on
+  # Home Manager because upstream's `programs.claude-code` installs the
+  # package anyway, and visible on devenv only as `claude` silently resolving
+  # to whatever the developer happened to have installed user-globally.
+  #
+  # `lib/ai/app/mkBackendTransform.nix` now owns installation and defaults to
+  # installing `cfg.package`, so saying nothing installs the plain package
+  # rather than nothing. This table pins the delivery CHANNEL per runtime per
+  # backend, which is the half a default cannot enforce: it catches a factory
+  # that opts out with `installPackage = null` for a reason that stops being
+  # true.
+  #
+  # `claude` on Home Manager is the ONE deliberate empty `home.packages`. It
+  # must not install there, or two paths to the same `bin/claude` land in one
+  # profile and buildEnv fails activation with a conflicting-subpath error.
+  # Its channel is `programs.claude-code.package`, asserted explicitly so the
+  # exemption cannot silently widen into "claude installs nothing anywhere".
+  module-every-runtime-installs-package = mkTest "every-runtime-installs-package" (
+    let
+      # The devenv-side SHAPE of each runtime's installed derivation, not merely
+      # that something was installed. `packages != []` alone is not enough: a
+      # misspelled or dropped `installPackage` key falls through to the
+      # transform's `cfg.package` default and installs the runtime's BARE
+      # binary — no flag injection, no baked environment, no `secretEnv` — while
+      # a count-only assertion still passes. Before the seam existed a wrong key
+      # name was a Nix eval error inside `config`; now it is a silent
+      # substitution, so the shape is what has to be pinned.
+      #
+      # Every harness wraps on devenv because `gitSshConfigWorkaround` defaults
+      # on and contributes `GIT_SSH_COMMAND`. `claude` is the exception at the
+      # other end: it has no wrapper anywhere (its env rides
+      # `.claude/settings.json`, never process env), so it installs `cfg.package`
+      # and MUST NOT gain a `-wrapped` suffix.
+      devenvShape = {
+        claude = "bare";
+        codex = "wrapped";
+        copilot = "wrapped";
+        kimchi = "wrapped";
+        kiro = "wrapped";
+      };
+      runtimes = builtins.attrNames devenvShape;
+      # `.name`, NOT `baseNameOf (toString drv)`: coercing a derivation to a string
+      # forces its `drvPath` and instantiates every runtime's package, which
+      # turns this eval-only check into a multi-minute realization. The name
+      # attribute carries the same `-wrapped` signal for free.
+      drvName = drv: drv.name or "";
+      devenvFailures =
+        builtins.concatMap (
+          name: let
+            installed = (evalDevenv {ai.${name}.enable = true;}).config.packages;
+            wrapped = lib.hasSuffix "-wrapped" (drvName (builtins.head installed));
+            ok =
+              builtins.length installed
+              == 1
+              && (
+                if devenvShape.${name} == "wrapped"
+                then wrapped
+                else !wrapped
+              );
+          in
+            lib.optional (!ok) "${name}/devenv"
+        )
+        runtimes;
+      hmFailures =
+        builtins.concatMap (
+          name: let
+            hm = evalHm {ai.${name}.enable = true;};
+            claudeChannel = hm.config.programs.claude-code or {};
+            ok =
+              if name == "claude"
+              # `programs.claude-code` is collapsed to `attrsOf anything` in this
+              # harness, so read it defensively: without the `?` guard, a factory
+              # that stopped setting `package` would throw an attribute error
+              # rather than fail this assertion.
+              then
+                (claudeChannel ? package)
+                && claudeChannel.package != null
+                && hm.config.home.packages == []
+              else hm.config.home.packages != [];
+          in
+            lib.optional (!ok) "${name}/hm"
+        )
+        runtimes;
+      failures = devenvFailures ++ hmFailures;
+    in
+      # `mkTest` throws a bare `FAIL: <name>`, which would name neither the
+      # runtime nor the backend across ten assertions. Trace the offenders first.
+      if failures == []
+      then true
+      else
+        builtins.trace
+        "every-runtime-installs-package: wrong install channel or shape for ${builtins.concatStringsSep ", " failures}"
+        false
+  );
+
   # ── A1 backstop: no repo module defines a ROOT ai.* option ──
   #
   # One per backend, because the pools are per-`evalModules`: an HM

@@ -39,6 +39,16 @@
           type = lib.types.attrsOf lib.types.anything;
           default = {};
         };
+        # Required since package installation moved into the shared backend
+        # transform: it writes `home.packages` for every ENABLED runtime, and
+        # this harness enables several. Without the stub the module system
+        # throws "The option `home.packages' does not exist" before any test
+        # assertion runs, so the error names the option and never mentions the
+        # test's actual subject.
+        packages = lib.mkOption {
+          type = lib.types.listOf lib.types.anything;
+          default = [];
+        };
       };
     };
   };
@@ -52,6 +62,11 @@
       files = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
+      };
+      # devenv's counterpart to the `home.packages` stub above — same reason.
+      packages = lib.mkOption {
+        type = lib.types.listOf lib.types.anything;
+        default = [];
       };
     };
   };

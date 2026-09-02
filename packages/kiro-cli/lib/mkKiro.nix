@@ -1001,6 +1001,33 @@
       SHELL = lib.getExe resolvedShell;
     }
     // mergedEnvironmentVariables;
+  # Both backends install the IDENTICAL wrapper — the two call sites carried
+  # byte-for-byte the same argument set, duplicated once per backend. Derived
+  # once here and handed to the shared transform's `installPackage` hook,
+  # which owns the `home.packages` / `packages` lowering.
+  #
+  # Env vars are BAKED INTO THE LAUNCHER on both backends, never exported into
+  # devenv's `env` attrset: a shell-wide export reaches the developer's own
+  # session and every other process in it, not just Kiro. `secretEnv` in
+  # particular must `cat` the decrypted file at launch rather than bake a
+  # static value, so it could never have been a plain env write. On HM the
+  # symlinkJoin wrapper is the only export mechanism at all, so env vars ride
+  # along with the `--v3` / `--trust-tools` flag injection either way.
+  kiroInstallPackage = {
+    cfg,
+    mergedServers,
+    moduleEnvironmentVariables,
+    mergedEnvironmentVariables,
+    resolvedShell,
+    ...
+  }:
+    wrapKiroPackage {
+      inherit (cfg) extraPackages trustedMcpTools useFhsSandbox v3;
+      package = resolvePackage cfg;
+      environmentVariables = kiroEnvironment {inherit moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell;};
+      inherit ((import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers) secretEnv;
+      identityMaterializer = resolveIdentityMaterializer cfg;
+    };
 in
   lib.ai.app.mkAiApp {
     # Carried as DATA, not a module argument — see mkAiApp.nix.
@@ -1472,6 +1499,7 @@ in
       };
     };
     hm = {
+      installPackage = kiroInstallPackage;
       options = {};
       migrationConfig = {cfg, ...}: let
         steeringDir = "${cfg.configDir}/steering";
@@ -1491,9 +1519,6 @@ in
         mergedSkills,
         mergedRules,
         mergedLspServers,
-        mergedEnvironmentVariables,
-        moduleEnvironmentVariables,
-        resolvedShell,
         mergedContext,
         hasMergedContext,
         ...
@@ -1518,17 +1543,6 @@ in
         # mcp.json + the runtime secret-env exports (Kiro-only delivery).
         kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
 
-        # HM's only export mechanism is the symlinkJoin wrapper, so env vars
-        # ride along with the --v3/--trust-tools flag injections. Shared
-        # wrapper helper (also used by the devenv backend).
-        kiroPackage = wrapKiroPackage {
-          inherit (cfg) extraPackages trustedMcpTools useFhsSandbox v3;
-          package = resolvePackage cfg;
-          environmentVariables = kiroEnvironment {inherit moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell;};
-          inherit (kiroSecrets) secretEnv;
-          identityMaterializer = resolveIdentityMaterializer cfg;
-        };
-
         # Agent files, keyed by attr name. Shares `mkAgentEntry` with the devenv
         # backend so a typed record, a raw JSON string, and a path all lower
         # identically in both. (Replaces the old `mkJsonEntries`, which was
@@ -1540,9 +1554,6 @@ in
         cfg.agents;
       in
         lib.mkMerge ([
-            # Package installation — wrapped with symlinkJoin when env
-            # vars are configured. Matches the legacy wrapper shape.
-            {home.packages = [kiroPackage];}
             # Per-turn workflow reminder, contributed as an ordinary typed hook
             # record so it rides the existing envelope writer rather than
             # adding a second hook path. Defining `ai.kiro.hooks` here and
@@ -1669,6 +1680,7 @@ in
           ++ steeringEmitters);
     };
     devenv = {
+      installPackage = kiroInstallPackage;
       options = {};
       migrationConfig = {
         cfg,
@@ -1693,9 +1705,6 @@ in
         mergedSkills,
         mergedRules,
         mergedLspServers,
-        mergedEnvironmentVariables,
-        moduleEnvironmentVariables,
-        resolvedShell,
         mergedContext,
         hasMergedContext,
         ...
@@ -1742,29 +1751,6 @@ in
         '';
       in
         lib.mkMerge ([
-            # Package installation — devenv projects are shell-scoped, so
-            # NON-secret env exports go in the devenv `env` attrset directly
-            # (below), not through the wrapper. But the `--v3`/`--trust-tools`
-            # flag injection AND runtime SECRET-env injection (secretEnv must
-            # cat the decrypted file at launch, not bake a static value) both
-            # need the wrapper — and since 2026-08-10 so does the static env,
-            # which is baked here rather than exported into the project shell.
-            {
-              packages = [
-                (wrapKiroPackage {
-                  inherit (cfg) extraPackages trustedMcpTools useFhsSandbox v3;
-                  package = resolvePackage cfg;
-                  # Baked into the launcher, NOT devenv's `env` attrset. This
-                  # module does not write the project shell's environment —
-                  # devenv/Nix is the config path, and a variable exported
-                  # shell-wide reaches the developer's own session and every
-                  # other process in it, not just Kiro.
-                  environmentVariables = kiroEnvironment {inherit moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell;};
-                  inherit (kiroSecrets) secretEnv;
-                  identityMaterializer = resolveIdentityMaterializer cfg;
-                })
-              ];
-            }
             # Per-turn workflow reminder — same contribution as the HM backend
             # (config parity; the record itself is built by the shared
             # `workflowReminderHooks`).

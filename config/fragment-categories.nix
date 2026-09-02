@@ -55,6 +55,21 @@ _: {
       ];
       sources = ["copilot-config-delivery" "packaging-guide"];
     };
+    # ai-config-scope: whether a devenv-delivered runtime reads the
+    # developer's user-global config, and why every runtime answers "yes".
+    # Scoped to the factories and wrappers that COULD redirect a config root,
+    # plus devenv.nix where the runtimes are enabled. Deliberately NOT scoped
+    # to `overlays/*` — an overlay packages a binary and never decides where
+    # that binary looks for config.
+    ai-config-scope = {
+      scopes = [
+        "devenv.nix"
+        "packages/*/lib/mk*.nix"
+        "packages/*/lib/wrapPackage.nix"
+        "packages/*/modules/devenv/**"
+      ];
+      sources = ["host-config-merge"];
+    };
     # ai-module: fanout semantics and per-CLI enable-as-sole-gate.
     # Post-factory, the fanout logic lives in each per-package factory
     # (packages/*/lib/mk*.nix + packages/*/modules/) and the shared
