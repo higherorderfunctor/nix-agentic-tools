@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-SCRIBE-RELATE-FILE-ROLE
 TITLE: scribe relate cannot write a File relation
-DEPTH: sketch
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 scribe relate --role File is refused because _relation_type_for_role in
@@ -18,6 +18,9 @@ mapping (scribe_ops.py ~204) and the relate branch lacks it. Found
 2026-09-02 while adding File relations to MECH-SDOC-BOARD-GRAMMARS-VIEW for
 grammar-groups.json and grammar-groups-check.py; those two relations are
 still missing from that node. Likely a one-line fix in the relate branch.
+<<<
+NOTES: >>>
+fixed in 6fbaa76
 <<<
 RELATIONS:
 - TYPE: Parent

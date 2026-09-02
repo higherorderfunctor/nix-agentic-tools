@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-CODE-LINKAGE-EXTRACTORS
 TITLE: Extend code linkage: strictdoc source traceability plus Nix and TypeScript extractors
-DEPTH: sketch
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Wire strictdoc's native source traceability so that a hard-coded render carries a File relation to the narrative it renders, and a change at either end dirties the edge and forces a review, ideally by an LLM. First case: the grammars grid in docs/sdoc/board/assets/grammars.js renders NAR-CANON-TYPES-GRID; today its glosses are copied prose in docs/sdoc/board/grammar-groups.json with no edge between them, so nothing notices when the narrative moves. Then extend the language coverage past what strictdoc ships (Python, the C family, Rust, Robot) with our own tree-sitter extractors: Nix modules and options, TypeScript types and interfaces.
@@ -24,6 +24,8 @@ Operator, 2026-09-02, verbatim, on the grid as code with a dirty edge: "so hard 
 The opening paragraph of the operator's ask, running from "strict doc has native code integrations" through "not sure how easy it is to add other things like a nix module, typescript type/interface, etc.", was not available to the session that filed this node and is NOT reproduced here. Paste it verbatim from the session transcript; do not paraphrase it into this field.
 
 Filed 2026-09-02 as the buildout item for MECH-NODE-CODE-LINKAGE-IS-PROSE. Not related to it by Crosses: that node lives in docs/plans/strictdoc-tooling/, and INV-NO-EXTERNAL-PLAN-REFS rules a plan-to-plan Parent relation, whatever its role, exactly the violation a spec-to-plan one is; the lane is named in the STATEMENT instead. Produces EV-STRICTDOC-SOURCE-TRACEABILITY-LOE, the assessment that preceded any build; the operator's read of it decides whether the repo-side edge, the native feature or the readers come first.
+
+MVP landed 2026-09-02: 0496adf feat(strictdoc): add a tree-sitter language-item extractor with nix first, 6fbaa76 feat(strictdoc): let scribe write file relations with element and id, and show them in the board, 62a1be7 docs(strictdoc): add test file relations with element and id; nix extractor + get_reader patch; File relations carry ELEMENT/ID; feature flag NOT enabled (11 s under study); dirty edge deferred by the operator's scope ruling.
 <<<
 RELATIONS:
 - TYPE: Parent
