@@ -697,6 +697,16 @@ in
     };
     # HM-specific projection
     hm = {
+      # OPT-OUT, and the only one in the repo. Home Manager's own
+      # `programs.claude-code` module installs `finalPackage`, and this factory
+      # sets `programs.claude-code.package` from `cfg.package` below — so
+      # installing here too would put two paths to the same `bin/claude` in one
+      # profile and `buildEnv` would fail activation with a conflicting-subpath
+      # error. The devenv side deliberately has NO such entry: devenv's
+      # `claude.code` integration is a config-file writer with no package
+      # option, so the shared transform's default is what actually delivers
+      # the binary there.
+      installPackage = null;
       options = {};
       config = {
         cfg,

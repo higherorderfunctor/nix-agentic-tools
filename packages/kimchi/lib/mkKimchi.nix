@@ -78,6 +78,20 @@
       then wrappedPackage
       else cfg.package;
   };
+  # Both backends install the same prepared wrapper (env + the runtime secret,
+  # which is cat'd at launch so it never enters the store). Handed to the
+  # shared transform's `installPackage` hook, which owns the `home.packages` /
+  # `packages` lowering. The second `mkPrep` application re-evaluates (Nix caches
+  # thunks, not function applications at distinct call sites) but
+  # yields the identical derivation, so it adds no build.
+  kimchiInstallPackage = {
+    cfg,
+    mergedContext,
+    mergedEnvironmentVariables,
+    moduleEnvironmentVariables,
+    ...
+  }:
+    (mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;}).package;
 in
   lib.ai.app.mkAiApp {
     # Carried as DATA, not a module argument — see mkAiApp.nix.
@@ -213,6 +227,7 @@ in
     };
 
     hm = {
+      installPackage = kimchiInstallPackage;
       options = {};
       config = {
         cfg,
@@ -228,9 +243,6 @@ in
         inherit (prep) contextEntry filteredSettings filteredHarnessSettings;
       in
         lib.mkMerge [
-          # Package installation — wrapped to inject env + the runtime secret.
-          {home.packages = [prep.package];}
-
           # config.json activation merge.
           (lib.mkIf (filteredSettings != {}) {
             home.activation.kimchiConfigMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
@@ -272,6 +284,7 @@ in
     };
 
     devenv = {
+      installPackage = kimchiInstallPackage;
       options = {};
       config = {
         cfg,
@@ -287,10 +300,6 @@ in
         inherit (prep) contextEntry filteredSettings filteredHarnessSettings;
       in
         lib.mkMerge [
-          # Package installation — wrapped to inject env + the runtime
-          # secret (parity with HM; secret never enters the store).
-          {packages = [prep.package];}
-
           # config.json static write.
           (lib.mkIf (filteredSettings != {}) {
             files."${cfg.configDir}/config.json".text = builtins.toJSON filteredSettings;

@@ -156,6 +156,7 @@ in {
     ./packages/chatgpt-codex/modules/devenv
     ./packages/claude-code/modules/devenv
     ./packages/copilot-cli/modules/devenv
+    ./packages/kimchi/modules/devenv
     ./packages/kiro-cli/modules/devenv
     ./packages/semble/modules/devenv
     # NOTE: the stacked-workflows devenv module is NOT imported here. Enabling
@@ -309,6 +310,13 @@ in {
       };
     };
     copilot.enable = true;
+    # Kimchi's BINARY comes from this repo's overlay like every other runtime.
+    # Its config fanout is a separate, still-open problem: `configDir` is
+    # HOME-shaped while the writes land at a project path the binary does not
+    # read, so `.config/kimchi/**` is materialized-but-inert today. Enabling
+    # the runtime is still correct — it stops `kimchi` resolving to whatever
+    # the developer happens to have installed user-globally.
+    kimchi.enable = true;
     kiro = {
       enable = true;
       # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,
@@ -518,6 +526,30 @@ in {
     # can pull a sibling task through a shared prerequisite during shell entry.
     ${lib.getExe runRepoHooks}
     echo "Validating devenv configuration..."
+    # Every enabled `ai.*` runtime must resolve to the binary THIS devenv
+    # profile provides, not to whatever the developer has installed
+    # user-globally. `claude` and `kimchi` both silently resolved to
+    # `~/.nix-profile` until 2026-09-02 — claude because its factory installed
+    # on neither backend, kimchi because it was never enabled here.
+    #
+    # A bare `command -v` cannot catch that: it succeeds either way. Nor is
+    # "resolves to a store path" sufficient — a `nix shell` or a second direnv
+    # layer also puts store paths on PATH, and both would pass while resolving
+    # OUTSIDE this profile. Compare against `$DEVENV_PROFILE/bin` instead, so
+    # the assertion is about provenance rather than about path shape.
+    test -n "''${DEVENV_PROFILE:-}" || { echo "FAIL: DEVENV_PROFILE is unset; cannot verify runtime provenance"; exit 1; }
+    for nat_runtime in claude codex copilot kimchi kiro-cli; do
+      nat_runtime_bin="$(command -v "$nat_runtime" || true)"
+      test -n "$nat_runtime_bin" || { echo "FAIL: $nat_runtime is not on PATH"; exit 1; }
+      nat_runtime_want="$DEVENV_PROFILE/bin/$nat_runtime"
+      test -e "$nat_runtime_want" || { echo "FAIL: $nat_runtime is absent from the devenv profile"; exit 1; }
+      if [ "$(${pkgs.coreutils}/bin/readlink -f "$nat_runtime_bin")" \
+         != "$(${pkgs.coreutils}/bin/readlink -f "$nat_runtime_want")" ]; then
+        echo "FAIL: $nat_runtime on PATH is $nat_runtime_bin, not the devenv profile's copy"
+        exit 1
+      fi
+    done
+
     # Per-runtime ai.shell delivery, against the real artifacts on PATH.
     ${lib.getExe verifyAiShell}
     # Codex must inject no ARGV: a separate `--profile` config layer would make

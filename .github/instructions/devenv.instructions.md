@@ -7,27 +7,34 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-08-31 (commit pending — full-corpus validation moved
-> out of the activation task graph and into enterTest after shell setup; normal
-> shell entry now performs activation setup without full-corpus scans). Prior:
-> 2026-08-30 (the Home Manager layer has migrated to named permissions, while
-> this repository temporarily selects `danger-full-access`; the obsolete
-> workspace-write roots and diagnostic assertions are gone). Prior: 2026-08-29
-> (`devenv test` is now an on-demand diagnostic instead of an automatic PR/push
-> workflow. Deterministic instruction-copy, shared-hook-isolation, and
-> validation-projection contracts moved under `nix flake check`; `$CI` no longer
-> removes validation hooks). Prior: 2026-08-17 (commit pending — the staged
-> Codex named-profile migration now receives the canonical Git common directory
-> automatically, including from linked worktrees, while this repository's
-> still-legacy config retains its existing `.git` workspace root until the
-> separate migration). Prior: 2026-08-17 (commit pending — enabled treefmt now
-> contributes its effective cache through the same permission-model-aware Codex
-> root pool; enterTest expects five local roots and four in CI). Prior:
-> 2026-08-17 (commit pending — named Codex permission tables are enabled at the
-> module boundary, but this repository deliberately remains on legacy
-> workspace-write until its Home Manager user layer migrates first; Codex does
-> not compose the two models across config layers). Prior: 2026-08-15 (commit
-> pending — the interactive-only Semble gate moved unchanged to
+> **Last verified:** 2026-09-02 (commit pending — the factory-CLI-wrapper bucket
+> gained two unconditional members. `claude-code` was always meant to be here
+> and never installed at all on devenv; `kimchi` is newly enabled and adds 118.3
+> MiB (124,037,485 bytes) of NEW store to every shell, CI included. Both are
+> accepted at full weight: the bucket's treatment is unchanged, and `!isCI` is
+> NOT available to shrink them — see the decision rule, which forbids that
+> branch for anything a guard depends on). Prior: 2026-08-31 (commit pending —
+> full-corpus validation moved out of the activation task graph and into
+> enterTest after shell setup; normal shell entry now performs activation setup
+> without full-corpus scans). Prior: 2026-08-30 (the Home Manager layer has
+> migrated to named permissions, while this repository temporarily selects
+> `danger-full-access`; the obsolete workspace-write roots and diagnostic
+> assertions are gone). Prior: 2026-08-29 (`devenv test` is now an on-demand
+> diagnostic instead of an automatic PR/push workflow. Deterministic
+> instruction-copy, shared-hook-isolation, and validation-projection contracts
+> moved under `nix flake check`; `$CI` no longer removes validation hooks).
+> Prior: 2026-08-17 (commit pending — the staged Codex named-profile migration
+> now receives the canonical Git common directory automatically, including from
+> linked worktrees, while this repository's still-legacy config retains its
+> existing `.git` workspace root until the separate migration). Prior:
+> 2026-08-17 (commit pending — enabled treefmt now contributes its effective
+> cache through the same permission-model-aware Codex root pool; enterTest
+> expects five local roots and four in CI). Prior: 2026-08-17 (commit pending —
+> named Codex permission tables are enabled at the module boundary, but this
+> repository deliberately remains on legacy workspace-write until its Home
+> Manager user layer migrates first; Codex does not compose the two models
+> across config layers). Prior: 2026-08-15 (commit pending — the
+> interactive-only Semble gate moved unchanged to
 > `ai.codex.programs.semble.enable`; grammar and path customization now follow
 > the same generated runtime program tree). Prior: 2026-08-14 (commit pending —
 > the local shell now enables the flake-pinned Semble module with AWK and jq
@@ -103,7 +110,7 @@ runner against the immutable generated hook config.
 | Diagnostic dependencies  | generation pipeline, coreutils-class tools, validators | yes                                    | narrow flake checks realize only their declared tools |
 | Interactive-only dev UX  | LSPs (`nixd`→llvm, `marksman`→dotnet, `taplo`), Semble | no — `lib.optionals (!isCI)`           | not invoked                                           |
 | Validation hooks         | prek plus declared hook tools                          | yes — policy is unconditional          | validator-only projection; commit lifecycle excluded  |
-| Factory CLI wrappers     | kiro-cli-wrapped, copilot-cli                          | yes — enterTest exercises files fanout | package/build checks remain separate                  |
+| Factory CLI wrappers     | all five `ai.*` runtimes (see note)                    | yes — enterTest exercises files fanout | package/build checks remain separate                  |
 | Consumer overlay exports | `pkgs.ai.devTools.*`, MCP server packages              | never unless explicitly selected       | CI build matrix and cache-hit-parity                  |
 
 ## The decision rule
@@ -112,6 +119,48 @@ Adding a package to `devenv.nix`? Ask whether the on-demand diagnostic invokes
 it. If not, put interactive-only tooling in the `!isCI` list. Do not use that
 branch for validation policy: automatic guards belong in flake checks with their
 own narrow closures.
+
+### Every enabled `ai.*` runtime is in the wrapper bucket, unconditionally
+
+The `Examples` column above used to name two wrappers and read as if the bucket
+were selective. It is not: `lib/ai/app/mkBackendTransform.nix` installs a
+package for every enabled runtime, so all five ride the closure whenever they
+are enabled — codex, copilot and kiro always did, `claude` was supposed to and
+did not (it installed on neither backend), and `kimchi` was enabled here on
+2026-09-02.
+
+The weight is real and worth stating rather than discovering — but state the
+MARGINAL cost, which is neither the binary size nor the total closure. Measured
+at kimchi 1.0.10, the version `overlays/kimchi-sources.json` currently pins:
+
+| figure                   | bytes           | what it means                              |
+| ------------------------ | --------------- | ------------------------------------------ |
+| `bin/kimchi` alone       | 116,974,792     | what a naive `stat` reports                |
+| **kimchi's output path** | **124,037,485** | **the only path not already in the shell** |
+| total closure            | 161,764,840     | includes deps every other package shares   |
+
+Quote the middle row. kimchi's closure is 5 store paths and **4 were already
+present** in the pre-change devenv profile — glibc and friends, there for
+everything else — so the shell gains one path, not a whole closure.
+
+Both neighbouring figures have shipped here as the answer, wrong in opposite
+directions: the binary size is too low (it misses the rest of the output path),
+and the total closure is too high by ~36 MiB (it bills shared dependencies to
+whichever package happens to be measured). Neither is what adding this to the
+shell costs.
+
+Measure the marginal set on a bump rather than scaling any of these:
+
+```bash
+comm -23 \
+  <(nix-store -qR "$(nix build --no-link --print-out-paths .#kimchi)" | sort) \
+  <(nix-store -qR "$DEVENV_PROFILE" | sort)
+```
+
+It is unconditional — no `!isCI` guard, by design. If that closure growth ever
+becomes unacceptable, the answer is `ai.kimchi.enable`, not an `!isCI` branch;
+the decision rule above forbids using that branch for anything a guard depends
+on, and enterTest asserts these binaries are on PATH.
 
 ### Codex uses an unrestricted project override
 
