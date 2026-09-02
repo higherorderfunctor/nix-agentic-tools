@@ -676,7 +676,7 @@ html[data-status="error"] .status-dot {
 .plan-group > summary::before {
   color: var(--text-tertiary);
   content: "▸";
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .plan-group[open] > summary::before {
@@ -686,14 +686,14 @@ html[data-status="error"] .status-dot {
 .plan-group-dir {
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .plan-group-count {
   color: var(--text-disabled);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .plan-group-body {
@@ -713,7 +713,7 @@ html[data-status="error"] .status-dot {
 .plan-branch > summary::before {
   color: var(--text-tertiary);
   content: "▸";
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .plan-branch[open] > summary::before {
@@ -721,13 +721,13 @@ html[data-status="error"] .status-dot {
 }
 
 .plan-leaf {
-  padding-left: 15px;
+  padding-left: 16px;
 }
 
 .plan-nest {
   display: grid;
   gap: 2px;
-  padding-left: 22px;
+  padding-left: 24px;
   border-left: 1px solid var(--border-subtle);
   margin-left: 4px;
 }
@@ -735,9 +735,9 @@ html[data-status="error"] .status-dot {
 .plan-row {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 9px;
   min-width: 0;
-  padding: 4px 8px;
+  padding: 4px 9px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: none;
@@ -759,8 +759,8 @@ html[data-status="error"] .status-dot {
 
 .plan-dot {
   flex: none;
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 2px;
   background: var(--accent);
 }
@@ -769,14 +769,17 @@ html[data-status="error"] .status-dot {
   flex: none;
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
 }
 
+/* 12px is what the Perspective tab's datagrid cells render at: the viewer's
+ * :host is 0.75em of the page's 16px default and the cells are 1em of that.
+ * The rest of the plan ramp steps down from here. */
 .plan-title {
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -786,7 +789,7 @@ html[data-status="error"] .status-dot {
   margin-left: auto;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 9px;
 }
 
 /* ---- grammars view ---------------------------------------------------- */
