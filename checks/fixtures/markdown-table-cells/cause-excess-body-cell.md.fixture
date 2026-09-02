@@ -1,0 +1,14 @@
+# cause: an unescaped pipe adds a body cell
+
+Header and delimiter agree at 2. The body row has 4, because the unescaped
+pipes inside the code span split it at BLOCK level, before inline parsing.
+GFM still renders a table and silently DROPS the excess.
+
+EXPECT: markdownlint HIT (MD056), rumdl SILENT.
+
+This is the state a formatter can escalate: prettier 3.8.3 widened the
+delimiter row to match the widest row, turning this into the break above.
+
+| A | B |
+| - | - |
+| x | `|| true` y |

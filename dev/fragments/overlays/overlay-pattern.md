@@ -129,6 +129,49 @@ which is exactly when it is easiest to violate by accident. The next overlay
 that needs a repo-local `.ts`/`.py`/`.sh` implementation file puts it beside the
 overlay under `overlays/`, not under `packages/`.
 
+### Absorption is about CADENCE. Never re-open it on a version comparison
+
+**A package is absorbed so it tracks upstream on this repo's 4x/day sweep. That
+is the entire justification. It is never a version delta, a store-path delta, or
+a derivation-quality delta against nixpkgs — and "nixpkgs already has this
+version" is NOT a reason to skip, defer, or drop an overlay.**
+
+This is a STOP rule, not a consideration to weigh. If you find yourself writing
+"nixpkgs is already at the same version, so this may not be worth carrying",
+delete the sentence and build the overlay.
+
+The reasoning, once, so it does not need re-deriving: parity today is a
+SNAPSHOT. What absorption buys is bounded LATENCY on the _next_ release, and
+that latency can be weeks regardless of where the two happen to sit right now.
+The measurement and the property are different quantities, and only one of them
+is the decision.
+
+A parity measurement is still worth taking — it tells you what carrying the
+package costs, and whether nixpkgs' derivation is worth overriding rather than
+reimplementing. Those are the only two questions it may open. It may not open
+"should we carry this at all".
+
+Corollaries, each learned the hard way:
+
+- **Override, do not copy.** When nixpkgs has the better derivation, take it — a
+  thin `overrideAttrs` carrying `version`/`src`/hash from our sidecar. We get
+  their implementation and our cadence. See "Thin overrides of a nixpkgs
+  package" below.
+- **Our `src` and `version` always win**, whoever owns the rest. That is the one
+  thing an overlay may never inherit from nixpkgs.
+- **Assume the latest release is in hand** when assessing anything. Do not build
+  a decision table around whether to own a package, and do not report a fix as
+  unavailable because nixpkgs has not picked it up. Take upstream's latest
+  release (or main HEAD where that is the tracking choice) as the version you
+  are designing against.
+- **Build it, do not note it.** A seriously-used package with no overlay is a
+  slice to write, not a version gap to report.
+
+`pnpm_10` / `pnpm_11` are the worked example: one sat at exact nixpkgs parity at
+landing and was absorbed anyway, precisely so the pair is carried the same way
+when the channel next moves. The several-majors section below repeats the rule
+for majors of one package; this is the general form.
+
 ### Direct external-flake derivations
 
 Semble is the external pinned-package exception to the local-build patterns

@@ -14,21 +14,40 @@ you author are discarded, and hand-wrapping is what created the defect below.
 
 ### Never break a line mid-token
 
-> **Last verified:** 2026-08-12 (commit pending — records
-> `checks/doubled-words.*`, the third markdown gate, and narrows this section's
-> claim: "no check can catch it" was always about a break landing MID-TOKEN, and
-> a reader could fairly have read it as covering repetition across the same
-> break, which is now caught. Also records that the file set both scans walk
-> moved into the shared `checks/markdown-scan.nix`, and that `proseWrap`'s
-> four-column continuation indent collides with CommonMark's indented-code rule
-> — the shared prose extraction is list-aware for that reason, having been
-> measured deleting most of a corpus of real prose before it was. Every measured
-> figure now lives in `checks/doubled-words.py`'s docstring and nowhere else).
-> Prior: 2026-07-29 (commit pending — first version, written after the
-> `proseWrap` flip in #589 and the two clean-up passes it turned out to need,
-> #590 and #591). If you change `settings.proseWrap`, add or swap a markdown
-> formatter, or touch `checks/split-code-spans.*`, `checks/doubled-words.*` or
-> `checks/markdown-scan.nix`, read this first.
+> **Last verified:** 2026-09-01 (commit pending — the pipe-in-a-table-cell
+> defect is now GATED by `markdown-table-cells` (rumdl primary, markdownlint
+> backup; same MD056 rule number, disjoint coverage, do not deduplicate them).
+> Three real instances were fixed landing it. `checks.formatting` was never the
+> gate: it is version-dependent (3.8.3 exits 0 where 3.9.6 exits 1),
+> `prettier-ignore` hides it outright, and prettier 3.8.3 CREATES it by widening
+> a delimiter row to match an over-wide body row. Corrects an earlier draft of
+> this section that blamed a human for that padding, claimed every row must
+> agree on cell count (only header and delimiter must), and shipped a hand-check
+> awk snippet that mis-counted escaped pipes and pipe-less outer edges — the
+> gate replaces it). Prior: 2026-09-01 (commit pending — adds the third reflow
+> defect, a table whose header and delimiter rows disagree on cell count. Its
+> point is not the reflow but the GATE: `checks.formatting` is NOT reliable for
+> this class, measured twice — the same input exits 0 under prettier 3.8.3 and 1
+> under 3.9.6, so it is version-dependent, and a `prettier-ignore` hides it
+> outright, which is how a broken table rendered as a pipe wall on main in
+> `dev/references/agnix.md`. Also records the block-level cell split: a row is
+> divided into cells BEFORE inline parsing, so a backtick gives a pipe no
+> protection and `` `|| true` `` silently becomes three cells. The defect is
+> decidable and could be checked; none is wired yet). Prior: 2026-08-12 (commit
+> pending — records `checks/doubled-words.*`, the third markdown gate, and
+> narrows this section's claim: "no check can catch it" was always about a break
+> landing MID-TOKEN, and a reader could fairly have read it as covering
+> repetition across the same break, which is now caught. Also records that the
+> file set both scans walk moved into the shared `checks/markdown-scan.nix`, and
+> that `proseWrap`'s four-column continuation indent collides with CommonMark's
+> indented-code rule — the shared prose extraction is list-aware for that
+> reason, having been measured deleting most of a corpus of real prose before it
+> was. Every measured figure now lives in `checks/doubled-words.py`'s docstring
+> and nowhere else). Prior: 2026-07-29 (commit pending — first version, written
+> after the `proseWrap` flip in #589 and the two clean-up passes it turned out
+> to need, #590 and #591). If you change `settings.proseWrap`, add or swap a
+> markdown formatter, or touch `checks/split-code-spans.*`,
+> `checks/doubled-words.*` or `checks/markdown-scan.nix`, read this first.
 
 A break landing MID-TOKEN is the one markdown defect in this repo that **no
 check can catch**, so it has to be prevented at authoring time. Read the
@@ -129,6 +148,58 @@ set is a hard failure in both the Nix wrapper and each scanner's `main()`:
 `find -print0 | xargs -0 -r` exits 0 on an empty tree, so a scan that received
 nothing used to be indistinguishable from a passing one, and a guard living only
 in one caller does not survive a second caller being added.
+
+### A pipe in a table cell — `markdown-table-cells`
+
+Gated. Two linters, one hook, because the defect has two states and no single
+tool sees both.
+
+**The cause is always the same: an unescaped `|` in a cell.** A table row is
+split into cells at BLOCK level, before inline parsing runs, so a backtick gives
+a pipe no protection — writing `` `|| true` `` in a cell silently produces extra
+cells. Escape it as `` `\|\| true` `` and it is one cell again, still rendering
+as `<code>|| true</code>`. Backslash PARITY decides it, not presence: `\\|` is a
+literal backslash followed by a real separator.
+
+Three instances shipped before this was gated, all from that one reflex —
+someone quoting a shell snippet in a table. Two were losing data silently; one
+had stopped being a table at all.
+
+**The two states, and why both linters are needed:**
+
+| state                                           | renders as                  | caught by          |
+| ----------------------------------------------- | --------------------------- | ------------------ |
+| excess body cell (header/delimiter still agree) | a table, extra cell DROPPED | markdownlint MD056 |
+| header and delimiter disagree                   | not a table — a pipe wall   | rumdl MD056        |
+
+Same rule number, disjoint coverage. markdownlint goes blind on the second
+because its parser stops recognizing a table, so MD056 has nothing to check;
+rumdl goes blind on the first. **Do not "deduplicate" them.** rumdl leads
+because it is ~200x faster (0.04s vs 8.2s over this corpus, MD056 only).
+
+Only the header and the delimiter must agree on cell count. A body row with
+FEWER cells is padded and one with MORE has the excess ignored — which is why
+the first state renders fine and loses data quietly.
+
+#### Why `checks.formatting` was never the gate for this
+
+It catches the second state only by accident, and not reliably:
+
+- **Version-dependent.** On the same input prettier 3.8.3 exits 0 and 3.9.6
+  exits 1. The `lens-01` instance sat green on main until a formatter bump
+  reddened it on an unrelated PR.
+- **`prettier-ignore` hides it outright.** `dev/references/agnix.md` was broken
+  under BOTH versions with no complaint, because a `prettier-ignore` sat above
+  the block.
+- **The formatter can CREATE it.** Measured: given a valid table whose body row
+  has an excess cell, prettier 3.8.3 widens the DELIMITER row to match the
+  widest row — turning a rendering-but-lossy table into a non-table. 3.9.6 no
+  longer does this. So the historical instance was not padded by hand at all;
+  treefmt manufactured it, and the `prettier-ignore` was added afterwards to
+  quiet the result.
+
+That last point is the reason to catch the CAUSE and not just the break: the
+excess-cell state is the input the formatter can escalate.
 
 ### Formatter selection is settled — do not re-survey
 

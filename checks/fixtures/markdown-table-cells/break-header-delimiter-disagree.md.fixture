@@ -1,0 +1,14 @@
+# break: header and delimiter disagree
+
+Header has 2 cells, delimiter has 4. GFM does not recognize a table at all;
+this renders as a paragraph of pipes.
+
+EXPECT: rumdl HIT (MD056), markdownlint SILENT.
+
+markdownlint goes silent because its parser stops seeing a table, so MD056
+has nothing to check. If markdownlint starts hitting this, it may have gained
+break detection — re-read whether the pair is still needed.
+
+| A | B |
+| - | - | - | - |
+| x | y |

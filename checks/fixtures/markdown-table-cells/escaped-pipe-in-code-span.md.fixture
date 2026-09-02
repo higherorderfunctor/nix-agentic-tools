@@ -1,0 +1,11 @@
+# escaped: the documented fix, accepted
+
+The same content as the cause fixture with the pipes escaped. One cell, and
+it still renders as a code span containing a literal `||`.
+
+EXPECT: both SILENT. This is the negative control for the FIX — if it ever
+starts hitting, the remedy this repo documents has stopped working.
+
+| A | B |
+| - | - |
+| x | `\|\| true` y |

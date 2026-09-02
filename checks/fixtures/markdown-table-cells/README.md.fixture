@@ -1,0 +1,12 @@
+# markdown-table-cells fixtures
+
+These are `*.md.fixture`, NOT `*.md`, and that is load-bearing twice over:
+`checks/markdown-scan.nix` scans every tracked `.md` in the tree, and the
+`markdown-table-cells` hook runs on every tracked `.md` — so a `.md` fixture
+carrying a deliberately broken table would fail the very check it exists to
+test. treefmt would also reformat the exact cell counts each one encodes.
+
+Each fixture states what it proves and the exact hits it expects. The suite's
+job is NOT "the linters find bugs" — it is the DISJOINTNESS claim that
+justifies carrying two of them, which is the thing that can rot silently when
+either tool updates.

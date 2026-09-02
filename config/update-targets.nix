@@ -63,6 +63,14 @@ _: {
       flags = ["--version" "skip"];
       git = "https://github.com/jwadow/kiro-gateway.git";
     };
+    markdownlint-cli2 = {
+      # Upstream ships no package-lock.json, so nixpkgs vendors one and the
+      # build symlinks it in. `--generate-lockfile` regenerates OUR copy
+      # beside the overlay on every bump; without it a version bump would
+      # build new source against the old dependency set.
+      file = "overlays/dev-tools/markdownlint-cli2.nix";
+      flags = ["--generate-lockfile"];
+    };
     mcp-language-server = {
       file = "overlays/mcp-servers/mcp-language-server.nix";
       flags = ["--version" "skip"];
@@ -176,6 +184,7 @@ _: {
     pnpm_10 = {flags = ["--use-update-script" "--override-filename" "overlays/generic/pnpm_10.nix"];};
     pnpm_11 = {flags = ["--use-update-script" "--override-filename" "overlays/generic/pnpm_11.nix"];};
     pnpm_12 = {flags = ["--use-update-script" "--override-filename" "overlays/generic/pnpm_12.nix"];};
+    rumdl = {flags = ["--use-update-script" "--override-filename" "overlays/dev-tools/rumdl.nix"];};
   };
 
   # Packages excluded from the update loop entirely.
