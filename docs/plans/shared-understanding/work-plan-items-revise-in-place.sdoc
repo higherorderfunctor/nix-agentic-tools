@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: Plan items revise in place; no reject, supersede by edge only
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-PLAN-ITEMS-REVISE-IN-PLACE
+TITLE: Plan items revise in place; no reject, supersede by edge only
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Plan items are revised in place as shape is added. They are not frozen or
+superseded the way an accepted DECISION is. Two questions stay open and are to
+be re-evaluated: whether a plan item needs a reject state at all, and whether
+supersession of a plan item should exist only as a tracked edge.
+<<<
+NOTES: >>>
+Operator, 2026-09-01, verbatim (spelling cleaned): "no reject on plan items,
+just supersedes I think? edge tracked only. may need to re-evaluate this. I
+mention reject because I wanted to say you can revise nodes, not
+freeze/supersede on this plan, as we add shape."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-PLAN-LAYER
+  ROLE: Assumes

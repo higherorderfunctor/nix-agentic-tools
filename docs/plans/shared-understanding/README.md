@@ -47,6 +47,10 @@ the branch: **promote a shared understanding between human and LLM.**
   topic they picked.
 - **Write what surfaces back into the node in the same session.** The STATEMENT
   gets sharper; NOTES keeps their words verbatim.
+- **Nodes on this thread are revised in place.** As shape is added, edit the
+  STATEMENT. Do not freeze or supersede a WORK item here; supersession belongs
+  to accepted decisions (operator ruling 2026-09-01, see
+  `WORK-PLAN-ITEMS-REVISE-IN-PLACE`).
 - **Work items only, until groomed.** Nothing here converts to spec or
   presentation nodes without the operator in the loop.
 - **Ambiguity is preserved, not resolved.** Where the dump was ambiguous, the
