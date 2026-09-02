@@ -54,6 +54,8 @@ positive controls on the check).
 
 Axis words corrected 2026-09-02 to DEC-NODE-FAMILIES' universal/particular;
 the carver had written all/one from a summary table.
+
+Operator, 2026-09-02, verbatim, on the grid becoming code with a dirty edge: "so hard coding the grid becomes like @relation(REQ-1, scope=file) pointed to NAR-CANON-TYPES-GRID. If the narrative changes it dirties your edge to the hard coded grammar render in code forcing a review (ideally LLM). this is a core feature of canon we just haven't built out yet." The buildout is WORK-CODE-LINKAGE-EXTRACTORS, with the assessment in EV-STRICTDOC-SOURCE-TRACEABILITY-LOE. Option 1 (render the grid from the narrative) versus option 2 (keep the grid in code and hang a dirty edge on it) is still the operator's open call.
 <<<
 RELATIONS:
 - TYPE: Parent

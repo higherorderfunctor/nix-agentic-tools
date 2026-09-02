@@ -1,0 +1,34 @@
+[DOCUMENT]
+TITLE: Extend code linkage: strictdoc source traceability plus Nix and TypeScript extractors
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-CODE-LINKAGE-EXTRACTORS
+TITLE: Extend code linkage: strictdoc source traceability plus Nix and TypeScript extractors
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Wire strictdoc's native source traceability so that a hard-coded render carries a File relation to the narrative it renders, and a change at either end dirties the edge and forces a review, ideally by an LLM. First case: the grammars grid in docs/sdoc/board/assets/grammars.js renders NAR-CANON-TYPES-GRID; today its glosses are copied prose in docs/sdoc/board/grammar-groups.json with no edge between them, so nothing notices when the narrative moves. Then extend the language coverage past what strictdoc ships (Python, the C family, Rust, Robot) with our own tree-sitter extractors: Nix modules and options, TypeScript types and interfaces.
+
+This is the buildout of MECH-NODE-CODE-LINKAGE-IS-PROSE, the observation that the link between a node and its code is prose in both directions and unchecked in both. That node lives in the strictdoc-tooling plan and is named here rather than related, because INV-NO-EXTERNAL-PLAN-REFS forbids a plan-to-plan Parent relation whatever its role. The assessment of what strictdoc gives, what the repo already has, the dirty-edge gap and the level of effort is EV-STRICTDOC-SOURCE-TRACEABILITY-LOE; its recommendation is to build the repo-side edge first and defer both the native feature and the readers.
+
+Still open, the operator's call: option 1, render the grid from the narrative, versus option 2, keep the render in code and hang a dirty edge on it (see WORK-GRAMMAR-TAB-GROUPS); where the code-side hash lives, strictdoc's HASH slot on the relation or PARENT_FP under a path key; and the direction of the edge, since the operator's phrasing has the render depend on the narrative while the canon's rules (nothing in the grid may depend on a narrative; MECHANISM has no Cites role) leave the narrative as the only lawful holder of that edge once NARRATIVE is given a File role.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim, on option 1 (render from the narrative) versus option 2 (code plus a dirty edge): "on option 1, it isn't a no but before I invest more in that I feel like it would be whack-a-mole maintaining an inner DSL inside an sdoc for different views where simple relating code to spec is the generic abstraction using core ideas of canon like dirty refs. could be a forcing function to apply some real settled mechanics also like just general dirty edge ripples and what not."
+
+Operator, 2026-09-02, verbatim, on the grid as code with a dirty edge: "so hard coding the grid becomes like @relation(REQ-1, scope=file) pointed to NAR-CANON-TYPES-GRID. If the narrative changes it dirties your edge to the hard coded grammar render in code forcing a review (ideally LLM). this is a core feature of canon we just haven't built out yet."
+
+The opening paragraph of the operator's ask, running from "strict doc has native code integrations" through "not sure how easy it is to add other things like a nix module, typescript type/interface, etc.", was not available to the session that filed this node and is NOT reproduced here. Paste it verbatim from the session transcript; do not paraphrase it into this field.
+
+Filed 2026-09-02 as the buildout item for MECH-NODE-CODE-LINKAGE-IS-PROSE. Not related to it by Crosses: that node lives in docs/plans/strictdoc-tooling/, and INV-NO-EXTERNAL-PLAN-REFS rules a plan-to-plan Parent relation, whatever its role, exactly the violation a spec-to-plan one is; the lane is named in the STATEMENT instead. Produces EV-STRICTDOC-SOURCE-TRACEABILITY-LOE, the assessment that preceded any build; the operator's read of it decides whether the repo-side edge, the native feature or the readers come first.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-CANON-STRUCTURE
+  ROLE: Assumes
+- TYPE: Child
+  VALUE: EV-STRICTDOC-SOURCE-TRACEABILITY-LOE
+  ROLE: Produces
