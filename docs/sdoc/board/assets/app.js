@@ -7,7 +7,8 @@ import { renderGrammars, selectGrammar } from "/assets/grammars.js";
 import { loadPerspective } from "/assets/perspective.js";
 import { renderPlan } from "/assets/plan.js";
 
-const VIEWS = ["perspective", "grammars", "plan", "board"];
+// Pill order; the default view is activeView()'s fallback, not the first entry.
+const VIEWS = ["grammars", "plan", "board", "perspective"];
 const elements = {
   error: document.querySelector("#error"),
   loading: document.querySelector("#loading"),
