@@ -15,6 +15,14 @@ spec.sgra even though it is kind of presentation, because what things are
 called is load-bearing. Existing material to reconcile: the ruled glossary
 terms (NAR-TERM-* under docs/spec, DEC-TERMS-ARE-NARRATIVES).
 <<<
+NOTES: >>>
+Verbatim, because "one per node" reads two ways that produce different
+work: "glossary / definition. should be one per node. my gut says it may
+fit in spec even though its kinda presentation. what we call stuff is kinda
+load bearing though." Reading one: every node carries one definition field.
+Reading two: glossary entries are their own nodes, one definition each
+(the NAR-TERM-* precedent). The UID leans reading two; the operator picks.
+<<<
 RELATIONS:
 - TYPE: Parent
   VALUE: WORK-SEMANTICS-AND-WORDS

@@ -12,8 +12,9 @@ AUTHORED_BY: llm
 STATEMENT: >>>
 Say what a grammar file IS: a collection of node types and semantics that
 represents a bounded goal -- not a full bounded context, since grammars can
-overlay each other. Decide what that boundary implies (what may cross it,
-what a file may assume about another) before the split lands.
+overlay each other. Work out what the boundary implies: what may cross it,
+and what one file may assume about another. No sequencing against the split
+is implied; ordering is grooming's.
 <<<
 NOTES: >>>
 Verbatim: "grammar files represent a sorta boundary, collection of node

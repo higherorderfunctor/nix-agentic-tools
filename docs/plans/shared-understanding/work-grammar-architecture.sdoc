@@ -13,7 +13,8 @@ STATEMENT: >>>
 Concept group: the grammar becomes several .sgra files, each a bounded goal.
 Holds the file split, the annotation class, field inheritance, and what a
 grammar-file boundary means. Grouping is presentational tiering only -- the
-operator ruled no enforced order yet.
+operator recommends no enforced order yet ("I don't recommend enforcing any
+order yet but tiering based on concepts is okay to judge").
 <<<
 RELATIONS:
 - TYPE: Parent

@@ -1,9 +1,12 @@
 # shared-understanding — LLM bootstrap
 
-The grooming thread for shifting the whole system — grammars, plan machinery,
-presentation, and the board app — toward human reasoning. The mission, in the
-operator's words: **this branch is designed to promote a shared understanding
-between human and LLM.**
+The grooming thread carved from the operator's 2026-09-01 dump. Their goal
+sentence, verbatim because it reads two ways: **"the goal crosses the whole
+system but it's to shift the board as a whole for human reasoning."** This carve
+leans the system-wide reading — grammars, plan machinery, presentation and the
+board app as peer groups — and the operator separates intent from that reading
+at grooming (see `WORK-SHARED-UNDERSTANDING`). Their mission line for the
+branch: **promote a shared understanding between human and LLM.**
 
 ## Load context
 

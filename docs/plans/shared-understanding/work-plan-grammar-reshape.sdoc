@@ -38,6 +38,13 @@ Axes clause verbatim, since node-kind-vs-field is theirs to pick: "various
 axis (own node kind or fields?). horizontal slice over time: milestone.
 verticle slice of like named components. kinda like node / relations so I
 can attach prose to those."
+
+Details-depth clause verbatim, because "before beads" reads two ways --
+temporal (an interim mechanism until beads adoption) or positional (the
+human pins specificity before an item enters beads, permanently): "details
+depth - human controlled before beads on how much specificity matters to me
+before llm is okay to elect. degrees of freedom allowed in how to
+implement."
 <<<
 RELATIONS:
 - TYPE: Parent

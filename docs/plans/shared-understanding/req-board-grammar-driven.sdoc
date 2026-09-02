@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [REQUIREMENT]
 UID: REQ-BOARD-GRAMMAR-DRIVEN
 TITLE: The board app hard-codes nothing the grammar can say
-DEPTH: interface-settled
+DEPTH: sketch
 AUTHORED_BY: llm
 STATEMENT: >>>
 The board app SHALL contain minimal hard-coded knowledge of the system it
@@ -18,8 +18,11 @@ none silently falling to a default -- and should ideally be literally a CSS
 sheet.
 <<<
 NOTES: >>>
-The one requirement the operator explicitly offered for this plan
-(2026-09-01). Known standing violations to burn down: TYPE_COLORS in
-board.js and the duplicated series colors in theme.css (hard-coded, no
-completeness check); the Perspective default column lists.
+Hedged by the operator -- verbatim: "one requirement I have we could add is
+board (app) should contain minimal hard coded info about the system." Filed
+as a REQUIREMENT node at sketch rather than parked as a work item; that
+filing (and this node's continued existence) is the carver's resolution of
+"we could add", reversible at grooming. Known standing violations to burn
+down: TYPE_COLORS in card.js and the duplicated series colors in theme.css
+(hard-coded, no completeness check); the Perspective default column lists.
 <<<
