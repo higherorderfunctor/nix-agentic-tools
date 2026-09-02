@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: The board app hard-codes nothing the grammar can say
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-BOARD-GRAMMAR-DRIVEN
+TITLE: The board app hard-codes nothing the grammar can say
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The board app SHALL contain minimal hard-coded knowledge of the system it
+renders: anything the app cannot infer from the grammar is a gap. The one
+permitted exception is coloring and styles, which SHALL be deterministically
+validated as complete against the grammar -- every element and role styled,
+none silently falling to a default -- and should ideally be literally a CSS
+sheet.
+<<<
+NOTES: >>>
+The one requirement the operator explicitly offered for this plan
+(2026-09-01). Known standing violations to burn down: TYPE_COLORS in
+board.js and the duplicated series colors in theme.css (hard-coded, no
+completeness check); the Perspective default column lists.
+<<<

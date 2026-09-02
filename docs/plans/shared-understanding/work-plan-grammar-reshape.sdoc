@@ -1,0 +1,48 @@
+[DOCUMENT]
+TITLE: Dynamic grouping instead of enforced tiers
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-PLAN-GRAMMAR-RESHAPE
+TITLE: Dynamic grouping instead of enforced tiers
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Reshape how plans are expressed. The operator's direction, needing more
+unpacking in a future session (their words): kill enforced epic/story/task
+TIERS -- "epics of epics of epics of stories of stories just become dynamic
+levels" for grouping how they reason over an execution plan -- but keep a
+way to mark a CLUSTER versus a detailed task list (maybe just a boolean
+field) so a kanban view and a tree view can each cut the same plan. Order
+should respect dependency order; grouping exists because nobody can reason
+over the whole tree at once.
+
+The use cases they separated, realizing they are managing several
+representations with different goals in one system:
+- complexity depth: work breakdown -- story/task-like, nesting allowed, a
+  tight coupling of dependencies among nodes;
+- details depth: how much specificity the HUMAN pins before the LLM may
+  elect the rest -- the degrees of freedom allowed in implementation
+  (pre-beads);
+- organization: epic-like higher-level reasoning;
+- axes, as their own node kind or as fields: milestone = horizontal slice
+  over time, named component = vertical slice -- shaped like nodes/relations
+  so prose can attach to them.
+<<<
+NOTES: >>>
+Operator: "yeah this one needs more unpacking in future session" and
+"pretty much describing the status quo, lol, but no enforced tier levels."
+Axes clause verbatim, since node-kind-vs-field is theirs to pick: "various
+axis (own node kind or fields?). horizontal slice over time: milestone.
+verticle slice of like named components. kinda like node / relations so I
+can attach prose to those."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-PLAN-LAYER
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

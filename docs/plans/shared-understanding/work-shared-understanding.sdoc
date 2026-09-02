@@ -1,0 +1,32 @@
+[DOCUMENT]
+TITLE: Shift the system toward shared human-and-LLM reasoning
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SHARED-UNDERSTANDING
+TITLE: Shift the system toward shared human-and-LLM reasoning
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The grooming thread for the operator's 2026-09-01 direction: shift the whole
+system -- grammars, plan machinery, presentation, and the board app --
+toward HUMAN reasoning. The mission, in the operator's words: this branch is
+designed to promote a shared understanding between human and LLM. Their
+sketch of the axes, offered "on a whim, don't take literally": the what
+(spec/presentation), the how/when (plan), the why (annotation), the who
+(authorship).
+
+Worked agile and HITL: no enforced order, the operator pivots to whatever
+they judge the worst gap when a session works this thread. The children are
+concept groups holding work items carved from the dump; each item's NOTES
+carries the operator's verbatim where meaning or scope is ambiguous, so they
+can separate intent from my reading. Nothing here converts to spec or
+presentation nodes without a grooming session -- REQ-BOARD-GRAMMAR-DRIVEN is
+the one requirement the operator explicitly offered.
+
+Old plans are NOT superseded by this thread's existence: reconciling them
+(WORK-OLD-PLANS-RECONCILE) is an explicit grooming session. Related work
+living elsewhere: WORK-BOARD-FILTER-MODEL stays in whiteboard-view.
+<<<

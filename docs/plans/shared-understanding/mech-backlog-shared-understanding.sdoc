@@ -1,0 +1,16 @@
+[DOCUMENT]
+TITLE: The shared-understanding plan's backlog register
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-BACKLOG-SHARED-UNDERSTANDING
+TITLE: The shared-understanding plan's backlog register
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The shared-understanding plan's backlog register. An ungroomed item carries
+Backlogged_In to this node; the edges are the list, the register holds none
+(DEC-BACKLOG-IS-A-REGISTER-NODE).
+<<<

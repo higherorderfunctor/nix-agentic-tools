@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: Paths serve navigation, never meaning
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-PATH-NOT-LOAD-BEARING
+TITLE: Paths serve navigation, never meaning
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Stop the directory path being load-bearing. The operator hates that meaning
+rides on where a file sits; paths should serve navigation only. Today's
+load-bearing uses to unwind: the systems table keys membership on source
+directory prefixes (DEC-SYSTEM-IS-A-SOURCE-SET), plan membership IS the
+plan directory, and dir_class derives from the path.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-CANON-STRUCTURE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

@@ -18,10 +18,19 @@ relation canvas. Shape undecided; it would be another lens under
 DEC-SDOC-BOARD-ONE-APP-TWO-VIEWS's switcher. Do not start without the
 operator.
 <<<
+NOTES: >>>
+First cut shipped 2026-09-01 (MECH-SDOC-BOARD-PLAN-TREE): collapsible tree
+grouped by directory, nested by Assumes, right-pane card. Still open from
+the original sketch and the plan-grammar reshape: the kanban cut, cluster
+vs detail marking, dependency-ordered rows.
+<<<
 RELATIONS:
 - TYPE: Parent
   VALUE: DEC-SDOC-BOARD-ONE-APP-TWO-VIEWS
   ROLE: Governed_By
 - TYPE: Parent
-  VALUE: MECH-BACKLOG-WHITEBOARD-VIEW
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
   ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-PLAN-LAYER
+  ROLE: Assumes

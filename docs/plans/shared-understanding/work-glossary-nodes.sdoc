@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: One definition per node
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-GLOSSARY-NODES
+TITLE: One definition per node
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Glossary/definition: one definition per node. The operator's gut: it fits
+spec.sgra even though it is kind of presentation, because what things are
+called is load-bearing. Existing material to reconcile: the ruled glossary
+terms (NAR-TERM-* under docs/spec, DEC-TERMS-ARE-NARRATIVES).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SEMANTICS-AND-WORDS
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: The board app carries more meaning
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-BOARD-SHIFT
+TITLE: The board app carries more meaning
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Concept group: the board app carries more meaning for a human reader. Holds
+the edge styling, the grammar-tab lifecycle redesign, and the app's
+grammar-driven requirement; the plan tree view ships first under
+WORK-BOARD-PLAN-VIEW.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

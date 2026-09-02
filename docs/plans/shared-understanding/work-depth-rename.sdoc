@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: Rename DEPTH and give the ladder real semantics
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-DEPTH-RENAME
+TITLE: Rename DEPTH and give the ladder real semantics
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Rename DEPTH and give its ladder real semantics. The operator likes the
+grading but calls the name horrible and the rung semantics unrememberable.
+Deliverables: a name, a per-rung meaning worth remembering, and the
+lifecycle/FSM view in the grammar tab that renders it
+(WORK-GRAMMAR-TAB-LIFECYCLE-VIEW).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SEMANTICS-AND-WORDS
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

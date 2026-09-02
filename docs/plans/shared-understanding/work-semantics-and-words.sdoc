@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: Naming and semantics get a home
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SEMANTICS-AND-WORDS
+TITLE: Naming and semantics get a home
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Concept group: naming and semantics. Holds glossary-per-node, semantic
+conflict tracking, and the DEPTH rename.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: Structural debts: paths and old plans
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-CANON-STRUCTURE
+TITLE: Structural debts: paths and old plans
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Concept group: structural debts of the canon itself -- the load-bearing
+directory path, and reconciling the old plans with this thread's lens.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

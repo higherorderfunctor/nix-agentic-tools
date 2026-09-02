@@ -19,7 +19,7 @@ STATEMENT: >>>
 | architecture | packages/ | optional | settled design co-located with the package it describes |
 | beads | docs/plans/beads-migration/ | optional | the working store the canon will hand execution to |
 | core | docs/plans/strictdoc-tooling/, docs/plans/scribe-daemon/ | optional | the canon's own tooling: the grammar, the scribe and its daemon, the checks and the hooks |
-| whiteboard | docs/plans/whiteboard-view/, docs/sdoc/board/ | optional | the view system that renders the canon for a person to read |
+| whiteboard | docs/plans/whiteboard-view/, docs/sdoc/board/, docs/plans/shared-understanding/ | optional | the view system that renders the canon for a person to read |
 <<<
 PARENT_FP: >>>
 DEC-SYSTEM-IS-A-TYPE-SET:0000000

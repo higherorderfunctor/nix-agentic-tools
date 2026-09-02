@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: The plan grammar and its views
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-PLAN-LAYER
+TITLE: The plan grammar and its views
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Concept group: the plan grammar and its views. Holds the plan-grammar
+reshape and the plan view work.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

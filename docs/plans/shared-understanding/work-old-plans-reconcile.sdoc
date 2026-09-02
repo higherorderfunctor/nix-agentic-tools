@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: Groom the old plans against the new lens
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-OLD-PLANS-RECONCILE
+TITLE: Groom the old plans against the new lens
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Reconcile the old plans with this thread's lens -- an EXPLICIT grooming
+session, not an implicit supersession. The operator: the old plans contain
+useful items, but the problem needs to be looked at differently now; this
+thread may supersede parts of them, or conflict them, and either is decided
+in that session, item by item.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-CANON-STRUCTURE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

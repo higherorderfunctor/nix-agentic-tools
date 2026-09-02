@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: Say what a grammar-file boundary means
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-GRAMMAR-AS-BOUNDARY
+TITLE: Say what a grammar-file boundary means
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Say what a grammar file IS: a collection of node types and semantics that
+represents a bounded goal -- not a full bounded context, since grammars can
+overlay each other. Decide what that boundary implies (what may cross it,
+what a file may assume about another) before the split lands.
+<<<
+NOTES: >>>
+Verbatim: "grammar files represent a sorta boundary, collection of node
+types and semantics. not full blown bounded contexts, as they can overlay,
+but alone they represent some kinda bounded goal." Filed as its own item
+because the boundary semantics gate both the split and inheritance; if it is
+only prose for the split node, collapse it at grooming.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-GRAMMAR-ARCHITECTURE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

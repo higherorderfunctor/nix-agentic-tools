@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: Several grammar files, each a bounded goal
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-GRAMMAR-ARCHITECTURE
+TITLE: Several grammar files, each a bounded goal
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Concept group: the grammar becomes several .sgra files, each a bounded goal.
+Holds the file split, the annotation class, field inheritance, and what a
+grammar-file boundary means. Grouping is presentational tiering only -- the
+operator ruled no enforced order yet.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

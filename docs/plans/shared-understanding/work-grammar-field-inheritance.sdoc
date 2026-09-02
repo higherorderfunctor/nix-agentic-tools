@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: Shared fields inherited across every grammar file
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-GRAMMAR-FIELD-INHERITANCE
+TITLE: Shared fields inherited across every grammar file
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Inheritance in the Nix grammar tooling: declare a shared surface once and
+have every grammar file inherit it -- the operator's example is authorship
+(AUTHORED_BY) across all nodes of all grammars. Lives in the values.nix /
+packages/strictdoc-grammar layer, where the .sgra files are rendered from.
+<<<
+NOTES: >>>
+Verbatim: "inheritance - nix special tooling. like authorship across all
+nodes all grammars." Read as: shared field/semantic definitions composed
+into each rendered grammar, not strictdoc-level inheritance. Flag if wrong.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-GRAMMAR-ARCHITECTURE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

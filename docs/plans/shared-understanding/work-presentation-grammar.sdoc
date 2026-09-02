@@ -1,0 +1,43 @@
+[DOCUMENT]
+TITLE: presentation.sgra: the human reasoning layer
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-PRESENTATION-GRAMMAR
+TITLE: presentation.sgra: the human reasoning layer
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+presentation.sgra -- the human reasoning layer, way under-specced by the
+operator's own account ("I cannot even fathom the nodes right now; scope
+could be overblown, it's blurry"). Use cases they named:
+
+- Prose over nodes: spec.sgra is LLM-understandable; presentation is the
+  human connecting the dots -- their reasoning layer.
+- Ordering/hierarchy, the way strictdoc's HTML view does it.
+- Custom axes for reasoning -- much of what should model the whiteboard.
+- Data views: pivot tables and queries that feed graphs; the Perspective
+  view is how the operator surfaces candidates.
+- Outputs: markdown (README, docs, even skills), the whiteboard for
+  non-markdown, maybe code -- code bindings not visible yet before other
+  things settle.
+- Maybe dirty relationships: a neighbor changed, so this needs review.
+<<<
+NOTES: >>>
+Two clauses kept verbatim because I cannot pin them down:
+- "custom axis for reasoning. a lot of what I hope helps model the
+  whiteboard."
+- "maybe dirty relationships? neighbor changed so needs review." -- possible
+  overlap with the existing PARENT_FP fingerprint machinery, which already
+  marks a citing node suspect when the cited contract changes; whether this
+  is that mechanism generalized, or something else, is a grooming question.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

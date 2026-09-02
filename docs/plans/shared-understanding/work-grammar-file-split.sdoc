@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: Split the grammar into spec, plan and annotations files
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-GRAMMAR-FILE-SPLIT
+TITLE: Split the grammar into spec, plan and annotations files
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Split the one grammar into multiple .sgra files grouping functionality, with
+cross-grammar relations. The operator's proposed divide, explicitly not
+settled: spec.sgra holds the definition family (MECHANISM, DECISION,
+EVIDENCE, REQUIREMENT) and probably coverage (USE_CASE); plan.sgra holds
+WORK, though they could hear an argument to merge it with spec;
+review/annotations.sgra holds the annotation class (WORK-ANNOTATION-NODES).
+
+First a spike: PROVE strictdoc resolves a relation whose two ends import
+different grammar files -- the operator assumes it works, and the session-5
+two-grammar sketch (packages/strictdoc-grammar/values/{plan,spec}.nix, wired
+to nothing) recorded the same assumption as UNVERIFIED. Note for grooming:
+DEC-ONE-GRAMMAR (accepted) currently rules ONE grammar; acting on this item
+means superseding it, which is the operator's call, not this node's.
+<<<
+NOTES: >>>
+Ambiguity the operator flagged themselves -- USE_CASE's home: "coverage: use
+case? I think it slots here as a form of contract but could also be seen as
+work (test coverage)."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-GRAMMAR-ARCHITECTURE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

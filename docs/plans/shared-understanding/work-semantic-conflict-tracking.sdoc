@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: Track semantic rules before a DSL exists
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SEMANTIC-CONFLICT-TRACKING
+TITLE: Track semantic rules before a DSL exists
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Track semantics before a DSL exists. The operator cannot track semantics
+today or know when conflicts come up; until they can craft a DSL, the LLM is
+the semantic layer. Wanted: a way to record a semantic rule when it is
+stated (a temp semantic node?) so conflicts surface instead of living in
+session memory.
+<<<
+NOTES: >>>
+Verbatim, since the shape is undecided: "temp semantic node? until I can
+craft a DSL and you're my semantic layer until then. i can't track semantics
+right now, know when conflicts come up."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SEMANTICS-AND-WORDS
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
