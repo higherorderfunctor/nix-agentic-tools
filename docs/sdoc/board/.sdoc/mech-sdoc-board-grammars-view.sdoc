@@ -10,15 +10,37 @@ TITLE: One card per grammar element; the declaration in the side pane
 DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
-The Grammars view draws one uniform card per grammar element on a grid --
-tag, UID prefix, and field/role/node counts -- and puts the full declaration
-in the right-hand pane on selection: every field with its kind, choice words
-and required flag, and every relation role the element may write. Data is the
-snapshot's grammar key (parsed from grammar.sgra, since the JSON export types
-every field as String); an element with zero nodes still gets a card, which
-is how an empty vocabulary such as COMMENTARY stays visible. The Board
-inspector's type name links here: clicking it switches the view and selects
-that element's card. The switcher order is Perspective, Grammars, Board.
+The Grammars view draws one uniform card per grammar element -- tag, UID
+prefix, and field/role/node counts -- and puts the full declaration in the
+right-hand pane on selection: every field with its kind, choice words and
+required flag, and every relation role the element may write. Where a card
+sits is not inferred from the grammar: the tab renders the hand-authored
+layout docs/sdoc/board/grammar-groups.json, whose sections are top-level
+headings over a rule and whose groups are subtitles over a widget -- "cards",
+a centered row of named types, or "grid", a 2x2 matrix with one type per
+cell. The Definition grid's axis words are DEC-NODE-FAMILIES' own: normative
+or descriptive by row, universal or particular by column. One "cards" group
+may take the "rest", every type the layout places nowhere else, so a type the
+grammar grows lands in Unsorted rather than off the tab. The layout is the
+operator's exception to REQ-BOARD-GRAMMAR-DRIVEN and is guarded twice:
+statically by dev/scripts/grammar-groups-check.py, run as the
+strictdoc-board-grammar-groups check in nix flake check over the committed
+grammar.sgra and layout -- every type placed exactly once or caught by the
+one "rest", nothing stale, no empty or doubly-filled grid cell -- with the
+check feeding itself one bad layout per rule so a green cannot be a checker
+that always passes; and at runtime by checkGroups() in grammars.js, which
+re-runs the same rules on every render and raises a red banner at the top of
+the tab for any finding, a missing or unreadable layout included, while still
+drawing every type and never hiding one. Data is the snapshot's grammar key
+(parsed from grammar.sgra, since the JSON export types every field as
+String); an element with zero nodes still gets a card, which is how an empty
+vocabulary such as COMMENTARY stays visible. The Board inspector's type name
+links here: clicking it switches the view and selects that element's card.
+The switcher order is Grammars, Plan, Graph, Perspective.
+<<<
+NOTES: >>>
+Updated 2026-09-02 for commits 8823edf1 and 35f2a499 (grammar-groups.json,
+coverage check, pill order).
 <<<
 RELATIONS:
 - TYPE: Parent
