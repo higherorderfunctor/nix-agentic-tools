@@ -136,6 +136,29 @@ def build_parser(grammar: dict, command: str | None, tag: str | None):
         one.add_argument("uid")
         one.add_argument("--role", required=True)
         one.add_argument("--target", required=True)
+        # A File relation may name one ITEM in the file rather than the whole
+        # of it. These three slots are strictdoc's FileEntry, not the .sgra
+        # grammar -- which declares a File relation by TYPE alone -- so there
+        # is nothing here to derive them from and no `choices` to attach. The
+        # vocabulary and every refusal live in sdoc_model on the daemon side,
+        # the same way a field illegal for a node's type is refused there:
+        # this client states the surface, the daemon holds the rule.
+        one.add_argument(
+            "--element",
+            metavar="function|class",
+            help="with --role File: the relation names an item in the file. Needs --id",
+        )
+        one.add_argument(
+            "--id",
+            dest="element_id",
+            metavar="QUALIFIED-NAME",
+            help='which item, as the reader names it (quotes included: tasks."build:all")',
+        )
+        one.add_argument(
+            "--line-range",
+            metavar="BEGIN-END",
+            help="with --role File: the lines named. Not combinable with --element/--id",
+        )
 
     move_parser = subparsers.add_parser("move", help="move a node's file")
     move_parser.add_argument("uid")
@@ -206,7 +229,15 @@ def operation(args, grammar: dict) -> dict:
             "fields": fields_from(args, grammar), "unset": args.unset,
         }
     if command in ("relate", "unrelate"):
-        return {"op": command, "uid": args.uid, "role": args.role, "target": args.target}
+        return {
+            "op": command,
+            "uid": args.uid,
+            "role": args.role,
+            "target": args.target,
+            "element": args.element,
+            "id": args.element_id,
+            "line_range": args.line_range,
+        }
     if command == "move":
         return {"op": "move", "uid": args.uid, "path": args.path}
     return {"op": "delete", "uid": args.uid}

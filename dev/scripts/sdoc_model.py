@@ -1,4 +1,4 @@
-# cspell:ignore uids sdoc autogen parallelizer textx arpeggio
+# cspell:ignore uids sdoc autogen parallelizer textx arpeggio unrelate
 """sdoc_model -- the one write path for .sdoc files, over strictdoc's own
 node model (MECH-SDOC-EDIT-VIA-MODEL,
 docs/plans/strictdoc-tooling/mech-sdoc-edit-via-model.sdoc).
@@ -36,13 +36,14 @@ path and belongs to the runtime by that node's ruling.
 from __future__ import annotations
 
 import contextlib
+import inspect
 import io
 import posixpath
 import tempfile
 import os
 import sys
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, NamedTuple
 
 from strictdoc.backend.sdoc.document_reference import DocumentReference
 from strictdoc.backend.sdoc.models.document import SDocDocument
@@ -58,6 +59,9 @@ from strictdoc.backend.sdoc.models.reference import (
 from strictdoc.backend.sdoc.reader import SDReader
 from strictdoc.backend.sdoc.validations.sdoc_validator import SDocValidator
 from strictdoc.backend.sdoc.writer import SDWriter
+from strictdoc.backend.sdoc_source_code.models.language_item_marker import (
+    RangeMarkerType,
+)
 from strictdoc.core.document_meta import DocumentMeta
 from strictdoc.core.project_config import ProjectConfigLoader
 from strictdoc.core.traceability_index_builder import TraceabilityIndexBuilder
@@ -180,6 +184,164 @@ def normalize_file_value(value: str) -> str:
     return value
 
 
+# --------------------------------------------------------------------------
+# Element-grained File relations
+# --------------------------------------------------------------------------
+#
+# A File relation may name a PART of the file rather than the whole of it:
+# `ELEMENT: function` + `ID: <qualified name>`, optionally a LINE_RANGE.
+# Neither the ELEMENT vocabulary nor the slot names live in the .sgra
+# grammar -- the File relation is declared there by TYPE alone -- so both
+# are derived from strictdoc rather than written down a second time here.
+# A strictdoc bump that renames either fails at import with the file and
+# the symbol named, instead of silently writing a relation nothing reads.
+
+# ELEMENT is a CLOSED vocabulary, and it is closed twice over: RangeMarkerType
+# below, and the marker lexer's own regex. `file` is the whole-file scope a
+# source marker carries, not something a File relation may name, so a
+# relation's ELEMENT is exactly the remainder.
+FILE_ELEMENTS = tuple(
+    marker.value for marker in RangeMarkerType if marker is not RangeMarkerType.FILE
+)
+
+# The FileEntry keyword each slot is carried by. The ID slot is spelled `id`
+# and the line range `g_line_range` (a STRING; FileEntry parses it into the
+# `line_range` tuple), which is exactly the kind of detail worth deriving
+# once and asserting rather than repeating at three call sites.
+FILE_ENTRY_SLOTS = {"element": "element", "id": "id", "line_range": "g_line_range"}
+
+
+def _check_file_entry_slots() -> None:
+    accepted = inspect.signature(FileEntry.__init__).parameters
+    missing = sorted(slot for slot in FILE_ENTRY_SLOTS.values() if slot not in accepted)
+    if missing:
+        raise SdocError(
+            f"strictdoc's FileEntry no longer accepts {', '.join(missing)} -- "
+            f"dev/scripts/sdoc_model.py FILE_ENTRY_SLOTS needs re-deriving from "
+            f"strictdoc/backend/sdoc/models/reference.py"
+        )
+
+
+_check_file_entry_slots()
+
+
+class RelationSpec(NamedTuple):
+    """One relation as a caller states it, before the grammar is consulted.
+
+    `role` is already the GRAMMAR's role -- the empty string for File (see
+    relation_role below). The last three are File-only and None everywhere
+    else. Plain `(role, target)` tuples are still accepted by add_node, so
+    an old caller keeps working.
+    """
+
+    role: str
+    target: str
+    element: str | None = None
+    id: str | None = None
+    line_range: str | None = None
+
+
+def relation_role(role: str) -> str:
+    """The role a caller typed, as the grammar spells it.
+
+    A File relation declares NO role at all, so the grammar's role for it is
+    the empty string, while every human-facing surface -- the CLI's --role
+    choices, the daemon's `role` parameter, roles_of() above -- names it
+    `File`. This is the one place that mapping lives; it used to be four,
+    and the daemon's relate verb was the copy that did not get it
+    (WORK-SCRIBE-RELATE-FILE-ROLE).
+    """
+    return "" if role == "File" else role
+
+
+def normalize_line_range(raw: str | None) -> str | None:
+    """`12-20`, `12,20` or `12, 20` -> the one spelling FileEntry parses.
+
+    FileEntry splits on the literal `", "` and asserts exactly two
+    components, so a tuple or a comma with no space raises an
+    AssertionError from inside the parser rather than anything a caller can
+    catch. Normalizing here keeps that AssertionError unreachable.
+    """
+    if raw is None or raw == "":
+        return None
+    text = raw.replace("-", ",").replace(" ", "")
+    parts = [part for part in text.split(",") if part != ""]
+    if len(parts) != 2 or not all(part.isdigit() for part in parts):
+        raise SdocError(f"line range {raw!r} is not two line numbers, as in 245-247")
+    begin, end = int(parts[0]), int(parts[1])
+    if begin < 1 or end < begin:
+        raise SdocError(f"line range {raw!r} does not run forward from line 1 or later")
+    return f"{begin}, {end}"
+
+
+def file_entry_kwargs(element: str | None, id_: str | None, line_range: str | None) -> dict:
+    """Validate the three element-grained slots and shape them for FileEntry.
+
+    Two refusals are strictdoc's rather than ours, and both would otherwise
+    be SILENT:
+
+    * ELEMENT without ID resolves to nothing. The forward resolver matches
+      an ID against the parsed items of the file; an ELEMENT alone names no
+      item, and strictdoc's own writer drops a lone ELEMENT on the next
+      format, so the relation would degrade to a whole-file one with no
+      diagnostic at all.
+    * ELEMENT + ID + LINE_RANGE cannot round-trip. SDWriter emits these
+      slots from an if/elif CHAIN (writer.py:541-575): with ELEMENT and ID
+      both set it takes the first arm and LINE_RANGE is never written. A
+      relation carrying all three would be silently narrowed by the next
+      `strictdoc format`, which is exactly the kind of drift the
+      write-then-reload guard exists to make impossible.
+    """
+    line_range = normalize_line_range(line_range)
+    if element is not None and element not in FILE_ELEMENTS:
+        raise SdocError(
+            f"ELEMENT {element!r} is not one of {', '.join(FILE_ELEMENTS)}. "
+            f"The KIND of the item (module, option, binding) is not an ELEMENT "
+            f"value -- it reaches a reader through the item's description."
+        )
+    if element is not None and not id_:
+        raise SdocError("--element names the kind of item; it needs an --id to name which one")
+    if element is not None and line_range is not None:
+        raise SdocError(
+            "a File relation carries ELEMENT+ID or LINE_RANGE, not both: "
+            "strictdoc's writer emits the first and would drop the range"
+        )
+    return {
+        FILE_ENTRY_SLOTS["element"]: element,
+        FILE_ENTRY_SLOTS["id"]: id_,
+        FILE_ENTRY_SLOTS["line_range"]: line_range,
+    }
+
+
+def _describe(spec: RelationSpec) -> str:
+    """A relation as an error message should name it: the target, plus the
+    element it narrows to when it narrows to one."""
+    text = repr(spec.target)
+    if spec.element or spec.id:
+        text += f" ({spec.element or '?'} {spec.id or '?'})"
+    elif spec.line_range:
+        text += f" (lines {spec.line_range})"
+    return text
+
+
+def file_entry_of(relation: FileReference) -> dict:
+    """The element-grained slots a File relation carries, absent ones None.
+
+    One reader for `show`, the export patch and any test: FileEntry
+    back-fills element/id from the deprecated FUNCTION:/CLASS: spellings in
+    its own constructor, so reading the attributes rather than the source
+    text gets a corpus written the old way right for free.
+    """
+    entry = getattr(relation, "g_file_entry", None)
+    if entry is None:
+        return {"element": None, "id": None, "line_range": None}
+    return {
+        "element": getattr(entry, "element", None),
+        "id": getattr(entry, "id", None),
+        "line_range": getattr(entry, "g_line_range", None),
+    }
+
+
 class Graph:
     """One loaded project tree, mutated in memory and written on save().
 
@@ -274,32 +436,90 @@ class Graph:
         self.validate(node)
         self._touch(node.get_document())
 
-    def add_relation(self, uid: str, role: str, target: str) -> None:
+    def add_relation(
+        self,
+        uid: str,
+        role: str,
+        target: str,
+        *,
+        file_element: str | None = None,
+        file_id: str | None = None,
+        line_range: str | None = None,
+    ) -> None:
         node = self.node(uid)
         element = self.element(node.node_type)
-        if self._find_relation(node, role, target) is not None:
-            raise SdocError(f"{uid} already has a {role or 'File'} relation to {target!r}")
-        node.relations.append(self._build_reference(node, element, role, target))
+        spec = RelationSpec(role, target, file_element, file_id, line_range)
+        # BEFORE the duplicate check, not inside _build_reference alone: a
+        # node-to-node relation carrying File slots would otherwise be
+        # refused by whichever check fired first, and "already has that
+        # relation" is a misleading answer to "ELEMENT is not for a Parent".
+        self._check_file_slots(self._relation_type_for_role(element, role), spec)
+        if self._find_relation(node, spec) is not None:
+            raise SdocError(
+                f"{uid} already has a {role or 'File'} relation to {_describe(spec)}"
+            )
+        node.relations.append(self._build_reference(node, element, spec))
         self.validate(node)
         self._touch(node.get_document())
 
-    def remove_relation(self, uid: str, role: str, target: str) -> None:
+    def remove_relation(
+        self,
+        uid: str,
+        role: str,
+        target: str,
+        *,
+        file_element: str | None = None,
+        file_id: str | None = None,
+        line_range: str | None = None,
+    ) -> None:
         node = self.node(uid)
-        existing = self._find_relation(node, role, target)
+        spec = RelationSpec(role, target, file_element, file_id, line_range)
+        self._check_file_slots(
+            self._relation_type_for_role(self.element(node.node_type), role), spec
+        )
+        existing = self._find_relation(node, spec)
         if existing is None:
-            raise SdocError(f"{uid} has no {role or 'File'} relation to {target!r}")
+            existing = self._sole_relation_to(node, spec)
         node.relations.remove(existing)
         self.validate(node)
         self._touch(node.get_document())
 
-    def _build_reference(self, node: SDocNode, element: GrammarElement, role: str, target: str):
+    @staticmethod
+    def _sole_relation_to(node: SDocNode, spec: RelationSpec):
+        """The one File relation naming this path, when the caller named no
+        element.
+
+        Element-grained linking makes several relations to ONE path
+        ordinary, so `unrelate --target <path>` is ambiguous exactly when
+        more than one exists. Refusing beats removing whichever came first.
+        """
+        candidates = [
+            relation
+            for relation in node.relations
+            if isinstance(relation, FileReference) and file_path_of(relation) == spec.target
+        ]
+        named = spec.element is not None or spec.id is not None or spec.line_range is not None
+        if not spec.role and not named and len(candidates) == 1:
+            return candidates[0]
+        uid = node.reserved_uid
+        if not spec.role and not named and len(candidates) > 1:
+            raise SdocError(
+                f"{uid} has {len(candidates)} File relations to {spec.target!r}; "
+                f"name which one with --element/--id: "
+                f"{', '.join(sorted(str(file_entry_of(c)['id']) for c in candidates))}"
+            )
+        raise SdocError(f"{uid} has no {spec.role or 'File'} relation to {_describe(spec)}")
+
+    def _build_reference(self, node: SDocNode, element: GrammarElement, spec: RelationSpec):
         """One relation, checked against the grammar and the tree.
 
         The two callers -- add_relation on an existing node and add_node on a
         fresh one -- were the same fifteen lines twice, which is how the File
         branch and the Parent branch drift apart.
         """
+        role, target = spec.role, spec.target
         relation_type = self._relation_type_for_role(element, role)
+        self._check_file_slots(relation_type, spec)
         if relation_type != "File":
             if not self.has_node(target):
                 raise SdocError(f"relation target {target!r} is not a node in the graph")
@@ -328,20 +548,46 @@ class Graph:
             # need it to read both. Migrating the corpus to PATH is a separate
             # change, not a side effect of the first tool that writes one.
             g_deprecated_file_path=target,
-            g_line_range=None,
+            **file_entry_kwargs(spec.element, spec.id, spec.line_range),
         )
         reference = FileReference(parent=node, g_file_entry=entry)
         entry.parent = reference
         return reference
 
     @staticmethod
-    def _find_relation(node: SDocNode, role: str, target: str):
+    def _check_file_slots(relation_type: str, spec: RelationSpec) -> None:
+        """ELEMENT, ID and LINE_RANGE name part of a FILE. A node-to-node
+        relation has no parts to name."""
+        if relation_type != "File" and (spec.element or spec.id or spec.line_range):
+            raise SdocError(
+                f"ELEMENT, ID and LINE_RANGE belong to a File relation; the "
+                f"{spec.role!r} role makes a {relation_type} relation to a node"
+            )
+
+    @staticmethod
+    def _find_relation(node: SDocNode, spec: RelationSpec):
+        """The relation this spec names EXACTLY, or None.
+
+        A File relation is keyed on the path TOGETHER WITH its element and
+        id. Keying on the path alone -- which is what this did while a File
+        relation could only name a whole file -- refuses a second relation
+        to the same file as a duplicate, and a second relation to the same
+        file naming a different item is the whole point of element-grained
+        linking.
+        """
         for relation in node.relations:
             if isinstance(relation, FileReference):
-                if not role and file_path_of(relation) == target:
+                if spec.role or file_path_of(relation) != spec.target:
+                    continue
+                entry = file_entry_of(relation)
+                if (
+                    entry["element"] == spec.element
+                    and entry["id"] == spec.id
+                    and entry["line_range"] == normalize_line_range(spec.line_range)
+                ):
                     return relation
                 continue
-            if relation.ref_uid == target and (relation.role or "") == role:
+            if relation.ref_uid == spec.target and (relation.role or "") == spec.role:
                 return relation
         return None
 
@@ -556,7 +802,7 @@ class Graph:
         document: SDocDocument,
         tag: str,
         values: dict[str, str],
-        relations: list[tuple[str, str]],
+        relations: list[RelationSpec | tuple],
     ) -> SDocNode:
         element = self.element(tag)
         fields: list[SDocNodeField] = []
@@ -596,8 +842,10 @@ class Graph:
         for field in fields:
             field.parent = node
         document.section_contents.append(node)
-        for role, target in relations:
-            node.relations.append(self._build_reference(node, element, role, target))
+        for relation in relations:
+            node.relations.append(
+                self._build_reference(node, element, RelationSpec(*relation))
+            )
         self.validate(node)
         self._touch(document)
         return node
@@ -710,6 +958,60 @@ def field_value(node: SDocNode, name: str) -> str | None:
 def file_path_of(relation: FileReference) -> str:
     """The repository-relative path a File relation names."""
     return relation.get_posix_path()
+
+
+_EXPORT_PATCHED = False
+
+
+def carry_file_element_into_json() -> None:
+    """Make strictdoc's JSON export carry ELEMENT and ID (idempotent).
+
+    JSONGenerator._write_requirement_relations reads exactly TYPE, FORMAT,
+    VALUE and LINE_RANGE off a FileReference (json_generator.py:305-323):
+    ELEMENT and ID are dropped, so an element-grained relation exports as a
+    whole-file one and every downstream consumer -- the board included --
+    sees a coarser graph than the corpus declares.
+
+    The fields are read back off the FileEntry objects the generator is
+    already walking, so this is the GRAPH's own data rather than a second
+    derivation of it. The zip is positionally safe: that function appends
+    exactly one dict per relation, in node.relations order.
+
+    Patched HERE rather than in the strictdoc package because
+    overlays/dev-tools/strictdoc.nix re-exports upstream's derivation
+    unchanged for cache-hit parity -- a patched package would break that
+    premise. The cost is that `strictdoc export` run by hand still drops the
+    fields; only an export that goes through this module carries them.
+
+    Fails closed: a renamed or re-shaped upstream method raises naming this
+    file, rather than leaving a silently unpatched exporter behind.
+    """
+    global _EXPORT_PATCHED
+    if _EXPORT_PATCHED:
+        return
+    from strictdoc.backend.json.json_generator import JSONGenerator
+
+    original = inspect.getattr_static(JSONGenerator, "_write_requirement_relations", None)
+    if not isinstance(original, staticmethod):
+        raise SdocError(
+            "strictdoc's JSONGenerator._write_requirement_relations is no longer a "
+            "staticmethod -- dev/scripts/sdoc_model.py carry_file_element_into_json "
+            "needs re-deriving from strictdoc/backend/json/json_generator.py"
+        )
+    unwrapped = original.__func__
+
+    def with_file_element(node: SDocNode):
+        relations = unwrapped(node)
+        for exported, relation in zip(relations, node.relations):
+            if not isinstance(relation, FileReference):
+                continue
+            for name, value in file_entry_of(relation).items():
+                if value and name != "line_range":
+                    exported[name.upper()] = value
+        return relations
+
+    JSONGenerator._write_requirement_relations = staticmethod(with_file_element)
+    _EXPORT_PATCHED = True
 
 
 def roles_of(element: GrammarElement) -> list[str]:

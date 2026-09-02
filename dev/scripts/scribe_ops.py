@@ -43,7 +43,12 @@ from scribe_workspace import (  # noqa: E402
     refuse_dangling_links,
     refuse_if_referenced,
 )
-from sdoc_model import SdocError, validate_guarded  # noqa: E402
+from sdoc_model import (  # noqa: E402
+    RelationSpec,
+    SdocError,
+    relation_role,
+    validate_guarded,
+)
 
 READS = ("show", "list", "check")
 WRITES = ("new", "set", "relate", "unrelate", "move", "delete")
@@ -145,10 +150,23 @@ def apply(workspace: Workspace, op: str, params: dict) -> dict:
         return _written(workspace, mutate, refuse_dangling_links)
 
     if op in ("relate", "unrelate"):
-        role, target = _need(params, "role"), _need(params, "target")
+        # `File` is the role a client NAMES and the empty string is the role
+        # the grammar declares. This branch used to pass the client's spelling
+        # straight through, so every File relation through the daemon was
+        # refused as a role the type does not declare, while the same verb on
+        # the command line worked (WORK-SCRIBE-RELATE-FILE-ROLE). The mapping
+        # now lives once, in sdoc_model.relation_role.
+        spec = _relation_spec(params)
         return _written(
             workspace,
-            lambda g: (g.add_relation if op == "relate" else g.remove_relation)(uid, role, target),
+            lambda g: (g.add_relation if op == "relate" else g.remove_relation)(
+                uid,
+                spec.role,
+                spec.target,
+                file_element=spec.element,
+                file_id=spec.id,
+                line_range=spec.line_range,
+            ),
             refuse_dangling_links if op == "relate" else None,
         )
 
@@ -160,6 +178,19 @@ def apply(workspace: Workspace, op: str, params: dict) -> dict:
         return _move(workspace, uid, destination)
 
     raise SdocError(f"operation {op!r} is not implemented")
+
+
+def _relation_spec(params: dict) -> RelationSpec:
+    """One relation off the wire, with the File role mapped and the
+    element-grained slots carried. Shared by relate/unrelate and by `new`,
+    so the two doors onto the same pipeline cannot drift again."""
+    return RelationSpec(
+        relation_role(_need(params, "role")),
+        _need(params, "target"),
+        params.get("element") or None,
+        params.get("id") or None,
+        params.get("line_range") or params.get("lineRange") or None,
+    )
 
 
 def _need(params: dict, name: str):
@@ -200,10 +231,7 @@ def _new(workspace: Workspace, params: dict, fields: dict) -> dict:
     values["UID"] = uid  # a field to the model, a parameter on the wire
     values["AUTHORED_BY"] = "llm"  # MECH-RUNTIME-WRITE-GUARD
 
-    relations = [
-        (("" if r.get("role") == "File" else r.get("role")), r.get("target"))
-        for r in (params.get("relations") or [])
-    ]
+    relations = [_relation_spec(r) for r in (params.get("relations") or [])]
     path = sdoc_cli.target_path(_need(params, "path"), uid, workspace.root)
     if path.exists():
         raise SdocError(f"{path} already exists")

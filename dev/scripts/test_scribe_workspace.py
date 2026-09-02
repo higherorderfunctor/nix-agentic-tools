@@ -32,7 +32,7 @@ from scribe_workspace import (  # noqa: E402
     refuse_dangling_links,
     refuse_if_referenced,
 )
-from sdoc_model import field_value  # noqa: E402
+from sdoc_model import SdocError, field_value  # noqa: E402
 
 PASSED: list[str] = []
 
@@ -49,10 +49,25 @@ def contract(name: str):
     return wrap
 
 
+# What an isolated copy of the canon must carry to be exportable. Defined
+# here and imported by test_scribe_rpc, because two suites building the same
+# corpus from two lists diverge silently: the copy that misses a dependency
+# still passes every in-process contract, where the harness's own sys.path
+# supplies it, and fails only in the one contract that shells out.
+#
+# dev/scripts is on the list because strictdoc_config.py is NOT
+# self-contained -- it puts that directory on sys.path and imports the .nix
+# source reader from it, and says so by name when the import fails. The whole
+# tracked directory, rather than the modules that config imports today:
+# naming them here would be a second place obliged to agree with its import
+# block.
+CORPUS_PATHS = ("*.sdoc", "*.sgra", "strictdoc_config.py", "dev/scripts")
+
+
 def corpus(destination: Path) -> Path:
     repo = Path(__file__).resolve().parents[2]
     listed = subprocess.run(
-        ["git", "ls-files", "-z", "*.sdoc", "*.sgra", "strictdoc_config.py"],
+        ["git", "ls-files", "-z", *CORPUS_PATHS],
         cwd=repo, capture_output=True, text=True, check=True,
     ).stdout.split("\0")
     for name in filter(None, listed):
@@ -484,6 +499,83 @@ def test_unreadable_destination_refused(root: Path) -> None:
     raise AssertionError("a create into an unread directory was accepted")
 
 
+@contract("a File relation names an item, through the daemon's own op path")
+def test_file_relation_names_an_item(root: Path) -> None:
+    """WORK-SCRIBE-RELATE-FILE-ROLE, and the export slots with it.
+
+    Goes through scribe_ops.apply rather than Graph directly, because the
+    defect was there and nowhere else: `File` is the role a client NAMES and
+    the empty string is the role the GRAMMAR declares, and this branch passed
+    the client's spelling straight through. The command line mapped it and
+    worked; every File relation through the daemon was refused as a role the
+    node's type does not declare.
+    """
+    import json
+
+    import scribe_ops
+
+    workspace = Workspace(root)
+    uid = "MECH-CONTRACT-FILE-ITEM"
+    create(workspace, root / "docs" / "plans" / "scribe-daemon" / "mech-item.sdoc", uid)
+    target = root / "dev" / "scripts" / "contract_target.nix"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("{ config, ... }: { processes.scribe = { }; }\n", encoding="utf8")
+    relative = "dev/scripts/contract_target.nix"
+
+    def relate(**extra):
+        return scribe_ops.apply(
+            workspace,
+            "relate",
+            {"op": "relate", "uid": uid, "role": "File", "target": relative, **extra},
+        )
+
+    # POSITIVE CONTROL: the whole-file relation the corpus already writes.
+    relate()
+    # Then the SAME file again, named down to one item in it. Refusing this
+    # as a duplicate is what keying the relation on its path alone did.
+    relate(element="function", id="processes.scribe")
+
+    written = (root / "docs" / "plans" / "scribe-daemon" / "mech-item.sdoc").read_text(
+        encoding="utf8"
+    )
+    assert "  ELEMENT: function\n  ID: processes.scribe\n" in written, (
+        f"the item slots did not reach the file:\n{written}"
+    )
+
+    for label, extra in (
+        ("the identical relation twice", {"element": "function", "id": "processes.scribe"}),
+        ("an element naming no item", {"element": "function"}),
+        ("an element strictdoc does not parse", {"element": "module", "id": "x"}),
+        ("an item AND a line range", {"element": "function", "id": "y", "line_range": "1-2"}),
+    ):
+        try:
+            relate(**extra)
+        except SdocError:
+            continue
+        raise AssertionError(f"accepted {label}")
+
+    # The export is the board's only input, and strictdoc's own generator
+    # reads neither slot off a FileReference.
+    exported = workspace.export_json(root / "export")
+    index = json.loads(Path(exported["index"]).read_text(encoding="utf8"))
+    relations = [
+        relation
+        for document in index["DOCUMENTS"]
+        for node in document.get("NODES", [])
+        if node.get("UID") == uid
+        for relation in node.get("RELATIONS", [])
+    ]
+    assert {"TYPE": "File", "VALUE": relative} in relations, (
+        f"the whole-file relation is missing from the export: {relations}"
+    )
+    assert {
+        "TYPE": "File",
+        "VALUE": relative,
+        "ELEMENT": "function",
+        "ID": "processes.scribe",
+    } in relations, f"the export dropped the item slots: {relations}"
+
+
 CONTRACTS = [
     test_read_is_free,
     test_write_defers,
@@ -500,6 +592,7 @@ CONTRACTS = [
     test_created_node_is_a_target,
     test_refused_create_leaves_nothing,
     test_unreadable_destination_refused,
+    test_file_relation_names_an_item,
 ]
 
 

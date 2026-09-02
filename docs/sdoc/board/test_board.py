@@ -61,6 +61,16 @@ FIXTURE_INDEX = {
                         {"TYPE": "Parent", "VALUE": "DEC-FIX-ONE", "ROLE": "Governed_By"},
                         {"TYPE": "Parent", "VALUE": "DEC-FIX-GONE", "ROLE": "Governed_By"},
                         {"TYPE": "File", "VALUE": "docs/sdoc/board/server.py"},
+                        # The same file again, named down to one item in it.
+                        # Two relations, ONE file: the pair is what proves
+                        # FILE_COUNT counts files rather than relations.
+                        {
+                            "TYPE": "File",
+                            "VALUE": "docs/sdoc/board/server.py",
+                            "ELEMENT": "function",
+                            "ID": "build_server",
+                            "LINE_RANGE": "40, 52",
+                        },
                     ],
                 }
             ],
@@ -117,6 +127,32 @@ class AdapterContractTest(unittest.TestCase):
         self.assertNotIn("RELATIONS", mechanism["fields"])
         self.assertNotIn("_NODE_TYPE", mechanism["fields"])
 
+    def test_snapshot_carries_the_item_a_file_relation_names(self) -> None:
+        """`files` stays the plain paths every sdoc-board/2 reader expects;
+        the element-grained view arrives beside it, one entry per RELATION."""
+        by_id = {node["id"]: node for node in adapted()["snapshot"]["nodes"]}
+        mechanism = by_id["MECH-FIX-TWO"]
+        self.assertEqual(
+            mechanism["fileRelations"],
+            [
+                # The whole-file relation sorts ahead of the item-grained
+                # one: they share a path, and an absent id sorts first.
+                {
+                    "path": "docs/sdoc/board/server.py",
+                    "element": None,
+                    "id": None,
+                    "lineRange": None,
+                },
+                {
+                    "path": "docs/sdoc/board/server.py",
+                    "element": "function",
+                    "id": "build_server",
+                    "lineRange": "40, 52",
+                },
+            ],
+        )
+        self.assertEqual(by_id["DEC-FIX-ONE"]["fileRelations"], [])
+
     def test_rows_share_one_key_set_per_table(self) -> None:
         rows = adapted()["rows"]
         self.assertEqual(rows["schema"], ROWS_SCHEMA)
@@ -132,7 +168,7 @@ class AdapterContractTest(unittest.TestCase):
 
     def test_relations_table_is_one_denormalized_row_per_declaration(self) -> None:
         rows = adapted()["rows"]["relations"]
-        self.assertEqual(len(rows), 3)  # resolved + dangling + File
+        self.assertEqual(len(rows), 4)  # resolved + dangling + two File
         resolved = next(r for r in rows if r["TARGET"] == "DEC-FIX-ONE")
         self.assertEqual(resolved["SOURCE_TYPE"], "MECHANISM")
         self.assertEqual(resolved["ROLE"], "Governed_By")
@@ -143,8 +179,22 @@ class AdapterContractTest(unittest.TestCase):
         dangling = next(r for r in rows if r["TARGET"] == "DEC-FIX-GONE")
         self.assertFalse(dangling["RESOLVED"])
         self.assertIsNone(dangling["TARGET_TYPE"])
-        file_row = next(r for r in rows if r["TYPE"] == "File")
-        self.assertEqual(file_row["TARGET"], "docs/sdoc/board/server.py")
+        file_rows = [r for r in rows if r["TYPE"] == "File"]
+        self.assertEqual(
+            [r["TARGET"] for r in file_rows], ["docs/sdoc/board/server.py"] * 2
+        )
+        # The columns exist on EVERY row, not only where a File relation
+        # fills them: Perspective infers its schema from the row list, and a
+        # key that first appears late never becomes a column.
+        for row in rows:
+            self.assertIn("ELEMENT", row)
+            self.assertIn("ELEMENT_ID", row)
+            self.assertIn("LINE_RANGE", row)
+        self.assertIsNone(resolved["ELEMENT"])
+        item_row = next(r for r in file_rows if r["ELEMENT"] is not None)
+        self.assertEqual(item_row["ELEMENT"], "function")
+        self.assertEqual(item_row["ELEMENT_ID"], "build_server")
+        self.assertEqual(item_row["LINE_RANGE"], "40, 52")
 
     def test_counts_come_from_resolved_edges_only(self) -> None:
         rows = adapted()["rows"]["nodes"]

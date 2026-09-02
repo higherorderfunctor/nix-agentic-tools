@@ -64,7 +64,12 @@ from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from sdoc_model import Graph, SdocError, open_graph  # noqa: E402
+from sdoc_model import (  # noqa: E402
+    Graph,
+    SdocError,
+    carry_file_element_into_json,
+    open_graph,
+)
 
 from strictdoc.backend.sdoc.reader import SDReader  # noqa: E402
 
@@ -162,6 +167,11 @@ class Workspace:
         A read, so it reloads first if it has to.
         """
         from strictdoc.backend.json.json_generator import JSONGenerator
+
+        # An element-grained File relation exports as a whole-file one
+        # otherwise: the generator reads neither ELEMENT nor ID off a
+        # FileReference. Idempotent, so a second export does not re-wrap.
+        carry_file_element_into_json()
 
         state = self.current()
         destination = Path(output_dir).expanduser().resolve() / "json"

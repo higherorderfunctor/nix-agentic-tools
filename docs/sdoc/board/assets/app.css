@@ -678,6 +678,33 @@ html[data-status="error"] .status-dot {
   overflow-wrap: anywhere;
 }
 
+/* A File relation names a file, and sometimes one item inside it. The row
+ * reuses the relation row wholesale -- the kind sits where a role sits, the
+ * path where a target sits -- so the two lists read as one thing. What it
+ * does NOT reuse is the pointer: there is no node to select. */
+.file-list li {
+  cursor: default;
+}
+
+.file-sep {
+  color: var(--text-tertiary);
+}
+
+/* The qualified name is what an operator types back into an `ID:` field, so
+ * it is monospaced for the same reason a UID is: quotes, dots and colons in
+ * it have to be readable one character at a time. */
+.file-id {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.file-lines {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+}
+
 /* ---- plan view -------------------------------------------------------- */
 
 .plan-view {

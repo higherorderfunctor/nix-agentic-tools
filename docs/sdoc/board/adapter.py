@@ -21,6 +21,14 @@ Two payloads out of one pass:
 Every row of a table carries the same key set (absent fields are null):
 Perspective infers a column schema from the rows, and a key that appears
 only late in the list would otherwise never become a column.
+
+A File relation may name one ITEM in the file rather than the whole of it
+(`ELEMENT: function` with `ID: <qualified name>`, or a LINE_RANGE). Both
+payloads carry those slots, and both do it ADDITIVELY: `node.files` stays
+the sorted list of plain paths every existing consumer reads, and the
+element-grained view arrives beside it as `node.fileRelations`. That is why
+neither schema string moves here -- a reader written against sdoc-board/2
+keeps working unchanged, and one that knows about items reads the new key.
 """
 
 from __future__ import annotations
@@ -122,15 +130,15 @@ def adapt(index: dict, paths: dict, grammar: dict, project: dict) -> dict:
     relation_rows: list[dict] = []
     inbound: Counter = Counter()
     for record in records:
-        files: list[str] = []
+        file_relations: list[dict] = []
         for relation in record.pop("relations"):
             rel_type = relation.get("TYPE")
             value = relation.get("VALUE")
             role = relation.get("ROLE")
             if rel_type == "File":
-                files.append(value)
+                file_relations.append(_file_relation(relation, value))
                 relation_rows.append(
-                    _relation_row(record, "File", None, value, None)
+                    _relation_row(record, "File", None, value, None, relation)
                 )
                 continue
             if rel_type not in ("Parent", "Child"):
@@ -146,7 +154,7 @@ def adapt(index: dict, paths: dict, grammar: dict, project: dict) -> dict:
                     }
                 )
                 relation_rows.append(
-                    _relation_row(record, rel_type, role, value, None)
+                    _relation_row(record, rel_type, role, value, None, relation)
                 )
                 continue
             inbound[value] += 1
@@ -163,9 +171,15 @@ def adapt(index: dict, paths: dict, grammar: dict, project: dict) -> dict:
                 }
             )
             relation_rows.append(
-                _relation_row(record, rel_type, role, value, target)
+                _relation_row(record, rel_type, role, value, target, relation)
             )
-        record["files"] = sorted(files)
+        record["fileRelations"] = sorted(
+            file_relations, key=lambda f: (f["path"] or "", f["id"] or "", f["element"] or "")
+        )
+        # Kept as the sorted DISTINCT paths rather than one entry per
+        # relation: two relations naming two items of one file are one file,
+        # and FILE_COUNT has always meant files.
+        record["files"] = sorted({f["path"] for f in record["fileRelations"]})
 
     edges.sort(key=lambda e: (e["source"], e["target"], e["type"], e["role"] or "", e["id"]))
     outbound = Counter(edge["source"] for edge in edges)
@@ -220,7 +234,20 @@ def _dir_of(path: str | None) -> str | None:
     return head or "."
 
 
-def _relation_row(source: dict, rel_type: str, role, value, target: dict | None) -> dict:
+def _file_relation(relation: dict, path: str | None) -> dict:
+    """One File relation as the card draws it: the file, and the item in it
+    when the relation names one."""
+    return {
+        "path": path,
+        "element": relation.get("ELEMENT"),
+        "id": relation.get("ID"),
+        "lineRange": relation.get("LINE_RANGE"),
+    }
+
+
+def _relation_row(
+    source: dict, rel_type: str, role, value, target: dict | None, relation: dict
+) -> dict:
     row = {
         "SOURCE": source["id"],
         "SOURCE_TYPE": source["type"],
@@ -230,6 +257,14 @@ def _relation_row(source: dict, rel_type: str, role, value, target: dict | None)
         "ROLE": role,
         "TARGET": value,
         "RESOLVED": target is not None or rel_type == "File",
+        # In the BASE dict, not added only where a File relation carries
+        # them: Perspective infers its columns from the row list, so a key
+        # that first appears on some later row never becomes a column at
+        # all. A corpus with no element-grained relation still gets the
+        # columns, all null.
+        "ELEMENT": relation.get("ELEMENT"),
+        "ELEMENT_ID": relation.get("ID"),
+        "LINE_RANGE": relation.get("LINE_RANGE"),
     }
     if target is not None:
         state = target["state"] or {}

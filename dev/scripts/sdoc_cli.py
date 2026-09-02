@@ -52,14 +52,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sdoc_model import (  # noqa: E402
+    FILE_ELEMENTS,
     GUARDED_FIELDS,
     GUARDED_OWNERS,
+    RelationSpec,
     SdocError,
     field_value,
     validate_guarded,
+    file_entry_of,
     file_path_of,
     normalize_file_value,
     open_graph,
+    relation_role,
     roles_of,
 )
 
@@ -361,6 +365,36 @@ def build_parser(graph, verb: str | None, tag: str | None) -> argparse.ArgumentP
             required=True,
             help="A node UID, or a repository-relative path when --role File",
         )
+        # Element-grained File relations. The three slots are strictdoc's,
+        # not the .sgra grammar's -- a File relation is declared there by
+        # TYPE alone -- so the vocabulary comes from sdoc_model, which
+        # derives it from strictdoc rather than restating it.
+        relation_parser.add_argument(
+            "--element",
+            choices=FILE_ELEMENTS,
+            help=(
+                "With --role File: the relation names an ITEM in the file, not the "
+                "whole of it. Needs --id. The item's KIND (module, option, binding) "
+                "is not spelled here -- it reaches a reader through the item's "
+                "description"
+            ),
+        )
+        relation_parser.add_argument(
+            "--id",
+            dest="element_id",
+            help=(
+                "With --element: which item, by its qualified name as the reader "
+                'names it (a quoted Nix attribute keeps its quotes: tasks."build:all")'
+            ),
+        )
+        relation_parser.add_argument(
+            "--line-range",
+            metavar="BEGIN-END",
+            help=(
+                "With --role File: the lines the relation names. Mutually exclusive "
+                "with --element/--id -- strictdoc's writer emits one or the other"
+            ),
+        )
 
     move_parser = writing("move", "Move a node's file")
     move_parser.add_argument("uid")
@@ -395,11 +429,11 @@ def collect_fields(args, element) -> dict[str, str]:
     return values
 
 
-def split_relate(spec: str) -> tuple[str, str]:
+def split_relate(spec: str) -> RelationSpec:
     role, separator, target = spec.partition("=")
     if not separator:
         raise SdocError(f"--relate wants ROLE=TARGET, got {spec!r}")
-    return ("" if role == "File" else role), target
+    return RelationSpec(relation_role(role), target)
 
 
 def target_path(raw: str, uid: str, root: Path) -> Path:
@@ -453,16 +487,46 @@ def do_set(graph, args, root: Path) -> int:
     return finish(graph, args, root)
 
 
-def do_relate(graph, args, root: Path) -> int:
-    role = "" if args.role == "File" else args.role
+def relation_from_args(args) -> RelationSpec:
+    """The relation a relate/unrelate command line names.
+
+    The File slots are refused OUTSIDE a File relation here rather than only
+    in the model, so the message names the flag the operator typed.
+    """
+    role = relation_role(args.role)
+    named = (args.element, args.element_id, args.line_range)
+    if role and any(named):
+        raise SdocError(
+            f"--element, --id and --line-range name part of a FILE; "
+            f"--role {args.role} relates this node to another node"
+        )
     target = normalize_file_value(args.target) if role == "" else args.target
-    graph.add_relation(args.uid, role, target)
+    return RelationSpec(role, target, *named)
+
+
+def do_relate(graph, args, root: Path) -> int:
+    spec = relation_from_args(args)
+    graph.add_relation(
+        args.uid,
+        spec.role,
+        spec.target,
+        file_element=spec.element,
+        file_id=spec.id,
+        line_range=spec.line_range,
+    )
     return finish(graph, args, root)
 
 
 def do_unrelate(graph, args, root: Path) -> int:
-    role = "" if args.role == "File" else args.role
-    graph.remove_relation(args.uid, role, args.target)
+    spec = relation_from_args(args)
+    graph.remove_relation(
+        args.uid,
+        spec.role,
+        spec.target,
+        file_element=spec.element,
+        file_id=spec.id,
+        line_range=spec.line_range,
+    )
     return finish(graph, args, root)
 
 
@@ -495,6 +559,19 @@ def do_delete(graph, args, root: Path) -> int:
     return finish(graph, args, root)
 
 
+def describe_file_relation(relation) -> str:
+    """`path`, or `path > element id` when the relation names one item in
+    the file. The same shape the board's card draws, so what `show` prints
+    and what the app renders read alike."""
+    entry = file_entry_of(relation)
+    text = file_path_of(relation)
+    if entry["element"] or entry["id"]:
+        text += f"  > {entry['element'] or '?'} {entry['id'] or '?'}"
+    if entry["line_range"]:
+        text += f"  [{entry['line_range']}]"
+    return text
+
+
 def do_show(graph, args, _root: Path) -> int:
     node = graph.node(args.uid)
     print(graph.render(node.get_document()), end="")
@@ -503,7 +580,7 @@ def do_show(graph, args, _root: Path) -> int:
         for relation in node.relations:
             uid = getattr(relation, "ref_uid", None)
             if uid is None:
-                print(f"  {'File':<13} {file_path_of(relation)}")
+                print(f"  {'File':<13} {describe_file_relation(relation)}")
                 continue
             target = graph.index.get_node_by_uid_weak(uid)
             title = target.reserved_title if target is not None else "(UNRESOLVED)"

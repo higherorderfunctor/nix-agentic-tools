@@ -31,20 +31,13 @@ from scribe_client import ClientError, NoDaemon, call, call_for_root  # noqa: E4
 from scribe_rpc import build_server  # noqa: E402
 from scribe_workspace import Workspace  # noqa: E402
 
+# One definition of an exportable corpus copy, shared with the workspace
+# suite. See CORPUS_PATHS there for what it must carry and why -- in
+# particular, this file is the only place a corpus that omits dev/scripts
+# fails, because it is the only one that shells out to `strictdoc export`.
+from test_scribe_workspace import corpus  # noqa: E402
+
 PASSED: list[str] = []
-
-
-def corpus(destination: Path) -> Path:
-    repo = Path(__file__).resolve().parents[2]
-    listed = subprocess.run(
-        ["git", "ls-files", "-z", "*.sdoc", "*.sgra", "strictdoc_config.py"],
-        cwd=repo, capture_output=True, text=True, check=True,
-    ).stdout.split("\0")
-    for name in filter(None, listed):
-        target = destination / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(repo / name, target)
-    return destination
 
 
 @contextmanager
@@ -146,8 +139,41 @@ def test_root_assertion(root: Path, runtime: Path) -> None:
         raise AssertionError("the client accepted another workspace's answer")
 
 
-@contract("the daemon's export is byte-identical to strictdoc's own")
+def _without_item_slots(index: dict) -> tuple[dict, int]:
+    """The export as strictdoc's own CLI would write it, and how many item
+    slots were dropped to get there."""
+    dropped = 0
+    for document in index.get("DOCUMENTS", []):
+        for node in document.get("NODES", []):
+            for relation in node.get("RELATIONS", []) or []:
+                if relation.get("TYPE") != "File":
+                    continue
+                for slot in ("ELEMENT", "ID"):
+                    if relation.pop(slot, None) is not None:
+                        dropped += 1
+    return index, dropped
+
+
+@contract("the daemon's export is strictdoc's own, plus the File item slots")
 def test_export_matches(root: Path, runtime: Path) -> None:
+    """It used to be byte-identical, and it is still identical everywhere the
+    two can agree.
+
+    The one deliberate difference is ELEMENT and ID on a File relation:
+    strictdoc's JSON generator reads neither off a FileReference, so an
+    element-grained relation would export as a whole-file one and the board
+    would draw a coarser graph than the corpus declares. sdoc_model wraps
+    that one method for exports taken through this repo -- see
+    carry_file_element_into_json -- and `strictdoc export` run BY HAND still
+    drops the slots, which is the accepted cost of leaving the packaged
+    strictdoc untouched.
+
+    So the comparison normalizes the difference away and then asserts the
+    difference was real: strip the slots and the two exports must be equal,
+    and a corpus that carries any must have had some to strip.
+    """
+    import json
+
     with served(root, runtime) as (_ws, path):
         mine = root / "out-daemon"
         result = call(path, "workspace.export", {"outputDir": str(mine)})
@@ -163,7 +189,18 @@ def test_export_matches(root: Path, runtime: Path) -> None:
     )
     a = (mine / "json" / "index.json").read_bytes()
     b = (theirs / "json" / "index.json").read_bytes()
-    assert a == b, f"exports differ: {len(a)} vs {len(b)} bytes"
+    if a == b:
+        # Nothing in this corpus names an item, so there is nothing to
+        # normalize and byte equality is the whole contract.
+        return
+    normalized, dropped = _without_item_slots(json.loads(a))
+    assert dropped, (
+        f"exports differ by something other than the File item slots: "
+        f"{len(a)} vs {len(b)} bytes"
+    )
+    assert normalized == json.loads(b), (
+        f"exports differ beyond the {dropped} File item slot(s) the daemon adds"
+    )
 
 
 CONTRACTS = [
