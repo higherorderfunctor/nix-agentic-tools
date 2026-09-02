@@ -1,10 +1,18 @@
-// The Grammars view: one uniform card per grammar element on a grid, the
-// full declaration in the right-hand pane on selection -- fields with kinds,
-// choice words and required flags, and the relation roles the element may
-// write. Data is the snapshot's `grammar` key (parsed from grammar.sgra;
-// the JSON export types every field as String, which is why the .sgra is
-// the source here).
-import { colorOf } from "/assets/card.js";
+// The Grammars view: one uniform card per grammar element, grouped by the
+// hand-authored layout in grammar-groups.json -- a section is a top-level
+// heading over a rule, a group a subtitle over centered cards or the axis
+// grid -- with the full declaration in the right-hand pane on selection:
+// fields with kinds, choice words and required flags, and the relation
+// roles the element may write. Data is the snapshot's `grammar` key (parsed
+// from grammar.sgra; the JSON export types every field as String, which is
+// why the .sgra is the source here).
+//
+// The layout is hand-authored, which REQ-BOARD-GRAMMAR-DRIVEN otherwise
+// forbids, so it is guarded twice: dev/scripts/grammar-groups-check.py in
+// nix flake check, and checkGroups() here on every render. A finding raises
+// the red banner at the top of the tab and never hides a type -- whatever
+// the layout leaves out lands in Unsorted.
+import { colorOf, htmlNode } from "/assets/card.js";
 
 const elements = {
   grid: document.querySelector("#grammar-grid"),
@@ -12,18 +20,165 @@ const elements = {
   inspectorContent: document.querySelector("#grammar-inspector-content"),
 };
 
+const REST = "rest";
+const WIDGETS = new Set(["cards", "grid"]);
+
 let snapshot;
 let selected = null;
 
-function htmlNode(name, className, text) {
-  const node = document.createElement(name);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
 function nodeCount(tag) {
   return snapshot.stats.types[tag] ?? 0;
+}
+
+function isObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function asList(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function cellKey(row, column) {
+  return `${row} ${column}`;
+}
+
+function sectionLabel(section, index) {
+  return section?.title != null
+    ? String(section.title)
+    : `section ${index + 1}`;
+}
+
+function groupLabel(section, group, sectionIndex, groupIndex) {
+  const own =
+    group?.title != null ? String(group.title) : `group ${groupIndex + 1}`;
+  return `${sectionLabel(section, sectionIndex)} / ${own}`;
+}
+
+// Every TAG the layout places, so the check and the renderer walk one
+// definition of "placed". A grid entry whose position is not a [row, column]
+// of the axes is still placed (the position is what is invalid), and the
+// renderer draws it beside the matrix rather than losing it.
+function* placements(layout) {
+  for (const section of asList(layout?.sections)) {
+    for (const group of asList(section?.groups)) {
+      if (!isObject(group)) continue;
+      if (group.widget === "grid" && isObject(group.cells)) {
+        yield* Object.keys(group.cells);
+      } else if (group.widget === "cards" && Array.isArray(group.types)) {
+        yield* group.types;
+      }
+    }
+  }
+}
+
+function gridCells(group) {
+  const rows = asList(group.axes?.rows).map(String);
+  const columns = asList(group.axes?.columns).map(String);
+  const at = new Map();
+  const misplaced = [];
+  const cells = isObject(group.cells) ? group.cells : {};
+  for (const [tag, position] of Object.entries(cells)) {
+    const placed =
+      Array.isArray(position) &&
+      position.length === 2 &&
+      rows.includes(String(position[0])) &&
+      columns.includes(String(position[1]));
+    if (!placed) {
+      misplaced.push(tag);
+      continue;
+    }
+    const key = cellKey(position[0], position[1]);
+    at.set(key, [...(at.get(key) ?? []), tag]);
+  }
+  return { at, columns, misplaced, rows };
+}
+
+// The runtime guard. Pure: the layout object and the grammar's TAG names in,
+// the findings out -- missing (in the grammar, placed nowhere, and no "rest"
+// group to catch it), stale (placed, not in the grammar), duplicate (placed
+// twice), unfilled (an axis pair no cell fills) and invalid (a shape the
+// page would otherwise have to guess at). Every list is empty on a clean
+// layout. Mirrors dev/scripts/grammar-groups-check.py; keep them in step.
+export function checkGroups(layout, typeNames) {
+  const findings = {
+    duplicate: [],
+    invalid: [],
+    missing: [],
+    stale: [],
+    unfilled: [],
+  };
+  if (!isObject(layout) || !Array.isArray(layout.sections)) {
+    findings.invalid.push("the layout needs a sections list");
+    findings.missing.push(...typeNames);
+    return findings;
+  }
+  let rests = 0;
+  layout.sections.forEach((section, s) => {
+    if (!isObject(section) || !Array.isArray(section.groups)) {
+      findings.invalid.push(`${sectionLabel(section, s)}: needs a groups list`);
+      return;
+    }
+    section.groups.forEach((group, g) => {
+      const label = groupLabel(section, group, s, g);
+      if (!isObject(group) || !WIDGETS.has(group.widget)) {
+        findings.invalid.push(`${label}: widget must be "cards" or "grid"`);
+        return;
+      }
+      if (group.widget === "grid") {
+        const { at, columns, misplaced, rows } = gridCells(group);
+        if (rows.length !== 2 || columns.length !== 2) {
+          findings.invalid.push(`${label}: axes need two rows and two columns`);
+        }
+        if (!isObject(group.cells)) {
+          findings.invalid.push(
+            `${label}: cells must map TAG to [row, column]`,
+          );
+        }
+        for (const tag of misplaced) {
+          const position = JSON.stringify(group.cells[tag]);
+          findings.invalid.push(
+            `${label}: ${tag} sits at ${position}, not a [row, column] of the axes`,
+          );
+        }
+        for (const row of rows) {
+          for (const column of columns) {
+            const tags = at.get(cellKey(row, column)) ?? [];
+            if (!tags.length) {
+              findings.unfilled.push(`${label}: ${row} × ${column}`);
+            } else if (tags.length > 1) {
+              findings.invalid.push(
+                `${label}: ${row} × ${column} holds ${tags.join(", ")}`,
+              );
+            }
+          }
+        }
+      } else if (group.types === REST) {
+        rests += 1;
+        if (rests > 1)
+          findings.invalid.push(`${label}: "rest" may appear once`);
+      } else if (!Array.isArray(group.types)) {
+        findings.invalid.push(
+          `${label}: types must be a list of TAGs or "rest"`,
+        );
+      }
+    });
+  });
+  const counts = new Map();
+  for (const tag of placements(layout)) {
+    counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  }
+  const known = new Set(typeNames);
+  for (const [tag, count] of counts) {
+    if (count > 1) findings.duplicate.push(tag);
+    if (!known.has(tag)) findings.stale.push(tag);
+    if (typeof tag === "string" && tag.endsWith("-")) {
+      findings.invalid.push(`${tag}: looks like a UID prefix, not a TAG`);
+    }
+  }
+  if (!rests) {
+    findings.missing.push(...typeNames.filter((tag) => !counts.has(tag)));
+  }
+  return findings;
 }
 
 function card(tag, element) {
@@ -52,6 +207,134 @@ function card(tag, element) {
   item.append(head, facts);
   item.addEventListener("click", () => selectGrammar(tag));
   return item;
+}
+
+// A placed name the grammar does not declare: drawn where the layout put it
+// so the stale entry is visible in place, but not a .grammar-card, so it
+// cannot be selected.
+function ghost(tag) {
+  const item = htmlNode("div", "grammar-ghost");
+  item.dataset.tag = tag;
+  item.append(
+    htmlNode("strong", null, String(tag)),
+    htmlNode("span", null, "not in the grammar"),
+  );
+  return item;
+}
+
+function typeCard(tag) {
+  const element = snapshot.grammar[tag];
+  return element ? card(tag, element) : ghost(tag);
+}
+
+function cardRow(tags, emptyText) {
+  if (!tags.length) return htmlNode("p", "grammar-empty", emptyText);
+  const row = htmlNode("div", "grammar-cards");
+  for (const tag of tags) row.append(typeCard(tag));
+  return row;
+}
+
+function matrix(group) {
+  const { at, columns, misplaced, rows } = gridCells(group);
+  const widget = htmlNode("div", "grammar-matrix");
+  widget.style.setProperty("--columns", String(columns.length));
+  widget.append(htmlNode("div", "grammar-axis-corner"));
+  for (const column of columns) {
+    widget.append(htmlNode("div", "grammar-axis grammar-axis-column", column));
+  }
+  for (const row of rows) {
+    widget.append(htmlNode("div", "grammar-axis grammar-axis-row", row));
+    for (const column of columns) {
+      const cell = htmlNode("div", "grammar-cell");
+      cell.dataset.row = row;
+      cell.dataset.column = column;
+      const tags = at.get(cellKey(row, column)) ?? [];
+      if (!tags.length) {
+        cell.classList.add("is-empty");
+        cell.append(htmlNode("span", null, "unfilled"));
+      }
+      for (const tag of tags) cell.append(typeCard(tag));
+      widget.append(cell);
+    }
+  }
+  const parts = [widget];
+  if (misplaced.length) {
+    parts.push(
+      htmlNode("p", "grammar-note", "placed outside the axes:"),
+      cardRow(misplaced),
+    );
+  }
+  return parts;
+}
+
+function renderGroup(group, context) {
+  const wrapper = htmlNode("section", "grammar-group");
+  if (group?.title != null) {
+    wrapper.append(htmlNode("h2", "grammar-group-title", String(group.title)));
+  }
+  if (!isObject(group) || !WIDGETS.has(group.widget)) {
+    wrapper.append(
+      htmlNode("p", "grammar-note", 'widget must be "cards" or "grid"'),
+    );
+  } else if (group.widget === "grid") {
+    wrapper.append(...matrix(group));
+  } else if (group.types === REST) {
+    wrapper.append(
+      context.restUsed
+        ? cardRow([], '"rest" was already drawn above')
+        : cardRow(context.rest, "nothing unsorted · every type is placed"),
+    );
+    context.restUsed = true;
+  } else {
+    wrapper.append(cardRow(asList(group.types), "no types listed"));
+  }
+  return wrapper;
+}
+
+function renderSection(section, index, context) {
+  const wrapper = htmlNode("section", "grammar-section");
+  wrapper.append(
+    htmlNode("h1", "grammar-section-title", sectionLabel(section, index)),
+    htmlNode("hr", "grammar-rule"),
+  );
+  for (const group of asList(section?.groups)) {
+    wrapper.append(renderGroup(group, context));
+  }
+  return wrapper;
+}
+
+function banner(findings) {
+  const box = htmlNode("div", "grammar-banner");
+  box.id = "grammar-banner";
+  box.setAttribute("role", "alert");
+  const lines = [];
+  if (findings.missing.length) {
+    lines.push(
+      `not placed by the layout, drawn under Unsorted: ${findings.missing.join(", ")}`,
+    );
+  }
+  if (findings.stale.length) {
+    lines.push(`stale · not in the grammar: ${findings.stale.join(", ")}`);
+  }
+  if (findings.duplicate.length) {
+    lines.push(`placed more than once: ${findings.duplicate.join(", ")}`);
+  }
+  for (const cell of findings.unfilled) lines.push(`unfilled cell: ${cell}`);
+  for (const reason of findings.invalid) lines.push(`invalid: ${reason}`);
+  box.hidden = !lines.length;
+  if (lines.length) {
+    const list = htmlNode("ul");
+    for (const line of lines) list.append(htmlNode("li", null, line));
+    box.append(
+      htmlNode(
+        "strong",
+        null,
+        "grammar-groups.json does not match the grammar",
+      ),
+      list,
+    );
+  }
+  return box;
 }
 
 function fieldItem(field) {
@@ -137,12 +420,56 @@ export function selectGrammar(tag) {
   renderInspector(tag);
 }
 
-export function renderGrammars(nextSnapshot) {
+// `groups` is app.js's cached fetch of grammar-groups.json, {layout, error}.
+// An unreadable layout is a finding, not an exception: the tab still draws
+// every type, all of them under a synthetic Unsorted.
+export function renderGrammars(nextSnapshot, groups = {}) {
   snapshot = nextSnapshot;
-  const fragments = document.createDocumentFragment();
-  for (const tag of Object.keys(snapshot.grammar).sort()) {
-    fragments.append(card(tag, snapshot.grammar[tag]));
+  const types = Object.keys(snapshot.grammar).sort();
+  const layout = groups.layout ?? null;
+  const findings = groups.error
+    ? {
+        duplicate: [],
+        invalid: [groups.error],
+        missing: types,
+        stale: [],
+        unfilled: [],
+      }
+    : checkGroups(layout, types);
+  window.boardGrammarGroups.layout = layout;
+  window.boardGrammarGroups.types = types;
+
+  const placed = new Set(placements(layout));
+  const context = {
+    rest: types.filter((tag) => !placed.has(tag)),
+    restUsed: false,
+  };
+  const sections = Array.isArray(layout?.sections) ? layout.sections : [];
+  const outline = sections.map((section, index) =>
+    renderSection(section, index, context),
+  );
+  if (findings.missing.length) {
+    const extra = { title: null, types: findings.missing, widget: "cards" };
+    const unsorted = sections.findIndex(
+      (section) => section?.title === "Unsorted",
+    );
+    if (unsorted >= 0) {
+      outline[unsorted].append(renderGroup(extra, context));
+    } else {
+      outline.push(
+        renderSection(
+          { groups: [extra], title: "Unsorted" },
+          outline.length,
+          context,
+        ),
+      );
+    }
   }
-  elements.grid.replaceChildren(fragments);
+  elements.grid.replaceChildren(banner(findings), ...outline);
   if (selected) selectGrammar(selected);
 }
+
+// For a verifier or the operator's console: the guard itself, plus what the
+// last render ran it over, so a mutated layout can be checked in-page
+// without editing a file.
+window.boardGrammarGroups = { check: checkGroups, layout: null, types: [] };

@@ -41,6 +41,7 @@ from source import ClientError, DaemonSource, NoDaemon  # noqa: E402
 STATIC_ROUTES = {
     "/": HERE / "index.html",
     "/index.html": HERE / "index.html",
+    "/grammar-groups.json": HERE / "grammar-groups.json",
     "/assets/app.css": HERE / "assets" / "app.css",
     "/assets/app.js": HERE / "assets" / "app.js",
     "/assets/board.js": HERE / "assets" / "board.js",

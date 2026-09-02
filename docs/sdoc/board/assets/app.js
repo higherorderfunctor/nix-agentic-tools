@@ -31,7 +31,7 @@ const switches = {
   perspective: document.querySelector("#switch-perspective"),
 };
 
-const cache = { graph: null, rows: null };
+const cache = { graph: null, groups: null, rows: null };
 const loaded = { board: false, perspective: false };
 
 function activeView() {
@@ -62,6 +62,26 @@ async function fetchJson(path) {
     throw new Error(payload.detail || `${path} failed: ${response.status}`);
   }
   return payload;
+}
+
+// The Grammars tab's hand-authored layout. Not fetchJson(): a 404 here is
+// text/plain, and response.json() would surface as "Unexpected token" in
+// #error. The tab owns the failure instead -- it renders every type and
+// raises its banner with the real reason -- so nothing is thrown.
+async function fetchGrammarGroups() {
+  const path = "/grammar-groups.json";
+  try {
+    const response = await fetch(path, { cache: "no-store" });
+    if (!response.ok) {
+      return {
+        error: `${path} not served (HTTP ${response.status}); restart the board server if the route was just added`,
+        layout: null,
+      };
+    }
+    return { error: null, layout: await response.json() };
+  } catch (fetchError) {
+    return { error: `${path} invalid: ${fetchError.message}`, layout: null };
+  }
 }
 
 function renderStats(payload) {
@@ -98,8 +118,9 @@ async function showGrammars() {
   if (payload.schema !== "sdoc-board/2") {
     throw new Error(`unsupported snapshot schema: ${payload.schema}`);
   }
+  if (!cache.groups) cache.groups = await fetchGrammarGroups();
   renderStats(payload);
-  renderGrammars(payload);
+  renderGrammars(payload, cache.groups);
 }
 
 async function showPlan() {
@@ -165,6 +186,7 @@ async function activate(view, { push = false } = {}) {
 
 function refresh() {
   cache.graph = null;
+  cache.groups = null;
   cache.rows = null;
   activate(activeView());
 }

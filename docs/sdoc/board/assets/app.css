@@ -857,10 +857,167 @@ html[data-status="error"] .status-dot {
   text-transform: uppercase;
 }
 
-.grammar-grid {
+/* The outline grammar-groups.json draws: a section is a top-level heading
+ * over a rule, a group a subtitle over centered cards or the axis grid. The
+ * banner is the runtime guard's voice and sits first when it has findings. */
+.grammar-outline {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: calc(30 * var(--u));
+}
+
+.grammar-banner {
+  padding: calc(12 * var(--u)) calc(16 * var(--u));
+  border: 1px solid var(--accent-danger);
+  border-left-width: calc(4 * var(--u));
+  border-radius: 8px;
+  background: color-mix(
+    in srgb,
+    var(--accent-danger),
+    var(--surface-overlay) 82%
+  );
+  color: #ffd4dd;
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+}
+
+.grammar-banner strong {
+  display: block;
+  margin-bottom: calc(6 * var(--u));
+  color: var(--accent-danger);
+  font-size: var(--fs-lead);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.grammar-banner ul {
+  margin: 0;
+  padding-left: calc(18 * var(--u));
+}
+
+.grammar-banner li + li {
+  margin-top: calc(3 * var(--u));
+}
+
+.grammar-section-title {
+  margin: 0 0 calc(8 * var(--u));
+  color: var(--text-primary);
+  font-size: var(--fs-display);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.grammar-rule {
+  height: 0;
+  margin: 0 0 calc(18 * var(--u));
+  border: 0;
+  border-top: 1px solid var(--border-default);
+}
+
+.grammar-group + .grammar-group {
+  margin-top: calc(24 * var(--u));
+}
+
+.grammar-group-title {
+  margin: 0 0 calc(12 * var(--u));
+  color: var(--text-secondary);
+  font-size: var(--fs-title);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.grammar-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 12px;
+}
+
+.grammar-cards > .grammar-card,
+.grammar-cards > .grammar-ghost {
+  flex: 0 1 260px;
+  min-width: 200px;
+}
+
+/* The axis grid: one label column, one label row, a card per cell. Tracks
+ * shrink to 200px and the shell scrolls below that -- the narrow-screen
+ * rules never adapted this view, so the matrix is not asked to either. */
+.grammar-matrix {
+  display: grid;
+  grid-template-columns: auto repeat(var(--columns, 2), minmax(200px, 260px));
+  justify-content: center;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.grammar-axis {
+  display: flex;
+  align-items: center;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.grammar-axis-column {
+  justify-content: center;
+}
+
+.grammar-axis-row {
+  justify-content: flex-end;
+  padding-right: calc(4 * var(--u));
+}
+
+.grammar-cell {
+  display: grid;
+  gap: 12px;
+}
+
+.grammar-cell > .grammar-card {
+  width: 100%;
+}
+
+.grammar-cell.is-empty {
+  place-items: center;
+  min-height: calc(76 * var(--u));
+  border: 1px dashed var(--accent-danger);
+  border-radius: 9px;
+  color: var(--accent-danger);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.grammar-ghost {
+  display: grid;
+  gap: calc(4 * var(--u));
+  padding: calc(14 * var(--u)) calc(14 * var(--u)) calc(12 * var(--u));
+  border: 1px dashed var(--accent-danger);
+  border-radius: 9px;
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+}
+
+.grammar-ghost strong {
+  color: var(--accent-danger);
+  font-size: var(--fs-body);
+  letter-spacing: 0.08em;
+}
+
+.grammar-empty,
+.grammar-note {
+  margin: 0;
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  text-align: center;
+}
+
+.grammar-note {
+  margin-bottom: calc(8 * var(--u));
+  color: var(--accent-danger);
 }
 
 .grammar-card {
@@ -1182,7 +1339,8 @@ perspective-viewer {
     display: none;
   }
 
-  .board-view {
+  .board-view,
+  .grammars-view {
     grid-template-columns: 1fr;
   }
 

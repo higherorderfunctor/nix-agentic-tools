@@ -1,0 +1,39 @@
+{
+  "$comment": "Hand-authored grouping of the grammar's node types for the Grammars tab. Guarded by dev/scripts/grammar-groups-check.py in nix flake check and by the page's runtime check. Type names are grammar TAGs (REQUIREMENT), never UID prefixes. A group's widget is \"cards\" (types: a list of TAGs, or the string \"rest\" for every TAG not placed elsewhere, at most once) or \"grid\" (axes: two lists of two words, cells: one TAG per [row, column] pair). The Definition axis words are DEC-NODE-FAMILIES' own: normative/descriptive, universal/particular.",
+  "sections": [
+    {
+      "title": "Spec",
+      "groups": [
+        {
+          "title": "Definition",
+          "widget": "grid",
+          "axes": {
+            "rows": ["normative", "descriptive"],
+            "columns": ["universal", "particular"]
+          },
+          "cells": {
+            "REQUIREMENT": ["normative", "universal"],
+            "DECISION": ["normative", "particular"],
+            "MECHANISM": ["descriptive", "universal"],
+            "EVIDENCE": ["descriptive", "particular"]
+          }
+        },
+        {
+          "title": "Coverage",
+          "widget": "cards",
+          "types": ["USE_CASE"]
+        }
+      ]
+    },
+    {
+      "title": "Unsorted",
+      "groups": [
+        {
+          "title": null,
+          "widget": "cards",
+          "types": "rest"
+        }
+      ]
+    }
+  ]
+}
