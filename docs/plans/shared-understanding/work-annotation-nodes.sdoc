@@ -10,20 +10,26 @@ TITLE: An annotation class: question, contradiction, comment, gap, known issue
 DEPTH: sketch
 AUTHORED_BY: llm
 STATEMENT: >>>
-An annotation is a node, in its own grammar file (assuming multiple
-grammars are allowed -- see WORK-GRAMMAR-FILE-SPLIT, itself unverified),
-that relates to one or more nodes in any grammar in the graph to annotate
-them. Chainable for threads. Kinds named so far: gaps, review comments,
-the operator's open questions about something, conflicts between two nodes
-that the LLM finds, and possibly the dirty-edges system. Last session's
-list -- question, contradiction, comment, gap, known issue -- was the
-operator's first pass at the same set. The class is open-ended, not this
-enumeration. This supersedes the earlier sidecar-for-edge-fields design.
+"Annotations" names a grammar FILE, not a single node type: the annotations
+side of the three-way split in WORK-GRAMMAR-FILE-SPLIT (assuming multiple
+grammars are allowed -- that item's spike is still unrun). The file holds
+one or more node types that relate to one or more nodes in any grammar in
+the graph to annotate them. Chainable for threads. Kinds named so far:
+gaps, review comments, the operator's open questions about something,
+conflicts between two nodes that the LLM finds, and possibly the
+dirty-edges system. Last session's list -- question, contradiction,
+comment, gap, known issue -- was the operator's first pass at the same set.
+The class is open-ended, not this enumeration. This supersedes the earlier
+sidecar-for-edge-fields design.
 
-Open fork on shape: distinct node types when the annotation kinds carry
-different content, or one type with an annotation-kind field when the
-content is the same. The operator's stated preference (not a ruling):
-split when the semantics are very different.
+The existing COMMENTARY element would live in that file, but the operator
+is not settled on keeping it as ONE type: its use cases carry different
+semantics, and one type is hard to tell apart in the views. Their lean, not
+a ruling: one node type per distinct semantics, because that is how the
+board colours things today (the rule behind it is
+WORK-SPLIT-TYPE-ON-SEMANTIC-FIELD); open to a field or something else
+instead. The concrete want: a GAP must read loud and red in every view --
+"do not pass go".
 
 Special semantics are under consideration, none settled. "Not merged to
 main" was said under uncertainty. Alternatives the operator has since
@@ -31,10 +37,10 @@ named: a plan cannot be ready to execute while certain annotations (gaps)
 are attached to it; or a plan is blocked only at the point of the conflict
 until it is resolved, not as a whole.
 
-To reconcile at grooming, undecided here: the grammar already carries an
-empty COMMENTARY element (STANDING open/closed/withdrawn, CLOSES_ON, EDGE;
-DEC-COMMENTARY-IS-THE-FIFTH-FAMILY is open, nothing is one yet). Whether
-this annotation class extends, supersedes, or coexists with it is not ruled.
+To reconcile at grooming: COMMENTARY (STANDING open/closed/withdrawn,
+CLOSES_ON, EDGE; DEC-COMMENTARY-IS-THE-FIFTH-FAMILY is open, nothing is one
+yet) moves into the annotations file and either survives as one of its
+types or dissolves into them. Which of the two is undecided.
 <<<
 NOTES: >>>
 Verbatim on the open-ended class: "In the past I mentioned a class of nodes
@@ -79,6 +85,30 @@ beside a block at the point of conflict only. The annotation's shape is
 now fixed as a node in its own grammar file with relations to its targets;
 the earlier "a field suffices" wording is replaced by the explicit fork
 between distinct node types and one type with a kind field.
+
+Operator, 2026-09-01, verbatim: "annotations was meant to be the grammar
+split. commentary is hard to eyeball in our views between the different
+semantic meanings it may represent. i want to see GAP loud and red in our
+views. my lean is node type since that's how things are colored today, but
+i'd be open to field type or something. i was describing splitting the
+grammar file up though (as well as discussing new node types) all in one
+giant monologue of a prompt, so I get the confusion. annotations new
+grammar file, commentary lives there, but i'm not settled on liking
+commentary as different use cases have different semantics. actually i
+think i also said that session that if a single field changes the
+semantics of a node, we should consider the split simply to divide the
+semantic rules. and it doubles as the visual cue I wanted cuz it's based on
+the semantics (gap, red, bad, do not pass go)."
+
+Changed 2026-09-01, second pass: the STATEMENT no longer says an annotation
+is "a node, in its own grammar file" -- "annotations" is the grammar FILE,
+holding one or more node types. The open fork "distinct node types vs one
+type with a kind field" is restated with the operator's lean (one node type
+per distinct semantics, open to a field) and its reason (the board colours
+by type; a GAP must read red). The reconcile-with-COMMENTARY note now says
+COMMENTARY moves into the annotations file and either survives as one of
+its types or dissolves into them, replacing "extends, supersedes, or
+coexists".
 <<<
 RELATIONS:
 - TYPE: Parent

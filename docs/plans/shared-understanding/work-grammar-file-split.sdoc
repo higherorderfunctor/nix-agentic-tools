@@ -15,7 +15,10 @@ with cross-grammar relations. The operator's proposed divide, explicitly
 not settled: spec.sgra holds the definition family (MECHANISM, DECISION,
 EVIDENCE, REQUIREMENT) and probably coverage (USE_CASE); plan.sgra
 holds WORK, though they could hear an argument to merge it with spec;
-review/annotations.sgra holds the annotation class (WORK-ANNOTATION-NODES).
+review/annotations.sgra holds the annotation class (WORK-ANNOTATION-NODES):
+it is the home of the annotation node types and of the existing
+COMMENTARY element, which moves there and either survives as one of those
+types or dissolves into them (see WORK-ANNOTATION-NODES).
 
 The multi-grammar assumption is UNVERIFIED. The operator
 assumed strictdoc allows it because its online docs bake grammars
@@ -36,6 +39,10 @@ work (test coverage)."
 Operator, 2026-09-01, verbatim: "sounds like a spike is needed. i assumed
 yes as they bake grammars directly into sdocs in their online docs. that's
 why i assumed yes. but it is an assumption."
+
+Changed 2026-09-01: the annotations-file clause now names that file as the
+home of the annotation node types and of COMMENTARY, per the operator's
+clarification recorded on WORK-ANNOTATION-NODES.
 <<<
 RELATIONS:
 - TYPE: Parent

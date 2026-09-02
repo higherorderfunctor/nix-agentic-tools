@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: Split a node type when one field changes its semantics
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SPLIT-TYPE-ON-SEMANTIC-FIELD
+TITLE: Split a node type when one field changes its semantics
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A grammar design rule the operator stated: when a single field's value
+changes the semantic rules that apply to a node, consider splitting the
+type instead, so that each type carries one set of rules and no reader has
+to inspect a field to know which rules are in force.
+
+The split doubles as the visual cue. The board colours by node type, so
+semantics show without reading fields -- a GAP is red because it is a GAP,
+not because a kind field says so. "Gap, red, bad, do not pass go."
+
+Applies first to the annotation kinds (WORK-ANNOTATION-NODES): it is the
+reason the operator leans node-type over kind-field there. It also bears on
+DEPTH/STATUS-style ladders, where one field's value already selects which
+rules apply; whether any of those should split is not decided here.
+<<<
+NOTES: >>>
+Operator, 2026-09-01, verbatim: "actually i think i also said that session
+that if a single field changes the semantics of a node, we should consider
+the split simply to divide the semantic rules. and it doubles as the visual
+cue I wanted cuz it's based on the semantics (gap, red, bad, do not pass
+go)."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-GRAMMAR-ARCHITECTURE
+  ROLE: Assumes
