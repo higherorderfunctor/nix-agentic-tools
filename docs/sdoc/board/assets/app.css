@@ -41,12 +41,13 @@
   /* Type ramp. --fs-base is the ONE knob: every font-size outside Perspective
    * is a frozen multiple of it (the ratios are the pre-token ramp over its
    * 12px body, so --fs-9 is what used to be 9px and --fs-12 is the body) and
-   * type-coupled geometry is in em so it rides along. The default lands the
-   * smallest step (7/12, the Graph card's state badge) on exactly 12px; any
-   * plain px retunes it. Perspective's datagrid cells are NOT on this ramp:
+   * type-coupled geometry is in em so it rides along. 12px reproduces the
+   * pre-token app exactly; 16px is an interim bump while the operator decides
+   * between a plain bump and a 12px floor (max()) on the small steps.
+   * Perspective's datagrid cells are NOT on this ramp:
    * its shadow stylesheet scales them from the browser default it inherits,
    * which is why body and .perspective-view set no font-size. */
-  --fs-base: calc(12px * 12 / 7);
+  --fs-base: 16px;
   --fs-7: calc(var(--fs-base) * 7 / 12);
   --fs-7-5: calc(var(--fs-base) * 7.5 / 12);
   --fs-8: calc(var(--fs-base) * 8 / 12);
