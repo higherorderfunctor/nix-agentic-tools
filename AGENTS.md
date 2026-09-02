@@ -30,6 +30,12 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
     [`dev/fragments/ai-clis/copilot-config-delivery.md`](dev/fragments/ai-clis/copilot-config-delivery.md),
     [`dev/fragments/ai-clis/packaging-guide.md`](dev/fragments/ai-clis/packaging-guide.md)
 
+- **`ai-config-scope`**
+  - Match: `devenv.nix`, `packages/*/lib/mk*.nix`,
+    `packages/*/lib/wrapPackage.nix`, `packages/*/modules/devenv/**`
+  - Read:
+    [`dev/fragments/ai-config-scope/host-config-merge.md`](dev/fragments/ai-config-scope/host-config-merge.md)
+
 - **`ai-module`**
   - Match: `checks/module-eval.nix`, `lib/ai/agent.nix`, `lib/ai/ai-common.nix`,
     `lib/ai/app/**`, `lib/ai/default.nix`, `lib/ai/hooks.nix`,

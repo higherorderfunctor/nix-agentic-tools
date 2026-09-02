@@ -43,6 +43,7 @@ packages/stacked-workflows/skills/*/[0-9a-z]*-*
 # shell-entry artifact.
 .codex/
 .config/github-copilot/
+.config/kimchi/
 .copilot/
 .github/skills/
 .kiro/hooks/

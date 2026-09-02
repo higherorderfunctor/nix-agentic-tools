@@ -39,6 +39,17 @@
         }
         // mergedEnvironmentVariables;
     };
+  # Adapter onto the shared transform's `installPackage` hook, which hands
+  # every backend the same callback args as `config`. Both backends install
+  # the identical wrapper, so it is derived once here.
+  codexInstallPackage = {
+    cfg,
+    moduleEnvironmentVariables,
+    mergedEnvironmentVariables,
+    resolvedShell,
+    ...
+  }:
+    codexPackageFor cfg moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell;
   jsonFormat = pkgs.formats.json {};
   tomlReconciler = ../../../lib/ai/reconcile-toml.py;
   tomlFormat = pkgs.formats.toml {};
@@ -1034,6 +1045,7 @@ in
       };
     };
 
+    hm.installPackage = codexInstallPackage;
     hm.config = {
       config,
       cfg,
@@ -1041,9 +1053,6 @@ in
       mergedServers,
       mergedSkills,
       mergedAgents,
-      mergedEnvironmentVariables,
-      moduleEnvironmentVariables,
-      resolvedShell,
       mergedContext,
       hasMergedContext,
       topHooks,
@@ -1152,10 +1161,10 @@ in
             "${cfg.configDir}/hooks.json".source = jsonFormat.generate "codex-hooks.json" {hooks = renderHooks effectiveHooks;};
           })
         ];
-        packages = [(codexPackageFor cfg moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell)];
       };
     };
 
+    devenv.installPackage = codexInstallPackage;
     devenv.config = {
       config,
       cfg,
@@ -1163,9 +1172,6 @@ in
       mergedServers,
       mergedSkills,
       mergedAgents,
-      mergedEnvironmentVariables,
-      moduleEnvironmentVariables,
-      resolvedShell,
       mergedContext,
       hasMergedContext,
       topHooks,
@@ -1270,7 +1276,6 @@ in
           ".codex/config.toml".source = tomlFormat.generate "codex-project-config.toml" settings;
         })
       ];
-      packages = [(codexPackageFor cfg moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell)];
       tasks =
         {
           "ai:codex:materialize-profiles" = {

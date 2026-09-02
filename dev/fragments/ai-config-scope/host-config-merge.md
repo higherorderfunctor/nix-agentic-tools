@@ -1,0 +1,104 @@
+## Devenv runtimes merge with host config — the reason is auth, not tidiness
+
+> **Last verified:** 2026-09-02 (commit pending — first landing. States as one
+> cross-runtime rule what previously had to be inferred by reading three
+> factories side by side: no `ai.*` runtime redirects its config root, on either
+> backend, and the reason is identical in every case. The per-runtime MECHANISMS
+> differ, and that difference is the whole content — Copilot has an additive
+> flag, Codex does not and must materialize into the host directory instead.
+> Motivation hoisted from the measurement already recorded in
+> `dev/fragments/ai-clis/copilot-config-delivery.md`, which stated it only for
+> Copilot. If you add a runtime, change how one delivers config, or set any
+> `*_HOME` / `*_CONFIG_DIR` variable in a wrapper, update this fragment in the
+> same commit.)
+
+### The rule
+
+A runtime delivered by `devenv shell` reads the developer's user-global config
+**in addition to** what this repo writes. Nothing isolates a runtime from its
+host configuration, and no `ai.*` code path sets a config-root variable.
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `COPILOT_HOME` and `KIRO_HOME` are _read_
+(always with a `$HOME` fallback) and never _written_.
+
+This is a deliberate choice with a specific motivation, not an accident of
+incompleteness. Do not "fix" it by pointing a config root at the project.
+
+Verify from inside the shell — every value must be empty:
+
+```bash
+for v in CLAUDE_CONFIG_DIR CODEX_HOME COPILOT_HOME KIRO_HOME; do
+  printf '%-20s %s\n' "$v" "$(printenv "$v" || echo '<unset>')"
+done
+```
+
+### Why: these tools keep credentials and history under the config root
+
+Every one of these CLIs stores **account state, credentials and conversation
+history in the same directory tree as its declarative config.** Redirecting that
+root to a project directory forks authentication per project and writes session
+transcripts into the repository.
+
+Measured for Copilot, where a single variable moves the entire tree:
+
+```text
+$COPILOT_HOME/config.json          # auth / account state
+$COPILOT_HOME/session-store.db     # + -wal, -shm
+$COPILOT_HOME/session-state/…      # full conversation history
+$COPILOT_HOME/logs/…
+```
+
+`COPILOT_HOME` _works_ — it does relocate `mcp-config.json` lookup and does stop
+the `$HOME/.copilot/` read. It is refused anyway, for the cost above. The same
+refusal governs Codex, which is why devenv materializes files **into**
+`CODEX_HOME` rather than re-pointing it.
+
+The corollary that is easy to miss: because the constraint is about auth and
+history rather than about config, a runtime that can add config **without**
+moving its root is free to do so. That is the only reason Copilot and Codex use
+different mechanisms.
+
+### Per-runtime mechanism
+
+| runtime   | host root read | what devenv adds                                                 | mechanism                                                     |
+| --------- | -------------- | ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| `claude`  | `~/.claude/`   | `<repo>/.claude/settings.json`, `.mcp.json`, `CLAUDE.md`         | native project scope — the CLI merges user + project itself   |
+| `codex`   | `~/.codex/`    | `<repo>/.codex/config.toml`, plus named profiles in the host dir | materializer writes INTO `CODEX_HOME`; flock + owner manifest |
+| `copilot` | `~/.copilot/`  | project `mcp-config.json`                                        | additive wrapper flag `--additional-mcp-config @<path>`       |
+| `kiro`    | `~/.kiro/`     | `<repo>/.kiro/{steering,hooks,agents,settings}/`                 | native project scope via a repo-relative `configDir`          |
+
+Codex is the one that needs explaining. It has no additive flag, so the only way
+to add a named profile without replacing the user's config is to write the file
+into the user's own directory. That write is shared mutable host state, so it is
+guarded: a `flock`, and a manifest keyed by a hash of the git common dir so one
+checkout never prunes another's profiles. Read that machinery as a consequence
+of this rule, not as incidental complexity.
+
+### What this rule does NOT cover
+
+**Process environment is scoped; config is not.** `environmentVariables` and
+`ai.shell` are delivered through each runtime's _wrapper_, so they reach only
+the launched process. They are deliberately not routed through devenv's `env`
+attrset, which writes the project **shell** and would leak every variable into
+the developer's interactive session and everything else running in it. That is
+process-scope containment and it is orthogonal to config scope — do not cite one
+as evidence about the other.
+
+**Kimchi is outside the table on purpose.** Its BINARY is repo-sourced like
+every other runtime, but it has no config row because its config fanout does not
+currently reach the binary: `configDir` is HOME-shaped while the writes land at
+a project path Kimchi never reads, so `.config/kimchi/**` is
+materialized-but-inert. Binary delivery and config delivery are separate
+problems for that runtime, and fixing one did not fix the other. Do not read its
+presence on PATH as evidence that this rule has been applied to it.
+
+### What would change this decision
+
+- A runtime splits auth and session state out of its config root → the env-var
+  route becomes viable for that runtime and the wrapper can be dropped.
+- A runtime gains an additive config flag → it moves from the materialize shape
+  to the Copilot shape.
+- The isolated-harness work lands → that harness owns isolation explicitly, and
+  this rule then describes the default path rather than the only one.
+
+Until one of those happens, treat a proposal to redirect any config root as a
+proposal to fork the developer's authentication, and price it accordingly.
