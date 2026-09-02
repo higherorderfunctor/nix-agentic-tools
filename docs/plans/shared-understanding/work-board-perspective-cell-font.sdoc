@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: Perspective cells ignore the theme monospace font
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-BOARD-PERSPECTIVE-CELL-FONT
+TITLE: Perspective cells ignore the theme monospace font
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The Aurora theme (docs/sdoc/board/assets/theme.css) declares JetBrains Mono
+first in --psp-interface-monospace--font-family, but Perspective's datagrid
+cells compute to the ui-monospace fallback stack: the variable is not reaching
+the cells. Measured 2026-09-01 by headless chromium against the live server
+while matching the Plan tab's font size to Perspective's 12px cells. Cosmetic;
+find which --psp-* property the datagrid actually reads for cell type and set
+that, or accept the fallback and drop the dead declaration.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-BOARD-SHIFT
+  ROLE: Assumes
