@@ -5,8 +5,9 @@
 import { renderBoard } from "/assets/board.js";
 import { renderGrammars, selectGrammar } from "/assets/grammars.js";
 import { loadPerspective } from "/assets/perspective.js";
+import { renderPlan } from "/assets/plan.js";
 
-const VIEWS = ["perspective", "grammars", "board"];
+const VIEWS = ["perspective", "grammars", "plan", "board"];
 const elements = {
   error: document.querySelector("#error"),
   loading: document.querySelector("#loading"),
@@ -20,11 +21,13 @@ const elements = {
 const sections = {
   board: document.querySelector("#view-board"),
   grammars: document.querySelector("#view-grammars"),
+  plan: document.querySelector("#view-plan"),
   perspective: document.querySelector("#view-perspective"),
 };
 const switches = {
   board: document.querySelector("#switch-board"),
   grammars: document.querySelector("#switch-grammars"),
+  plan: document.querySelector("#switch-plan"),
   perspective: document.querySelector("#switch-perspective"),
 };
 
@@ -99,6 +102,19 @@ async function showGrammars() {
   renderGrammars(payload);
 }
 
+async function showPlan() {
+  if (!cache.graph) {
+    showLoading("Asking the scribe daemon", "Exporting the held graph");
+    cache.graph = await fetchJson("/api/graph");
+  }
+  const payload = cache.graph;
+  if (payload.schema !== "sdoc-board/2") {
+    throw new Error(`unsupported snapshot schema: ${payload.schema}`);
+  }
+  renderStats(payload);
+  renderPlan(payload);
+}
+
 async function showPerspective() {
   if (!cache.rows) {
     showLoading("Asking the scribe daemon", "Adapting rows for Perspective");
@@ -128,6 +144,7 @@ async function activate(view, { push = false } = {}) {
   try {
     if (view === "board") await showBoard();
     else if (view === "grammars") await showGrammars();
+    else if (view === "plan") await showPlan();
     else await showPerspective();
     elements.loading.hidden = true;
     setStatus("live from the daemon", "ready");

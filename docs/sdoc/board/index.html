@@ -28,7 +28,8 @@
       <nav class="view-switch" aria-label="View">
         <button id="switch-perspective" type="button">Perspective</button>
         <button id="switch-grammars" type="button">Grammars</button>
-        <button id="switch-board" type="button" class="is-active">Board</button>
+        <button id="switch-plan" type="button">Plan</button>
+        <button id="switch-board" type="button" class="is-active">Graph</button>
       </nav>
 
       <dl class="stats" aria-label="Canon counts">
@@ -125,6 +126,34 @@
             </p>
           </div>
           <div id="inspector-content" hidden></div>
+        </aside>
+      </section>
+
+      <section
+        id="view-plan"
+        class="view plan-view"
+        aria-label="Plan view"
+        hidden
+      >
+        <div class="plan-shell">
+          <p class="grammar-hint">
+            Grouped by declaring directory · nested by Assumes · select a row
+            for the full card
+          </p>
+          <div id="plan-tree" class="plan-tree"></div>
+        </div>
+
+        <aside class="inspector" aria-live="polite">
+          <div id="plan-inspector-empty" class="inspector-empty">
+            <span class="empty-mark" aria-hidden="true">▤</span>
+            <h1>Walk the plans</h1>
+            <p>
+              Select any row to see the node's full card: fields, source
+              location, and declared relations.
+            </p>
+            <p class="read-only">read only · one resident scribe</p>
+          </div>
+          <div id="plan-inspector-content" hidden></div>
         </aside>
       </section>
 

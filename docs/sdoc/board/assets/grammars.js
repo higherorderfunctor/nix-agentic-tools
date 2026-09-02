@@ -4,7 +4,7 @@
 // write. Data is the snapshot's `grammar` key (parsed from grammar.sgra;
 // the JSON export types every field as String, which is why the .sgra is
 // the source here).
-import { colorOf } from "/assets/board.js";
+import { colorOf } from "/assets/card.js";
 
 const elements = {
   grid: document.querySelector("#grammar-grid"),

@@ -637,6 +637,158 @@ html[data-status="error"] .status-dot {
   overflow-wrap: anywhere;
 }
 
+/* ---- plan view -------------------------------------------------------- */
+
+.plan-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+}
+
+.plan-shell {
+  overflow: auto;
+  padding: 18px;
+  border-right: 1px solid var(--border-default);
+  background:
+    radial-gradient(circle at 50% 0%, rgb(100 255 218 / 5%), transparent 44%),
+    var(--surface-backdrop);
+}
+
+.plan-tree {
+  display: grid;
+  gap: 8px;
+}
+
+.plan-group {
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--surface-primary);
+}
+
+.plan-group > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.plan-group > summary::before {
+  color: var(--text-tertiary);
+  content: "▸";
+  font-size: 10px;
+}
+
+.plan-group[open] > summary::before {
+  content: "▾";
+}
+
+.plan-group-dir {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.plan-group-count {
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.plan-group-body {
+  display: grid;
+  gap: 2px;
+  padding: 4px 10px 12px;
+}
+
+.plan-branch > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.plan-branch > summary::before {
+  color: var(--text-tertiary);
+  content: "▸";
+  font-size: 9px;
+}
+
+.plan-branch[open] > summary::before {
+  content: "▾";
+}
+
+.plan-leaf {
+  padding-left: 15px;
+}
+
+.plan-nest {
+  display: grid;
+  gap: 2px;
+  padding-left: 22px;
+  border-left: 1px solid var(--border-subtle);
+  margin-left: 4px;
+}
+
+.plan-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-align: left;
+}
+
+.plan-row:hover,
+.plan-row:focus-visible {
+  border-color: var(--border-default);
+  background: var(--surface-secondary);
+}
+
+.plan-row.is-selected {
+  border-color: var(--border-strong);
+  background: var(--surface-tertiary);
+}
+
+.plan-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.plan-uid {
+  flex: none;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.plan-title {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-state {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+
 /* ---- grammars view ---------------------------------------------------- */
 
 .grammars-view {

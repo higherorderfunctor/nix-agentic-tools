@@ -1,0 +1,35 @@
+[DOCUMENT]
+TITLE: The Plan view: a collapsible tree over the declaring directories
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-PLAN-TREE
+TITLE: The Plan view: a collapsible tree over the declaring directories
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+The Plan view renders the canon as a collapsible tree with the selected
+node's full card in the right pane, sharing one card renderer (card.js) with
+the Graph view so a node reads the same in both. Groups are the declaring
+directories; within a group a node nests under the same-group node it
+Assumes (first parent wins, cycles fall back to flat), which is exactly the
+edge the shared-understanding carve writes for its concept tiers. Selection
+lives in the #hash like the Graph view; the shared-understanding group opens
+by default. The Graph pill is labelled Graph, not Board, to stop the view
+shadowing the app's name.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-ONE-APP-TWO-VIEWS
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+  ROLE: Governed_By
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/plan.js
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/card.js
+- TYPE: File
+  VALUE: docs/sdoc/board/index.html
