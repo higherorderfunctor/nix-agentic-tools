@@ -44,6 +44,27 @@ branch: **promote a shared understanding between human and LLM.**
 - Standing sdoc rules apply: never `fp-accept`, never `AUTHORED_BY`, supersede —
   never edit — an accepted decision, log findings to
   `MECH-BACKLOG-SHARED-UNDERSTANDING` instead of narrating them.
+- **Scope is the board viewer and StrictDoc in general, not only the carve.**
+  The operator adds items on the fly. File each as a WORK node at `sketch`,
+  under the concept group it fits or directly under the root.
+- **The plan tracks what changed.** When a session changes something a node
+  describes, update that node in the same commit. An outcome that is spec-worthy
+  goes where settled things live — `docs/spec/` for the plan model, `**/.sdoc/`
+  beside the package it describes — not only into a WORK node's NOTES.
+
+## Root context
+
+Root context is for the operator's conversation rounds. Protect it:
+
+- **Delegate reading and mechanical edits.** A background agent or a small
+  workflow opens the files, makes the change, commits it, and returns the
+  conclusion — never the file dump. Reasoning needed to converse cannot be
+  delegated; everything else can.
+- **The bootstrap reads are the exception.** Memory block, skill, this README
+  and the root node are shared ground and belong in root context.
+- **Agents commit their own files by explicit path**, never `git add -A`, and
+  the session sequences commits so two agents never race on the index.
+- **Replies are terse.** The answer, what moved, then stop.
 
 ## Session prompt
 
@@ -66,12 +87,18 @@ Bootstrap, in order:
 The board app: `devenv up -d scribe board` from a shell in the worktree if not
 already up; http://127.0.0.1:8765/?view=plan renders this plan.
 
-Rules: I pick what we work on — never pick for me. Work items only; nothing
-converts to spec/presentation without me. Ambiguities stay verbatim in NOTES.
-Decisions come to me as plain-language cards, one per turn. Never fp-accept,
-never AUTHORED_BY. Log incidental findings to MECH-BACKLOG-SHARED-UNDERSTANDING,
-don't narrate them. Terse responses; explain designs, don't change them unasked.
-Commit as you go on the branch.
+Rules: I pick what we work on — never pick for me. I may add items outside the
+carve but in scope (the board viewer, strictdoc in general); file them as WORK.
+Work items only; nothing converts to spec/presentation without me. Ambiguities
+stay verbatim in NOTES. Decisions come to me as plain-language cards, one per
+turn. Never fp-accept, never AUTHORED_BY. Log incidental findings to
+MECH-BACKLOG-SHARED-UNDERSTANDING, don't narrate them. Keep the plan tracking
+what changes; spec-worthy outcomes go to sdoc where they belong.
+
+Protect your root context: delegate file reading and mechanical edits to
+background agents or small workflows and take back only the conclusion. Reason
+here only as much as conversing needs. Terse responses; explain designs, don't
+change them unasked. Commit as you go on the branch.
 ```
 
 ## Origin
