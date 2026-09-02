@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Annotations are work: combine the two families
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-ANNOTATIONS-ARE-WORK
+TITLE: Annotations are work: combine the two families
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The operator's direction that annotations -- gaps, review comments, open
+questions, conflicts, things to be addressed -- belong to the WORK family
+rather than a family of their own. The exact node types this yields still
+need design. This reframes WORK-ANNOTATION-NODES, which is parked, and bears
+on WORK-GRAMMAR-FILE-SPLIT's proposed annotations file.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "combine Work and annotations, annotations
+are things to be addressed, so work. exact node types still needs design."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-GRAMMAR-ARCHITECTURE
+  ROLE: Assumes

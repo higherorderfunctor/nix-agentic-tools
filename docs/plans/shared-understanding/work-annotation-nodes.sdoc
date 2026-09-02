@@ -118,6 +118,9 @@ intended to annotate like the plan or spec stuff." Carver's reading: the
 blocking-semantics question (which kinds block a plan, which only inform)
 is PARKED; annotations rank below the plan-model and spec-model items,
 because those are what an annotation attaches to, and they are not settled.
+
+2026-09-02: operator now leans to annotations being WORK (see
+WORK-ANNOTATIONS-ARE-WORK).
 <<<
 RELATIONS:
 - TYPE: Parent

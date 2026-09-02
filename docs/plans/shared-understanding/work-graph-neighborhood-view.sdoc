@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: Graph tab: pick a node from a list, draw only its neighborhood
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-GRAPH-NEIGHBORHOOD-VIEW
+TITLE: Graph tab: pick a node from a list, draw only its neighborhood
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The Graph tab gains a new left pane: a list of every node, searchable and
+filterable. Selecting a node from that list renders the graph scoped to
+that node and its immediate neighbors only -- never the whole canon.
+Selecting a node within the rendered graph fills the right-pane details.
+The node picked from the left pane is the central node and starts
+highlighted by default. This is a concrete design for the too-much-data
+problem tracked as WORK-BOARD-FILTER-MODEL in the whiteboard-view plan.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "graph, add new left pane that's a list of
+all nodes. search/filterable. selecting a node renders the graph and
+immediate neighbors only. no more whole canon in graph. selecting in graph
+gives right pane details. default to central node has highlighted picking
+from left."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-BOARD-SHIFT
+  ROLE: Assumes
