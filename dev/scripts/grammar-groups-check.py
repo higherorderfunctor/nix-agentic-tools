@@ -35,6 +35,12 @@ Rules, one finding each, on stderr:
   empty cell, or a doubly-filled cell is a finding.
 * A "cards" group lists type names, or is the "rest".
 * Any other widget is a finding.
+* A group's optional "glosses" maps a type name it places to one non-empty
+  sentence, and a grid's axes may carry a parallel "glosses" map over the
+  axis words; a gloss on a name the group does not place (for the "rest",
+  a type some other group placed) is a finding, since the tab would draw
+  it nowhere. The glosses are prose copied from the canon (see the file's
+  $comment) and the check does not compare them with their sources.
 * An empty type universe is a hard failure: a blind check must not pass.
 
 The layout shape this enforces is the shape the page assumes; change both
@@ -75,6 +81,7 @@ def check(grammar: dict, layout: object) -> tuple:
     by_prefix = {el["prefix"].rstrip("-"): tag for tag, el in grammar.items() if el["prefix"]}
     placed: dict = {}
     rest_at: list = []
+    rest_group: list = []
 
     def place(name: object, where: str) -> None:
         if not isinstance(name, str):
@@ -92,15 +99,31 @@ def check(grammar: dict, layout: object) -> tuple:
         else:
             placed[name] = where
 
+    def check_glosses(owner: dict, allowed: set, where: str, what: str) -> None:
+        glosses = owner.get("glosses")
+        if glosses is None:
+            return
+        if not isinstance(glosses, dict):
+            find(f"{where}: 'glosses' must be an object mapping names to one sentence each")
+            return
+        for name, gloss in glosses.items():
+            if name not in allowed:
+                find(f"{where}: {name!r} has a gloss but is not {what}")
+            if not (isinstance(gloss, str) and gloss.strip()):
+                find(f"{where}: the gloss for {name!r} must be a non-empty string, got {gloss!r}")
+
     def check_cards(group: dict, where: str) -> None:
         types = group.get("types")
         if types == REST:
             rest_at.append(where)
             if len(rest_at) > 1:
                 find(f"{where}: {REST!r} already appears at {rest_at[0]}; at most one group takes the rest")
+            else:
+                rest_group.append(group)
         elif isinstance(types, list):
             for name in types:
                 place(name, where)
+            check_glosses(group, {name for name in types if isinstance(name, str)}, where, "a type this group lists")
         else:
             find(f"{where}: 'types' must be a list of type names or the string {REST!r}")
 
@@ -108,7 +131,7 @@ def check(grammar: dict, layout: object) -> tuple:
         axes = group.get("axes")
         axes_ok = (
             isinstance(axes, dict)
-            and set(axes) == set(AXES)
+            and set(AXES) <= set(axes) <= {*AXES, "glosses"}
             and all(
                 isinstance(axes[axis], list)
                 and len(axes[axis]) == GRID_SIZE
@@ -119,10 +142,13 @@ def check(grammar: dict, layout: object) -> tuple:
         )
         if not axes_ok:
             find(f"{where}: a grid needs 'axes' with 'rows' and 'columns' of {GRID_SIZE} distinct words each")
+        else:
+            check_glosses(axes, {word for axis in AXES for word in axes[axis]}, where, "a word of this grid's axes")
         cells = group.get("cells")
         if not isinstance(cells, dict):
             find(f"{where}: a grid needs 'cells' mapping each type to [row, column]")
             return
+        check_glosses(group, set(cells), where, "a type in a cell of this grid")
         filled: dict = {}
         for name, coords in cells.items():
             place(name, where)
@@ -176,6 +202,7 @@ def check(grammar: dict, layout: object) -> tuple:
 
     unplaced = sorted(universe - set(placed))
     if rest_at:
+        check_glosses(rest_group[0], set(unplaced), rest_at[0], f"a type the {REST!r} absorbs")
         return len(universe), findings, (rest_at[0], unplaced)
     for name in unplaced:
         find(f"{name} is declared in the grammar but placed nowhere, and no group takes the {REST!r}")

@@ -12,6 +12,10 @@
 // nix flake check, and checkGroups() here on every render. A finding raises
 // the red banner at the top of the tab and never hides a type -- whatever
 // the layout leaves out lands in Unsorted.
+//
+// The one-line glosses under the axis words and the card titles are prose
+// the layout carries verbatim from the canon (its $comment names the
+// sources); they are drawn as given and never composed here.
 import { colorOf, htmlNode } from "/assets/card.js";
 
 const elements = {
@@ -93,6 +97,20 @@ function gridCells(group) {
   return { at, columns, misplaced, rows };
 }
 
+// A group's optional "glosses" map (name -> sentence), and the axes' own,
+// read defensively: anything that is not a non-empty string draws nothing.
+function glossOf(owner, name) {
+  const gloss = isObject(owner?.glosses) ? owner.glosses[name] : undefined;
+  return typeof gloss === "string" && gloss.trim() ? gloss : null;
+}
+
+// Gloss keys that name nothing the owner places: the check's rule, mirrored
+// so the banner shows what the tab would otherwise silently drop.
+function strayGlosses(owner, allowed) {
+  if (!isObject(owner?.glosses)) return [];
+  return Object.keys(owner.glosses).filter((name) => !allowed.has(name));
+}
+
 // The runtime guard. Pure: the layout object and the grammar's TAG names in,
 // the findings out -- missing (in the grammar, placed nowhere, and no "rest"
 // group to catch it), stale (placed, not in the grammar), duplicate (placed
@@ -112,6 +130,19 @@ export function checkGroups(layout, typeNames) {
     findings.missing.push(...typeNames);
     return findings;
   }
+  const placedAnywhere = new Set(placements(layout));
+  const restTypes = new Set(
+    typeNames.filter((tag) => !placedAnywhere.has(tag)),
+  );
+  const glossFindings = (label, owner, allowed, what) => {
+    if (owner?.glosses !== undefined && !isObject(owner.glosses)) {
+      findings.invalid.push(`${label}: glosses must map names to sentences`);
+      return;
+    }
+    for (const name of strayGlosses(owner, allowed)) {
+      findings.invalid.push(`${label}: ${name} has a gloss but is not ${what}`);
+    }
+  };
   let rests = 0;
   layout.sections.forEach((section, s) => {
     if (!isObject(section) || !Array.isArray(section.groups)) {
@@ -134,6 +165,18 @@ export function checkGroups(layout, typeNames) {
             `${label}: cells must map TAG to [row, column]`,
           );
         }
+        glossFindings(
+          label,
+          group.axes,
+          new Set([...rows, ...columns]),
+          "a word of this grid's axes",
+        );
+        glossFindings(
+          label,
+          group,
+          new Set(Object.keys(isObject(group.cells) ? group.cells : {})),
+          "a type in a cell of this grid",
+        );
         for (const tag of misplaced) {
           const position = JSON.stringify(group.cells[tag]);
           findings.invalid.push(
@@ -156,9 +199,17 @@ export function checkGroups(layout, typeNames) {
         rests += 1;
         if (rests > 1)
           findings.invalid.push(`${label}: "rest" may appear once`);
+        glossFindings(label, group, restTypes, 'a type the "rest" absorbs');
       } else if (!Array.isArray(group.types)) {
         findings.invalid.push(
           `${label}: types must be a list of TAGs or "rest"`,
+        );
+      } else {
+        glossFindings(
+          label,
+          group,
+          new Set(group.types),
+          "a type this group lists",
         );
       }
     });
@@ -181,7 +232,7 @@ export function checkGroups(layout, typeNames) {
   return findings;
 }
 
-function card(tag, element) {
+function card(tag, element, gloss) {
   const item = htmlNode("button", "grammar-card");
   item.type = "button";
   item.dataset.tag = tag;
@@ -204,7 +255,9 @@ function card(tag, element) {
     );
     facts.append(fact);
   }
-  item.append(head, facts);
+  item.append(head);
+  if (gloss) item.append(htmlNode("p", "grammar-card-gloss", gloss));
+  item.append(facts);
   item.addEventListener("click", () => selectGrammar(tag));
   return item;
 }
@@ -222,16 +275,29 @@ function ghost(tag) {
   return item;
 }
 
-function typeCard(tag) {
+function typeCard(tag, owner) {
   const element = snapshot.grammar[tag];
-  return element ? card(tag, element) : ghost(tag);
+  return element ? card(tag, element, glossOf(owner, tag)) : ghost(tag);
 }
 
-function cardRow(tags, emptyText) {
+function cardRow(tags, emptyText, owner) {
   if (!tags.length) return htmlNode("p", "grammar-empty", emptyText);
   const row = htmlNode("div", "grammar-cards");
-  for (const tag of tags) row.append(typeCard(tag));
+  for (const tag of tags) row.append(typeCard(tag, owner));
   return row;
+}
+
+// An axis label: the word, and its gloss when the axes carry one. The
+// column reads "UNIVERSAL -- EVERY CASE" on one line; the row label is the
+// same two spans stood on end down the left edge (CSS does the turning).
+function axisLabel(axes, word, orientation) {
+  const wrapper = htmlNode("div", `grammar-axis grammar-axis-${orientation}`);
+  const label = htmlNode("span", "grammar-axis-label");
+  label.append(htmlNode("span", "grammar-axis-word", word));
+  const gloss = glossOf(axes, word);
+  if (gloss) label.append(htmlNode("span", "grammar-axis-gloss", gloss));
+  wrapper.append(label);
+  return wrapper;
 }
 
 function matrix(group) {
@@ -240,10 +306,10 @@ function matrix(group) {
   widget.style.setProperty("--columns", String(columns.length));
   widget.append(htmlNode("div", "grammar-axis-corner"));
   for (const column of columns) {
-    widget.append(htmlNode("div", "grammar-axis grammar-axis-column", column));
+    widget.append(axisLabel(group.axes, column, "column"));
   }
   for (const row of rows) {
-    widget.append(htmlNode("div", "grammar-axis grammar-axis-row", row));
+    widget.append(axisLabel(group.axes, row, "row"));
     for (const column of columns) {
       const cell = htmlNode("div", "grammar-cell");
       cell.dataset.row = row;
@@ -253,7 +319,7 @@ function matrix(group) {
         cell.classList.add("is-empty");
         cell.append(htmlNode("span", null, "unfilled"));
       }
-      for (const tag of tags) cell.append(typeCard(tag));
+      for (const tag of tags) cell.append(typeCard(tag, group));
       widget.append(cell);
     }
   }
@@ -261,7 +327,7 @@ function matrix(group) {
   if (misplaced.length) {
     parts.push(
       htmlNode("p", "grammar-note", "placed outside the axes:"),
-      cardRow(misplaced),
+      cardRow(misplaced, "", group),
     );
   }
   return parts;
@@ -282,11 +348,15 @@ function renderGroup(group, context) {
     wrapper.append(
       context.restUsed
         ? cardRow([], '"rest" was already drawn above')
-        : cardRow(context.rest, "nothing unsorted · every type is placed"),
+        : cardRow(
+            context.rest,
+            "nothing unsorted · every type is placed",
+            group,
+          ),
     );
     context.restUsed = true;
   } else {
-    wrapper.append(cardRow(asList(group.types), "no types listed"));
+    wrapper.append(cardRow(asList(group.types), "no types listed", group));
   }
   return wrapper;
 }

@@ -940,10 +940,20 @@ html[data-status="error"] .status-dot {
 
 /* The axis grid: one label column, one label row, a card per cell. Tracks
  * shrink to 200px and the shell scrolls below that -- the narrow-screen
- * rules never adapted this view, so the matrix is not asked to either. */
+ * rules never adapted this view, so the matrix is not asked to either.
+ * An axis label is the word plus its gloss from the layout: the column
+ * header reads them on one line, the row label stands them on end down
+ * the left edge (vertical-rl turned 180deg reads bottom to top, and the
+ * grid sizes the label's untransformed box, so the track stays two lines
+ * wide). A stood-up label can be taller than its cards, and the card rows
+ * share one height so a long gloss on one row does not leave the other
+ * row's cards shorter. Both labels keep the caption style the tab already
+ * uses. */
 .grammar-matrix {
   display: grid;
   grid-template-columns: auto repeat(var(--columns, 2), minmax(200px, 260px));
+  grid-template-rows: auto;
+  grid-auto-rows: 1fr;
   justify-content: center;
   align-items: stretch;
   gap: 12px;
@@ -952,6 +962,7 @@ html[data-status="error"] .status-dot {
 .grammar-axis {
   display: flex;
   align-items: center;
+  justify-content: center;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
   font-size: var(--fs-small);
@@ -959,13 +970,30 @@ html[data-status="error"] .status-dot {
   text-transform: uppercase;
 }
 
-.grammar-axis-column {
-  justify-content: center;
+.grammar-axis-label {
+  text-align: center;
+}
+
+.grammar-axis-word {
+  color: var(--text-secondary);
+}
+
+.grammar-axis-column .grammar-axis-gloss::before {
+  content: " — ";
 }
 
 .grammar-axis-row {
-  justify-content: flex-end;
   padding-right: calc(4 * var(--u));
+}
+
+.grammar-axis-row .grammar-axis-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.grammar-axis-row .grammar-axis-word,
+.grammar-axis-row .grammar-axis-gloss {
+  display: block;
 }
 
 .grammar-cell {
@@ -1064,6 +1092,16 @@ html[data-status="error"] .status-dot {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
   font-size: var(--fs-meta);
+}
+
+/* The canon's one-line gloss for the type, between the title block and the
+ * facts: reading size, muted, in the prose face rather than the mono the
+ * rest of the card is set in. */
+.grammar-card-gloss {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  line-height: 1.4;
 }
 
 .grammar-card-facts {

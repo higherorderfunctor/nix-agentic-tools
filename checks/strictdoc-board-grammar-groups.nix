@@ -135,6 +135,33 @@ pkgs.runCommand "strictdoc-board-grammar-groups" {
   JSON
   expect_fail unknown-widget "widget 'list' is not one of"
 
+  fixture gloss-unplaced <<'JSON'
+  {"sections": [{"title": "S", "groups": [
+    {"title": "G", "widget": "cards", "types": ["REQUIREMENT"],
+     "glosses": {"DECISION": "A choice, open or closed."}},
+    {"title": null, "widget": "cards", "types": "rest"}]}]}
+  JSON
+  expect_fail gloss-unplaced "'DECISION' has a gloss but is not a type this group lists"
+
+  fixture gloss-axis-word <<'JSON'
+  {"sections": [{"title": "S", "groups": [
+    {"title": "G", "widget": "grid",
+     "axes": {"rows": ["normative", "descriptive"], "columns": ["universal", "particular"],
+              "glosses": {"general": "every case"}},
+     "cells": {"REQUIREMENT": ["normative", "universal"], "DECISION": ["normative", "particular"],
+               "MECHANISM": ["descriptive", "universal"], "EVIDENCE": ["descriptive", "particular"]}},
+    {"title": null, "widget": "cards", "types": "rest"}]}]}
+  JSON
+  expect_fail gloss-axis-word "'general' has a gloss but is not a word of this grid's axes"
+
+  fixture gloss-rest-placed <<'JSON'
+  {"sections": [{"title": "S", "groups": [
+    {"title": "G", "widget": "cards", "types": ["REQUIREMENT"]},
+    {"title": null, "widget": "cards", "types": "rest",
+     "glosses": {"REQUIREMENT": "What must always be true."}}]}]}
+  JSON
+  expect_fail gloss-rest-placed "'REQUIREMENT' has a gloss but is not a type the 'rest' absorbs"
+
   # a blind check must not pass: the REAL layout against an EMPTY grammar
   : > "$TMPDIR/empty.sgra"
   cp "$layout" "$TMPDIR/empty-grammar.json"

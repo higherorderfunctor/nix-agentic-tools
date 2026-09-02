@@ -1,5 +1,5 @@
 {
-  "$comment": "Hand-authored grouping of the grammar's node types for the Grammars tab. Guarded by dev/scripts/grammar-groups-check.py in nix flake check and by the page's runtime check. Type names are grammar TAGs (REQUIREMENT), never UID prefixes. A group's widget is \"cards\" (types: a list of TAGs, or the string \"rest\" for every TAG not placed elsewhere, at most once) or \"grid\" (axes: two lists of two words, cells: one TAG per [row, column] pair). The Definition axis words are DEC-NODE-FAMILIES' own: normative/descriptive, universal/particular.",
+  "$comment": "Hand-authored grouping of the grammar's node types for the Grammars tab. Guarded by dev/scripts/grammar-groups-check.py in nix flake check and by the page's runtime check. Type names are grammar TAGs (REQUIREMENT), never UID prefixes. A group's widget is \"cards\" (types: a list of TAGs, or the string \"rest\" for every TAG not placed elsewhere, at most once) or \"grid\" (axes: two lists of two words, cells: one TAG per [row, column] pair). The Definition axis words are DEC-NODE-FAMILIES' own: normative/descriptive, universal/particular. A group may carry a \"glosses\" map (TAG to one sentence) and a grid's axes a parallel \"glosses\" map (axis word to phrase); a gloss on a name the group does not place is a finding. The prose is copied verbatim from NAR-CANON-TYPES-GRID (the axis glosses) and the first sentence of each NAR-SEMANTIC-LAYER-TYPE-* narrative (the type glosses); a type with no narrative has no gloss. Interim hard-coding until the tab renders the narratives themselves, so the swap is mechanical.",
   "sections": [
     {
       "title": "Spec",
@@ -9,19 +9,34 @@
           "widget": "grid",
           "axes": {
             "rows": ["normative", "descriptive"],
-            "columns": ["universal", "particular"]
+            "columns": ["universal", "particular"],
+            "glosses": {
+              "normative": "can be violated",
+              "descriptive": "can only be wrong",
+              "universal": "every case",
+              "particular": "one case"
+            }
           },
           "cells": {
             "REQUIREMENT": ["normative", "universal"],
             "DECISION": ["normative", "particular"],
             "MECHANISM": ["descriptive", "universal"],
             "EVIDENCE": ["descriptive", "particular"]
+          },
+          "glosses": {
+            "REQUIREMENT": "What must always be true.",
+            "DECISION": "A choice, open or closed.",
+            "MECHANISM": "How the system always behaves.",
+            "EVIDENCE": "What happened this once."
           }
         },
         {
           "title": "Coverage",
           "widget": "cards",
-          "types": ["USE_CASE"]
+          "types": ["USE_CASE"],
+          "glosses": {
+            "USE_CASE": "One path that must work."
+          }
         }
       ]
     },
@@ -31,7 +46,11 @@
         {
           "title": null,
           "widget": "cards",
-          "types": "rest"
+          "types": "rest",
+          "glosses": {
+            "NARRATIVE": "A maintained projection for a reader: it presents parts of the canon, start to finish, and depends on their wording.",
+            "WORK": "Build this."
+          }
         }
       ]
     }
