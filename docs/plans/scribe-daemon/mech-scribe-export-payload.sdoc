@@ -37,3 +37,7 @@ RELATIONS:
   ROLE: Proven_By
 - TYPE: File
   VALUE: dev/tasks/generate.nix
+- TYPE: File
+  VALUE: dev/tasks/generate.nix
+  ELEMENT: function
+  ID: tasks."generate:devenv-yaml"

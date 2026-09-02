@@ -33,3 +33,7 @@ RELATIONS:
   VALUE: packages/strictdoc-grammar/values.nix
 - TYPE: File
   VALUE: dev/scripts/sdoc_fp.py
+- TYPE: File
+  VALUE: packages/strictdoc-grammar/values.nix
+  ELEMENT: function
+  ID: governedBy

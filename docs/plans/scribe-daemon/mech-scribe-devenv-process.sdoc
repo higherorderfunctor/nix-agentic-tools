@@ -35,3 +35,7 @@ RELATIONS:
   VALUE: dev/scripts/scribe_daemon.py
 - TYPE: File
   VALUE: packages/strictdoc-grammar/modules/devenv/default.nix
+- TYPE: File
+  VALUE: packages/strictdoc-grammar/modules/devenv/default.nix
+  ELEMENT: function
+  ID: config.processes.scribe
