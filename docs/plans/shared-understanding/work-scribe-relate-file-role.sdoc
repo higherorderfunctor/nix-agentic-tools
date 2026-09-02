@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: scribe relate cannot write a File relation
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SCRIBE-RELATE-FILE-ROLE
+TITLE: scribe relate cannot write a File relation
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+scribe relate --role File is refused because _relation_type_for_role in
+dev/scripts/sdoc_model.py (lines ~349-364) only maps File when the role is
+the empty string, while --role '' is refused by _need() in
+dev/scripts/scribe_ops.py (~147-148); scribe new carries the "File" -> ""
+mapping (scribe_ops.py ~204) and the relate branch lacks it. Found
+2026-09-02 while adding File relations to MECH-SDOC-BOARD-GRAMMARS-VIEW for
+grammar-groups.json and grammar-groups-check.py; those two relations are
+still missing from that node. Likely a one-line fix in the relate branch.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

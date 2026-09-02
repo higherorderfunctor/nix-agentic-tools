@@ -14,8 +14,9 @@ Group the Grammars tab by a hand-authored layout file, grammar-groups.json,
 that places the grammar's node types into sections and groups for reasoning.
 Section Spec holds group Definition, drawn as a 2x2 grid of the definition
 family on the two axes DEC-NODE-FAMILIES rules (normative vs descriptive,
-all vs one: REQUIREMENT normative/all, DECISION normative/one, MECHANISM
-descriptive/all, EVIDENCE descriptive/one), and group Coverage, holding
+universal vs particular: REQUIREMENT normative/universal, DECISION
+normative/particular, MECHANISM descriptive/universal, EVIDENCE
+descriptive/particular), and group Coverage, holding
 USE_CASE. Section Unsorted holds every remaining type until the operator
 organizes them; its purpose is to surface the grammar-file splits they may
 want (WORK-GRAMMAR-FILE-SPLIT). Two guards make the hand-authored file an
@@ -50,6 +51,9 @@ Landed 2026-09-02: 8823edf1 (the tab and the check), 35f2a499 (the pill
 order); static check strictdoc-board-grammar-groups in nix flake check;
 runtime banner; verified by an independent agent (headless chromium +
 positive controls on the check).
+
+Axis words corrected 2026-09-02 to DEC-NODE-FAMILIES' universal/particular;
+the carver had written all/one from a summary table.
 <<<
 RELATIONS:
 - TYPE: Parent
