@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-GRAMMAR-TAB-GROUPS
 TITLE: Group the Grammars tab for reasoning, guarded by a coverage check
-DEPTH: sketch
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Group the Grammars tab by a hand-authored layout file, grammar-groups.json,
@@ -45,6 +45,11 @@ Given the current design consider good way to visualize, like
 <center the cards or the grid for custom widget>
 something like that. while in there move perspective tab to be last not
 first."
+
+Landed 2026-09-02: 8823edf1 (the tab and the check), 35f2a499 (the pill
+order); static check strictdoc-board-grammar-groups in nix flake check;
+runtime banner; verified by an independent agent (headless chromium +
+positive controls on the check).
 <<<
 RELATIONS:
 - TYPE: Parent
