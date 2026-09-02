@@ -1,11 +1,11 @@
 {
-  "version": "12.2.1",
+  "version": "12.3.0",
   "aarch64-darwin": {
-    "url": "https://registry.npmjs.org/@pnpm/exe.darwin-arm64/-/exe.darwin-arm64-12.2.1.tgz",
-    "hash": "sha256-CebGU81Ooxu1OxAzdUKOXxfuMuHfqNS2An46lAFRD70="
+    "url": "https://registry.npmjs.org/@pnpm/exe.darwin-arm64/-/exe.darwin-arm64-12.3.0.tgz",
+    "hash": "sha256-KkSgaHWprH24PZJGSDAEubsEjoDg2+0IfqPWgSkDL9U="
   },
   "x86_64-linux": {
-    "url": "https://registry.npmjs.org/@pnpm/exe.linux-x64/-/exe.linux-x64-12.2.1.tgz",
-    "hash": "sha256-LU1krEpBOWTzyXRW8u4jrjRv8pw8d9w2EdJE9ksW1AU="
+    "url": "https://registry.npmjs.org/@pnpm/exe.linux-x64/-/exe.linux-x64-12.3.0.tgz",
+    "hash": "sha256-vKDoBaM4VamceyVXqEIhLWeZR4UhfLiSKzPSwOQIFcs="
   }
 }
