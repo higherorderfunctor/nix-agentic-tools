@@ -107,7 +107,7 @@ configOption appears token-free** — see 3.5.
 | `_kiro/session/rename` | `{}` -> -32602 `title must be a non-empty string`; `{sessionId,title}` -> `{success:true}` | **persists**: `session.json` `title` rewritten on disk (verified) |
 | `_kiro/session/delete` | `{}` -> -32603 `Invalid sessionId`; `{sessionId}` -> `{success:true}` | removes session dir; gone from subsequent `list` |
 | `_kiro/permissions/list` | `{}` -> -32603 `Unknown session: undefined`; `{sessionId}` -> full default ruleset | see 3.6 |
-| `_kiro/permissions/explain` | `{}` -> `Unknown session`; `{sessionId}` -> -32603 `Either capability or toolId is required` | needs `{sessionId, capability|toolId}` |
+| `_kiro/permissions/explain` | `{}` -> `Unknown session`; `{sessionId}` -> -32603 `Either capability or toolId is required` | needs `{sessionId, capability\|toolId}` |
 | `_kiro/policy/check` | `{}` -> `Unknown session`; `{sessionId}` -> -32603 `Invalid or missing capability: undefined` | needs `{sessionId, capability}` |
 | `_kiro/account/getUsage` | RESULT `{success:false,"Failed to retrieve usage information: Authentication failed..."}` | **reachable token-free, DATA token-gated, does NOT stall** (G5) |
 | `_kiro/safety/getProperties` | `{}` -> -32603 `sessionId is required`; `{sessionId}` -> `{properties:[]}` | |

@@ -266,7 +266,13 @@
     glab = import ./dev-tools/glab.nix {
       inherit inputs final;
     };
+    markdownlint-cli2 = import ./dev-tools/markdownlint-cli2.nix {
+      inherit inputs final;
+    };
     oxlint = import ./dev-tools/oxlint.nix {
+      inherit inputs final;
+    };
+    rumdl = import ./dev-tools/rumdl.nix {
       inherit inputs final;
     };
     tsgolint = import ./dev-tools/tsgolint.nix {

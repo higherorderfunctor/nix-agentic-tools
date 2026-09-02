@@ -1,0 +1,8 @@
+# clean: a well-formed table
+
+EXPECT: both SILENT. Negative control — without it, "both fixtures hit"
+is equally consistent with a linter that flags every table.
+
+| A | B |
+| - | - |
+| x | y |

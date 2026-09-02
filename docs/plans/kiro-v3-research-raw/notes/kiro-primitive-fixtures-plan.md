@@ -226,7 +226,7 @@ recorded result or names what changed.
 | Global hooks do load | grep a transcript for a hook id under `$HOME` | a `…/.kiro/hooks/*.json#hook-N` id, status `completed`, in a project session |
 | Workflow flag distribution | count `workflowsEnabled` across all `session.json` | 205 files: 11 `false`, 194 absent, **0 true** |
 | No env override for workflows | enumerate `process.env.*` in the bundle | 13 `KIRO_*` vars, none workflow-related |
-| Rust binaries carry no hook/workflow machinery | `strings … | grep -c` for the tool and hook names | 0 for each — **with positive controls** (`subagentOrchestration`, `toolSearch`) non-zero |
+| Rust binaries carry no hook/workflow machinery | `strings … \| grep -c` for the tool and hook names | 0 for each — **with positive controls** (`subagentOrchestration`, `toolSearch`) non-zero |
 | Nested sub-executions have occurred here | count sub-execution transcripts with a parent reference | 19 nested L2 transcripts |
 | Upstream issue statuses | one issue query per id | the compaction, MCP-in-subagent, process-leak, headless-hang, and nesting issues with state + one-line claim |
 | Reference repo's duplication | `md5sum` over its starter skill files | 33 files in **6 groups of 3** (22 redundant byte-identical copies) |

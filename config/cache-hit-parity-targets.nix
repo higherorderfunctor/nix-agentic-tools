@@ -44,7 +44,9 @@ _: {
     beads = {consumerPath = ["ai" "devTools" "beads"];};
     gh = {consumerPath = ["ai" "devTools" "gh"];};
     glab = {consumerPath = ["ai" "devTools" "glab"];};
+    markdownlint-cli2 = {consumerPath = ["ai" "devTools" "markdownlint-cli2"];};
     oxlint = {consumerPath = ["ai" "devTools" "oxlint"];};
+    rumdl = {consumerPath = ["ai" "devTools" "rumdl"];};
     tsgolint = {consumerPath = ["ai" "devTools" "tsgolint"];};
 
     # ── Generic supporting packages — live at `consumerPkgs.ai.generic.<name>` ──

@@ -98,6 +98,7 @@ diffutils
 direntry
 direnv
 direnvrc
+disjointness
 docnix
 docsite
 dogfood
@@ -168,6 +169,7 @@ goproxy
 GOTOOLCHAIN
 GOWORK
 gpgsign
+gsub
 headlessly
 heredocs
 herestring
@@ -369,6 +371,7 @@ rspack
 rulesdir
 rumdl
 rustc
+rvben
 sadjow
 sandboxed
 sarif

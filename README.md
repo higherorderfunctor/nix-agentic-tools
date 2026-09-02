@@ -215,7 +215,9 @@ Agent-adjacent development utilities exposed as `pkgs.ai.devTools.*`.
 | `beads` | Graph-based issue tracker for AI coding agents |
 | `gh` | GitHub CLI |
 | `glab` | GitLab CLI |
+| `markdownlint-cli2` | Configuration-based markdown linter (markdownlint) |
 | `oxlint` | Fast JS/TS linter with type-aware (tsgo) linting and JS plugins |
+| `rumdl` | Fast Rust markdown linter (markdownlint-compatible rules) |
 | `tsgolint` | Type-aware linting backend for oxlint (typescript-go) |
 
 ```bash
