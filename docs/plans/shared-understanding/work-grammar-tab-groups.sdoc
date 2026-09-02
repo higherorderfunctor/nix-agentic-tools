@@ -1,0 +1,52 @@
+[DOCUMENT]
+TITLE: Group the Grammars tab for reasoning, guarded by a coverage check
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-GRAMMAR-TAB-GROUPS
+TITLE: Group the Grammars tab for reasoning, guarded by a coverage check
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Group the Grammars tab by a hand-authored layout file, grammar-groups.json,
+that places the grammar's node types into sections and groups for reasoning.
+Section Spec holds group Definition, drawn as a 2x2 grid of the definition
+family on the two axes DEC-NODE-FAMILIES rules (normative vs descriptive,
+all vs one: REQUIREMENT normative/all, DECISION normative/one, MECHANISM
+descriptive/all, EVIDENCE descriptive/one), and group Coverage, holding
+USE_CASE. Section Unsorted holds every remaining type until the operator
+organizes them; its purpose is to surface the grammar-file splits they may
+want (WORK-GRAMMAR-FILE-SPLIT). Two guards make the hand-authored file an
+allowed exception to REQ-BOARD-GRAMMAR-DRIVEN rather than a violation: a
+static check in nix flake check that every grammar node type is placed
+exactly once or falls into the one catch-all, and that no placed type is
+stale; and a runtime check on the page that shows a loud red banner for a
+missing or stale type and never hides a type. Visually, each section is a
+top-level heading followed by a horizontal rule, each group a subtitle, and
+under it the cards centered or the 2x2 grid as a custom widget. The
+Perspective pill moves to the end of the view switcher.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "I want groups, to start to help surface
+the splits I may want.
+# Spec
+## Definition
+2x2 Grid
+## Coverage
+- Use Case
+# Unsorted
+Rest of em till I organize
+Given the current design consider good way to visualize, like
+# TOP
+<HR>
+## Sub-title
+<center the cards or the grid for custom widget>
+something like that. while in there move perspective tab to be last not
+first."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-BOARD-SHIFT
+  ROLE: Assumes

@@ -11,11 +11,17 @@ DEPTH: sketch
 AUTHORED_BY: llm
 STATEMENT: >>>
 The board app SHALL contain minimal hard-coded knowledge of the system it
-renders: anything the app cannot infer from the grammar is a gap. The one
-permitted exception is coloring and styles, which SHALL be deterministically
-validated as complete against the grammar -- every element and role styled,
-none silently falling to a default -- and should ideally be literally a CSS
-sheet.
+renders: anything the app cannot infer from the grammar is a gap. Two
+exceptions are permitted, and both are guarded rather than trusted. Coloring
+and styles SHALL be deterministically validated as complete against the
+grammar -- every element and role styled, none silently falling to a default
+-- and should ideally be literally a CSS sheet. A hand-authored presentation
+is allowed where reasoning needs an arrangement the grammar cannot express,
+PROVIDED a check guards it: every node type the grammar declares is covered
+by the presentation and nothing stale remains in it, checked statically in
+nix flake check, with a runtime check on the page as the safety net for a
+refresh or reload. The first instance is the Grammars tab's groups
+(WORK-GRAMMAR-TAB-GROUPS).
 <<<
 NOTES: >>>
 Hedged by the operator -- verbatim: "one requirement I have we could add is
@@ -25,4 +31,11 @@ filing (and this node's continued existence) is the carver's resolution of
 "we could add", reversible at grooming. Known standing violations to burn
 down: TYPE_COLORS in card.js and the duplicated series colors in theme.css
 (hard-coded, no completeness check); the Perspective default column lists.
+
+Operator, 2026-09-02, verbatim: "okay I'm going to violate one of my own
+proposed rules with justification. the everything must be generated, not
+hard coded. justification is I want a check to guard. The grammar page I
+want customized for reasoning, it should check every node type is covered
+though (ideally a check rather than runtime error alone but runtime is a
+good check also as safety check or if I need to refresh/reload)."
 <<<

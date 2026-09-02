@@ -17,6 +17,10 @@ ladder as an FSM) and a semantics table; the right pane unchanged, rendering
 what the grammar file declares. Motivated by DEPTH's grading being liked
 while its semantics are unrememberable -- see WORK-DEPTH-RENAME.
 <<<
+NOTES: >>>
+The reasoning groups landed first as WORK-GRAMMAR-TAB-GROUPS (2026-09-02);
+the lifecycle/semantics redesign stays open.
+<<<
 RELATIONS:
 - TYPE: Parent
   VALUE: WORK-BOARD-SHIFT
