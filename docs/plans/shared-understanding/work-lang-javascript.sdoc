@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: Language items for JavaScript
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-LANG-JAVASCRIPT
+TITLE: Language items for JavaScript
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Grammar to load: `tree-sitter-grammars.tree-sitter-javascript` (nixpkgs, 0.25.0, `python313Packages`/`python314Packages` binding present).
+
+Candidate items (node type, confirmed against upstream `tree-sitter/tree-sitter-javascript`'s `src/node-types.json`): `class_declaration`, `function_declaration`, `method_definition`, `arrow_function`, `export_statement` — largely the same names TypeScript's grammar uses for the shapes both languages share.
+
+Present in this repo today: 7 files under `docs/sdoc/board/assets/` (`app.js`, `board.js`, `card.js`, `grammars.js`, `layout.js`, `perspective.js`, `plan.js` — the whiteboard-view board app, loaded by `docs/sdoc/board/index.html`), plus 2 `.mjs` update scripts, `overlays/claude-code/{census,locate}.mjs`.
+
+Gap: deprioritized. Per the operator, the board app's `.js` is a rewrite target for modern TS (see WORK-LANG-TYPESCRIPT), so this language's extractor support should not be built out as a separate long-lived surface — if anything is built, it should be built to converge on the TypeScript grammar's node types (see the shared node-type names above) so the same item queries survive the rewrite.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "i heavily prefer modern TS over JS. so plan
+ahead for that rewrite with ts grammars." Also, on backlogging generally:
+"we should track these in an sdoc, doesn't mean we have to implement any
+until a forcing function. lang, langitem/query can all be backlog items
+until there is a need."
+
+Filed 2026-09-02 as part of EV-REPO-LANGUAGE-SURVEY's per-language
+follow-through.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes

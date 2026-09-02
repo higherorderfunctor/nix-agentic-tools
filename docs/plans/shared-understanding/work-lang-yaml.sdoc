@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: Language items for YAML
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-LANG-YAML
+TITLE: Language items for YAML
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Grammar to load: `tree-sitter-grammars.tree-sitter-yaml` (nixpkgs, 0.7.2, `python313Packages`/`python314Packages` binding present).
+
+Candidate items (node type, confirmed against upstream `tree-sitter-grammars/tree-sitter-yaml`'s `src/node-types.json`): `block_mapping`, `block_mapping_pair` (a GitHub Actions workflow's `jobs:` keys are `block_mapping_pair` nodes under the top-level `jobs` mapping), `flow_pair` (the `{ key: value }` inline form).
+
+Present in this repo today: 7 tracked files — `.github/actions/{assert-nix-config,git-bot-identity,warm-ifd}/action.yml`, `.github/workflows/{ci,devenv-test,update}.yml`, `devenv.yaml`.
+
+Gap: this is under the ~10-file presence bar this survey used elsewhere, and the operator did not name YAML directly; it is filed here because the survey brief pre-scoped it (both as one of the languages to check a grammar for and as one of the UIDs to file). Whether it earns real extractor work is an open question for whoever grooms this backlog.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim, on backlogging generally: "we should track
+these in an sdoc, doesn't mean we have to implement any until a forcing
+function. lang, langitem/query can all be backlog items until there is a
+need." YAML itself was not separately named by the operator in the quoted
+brief; it is filed because the survey instructions pre-scoped it by name.
+
+Filed 2026-09-02 as part of EV-REPO-LANGUAGE-SURVEY's per-language
+follow-through.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes

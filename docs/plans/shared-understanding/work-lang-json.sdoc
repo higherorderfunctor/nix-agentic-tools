@@ -1,0 +1,41 @@
+[DOCUMENT]
+TITLE: Language items for JSON
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-LANG-JSON
+TITLE: Language items for JSON
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Grammar to load: `tree-sitter-grammars.tree-sitter-json` (nixpkgs, 0.24.8, `python313Packages`/`python314Packages` binding present) for the current repo. `tree-sitter-grammars.tree-sitter-json5` (nixpkgs, 0.1.0, upstream `Joakker/tree-sitter-json5`, binding present) exists and is packaged if a forcing function ever appears.
+
+Candidate items (node type, confirmed against upstream `tree-sitter/tree-sitter-json`'s `src/node-types.json`): `pair` (a top-level object key), `object`, `array`.
+
+Present in this repo today: 78 tracked `.json` files — `docs/plans/kiro-v3-research-raw/**` probe fixtures (26), `fixtures/kiro-primitives/**` (13), `overlays/generic/**` (12), `checks/fixtures/**` (7), plus per-package `overlays/*-sources.json`/`*-extracted.json` update-pipeline sidecars and `cspell.json`, `config/heron-brook-tripwire.json`, `config/cspell/*`.
+
+The jsonc/json5 question, answered with data: measured 0 of 78 tracked JSON files contain a `//` or `/*` leading-line comment, and 0 of 78 fail a strict `python3 -m json.tool` parse. There is no comment usage and no trailing-comma usage anywhere in the tracked JSON corpus today — the gap the operator named can survive unimplemented.
+
+Caveat worth carrying into any future implementation: nixpkgs' plain `tree-sitter-json` grammar already declares `comment` as an `extras` token in its own `grammar.js` (`extras: $ => [/\s/, $.comment]`, with `comment` matching `//` and `/* */` forms) but its `commaSep`/`commaSep1` helpers admit no trailing comma. So the ordinary json grammar already parses a JSONC-with-comments file without error; only trailing-comma tolerance (closer to true JSON5) needs the separate json5 grammar. If a forcing function ever appears, check which of the two gaps (comments vs. trailing commas) it actually needs before reaching for `tree-sitter-json5` — the plain grammar may already cover it.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "im not sure the state of all our json
+usage and if there is enough support for jsonc/5. could probably survive as
+a gap until there is a forcing function." Also, on backlogging generally:
+"we should track these in an sdoc, doesn't mean we have to implement any
+until a forcing function. lang, langitem/query can all be backlog items
+until there is a need."
+
+Filed 2026-09-02 as part of EV-REPO-LANGUAGE-SURVEY's per-language
+follow-through; the measurement this node's STATEMENT reports directly
+answers the "not sure the state of all our json usage" question.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes

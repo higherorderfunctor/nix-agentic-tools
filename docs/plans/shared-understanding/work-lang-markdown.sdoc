@@ -1,0 +1,36 @@
+[DOCUMENT]
+TITLE: Language items for Markdown
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-LANG-MARKDOWN
+TITLE: Language items for Markdown
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Grammar to load: two grammars, not one. `tree-sitter-grammars.tree-sitter-markdown` (nixpkgs, 0.5.3, binding present) covers block structure; `tree-sitter-grammars.tree-sitter-markdown-inline` (nixpkgs, 0.5.3, binding present) covers inline spans (links, emphasis, code spans). Upstream ships them as two grammars/subdirectories in one repo (`tree-sitter-grammars/tree-sitter-markdown`, `split_parser` branch layout) for exactly this reason — block parsing and inline parsing are genuinely separate passes in CommonMark. A heading-level or fenced-code-level extractor needs only the block grammar; only a span-aware extractor (e.g. resolving this corpus's own cross-reference link syntax inside a STATEMENT, or a wikilink) needs the inline one too.
+
+Candidate items (node type, confirmed against upstream's block grammar `src/node-types.json`): `atx_heading` (`#`-style heading — this repo's convention), `setext_heading` (`===`/`---` underline form, present in CommonMark but not this repo's house style), `fenced_code_block` (with `fenced_code_block_delimiter` marking the opening/closing fence, relevant to identifying the language tag on a fence).
+
+Present in this repo today: 276 tracked `.md` files; 178 of them carry at least one fenced code block. Top fence languages by count: `bash` (578), `nix` (282), `json` (30), `console` (19), `text` (17), `markdown` (12), `yaml` (9), `gitconfig` (8), `js` (6), `toml`/`python` (2 each), `sh`/`jsonc`/`diff` (1 each).
+
+Gap: the repo's `markdown-formatting` fragment already documents several formatter/lint interactions specific to this corpus (mid-token code-span breaks, doubled words across a reflow, pipe-in-table-cell) that any markdown-aware tree-sitter tooling here should be aware of before trying to normalize or reflow markdown itself — see `dev/fragments/markdown-formatting/markdown-formatting.md`.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim, on backlogging generally: "we should track
+these in an sdoc, doesn't mean we have to implement any until a forcing
+function. lang, langitem/query can all be backlog items until there is a
+need."
+
+Filed 2026-09-02 as part of EV-REPO-LANGUAGE-SURVEY's per-language
+follow-through.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes

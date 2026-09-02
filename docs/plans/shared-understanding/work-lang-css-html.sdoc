@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: Language items for CSS and HTML
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-LANG-CSS-HTML
+TITLE: Language items for CSS and HTML
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Grammar to load: `tree-sitter-grammars.tree-sitter-css` (nixpkgs, 0.25.0, binding present) and `tree-sitter-grammars.tree-sitter-html` (nixpkgs, 0.23.2, binding present) — two separate grammars, paired here because both files are the same small surface (`docs/sdoc/board/`, `docs/sdoc/view/`).
+
+Candidate items, CSS (node type, confirmed against upstream `tree-sitter/tree-sitter-css`'s `src/node-types.json`): `rule_set` (a full `selector { ... }` block), `class_selector`, `id_selector`. HTML node types were not fetched this survey and are unverified — likely candidates by analogy with other tree-sitter HTML grammars are `element` and `script_element`/`style_element`, but treat these as unconfirmed until checked against `tree-sitter/tree-sitter-html`'s own `node-types.json`.
+
+Present in this repo today: 2 CSS files (`docs/sdoc/board/assets/{app,theme}.css`) and 2 HTML files (`docs/sdoc/board/index.html`, `docs/sdoc/view/template.html`); `index.html` is what loads the board app's JS and CSS listed under WORK-LANG-JAVASCRIPT.
+
+Gap: 4 files combined, well under the ~10-file presence bar this survey used elsewhere, and the operator did not name CSS or HTML directly; filed as one combined entry because the survey brief pre-scoped it that way and the two files types share one small surface. HTML node types remain unverified pending a follow-up fetch of upstream's `node-types.json` if this ever gets picked up.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim, on backlogging generally: "we should track
+these in an sdoc, doesn't mean we have to implement any until a forcing
+function. lang, langitem/query can all be backlog items until there is a
+need." CSS and HTML were not separately named by the operator in the quoted
+brief; filed because the survey instructions pre-scoped them by name.
+
+Filed 2026-09-02 as part of EV-REPO-LANGUAGE-SURVEY's per-language
+follow-through.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes

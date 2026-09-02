@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: Language items for TOML
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-LANG-TOML
+TITLE: Language items for TOML
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Grammar to load: `tree-sitter-grammars.tree-sitter-toml` (nixpkgs, 0.7.0-unstable-2024-12-03, `python313Packages`/`python314Packages` binding present).
+
+Candidate items (node type, confirmed against upstream `tree-sitter-grammars/tree-sitter-toml`'s `src/node-types.json`): `table` (a `[section]` header), `inline_table` (`{ k = v }` form), `table_array_element` (`[[section]]`).
+
+Present in this repo today: 1 tracked file, `config/agnix/agnix.toml`.
+
+Gap: well under the ~10-file presence bar this survey used elsewhere, and the operator did not name TOML directly; filed here only because the survey brief pre-scoped it by name (both as one of the languages to check a grammar for and as one of the UIDs to file). At a single file, this is the thinnest node in the set — a strong candidate for pruning at the next grooming pass unless TOML usage grows.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim, on backlogging generally: "we should track
+these in an sdoc, doesn't mean we have to implement any until a forcing
+function. lang, langitem/query can all be backlog items until there is a
+need." TOML itself was not separately named by the operator in the quoted
+brief; it is filed because the survey instructions pre-scoped it by name.
+
+Filed 2026-09-02 as part of EV-REPO-LANGUAGE-SURVEY's per-language
+follow-through.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes

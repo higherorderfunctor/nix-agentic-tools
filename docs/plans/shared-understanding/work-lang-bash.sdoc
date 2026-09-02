@@ -1,0 +1,46 @@
+[DOCUMENT]
+TITLE: Language items for Bash
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-LANG-BASH
+TITLE: Language items for Bash
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Grammar to load: `tree-sitter-grammars.tree-sitter-bash` (nixpkgs, 0.25.1, `python313Packages`/`python314Packages` binding present).
+
+Candidate items (node type, confirmed against upstream `tree-sitter/tree-sitter-bash`'s `src/node-types.json`): `function_definition`, `function` (the alternate `function foo { ... }` form the grammar tracks separately), `variable_assignment` (candidate for tracking exported/strict-mode setup, lower priority than the function forms).
+
+Present in this repo today: 52 `.sh` files plus 3 tracked files with no extension that carry a `#!/usr/bin/env bash` shebang: `checks/fixtures/claude-hooks/post-edit`, `checks/fixtures/claude-hooks/pre-edit`, `docs/sdoc/board/serve`. A manifest built from a bare `*.sh` glob misses all three; the manifest step needs a shebang-sniffing pass over extensionless tracked files (first two bytes `#!`, interpreter line matched against `bash`) alongside the extension glob.
+
+Sub-grammar case: bash is not only a standalone-file language here. 36 Nix files call `writeShellApplication` or `writeShellScript`, and 17 more carry a `text = ''` indented-string body whose content is frequently a shell script (the repo's own coding standard requires the full `set -euETo pipefail` / `shopt -s inherit_errexit` strict-mode header inside these bodies — see AGENTS.md's Bash table). Extracting language items out of these means parsing bash a second time, rooted at a byte-range offset inside the Nix parse tree (the Nix string's contents, after resolving Nix-level interpolation splices), not as an independent top-level file.
+
+Gap: no forcing function beyond the file count and the sub-grammar/extensionless cases named above; this WORK stays a design sketch until the manifest-and-glob mechanism is picked.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim, on backlogging generally: "we should track
+these in an sdoc, doesn't mean we have to implement any until a forcing
+function. lang, langitem/query can all be backlog items until there is a
+need."
+
+The sub-grammar requirement (bash inside Nix strings) and the
+extensionless-bash manifest requirement were relayed by the session that
+dispatched this survey, in its own words rather than a direct operator
+quote, so they are not reproduced here as verbatim — they are captured in
+STATEMENT and confirmed against this tree by measurement (36
+`writeShellApplication`/`writeShellScript` call sites, 17 `text = ''`
+bodies, 3 extensionless shebang scripts).
+
+Filed 2026-09-02 as part of EV-REPO-LANGUAGE-SURVEY's per-language
+follow-through.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes

@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: Language items for TypeScript
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-LANG-TYPESCRIPT
+TITLE: Language items for TypeScript
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Grammar to load: `tree-sitter-grammars.tree-sitter-typescript` (nixpkgs, 0.23.2, `python313Packages`/`python314Packages` binding present). TSX is a second, separate nixpkgs attribute from the same upstream repo, `tree-sitter-grammars.tree-sitter-tsx` (0.23.2, binding present) — TypeScript and TSX are two distinct grammars, not one grammar with a mode flag, so a `.tsx` extractor needs the second attribute even though this repo has no `.tsx` file today.
+
+Candidate items (node type, confirmed against upstream `tree-sitter/tree-sitter-typescript`'s `typescript/src/node-types.json`): `interface_declaration`, `type_alias_declaration`, `class_declaration`, `function_declaration`, `enum_declaration`, `method_definition` (inside a class body), and `export_statement` as the wrapper a top-level declaration is commonly found under (`export interface Foo {}` parses as `export_statement` wrapping `interface_declaration`).
+
+Present in this repo today: 4 files, `overlays/kiro-memory-distiller/{distiller,distiller.test}.ts` and `overlays/mcp-servers/openmemory-mem/{openmemory-mem,openmemory-mem.test}.ts` — two source/test pairs, both MCP-adjacent overlay update tooling.
+
+Gap: no forcing function today at 4 files, but the operator has named this the target language for a pending JS rewrite (see NOTES), so the grammar and item set above should be treated as ready-to-adopt rather than speculative.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "i heavily prefer modern TS over JS. so plan
+ahead for that rewrite with ts grammars." Also, on backlogging generally:
+"we should track these in an sdoc, doesn't mean we have to implement any
+until a forcing function. lang, langitem/query can all be backlog items
+until there is a need."
+
+Filed 2026-09-02 as part of EV-REPO-LANGUAGE-SURVEY's per-language
+follow-through.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes

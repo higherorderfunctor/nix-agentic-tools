@@ -1,0 +1,36 @@
+[DOCUMENT]
+TITLE: Language items for Python
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-LANG-PYTHON
+TITLE: Language items for Python
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Grammar to load: `tree-sitter-grammars.tree-sitter-python` (nixpkgs, 0.25.0, `python313Packages`/`python314Packages` binding present). This is also the grammar strictdoc's own built-in `reader_python.py` uses natively (source traceability, gated off in this repo today), so a repo-side extractor and strictdoc's own reader would target the same grammar.
+
+Candidate items (node type, confirmed against upstream `tree-sitter/tree-sitter-python`'s `src/node-types.json`): `function_definition`, `class_definition`, `decorated_definition` (a `@decorator` wrapping either of the first two — strictdoc's own reader treats this as its own top-level case).
+
+Present in this repo today: 75 files, the largest non-Nix, non-Markdown language by tracked-file count — the `dev/scripts/` tooling (scribe, the sdoc extractors, checks) and `checks/*.py`.
+
+Gap: none noted. No dialect ambiguity, and the grammar is already proven inside this exact toolchain via strictdoc's bundled reader.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim, on backlogging generally: "we should track
+these in an sdoc, doesn't mean we have to implement any until a forcing
+function. lang, langitem/query can all be backlog items until there is a
+need."
+
+Filed 2026-09-02 as part of EV-REPO-LANGUAGE-SURVEY's per-language
+follow-through.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes

@@ -1,0 +1,80 @@
+[DOCUMENT]
+TITLE: Repository languages paired with tree-sitter grammars
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-REPO-LANGUAGE-SURVEY
+TITLE: Repository languages paired with tree-sitter grammars
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: git ls-files + grep/json.tool measurements on this worktree, plus nixos-mcp package search on channel unstable and upstream node-types.json fetches; 2026-09-02
+STATEMENT: >>>
+| language | tracked files | embedded in | nixpkgs grammar (attr, version, python binding) | candidate items (tree-sitter node type) | gaps / caveats |
+| --- | --- | --- | --- | --- | --- |
+| Nix | 355 | 36 files call `writeShellApplication`/`writeShellScript`; 17 more carry a `text = ''` indented-string body (bash sub-grammar sites); 46 call `builtins.toJSON`/`fromJSON` | `tree-sitter-grammars.tree-sitter-nix`, 0.3.0-unstable-2025-12-03, python313/314Packages binding yes | `binding`, `function_expression` (with `formals`), `apply_expression` of `mkOption`/`mkEnableOption`/`mkPackageOption` — confirmed against upstream `nix-community/tree-sitter-nix` node-types.json and matches the in-flight extractor's own queries (`dev/scripts/sdoc_extractors/nix.py`) | first language, already in flight; the bash-in-Nix sub-grammar case is the one still open |
+| Python | 75 | — | `tree-sitter-grammars.tree-sitter-python`, 0.25.0, binding yes | `function_definition`, `class_definition`, `decorated_definition` (confirmed node-types.json) | none noted |
+| Bash | 52 `.sh` + 3 extensionless shebang scripts = 55 | parsed a second time inside Nix, at a byte-range offset, wherever a `writeShellApplication`/`writeShellScript` or `text = ''` body appears (see Nix row) | `tree-sitter-grammars.tree-sitter-bash`, 0.25.1, binding yes | `function_definition`, `function` (alt form), `variable_assignment` (confirmed node-types.json) | a manifest built from a `*.sh` glob misses all 3 extensionless scripts (`checks/fixtures/claude-hooks/post-edit`, `checks/fixtures/claude-hooks/pre-edit`, `docs/sdoc/board/serve`), all `#!/usr/bin/env bash` — needs a shebang-sniffing glob step |
+| TypeScript | 4 (`overlays/kiro-memory-distiller/{distiller,distiller.test}.ts`, `overlays/mcp-servers/openmemory-mem/{openmemory-mem,openmemory-mem.test}.ts`) | — | `tree-sitter-grammars.tree-sitter-typescript`, 0.23.2, binding yes; `tree-sitter-grammars.tree-sitter-tsx`, 0.23.2, binding yes (separate attr, same upstream repo, no `.tsx` in this repo today) | `interface_declaration`, `type_alias_declaration`, `class_declaration`, `function_declaration`, `enum_declaration`, `method_definition`, `export_statement` wrapper (all confirmed node-types.json) | under presence bar but operator-named as the rewrite target; kept |
+| JavaScript | 7 (`docs/sdoc/board/assets/*.js`, the whiteboard-view board app) + 2 `.mjs` (`overlays/claude-code/{census,locate}.mjs`) | `docs/sdoc/board/index.html` loads the `.js`/`.css` pair | `tree-sitter-grammars.tree-sitter-javascript`, 0.25.0, binding yes | `class_declaration`, `function_declaration`, `method_definition`, `arrow_function`, `export_statement` (confirmed node-types.json; largely the same names as TS) | deprioritized: the board app is a named rewrite-to-TS target, not a surface to build out |
+| JSON | 78 | 46 Nix files call `builtins.toJSON`/`fromJSON`; `overlays/*-sources.json`/`-extracted.json` sidecars; `docs/plans/kiro-v3-research-raw/**` probe fixtures | `tree-sitter-grammars.tree-sitter-json`, 0.24.8, binding yes; `tree-sitter-grammars.tree-sitter-json5`, 0.1.0, binding yes (upstream `Joakker/tree-sitter-json5`) | `pair` (top-level key), `object`, `array` (confirmed node-types.json) | measured: 0/78 tracked files contain a `//`/`/*` leading-line comment; 0/78 fail a strict `python3 -m json.tool` parse — no jsonc/json5 usage found. tree-sitter-json's own `grammar.js` already declares `comment` as an `extras` token (accepts `//`, `/* */`) but its `commaSep` helper allows no trailing comma, so the plain json grammar already covers a JSONC-with-comments reading; only trailing-comma tolerance needs the separate json5 grammar |
+| YAML | 7 (`.github/actions/*/action.yml`, `.github/workflows/*.yml`, `devenv.yaml`) | — | `tree-sitter-grammars.tree-sitter-yaml`, 0.7.2, binding yes | `block_mapping`, `block_mapping_pair`, `flow_pair` (confirmed node-types.json) — a GitHub workflow's `jobs:` keys are `block_mapping_pair` | under the ~10-file threshold; kept because pre-scoped by the survey brief |
+| TOML | 1 (`config/agnix/agnix.toml`) | — | `tree-sitter-grammars.tree-sitter-toml`, 0.7.0-unstable-2024-12-03, binding yes | `table`, `inline_table`, `table_array_element` (confirmed node-types.json) | 1 tracked file, well under the ~10 threshold; kept because pre-scoped |
+| Markdown | 276 | 178 carry fenced code; top fence languages `bash` (578), `nix` (282), `json` (30), `console` (19), `text` (17) | `tree-sitter-grammars.tree-sitter-markdown`, 0.5.3, binding yes; `tree-sitter-grammars.tree-sitter-markdown-inline`, 0.5.3, binding yes (separate grammar/repo) | `atx_heading`, `fenced_code_block`, `setext_heading` (confirmed node-types.json, block grammar) | two-grammar split: block structure and inline spans are separate tree-sitter grammars, both packaged; a heading-level extractor needs only the block grammar |
+| CSS / HTML | 2 css + 2 html, all under `docs/sdoc/board` or `docs/sdoc/view` | `docs/sdoc/board/index.html` loads the board app's `.css` and `.js` | `tree-sitter-grammars.tree-sitter-css`, 0.25.0, binding yes; `tree-sitter-grammars.tree-sitter-html`, 0.23.2, binding yes | `rule_set`, `class_selector`, `id_selector` (css, confirmed node-types.json); html node types unverified this survey | 4 files combined, well under the ~10-file threshold; kept as one entry because pre-scoped |
+
+Findings. Nix (355 tracked files) and Markdown (276) dominate the tree; StrictDoc's own `.sdoc` format (434 files) and generated `.sgra` (2) are excluded here since they are the plan corpus itself, not an extraction-target language. JSON usage today (78 files) is strict JSON with zero measured jsonc/json5 features: 0 of 78 tracked files contain a `//` or `/*` leading-line comment, and 0 of 78 fail a strict `python3 -m json.tool` parse, so there is no forcing function yet — matching the operator's "could probably survive as a gap" call. A side finding worth carrying forward: nixpkgs' plain `tree-sitter-json` grammar already declares `comment` as an `extras` token in its own `grammar.js` (accepts `//` and `/* */`) but its `commaSep` helper allows no trailing comma, so the ordinary json grammar already covers a JSONC-with-comments reading on its own; only trailing-comma tolerance needs the separate json5 grammar. Three tracked files are extensionless with a shebang, and all three are `#!/usr/bin/env bash` (`checks/fixtures/claude-hooks/post-edit`, `checks/fixtures/claude-hooks/pre-edit`, `docs/sdoc/board/serve`) — a manifest built from a bare `*.sh` glob would miss all three, confirming the "extensionless bash included" requirement needs a shebang-sniffing glob step, not an extension glob. Bash also appears embedded a second time, inside Nix: 36 files call `writeShellApplication`/`writeShellScript` and 17 more carry a `text = ''` indented-string body, both candidate sites for a bash sub-grammar parsed at a byte-range offset inside the Nix parse tree. JavaScript is confined to the `docs/sdoc/board/assets` whiteboard-view app (7 files) plus two `.mjs` update scripts in `overlays/claude-code`; TypeScript already exists in two overlay packages (4 files, each source paired with a `.test.ts`) — per the operator, the board app's JS is a rewrite-to-TS target, so the extractor's JS support should converge on the TS grammar's node types rather than grow as a separate long-lived surface. Markdown (276 files, 178 with fenced code, dominated by `bash` and `nix` fences) is upstream two grammars, not one: `tree-sitter-markdown` covers block structure and a separate `tree-sitter-markdown-inline` covers inline spans, both packaged in nixpkgs at 0.5.3 — a heading-level extractor needs only the block grammar. YAML (7 files), TOML (1 file) and CSS/HTML (2+2 files) all sit under the ~10-file presence bar used elsewhere in this survey but are carried here since the brief pre-scoped them; every attribute above resolved with both a `python313Packages` and `python314Packages` binding on the unstable channel (search index at nixos-unstable commit `34ab99075ac4f7e40cf037eef32cb1c360bb85e9`).
+<<<
+NOTES: >>>
+DEPTH implemented, not verified: this is a one-pass survey, not an
+independently re-run observation — the corpus convention here (see the other
+`EV-` nodes in this plan) is `implemented` for a completed measurement session
+and `verified` only once a second session re-runs it.
+
+Filed 2026-09-02 against this worktree (`nix-agentic-tools-worktrees/strictdoc-trial`)
+and the live nixpkgs search index at channel `unstable`
+(commit `34ab99075ac4f7e40cf037eef32cb1c360bb85e9`, via the nixos-mcp tool); the
+repo's own `flake.lock` pins `nixpkgs-src` to `NixOS/nixpkgs` at
+`c8f90650c15282fa8656a041bfbbd2403997a9a7` (lastModified 1787394516).
+
+Commands run (from the worktree root):
+
+```bash
+git ls-files | sed -n 's/.*\.\([^./]*\)$/\1/p' | sort | uniq -c | sort -rn
+git ls-files | wc -l
+git ls-files | while read -r f; do case "$f" in *.*) ;; *) [ -f "$f" ] && \
+  [ "$(head -c2 -- "$f")" = "#!" ] && head -n1 -- "$f";; esac; done
+git grep -lE 'writeShellApplication|writeShellScript' -- '*.nix' | wc -l
+git grep -lE "text = ''" -- '*.nix' | wc -l
+git grep -hE '^```[a-zA-Z0-9_+-]+' -- '*.md' \
+  | sed -E 's/^```([a-zA-Z0-9_+-]+).*/\1/' | sort | uniq -c | sort -rn
+git grep -lE '^\s*(//|/\*)' -- '*.json'
+git ls-files '*.json' | while read -r f; do python3 -m json.tool -- "$f" >/dev/null || echo "FAIL: $f"; done
+git grep -lE 'builtins\.(to|from)JSON' -- '*.nix' | wc -l
+```
+
+Grammar lookups: `mcp__plugin_hm_nixos-mcp__nix` (`action: search`,
+`query: tree-sitter-grammars.tree-sitter-<lang>`, `type: packages`) for every
+row's attribute and version; `python31{3,4}Packages.tree-sitter-grammars.*`
+confirmed present alongside every attr queried, so "python binding: yes" is
+uniform across the table and not called out per row beyond that.
+
+Node types were confirmed by fetching each grammar's `src/node-types.json`
+from its upstream GitHub repo (`nix-community/tree-sitter-nix`,
+`tree-sitter/tree-sitter-{python,bash,json,javascript,typescript,css}`,
+`tree-sitter-grammars/tree-sitter-yaml`,
+`tree-sitter-grammars/tree-sitter-toml`,
+`tree-sitter-grammars/tree-sitter-markdown` split_parser branch) rather than
+guessed from memory; HTML's node types were not fetched (time-boxed) and are
+marked unverified in the table. `Joakker/tree-sitter-json5` was located as the
+upstream for nixpkgs' `tree-sitter-grammars.tree-sitter-json5` by trying
+candidate org/repo names against raw.githubusercontent.com until one 200'd;
+its own node-types.json was not fetched.
+
+The in-flight Nix extractor's own tree-sitter queries
+(`dev/scripts/sdoc_extractors/nix.py:100-124`) were cross-checked against the
+upstream node-types.json rather than trusted standalone, and match: `binding`,
+`function_expression`/`formals`, `apply_expression` with an `mkOption` /
+`mkEnableOption` / `mkPackageOption` function-name match.
+<<<
