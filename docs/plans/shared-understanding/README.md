@@ -1,12 +1,19 @@
 # shared-understanding — LLM bootstrap
 
-The grooming thread carved from the operator's 2026-09-01 dump. Their goal
-sentence, verbatim because it reads two ways: **"the goal crosses the whole
-system but it's to shift the board as a whole for human reasoning."** This carve
-leans the system-wide reading — grammars, plan machinery, presentation and the
-board app as peer groups — and the operator separates intent from that reading
-at grooming (see `WORK-SHARED-UNDERSTANDING`). Their mission line for the
-branch: **promote a shared understanding between human and LLM.**
+**This is not a plan to implement.** It is the operator's consciousness dump of
+nits, missed expectations and fuzzy wants, carved on 2026-09-01 while those
+expectations are still fuzzy — on purpose. A session on this thread is guided
+elicitation: the operator picks a topic, and the session helps them pull out
+what they actually want, name what they did not consider, and sharpen what is
+fuzzy. There is no dependency order to work through, because nothing here is
+ready to build.
+
+Their goal sentence, verbatim because it reads two ways: **"the goal crosses the
+whole system but it's to shift the board as a whole for human reasoning."** This
+carve leans the system-wide reading — grammars, plan machinery, presentation and
+the board app as peer groups — and the operator separates intent from that
+reading at grooming (see `WORK-SHARED-UNDERSTANDING`). Their mission line for
+the branch: **promote a shared understanding between human and LLM.**
 
 ## Load context
 
@@ -31,9 +38,15 @@ branch: **promote a shared understanding between human and LLM.**
 
 ## Working protocol (the operator's rules)
 
-- **Agile, HITL.** No enforced order. The operator pivots to whatever they judge
-  the worst gap when a session works this thread. Do not pick the next item for
-  them.
+- **The operator picks the topic.** Do not pick for them, and do not rank, order
+  or schedule the items — a dependency analysis of this thread answers a
+  question nobody has asked yet.
+- **Help them extract, one step at a time.** Ask one question per turn, in plain
+  words. Offer two or three concrete readings to react to rather than an open
+  question. Say what they may not have considered. Drill deeper only on the
+  topic they picked.
+- **Write what surfaces back into the node in the same session.** The STATEMENT
+  gets sharper; NOTES keeps their words verbatim.
 - **Work items only, until groomed.** Nothing here converts to spec or
   presentation nodes without the operator in the loop.
 - **Ambiguity is preserved, not resolved.** Where the dump was ambiguous, the
@@ -87,18 +100,24 @@ Bootstrap, in order:
 The board app: `devenv up -d scribe board` from a shell in the worktree if not
 already up; http://127.0.0.1:8765/?view=plan renders this plan.
 
-Rules: I pick what we work on — never pick for me. I may add items outside the
-carve but in scope (the board viewer, strictdoc in general); file them as WORK.
+This is not a plan to implement. It is my consciousness dump of nits, missed
+expectations and fuzzy wants. Your job is to help me extract what I want, name what I did
+not consider, and sharpen what is fuzzy — on the topic I pick. Never pick for
+me, never rank or order the items. One question per turn, plain words, two or
+three concrete readings to react to. I may add items outside the carve but in
+scope (the board viewer, strictdoc in general); file them as WORK.
+
 Work items only; nothing converts to spec/presentation without me. Ambiguities
 stay verbatim in NOTES. Decisions come to me as plain-language cards, one per
 turn. Never fp-accept, never AUTHORED_BY. Log incidental findings to
-MECH-BACKLOG-SHARED-UNDERSTANDING, don't narrate them. Keep the plan tracking
-what changes; spec-worthy outcomes go to sdoc where they belong.
+MECH-BACKLOG-SHARED-UNDERSTANDING, don't narrate them. Write what surfaces back
+into the node the same session; spec-worthy outcomes go to sdoc where they
+belong.
 
 Protect your root context: delegate file reading and mechanical edits to
-background agents or small workflows and take back only the conclusion. Reason
-here only as much as conversing needs. Terse responses; explain designs, don't
-change them unasked. Commit as you go on the branch.
+background agents or small workflows and take back only the conclusion. Terse
+responses; explain designs, don't change them unasked. Commit as you go on the
+branch.
 ```
 
 ## Origin
