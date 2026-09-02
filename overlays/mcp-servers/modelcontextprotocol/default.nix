@@ -13,12 +13,12 @@
   inherit (ourPkgs) buildNpmPackage bun fetchFromGitHub makeWrapper python314Packages;
   vu = import ../../lib.nix;
 
-  rev = "579c3903f30044eb702a599a74b3ae77588e722e";
+  rev = "2e3e4c7ab74e08c664974e147620785d5748a3c9";
   src = fetchFromGitHub {
     owner = "modelcontextprotocol";
     repo = "servers";
     inherit rev;
-    hash = "sha256-svxsTWi4xasCYk71AQX5bDeYJlnLETeEeythZGpnnzM=";
+    hash = "sha256-1TRzsb1bcSv913lP6RfcVwUQp6yAfje2C1LCZ4uc5TM=";
   };
 
   # Helper: compute version string from a sub-package's upstream version.
