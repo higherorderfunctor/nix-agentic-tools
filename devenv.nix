@@ -156,6 +156,7 @@ in {
     ./packages/chatgpt-codex/modules/devenv
     ./packages/claude-code/modules/devenv
     ./packages/copilot-cli/modules/devenv
+    ./packages/kimchi/modules/devenv
     ./packages/kiro-cli/modules/devenv
     ./packages/semble/modules/devenv
     # NOTE: the stacked-workflows devenv module is NOT imported here. Enabling
@@ -309,6 +310,13 @@ in {
       };
     };
     copilot.enable = true;
+    # Kimchi's BINARY comes from this repo's overlay like every other runtime.
+    # Its config fanout is a separate, still-open problem: `configDir` is
+    # HOME-shaped while the writes land at a project path the binary does not
+    # read, so `.config/kimchi/**` is materialized-but-inert today. Enabling
+    # the runtime is still correct — it stops `kimchi` resolving to whatever
+    # the developer happens to have installed user-globally.
+    kimchi.enable = true;
     kiro = {
       enable = true;
       # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,
@@ -529,6 +537,21 @@ in {
     # from `gitSshConfigWorkaround`) — see packages/chatgpt-codex/lib/wrapPackage.nix,
     # which only ever emits `--set`. An env-only wrapper cannot reintroduce the
     # profile, so the guard now tests the hazard directly instead of the proxy.
+    # Every enabled `ai.*` runtime must resolve INTO the devenv closure, not to
+    # whatever the developer has installed user-globally. `claude` and `kimchi`
+    # both silently resolved to `~/.nix-profile` until 2026-09-02 — claude
+    # because its factory installed on neither backend, kimchi because it was
+    # never enabled here. A bare `command -v` is not enough to catch that: it
+    # succeeds either way. Assert the resolved path is a store path.
+    for nat_runtime in claude codex copilot kimchi kiro-cli; do
+      nat_runtime_bin="$(command -v "$nat_runtime" || true)"
+      test -n "$nat_runtime_bin" || { echo "FAIL: $nat_runtime is not on PATH"; exit 1; }
+      case "$nat_runtime_bin" in
+        /nix/store/*) ;;
+        *) echo "FAIL: $nat_runtime resolves to $nat_runtime_bin, outside the store"; exit 1 ;;
+      esac
+    done
+
     nat_codex_bin="$(command -v codex)"
     test -n "$nat_codex_bin" || { echo "FAIL: Codex is not on PATH"; exit 1; }
     if ${pkgs.coreutils}/bin/head -c2 "$nat_codex_bin" | ${pkgs.gnugrep}/bin/grep -Fq '#!'; then

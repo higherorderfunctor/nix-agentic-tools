@@ -932,6 +932,42 @@ in {
       )
   );
 
+  # ── Structural gate: every enabled runtime installs SOMETHING ──
+  #
+  # This is the test that would have caught `claude`. Installation used to be
+  # a per-factory `home.packages` / `packages` write with no shared
+  # requirement, and claude's was missing from BOTH backends — invisible on
+  # Home Manager because upstream's `programs.claude-code` installs the
+  # package anyway, and visible on devenv only as `claude` silently resolving
+  # to whatever the developer happened to have installed user-globally.
+  #
+  # `lib/ai/app/mkBackendTransform.nix` now owns installation and defaults to
+  # installing `cfg.package`, so saying nothing installs the plain package
+  # rather than nothing. This table pins the delivery CHANNEL per runtime per
+  # backend, which is the half a default cannot enforce: it catches a factory
+  # that opts out with `installPackage = null` for a reason that stops being
+  # true.
+  #
+  # `claude` on Home Manager is the ONE deliberate empty `home.packages`. It
+  # must not install there, or two paths to the same `bin/claude` land in one
+  # profile and buildEnv fails activation with a conflicting-subpath error.
+  # Its channel is `programs.claude-code.package`, asserted explicitly so the
+  # exemption cannot silently widen into "claude installs nothing anywhere".
+  module-every-runtime-installs-package = mkTest "every-runtime-installs-package" (
+    let
+      runtimes = ["claude" "codex" "copilot" "kimchi" "kiro"];
+      devenvInstalls = name: (evalDevenv {ai.${name}.enable = true;}).config.packages != [];
+      hmInstalls = name: let
+        hm = evalHm {ai.${name}.enable = true;};
+      in
+        if name == "claude"
+        then hm.config.programs.claude-code.package != null && hm.config.home.packages == []
+        else hm.config.home.packages != [];
+    in
+      lib.all devenvInstalls runtimes
+      && lib.all hmInstalls runtimes
+  );
+
   # ── A1 backstop: no repo module defines a ROOT ai.* option ──
   #
   # One per backend, because the pools are per-`evalModules`: an HM

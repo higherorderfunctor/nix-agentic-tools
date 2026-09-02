@@ -81,6 +81,13 @@ in
   if wrapArgs == []
   then package
   else
+    # `wrapProgram` (from `makeWrapper`) rather than a legacy inline bash
+    # heredoc. The legacy form wrote `$out` into the generated wrapper via a
+    # quoted `<< 'WRAPPER'` heredoc and relied on `$out` being set at RUNTIME,
+    # which it is not outside the nix build sandbox — a latent bug.
+    # `wrapProgram` resolves the target path at wrap time, substituting the
+    # real store path. Relocated here from mkCopilot.nix, which described this
+    # file's implementation from the caller's side.
     pkgs.symlinkJoin {
       name = "copilot-cli-wrapped";
       paths = [package];

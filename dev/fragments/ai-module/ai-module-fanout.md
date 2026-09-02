@@ -1,27 +1,34 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-19 (commit pending — the retired skill-package
-> program and its module tree are removed, leaving Stacked Workflows as the
-> skill-package factory consumer while preserving the per-runtime pool and
-> program contracts). Prior: 2026-08-17 (commit pending — devenv Codex now
-> resolves the canonical Git common directory from its automatically populated
-> `git.root`, including directory-form or linked-worktree metadata with absolute
-> or relative `gitdir` and `commondir` values, validates the Git directory and
-> common object database before granting it directly to a selected custom
-> permission profile, and emits no Git grant for non-Git projects; the legacy
-> workspace-root behavior remains unchanged for compatibility). Prior:
-> 2026-08-17 (commit pending — devenv Codex now contributes the effective
-> treefmt cache only when treefmt is enabled, lowering it through the
-> permission-model-aware integration-root pool; the locked whole-file profile
-> materializer exits before creating empty state, avoiding a grant over every
-> repository's profile-state parent, while processes without an enabled owner
-> receive no grant). Prior: 2026-08-17 (commit pending — Codex named permission
-> tables are enabled now that upstream documents their same-name cross-layer
-> merge; the hidden integration-root pool lowers into either legacy
-> workspace-write or the selected custom permission profile, with explicit
-> consumer rules winning at the same path. Whole-file `codex --profile` layers
-> remain a separate locked surface). Prior: 2026-08-16 (commit pending — every
-> runtime now exposes the one-way `ai.<runtime>.files` static-output seam;
+> **Last verified:** 2026-09-02 (commit pending — package installation MOVED out
+> of the per-factory backend callbacks into the shared transform. Two statements
+> below were false and are corrected: it was never true that only "Codex and
+> Kimchi install the selected package directly" — every runtime installs, and
+> `claude` installed on NEITHER backend, which is the defect this change fixes.
+> If you add a runtime, change a factory's `installPackage`, or touch the
+> install lowering in `lib/ai/app/mkBackendTransform.nix`, update this fragment
+> in the same commit). Prior: 2026-08-19 (commit pending — the retired
+> skill-package program and its module tree are removed, leaving Stacked
+> Workflows as the skill-package factory consumer while preserving the
+> per-runtime pool and program contracts). Prior: 2026-08-17 (commit pending —
+> devenv Codex now resolves the canonical Git common directory from its
+> automatically populated `git.root`, including directory-form or
+> linked-worktree metadata with absolute or relative `gitdir` and `commondir`
+> values, validates the Git directory and common object database before granting
+> it directly to a selected custom permission profile, and emits no Git grant
+> for non-Git projects; the legacy workspace-root behavior remains unchanged for
+> compatibility). Prior: 2026-08-17 (commit pending — devenv Codex now
+> contributes the effective treefmt cache only when treefmt is enabled, lowering
+> it through the permission-model-aware integration-root pool; the locked
+> whole-file profile materializer exits before creating empty state, avoiding a
+> grant over every repository's profile-state parent, while processes without an
+> enabled owner receive no grant). Prior: 2026-08-17 (commit pending — Codex
+> named permission tables are enabled now that upstream documents their
+> same-name cross-layer merge; the hidden integration-root pool lowers into
+> either legacy workspace-write or the selected custom permission profile, with
+> explicit consumer rules winning at the same path. Whole-file `codex --profile`
+> layers remain a separate locked surface). Prior: 2026-08-16 (commit pending —
+> every runtime now exposes the one-way `ai.<runtime>.files` static-output seam;
 > normalized context/rules and the single-owner repository AGENTS.md traverse it
 > before native backend sinks, including enabled-only public shared-target
 > arbitration and lazy discarded defaults, while Kiro uses verified symlink
@@ -213,9 +220,31 @@ sole gate for that ecosystem's product output:
 
 Where an upstream module exists, each per-CLI block implicitly flips its enable
 via `mkDefault`, so consumers don't have to set enable twice. Codex and Kimchi
-have no upstream modules: their factories install the selected package directly
-in each backend. For CLIs that do have an upstream module, a consumer can still
+have no upstream modules. For CLIs that do have one, a consumer can still
 override the corresponding `programs.<cli>.enable` explicitly.
+
+**Package installation is NOT per-factory work.**
+`lib/ai/app/mkBackendTransform.nix` installs a package for every enabled
+runtime, lowering it to `home.packages` on Home Manager and `packages` on devenv
+— the two option names being the whole reason it cannot live in a factory
+without being written twice per runtime. A backend spec that says nothing
+installs the plain `cfg.package`; one that wraps its binary supplies an
+`installPackage` callback taking the same arguments as `config`;
+`installPackage = null` opts out.
+
+The direction of that default is load-bearing. Installation used to be a
+per-factory `home.packages` / `packages` write with no shared requirement, and
+`claude` shipped with it missing from BOTH backends — masked on Home Manager,
+where upstream's `programs.claude-code` installs the package anyway, and visible
+on devenv only as `claude` silently resolving to whatever the developer had
+installed user-globally. Silence now means "install the plain package", so the
+same omission is inert rather than invisible.
+
+`claude` on Home Manager is the sole `installPackage = null` in the repo:
+upstream already installs it there, and a second path to the same `bin/claude`
+in one profile fails activation with a `buildEnv` conflicting-subpath error.
+`checks/module-eval.nix`'s `every-runtime-installs-package` pins each runtime's
+delivery channel per backend, so that exemption cannot silently widen.
 
 The one bounded exception is `migrationConfig`: ownership-safe retirement may
 run outside the enable gate when the generation that disables a runtime must
@@ -278,9 +307,10 @@ The ai module fans out TWO kinds of configuration:
 **Per-CLI options** (live inside `ai.{claude,codex,copilot,kimchi,kiro}.*`):
 
 - `ai.claude.package` / `ai.codex.package` / `ai.copilot.package` /
-  `ai.kimchi.package` / `ai.kiro.package` — package override; Codex and Kimchi
-  install it directly while the other runtimes route it through their native
-  factory wiring.
+  `ai.kimchi.package` / `ai.kiro.package` — package override. All five are
+  installed by the shared backend transform; four wrap the selected package
+  first via `installPackage`. `ai.claude.package` additionally feeds
+  `programs.claude-code.package`, which is what installs it on Home Manager.
 - `ai.kiro.extraPackages` — store-backed tools added to Kiro's runtime PATH in
   both backends. It is Kiro-specific because it closes the Linux `buildFHSEnv`
   visibility gap; it remains independent of `ai.shell`, which selects an

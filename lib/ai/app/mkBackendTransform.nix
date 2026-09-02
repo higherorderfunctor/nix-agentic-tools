@@ -179,6 +179,35 @@
       )
     else [];
   runtimeSinkFiles = builtins.removeAttrs cfg.files sharedAgentsMdTargets;
+  # ── Package installation ───────────────────────────────────────────────
+  # Owned HERE, not by each factory. An enabled runtime installs SOMETHING
+  # unless its backend spec opts out EXPLICITLY.
+  #
+  # The default is load-bearing: a backend spec that says nothing about
+  # packages installs `cfg.package`. It used to be the reverse — installation
+  # was a per-factory `home.packages` / `packages` write with no shared
+  # requirement — and `claude` shipped with that write missing from BOTH
+  # backends. Home Manager masked it (upstream's `programs.claude-code`
+  # installs the package), so the only visible symptom was `claude` missing
+  # from the devenv profile while every other runtime was fine. Silence now
+  # means "install the plain package", so the same omission is inert.
+  #
+  # `installPackage` accepts the same callback args as `config`, so a factory
+  # that wraps its binary derives the wrapper once and never repeats the
+  # lowering. `null` is the documented opt-out and exists for exactly one
+  # case — see mkClaude.nix's `hm` spec.
+  installPackageFn = backendSpec.installPackage or (_: cfg.package);
+  installedPackages =
+    if installPackageFn == null
+    then []
+    else [(installPackageFn callbackArgs)];
+  # `home.packages` on Home Manager, `packages` on devenv. The two option
+  # names are the whole reason this cannot live in the factories without
+  # being written twice per runtime.
+  packageInstallConfig =
+    if backend == "hm"
+    then {home.packages = installedPackages;}
+    else {packages = installedPackages;};
 in {
   options.ai.${appRecord.name} =
     {
@@ -334,6 +363,7 @@ in {
       );
     }))
     (lib.mkIf cfg.enable (lib.mkMerge [
+      packageInstallConfig
       customConfig
       (runtimeFiles.mkBackendSink {
         inherit backend;

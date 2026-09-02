@@ -22,12 +22,24 @@
 #     contextDescription ? null;     # runtime-specific option description override
 #     rulesDescription ? null;       # runtime-specific option description override
 #     hm = {
+#       installPackage ? (_: cfg.package);
+#                              # callback (same args as `config`) returning the
+#                              #   derivation to install. OMIT to install the plain
+#                              #   `cfg.package`; `null` opts out entirely. The
+#                              #   transform owns the `home.packages` / `packages`
+#                              #   lowering, so a factory never writes either.
 #       options ? {};                # HM-only option additions
 #       defaults ? {};               # HM-only default overrides
 #       migrationConfig ? _: {};     # bounded cleanup outside runtime enable
 #       config ? _: {};              # consumer callback projecting merged view → module attrs
 #     };
 #     devenv = {
+#       installPackage ? (_: cfg.package);
+#                              # callback (same args as `config`) returning the
+#                              #   derivation to install. OMIT to install the plain
+#                              #   `cfg.package`; `null` opts out entirely. The
+#                              #   transform owns the `home.packages` / `packages`
+#                              #   lowering, so a factory never writes either.
 #       options ? {};                # devenv-only option additions
 #       defaults ? {};               # devenv-only default overrides
 #       migrationConfig ? _: {};     # bounded cleanup outside runtime enable
