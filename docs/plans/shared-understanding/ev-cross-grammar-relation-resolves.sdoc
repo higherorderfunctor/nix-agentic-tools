@@ -1,0 +1,55 @@
+[DOCUMENT]
+TITLE: Two grammar files: a cross-file relation resolves
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-CROSS-GRAMMAR-RELATION-RESOLVES
+TITLE: Two grammar files: a cross-file relation resolves
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: scratch two-grammar project in the session scratchpad, eleven export runs each into a fresh output dir, plus upstream source at core/traceability_index_builder.py; strictdoc 0.28.3; 2026-09-01
+STATEMENT: >>>
+strictdoc 0.28.3 accepts more than one grammar alias: ProjectConfig(grammars={"@a": "a.sgra", "@b": "b.sgra"}) is typed Optional[Dict[str, str]], and every alias is resolved per document at core/traceability_index_builder.py:424. Grammar choice is per document, not per directory: two sibling documents in one directory importing @a and @b respectively export clean. A node under grammar A may declare a relation to a node under grammar B. The traceability index resolves it, and the HTML export renders the forward link (an href to the target document's anchor), the target anchor, and the reverse link labelled with the REVERSE_ROLE taken from the source node's grammar. The relation role must be registered in the SOURCE node's grammar: an ALPHA node using role Backs, registered only in b.sgra, fails with "Semantic error: Requirement relation type/role is not registered: Parent / Backs." A dangling target still fails across grammars: "error: [DocumentIndex.create] Requirement ALPHA-1 references parent requirement which doesn't exist: BETA-999."
+
+Two facts the board needs. The JSON export carries neither the grammar alias, nor the grammar file, nor the document path: each document has exactly the keys GRAMMAR, NODES, TITLE and _NODE_TYPE, and GRAMMAR is the inlined element list. Grouping by grammar file therefore needs an out-of-band map, either node type to grammar or the IMPORT_FROM_FILE line of each .sdoc header; the board's adapter already reads document paths from view-check's uid_paths.
+
+Caveat, recorded as confirmation of a known upstream blindness and not as a new defect: a parent cycle whose relations carry a ROLE passes JSON export with exit 0 and crashes HTML export with a RecursionError in the deep-trace renderer. Upstream parent_cycle_traverse_ (core/traceability_index_builder.py:770-789) queries NODE_TO_PARENT_NODES with the default edge=None, while role-qualified links are stored under edge=<role>; the same cycle written with role-less Parent relations is rejected with "document tree: a cycle detected". This repository's own cycle checker in nix flake check exists for exactly that reason.
+<<<
+NOTES: >>>
+DEPTH implemented, not verified: the observation is complete and measured, with a positive control behind every negative claim (case 2 for role registration, case 3 for dangling UIDs, case 7b for cycle detection), reproduced under both JSON and HTML export from clean output directories. It is nonetheless unreviewed: the ladder reserves verified for an independent session's check, no other session has re-run these cases, and every EVIDENCE node in the corpus at the time of filing (16 of 16) sits at implemented for the same reason. Raising it is a reviewer's act.
+
+Config shape that worked, verbatim:
+
+from strictdoc.api import ProjectConfig
+from strictdoc.backend.json.json_format import JSONFormat
+from strictdoc.backend.sdoc.sdoc_format import SDocFormat
+
+def create_config() -> ProjectConfig:
+    return ProjectConfig(
+        project_title="cross-grammar spike",
+        grammars={"@a": "a.sgra", "@b": "b.sgra"},
+        exclude_doc_paths=["*.md", "**/*.md", "out/**"],
+        formats=[SDocFormat(), JSONFormat()],
+        dir_for_sdoc_cache="$TMPDIR",
+    )
+
+Fixtures: a.sgra registers ALPHA (fields UID, TITLE, STATEMENT; Parent role Refers_To, reverse Referred_By). b.sgra registers BETA (same fields; Parent role Backs, reverse Backed_By). docs/a/one.sdoc imports @a and holds ALPHA-1 with Parent BETA-1 role Refers_To. docs/b/one.sdoc imports @b and holds BETA-1 with Parent ALPHA-1 role Backs. Every run used a fresh --output-dir; the HTML runs used a config without the formats pin, since the pinned JSON-only stack exits 0 and writes nothing for --formats=html.
+
+Cases (case; exit; decisive line):
+1 baseline, both documents, json; 0; both relations present in index.json: ALPHA-1 -> BETA-1 Refers_To and BETA-1 -> ALPHA-1 Backs.
+2 negative control, ALPHA-1 uses role Backs; 1; Semantic error: Requirement relation type/role is not registered: Parent / Backs. Hint: Problematic requirement: ALPHA-1.
+3 negative control, ALPHA-1 -> BETA-999; 1; error: [DocumentIndex.create] Requirement ALPHA-1 references parent requirement which doesn't exist: BETA-999.
+4 siblings docs/mixed/alpha.sdoc (@a) and docs/mixed/beta.sdoc (@b); 0; the same two relations as case 1.
+5 JSON provenance; not a run; document keys are exactly GRAMMAR, NODES, TITLE, _NODE_TYPE; zero occurrences of @a, @b, sgra or IMPORT_FROM_FILE anywhere in index.json.
+6 html, bidirectional baseline; 1; error: maximum recursion depth exceeded (markupsafe __new__, reached from features/deep_trace/generator.py:42 through requirement_tree_left.jinja.html). The per-document pages had already been written, with href="../../../case6/docs/b/one.html#BETA-1" on the alpha page and id="BETA-1" on the beta page.
+6b html, one direction (BETA-1's relation removed); 0; forward href to docs/b/one.html#BETA-1, target id="BETA-1", and the beta page shows the reverse link to ALPHA-1 labelled Referred_By.
+6c html, same grammar (@a in both documents), ALPHA-1 <-> ALPHA-2; html 1, json 0; identical RecursionError, so the crash is the cycle and not the grammar split.
+7 the same cycle inside one document, roles on; json 0, html 1; identical RecursionError.
+7b the same cycle with the ROLE lines removed and a bare Parent registered; 1; error: document tree: a cycle detected: requirements in the document tree must not reference each other. Cycle: ALPHA-1, ALPHA-2.
+
+The bidirectional baseline of case 1 is itself a parent cycle and passed only because of the role-qualified blindness above; case 6b, one direction, is the clean positive control for cross-grammar resolution.
+
+Scratch project: the session scratchpad, spike-cross-grammar/ with variants/caseN/ and out/caseN/; ephemeral, nothing of it is committed. strictdoc ran from the store path the dev shell exposes, the same binary as the shell's.
+<<<
