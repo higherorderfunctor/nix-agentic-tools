@@ -38,31 +38,36 @@
     "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace,
     SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* Type ramp. --fs-base is the ONE knob: every font-size outside Perspective
-   * is a frozen multiple of it (the ratios are the pre-token ramp over its
-   * 12px body, so --fs-9 is what used to be 9px and --fs-12 is the body) and
-   * type-coupled geometry is in em so it rides along. 12px reproduces the
-   * pre-token app exactly; 16px is an interim bump while the operator decides
-   * between a plain bump and a 12px floor (max()) on the small steps.
-   * Perspective's datagrid cells are NOT on this ramp:
-   * its shadow stylesheet scales them from the browser default it inherits,
-   * which is why body and .perspective-view set no font-size. */
-  --fs-base: 16px;
-  --fs-7: calc(var(--fs-base) * 7 / 12);
-  --fs-7-5: calc(var(--fs-base) * 7.5 / 12);
-  --fs-8: calc(var(--fs-base) * 8 / 12);
-  --fs-9: calc(var(--fs-base) * 9 / 12);
-  --fs-10: calc(var(--fs-base) * 10 / 12);
-  --fs-11: calc(var(--fs-base) * 11 / 12);
-  --fs-12: var(--fs-base);
-  --fs-13: calc(var(--fs-base) * 13 / 12);
-  --fs-14: calc(var(--fs-base) * 14 / 12);
-  --fs-17: calc(var(--fs-base) * 17 / 12);
-  --fs-18: calc(var(--fs-base) * 18 / 12);
-  --fs-42: calc(var(--fs-base) * 42 / 12);
+  /* Type ramp. --fs-base is the ONE knob and 12px is the reading size:
+   * every title, field value, relation target, button label and table cell
+   * the app renders itself sits on --fs-body. The steps below it were
+   * RE-STEPPED, not clamped: the old 7-11px labels now land on 10, 10.5 and
+   * 11 at base 12 (10px is the floor, nothing renders under it), and their
+   * order is preserved -- a step that was smaller stays no larger. No
+   * max()/min()/clamp() anywhere on a font-size. Tokens are named by role,
+   * never by px, since the px depends on the knob. Perspective is separate:
+   * its datagrid cells are sized by its own shadow stylesheet from the 16px
+   * it inherits, which is why body and .perspective-view set no font-size. */
+  --fs-base: 12px;
+  --fs-micro: calc(var(--fs-base) * 10 / 12);
+  --fs-small: calc(var(--fs-base) * 10.5 / 12);
+  --fs-meta: calc(var(--fs-base) * 11 / 12);
+  --fs-body: var(--fs-base);
+  --fs-lead: calc(var(--fs-base) * 13 / 12);
+  --fs-title: calc(var(--fs-base) * 14 / 12);
+  --fs-heading: calc(var(--fs-base) * 17 / 12);
+  --fs-display: calc(var(--fs-base) * 18 / 12);
+  --fs-mark: calc(var(--fs-base) * 42 / 12);
+
+  /* One pre-token pixel: type-coupled geometry (row heights, badge and chip
+   * padding, indents, dots) is written as calc(N * var(--u)) with N the px
+   * it had at the 12px body, so it rides the knob without riding the local
+   * font-size -- a chip whose text grew from 8px to 10.5px keeps its 2px
+   * padding. At base 12 this is exactly 1px. */
+  --u: calc(var(--fs-base) / 12);
 
   /* The chrome row's height, shared with the workspace that fills the rest. */
-  --topbar-height: calc(var(--fs-base) * 64 / 12);
+  --topbar-height: calc(64 * var(--u));
 
   font-family: var(--font-sans);
 }
@@ -91,7 +96,7 @@ button {
   background: var(--surface-tertiary);
   color: var(--text-primary);
   font: inherit;
-  font-size: var(--fs-12);
+  font-size: var(--fs-body);
   font-weight: 700;
   letter-spacing: 0.04em;
   cursor: pointer;
@@ -116,14 +121,14 @@ button:focus-visible {
   border-bottom: 1px solid var(--border-default);
   background: var(--surface-elevated);
   box-shadow: 0 8px 30px rgb(0 0 0 / 30%);
-  font-size: var(--fs-12);
+  font-size: var(--fs-body);
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 1em;
-  padding: 0 calc(20em / 12);
+  gap: calc(12 * var(--u));
+  padding: 0 calc(20 * var(--u));
   border-right: 1px solid var(--border-subtle);
 }
 
@@ -133,49 +138,49 @@ button:focus-visible {
 }
 
 .brand strong {
-  font-size: var(--fs-14);
+  font-size: var(--fs-title);
   letter-spacing: 0.065em;
 }
 
 .brand small {
   max-width: 200px;
-  margin-top: calc(3em / 9);
+  margin-top: calc(3 * var(--u));
   overflow: hidden;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: var(--fs-9);
+  font-size: var(--fs-meta);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .brand-mark {
   display: grid;
-  grid-template-columns: repeat(2, calc(7em / 12));
-  gap: 0.25em;
-  width: calc(34em / 12);
-  height: calc(34em / 12);
+  grid-template-columns: repeat(2, calc(7 * var(--u)));
+  gap: calc(3 * var(--u));
+  width: calc(34 * var(--u));
+  height: calc(34 * var(--u));
   place-content: center;
   border: 1px solid var(--border-default);
   background: var(--surface-primary);
 }
 
 .brand-mark i {
-  width: calc(7em / 12);
-  height: calc(7em / 12);
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
   border: 1px solid var(--accent-info);
 }
 
 .view-switch {
   display: flex;
   align-items: center;
-  gap: calc(4em / 12);
-  padding: 0 calc(16em / 12);
+  gap: calc(4 * var(--u));
+  padding: 0 calc(16 * var(--u));
   border-right: 1px solid var(--border-subtle);
 }
 
 .view-switch button {
-  height: calc(34em / 12);
-  padding: 0 1.5em;
+  height: calc(34 * var(--u));
+  padding: 0 calc(18 * var(--u));
   border-color: transparent;
   border-radius: 9px;
   background: transparent;
@@ -191,19 +196,19 @@ button:focus-visible {
 .stats {
   display: flex;
   align-items: center;
-  gap: calc(8em / 12);
+  gap: calc(8 * var(--u));
   min-width: 0;
   margin: 0;
-  padding: 0 calc(20em / 12);
+  padding: 0 calc(20 * var(--u));
   overflow: hidden;
 }
 
 .stats div {
   display: flex;
   align-items: baseline;
-  gap: calc(10em / 12);
-  min-width: 8em;
-  padding: 0.75em 1em;
+  gap: calc(10 * var(--u));
+  min-width: calc(96 * var(--u));
+  padding: calc(9 * var(--u)) calc(12 * var(--u));
   border: 1px solid var(--border-subtle);
   background: var(--surface-primary);
 }
@@ -211,7 +216,7 @@ button:focus-visible {
 .stats dt {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: var(--fs-9);
+  font-size: var(--fs-meta);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -220,35 +225,35 @@ button:focus-visible {
   margin: 0;
   color: var(--accent-info);
   font-family: var(--font-mono);
-  font-size: var(--fs-13);
+  font-size: var(--fs-lead);
   font-weight: 800;
 }
 
 .global-actions {
   display: flex;
   align-items: center;
-  gap: 1em;
-  padding: 0 calc(16em / 12);
+  gap: calc(12 * var(--u));
+  padding: 0 calc(16 * var(--u));
   border-left: 1px solid var(--border-subtle);
 }
 
 .global-actions button {
-  height: calc(34em / 12);
-  padding: 0 calc(14em / 12);
+  height: calc(34 * var(--u));
+  padding: 0 calc(14 * var(--u));
 }
 
 .status {
   display: flex;
   align-items: center;
-  gap: 0.8em;
+  gap: calc(8 * var(--u));
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: var(--fs-10);
+  font-size: var(--fs-meta);
 }
 
 .status-dot {
-  width: 0.8em;
-  height: 0.8em;
+  width: calc(8 * var(--u));
+  height: calc(8 * var(--u));
   border-radius: 50%;
   background: var(--accent-warning);
   box-shadow: 0 0 12px rgb(251 191 36 / 60%);
@@ -280,7 +285,7 @@ html[data-status="error"] .status-dot {
 .board-view {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 350px;
-  font-size: var(--fs-12);
+  font-size: var(--fs-body);
 }
 
 .canvas-shell {
@@ -299,7 +304,7 @@ html[data-status="error"] .status-dot {
   width: 100%;
   height: 100%;
   cursor: grab;
-  font-size: var(--fs-12);
+  font-size: var(--fs-body);
   touch-action: none;
   user-select: none;
 }
@@ -319,9 +324,9 @@ html[data-status="error"] .status-dot {
   left: 16px;
   display: flex;
   flex-wrap: wrap;
-  gap: calc(7em / 12) 1em;
+  gap: calc(7 * var(--u)) calc(12 * var(--u));
   max-width: calc(100% - 140px);
-  padding: calc(8em / 12) calc(11em / 12);
+  padding: calc(8 * var(--u)) calc(11 * var(--u));
   border: 1px solid var(--border-subtle);
   border-radius: 9px;
   background: rgb(7 10 14 / 88%);
@@ -332,16 +337,16 @@ html[data-status="error"] .status-dot {
 .legend-item {
   display: inline-flex;
   align-items: center;
-  gap: calc(5em / 9);
+  gap: calc(5 * var(--u));
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: var(--fs-9);
+  font-size: var(--fs-meta);
   letter-spacing: 0.04em;
 }
 
 .legend-item::before {
-  width: calc(7em / 9);
-  height: calc(7em / 9);
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
   border-radius: 2px;
   background: var(--accent);
   content: "";
@@ -354,13 +359,13 @@ html[data-status="error"] .status-dot {
   top: 16px;
   right: 16px;
   display: flex;
-  gap: calc(7em / 12);
+  gap: calc(7 * var(--u));
 }
 
 .viewport-actions button {
-  height: 2.5em;
-  min-width: 2.5em;
-  padding: 0 calc(10em / 12);
+  height: calc(30 * var(--u));
+  min-width: calc(30 * var(--u));
+  padding: 0 calc(10 * var(--u));
   background: rgb(7 10 14 / 88%);
 }
 
@@ -370,12 +375,12 @@ html[data-status="error"] .status-dot {
   bottom: 12px;
   left: 16px;
   margin: 0;
-  padding: 0.6em 0.9em;
+  padding: calc(6 * var(--u)) calc(9 * var(--u));
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: rgb(7 10 14 / 80%);
   color: var(--text-tertiary);
-  font-size: var(--fs-10);
+  font-size: var(--fs-meta);
   pointer-events: none;
 }
 
@@ -397,12 +402,12 @@ html[data-status="error"] .status-dot {
 .edge-label {
   fill: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: var(--fs-8);
+  font-size: var(--fs-small);
   letter-spacing: 0.02em;
   paint-order: stroke;
   stroke: var(--surface-backdrop);
   stroke-linejoin: round;
-  stroke-width: 0.5em;
+  stroke-width: calc(4 * var(--u));
   text-anchor: middle;
   transition:
     opacity 120ms ease,
@@ -463,19 +468,19 @@ html[data-status="error"] .status-dot {
 
 .node-card .card-type {
   fill: var(--accent);
-  font-size: var(--fs-8);
+  font-size: var(--fs-small);
   font-weight: 800;
   letter-spacing: 0.1em;
 }
 
 .node-card .card-id {
   fill: var(--text-tertiary);
-  font-size: var(--fs-7-5);
+  font-size: var(--fs-micro);
 }
 
 .node-card .card-title {
   fill: var(--text-primary);
-  font-size: var(--fs-11);
+  font-size: var(--fs-body);
   font-weight: 700;
 }
 
@@ -488,7 +493,7 @@ html[data-status="error"] .status-dot {
 
 .node-card .card-state {
   fill: var(--text-secondary);
-  font-size: var(--fs-7);
+  font-size: var(--fs-micro);
   letter-spacing: 0.04em;
 }
 
@@ -535,27 +540,27 @@ html[data-status="error"] .status-dot {
 
 .empty-mark {
   color: var(--accent-info);
-  font-size: var(--fs-42);
+  font-size: var(--fs-mark);
 }
 
 .inspector-empty h1 {
-  margin: calc(16em / 18) 0 calc(7em / 18);
-  font-size: var(--fs-18);
+  margin: calc(16 * var(--u)) 0 calc(7 * var(--u));
+  font-size: var(--fs-display);
 }
 
 .inspector-empty p {
   max-width: 250px;
   margin: 0;
   color: var(--text-tertiary);
-  font-size: var(--fs-12);
+  font-size: var(--fs-body);
   line-height: 1.55;
 }
 
 .inspector-empty .read-only {
-  margin-top: calc(24em / 9);
+  margin-top: calc(24 * var(--u));
   color: var(--text-disabled);
   font-family: var(--font-mono);
-  font-size: var(--fs-9);
+  font-size: var(--fs-meta);
   text-transform: uppercase;
 }
 
@@ -571,14 +576,14 @@ html[data-status="error"] .status-dot {
   justify-content: space-between;
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: var(--fs-9);
+  font-size: var(--fs-meta);
   font-weight: 800;
   letter-spacing: 0.1em;
 }
 
 .inspector-head h1 {
-  margin: calc(11em / 17) 0 calc(7em / 17);
-  font-size: var(--fs-17);
+  margin: calc(11 * var(--u)) 0 calc(7 * var(--u));
+  font-size: var(--fs-heading);
   line-height: 1.25;
 }
 
@@ -587,11 +592,11 @@ html[data-status="error"] .status-dot {
   overflow-wrap: anywhere;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: var(--fs-9);
+  font-size: var(--fs-meta);
 }
 
 .inspector-source {
-  margin-top: calc(12em / 9);
+  margin-top: calc(12 * var(--u));
   color: var(--text-disabled);
 }
 
@@ -601,15 +606,15 @@ html[data-status="error"] .status-dot {
 }
 
 .inspector-section h2 {
-  margin: 0 0 calc(12em / 9);
+  margin: 0 0 calc(12 * var(--u));
   color: var(--text-tertiary);
-  font-size: var(--fs-9);
+  font-size: var(--fs-meta);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .field {
-  margin-bottom: 1.25em;
+  margin-bottom: calc(15 * var(--u));
 }
 
 .field:last-child {
@@ -617,39 +622,44 @@ html[data-status="error"] .status-dot {
 }
 
 .field dt {
-  margin-bottom: 0.625em;
+  margin-bottom: calc(5 * var(--u));
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: var(--fs-8);
+  font-size: var(--fs-small);
   letter-spacing: 0.08em;
 }
 
 .field dd {
   margin: 0;
   color: var(--text-secondary);
-  font-size: var(--fs-11);
+  font-size: var(--fs-body);
   line-height: 1.5;
   white-space: pre-wrap;
 }
 
 .relation-list {
   display: grid;
-  gap: calc(7em / 12);
+  gap: calc(7 * var(--u));
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* Role beside the target while the target fits on the role's line; a target
+ * that would wrap drops to its own full-width line instead (flex-wrap with an
+ * auto basis), so at the 12px reading size "UID · title" never breaks a UID
+ * mid-word in a side column too narrow for it. */
 .relation-list li {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.7em;
-  padding: 0.8em 0.9em;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: calc(3 * var(--u)) calc(7 * var(--u));
+  padding: calc(8 * var(--u)) calc(9 * var(--u));
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: var(--surface-input);
   color: var(--text-secondary);
-  font-size: var(--fs-10);
+  font-size: var(--fs-body);
   cursor: pointer;
 }
 
@@ -660,10 +670,11 @@ html[data-status="error"] .status-dot {
 .relation-role {
   color: var(--accent-info);
   font-family: var(--font-mono);
-  font-size: var(--fs-8);
+  font-size: var(--fs-small);
 }
 
 .relation-target {
+  flex: 1 1 auto;
   overflow-wrap: anywhere;
 }
 
@@ -672,7 +683,7 @@ html[data-status="error"] .status-dot {
 .plan-view {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 350px;
-  font-size: var(--fs-12);
+  font-size: var(--fs-body);
 }
 
 .plan-shell {
@@ -686,7 +697,7 @@ html[data-status="error"] .status-dot {
 
 .plan-tree {
   display: grid;
-  gap: calc(8em / 12);
+  gap: calc(8 * var(--u));
 }
 
 .plan-group {
@@ -698,8 +709,8 @@ html[data-status="error"] .status-dot {
 .plan-group > summary {
   display: flex;
   align-items: baseline;
-  gap: calc(10em / 12);
-  padding: calc(10em / 12) calc(14em / 12);
+  gap: calc(10 * var(--u));
+  padding: calc(10 * var(--u)) calc(14 * var(--u));
   cursor: pointer;
   list-style: none;
 }
@@ -707,7 +718,7 @@ html[data-status="error"] .status-dot {
 .plan-group > summary::before {
   color: var(--text-tertiary);
   content: "▸";
-  font-size: var(--fs-11);
+  font-size: var(--fs-meta);
 }
 
 .plan-group[open] > summary::before {
@@ -717,26 +728,26 @@ html[data-status="error"] .status-dot {
 .plan-group-dir {
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: var(--fs-12);
+  font-size: var(--fs-body);
   font-weight: 700;
 }
 
 .plan-group-count {
   color: var(--text-disabled);
   font-family: var(--font-mono);
-  font-size: var(--fs-10);
+  font-size: var(--fs-meta);
 }
 
 .plan-group-body {
   display: grid;
-  gap: calc(2em / 12);
-  padding: calc(4em / 12) calc(10em / 12) 1em;
+  gap: calc(2 * var(--u));
+  padding: calc(4 * var(--u)) calc(10 * var(--u)) calc(12 * var(--u));
 }
 
 .plan-branch > summary {
   display: flex;
   align-items: center;
-  gap: 0.5em;
+  gap: calc(6 * var(--u));
   cursor: pointer;
   list-style: none;
 }
@@ -744,7 +755,7 @@ html[data-status="error"] .status-dot {
 .plan-branch > summary::before {
   color: var(--text-tertiary);
   content: "▸";
-  font-size: var(--fs-10);
+  font-size: var(--fs-meta);
 }
 
 .plan-branch[open] > summary::before {
@@ -752,23 +763,23 @@ html[data-status="error"] .status-dot {
 }
 
 .plan-leaf {
-  padding-left: calc(16em / 12);
+  padding-left: calc(15 * var(--u));
 }
 
 .plan-nest {
   display: grid;
-  gap: calc(2em / 12);
-  padding-left: 2em;
+  gap: calc(2 * var(--u));
+  padding-left: calc(22 * var(--u));
   border-left: 1px solid var(--border-subtle);
-  margin-left: calc(4em / 12);
+  margin-left: calc(4 * var(--u));
 }
 
 .plan-row {
   display: flex;
   align-items: baseline;
-  gap: 0.75em;
+  gap: calc(8 * var(--u));
   min-width: 0;
-  padding: calc(4em / 12) 0.75em;
+  padding: calc(4 * var(--u)) calc(8 * var(--u));
   border: 1px solid transparent;
   border-radius: 6px;
   background: none;
@@ -790,8 +801,8 @@ html[data-status="error"] .status-dot {
 
 .plan-dot {
   flex: none;
-  width: calc(8em / 12);
-  height: calc(8em / 12);
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
   border-radius: 2px;
   background: var(--accent);
 }
@@ -800,15 +811,14 @@ html[data-status="error"] .status-dot {
   flex: none;
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: var(--fs-10);
+  font-size: var(--fs-meta);
   font-weight: 700;
 }
 
-/* The body step; the rest of the plan ramp steps down from here. */
 .plan-title {
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: var(--fs-12);
+  font-size: var(--fs-body);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -818,7 +828,7 @@ html[data-status="error"] .status-dot {
   margin-left: auto;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: var(--fs-9);
+  font-size: var(--fs-small);
 }
 
 /* ---- grammars view ---------------------------------------------------- */
@@ -826,7 +836,7 @@ html[data-status="error"] .status-dot {
 .grammars-view {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 350px;
-  font-size: var(--fs-12);
+  font-size: var(--fs-body);
 }
 
 .grammar-shell {
@@ -839,10 +849,10 @@ html[data-status="error"] .status-dot {
 }
 
 .grammar-hint {
-  margin: 0 0 calc(14em / 9);
+  margin: 0 0 calc(14 * var(--u));
   color: var(--text-disabled);
   font-family: var(--font-mono);
-  font-size: var(--fs-9);
+  font-size: var(--fs-meta);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -855,8 +865,8 @@ html[data-status="error"] .status-dot {
 
 .grammar-card {
   display: grid;
-  gap: 1em;
-  padding: calc(14em / 12) calc(14em / 12) 1em;
+  gap: calc(12 * var(--u));
+  padding: calc(14 * var(--u)) calc(14 * var(--u)) calc(12 * var(--u));
   border: 1px solid var(--border-subtle);
   border-left: 3px solid var(--accent);
   border-radius: 9px;
@@ -882,13 +892,13 @@ html[data-status="error"] .status-dot {
 
 .grammar-card-head {
   display: grid;
-  gap: calc(4em / 12);
+  gap: calc(4 * var(--u));
 }
 
 .grammar-card-tag {
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: var(--fs-12);
+  font-size: var(--fs-body);
   font-weight: 800;
   letter-spacing: 0.08em;
 }
@@ -896,25 +906,25 @@ html[data-status="error"] .status-dot {
 .grammar-card-prefix {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: var(--fs-9);
+  font-size: var(--fs-meta);
 }
 
 .grammar-card-facts {
   display: flex;
-  gap: calc(14em / 12);
+  gap: calc(14 * var(--u));
   margin: 0;
 }
 
 .grammar-card-facts div {
   display: flex;
   align-items: baseline;
-  gap: calc(5em / 12);
+  gap: calc(5 * var(--u));
 }
 
 .grammar-card-facts dt {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: var(--fs-8);
+  font-size: var(--fs-small);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -923,20 +933,20 @@ html[data-status="error"] .status-dot {
   margin: 0;
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: var(--fs-11);
+  font-size: var(--fs-body);
   font-weight: 800;
 }
 
 .grammar-field-list {
   display: grid;
-  gap: calc(7em / 12);
+  gap: calc(7 * var(--u));
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .grammar-field {
-  padding: calc(8em / 12) 0.75em;
+  padding: calc(8 * var(--u)) calc(9 * var(--u));
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: var(--surface-input);
@@ -945,27 +955,27 @@ html[data-status="error"] .status-dot {
 .grammar-field-head {
   display: flex;
   align-items: baseline;
-  gap: calc(8em / 12);
+  gap: calc(8 * var(--u));
 }
 
 .grammar-field-name {
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: var(--fs-10);
+  font-size: var(--fs-meta);
   font-weight: 700;
 }
 
 .grammar-field-kind {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: var(--fs-9);
+  font-size: var(--fs-meta);
 }
 
 .grammar-required,
 .grammar-optional {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: var(--fs-8);
+  font-size: var(--fs-small);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -981,17 +991,17 @@ html[data-status="error"] .status-dot {
 .grammar-options {
   display: flex;
   flex-wrap: wrap;
-  gap: calc(4em / 12);
-  margin-top: calc(7em / 12);
+  gap: calc(4 * var(--u));
+  margin-top: calc(7 * var(--u));
 }
 
 .grammar-option {
-  padding: 0.25em 0.875em;
+  padding: calc(2 * var(--u)) calc(7 * var(--u));
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: var(--fs-8);
+  font-size: var(--fs-small);
 }
 
 /* The Board inspector's type name links into this view. */
@@ -1003,11 +1013,11 @@ html[data-status="error"] .status-dot {
   background: none;
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: var(--fs-9);
+  font-size: var(--fs-meta);
   font-weight: 800;
   letter-spacing: 0.1em;
   text-decoration: underline dotted;
-  text-underline-offset: calc(3em / 9);
+  text-underline-offset: calc(3 * var(--u));
 }
 
 .type-link:hover,
@@ -1031,13 +1041,13 @@ html[data-status="error"] .status-dot {
 .table-switch {
   display: flex;
   align-items: center;
-  gap: calc(4em / 12);
-  font-size: var(--fs-12);
+  gap: calc(4 * var(--u));
+  font-size: var(--fs-body);
 }
 
 .table-switch button {
-  height: 2.5em;
-  padding: 0 calc(16em / 12);
+  height: calc(30 * var(--u));
+  padding: 0 calc(16 * var(--u));
   border-color: transparent;
   border-radius: 8px;
   background: var(--surface-primary);
@@ -1051,10 +1061,10 @@ html[data-status="error"] .status-dot {
 }
 
 .table-hint {
-  margin-left: calc(12em / 9);
+  margin-left: calc(12 * var(--u));
   color: var(--text-disabled);
   font-family: var(--font-mono);
-  font-size: var(--fs-9);
+  font-size: var(--fs-meta);
 }
 
 perspective-viewer {
@@ -1075,27 +1085,27 @@ perspective-viewer {
   display: grid;
   align-content: center;
   justify-items: center;
-  gap: calc(8em / 12);
+  gap: calc(8 * var(--u));
   text-align: center;
   background: rgb(7 10 14 / 92%);
-  font-size: var(--fs-12);
+  font-size: var(--fs-body);
 }
 
 .loading strong,
 .no-daemon strong {
-  font-size: var(--fs-14);
+  font-size: var(--fs-title);
   letter-spacing: 0.05em;
 }
 
 .loading small {
   color: var(--text-tertiary);
-  font-size: var(--fs-11);
+  font-size: var(--fs-body);
 }
 
 .spinner {
-  width: calc(34em / 12);
-  height: calc(34em / 12);
-  margin-bottom: 0.5em;
+  width: calc(34 * var(--u));
+  height: calc(34 * var(--u));
+  margin-bottom: calc(6 * var(--u));
   border: 2px solid var(--border-default);
   border-top-color: var(--accent-info);
   border-radius: 50%;
@@ -1110,21 +1120,21 @@ perspective-viewer {
 
 .no-daemon pre {
   max-width: min(90vw, 640px);
-  margin: calc(6em / 11) 0 calc(10em / 11);
-  padding: calc(14em / 11) calc(18em / 11);
+  margin: calc(6 * var(--u)) 0 calc(10 * var(--u));
+  padding: calc(14 * var(--u)) calc(18 * var(--u));
   overflow: auto;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--surface-input);
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: var(--fs-11);
+  font-size: var(--fs-body);
   text-align: left;
   white-space: pre-wrap;
 }
 
 .no-daemon button {
-  padding: calc(8em / 12) calc(22em / 12);
+  padding: calc(8 * var(--u)) calc(22 * var(--u));
 }
 
 .error {
@@ -1133,7 +1143,7 @@ perspective-viewer {
   right: 18px;
   bottom: 18px;
   max-width: 520px;
-  padding: calc(13em / 11) calc(16em / 11);
+  padding: calc(13 * var(--u)) calc(16 * var(--u));
   border: 1px solid var(--accent-danger);
   border-radius: 8px;
   background: color-mix(
@@ -1143,7 +1153,7 @@ perspective-viewer {
   );
   color: #ffd4dd;
   font-family: var(--font-mono);
-  font-size: var(--fs-11);
+  font-size: var(--fs-body);
   box-shadow: 0 12px 36px rgb(0 0 0 / 42%);
 }
 
