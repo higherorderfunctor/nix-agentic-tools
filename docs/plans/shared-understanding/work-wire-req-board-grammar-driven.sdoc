@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: Hang REQ-BOARD-GRAMMAR-DRIVEN in the plan tree
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-WIRE-REQ-BOARD-GRAMMAR-DRIVEN
+TITLE: Hang REQ-BOARD-GRAMMAR-DRIVEN in the plan tree
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+REQ-BOARD-GRAMMAR-DRIVEN carries no RELATIONS block, so the Plan tab cannot
+hang it under WORK-BOARD-SHIFT even though that group's STATEMENT says it holds
+it. Where it belongs is a grooming call, not a wiring fix: read as a board
+consumer it hangs under WORK-BOARD-SHIFT; read as a constraint on what the
+grammar layer EMITS (styles, rung semantics, a companion payload the .sgra has
+no slot for) it hangs under WORK-GRAMMAR-ARCHITECTURE. Found 2026-09-01 by the
+three dependency-order readers, who split 2-1 on exactly that reading.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
