@@ -1,3 +1,4 @@
+# cspell:ignore dlopened restype
 # The generation-time runner for the typed `.sgra` option surface: strictdoc's
 # own interpreter, importable, with the extractor's entry point passed as
 # argv[1].
@@ -51,6 +52,32 @@
 # caller that diffs against a formatted file has to name it itself — see the
 # header of checks/strictdoc-grammar-surface-current.nix.
 #
+# ── Tree-sitter grammars for dev/scripts/sdoc_extractors/ ────────────────────
+#
+# THIS IS THE ONE SEAM, and it is why the grammars are delivered here rather
+# than in devenv.nix. Every scribe program — `scribe`, `scribe-daemon` (which
+# `processes.scribe` runs) and `scribe-client` — takes THIS derivation as its
+# `runner`, so a variable set on this wrapper reaches all of them, plus the
+# checks that run the same interpreter. Set it anywhere else and the daemon,
+# the one process that actually holds the graph, does not see it.
+#
+# `--set-default`, never `--set`: a developer pointing `SDOC_TS_NIX_PARSER` at
+# a locally built grammar has to win over the pinned one.
+#
+# THE CTYPES ROUTE IS FORCED, which is why a plain grammar derivation appears
+# here rather than a python package. `python3Packages.tree-sitter-grammars.*`
+# drags in pydantic, email_validator, dnspython and idna, none of which
+# upstream's venv carries; the plain derivation ships `$out/parser` — an ELF
+# shared object — with no python at all, and `tree_sitter.Language` accepts the
+# pointer `ctypes` hands back. The venv ALREADY carries py-tree-sitter, so
+# nothing goes on PYTHONPATH for this.
+#
+# The install check parses one buffer per grammar, and it is a BUILD gate
+# rather than a test on purpose: tree-sitter-nix is ABI 13, sitting exactly on
+# py-tree-sitter 0.25.2's MIN_COMPATIBLE floor, so either a grammar bump or a
+# strictdoc bump can break this with no change to any file here. Adding a
+# language is one row in `grammars` and nothing else.
+#
 # ── One consequence of moving the wrap out of the overlay ────────────────────
 #
 # Build inputs now come from the CONSUMER's `pkgs` rather than from the
@@ -66,6 +93,26 @@
   inherit (pkgs) ast-grep makeWrapper python3 stdenvNoCC;
 
   astGrepPy = pkgs.python3Packages.ast-grep-py;
+
+  # Language name -> the grammar derivation whose `$out/parser` is dlopened.
+  # The name is the whole convention: it becomes `SDOC_TS_<NAME>_PARSER` and
+  # the C entry point `tree_sitter_<name>`. One row per language.
+  grammars = {
+    nix = pkgs.tree-sitter-grammars.tree-sitter-nix;
+  };
+
+  grammarEnv = name: "SDOC_TS_${lib.toUpper name}_PARSER";
+
+  grammarFlags =
+    lib.concatMapStringsSep " \\\n        "
+    (name: ''--set-default ${grammarEnv name} "${grammars.${name}}/parser"'')
+    (lib.attrNames grammars);
+
+  # `(env, symbol)` pairs the install check parses one buffer through.
+  grammarProbes =
+    lib.concatMapStringsSep ", "
+    (name: ''("${grammarEnv name}", "tree_sitter_${name}")'')
+    (lib.attrNames grammars);
 in
   stdenvNoCC.mkDerivation {
     pname = "strictdoc-grammar-extract";
@@ -95,7 +142,8 @@ in
 
       makeWrapper "$venvPython" "$out/bin/strictdoc-grammar-extract" \
         --prefix PYTHONPATH : "${astGrepPy}/${python3.sitePackages}" \
-        --suffix PATH : "${lib.makeBinPath [ast-grep]}"
+        --suffix PATH : "${lib.makeBinPath [ast-grep]}" \
+        ${grammarFlags}
       runHook postInstall
     '';
 
@@ -111,8 +159,31 @@ in
       from strictdoc.backend.sdoc.grammar.grammar_builder import SDocGrammarBuilder
       assert SDocGrammarBuilder.create_grammar_grammar()
       '
+
+      # Every delivered tree-sitter grammar must be loadable by the SAME
+      # interpreter, through ctypes, and must parse. This is the ABI check:
+      # py-tree-sitter refuses a grammar below its MIN_COMPATIBLE floor, and
+      # tree-sitter-nix sits exactly on it.
+      "$out/bin/strictdoc-grammar-extract" -c '
+      import ctypes, os, warnings
+      from tree_sitter import Language, Parser
+      for env, symbol in [${grammarProbes}]:
+          path = os.environ[env]
+          library = ctypes.CDLL(path)
+          entry_point = getattr(library, symbol)
+          entry_point.restype = ctypes.c_void_p
+          with warnings.catch_warnings():
+              warnings.simplefilter("ignore", DeprecationWarning)
+              language = Language(entry_point())
+          assert Parser(language).parse(b"{ a = 1; }").root_node.type, (env, path)
+      '
       runHook postInstallCheck
     '';
+
+    # The delivered grammars, so a consumer that needs the same paths outside
+    # this wrapper (a dev-shell `env` entry for a hand-run `strictdoc export`,
+    # say) reads them from here rather than re-deriving the attrset.
+    passthru.tsGrammars = grammars;
 
     meta = {
       description = "Generation-time runner for StrictDoc's typed .sgra Nix surface";

@@ -1,0 +1,46 @@
+[DOCUMENT]
+TITLE: Nix extractor gate
+
+[REQUIREMENT]
+UID: REQ-FILE
+STATEMENT: backward file-scope marker, from the Nix header comment
+
+[REQUIREMENT]
+UID: REQ-ENABLE
+STATEMENT: backward function-scope marker, from a comment above an option
+
+[REQUIREMENT]
+UID: REQ-MODULE
+STATEMENT: forward relation to the module itself, as a class element
+RELATIONS:
+- TYPE: File
+  PATH: src/mod.nix
+  ELEMENT: class
+  ID: src/mod.nix
+
+[REQUIREMENT]
+UID: REQ-OPTION
+STATEMENT: forward relation to one option, by its qualified attribute path
+RELATIONS:
+- TYPE: File
+  PATH: src/mod.nix
+  ELEMENT: function
+  ID: options.services.foo.port
+
+[REQUIREMENT]
+UID: REQ-BINDING
+STATEMENT: forward relation to a nested binding, by its qualified attribute path
+RELATIONS:
+- TYPE: File
+  PATH: src/mod.nix
+  ELEMENT: function
+  ID: config.systemd.services.foo.script
+
+[REQUIREMENT]
+UID: REQ-GHOST
+STATEMENT: POSITIVE CONTROL - an ID no item offers, which strictdoc drops silently
+RELATIONS:
+- TYPE: File
+  PATH: src/mod.nix
+  ELEMENT: function
+  ID: options.services.foo.nonexistent
