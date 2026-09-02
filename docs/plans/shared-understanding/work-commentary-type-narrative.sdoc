@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: COMMENTARY has no per-type narrative
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-COMMENTARY-TYPE-NARRATIVE
+TITLE: COMMENTARY has no per-type narrative
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Every grammar type except COMMENTARY has a NAR-SEMANTIC-LAYER-TYPE-* narrative
+in docs/spec/ carrying TAGS: <TYPE> and a first-sentence gloss; COMMENTARY has
+none, so a Grammars tab that renders type cards from those narratives (the
+generate-not-hard-code direction under discussion 2026-09-02) would have no
+gloss for it and a narrative-driven coverage check would flag it. Found while
+copying the glosses into grammar-groups.json (b6c01bd4).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
