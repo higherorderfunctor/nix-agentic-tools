@@ -1,9 +1,9 @@
 {
-  "version": "2.99.0",
+  "version": "2.100.0",
   "src": {
-    "url": "https://github.com/cli/cli/archive/v2.99.0.tar.gz",
-    "hash": "sha256-+66P7F+UBhqV+B/ak1LqzK8X5z+z9PLN2XhIB9FJyPg="
+    "url": "https://github.com/cli/cli/archive/v2.100.0.tar.gz",
+    "hash": "sha256-9tnSQPSqllE+Ke6LKyNbnOF1drzdEwesEuPdmWD1X5c="
   },
-  "goFloor": "1.26.7",
-  "vendorHash": "sha256-bVc4dhDapAp1YtO06C/nSrdxllpEhVFC2iZNPmjsJkI="
+  "goFloor": "1.26.8",
+  "vendorHash": "sha256-ZqUs2BnasF3QBX0I2Sxh2A/CnO61Vy6gRn1hkf0n9AY="
 }
