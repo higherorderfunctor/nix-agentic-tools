@@ -52,7 +52,7 @@ in
 
     # Patches the grammar DEFINITION (grammar/grammar.js,
     # grammar/rules/document_grammar.js, grammar/rules/type_system.js), not the
-    # generated parser. Three gaps, each measured against a real file upstream
+    # generated parser. Four gaps, each measured against a real file upstream
     # could not parse:
     #   - the root rule required a [DOCUMENT] header, so a bare .sgra grammar
     #     file could never parse at all;
@@ -64,11 +64,17 @@ in
     #     `SingleChoice("MIT (Expat)", GPL-3.0-or-later, proprietary)` failed.
     #     Found by checks/strictdoc-grammar-corpus.nix the moment
     #     packages/strictdoc-grammar/fixtures/foreign.sgra entered the corpus.
+    #   - file_entry knew five of StrictDoc's nine FileEntry keys and required
+    #     VALUE, so an ELEMENT-grained File relation -- VALUE + ELEMENT + ID,
+    #     which points a relation at one function or class rather than a whole
+    #     file -- could not parse. The whole upstream key set is taught, in
+    #     StrictDoc's own order; only "VALUE or PATH, at least one" diverges,
+    #     because tree-sitter rejects a rule deriving the empty string.
     patches = [./tree-sitter-strictdoc.patch];
     patchFlags = ["-p1" "--fuzz=0"];
 
     meta = {
-      description = "Tree-sitter grammar for StrictDoc's .sdoc/.sgra format, patched to parse standalone .sgra grammar files and REVERSE_ROLE relations";
+      description = "Tree-sitter grammar for StrictDoc's .sdoc/.sgra format, patched to parse standalone .sgra grammar files, REVERSE_ROLE relations and the full File relation key set";
       homepage = "https://github.com/manueldiagostino/tree-sitter-strictdoc";
       license = lib.licenses.mit;
       platforms = lib.platforms.all;

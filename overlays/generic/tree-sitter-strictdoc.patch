@@ -94,10 +94,16 @@
      ),
 --- a/grammar/rules/type_system.js
 +++ b/grammar/rules/type_system.js
-@@ -1,7 +1,30 @@
+@@ -1,7 +1,36 @@
++// One `  KEY: <rest of line>` entry inside a File relation's FileEntry. Eight
++// of the nine keys are this exact shape, so it is written once here rather
++// than eight times below.
++const fileEntryLine = (key, name) =>
++  seq("  ", key, ":", " ", field(name, /.*/), "\n");
++
  module.exports = {
    boolean_choice: () => choice("True", "False"),
- 
+
 -  choice_option: () => field("option", token(/[\w\/-]+/)),
 +  // StrictDoc's own ChoiceOption production is `(["])[^,]+\1|[^,()"]+`
 +  // (backend/sdoc/grammar/grammar_grammar.py): a QUOTED run of anything but a
@@ -123,6 +129,59 @@
 +  // eye -- widen it against the corpus check.
 +  choice_option: () =>
 +    field("option", token(choice(/"[-\w .\/()]+"/, /[-\w\/]+/))),
- 
+
    requirement_type: ($) => /[A-Z]+[_A-Z]*/,
- 
+
+@@ -61,6 +90,22 @@
+
+   role_id: ($) => token(/.+/),
+
++  // StrictDoc's own FileEntry production (backend/sdoc/grammar/type_system.py)
++  // is NINE keys in a fixed order -- FORMAT, VALUE, PATH, ELEMENT, ID,
++  // LINE_RANGE, FUNCTION, CLASS, HASH -- and every one of them is optional.
++  // Upstream's rule below knew only five and made VALUE mandatory, so an
++  // ELEMENT-grained relation (`VALUE` + `ELEMENT` + `ID`, which is how a
++  // relation points at one function or class rather than a whole file) could
++  // not parse at all. The WHOLE key set is taught here, not just the keys some
++  // corpus happens to use today, so the rule tracks the upstream production
++  // rather than the documents of the day.
++  //
++  // One deliberate divergence: strictdoc leaves VALUE and PATH both optional,
++  // which admits a FileEntry naming no file whatsoever. tree-sitter rejects a
++  // rule that can derive the empty string, and such an entry is meaningless in
++  // any case, so at least one of the two is required. Every other key stays
++  // optional and stays in strictdoc's order -- textx matches the sequence
++  // positionally, so a reordering here would accept files strictdoc rejects.
+   file_entry: ($) =>
+     seq(
+       optional(
+@@ -73,17 +118,19 @@
+           "\n",
+         ),
+       ),
+-      "  ",
+-      "VALUE",
+-      ":",
+-      " ",
+-      field("g_file_path", /.*/),
+-      "\n",
+-      optional(
+-        seq("  ", "LINE_RANGE", ":", " ", field("g_line_range", /.*/), "\n"),
++      choice(
++        seq(
++          fileEntryLine("VALUE", "g_file_path"),
++          optional(fileEntryLine("PATH", "g_path")),
++        ),
++        fileEntryLine("PATH", "g_path"),
+       ),
+-      optional(seq("  ", "FUNCTION", ":", " ", field("function", /.*/), "\n")),
+-      optional(seq("  ", "CLASS", ":", " ", field("clazz", /.*/), "\n")),
++      optional(fileEntryLine("ELEMENT", "element")),
++      optional(fileEntryLine("ID", "id")),
++      optional(fileEntryLine("LINE_RANGE", "g_line_range")),
++      optional(fileEntryLine("FUNCTION", "function")),
++      optional(fileEntryLine("CLASS", "clazz")),
++      optional(fileEntryLine("HASH", "hash")),
+     ),
+
+   file_entry_format: () => choice("Sourcecode", "Python", /[A-Z]+[A-Z_]*/),

@@ -22,6 +22,27 @@
 # zero — several fail on pre-existing, unrelated grammar gaps (document-body
 # / FREETEXT coverage) this patch never targeted; see the backlog entry this
 # SLICE files for that gap. The build prints a before/after table either way.
+#
+# CONTROLS, because "every file in this repository parses" is a gate a grammar
+# that accepted anything at all would also pass — and so would one whose patch
+# had silently not taken effect, since `generate = true` without the preBuild
+# override ships upstream's committed `src/parser.c` and still exits 0. Two
+# synthetic documents travel the same two parsers:
+#
+#   accept — a File relation carrying EVERY key StrictDoc's own FileEntry
+#     production admits (FORMAT, VALUE, PATH, ELEMENT, ID, LINE_RANGE,
+#     FUNCTION, CLASS, HASH), plus the VALUE+ELEMENT+ID shape this repository
+#     writes and the PATH-without-VALUE shape it does not. It must parse clean
+#     under `patched` and must NOT under `baseline` — that differential is the
+#     only thing here that can tell a live patch from an inert one.
+#   reject — the same relation carrying a key StrictDoc has never defined. It
+#     must NOT parse. Without it, "teach the grammar the whole key set" is
+#     indistinguishable from "let a File relation hold anything".
+#
+# They are `writeText` rather than committed `.sdoc` fixtures deliberately: a
+# real file under the repository root is read by every whole-project
+# `strictdoc export`, and the reject control is invalid input by construction
+# — the same reason `fixtures/negative/` spells its grammars `.sgra.invalid`.
 {
   lib,
   pkgs,
@@ -77,6 +98,59 @@
     map (name: strictdocUpstream + "/docs/${name}")
     (lib.filter (lib.hasSuffix ".sdoc") (builtins.attrNames (builtins.readDir (strictdocUpstream + "/docs"))));
 
+  # A `.sdoc` is whitespace-significant to the byte, so the controls are built
+  # from LINE LISTS rather than an indented Nix string: an interpolated
+  # multi-line value inside `''…''` keeps its own indentation while the literal
+  # around it is stripped, which is exactly the kind of drift that would make a
+  # control fail for a reason it does not name. Only RELATIONS differs between
+  # the two; the envelope is written once. The node type and its fields are
+  # arbitrary — nothing above RELATIONS is what either control measures.
+  controlDocument = name: relations:
+    pkgs.writeText "strictdoc-corpus-control-${name}.sdoc"
+    (lib.concatStringsSep "\n" (
+      [
+        "[DOCUMENT]"
+        "TITLE: File relation control (${name})"
+        ""
+        "[MECHANISM]"
+        "UID: MECH-FILE-RELATION-CONTROL"
+        "TITLE: File relation control"
+        "STATEMENT: Synthetic; see checks/strictdoc-grammar-corpus.nix."
+        "RELATIONS:"
+      ]
+      ++ relations
+      ++ [""]
+    ));
+
+  # Every key, in StrictDoc's order, then the two shapes that matter on their
+  # own: VALUE+ELEMENT+ID, which is what this repository writes, and PATH with
+  # no VALUE, which upstream admits and the pre-patch rule could not express.
+  controlAccept = controlDocument "accept" [
+    "- TYPE: File"
+    "  ROLE: Implements"
+    "  FORMAT: Sourcecode"
+    "  VALUE: lib/thing.py"
+    "  PATH: lib/thing.py"
+    "  ELEMENT: function"
+    "  ID: thing.do"
+    "  LINE_RANGE: 10, 20"
+    "  FUNCTION: do"
+    "  CLASS: Thing"
+    "  HASH: deadbeef"
+    "- TYPE: File"
+    "  VALUE: lib/other.nix"
+    "  ELEMENT: class"
+    "  ID: Other"
+    "- TYPE: File"
+    "  PATH: lib/third.py"
+  ];
+
+  controlReject = controlDocument "reject" [
+    "- TYPE: File"
+    "  VALUE: lib/thing.py"
+    "  SPROCKET: not a StrictDoc FileEntry key"
+  ];
+
   countScript = pkgs.writeText "strictdoc-corpus-count.py" ''
     # cspell:ignore argtypes pythonapi restype
     from __future__ import annotations
@@ -128,6 +202,46 @@
             print(f"  {status:12s} {path}")
 
 
+    def controls(patched_parser: str, baseline_parser: str, accept: str, reject: str) -> list[str]:
+        """The accept/reject pair. Returns the failures, printing every verdict.
+
+        Reported as claims rather than as a counts table: the three do not
+        share an expectation, and a table whose OK column means the opposite
+        thing on one row is how a control quietly stops being read.
+        """
+        patched_counts = parse_all(patched_parser, [accept, reject])
+        baseline_counts = parse_all(baseline_parser, [accept])
+
+        claims = [
+            (
+                "every StrictDoc FileEntry key parses under the patched grammar",
+                patched_counts[accept] == 0,
+                f"{accept}: {patched_counts[accept]} error node(s) under the PATCHED grammar",
+            ),
+            (
+                "...and does NOT under the unpatched baseline, so the patch is live",
+                baseline_counts[accept] != 0,
+                f"{accept}: parsed clean under the BASELINE grammar too, so this "
+                "control cannot tell a live patch from an inert one",
+            ),
+            (
+                "a key StrictDoc never defined is still rejected",
+                patched_counts[reject] != 0,
+                f"{reject}: parsed clean under the PATCHED grammar, so a File "
+                "relation now accepts any key at all",
+            ),
+        ]
+
+        print("\n== controls ==")
+        failures = []
+        for title, ok, why in claims:
+            status = "OK" if ok else "FAIL"
+            print(f"  {status:12s} {title}")
+            if not ok:
+                failures.append(why)
+        return failures
+
+
     def main() -> None:
         manifest = json.loads(Path(sys.argv[1]).read_text())
         patched_parser = manifest["patched"]
@@ -145,6 +259,14 @@
         report("strictdoc's own docs, baseline (unpatched)", baseline_strictdoc)
         report("strictdoc's own docs, patched", patched_strictdoc)
 
+        control_failures = controls(
+            patched_parser,
+            baseline_parser,
+            manifest["controlAccept"],
+            manifest["controlReject"],
+        )
+        assert not control_failures, "controls failed: " + "; ".join(control_failures)
+
         failures = [f for f, c in patched_ours.items() if c != 0]
         assert not failures, f"patched grammar must parse our own corpus with zero errors: {failures}"
 
@@ -155,7 +277,7 @@
         ]
         assert not regressions, f"patched grammar regressed on strictdoc's own docs: {regressions}"
 
-        print("\nok — no regressions, our corpus fully clean")
+        print("\nok — controls hold, no regressions, our corpus fully clean")
 
 
     if __name__ == "__main__":
@@ -167,6 +289,8 @@
     baseline = "${baseline}/parser";
     ours = ourCorpus;
     strictdocDocs = strictdocCorpus;
+    controlAccept = "${controlAccept}";
+    controlReject = "${controlReject}";
   });
 
   pythonWithTreeSitter = pkgs.python3.withPackages (ps: [ps.tree-sitter]);
