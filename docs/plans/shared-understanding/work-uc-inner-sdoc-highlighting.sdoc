@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: Use case: syntax highlighting for inner sdocs in code
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-UC-INNER-SDOC-HIGHLIGHTING
+TITLE: Use case: syntax highlighting for inner sdocs in code
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+An unsettled use case, narrower than WORK-UC-INNER-SDOCS-IN-CODE-COMMENTS:
+once an inner sdoc inside a code comment is matched, give it its own syntax
+highlighting rather than rendering as an undifferentiated comment.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "syntax highlighting"
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-UC-INNER-SDOCS-IN-CODE-COMMENTS
+  ROLE: Assumes

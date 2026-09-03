@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: Fields may embed another language, named by a companion field
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SDOC-EMBEDDED-LANGUAGE-FIELDS
+TITLE: Fields may embed another language, named by a companion field
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Let an sdoc field's content be written in another language, with a companion
+field on the same node naming which language it is, so the tree-sitter
+grammar knows what to parse the embedded content as.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "allow fields to contain other languages
+embedded, maybe with another field for the language."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SDOC-TREE-SITTER-SUPPORT
+  ROLE: Assumes

@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Use case: assemble output documents from chunks
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-UC-ASSEMBLE-OUTPUT-DOCS
+TITLE: Use case: assemble output documents from chunks
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+An unsettled use case the tree-sitter/embedded-language work could serve:
+assembling an output document (for example, Markdown) from chunks held
+across sdoc nodes. Filed as WORK rather than USE_CASE because turning it into
+a USE_CASE node is a spec conversion the operator makes at grooming, once it
+is settled enough to state as a covered path.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "assembling output docs from chunks (e.g.,
+md)."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SDOC-TREE-SITTER-SUPPORT
+  ROLE: Assumes

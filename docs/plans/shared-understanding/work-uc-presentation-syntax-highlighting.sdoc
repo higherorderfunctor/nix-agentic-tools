@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: Use case: presentation nodes with syntax highlighting
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-UC-PRESENTATION-SYNTAX-HIGHLIGHTING
+TITLE: Use case: presentation nodes with syntax highlighting
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+An unsettled use case: presentation nodes that carry syntax-highlighted code,
+which the embedded-language grammar work could enable. Filed as WORK rather
+than USE_CASE for the same reason as its siblings -- a USE_CASE node is a
+spec conversion the operator makes at grooming, once settled.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "presentation nodes with like syntax
+highlighting"
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SDOC-TREE-SITTER-SUPPORT
+  ROLE: Assumes

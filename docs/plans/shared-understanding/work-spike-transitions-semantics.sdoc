@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: Spike: pytransitions/transitions as the semantics engine
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SPIKE-TRANSITIONS-SEMANTICS
+TITLE: Spike: pytransitions/transitions as the semantics engine
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A spike on the transitions Python library (https://github.com/pytransitions/transitions)
+as the engine behind instance semantics -- the lifecycle ladders (DEPTH,
+STATUS, STANDING) modeled as state machines with events and guards. The
+library reads as simple enough that it could either influence a Nix
+rendering of the same state machine, or a thin config wrapper built around
+the library itself; which of the two is still open, and is the point of the
+spike. The semantic rules the engine would run are meant to be stored as
+literal scripts embedded directly in sdoc fields, which is what ties this to
+WORK-SDOC-EMBEDDED-LANGUAGE-FIELDS (the field-plus-language-companion
+mechanism) and to WORK-UC-WORK-ITEMS-AS-BASH (the sibling use case of a WORK
+item whose content is a literal, executable script).
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "spike using
+https://github.com/pytransitions/transitions for semantics engine. looks
+simple, possibly to influence a nix version or config wrapper.
+- relate the node about scripts embedded in sdoc (literal scripts). store
+  semantic rules in literal sdocs"
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SEMANTICS-AND-WORDS
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-SDOC-EMBEDDED-LANGUAGE-FIELDS
+  ROLE: Assumes

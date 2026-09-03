@@ -1,0 +1,41 @@
+[DOCUMENT]
+TITLE: Extended tree-sitter support for sdoc
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SDOC-TREE-SITTER-SUPPORT
+TITLE: Extended tree-sitter support for sdoc
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The umbrella for extended tree-sitter/sdoc support, carrying three build items
+and a set of unsettled use cases the operator listed but did not settle. The
+build items: a tree-sitter grammar for the sdoc format itself, derived from
+the sdoc grammar (WORK-SDOC-TREE-SITTER-GRAMMAR); letting a field embed
+another language, named by a companion field
+(WORK-SDOC-EMBEDDED-LANGUAGE-FIELDS); and extending the sdoc tree-sitter
+grammar to switch its inner grammar on that language field
+(WORK-SDOC-GRAMMAR-LANGUAGE-SWITCH). The unsettled use cases this could serve
+-- assembling output documents from chunks, presentation nodes with syntax
+highlighting, work items that are literal bash scripts, and matching,
+highlighting, and extracting inner sdocs found in code comments -- are filed
+as their own WORK-UC-* children rather than folded into the build items, since
+the operator raised them as open uses to weigh, not requirements.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "two more sdocs from my drive home. - sdoc
+grammars to custom tree-sitter grammar - allow fields to contain other
+languages embedded, maybe with another field for the language. - extend sdoc
+treesitter grammar to support switching lang grammar based on above. can
+maybe parent under one node for extended tree-sitter/sdoc support. unsettled
+use cases: - assembling output docs from chunks (e.g., md). - presentation
+nodes with like syntax highlighting - work items that are literal bash
+scripts - match inner sdocs in code comments - syntax highlighting -
+extraction"
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-GRAMMAR-ARCHITECTURE
+  ROLE: Assumes

@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: A tree-sitter grammar for the sdoc format, derived from the sdoc grammar
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SDOC-TREE-SITTER-GRAMMAR
+TITLE: A tree-sitter grammar for the sdoc format, derived from the sdoc grammar
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A dedicated tree-sitter grammar for the sdoc file format itself, derived from
+the sdoc .sgra grammar so the two stay in step rather than being maintained
+as two independent descriptions of the same format.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "sdoc grammars to custom tree-sitter grammar"
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SDOC-TREE-SITTER-SUPPORT
+  ROLE: Assumes

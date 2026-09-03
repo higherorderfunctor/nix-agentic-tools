@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: Use case: match inner sdocs in code comments
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-UC-INNER-SDOCS-IN-CODE-COMMENTS
+TITLE: Use case: match inner sdocs in code comments
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+An unsettled use case: recognizing an sdoc node written inline inside a
+source-code comment, as a match target for tree-sitter tooling working over
+that source file. Parent to two narrower use cases below it: highlighting
+such an inner sdoc, and extracting it.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "match inner sdocs in code comments"
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SDOC-TREE-SITTER-SUPPORT
+  ROLE: Assumes

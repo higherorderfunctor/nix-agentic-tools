@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Use case: extract inner sdocs from code comments
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-UC-INNER-SDOC-EXTRACTION
+TITLE: Use case: extract inner sdocs from code comments
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+An unsettled use case, narrower than WORK-UC-INNER-SDOCS-IN-CODE-COMMENTS:
+once an inner sdoc inside a code comment is matched, extract it as a real
+node rather than leaving it inert prose in a comment -- the same kind of
+source-to-graph extraction WORK-CODE-LINKAGE-EXTRACTORS is already building
+tree-sitter extractors for, just for sdoc-shaped content instead of Nix or
+TypeScript.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "extraction"
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-UC-INNER-SDOCS-IN-CODE-COMMENTS
+  ROLE: Assumes

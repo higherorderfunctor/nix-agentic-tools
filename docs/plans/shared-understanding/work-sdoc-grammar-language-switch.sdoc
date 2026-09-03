@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: The sdoc tree-sitter grammar switches the inner grammar on the language field
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SDOC-GRAMMAR-LANGUAGE-SWITCH
+TITLE: The sdoc tree-sitter grammar switches the inner grammar on the language field
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Extend the sdoc tree-sitter grammar (WORK-SDOC-TREE-SITTER-GRAMMAR) so that,
+given a field embedding another language
+(WORK-SDOC-EMBEDDED-LANGUAGE-FIELDS), it switches to that language's own
+grammar for the embedded span instead of parsing it as sdoc content.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "extend sdoc treesitter grammar to support
+switching lang grammar based on above"
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SDOC-EMBEDDED-LANGUAGE-FIELDS
+  ROLE: Assumes

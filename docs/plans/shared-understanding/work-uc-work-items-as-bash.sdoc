@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: Use case: work items that are literal bash scripts
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-UC-WORK-ITEMS-AS-BASH
+TITLE: Use case: work items that are literal bash scripts
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+An unsettled use case: a WORK item whose content is a literal, executable
+bash script rather than prose describing one, which the embedded-language
+field work could carry.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "work items that are literal bash scripts"
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SDOC-TREE-SITTER-SUPPORT
+  ROLE: Assumes
