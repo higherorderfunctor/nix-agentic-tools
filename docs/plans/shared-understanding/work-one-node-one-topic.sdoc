@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: One node, one topic: keep nodes small and let count carry complexity
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-ONE-NODE-ONE-TOPIC
+TITLE: One node, one topic: keep nodes small and let count carry complexity
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Nodes are small: one node, one topic. The plan tree should carry one node per
+wanted thing, so a plan-view item has a tree-view child and a kanban child,
+and every spec item beneath them is its own node. Node count should reflect
+the amount of specificity or complexity, not the length of any one node. No
+hard limit, but a decision node is one decision, a mechanism is one mechanic,
+a use case is one path, and every other type follows the same line. Observed
+this session as the pattern to unpack at grooming: several nodes grew without
+bound by appending verbatim paragraphs to NOTES (WORK-ANNOTATION-NODES,
+WORK-CODE-LINKAGE-EXTRACTORS, WORK-GRAMMAR-TAB-GROUPS). Companion to
+MECH-ONE-NODE-PER-FILE, which fixes the file unit; this fixes the topic unit.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "dont fix now just file another node or update
+a node, nodes are meant to be small. one node one topic. i was expecting like
+plan-view node, tree node, kanban node under plan-view, every spec item under
+each is defining what i want is a single node. just skimmed through and I see
+some mega nodes with unbound growth. node count should reflect the amount of
+specificity or complexity based on count. asking just to file in the shared
+understanding plan to unpack more details on this. i dont want to make a hard
+limit but a decision node is one decision, same with mechanic, use case, and
+pretty much every node along the same lines."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-CANON-STRUCTURE
+  ROLE: Assumes
