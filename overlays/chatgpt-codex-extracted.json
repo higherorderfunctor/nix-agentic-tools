@@ -3798,7 +3798,7 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Configured marketplace name to use when PLUGIN does not include @MARKETPLACE",
+            "help": "Marketplace name to use when PLUGIN does not include @MARKETPLACE",
             "names": ["--marketplace", "-m"],
             "valueName": "MARKETPLACE"
           },
@@ -3835,7 +3835,7 @@
             "valueName": null
           }
         ],
-        "help": "Install a plugin from a configured marketplace snapshot.",
+        "help": "Install a plugin from a configured or remote marketplace.",
         "path": ["codex", "plugin", "add"]
       },
       "codex plugin list": {
@@ -3853,7 +3853,7 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Only list plugins from this configured marketplace name",
+            "help": "Only list plugins from this marketplace name",
             "names": ["--marketplace", "-m"],
             "valueName": "MARKETPLACE"
           },
@@ -3898,7 +3898,7 @@
             "valueName": null
           }
         ],
-        "help": "List plugins available from configured marketplace snapshots",
+        "help": "List plugins available from configured and remote marketplaces",
         "path": ["codex", "plugin", "list"]
       },
       "codex plugin marketplace": {
@@ -4196,7 +4196,7 @@
             "valueName": null
           }
         ],
-        "help": "Remove an installed plugin from local config and cache.",
+        "help": "Uninstall a plugin and remove its local cache.",
         "path": ["codex", "plugin", "remove"]
       },
       "codex queue": {
@@ -5454,6 +5454,11 @@
     {
       "default": false,
       "maturity": "under development",
+      "name": "context_management"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
       "name": "current_time_reminder"
     },
     {
@@ -5633,13 +5638,18 @@
     },
     {
       "default": false,
-      "maturity": "under development",
+      "maturity": "removed",
       "name": "local_thread_store_shared_compression"
     },
     {
       "default": false,
       "maturity": "under development",
       "name": "mcp_2026_07_28"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "mcp_oauth_refresh_coordination"
     },
     {
       "default": false,
@@ -6055,7 +6065,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.152.1",
+    "codexVersion": "0.153.0",
     "extractorSchema": 1
   }
 }
