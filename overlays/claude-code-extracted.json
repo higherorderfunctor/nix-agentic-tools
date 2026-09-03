@@ -64,6 +64,7 @@
       "modelProposedGoals",
       "policyHelpers",
       "quietHours",
+      "remoteTools",
       "skipWorkflowUsageWarning",
       "totalTokensReminder",
       "totalTokensReminderAfterUserTurn",
@@ -1857,6 +1858,18 @@
       "language": {
         "type": "string"
       },
+      "managedMcpServers": {
+        "type": "object"
+      },
+      "managedMcpServers.*": {
+        "type": "anyOf"
+      },
+      "managedMcpServers.*|0": {
+        "type": "any"
+      },
+      "managedMcpServers.*|1": {
+        "type": "any"
+      },
       "managedSourcesBehavior": {
         "enum": ["first-wins", "merge"],
         "type": "string"
@@ -2280,6 +2293,12 @@
         "type": "string"
       },
       "remoteControlAtStartup": {
+        "type": "boolean"
+      },
+      "remoteTools": {
+        "type": "object"
+      },
+      "remoteTools.allowUnattendedServing": {
         "type": "boolean"
       },
       "requiredMaximumVersion": {
@@ -3230,6 +3249,7 @@
       "isolatePeerMachines",
       "keybindingFlavor",
       "language",
+      "managedMcpServers",
       "managedSourcesBehavior",
       "minimumVersion",
       "model",
