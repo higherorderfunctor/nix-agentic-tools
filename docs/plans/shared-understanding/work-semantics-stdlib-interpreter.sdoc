@@ -22,8 +22,10 @@ sdoc-semantics/2. What it does, in order:
    vocabulary the document does declare.
 2. Predicates. A closed table of operations over a node, its relations and
    the acting context: field_is, field_at_least (by ladder rank),
-   has_relation (role, direction, optional target type), all_related (role,
-   predicate), any_related, actor_in, and, or, not. About ten. A new operation
+   has_relation (role, direction, optional target type), all_related and
+   any_related (role, predicate, and what an empty set means: pass or fail),
+   actor_in, and, or, not. About ten. Traversal is one hop; depth-bounded
+   selection stays out until an instance rule needs it. A new operation
    is a small addition to the table with its own positive and negative test; a
    rule that fits an existing one is data only.
 3. Dispatch. fire(graph, command, actor) preflights every gate on the
@@ -33,7 +35,11 @@ sdoc-semantics/2. What it does, in order:
    uid), with a visited set and a step bound so a cyclic model refuses instead
    of hanging, then commits the staged copy in one step or refuses the whole
    change naming the gate or the bound that refused. The original graph is
-   untouched on refusal.
+   untouched on refusal. Every ripple step is recorded with its provenance:
+   the subject moved, the transition taken, the event that caused it, the
+   subject that emitted that event, and the gate or rule that let it through.
+   fire() returns that log with its verdict, so the board can later show why
+   an edge went dirty.
 4. Relation contracts. check(graph) reports every edge whose role, source
    type or target type breaks a contract, and every cycle on a role that
    admits none.
@@ -44,7 +50,8 @@ sdoc-semantics/2. What it does, in order:
    (state names carry dashes), one diagram per lifecycle, gate names on the
    edges.
 7. Payload sdoc-semantics/2: everything v1 carries, plus gates,
-   relation_contracts, actors, commands, events, checkpoints, flows, and the
+   relation_contracts, actors, commands, events, operations, milestones,
+   checkpoints, flows, and the
    derived gate placement (which checkpoints a gate may run at, from what each
    sees). by_type stays. The board (docs/sdoc/board/source.py, the Rules
    section, fsm.js) reads v2, and its unavailable degrade path stays.

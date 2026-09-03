@@ -24,8 +24,8 @@ item the document is the only place the semantics are written.
 The document shape, fixed here and documented in a short file beside it:
 
 - Top level: schema (the string sdoc-semantics-model/1), model_version, then
-  lifecycles, actors, commands, events, gates, relation_contracts, checkpoints,
-  flows and rules, each a LIST in presentation order. Never an object whose key
+  lifecycles, actors, commands, events, operations, gates, relation_contracts,
+  checkpoints, milestones, flows and rules, each a LIST in presentation order. Never an object whose key
   order carries meaning: Nix alphabetises attribute keys on emission, and the
   existing test that ladder order survives is what catches it.
 - A lifecycle: name; subject, a tagged object with one of three kinds (field:
@@ -38,6 +38,13 @@ The document shape, fixed here and documented in a short file beside it:
 - A gate: name; sees, a list of what it reads (fields, relation roles, the
   actor, a git base ref); predicate, a tree of operations from the closed
   table WORK-SEMANTICS-STDLIB-INTERPRETER fixes, never a string to evaluate.
+  A predicate over related nodes says what an empty set means (pass or
+  fail); it is never left implicit.
+- An operation: name, subject, writes, emits. It mutates without moving a
+  state field (a STATEMENT edit is one) and is what starts a ripple.
+- A milestone: name, subject, achieved_when and stale_when (gate names). An
+  achieved fact that can go stale, the carrier SLICE-BEHAVIOUR-MODEL keeps
+  beside the per-edge machine so both stay expressible.
 - A relation contract: role, from_types, to_types, admits_cycles, propagates.
 - A checkpoint: name, sees. An actor: name. A command: name, lifecycle,
   trigger, actor (optional). An event: name, external (bool). A flow: name,
