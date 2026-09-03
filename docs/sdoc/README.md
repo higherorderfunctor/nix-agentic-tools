@@ -32,42 +32,229 @@ away.
 strictdoc export . --formats=json --output-dir /tmp/sdoc-out   # exit 0 required
 ```
 
-**The `strictdoc` binary needs a devenv shell.** `devenv.nix` gates
-`ai.strictdoc.enable` on `!isCI`, so the binary reaches `PATH` only through
-shell entry — every bare `strictdoc` command in this file assumes you are in
-one, or that you pass an absolute path to a built one.
+That command needs a devenv shell, like every other `strictdoc`, `scribe` and
+`strictdoc-grammar-extract` command in this file. See **How to run** below.
 
-That is the only thing shell entry is needed for. **Committing** from a worktree
-does not need it: the prek hooks resolve their config from the primary checkout,
-so a worktree that has never entered a shell validates exactly like one that
-has.
+## How to run
 
-## Running the scribe daemon
+Everything below needs a devenv shell in this worktree. `devenv.nix` gates
+`ai.strictdoc.enable` on `!isCI`, so `strictdoc`, `scribe` and
+`strictdoc-grammar-extract` reach `PATH` only through shell entry.
+
+```bash
+cd "$worktrees/strictdoc-trial"
+devenv shell                             # interactive
+devenv shell -q -- bash -c '<command>'   # one-shot, for scripts and agents
+```
+
+The first call of a session takes about twenty seconds; later ones are quick.
+Running these tools is the only thing a shell is needed for. **Committing** from
+a worktree does not need one: the prek hooks resolve their config from the
+primary checkout, so a worktree that has never entered a shell validates exactly
+like one that has.
+
+### Start and stop
+
+Two long-running processes. `scribe` is the daemon holding one loaded copy of
+the canon; `board` is the web app that reads it through the daemon's socket.
+They are independent — with no daemon the board serves a refusal page until one
+comes up.
+
+| what                                 | command                           |
+| ------------------------------------ | --------------------------------- |
+| start both in the background         | `devenv up -d scribe board`       |
+| start in the foreground, logs inline | `devenv up scribe board`          |
+| what is running                      | `devenv processes list`           |
+| read one process's log               | `devenv processes logs scribe`    |
+| pick up an edit under `dev/scripts/` | `devenv processes restart scribe` |
+| stop everything                      | `devenv processes down`           |
+
+**When a restart is not enough.** `devenv processes restart` starts the process
+again inside the environment the running manager already holds. A `devenv.nix`
+change that moves an interpreter, a package or an environment variable is
+therefore invisible to it. Replace the manager instead:
+
+```bash
+devenv processes down
+devenv up -d scribe board
+```
+
+### The board
+
+`http://127.0.0.1:8765/` — `docs/sdoc/board/serve`, port 8765 unless `--port`
+says otherwise. Four tabs, each also a URL:
+
+| tab         | URL                 | shows                                                                                |
+| ----------- | ------------------- | ------------------------------------------------------------------------------------ |
+| Grammars    | `?view=grammars`    | one card per grammar element, grouped; per type, its rules and its lifecycle machine |
+| Plan        | `?view=plan`        | the canon as a collapsible tree grouped by directory, the selected node's full card  |
+| Graph       | `?view=board`       | the whole canon as cards on a pan-and-zoom canvas. The default view                  |
+| Perspective | `?view=perspective` | two queryable tables over one export: one row per node, one row per relation         |
+
+The Grammars tab's grouping is hand-authored in
+`docs/sdoc/board/grammar-groups.json` — the one part of the board not derived
+from the grammar. It is guarded twice: `strictdoc-board-grammar-groups` in
+`nix flake check`, and the same rules again at page load, which raise a red
+banner and drop anything unplaced into Unsorted rather than hiding it. Its
+one-line glosses come from two places: the four axis glosses are copied verbatim
+from `NAR-CANON-TYPES-GRID`, and each type gloss is the first sentence of that
+type's `NAR-SEMANTIC-LAYER-TYPE-*` narrative. Both are interim.
+
+### Reading and writing with `scribe`
+
+```bash
+scribe show WORK-SHARED-UNDERSTANDING     # one node, relations resolved to titles
+scribe list --type WORK --depth sketch    # filtered listing
+scribe check                              # every node, relation and File path
+scribe new MECHANISM --help               # the flags this type actually declares
+scribe set MECH-THING --depth implemented --notes @notes.md
+scribe relate MECH-THING --role Governed_By --target DEC-SOMETHING
+scribe semantics DECISION                 # the lifecycle its state field claims
+```
+
+`set` **replaces** a field rather than appending to it: read the current value
+with `show`, then write old plus new. Every field flag takes `@FILE` to read the
+value from a file, which is how a multi-paragraph `STATEMENT` or `NOTES` gets in
+without a shell-quoting accident. No `scribe` verb takes `--dry-run` — the flag
+exists only on `dev/scripts/sdoc_cli.py`, not on the daemon client, and
+WORK-SCRIBE-DRY-RUN tracks the gap. What stands in for it is the write itself: a
+change that does not validate leaves the original bytes on disk.
+
+**A `File` relation can name an item inside the file**, not only the path:
+
+```bash
+scribe relate EV-STRICTDOC-EXPORT-TIMING --role File --target devenv.nix \
+  --element function --id 'tasks."strictdoc:bench"'
+scribe relate MECH-THING --role File --target dev/scripts/thing.sh \
+  --line-range 10-40
+```
+
+`--element` takes `function` or `class` and needs `--id`, the qualified name as
+the reader writes it, quotes included. `--line-range` is the alternative and is
+not combinable with the pair. The id is checked on write against the same
+extractor table strictdoc resolves it with, so a wrong id is refused rather than
+silently dropped.
+
+`scribe semantics` works with the daemon down. With no argument it prints every
+machine; give it a state field (`DEPTH`) or a node type (`DECISION`) to narrow
+it. `--json` prints the `sdoc-semantics/1` payload the board consumes;
+`--mermaid` prints one `stateDiagram-v2` per machine.
+
+### Listing what a source file offers
+
+```bash
+strictdoc-grammar-extract dev/scripts/sdoc_extractors/__main__.py devenv.nix
+strictdoc-grammar-extract dev/scripts/sdoc_extractors/__main__.py \
+  --id 'tasks."strictdoc:bench"' devenv.nix
+```
+
+One line per item: file, kind, element, id, line range. `--id` exits 1 and says
+"no such item" when nothing matches — the loud check strictdoc does not give
+you, since it drops an `ID:` it cannot resolve with exit 0 and no marker.
+Resolve an id here before writing it into a `File` relation.
+
+`python3 -m sdoc_extractors` does **not** work from the repository root:
+`dev/scripts` is not on `PYTHONPATH` there. Use the path form above.
+
+### The export benchmark
+
+```bash
+devenv tasks run strictdoc:bench
+```
+
+Exports the corpus with source linking on and off, cold and warm, and prints a
+markdown table on stderr. A devenv task takes no argv, so tune it through the
+environment: `SDOC_BENCH_RUNS=1` for one repetition, `SDOC_BENCH_PROFILE=1` to
+add a serialized cProfile arm. Three repetitions take several minutes. The
+numbers of record live in `EV-STRICTDOC-EXPORT-TIMING`, which carries a `File`
+relation to the task binding by id, and the binding carries a marker back.
+
+### The checks, by name
+
+`nix flake check` runs them all. One at a time:
+`nix build .#checks.x86_64-linux.<name>`.
+
+| check                                             | gates                                                                                |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `module-semble-strictdoc-grammar-load`            | semble loads the patched sdoc tree-sitter grammar                                    |
+| `module-strictdoc-enable-installs-cli-and-runner` | `ai.strictdoc.enable` puts the CLI and the runner in the shell                       |
+| `module-strictdoc-grammars-render-committed-file` | the module renders the grammar file that is committed                                |
+| `module-strictdoc-inert-when-disabled`            | the module adds nothing when disabled                                                |
+| `strictdoc-board-grammar-groups`                  | the Grammars tab's hand-authored layout places every grammar type exactly once       |
+| `strictdoc-commentary-check`                      | COMMENTARY's `STANDING`, `CLOSES_ON`, and an `EDGE` whose ends are both remarked on  |
+| `strictdoc-cycle-check`                           | no cycle among role-carrying relations, which strictdoc itself never detects         |
+| `strictdoc-element-check`                         | every `ELEMENT`/`ID` in the corpus names a real item of the file it points into      |
+| `strictdoc-file-check`                            | every `File` relation's path exists                                                  |
+| `strictdoc-fp-check`                              | no drifted, unbacked or deleted-parent `PARENT_FP` entry                             |
+| `strictdoc-grammar-corpus`                        | the patched tree-sitter grammar against its regression corpus                        |
+| `strictdoc-grammar-foreign-roundtrip`             | the half of the grammar surface this repository's own types never exercise           |
+| `strictdoc-grammar-model-equal`                   | `grammar.sgra` parses to the same model `values.nix` renders. A hand edit reddens it |
+| `strictdoc-grammar-negative-fixtures`             | every malformed fixture is rejected at the layer that owns the rule                  |
+| `strictdoc-grammar-surface-current`               | the generated grammar surface still matches the pinned strictdoc                     |
+| `strictdoc-grammar-surface-live`                  | the typed grammar DSL evaluates and cannot weaken its types                          |
+| `strictdoc-nix-extractor`                         | the tree-sitter source extractors: nix, bash, and bash injected into nix strings     |
+| `strictdoc-semantics`                             | the state-field semantics engine and its `sdoc-semantics/1` payload                  |
+
+### Two things that will cost you an hour
+
+**The scribe daemon never reloads Python.** It imports everything under
+`dev/scripts/` once, at startup. Edit a module and the daemon keeps running the
+old code, with nothing to warn you. If the edit breaks an import, every `scribe`
+call fails with a JSON-RPC `-32002` error naming `strictdoc_config.py` — which
+reads like a broken corpus and is not one. The fix is
+`devenv processes restart scribe`.
+
+**A `devenv.nix` change to an interpreter or an environment variable needs a
+full down and up.** `devenv processes restart` keeps the environment the manager
+already has, so the change appears to do nothing. `devenv processes down`, then
+`devenv up -d scribe board`.
+
+## What is on
+
+**Source linking is on.** `strictdoc_config.py` enables
+`REQUIREMENT_TO_SOURCE_TRACEABILITY`, so a node can point into a source file and
+a source file can point back at a node.
+
+**Globs decide what is parsed.** `SOURCE_EXTRACTORS` in
+`dev/scripts/sdoc_extractors/registry.py` is the whole manifest: a glob, and the
+tree-sitter extractor that parses what it matches — `**/*.nix`, `**/*.sh` and
+three named extensionless scripts today. Everything else is read by a null
+reader: no parser, no cost. No internal strictdoc reader is ever reached, `.py`
+and `.rs` included. That keeps the feature affordable; strictdoc's generic
+reader recompiled its grammar once per file and cost 15.4 s on a cold export.
+
+**Parsed is not indexed.** The walk still visits every file, so a whole-file
+`File` relation to a `.md` or a `.js` still resolves.
+
+**Code points back with a marker** in a comment:
+
+```nix
+# @relation(EV-STRICTDOC-EXPORT-TIMING, scope=function)
+```
+
+The marker must be the **first line of its comment block**. A later line still
+carries its indentation, and an indented marker does not match the marker
+grammar — it fails silently: exit 0, nothing registered, indistinguishable from
+a marker that resolved.
+
+**What it costs**, from `EV-STRICTDOC-EXPORT-TIMING`: a cold export goes from
+2.4 s to 9.3 s and a warm one from 2.1 s to 2.8 s. `scribe check` is untaxed at
+2.1 s, because the daemon loads with `skip_source_files=True`.
+
+## Daemon internals
 
 `scribe` and every writing command talk to a resident daemon holding one loaded
 graph per worktree. Without one they fail closed, naming the socket and the
 command that starts it; there is deliberately no fallback.
 
-From this worktree, inside a devenv shell:
-
-| what                                         | command                            |
-| -------------------------------------------- | ---------------------------------- |
-| up, foreground — holds the pane, logs inline | `devenv up scribe`                 |
-| up, background                               | `devenv up -d scribe`              |
-| down                                         | Ctrl-C, or `devenv processes down` |
-| restart after editing the writer             | `devenv processes restart scribe`  |
-| is the manager alive?                        | `devenv processes list`            |
-| is the daemon up?                            | `scribe-client ping`               |
-| what does it hold?                           | `scribe-client info`               |
+| what               | command              |
+| ------------------ | -------------------- |
+| is the daemon up?  | `scribe-client ping` |
+| what does it hold? | `scribe-client info` |
 
 The client walks up from the working directory for `strictdoc_config.py`, the
 same marker the writer uses, so the bare forms work from anywhere inside the
 worktree; `--root` is for calling from outside one.
-
-**Restart after every edit under `dev/scripts/`.** The daemon imports those
-modules once, at startup, so a change on disk does nothing until it restarts and
-nothing warns you that you are running the old code. `restart` needs the process
-manager alive, which means either `-d` or a pane sitting in `devenv up`.
 
 **It is not auto-started.** A task running before `enterShell` fires on every
 shell entry — this worktree recorded over seventy in a week — so an unguarded
