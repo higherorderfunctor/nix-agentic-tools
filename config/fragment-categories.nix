@@ -361,6 +361,7 @@ _: {
         "delegate-sizing"
         "git-workflow"
         "linting"
+        "peer-communication"
         "project-overview"
       ];
     };
