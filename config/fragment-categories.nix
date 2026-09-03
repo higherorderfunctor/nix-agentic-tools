@@ -358,6 +358,7 @@ _: {
         "architecture-fragments"
         "build-commands"
         "change-propagation"
+        "delegate-sizing"
         "git-workflow"
         "linting"
         "project-overview"
