@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: Give the LLM SSH and GPG keys, stored in SecretSpec
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-LLM-SIGNING-KEYS
+TITLE: Give the LLM SSH and GPG keys, stored in SecretSpec
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Provision the LLM an SSH key and a GPG key of its own, held in devenv's
+SecretSpec integration rather than baked into the repo or the environment ad
+hoc. The keys are the LLM's identity that WORK-ASSESS-AUTO-AUTHORSHIP's
+options -- automatic AUTHORED_BY attribution and GPG commit-signing
+enforcement -- key off.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "add llm ssh/gpg keys, store in secretspec"
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-AUTHORSHIP-IDENTITY
+  ROLE: Assumes

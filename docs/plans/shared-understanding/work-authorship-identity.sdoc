@@ -1,0 +1,35 @@
+[DOCUMENT]
+TITLE: Authorship identity: keys for the LLM and how AUTHORED_BY gets set
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-AUTHORSHIP-IDENTITY
+TITLE: Authorship identity: keys for the LLM and how AUTHORED_BY gets set
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The umbrella node for giving the LLM its own signing identity and for making
+authorship attach to a write automatically from that identity. Two children
+hang off it: WORK-LLM-SIGNING-KEYS, provisioning SSH and GPG keys for the LLM
+in SecretSpec, and WORK-ASSESS-AUTO-AUTHORSHIP, assessing how a key turns into
+recorded authorship at write time.
+
+This does not reopen DEC-AUTHORSHIP-LADDER, the accepted decision that
+AUTHORED_BY is one monotonic field (llm / llm-accepted / llm-adopted / human)
+governing reversal rather than credit, nor MECH-RUNTIME-WRITE-GUARD, which
+already keeps AUTHORED_BY and PARENT_FP out of the writer's hands by giving the
+CLI no flag for either and writing llm unconditionally on create. What the two
+children below are after is upstream of both: a real identity for the writer to
+be graded against, and a mechanism that sets the grade from that identity
+instead of the current unconditional default.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "need new nodes, all related likely under one
+authorship spec design or something."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-CANON-STRUCTURE
+  ROLE: Assumes

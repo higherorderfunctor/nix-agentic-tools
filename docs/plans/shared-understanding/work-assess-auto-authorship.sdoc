@@ -1,0 +1,57 @@
+[DOCUMENT]
+TITLE: Assess and select how authorship gets set automatically from the key
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-ASSESS-AUTO-AUTHORSHIP
+TITLE: Assess and select how authorship gets set automatically from the key
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+An assessment node, deliberately kept as one node because the operator framed
+it as research carrying several non-exhaustive ideas rather than a settled
+design:
+
+(a) an identity-authorship path -- a daemon, scribe, LLM hooks, and jail.nix's
+bubblewrap sandboxing enforcing access to the LLM's key, so that a write made
+under that key carries the key's identity as authorship. Enforce, not make
+impossible.
+
+(b) a signing backstop -- GPG commit signing under the same jail-enforced key
+access, plus a git hook and a CI check verifying that the authorship recorded
+on every node touched by a commit matches that commit's signing key.
+
+(c) "enforce, not make impossible" is a deliberate scope line: the future
+beads-harness VM is where the impossible-to-bypass guarantee is meant to land,
+not this work.
+
+(d) an open, unconfirmed question -- whether sops carries special GPG support
+scoped under a single key that could simplify (a) or (b).
+
+MECH-AGENT-IDENTITY-KEYS already surveyed a per-agent-SSH-key design and
+rejected it on exactly the ground jail.nix is aimed at: the agent runs as the
+same UNIX user who owns the human's key, so a key the agent can reach is a key
+the agent can substitute, and one machine under one user offers no principal
+boundary. Bubblewrap-enforced access is what would give this a boundary that
+node found missing. The work here is to assess these options and select.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "assess and select options for auto setting
+id, non exhaustive ideas (this is all one node)
+- daemon, scribe, llm hooks, jail.nix (bubblewrap) to enforce key access, not
+  make impossible, for key identity authorship
+- gpg commit signing, jail.nix (bubblewrap) to enforce key access, not make
+  impossible, for backstop, git hook, and ci check, authorship on all nodes
+  modified in a commit match signing key.
+- not make impossible is because the future beads harness vm will provide the
+  impossible part.
+- all one node as this is an assessment/research with non-exhaustive ideas
+- I thought sops had some special gpg support under like one key, could be
+  wrong, still same node"
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-AUTHORSHIP-IDENTITY
+  ROLE: Assumes
