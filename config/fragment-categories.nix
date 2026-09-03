@@ -355,6 +355,14 @@ _: {
       sources = ["service-host-contract"];
     };
     # monorepo: always-loaded orientation — no scoping.
+    #
+    # `monorepo` is the ONLY always-loaded category the generator supports, so
+    # always-loaded content is added as a SOURCE here rather than as a second
+    # `scopes = null` category. dev/generate.nix hardcodes the split two ways:
+    # `agentsContent` composes only this category into AGENTS.md, and
+    # `scopedArchitectureRouting` maps every OTHER category through
+    # `mkInlineCodeList fragmentCategories.<name>.scopes`, which throws
+    # `expected a list but found null` on an unscoped one. Measured 2026-09-03.
     monorepo = {
       scopes = null;
       sources = [
@@ -363,6 +371,15 @@ _: {
         "change-propagation"
         "git-workflow"
         "linting"
+        # The house response-style guide. Lives in its own fragment directory
+        # (hence the `dir` override) so it can move to a standalone category
+        # if the generator ever grows multi-category always-loaded support, and
+        # so the sibling work item WORK-PEER-COMMS-FRAGMENT-TO-SDOC has one
+        # file to convert into an sdoc node.
+        {
+          name = "peer-communication";
+          dir = "peer-communication";
+        }
         "project-overview"
       ];
     };

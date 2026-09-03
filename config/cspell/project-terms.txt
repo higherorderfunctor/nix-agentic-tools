@@ -301,6 +301,7 @@ oxalica
 oxlint
 pagefind
 pandoc
+parentheticals
 partialclone
 passteque
 passthroughs
