@@ -1,0 +1,58 @@
+[DOCUMENT]
+TITLE: strictdoc export timing with source linking on and off
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-STRICTDOC-EXPORT-TIMING
+TITLE: strictdoc export timing with source linking on and off
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: four interleaved export arms over this worktree, /usr/bin/time and time.perf_counter, strictdoc 0.28.3, one machine; 2026-09-02
+STATEMENT: >>>
+Wall time of ONE `strictdoc export <repo> --formats=json` over this whole corpus, measured four ways. ON is the repository's own `strictdoc_config.py` unmodified, with `REQUIREMENT_TO_SOURCE_TRACEABILITY` in `project_features`; OFF is that same config with exactly that one feature dropped, so the delta is the feature and nothing else. COLD means strictdoc's pickle parse cache and the arm's output directory were deleted first; WARM is the next run against the cache the cold one left.
+
+| arm | cold | warm |
+| --- | --- | --- |
+| source linking ON | 9.25 - 9.39 s | 2.77 - 2.84 s |
+| source linking OFF | 2.43 - 2.46 s | 2.13 - 2.18 s |
+
+1397 indexed source files, JSON format only, interleaved arms, each arm with its own scratch cache and output directory. Ranges are the spread across repetitions, not error bars.
+
+What the numbers mean. THE STANDING COST IS THE WARM DELTA: about +0.6 s, roughly +30%, on every export from here on. That is not parse time -- the parse is cached and the cache hits. It is strictdoc's own indexing of ~1400 files: an uncached directory walk of about 0.3 s, plus a stat-and-unpickle pass over every indexed file, plus relation resolution. The COLD delta of about +7 s is the parse itself plus writing that cache, and it is paid again whenever the cache is discarded (a fresh worktree, a new output directory, a strictdoc upgrade).
+
+Three facts decide where the cost can and cannot be attacked.
+
+The cache is stat-based and self-healing: mtime and size are the fast path, an md5 comparison the fallback, and a miss rewrites the entry. So a warm run pays a stat per file rather than a parse. Its KEY INCLUDES THE OUTPUT DIRECTORY (`strictdoc/backend/sdoc/pickle_cache.py`, `get_cached_file_path`, an md5 of `output_dir + source path`), which is a measurement trap as much as a design note: a harness that hands each run a fresh `--output-dir` defeats the cache silently and reports every run as cold.
+
+The walk is strictdoc's own and is uncached by design, so about 0.3 s of the warm delta has no lever short of pruning `exclude_source_paths` -- and pruning the walk is exactly what turns a whole-file relation to a pruned path into a hard error, because the File-relation resolver's predicate is "was indexed", not "exists".
+
+THE WRITE PATH IS UNTAXED, which is why this cost is affordable at all. `dev/scripts/sdoc_model.py` passes `skip_source_files=True` for the scribe daemon, and that flag guards the entire source block in `traceability_index_builder.create`, so none of the above reaches a `scribe` write or `scribe check`.
+
+The generic parser is dead and its cost is gone. Before it was disabled, a cold ON export was 15.4 s, of which 77% was strictdoc's generic textX reader recompiling its grammar once per file across ~1300 files. Only the configured glob manifest (`dev/scripts/sdoc_extractors/registry.py`) parses anything now; every other file gets a null reader, still indexed and still linkable whole-file, at no parse cost. That is the difference between 15.4 s and 9.3 s cold.
+
+To reproduce: `devenv tasks run strictdoc:bench`. It writes two derived configs from the repository's own `create_config()`, runs the four arms interleaved against the worktree read-only, and prints this table plus the indexed-file count and the strictdoc version. `SDOC_BENCH_RUNS=1` for a single repetition; `SDOC_BENCH_PROFILE=1` adds one serialized on-cold run under cProfile, bucketed into source read / sdoc parse / walk / other. Nothing it does touches the repository; scratch lives under `$TMPDIR`.
+<<<
+NOTES: >>>
+DEPTH implemented, not verified: the table is a completed observation, run and re-run by its author, but no independent session has re-taken it. That is this corpus's convention for a measurement -- verified is a reviewer's act, not the author's.
+
+Filed 2026-09-02 against strictdoc 0.28.3 (the dev shell's binary) and this worktree on feat/strictdoc-trial, one machine, `/usr/bin/time` around a JSON export.
+
+MACHINE CAVEAT, and it is why the table carries ranges rather than single figures: another workload was running on the same machine during the measurement. The arms were interleaved specifically so that a drift in load lands on both sides of each comparison rather than on one, but the absolute figures are an upper bound on an idle machine, not a floor.
+
+The corpus grows, so the numbers will drift on their own. At filing the ON arm reported 1397 indexed source files; a re-run the same day on a slightly larger tree reported 1416 and moved cold to 9.8 s and warm to 3.0 s, against off-warm 2.4 s -- the same +0.6 s warm delta. Re-run rather than trusting a number here.
+
+THE EARLIER PROFILER FIGURES, kept because they are what the "77% generic parser" claim rests on and because they are not comparable with the table above: before the generic textX reader was disabled, a cold ON export measured 15.4 s, 77% of it that reader recompiling its grammar per file across ~1300 files, with warm at 2.3 s. That 2.3 s warm figure is ALSO the one that produced the bar this work was later judged against, and it was not a timing of a complete export: every feature-on run in that session exited 1 inside `validate_and_resolve`, which runs inside the index build, so those runs stopped before the export phase while the baseline they were compared against ran it in full. A run that fails inside the index build is not a timing of an export, and it reads as one.
+
+DELIBERATELY LINKED BOTH WAYS, as the first dogfood of the code linkage this repository just built. Forward: this node carries File relations to `dev/scripts/bench-export.py` (whole file) and to the `tasks."strictdoc:bench"` binding in `devenv.nix` (element-grained). Backward: a `@relation(EV-STRICTDOC-EXPORT-TIMING, scope=function)` marker sits in the comment above that binding, so the code names the node and the node names the code. Both directions are checked -- an unknown UID in the marker fails the export, and `dev/scripts/element-check.py` (the `strictdoc-element-check` gate in `nix flake check`) fails on an `ID:` that is not really an item of the file. Renaming the task without updating this node is therefore a red check rather than a silent drift, which is the whole point of the exercise.
+
+AND THE FIRST DOGFOOD IMMEDIATELY CAUGHT A SILENT FAILURE, which is the reason to write it down. A backward `@relation` marker MUST BE THE FIRST LINE of the comment block that touches the binding. The extractor hands strictdoc's `MarkerParser` the comment slice beginning at the first `#`, so every later line still carries its source indentation, and an indented `@relation` line does not match the marker grammar. Nothing complains: the export stays green, no marker is registered, and that is indistinguishable from a marker that resolved. Measured 2026-09-02 -- with the marker as the last of seventeen prose comment lines, an export carrying a deliberately nonexistent UID exited 0; with the marker moved to the first line of its own block, the same bogus UID exited 1 naming it, and the real one exited 0. A positive control is therefore not optional when adding a marker: assert that a WRONG uid fails, because a right one passing proves nothing.
+<<<
+RELATIONS:
+- TYPE: File
+  VALUE: dev/scripts/bench-export.py
+- TYPE: File
+  VALUE: devenv.nix
+  ELEMENT: function
+  ID: tasks."strictdoc:bench"
