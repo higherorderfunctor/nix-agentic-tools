@@ -16,6 +16,13 @@ as two independent descriptions of the same format.
 <<<
 NOTES: >>>
 Operator, 2026-09-02, verbatim: "sdoc grammars to custom tree-sitter grammar"
+
+A patched upstream grammar already exists at
+`overlays/generic/tree-sitter-strictdoc.nix` and its adjacent `.patch`,
+consumed by `checks/strictdoc-grammar-corpus.nix`, which parses every
+`.sdoc`/`.sgra` in this repository, and it was extended on 2026-09-03
+(commit d6633588) to teach `file_entry` StrictDoc's full File relation key
+set after element-grained relations stopped four documents parsing.
 <<<
 RELATIONS:
 - TYPE: Parent
