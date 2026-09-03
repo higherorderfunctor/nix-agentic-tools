@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: The item kind is recomputed by the board, not stored on the relation
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-KIND-NOT-IN-RELATION
+TITLE: The item kind is recomputed by the board, not stored on the relation
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The extractor reports a KIND for each source item, and the adapter emits it,
+but the File relation written by `scribe relate` stores only ELEMENT, ID and
+LINE_RANGE. The board therefore recomputes the kind from the id when it draws
+the card, so the displayed kind can disagree with what the extractor actually
+saw. Cheapest fix: carry KIND on the File relation and have the board read it
+instead of guessing.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-DEBT-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes

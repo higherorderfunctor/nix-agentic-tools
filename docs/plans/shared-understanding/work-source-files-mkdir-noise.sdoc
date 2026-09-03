@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: A JSON-only export leaves an empty HTML source tree behind
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SOURCE-FILES-MKDIR-NOISE
+TITLE: A JSON-only export leaves an empty HTML source tree behind
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A JSON-only export still creates the HTML source-file tree, leaving roughly 400
+empty directories under output/html/_source_files. They are pure noise in a
+JSON run and they are part of the cold-export cost. Cheapest fix: skip the
+per-file directory creation when the requested formats do not include html.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-DEBT-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes

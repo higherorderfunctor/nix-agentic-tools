@@ -1,0 +1,40 @@
+[DOCUMENT]
+TITLE: Runtime dependencies enter through Nix
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-DEPS-VIA-NIX
+TITLE: Runtime dependencies enter through Nix
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: A runtime dependency is added by any other route and the reason is recorded here.
+STATEMENT: >>>
+Every runtime dependency of this repository's tooling -- Python packages, Node
+packages, tree-sitter grammars, binaries -- enters through Nix, into the
+runtime that uses it. The shapes that count: a nixpkgs package spliced onto the
+interpreter that needs it, python3.withPackages, or a wrapper that puts the
+dependency on the program's path. What is ruled out: a user-global install, pip
+or npm -g into an ambient environment, and a lockfile resolved outside Nix at
+build or run time.
+
+A package manager such as uv may be used to manage a set of dependencies,
+provided the manager itself is Nix-installed and its output is reproducible
+from the flake. The rule is about where the bytes come from and whether another
+machine gets the same ones, not about which tool arranges them.
+<<<
+RATIONALE: >>>
+Anyone on another machine gets the same runtime, and a dependency cannot go
+missing because a developer's global environment happened to carry it. The two
+instances already live in the tree: the tree-sitter grammars and transitions
+reach the strictdoc venv through the PYTHONPATH splice in
+packages/strictdoc-grammar/lib/mkExtract.nix, and the board gets its
+interpreter from grammarPython = python3.withPackages in devenv.nix. Neither
+needs a user global and neither needs pip.
+<<<
+NOTES: >>>
+The operator, verbatim: "we should log a sdoc like a decision or mechanism for
+adding deps (node, py, etc) is via nix. i would approve using like ux if its
+easier to manage some of that but still nix installed."
+<<<

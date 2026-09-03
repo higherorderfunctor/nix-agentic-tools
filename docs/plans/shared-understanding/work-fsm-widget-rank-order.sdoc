@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: The lifecycle widget ranks states by longest path
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-FSM-WIDGET-RANK-ORDER
+TITLE: The lifecycle widget ranks states by longest path
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The Grammars tab's lifecycle widget orders states by longest path from the
+initial state, so a state reachable by a short and a long path is drawn at the
+far rank rather than where the lifecycle reads. Payload order is honoured only
+within a rank, which means the author cannot correct the layout from the
+semantics payload. Cheapest fix: rank by shortest path, or let the payload
+declare rank explicitly.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-DEBT-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-GRAMMAR-VIEW-FSM-WIDGET
+  ROLE: Assumes

@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: An injected script's leading comment swallows its shebang
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-INJECTED-COMMENT-SHEBANG
+TITLE: An injected script's leading comment swallows its shebang
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+In the bash-in-nix injection extractor, an injected item whose body opens with
+a leading comment swallows the shebang line into that comment, so the first
+line of the script is reported as part of the comment block rather than as the
+interpreter line. Line ranges for such an item start one line late. Cheapest
+fix: treat a first-line shebang as its own node before the comment grouping
+runs.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-DEBT-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes

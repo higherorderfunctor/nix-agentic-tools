@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: Source linking costs an export half a second warm and seven seconds cold
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-EXPORT-COST-WITH-LINKING
+TITLE: Source linking costs an export half a second warm and seven seconds cold
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Source linking costs about +0.6 s on a warm export and about +7 s cold (9.3 s
+vs 2.4 s cold, 2.8 s vs 2.1 s warm); `scribe check` is untaxed. The cost is in
+the strictdoc export path with REQUIREMENT_TO_SOURCE_TRACEABILITY on. Two
+candidates to measure first: the per-file mkdir under output/html/_source_files
+that runs for every indexed file, and the NullSourceReader lookups for files no
+extractor claims. `devenv tasks run strictdoc:bench` reproduces the numbers;
+EV-STRICTDOC-EXPORT-TIMING records them.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-DEBT-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes

@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: Loading agent context from the canon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SDOC-CONTEXT-LOADING
+TITLE: Loading agent context from the canon
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Loading agent context out of the canon, rather than authoring it twice. Two
+routes are on the table and neither is chosen: projecting selected sdoc nodes
+into the existing per-ecosystem instruction files (steering, rules,
+instructions), or a hook that injects nodes into a session at start or at a
+checkpoint. The open questions are which nodes qualify, how they are selected,
+and whether the projection is generated at build time or read live. Undecided.
+<<<
+NOTES: >>>
+The operator, verbatim: "and another sdoc for loading context from sdocs (e.g.,
+sdoc -> steering or some other system like hooks could be on the table)."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-CANON-STRUCTURE
+  ROLE: Assumes

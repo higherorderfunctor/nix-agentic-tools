@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: The semantics engine is not importable from the repository root
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SEMANTICS-CLI-MODULE-PATH
+TITLE: The semantics engine is not importable from the repository root
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+`python3 -m sdoc_semantics` does not work from the repository root, because
+dev/scripts is not on PYTHONPATH. The engine is only reachable through
+`scribe semantics` or through the strictdoc-grammar-extract path form, and the
+-m spelling fails with an import error that reads like a missing dependency.
+Cheapest fix: put dev/scripts on the path the dev shell exports, or retire the
+-m form and document the two entry points that do work.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-DEBT-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-SPIKE-TRANSITIONS-SEMANTICS
+  ROLE: Assumes

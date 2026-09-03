@@ -1,0 +1,52 @@
+[DOCUMENT]
+TITLE: Record how the canon holds the layer-stack waiver, and what retires it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-LAYER-STACK-WAIVER-RECORD
+TITLE: Record how the canon holds the layer-stack waiver, and what retires it
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Decide how the canon records the layer-stack waiver, and what retires it.
+
+DEC-LAYER-STACK is accepted and its hard rule reads: semantics are never
+written directly into a tool. dev/scripts/sdoc_semantics/machines/ is exactly
+that -- three lifecycles declared in Python -- and the operator waived the rule
+for the spike. The waiver is real, but the only place it is written down is the
+NOTES of WORK-SPIKE-TRANSITIONS-SEMANTICS and a docstring in the engine, so an
+accepted decision and the shipped tree now contradict each other with nothing
+in the canon reconciling them.
+
+Three readings to choose between. The decision is amended to carry an explicit
+spike exception with its own retirement condition. Or it is superseded by a
+successor that says the same rule with the exception built in. Or the waiver is
+left as a recorded, deliberate violation that a check reports until
+SLICE-BEHAVIOUR-MODEL lands and the machines become fixtures rather than the
+thing that ships.
+
+Whichever is chosen, name what ends it. The decision's own RETIRES_ON covers a
+layer needing something from the layer above it and nothing else, so today a
+waiver that was granted for one spike has no expiry at all.
+
+DEC-LAYER-STACK, WORK-SPIKE-TRANSITIONS-SEMANTICS and SLICE-BEHAVIOUR-MODEL
+live in docs/plans/strictdoc-tooling/ and are named here rather than related:
+INV-NO-EXTERNAL-PLAN-REFS forbids a plan-to-plan Parent relation whatever its
+role.
+<<<
+NOTES: >>>
+Filed 2026-09-03 by the canon audit of commits b78dd325..66f73b03, which found
+the contradiction while checking settled nodes against the semantics spike. Not
+a finding against the spike: the waiver was the operator's and is recorded. The
+gap is that an accepted decision's text still forbids what the tree now does,
+and nothing in the canon says for how long.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SEMANTICS-AND-WORDS
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: The shared-understanding plan's tech-debt register
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-DEBT-SHARED-UNDERSTANDING
+TITLE: The shared-understanding plan's tech-debt register
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+The linchpin every tech-debt item in this plan points at. A debt item is a
+WORK node at sketch that Assumes this register AND Assumes the work item
+whose landing produced it, so it surfaces in the Plan tab under both. The
+register holds no list: the edges are the list, and reviewing the new debt
+means reading this node's inbound edges.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SHARED-UNDERSTANDING
+  ROLE: Assumes

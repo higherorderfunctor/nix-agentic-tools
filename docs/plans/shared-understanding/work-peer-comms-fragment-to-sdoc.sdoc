@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: The peer-communication guide ships as a fragment, then becomes canon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-PEER-COMMS-FRAGMENT-TO-SDOC
+TITLE: The peer-communication guide ships as a fragment, then becomes canon
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The peer-communication style guide lands first as a dev fragment, so the
+fragment system fans it to every ecosystem (Claude rules, Copilot
+instructions, Kiro steering, the AGENTS routing index). That is the interim
+shape, not the destination: the guide is canon-shaped content, and it should
+eventually live in the canon as sdoc nodes with the fragment generated from
+them. Doing that needs the projection path in WORK-SDOC-CONTEXT-LOADING, so
+this item waits on it.
+<<<
+NOTES: >>>
+The operator, verbatim: "we can bake Peer Communication.md into this repo ...
+can use fragment system so it fans to all ecosystems, but log an sdoc to
+eventually convert to sdoc."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-CANON-STRUCTURE
+  ROLE: Assumes

@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: The grammar tab's glosses are a hand copy of the canon narrative
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-GRAMMAR-GLOSSES-INTERIM
+TITLE: The grammar tab's glosses are a hand copy of the canon narrative
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The Grammars tab's axis and type glosses are hard-coded in
+docs/sdoc/board/grammar-groups.json, copied verbatim out of two different
+canon sources: the four axis glosses out of NAR-CANON-TYPES-GRID, and each
+type gloss out of the first sentence of that type's NAR-SEMANTIC-LAYER-TYPE-*
+narrative. Two copies of the same words drift, and only the coverage check
+(dev/scripts/grammar-groups-check.py) notices a missing type, not a stale
+gloss. The fix is blocked on the option-1-versus-2 call about where glosses
+live; cheapest interim guard is a check that each copied sentence still
+matches its own source -- which means reading two kinds of file, not one.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-DEBT-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-GRAMMAR-TAB-GROUPS
+  ROLE: Assumes

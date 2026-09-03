@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: A process restart keeps the old interpreter environment
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-DEVENV-PROCESS-ENV-STALE
+TITLE: A process restart keeps the old interpreter environment
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+`devenv processes restart` keeps the process's old interpreter environment, so
+a devenv.nix change to an interpreter or an env var does not reach a running
+scribe or board. The working sequence is `devenv processes down` followed by
+`devenv up -d scribe board`, and nothing says so at the point of failure.
+Cheapest fix: document the sequence where the processes are defined, or make
+the restart path detect a changed environment and re-exec.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-DEBT-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes

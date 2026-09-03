@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Three work items grew into several topics each
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SPLIT-MEGA-NODES
+TITLE: Three work items grew into several topics each
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+WORK-ANNOTATION-NODES, WORK-CODE-LINKAGE-EXTRACTORS and WORK-GRAMMAR-TAB-GROUPS
+each grew by appending verbatim paragraphs to NOTES across several sessions, so
+each now covers several topics at once. That is the anti-pattern
+WORK-ONE-NODE-ONE-TOPIC rules against: node count is supposed to carry
+complexity. Cheapest fix: split each into one node per topic, keeping the
+original UID for whichever topic is the trunk.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-DEBT-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-ONE-NODE-ONE-TOPIC
+  ROLE: Assumes

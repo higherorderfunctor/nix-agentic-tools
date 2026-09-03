@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: The scribe daemon never reloads Python
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-DAEMON-NO-HOT-RELOAD
+TITLE: The scribe daemon never reloads Python
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The scribe daemon never reloads Python modules. An import-level change under
+dev/scripts/ breaks every scribe call with a JSON-RPC -32002 raised out of
+strictdoc_config.py, and the failure does not name the cause. The only
+recovery today is `devenv processes restart scribe`, which a session has to
+already know about. Cheapest fix: a file watcher on dev/scripts that restarts
+the worker, or a `scribe restart` verb that does it on demand.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-DEBT-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-CODE-LINKAGE-EXTRACTORS
+  ROLE: Assumes
