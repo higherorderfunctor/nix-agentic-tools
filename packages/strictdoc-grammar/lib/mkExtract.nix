@@ -37,11 +37,16 @@
 # handle on it. It carries strictdoc plus everything `uv.lock` pins, textx and
 # arpeggio included — neither of which is on a plain interpreter's path.
 #
-# `ast_grep_py` is the one thing that venv does not carry, and it is spliced
-# onto PYTHONPATH, because the normalizer matches over the faithful surface's
-# Nix source in process. That splice is a version coupling: an extension module
+# TWO PACKAGES ARE SPLICED ONTO PYTHONPATH, because that venv carries neither.
+# `ast_grep_py`, because the normalizer matches over the faithful surface's Nix
+# source in process. `transitions`, because dev/scripts/sdoc_semantics/ builds
+# its state machines on THIS interpreter — every scribe program takes this
+# derivation as its runner, so `scribe semantics` and
+# checks/strictdoc-semantics.nix both resolve it here. Only the first splice is
+# a version coupling: an extension module
 # built for `pkgs.python3` is only importable by upstream's interpreter while
-# the two agree on the Python MINOR version. MEASURED 2026-08-27 against this
+# the two agree on the Python MINOR version. `transitions` is pure python plus
+# `six`, which the venv already has, so it is importable regardless. MEASURED 2026-08-27 against this
 # repository's pin — 3.14.7 against upstream's 3.14.6, `import ast_grep_py`
 # clean and the grammar builder returning the same `4adcdb05…` grammar the
 # implementation brief records. The install check below is what makes a future
@@ -92,7 +97,16 @@
 }: let
   inherit (pkgs) ast-grep makeWrapper python3 stdenvNoCC;
 
-  astGrepPy = pkgs.python3Packages.ast-grep-py;
+  # Spliced onto the venv's PYTHONPATH. `ast_grep_py` is an EXTENSION module,
+  # so it is only importable while this repository's `pkgs.python3` and
+  # upstream's interpreter agree on the Python MINOR version — see the header.
+  # `transitions` is PURE PYTHON and carries no such coupling; it is here
+  # because dev/scripts/sdoc_semantics/ runs on this interpreter, through the
+  # scribe wrappers and through checks/strictdoc-semantics.nix.
+  pythonPathPackages = [
+    pkgs.python3Packages.ast-grep-py
+    pkgs.python3Packages.transitions
+  ];
 
   # The one grammar registry. Shared with devenv.nix, which needs the same
   # paths in the dev shell's env for a hand-run `strictdoc export`; see that
@@ -138,7 +152,7 @@ in
       fi
 
       makeWrapper "$venvPython" "$out/bin/strictdoc-grammar-extract" \
-        --prefix PYTHONPATH : "${astGrepPy}/${python3.sitePackages}" \
+        --prefix PYTHONPATH : "${lib.makeSearchPath python3.sitePackages pythonPathPackages}" \
         --suffix PATH : "${lib.makeBinPath [ast-grep]}" \
         ${grammarFlags}
       runHook postInstall
@@ -152,9 +166,11 @@ in
     installCheckPhase = ''
       runHook preInstallCheck
       "$out/bin/strictdoc-grammar-extract" -c '
-      import ast_grep_py, arpeggio, textx
+      import ast_grep_py, arpeggio, textx, transitions
+      from transitions.extensions.markup import MarkupMachine
       from strictdoc.backend.sdoc.grammar.grammar_builder import SDocGrammarBuilder
       assert SDocGrammarBuilder.create_grammar_grammar()
+      assert MarkupMachine(model=None, states=["a"], initial="a").markup
       '
 
       # Every delivered tree-sitter grammar must be loadable by the SAME

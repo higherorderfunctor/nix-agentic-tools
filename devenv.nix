@@ -153,7 +153,13 @@
   # `ai.strictdoc.enable` installs — packages/strictdoc-grammar/lib/mkExtract.nix
   # wraps upstream's OWN venv interpreter, because `python3Packages.strictdoc`
   # does not exist and `withPackages` cannot reach the grammar builder.
-  grammarPython = pkgs.python3.withPackages (ps: [ps.ast-grep-py]);
+  # `transitions` rides along for dev/scripts/sdoc_semantics/, which the board
+  # server imports in process (docs/sdoc/board/source.py) and which
+  # `python3 -m sdoc_semantics` reaches from a hand-run shell. It is delivered
+  # a SECOND time onto strictdoc's own venv in
+  # packages/strictdoc-grammar/lib/mkExtract.nix, because these are two
+  # different interpreters and neither can see the other's path.
+  grammarPython = pkgs.python3.withPackages (ps: [ps.ast-grep-py ps.transitions]);
 
   # The typed `.sgra` surface, imported here for ONE reason: its consumer DSL.
   # `ai.strictdoc.grammars.<name>.elements` is declared with the NORMALIZED

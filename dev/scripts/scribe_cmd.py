@@ -172,7 +172,60 @@ def build_parser(grammar: dict, command: str | None, tag: str | None):
     list_parser.add_argument("--type", dest="node_type")
     list_parser.add_argument("--depth")
     list_parser.add_argument("--status")
+
+    # READ-ONLY, AND IT NEVER REACHES THE DAEMON. What a state field's values
+    # MEAN is a property of the grammar plus dev/scripts/sdoc_semantics/, both
+    # of which are files; the corpus has no say in it. So this answers with
+    # the daemon down, which is deliberate -- the first thing an operator
+    # wants when the graph will not load is the vocabulary it refused.
+    semantics_parser = subparsers.add_parser(
+        "semantics",
+        help="the lifecycle a state field claims, and the rules nobody has settled",
+    )
+    semantics_parser.add_argument(
+        "selector", nargs="?", metavar="FIELD|TYPE",
+        help="one state field (DEPTH) or one node type (DECISION); default all",
+    )
+    output = semantics_parser.add_mutually_exclusive_group()
+    output.add_argument("--json", action="store_true", help="the sdoc-semantics/1 payload")
+    output.add_argument("--mermaid", action="store_true", help="stateDiagram-v2 per machine")
     return parser
+
+
+def run_semantics(args, grammar: dict) -> int:
+    """`scribe semantics` -- ONE renderer, shared with `python -m sdoc_semantics`.
+
+    Imported HERE rather than at module import, and the reason is the module
+    docstring above: `scribe` is stdlib-only so that every other subcommand
+    keeps working on any interpreter. `sdoc_semantics.engine` imports
+    `transitions`, which is delivered on the two interpreters that matter
+    (packages/strictdoc-grammar/lib/mkExtract.nix and devenv.nix's
+    grammarPython) and on nothing else. A missing engine must cost this one
+    subcommand, never `scribe set`.
+    """
+    try:
+        from sdoc_semantics import cli as semantics_cli
+    except ImportError as exc:
+        print(
+            f"scribe: the semantics engine is unavailable ({exc}). It needs "
+            f"`transitions` on this interpreter; run under the dev shell or "
+            f"strictdoc-grammar-extract.",
+            file=sys.stderr,
+        )
+        return 1
+    data = semantics_cli.build_payload(grammar)
+    try:
+        sys.stdout.write(
+            semantics_cli.emit(
+                data, args.selector, as_json=args.json, as_mermaid=args.mermaid
+            )
+        )
+    except SystemExit as exc:
+        if isinstance(exc.code, str):
+            print(f"scribe: {exc.code}", file=sys.stderr)
+            return 1
+        raise
+    return 0
 
 
 def reject_guarded(argv: list[str]) -> None:
@@ -254,6 +307,10 @@ def main(argv: list[str] | None = None) -> int:
         grammar = parse_sgra(root / "docs" / "sdoc" / "grammar.sgra")
         command, tag = peek(argv)
         args = build_parser(grammar, command, tag).parse_args(argv)
+        if args.command == "semantics":
+            # SHORT-CIRCUIT BEFORE ANY RPC. Everything this needs is already
+            # in hand: the grammar was parsed client-side a few lines up.
+            return run_semantics(args, grammar)
         payload = operation(args, grammar)
     except RootError as exc:
         print(f"scribe: {exc}", file=sys.stderr)
