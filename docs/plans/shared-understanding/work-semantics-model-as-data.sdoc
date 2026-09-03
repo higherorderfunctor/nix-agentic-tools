@@ -1,0 +1,77 @@
+[DOCUMENT]
+TITLE: Turn the three transcribed machines into one model document
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SEMANTICS-MODEL-AS-DATA
+TITLE: Turn the three transcribed machines into one model document
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Replace dev/scripts/sdoc_semantics/machines/depth.py, status.py,
+authored_by.py and registry.py with one committed document,
+dev/scripts/sdoc_semantics/model.json, in the shape DEC-SEMANTICS-MODEL-IS-DATA
+names and SLICE-BEHAVIOUR-MODEL's emitter will later produce. The content is a
+TRANSCRIPTION of exactly what the three machines say today: three lifecycles
+(DEPTH on every element that declares the field, STATUS on DECISION,
+AUTHORED_BY rise-only), their transitions with their rule text and settled
+false, and the rules of kind transcription and open, including the three open
+questions word for word. No gate is added; the gates list is empty. After this
+item the document is the only place the semantics are written.
+
+The document shape, fixed here and documented in a short file beside it:
+
+- Top level: schema (the string sdoc-semantics-model/1), model_version, then
+  lifecycles, actors, commands, events, gates, relation_contracts, checkpoints,
+  flows and rules, each a LIST in presentation order. Never an object whose key
+  order carries meaning: Nix alphabetises attribute keys on emission, and the
+  existing test that ladder order survives is what catches it.
+- A lifecycle: name; subject, a tagged object with one of three kinds (field:
+  every element declaring that field, derived from the grammar; element: one
+  tag plus the field; role: one relation role plus the field), so the
+  operator's open question of one machine per field or per type and field
+  stays expressible both ways; states as a list of name, label, note; initial;
+  terminal as a list; transitions as a list of trigger, from, to, gates (names),
+  writes, emits, rule_text, settled.
+- A gate: name; sees, a list of what it reads (fields, relation roles, the
+  actor, a git base ref); predicate, a tree of operations from the closed
+  table WORK-SEMANTICS-STDLIB-INTERPRETER fixes, never a string to evaluate.
+- A relation contract: role, from_types, to_types, admits_cycles, propagates.
+- A checkpoint: name, sees. An actor: name. A command: name, lifecycle,
+  trigger, actor (optional). An event: name, external (bool). A flow: name,
+  steps, each a transition reference plus an expected outcome (taken, or
+  refused by a named gate).
+- A rule: id, text, kind (transcription, policy, derived or open), settled,
+  cites.
+
+Every name that refers to another entry resolves, or the loader refuses the
+document. Loading and validating is WORK-SEMANTICS-STDLIB-INTERPRETER's; this
+item owns the document, its documented shape, and the deletion of the four
+Python modules and of the declare.py helpers (ordered, states_of) that only
+routed around transitions traps.
+<<<
+NOTES: >>>
+Operator, 2026-09-03, verbatim: "nix opyion set can still be post spike to
+prove it first, but make sure path to nix if it surfaces is logged as sdocs".
+The path is WORK-SEMANTICS-NIX-EMITTER-PATH.
+
+The shaping of the real content is the operator's and starts only when they
+say so. This item must leave DEPTH-REGRESSION-UNDECIDED, DEPTH-RUNGS-UNDECIDED
+and DEPTH-SHARED-MACHINE-UNDECIDED as open rules in the document, unchanged.
+
+Why one document and not one per lifecycle: SLICE-BEHAVIOUR-MODEL emits one
+JSON carrying a schema version, a model version and the resolved model, and
+relation contracts, checkpoints and flows are not per-lifecycle things.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SEMANTICS-MODEL-IS-DATA
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: WORK-REVISIT-SEMANTICS-ENGINE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-SEMANTICS-DEFINITION-BOUNDARY
+  ROLE: Crosses

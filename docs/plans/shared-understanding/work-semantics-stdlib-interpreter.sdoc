@@ -1,0 +1,92 @@
+[DOCUMENT]
+TITLE: Replace the transitions engine with a standard-library interpreter over the model document
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SEMANTICS-STDLIB-INTERPRETER
+TITLE: Replace the transitions engine with a standard-library interpreter over the model document
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Rewrite dev/scripts/sdoc_semantics/engine.py as a standard-library-only
+interpreter over model.json and take the payload contract to
+sdoc-semantics/2. What it does, in order:
+
+1. Load and validate. Refuse a document whose schema string is unknown, whose
+   operation names fall outside the closed table, whose state, gate,
+   lifecycle, actor, checkpoint or transition references do not resolve, or
+   whose lifecycle subject names a field or role the grammar does not declare
+   (the grammar cross-check the spike already does). Errors name the
+   vocabulary the document does declare.
+2. Predicates. A closed table of operations over a node, its relations and
+   the acting context: field_is, field_at_least (by ladder rank),
+   has_relation (role, direction, optional target type), all_related (role,
+   predicate), any_related, actor_in, and, or, not. About ten. A new operation
+   is a small addition to the table with its own positive and negative test; a
+   rule that fits an existing one is data only.
+3. Dispatch. fire(graph, command, actor) preflights every gate on the
+   transition, applies the write to a STAGED copy of the graph, collects the
+   emitted events, ripples them through every lifecycle whose transitions
+   listen (deterministic order: lifecycle order in the document, then subject
+   uid), with a visited set and a step bound so a cyclic model refuses instead
+   of hanging, then commits the staged copy in one step or refuses the whole
+   change naming the gate or the bound that refused. The original graph is
+   untouched on refusal.
+4. Relation contracts. check(graph) reports every edge whose role, source
+   type or target type breaks a contract, and every cycle on a role that
+   admits none.
+5. Diagnostics over the document alone: unreachable state, no initial, no
+   terminal, ambiguous dispatch, grammar vocabulary mismatch. The existing
+   positive controls carry over.
+6. Rendering: a mermaid stateDiagram-v2 emitter with safe state identifiers
+   (state names carry dashes), one diagram per lifecycle, gate names on the
+   edges.
+7. Payload sdoc-semantics/2: everything v1 carries, plus gates,
+   relation_contracts, actors, commands, events, checkpoints, flows, and the
+   derived gate placement (which checkpoints a gate may run at, from what each
+   sees). by_type stays. The board (docs/sdoc/board/source.py, the Rules
+   section, fsm.js) reads v2, and its unavailable degrade path stays.
+
+The graph the interpreter reads is an adapter over the daemon's loaded corpus
+(dev/scripts/sdoc_model.py), never a second parser. Nothing enforces on write
+yet: the daemon does not call fire() in this item, so the operator's shaping
+starts from a document with no gates and a writer that still accepts every
+move.
+
+Tests: every operation with a positive and a negative control; transaction
+refusal leaves the graph unchanged; a cyclic fixture is refused by the bound;
+load validation rejects a bogus operation and an unknown state name;
+presentation order survives (never alphabetised); payload v2 keys are exact;
+mermaid identifiers are safe; and the three shipped lifecycles produce exactly
+the payload rows they produce today. Fixtures that exercise gates, ripple,
+contracts and flows live under the tests only; the committed model.json gains
+no gate.
+<<<
+NOTES: >>>
+Measurements this design leans on, from EV-SEMANTICS-ENGINE-ALTERNATIVES: a
+standard-library interpreter covered every rubric row in 318 lines over a
+250-line document; load and dispatch under a millisecond in-process; the
+baseline's probe found an unreachable-state bug and a ripple that ignored one
+event kind, both by negative controls.
+
+Design calls made here, open to the operator: per-write gating in the daemon
+rather than checkpoint-only, because scribe is the only writer; the write side
+of a ripple is the interpreter's and rolls back as a whole; termination is
+enforced by the interpreter, not assumed of the model; the board consumes the
+same payload as the daemon.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SEMANTICS-MODEL-IS-DATA
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: WORK-SEMANTICS-MODEL-AS-DATA
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-REVISIT-SEMANTICS-ENGINE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-SEMANTICS-DEFINITION-BOUNDARY
+  ROLE: Crosses

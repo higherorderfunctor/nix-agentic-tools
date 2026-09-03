@@ -1,0 +1,47 @@
+[DOCUMENT]
+TITLE: The path from the hand-written model document to the Nix behaviour surface
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SEMANTICS-NIX-EMITTER-PATH
+TITLE: The path from the hand-written model document to the Nix behaviour surface
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The logged path from model.json to Nix, so it exists as sdoc before anyone
+builds it. SLICE-BEHAVIOUR-MODEL's typed option tree emits the same document
+model.json holds today, and a check regenerates and diffs the two, the way
+strictdoc-grammar-model-equal does for the grammar. When the emitter lands the
+hand-written file is deleted and the emitted one is committed in its place.
+
+Two gotchas measured in the assessment that the surface must respect: Nix
+alphabetises attribute keys on emission, so everything ordered in the document
+is a list, and the option tree keys entities by name only where order carries
+no meaning; and a transition from or to typed as a string passes evaluation
+with a typo, so the surface resolves state names against the lifecycle in an
+apply pass (addCheck never runs on a submodule, this repository's recorded
+invariant).
+
+The Nix side types the model, cross-checks it against the checked grammar
+value and emits; it does not evaluate gates, so there is one interpreter. A
+full evaluation measured 29 ms with a pinned lib and 825 ms through the flake
+registry, so the board reads the committed document and never runs a nix eval
+per page.
+<<<
+NOTES: >>>
+Operator, 2026-09-03, verbatim: "make sure path to nix if it surfaces is
+logged as sdocs". Not for Codex now; it is milestone three of
+DEC-EXECUTABLE-RULES-ROADMAP.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SEMANTICS-MODEL-IS-DATA
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: WORK-REVISIT-SEMANTICS-ENGINE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

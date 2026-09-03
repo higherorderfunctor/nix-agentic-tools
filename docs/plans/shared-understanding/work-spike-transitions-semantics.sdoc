@@ -57,6 +57,13 @@ one machine per FIELD (what ships) or one machine per (type, field) is the
 right grain -- the former is cheaper and is what six node types sharing one
 DEPTH ladder assumes, the latter would let a REQUIREMENT and a WORK disagree
 about what a rung means, at the cost of keeping six tables aligned.
+
+Revisited 2026-09-03: the engine choice was re-opened before shaping
+(WORK-REVISIT-SEMANTICS-ENGINE). The assessment
+(EV-SEMANTICS-ENGINE-ALTERNATIVES) found no library that carries the whole
+vocabulary, and DEC-SEMANTICS-MODEL-IS-DATA (open) proposes the model as a
+data document over a standard-library interpreter, with transitions removed.
+The three open questions above are unchanged by that and stay the operator's.
 <<<
 RELATIONS:
 - TYPE: Parent

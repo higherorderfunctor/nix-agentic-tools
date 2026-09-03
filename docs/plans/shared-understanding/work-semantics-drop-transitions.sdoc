@@ -1,0 +1,44 @@
+[DOCUMENT]
+TITLE: Remove transitions from both Nix delivery sites
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SEMANTICS-DROP-TRANSITIONS
+TITLE: Remove transitions from both Nix delivery sites
+DEPTH: interface-settled
+AUTHORED_BY: llm
+STATEMENT: >>>
+Remove ps.transitions from grammarPython in devenv.nix and
+pkgs.python3Packages.transitions from pythonPathPackages in
+packages/strictdoc-grammar/lib/mkExtract.nix, together with that wrapper's
+install-check imports of transitions and MarkupMachine. After this item scribe
+semantics, the strictdoc-semantics check and the board import nothing outside
+the standard library for semantics, and the install check imports the
+interpreter instead.
+
+Record the closure change in NOTES when it lands: the nixpkgs transitions
+package propagates pygraphviz unconditionally, 312 MB at each site measured on
+2026-09-03, for a backend the engine never imported.
+
+The daemon and the board need devenv processes down and then up after the
+devenv.nix change; restart keeps the old environment.
+<<<
+NOTES: >>>
+Ordered last of the three: the interpreter must be green under the old
+environment before the dependency goes, so a failure is attributable.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SEMANTICS-MODEL-IS-DATA
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-DEPS-VIA-NIX
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: WORK-SEMANTICS-STDLIB-INTERPRETER
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-REVISIT-SEMANTICS-ENGINE
+  ROLE: Assumes

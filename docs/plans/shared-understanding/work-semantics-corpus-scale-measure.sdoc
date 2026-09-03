@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: Measure the interpreter at corpus scale once it exists
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SEMANTICS-CORPUS-SCALE-MEASURE
+TITLE: Measure the interpreter at corpus scale once it exists
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Nothing in the engine assessment was measured at real corpus scale except
+pySHACL, which validated the 489-file corpus in 43 ms. Once the
+standard-library interpreter exists, measure a per-write fire() in the daemon,
+a whole-corpus contract check, and a whole-corpus ripple from one MECHANISM
+edit, over the real corpus, and record the numbers on this node. Each is of
+order nodes times invariants times edges; a number over the scribe check's 2.1
+s budget is a finding.
+<<<
+NOTES: >>>
+Filed from EV-SEMANTICS-ENGINE-ALTERNATIVES's "what this does not settle".
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SEMANTICS-STDLIB-INTERPRETER
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
