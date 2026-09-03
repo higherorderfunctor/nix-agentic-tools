@@ -432,11 +432,13 @@ toolsets
 tophat
 toplevel
 tostring
+trailcomma
 treefmt
 tryeval
 tsgo
 tsgolint
 tummychow
+ugrep
 ultracode
 unapprove
 unbuildable
@@ -478,7 +480,9 @@ worktree
 worktrees
 wyhash
 xhigh
+xyzzy
 ymtdzzz
 zdiff
+zebrafish
 zereight
 zstd

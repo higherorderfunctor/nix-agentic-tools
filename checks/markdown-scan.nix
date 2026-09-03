@@ -11,15 +11,23 @@
 # coverage neither check claims to have lost.
 #
 # WHICH FILES: every `.md` in the source tree, minus treefmt's own markdown
-# exclusions — `docs/plan.md`, sentinel-tip scratch that never merges, and
-# `docs/plans/kiro-v3-research-raw/`, a verbatim research snapshot whose
-# as-authored text is deliberately preserved (see the treefmt.nix comment
-# for the mangling that reformatting it causes). treefmt.nix states those
-# exclusions for the FORMATTER and this is their scan-side mirror; keep the
-# two in step. Both name this file back, and so does
-# docs/plans/kiro-v3-research-raw/README.md — three surfaces to move
-# together, which is why the exclusion is stated once here and not once per
-# scanner. Deriving them mechanically from `settings.global.excludes`
+# exclusions, which are three:
+#
+#   - `docs/plan.md` — sentinel-tip scratch that never merges.
+#   - `docs/plans/kiro-v3-research-raw/` — a verbatim research snapshot whose
+#     as-authored text is deliberately preserved (see the treefmt.nix comment
+#     for the mangling that reformatting it causes).
+#   - `dev/probes/kiro-steering/fixture/` — steering probe documents whose
+#     deliberately-malformed YAML frontmatter IS the experiment; normalizing
+#     it into a parsable shape deletes the finding (see that directory's
+#     README).
+#
+# treefmt.nix states those exclusions for the FORMATTER and this is their
+# scan-side mirror; keep the two in step. Both name this file back, and so do
+# docs/plans/kiro-v3-research-raw/README.md and
+# dev/probes/kiro-steering/README.md — so an exclusion spans four surfaces,
+# which is why it is stated once here and not once per scanner. Deriving them
+# mechanically from `settings.global.excludes`
 # was rejected: that list is glob-shaped and mostly about non-markdown
 # files, so a glob-to-find translation would be a second source of truth
 # wearing a derivation's clothes.
@@ -75,6 +83,7 @@ in
 
       ${pkgs.findutils}/bin/find . \
         -path './docs/plans/kiro-v3-research-raw' -prune -o \
+        -path './dev/probes/kiro-steering/fixture' -prune -o \
         -type f -name '*.md' \
         ! -path './docs/plan.md' \
         -print0 > "$TMPDIR/markdown-files"

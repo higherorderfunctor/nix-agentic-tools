@@ -251,6 +251,30 @@ _: {
         }
       ];
     };
+    # kiro-steering: what kiro-cli ACTUALLY does with each steering
+    # `inclusion` mode, which is not what the vendor's IDE-oriented docs
+    # describe — `manual` is inert in the CLI and a frontmatter fault degrades
+    # to `always` silently. Scoped to the transformer that EMITS the
+    # frontmatter, the option that types it, and the kiro package, because a
+    # change to any of those is a change to what the engine will be handed.
+    # Deliberately NOT scoped to `checks/module-eval.nix`: it holds the
+    # inclusion assertions, but it is edited constantly for unrelated reasons
+    # and loading this fragment on every one of those edits is pure context
+    # tax.
+    kiro-steering = {
+      scopes = [
+        "lib/ai/ai-common.nix"
+        "lib/ai/transformers/kiro.nix"
+        "packages/kiro-cli/**"
+      ];
+      sources = [
+        {
+          location = "package";
+          name = "steering-inclusion";
+          dir = "kiro-cli";
+        }
+      ];
+    };
     # kiro-wrapper: the argv contract of the generated kiro-cli launcher /
     # chat wrappers — which subcommands accept `--tui`/`--v3`/`--trust-tools`,
     # why the appends are gated rather than unconditional, and how to
