@@ -1,0 +1,114 @@
+[DOCUMENT]
+TITLE: The behaviour model is data, and the writer interprets it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SEMANTICS-MODEL-IS-DATA
+TITLE: The behaviour model is data, and the writer interprets it
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: The real model, once shaped, needs more than about twelve predicate operations, or a gate whose body cannot be data. At that point the interpreter has become a rule engine and the engine question reopens with EV-SEMANTICS-ENGINE-ALTERNATIVES as the baseline.
+STATEMENT: >>>
+The behaviour model is one neutral JSON document, and the writer interprets
+it. The document holds every lifecycle (its subject, its field, its states in
+presentation order, its initial and terminal states, its transitions with
+trigger, from, to, gates, writes and emits), every gate as a predicate built
+from a CLOSED table of operations, the actors, the commands and events, the
+relation contracts, the checkpoints with what each sees, the flows, and the
+rules that are still prose. A small interpreter the repository owns, standard
+library only, loads and validates the document, preflights a command against
+its gates, applies the write on a staged copy of the graph, ripples the
+emitted events to a fixed point in a deterministic order, and commits the
+whole change or refuses all of it. The eval-time diagnostics and the mermaid
+rendering are functions over the document.
+
+No third-party lifecycle engine sits underneath, and transitions leaves both
+Nix delivery sites. A rule is never Python: a rule that fits an existing
+operation is data only, and a new operation is a small addition to the closed
+table with its own tests. The size of that table is what this decision
+watches.
+
+The document's shape is the target SLICE-BEHAVIOUR-MODEL's typed Nix option
+surface emits. Until that surface exists the document is committed by hand in
+the same shape, so the emitter later replaces the hand-written file and a
+check proves the two equal, the way strictdoc-grammar-model-equal does for the
+grammar. The Python interpreter is the only interpreter: the Nix side types
+the model, cross-checks it against the grammar and emits it; it does not
+evaluate gates.
+<<<
+RATIONALE: >>>
+From EV-SEMANTICS-ENGINE-ALTERNATIVES. No library handles the whole
+vocabulary. The statechart libraries (transitions, python-statemachine,
+XState) carry the ladder, the branch and the diagram and nothing else: in each
+of them a gate body is code, a method name, a callable or a JavaScript
+function, so the rows that broke the spike (a gate that sees the graph, a
+comparison across an edge, the ripple, checkpoints, relation contracts) are
+caller code whichever library is underneath, and a Nix emitter could not
+target them either way. The engines that do express every row (clingo, OPA,
+pySHACL) do it as rule text in a second language, which under DEC-LAYER-STACK
+is a rule living in a script body, and bring a second evaluation model; two of
+the three showed measured defects in their probes. Two probes run separately,
+the Nix option-tree probe and the no-library baseline, converged on the same
+shape: a JSON model with a closed predicate vocabulary and a fixed interpreter
+of a few hundred lines. That is the only shape where DEC-LAYER-STACK holds by
+construction rather than by discipline, because there is no module a rule
+could be written into.
+
+transitions itself is dormant (2 commits in 12 months, 1 release in 24, no
+maintainer reply on any 2026 issue or pull request) and its nixpkgs package
+propagates pygraphviz unconditionally, a 312 MB closure at both delivery sites
+for a backend that is never imported. Adopting the data shape subtracts a
+dependency instead of adding one.
+
+What it costs. The repository owns a few hundred lines with no upstream to
+find bugs; the baseline probe surfaced two defects in its own interpreter,
+both caught only by negative controls, so the tests carry the burden a library
+would. Three things no candidate supplied and this shape must build: a
+transaction (refuse the whole change, never half of it), termination (a step
+bound and a visited set, so a cyclic model refuses instead of hanging), and
+validation on load (every state, gate, operation and lifecycle reference
+resolves, or the document is rejected).
+
+Rejected. Keep transitions and add a graph layer beside it: the layer would
+own most of the vocabulary while the library held three rows, and the library
+is dormant. Swap to python-statemachine: healthy and loads JSON, but its loader
+silently disables three diagnostics, a refused send raises nothing, and
+checkpoints and contracts stay outside it. A lifecycle engine plus a
+graph-query engine: pySHACL needs an RDF projection of the corpus and cannot
+reach a fixed point across shapes; clingo and OPA are a second language with a
+second evaluator.
+<<<
+NOTES: >>>
+Open, not accepted. Written 2026-09-03 by the session that ran the assessment.
+The operator delegated the pick ("pick the path or reject a pivot") and
+confirms or rejects it here.
+
+Questions the evidence cannot settle, carried verbatim from the synthesis for
+the operator:
+
+- Does a hand-written rule library in a second language satisfy
+  DEC-LAYER-STACK? A 214-line Nix engine and a 318-line Python interpreter are
+  also machinery. Where is the line? This decision reads the line as: data
+  plus a fixed interpreter is inside it; rule text in a second language is
+  not.
+- How many distinct gate shapes does the real model need, versus gate
+  instances? Probes used three to eight predicate operations; the real number
+  is unknown, and the RETIRES_ON condition is where that number bites.
+- Does the write path need a per-write gate, or is checkpoint granularity
+  enough? This decision assumes a per-write gate in the daemon, in-process and
+  under a millisecond, because scribe is the only writer.
+- Does a refused ripple roll back the write that triggered it? This decision
+  says yes: the staged copy is committed whole or not at all.
+- May the board consume a different representation than the daemon? This
+  decision says no: the board reads the same emitted payload.
+- Does corpus-scale performance need measuring before or after? After, on the
+  interpreter that exists; WORK-SEMANTICS-CORPUS-SCALE-MEASURE.
+- Is DEC-DEPS-VIA-NIX binding? It is open too. This decision does not need it:
+  the data shape adds no dependency under either reading.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: EV-SEMANTICS-ENGINE-ALTERNATIVES
+  ROLE: Proven_By
