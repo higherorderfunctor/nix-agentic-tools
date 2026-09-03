@@ -1,4 +1,4 @@
-# cspell:ignore sembleignore
+# cspell:ignore dlopens sembleignore
 {
   config,
   pkgs,
@@ -161,6 +161,15 @@
   # over it — so the DSL has to be handed in from the call site. Everything else
   # about the surface is the module's business, not this file's.
   sdocGrammar = import ./packages/strictdoc-grammar/lib {inherit lib;};
+
+  # The tree-sitter grammars dev/scripts/sdoc_extractors/ dlopens. The SAME
+  # registry packages/strictdoc-grammar/lib/mkExtract.nix bakes onto the
+  # strictdoc-grammar-extract wrapper — imported rather than re-listed, because
+  # two copies of a language list drift silently and the failure is a source
+  # reader that simply finds nothing.
+  sdocTsGrammars = import ./packages/strictdoc-grammar/lib/tsGrammars.nix {
+    inherit lib pkgs;
+  };
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
@@ -197,6 +206,17 @@ in {
 
   # ── Binary Cache ──────────────────────────────────────────────────────
   cachix.pull = ["nix-agentic-tools"];
+
+  # ── Environment ───────────────────────────────────────────────────────
+  #
+  # The tree-sitter parsers strictdoc's source readers dlopen. NOT optional
+  # since strictdoc_config.py turned REQUIREMENT_TO_SOURCE_TRACEABILITY on: a
+  # HAND-RUN `strictdoc export` is not the wrapped interpreter and would
+  # otherwise die with "no tree-sitter parser for symbol". The scribe programs
+  # get the same values from the wrapper's `--set-default`, which these
+  # deliberately override — that is the developer's lever for pointing at a
+  # locally built grammar.
+  inherit (sdocTsGrammars) env;
 
   # ── Packages ──────────────────────────────────────────────────────────
   packages = with pkgs;

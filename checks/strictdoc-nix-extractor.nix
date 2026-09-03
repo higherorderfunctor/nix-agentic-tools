@@ -2,15 +2,32 @@
 # checks/strictdoc-nix-extractor.nix -- the CI gate for the tree-sitter source
 # extractor (dev/scripts/sdoc_extractors/).
 #
-# Two arms, and the second is the one that matters.
+# Three arms, and the last is the one that matters.
 #
-# 1. The contract suite, dev/scripts/test_sdoc_extractors.py. Sixteen
-#    contracts, each negative one carrying its positive control, run on
+# 1. The extractor's contract suite, dev/scripts/test_sdoc_extractors.py. Each
+#    negative contract carries its positive control, and all of them run on
 #    strictdoc's OWN venv -- the only interpreter here that imports both
-#    `strictdoc` and `tree_sitter`, and the one that carries
-#    `SDOC_TS_NIX_PARSER`. That is `strictdocGrammarExtract`, the same runner
-#    `ai.strictdoc` puts in the dev shell and hands to every scribe program, so
-#    a session and CI exercise one environment.
+#    `strictdoc` and `tree_sitter`, and the one that carries the
+#    `SDOC_TS_*_PARSER` variables. That is `strictdocGrammarExtract`, the same
+#    runner `ai.strictdoc` puts in the dev shell and hands to every scribe
+#    program, so a session and CI exercise one environment.
+#
+# 1b. The FLIP suite, dev/scripts/test_sdoc_flip.py. Same interpreter, separate
+#    file, and it must be invoked separately -- a suite nothing runs is a suite
+#    that does not exist. It covers the surface the source-traceability flip
+#    added and arm 1 does not touch: the bash kinds, the glob routing table,
+#    `NullSourceReader`, the three NAMED extensionless scripts, and the bash
+#    sub-grammar injected into Nix indented strings (ids, kinds, absolute line
+#    numbers, Nix interpolation excluded from the bash parse, inject_bash off).
+#
+#    IT ALSO CARRIES THE ONLY DEMONSTRATION THAT AN EXTENSIONLESS SCRIPT YIELDS
+#    A FUNCTION ITEM, and that is a property of the repository rather than a
+#    shortcut. All three extensionless scripts the manifest names are real
+#    files with no shell function in them -- `docs/sdoc/board/serve` offers one
+#    variable, the two `checks/fixtures/claude-hooks/` hooks offer nothing --
+#    so routing is provable on repository files and the function half is not.
+#    The suite's own fixture is what closes that, which is exactly why it has
+#    to run somewhere merge-blocking.
 #
 # 2. A REAL strictdoc export, in a scratch project, with
 #    REQUIREMENT_TO_SOURCE_TRACEABILITY ON and `include_source_paths` narrowed
@@ -29,13 +46,21 @@
 #    markers rendered" is indistinguishable from a page that renders every
 #    requirement in the project regardless of resolution.
 #
-# The feature is NOT enabled in the repository's own strictdoc_config.py, and
-# must not be: it costs ~11 s on this corpus and is being examined separately.
-# The scratch config here is what makes the reader provable without paying that
-# on every export. Narrowing has its own hazard, recorded in
+# THE FEATURE IS NOW ON in the repository's own strictdoc_config.py (operator
+# ruling 2026-09-02; the cost that used to rule it out was strictdoc's generic
+# textX reader, which the glob manifest no longer reaches). This check keeps
+# its own scratch project anyway, and the reason is isolation rather than cost:
+# arm 2 asserts on a RENDERED page whose every marker it also authored, and it
+# can only do that over a corpus it fully controls. Narrowing has its own
+# hazard, recorded in
 # docs/plans/strictdoc-tooling/mech-file-relation-existence.sdoc -- the
 # File-relation resolver's predicate is "was indexed", not "exists" -- which is
 # why the scratch project holds exactly one source file and one document.
+#
+# The scratch config below registers ONE suffix route rather than the glob
+# manifest, and that is deliberate for the same reason: arm 2 is a proof about
+# the Nix reader's rendered output, over a project with a single `.nix` file in
+# it. The manifest itself is arm 1b's subject.
 {
   pkgs,
   self,
@@ -58,6 +83,12 @@ pkgs.runCommand "strictdoc-nix-extractor" {
 
     echo "== 1. the extractor's contract suite =="
     strictdoc-grammar-extract ${self}/dev/scripts/test_sdoc_extractors.py | tee "$out"
+
+    # A SECOND INVOCATION, not a second path appended to the first: each suite
+    # is a script with its own `main`, so naming both on one command line would
+    # run the first and silently ignore the second.
+    echo "== 1b. the source-traceability flip's contract suite ==" | tee -a "$out"
+    strictdoc-grammar-extract ${self}/dev/scripts/test_sdoc_flip.py | tee -a "$out"
 
     echo "== 2. a real export renders the markers, and drops the ghost =="
     project="$TMPDIR/project"
@@ -113,13 +144,23 @@ pkgs.runCommand "strictdoc-nix-extractor" {
       )
   PYEOF
 
-    # strictdoc's own CLI, not the runner: `SDOC_TS_NIX_PARSER` is set on the
-    # runner's wrapper, so hand it over explicitly. That indirection is the whole
-    # delivery seam (packages/strictdoc-grammar/lib/mkExtract.nix) and reading it
-    # off the runner here is what keeps ONE pinned grammar in play.
-    SDOC_TS_NIX_PARSER=$(strictdoc-grammar-extract -c \
-      'import os; print(os.environ["SDOC_TS_NIX_PARSER"])')
-    export SDOC_TS_NIX_PARSER
+    # strictdoc's own CLI, not the runner: the `SDOC_TS_*_PARSER` variables are
+    # set on the runner's wrapper, so hand them over explicitly. That
+    # indirection is the whole delivery seam
+    # (packages/strictdoc-grammar/lib/mkExtract.nix) and reading them off the
+    # runner here is what keeps ONE pinned grammar per language in play.
+    #
+    # Enumerated rather than named one by one: the Nix extractor INJECTS the
+    # bash one into every indented Nix string, so it needs SDOC_TS_BASH_PARSER
+    # too, and a third language would need a third line. Reading whatever the
+    # wrapper carries means adding a grammar stays one row in
+    # packages/strictdoc-grammar/lib/tsGrammars.nix.
+    eval "$(strictdoc-grammar-extract -c '
+    import os
+    for key, value in sorted(os.environ.items()):
+        if key.startswith("SDOC_TS_") and key.endswith("_PARSER"):
+            print(f"export {key}={value}")
+    ')"
 
     strictdoc export "$project" --formats=html,json \
       --output-dir "$TMPDIR/out" > "$TMPDIR/export.log" 2>&1 \

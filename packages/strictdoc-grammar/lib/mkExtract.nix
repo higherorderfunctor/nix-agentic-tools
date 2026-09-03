@@ -94,25 +94,22 @@
 
   astGrepPy = pkgs.python3Packages.ast-grep-py;
 
-  # Language name -> the grammar derivation whose `$out/parser` is dlopened.
-  # The name is the whole convention: it becomes `SDOC_TS_<NAME>_PARSER` and
-  # the C entry point `tree_sitter_<name>`. One row per language.
-  grammars = {
-    nix = pkgs.tree-sitter-grammars.tree-sitter-nix;
-  };
-
-  grammarEnv = name: "SDOC_TS_${lib.toUpper name}_PARSER";
+  # The one grammar registry. Shared with devenv.nix, which needs the same
+  # paths in the dev shell's env for a hand-run `strictdoc export`; see that
+  # file's header for why the list may not be written twice.
+  ts = import ./tsGrammars.nix {inherit lib pkgs;};
 
   grammarFlags =
-    lib.concatMapStringsSep " \\\n        "
-    (name: ''--set-default ${grammarEnv name} "${grammars.${name}}/parser"'')
-    (lib.attrNames grammars);
+    lib.concatStringsSep " \\\n        "
+    (lib.mapAttrsToList
+      (name: value: ''--set-default ${name} "${value}"'')
+      ts.env);
 
   # `(env, symbol)` pairs the install check parses one buffer through.
   grammarProbes =
     lib.concatMapStringsSep ", "
-    (name: ''("${grammarEnv name}", "tree_sitter_${name}")'')
-    (lib.attrNames grammars);
+    (name: ''("${ts.envName name}", "${ts.symbolName name}")'')
+    (lib.attrNames ts.grammars);
 in
   stdenvNoCC.mkDerivation {
     pname = "strictdoc-grammar-extract";
@@ -163,7 +160,10 @@ in
       # Every delivered tree-sitter grammar must be loadable by the SAME
       # interpreter, through ctypes, and must parse. This is the ABI check:
       # py-tree-sitter refuses a grammar below its MIN_COMPATIBLE floor, and
-      # tree-sitter-nix sits exactly on it.
+      # tree-sitter-nix sits exactly on it. The buffer is deliberately trivial
+      # -- every grammar here accepts it as SOMETHING, so this asserts the
+      # dlopen and the ABI, not the language. What each grammar actually
+      # matches is dev/scripts/test_sdoc_extractors.py's job.
       "$out/bin/strictdoc-grammar-extract" -c '
       import ctypes, os, warnings
       from tree_sitter import Language, Parser
@@ -180,10 +180,10 @@ in
       runHook postInstallCheck
     '';
 
-    # The delivered grammars, so a consumer that needs the same paths outside
-    # this wrapper (a dev-shell `env` entry for a hand-run `strictdoc export`,
-    # say) reads them from here rather than re-deriving the attrset.
-    passthru.tsGrammars = grammars;
+    # The delivered grammars. Kept as passthru for a consumer that already
+    # holds this derivation; anything that only needs the paths imports
+    # ./tsGrammars.nix directly, as devenv.nix does.
+    passthru.tsGrammars = ts.grammars;
 
     meta = {
       description = "Generation-time runner for StrictDoc's typed .sgra Nix surface";
