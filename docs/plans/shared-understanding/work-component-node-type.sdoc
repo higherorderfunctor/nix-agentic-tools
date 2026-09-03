@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: A COMPONENT node type with content, replacing the Tag field
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-COMPONENT-NODE-TYPE
+TITLE: A COMPONENT node type with content, replacing the Tag field
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A new node type, COMPONENT, would carry content describing the thing
+itself -- a database, a service -- rather than being a general string.
+Relations to a COMPONENT node would replace today's free-string,
+Tag-typed COMPONENT field. This is part of the spec, in a category that
+does not yet have a name; see WORK-COMPONENT-CATEGORY-NAME for the
+follow-on to brainstorm and name it.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "new node type: component. likely
+supersedes the Tag field. i want components to have content, not be a
+general string. if there is a db, the node describes it. relations
+replace the Tag field.
+- part of spec, new category. not sure what to call the category. add
+work item under parent to brainstorm on it."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-GRAMMAR-ARCHITECTURE
+  ROLE: Assumes

@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: Grammars view: normalize card heights
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-GRAMMAR-VIEW-NORMALIZE-HEIGHTS
+TITLE: Grammars view: normalize card heights
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Cards on the Grammars tab should share a height within a row or group, so
+that content length does not make the layout ragged. This is the carver's
+reading of a delegated call: normalize HEIGHT through content wrapping,
+not text size, because the type ramp carries a 12px floor the operator
+set (see WORK-GRAMMAR-TAB-GROUPS), and shrinking text to fit a card would
+break it.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "grammar view normalize node heights. since
+content drive your call on dynamic height vs dynamic text size."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-GRAMMAR-TAB-GROUPS
+  ROLE: Assumes

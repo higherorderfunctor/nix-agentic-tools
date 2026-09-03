@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Brainstorm the category the COMPONENT type belongs to
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-COMPONENT-CATEGORY-NAME
+TITLE: Brainstorm the category the COMPONENT type belongs to
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The four families DEC-NODE-FAMILIES rules -- definition, coverage,
+representation, work -- plus the open commentary family, do not obviously
+hold a component. The work is to brainstorm and name the category a
+COMPONENT node type would belong to.
+<<<
+NOTES: >>>
+Operator, 2026-09-02, verbatim: "part of spec, new category. not sure
+what to call the category. add work item under parent to brainstorm on
+it."
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-COMPONENT-NODE-TYPE
+  ROLE: Assumes
