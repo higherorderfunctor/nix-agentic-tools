@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: Make sdoc-extract a real command
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SDOC-EXTRACT-COMMAND
+TITLE: Make sdoc-extract a real command
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Make sdoc-extract a real command: the extractor CLI is invoked as
+strictdoc-grammar-extract dev/scripts/sdoc_extractors/__main__.py; a devenv
+mkScribe row (name sdoc-extract, script
+dev/scripts/sdoc_extractors/__main__.py) plus changing registry.LIST_COMMAND
+would give the short spelling. One-line change, deferred.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

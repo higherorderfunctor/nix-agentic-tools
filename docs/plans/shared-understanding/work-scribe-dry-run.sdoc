@@ -1,0 +1,21 @@
+[DOCUMENT]
+TITLE: scribe has no --dry-run
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SCRIBE-DRY-RUN
+TITLE: scribe has no --dry-run
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+scribe has no --dry-run: the sdoc skill promises every writing verb takes
+--dry-run, but scribe_cmd.py (the daemon client) exposes none; sdoc_cli.py
+has it. Found 2026-09-02 verifying element/id refusal; a bogus-id relate
+could only be tested safely on sdoc_cli.py.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

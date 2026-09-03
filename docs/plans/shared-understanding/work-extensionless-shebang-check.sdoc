@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: A fourth extensionless bash script would go unparsed silently
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-EXTENSIONLESS-SHEBANG-CHECK
+TITLE: A fourth extensionless bash script would go unparsed silently
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+A fourth extensionless bash script would go unparsed silently:
+SOURCE_EXTRACTORS names the three extensionless scripts by path; nothing
+notices a new tracked extensionless file with a bash shebang. A check that
+greps tracked extensionless files for #! bash and fails on one not in the
+manifest would close it. Accepted gap per the operator's "glob not covered
+not in scope"; filed so it is visible.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
