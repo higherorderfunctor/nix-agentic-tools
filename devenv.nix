@@ -789,6 +789,42 @@ in {
             --no-link
         '';
       };
+
+      # ── strictdoc export timing ──────────────────────────────────────
+      # What source linking costs on every export, measured rather than
+      # assumed. The `@relation` below is a BACKWARD marker: it names the
+      # EVIDENCE node that holds the table, an unknown UID there fails the
+      # export, and that node carries the forward File relation back to this
+      # binding by id. Neither end can be renamed without a red check.
+      #
+      # The runner is `strictdoc-grammar-extract`, not `python3`: this
+      # script drives strictdoc and needs the one interpreter that carries
+      # it, the same wrapper every scribe program takes. Tune it through
+      # the environment, since a devenv task takes no argv:
+      # `SDOC_BENCH_RUNS=1` for one repetition, `SDOC_BENCH_PROFILE=1` to
+      # add a serialized cProfile arm.
+      #
+      # THE MARKER MUST BE THE FIRST LINE OF THE COMMENT BLOCK THAT TOUCHES
+      # THE BINDING, which is why the prose above is a separate block. The
+      # extractor hands strictdoc's MarkerParser the comment slice starting
+      # at the first `#`, so every LATER line still carries its indentation
+      # -- and an indented `@relation` line does not match the marker
+      # grammar. It fails SILENTLY: the export stays green and no marker is
+      # registered, which is indistinguishable from a marker that resolved.
+      # Measured 2026-09-02; a bogus UID in an indented marker exits 0.
+
+      # @relation(EV-STRICTDOC-EXPORT-TIMING, scope=function)
+      # EV-STRICTDOC-EXPORT-TIMING holds the measurements; re-take them with
+      # `devenv tasks run strictdoc:bench`.
+      #
+      # `1>&2` is not decoration: devenv CAPTURES a task's stdout as its
+      # output value and prints none of it, `--show-output` included
+      # (measured), so the markdown table would be swallowed. stderr is the
+      # only stream a task can put in front of a person.
+      "strictdoc:bench" = {
+        description = "Measure export wall time with source linking on and off (EV-STRICTDOC-EXPORT-TIMING)";
+        exec = ''exec strictdoc-grammar-extract "$DEVENV_ROOT/dev/scripts/bench-export.py" 1>&2'';
+      };
     }
     // lib.optionalAttrs (!isCI) {
       # ── Commit-hook config resolution (no-cascade) ───────────────────
