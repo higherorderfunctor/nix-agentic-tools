@@ -21,7 +21,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from adapter import ROWS_SCHEMA, SNAPSHOT_SCHEMA, adapt
+from adapter import REPO_ROOT, ROWS_SCHEMA, SNAPSHOT_SCHEMA, adapt
 from server import build_server
 from source import NoDaemon, Payloads
 
@@ -87,6 +87,11 @@ FIXTURE_GRAMMAR = {
 }
 FIXTURE_PROJECT = {"name": "fixture", "root": "/fixture", "generation": 7}
 
+# The one real file this suite touches, and a committed FIXTURE rather than a
+# corpus file: dev/scripts/test_sdoc_extractors.py asserts the same ids
+# against the same bytes, so the two suites move together or not at all.
+NIX_FIXTURE_PATH = "dev/scripts/sdoc_extractors/fixtures/mod.nix"
+
 
 def adapted():
     return adapt(FIXTURE_INDEX, FIXTURE_PATHS, FIXTURE_GRAMMAR, FIXTURE_PROJECT)
@@ -140,18 +145,86 @@ class AdapterContractTest(unittest.TestCase):
                 {
                     "path": "docs/sdoc/board/server.py",
                     "element": None,
+                    "kind": None,
                     "id": None,
                     "lineRange": None,
                 },
                 {
                     "path": "docs/sdoc/board/server.py",
                     "element": "function",
+                    # NULL, and that is the contract rather than an omission:
+                    # no configured glob covers a `.py` file, so nothing
+                    # parses it and there is no kind to report. The card
+                    # falls back to ELEMENT. That is element-check's finding
+                    # to make -- never a reason for the adapter to fail.
+                    "kind": None,
                     "id": "build_server",
                     "lineRange": "40, 52",
                 },
             ],
         )
         self.assertEqual(by_id["DEC-FIX-ONE"]["fileRelations"], [])
+
+    def test_kind_is_resolved_when_the_extractor_is_available(self) -> None:
+        """The KIND word the export does not carry.
+
+        ELEMENT is strictdoc's closed vocabulary, so an option and a plain
+        binding both export as `function` and the card drew them alike. The
+        kind comes from resolving the id against the file, and this asserts
+        the two DISAGREE on a real item -- `option` against `function` --
+        because a test where they happened to match would pass just as well
+        against an adapter that merely echoed ELEMENT back.
+
+        Skipped, not failed, where the extractor cannot run: this suite is
+        meant to run under any python3, and the adapter's soft import is the
+        mechanism that keeps that true.
+
+        THE SKIP PREDICATE IS A REAL EXTRACTION, NOT AN IMPORT, and the
+        difference is measured. `import sdoc_extractors.registry` SUCCEEDS
+        under this dev shell's plain `python3` -- `tree_sitter` is on its
+        path -- while `SDOC_TS_NIX_PARSER` is set only on the
+        strictdoc-grammar-extract wrapper, so the grammar load fails later.
+        An importability guard therefore lets the test through on an
+        interpreter that cannot resolve anything, and it fails with a bare
+        `None != 'option'` that reads like an adapter bug.
+        """
+        try:
+            from sdoc_extractors import registry
+
+            registry.items_of(
+                REPO_ROOT / NIX_FIXTURE_PATH, path_root=REPO_ROOT
+            )
+        except Exception as error:  # noqa: BLE001 - any failure is a skip
+            self.skipTest(f"no working source extractor here: {error}")
+        index = json.loads(json.dumps(FIXTURE_INDEX))
+        relations = index["DOCUMENTS"][1]["NODES"][0]["RELATIONS"]
+        relations[-1] = {
+            "TYPE": "File",
+            "VALUE": NIX_FIXTURE_PATH,
+            "ELEMENT": "function",
+            "ID": "options.services.foo.port",
+        }
+        payloads = adapt(
+            index,
+            FIXTURE_PATHS,
+            FIXTURE_GRAMMAR,
+            FIXTURE_PROJECT,
+            source_root=REPO_ROOT,
+        )
+        by_id = {node["id"]: node for node in payloads["snapshot"]["nodes"]}
+        item = next(
+            relation
+            for relation in by_id["MECH-FIX-TWO"]["fileRelations"]
+            if relation["id"]
+        )
+        self.assertEqual(item["kind"], "option")
+        self.assertEqual(item["element"], "function")
+        row = next(
+            r
+            for r in payloads["rows"]["relations"]
+            if r["ELEMENT_ID"] == "options.services.foo.port"
+        )
+        self.assertEqual(row["ELEMENT_KIND"], "option")
 
     def test_rows_share_one_key_set_per_table(self) -> None:
         rows = adapted()["rows"]
@@ -188,6 +261,7 @@ class AdapterContractTest(unittest.TestCase):
         # key that first appears late never becomes a column.
         for row in rows:
             self.assertIn("ELEMENT", row)
+            self.assertIn("ELEMENT_KIND", row)
             self.assertIn("ELEMENT_ID", row)
             self.assertIn("LINE_RANGE", row)
         self.assertIsNone(resolved["ELEMENT"])

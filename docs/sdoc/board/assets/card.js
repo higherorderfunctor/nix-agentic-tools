@@ -71,7 +71,15 @@ function fileRelationsOf(node) {
 
 function fileItem(file) {
   const item = htmlNode("li", "file-item");
-  const kind = htmlNode("span", "relation-role", file.element ?? "file");
+  // `kind` is the extractor's word (option, module, binding); `element` is
+  // strictdoc's closed marker vocabulary, in which all three read `function`.
+  // Prefer the specific one, and fall back for a payload written before the
+  // adapter resolved kinds -- or served where the extractor is unavailable.
+  const kind = htmlNode(
+    "span",
+    "relation-role",
+    file.kind ?? file.element ?? "file",
+  );
   const target = htmlNode("span", "relation-target");
   target.append(document.createTextNode(file.path ?? ""));
   if (file.id) {

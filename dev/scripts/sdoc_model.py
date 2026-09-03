@@ -313,6 +313,63 @@ def file_entry_kwargs(element: str | None, id_: str | None, line_range: str | No
     }
 
 
+def check_file_item(root: Path, target: str, identifier: str | None) -> None:
+    """Refuse an `ID:` that names no item of the file it points into.
+
+    THE FAILURE THIS CLOSES IS SILENT AT EVERY OTHER LAYER. strictdoc drops a
+    forward `ID:` it cannot resolve with exit 0, no marker, and the relation
+    absent from both pages; dev/scripts/file-check.py checks the PATH and
+    never opens the file; and `scribe relate --element function --id
+    this.does.not.exist` wrote and exited 0. A wrong id and a right one were
+    indistinguishable from outside, which is the same evidence as no check at
+    all.
+
+    The extractor table is `sdoc_extractors/registry.py` -- the SAME table
+    strictdoc_config.py routes readers with. Validating against a second
+    table would let a relation pass here and resolve to nothing there, and
+    that discrepancy is precisely the thing with no diagnostic.
+
+    Only the ONE target file is parsed: a single tree-sitter parse, not a
+    corpus walk.
+
+    A missing `tree_sitter` REFUSES rather than skipping. A skip is
+    invisible, and what it lets through is the unresolvable relation this
+    function exists to stop; every scribe program runs on the interpreter
+    that carries the grammar
+    (packages/strictdoc-grammar/lib/mkExtract.nix).
+    """
+    if not identifier:
+        return
+    try:
+        from sdoc_extractors import registry
+        from sdoc_extractors.tree_sitter_extractor import ExtractorError
+    except ImportError as error:
+        raise SdocError(
+            f"cannot validate ELEMENT/ID: the source extractor is not "
+            f"importable ({error}). Run this on strictdoc's own interpreter "
+            f"-- `strictdoc-grammar-extract`, which every scribe program uses "
+            f"-- rather than a plain python3."
+        ) from error
+    try:
+        items = registry.items_of(root / target, path_root=root)
+    except registry.UnsupportedPath:
+        raise SdocError(
+            f"File relation to {target!r} names an ID, but no source "
+            f"extractor is configured for that path. Covered globs: "
+            f"{registry.describe_globs()} "
+            f"(dev/scripts/sdoc_extractors/registry.py). Relate to the whole "
+            f"file instead, or add a glob."
+        ) from None
+    except ExtractorError as error:
+        raise SdocError(f"cannot parse {target!r}: {error}") from error
+    if not any(item.display_name == identifier for item in items):
+        raise SdocError(
+            registry.explain_missing_id(
+                root / target, identifier, items, path_root=root
+            )
+        )
+
+
 def _describe(spec: RelationSpec) -> str:
     """A relation as an error message should name it: the target, plus the
     element it narrows to when it narrows to one."""
@@ -536,6 +593,12 @@ class Graph:
                 f"File relation {target!r} does not name an existing regular "
                 f"file under {self.root}"
             )
+        # AFTER the path check and BEFORE the entry is built, so a bad path
+        # is reported as a bad path rather than as an unparseable file, and
+        # so nothing is constructed for a relation that is about to be
+        # refused. `remove_relation` deliberately does NOT do this: a
+        # relation whose id has gone stale must stay removable.
+        check_file_item(self.root, target, spec.id)
         entry = FileEntry(
             parent=None,
             g_file_format=None,
