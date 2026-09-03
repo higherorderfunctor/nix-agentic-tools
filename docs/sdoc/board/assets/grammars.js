@@ -16,7 +16,18 @@
 // The one-line glosses under the axis words and the card titles are prose
 // the layout carries verbatim from the canon (its $comment names the
 // sources); they are drawn as given and never composed here.
+//
+// The inspector's last two sections come from the snapshot's `semantics`
+// key, not from the .sgra: the grammar says a type HAS a STATUS field with
+// four words in it, and the semantics engine says which of those words a
+// node may move to next, and under what rule. Rules first, then the machine
+// each rule is about -- an operator shaping the model reads the sentence
+// before the diagram. Both sections degrade to a named absence: no engine,
+// no machine for this type, or a machine with no rules yet all render a
+// section that says so, because a missing section reads as "settled" and
+// nothing here is.
 import { colorOf, htmlNode } from "/assets/card.js";
+import { layoutMachines, machineFigure } from "/assets/fsm.js";
 
 const elements = {
   grid: document.querySelector("#grammar-grid"),
@@ -439,6 +450,90 @@ function roleItem(role) {
   return item;
 }
 
+// The semantics payload keys machines by FIELD and indexes them by type, so
+// the inspector never has to know which fields a type carries -- that answer
+// is the engine's, computed from the same parsed grammar.
+function machinesFor(tag) {
+  const semantics = snapshot.semantics ?? {};
+  const fields = semantics.by_type?.[tag] ?? [];
+  return fields
+    .map((field) => semantics.machines?.[field])
+    .filter((machine) => machine);
+}
+
+function ruleItem(rule, field) {
+  const item = htmlNode("li", "rule-item");
+  // `settled: false` is the engine saying "this is written down, not
+  // decided". It rides as a dashed edge on the row rather than a second
+  // pill, so the pill keeps meaning one thing: where the rule came from.
+  if (rule.settled === false) item.classList.add("is-unsettled");
+  const head = htmlNode("div", "rule-head");
+  head.append(
+    htmlNode("span", "rule-field", field),
+    htmlNode("span", "rule-id", rule.id),
+    htmlNode("span", `rule-kind is-${rule.kind}`, rule.kind),
+  );
+  item.append(head, htmlNode("div", "rule-text", rule.text));
+  if (rule.cites?.length) {
+    const cites = htmlNode("div", "rule-cites");
+    for (const uid of rule.cites)
+      cites.append(htmlNode("span", "rule-cite", uid));
+    item.append(cites);
+  }
+  return item;
+}
+
+function noteItem(text, className) {
+  const list = htmlNode("ul", "rule-list");
+  list.append(
+    htmlNode("li", className ? `rule-note ${className}` : "rule-note", text),
+  );
+  return list;
+}
+
+function rulesSection(tag, machines) {
+  const unavailable = snapshot.semantics?.unavailable;
+  if (unavailable) {
+    return section(
+      "Rules · unavailable",
+      noteItem(unavailable, "is-unavailable"),
+    );
+  }
+  const rules = machines.flatMap((machine) =>
+    (machine.rules ?? []).map((rule) => ({ field: machine.field, rule })),
+  );
+  if (!rules.length) {
+    return section(
+      "Rules · 0",
+      noteItem(`No lifecycle rule is recorded for ${tag} yet.`),
+    );
+  }
+  const list = htmlNode("ul", "rule-list");
+  for (const entry of rules) list.append(ruleItem(entry.rule, entry.field));
+  return section(`Rules · ${rules.length}`, list);
+}
+
+function lifecycleSection(tag, machines) {
+  if (snapshot.semantics?.unavailable) {
+    return section(
+      "Lifecycle · unavailable",
+      noteItem(
+        "The semantics engine did not load; see Rules.",
+        "is-unavailable",
+      ),
+    );
+  }
+  if (!machines.length) {
+    return section(
+      "Lifecycle · 0",
+      noteItem(`No state field of ${tag} has a machine yet.`),
+    );
+  }
+  const wrapper = htmlNode("div", "fsm-list");
+  for (const machine of machines) wrapper.append(machineFigure(machine));
+  return section(`Lifecycle · ${machines.length}`, wrapper);
+}
+
 function section(title, list) {
   const wrapper = htmlNode("section", "inspector-section");
   wrapper.append(htmlNode("h2", null, title));
@@ -472,13 +567,19 @@ function renderInspector(tag) {
   for (const role of element.roles) roles.append(roleItem(role));
   if (!element.roles.length) roles.append(htmlNode("li", null, "None"));
 
+  const machines = machinesFor(tag);
   elements.inspectorContent.replaceChildren(
     head,
     section(`Fields · ${element.fields.length}`, fields),
     section(`Relations it may write · ${element.roles.length}`, roles),
+    rulesSection(tag, machines),
+    lifecycleSection(tag, machines),
   );
   elements.inspectorEmpty.hidden = true;
   elements.inspectorContent.hidden = false;
+  // Only now does a figure know how wide it is; see fsm.js's header.
+  elements.inspectorContent.style.setProperty("--accent", colorOf(tag));
+  layoutMachines(elements.inspectorContent);
 }
 
 export function selectGrammar(tag) {

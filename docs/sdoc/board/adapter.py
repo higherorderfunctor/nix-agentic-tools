@@ -76,6 +76,7 @@ uid_paths = _view_check().uid_paths
 
 SNAPSHOT_SCHEMA = "sdoc-board/2"
 ROWS_SCHEMA = "sdoc-perspective/2"
+SEMANTICS_SCHEMA = "sdoc-semantics/1"
 STATE_FIELDS = ("STATUS", "DEPTH")
 STRUCTURAL = ("_TOC", "_NODE_TYPE", "RELATIONS")
 
@@ -143,16 +144,42 @@ def _normalize(rows: list[dict]) -> list[dict]:
     return [{name: row.get(name) for name in names} for row in rows]
 
 
+def semantics_unavailable(reason: str) -> dict:
+    """The payload shape that says "no lifecycles here, and why".
+
+    Every consumer -- the board's Grammars tab included -- reads
+    `machines` and `by_type` unconditionally, so the absent case is the
+    SAME shape with both empty plus a `unavailable` string. There is no
+    missing key and no null to branch on: a semantics engine that will not
+    import must not cost the operator their board.
+    """
+    return {
+        "schema": SEMANTICS_SCHEMA,
+        "machines": {},
+        "by_type": {},
+        "unavailable": reason,
+    }
+
+
 def adapt(
     index: dict,
     paths: dict,
     grammar: dict,
     project: dict,
     *,
+    semantics=None,
     source_root=None,
 ) -> dict:
     """One export in, both payloads out. `project` is passed through verbatim
     into each payload's `project` key (root, generation, and friends).
+
+    `semantics` is the `sdoc-semantics/1` payload the engine computes from
+    the same parsed grammar (states, transitions and rules per state field).
+    The adapter does not compute it and does not validate it -- it carries
+    it through onto the snapshot so one fetch answers both questions the
+    Grammars tab asks about a type: what it may declare, and how its state
+    fields may move. Absent, the snapshot carries the explicit unavailable
+    shape rather than a missing key.
 
     `source_root` is the tree a File relation's path resolves against, for the
     kind lookup. It defaults to `project["root"]` -- the server already puts
@@ -280,6 +307,8 @@ def adapt(
             "project": project,
             "stats": stats,
             "grammar": {tag: grammar[tag] for tag in sorted(grammar)},
+            "semantics": semantics
+            or semantics_unavailable("No semantics payload reached the adapter."),
             "nodes": records,
             "edges": edges,
             "diagnostics": diagnostics,

@@ -12,18 +12,26 @@ from __future__ import annotations
 
 import json
 import threading
+import types
 import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
+from unittest import mock
 
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from adapter import REPO_ROOT, ROWS_SCHEMA, SNAPSHOT_SCHEMA, adapt
+from adapter import (
+    REPO_ROOT,
+    ROWS_SCHEMA,
+    SEMANTICS_SCHEMA,
+    SNAPSHOT_SCHEMA,
+    adapt,
+)
 from server import build_server
-from source import NoDaemon, Payloads
+from source import NoDaemon, Payloads, semantics_payload
 
 FIXTURE_INDEX = {
     "_COMMENT": "fixture",
@@ -86,6 +94,109 @@ FIXTURE_GRAMMAR = {
     "MECHANISM": {"prefix": "MECH-", "fields": [], "roles": []},
 }
 FIXTURE_PROJECT = {"name": "fixture", "root": "/fixture", "generation": 7}
+
+# A hand-written `sdoc-semantics/1` payload. It is INVENTED -- two small
+# machines under names no grammar carries -- because it exists to pin the
+# SHAPE, and a fixture that paraphrases the real lifecycles would read as the
+# model and rot against it the first time the operator changes their mind.
+# The model lives in dev/scripts/sdoc_semantics; this suite must stay
+# hermetic under a bare python3, where that engine's `transitions` dependency
+# is not importable.
+#
+# Two things the shape demands and this fixture shows. `states` is in LADDER
+# order, not alphabetical -- the order IS the semantics, and sorting it would
+# destroy the machine. And a rule carries `kind` and `settled` separately:
+# where a claim came from is not the same question as whether anyone has
+# decided it, and this spike has far more of the second than the first.
+FIXTURE_SEMANTICS = {
+    "schema": SEMANTICS_SCHEMA,
+    "machines": {
+        "FIX_LADDER": {
+            "field": "FIX_LADDER",
+            "applies_to": ["MECHANISM"],
+            "initial": "one",
+            "terminal": ["three"],
+            "states": [
+                {"name": "one", "label": "one", "note": "The first rung."},
+                {"name": "two", "label": "two"},
+                {"name": "three", "label": "three"},
+            ],
+            "transitions": [
+                {
+                    "trigger": "advance",
+                    "source": "one",
+                    "dest": "two",
+                    "conditions": [],
+                    "unless": [],
+                    "rule_text": "One rung at a time.",
+                    "settled": True,
+                },
+                {
+                    "trigger": "advance",
+                    "source": "two",
+                    "dest": "three",
+                    "conditions": [],
+                    "unless": [],
+                    "rule_text": "One rung at a time.",
+                    "settled": False,
+                },
+            ],
+            "rules": [
+                {
+                    "id": "FIX-LADDER-ORDER",
+                    "text": "The rungs are the grammar's own option order.",
+                    "kind": "transcription",
+                    "settled": True,
+                    "cites": [],
+                },
+                {
+                    "id": "FIX-LADDER-REGRESS",
+                    "text": "OPEN: may it fall back a rung?",
+                    "kind": "open",
+                    "settled": False,
+                    "cites": ["DEC-FIX-ONE"],
+                },
+            ],
+            "diagnostics": [],
+        },
+        "FIX_BRANCH": {
+            "field": "FIX_BRANCH",
+            "applies_to": ["DECISION"],
+            "initial": "open",
+            "terminal": ["closed"],
+            "states": [
+                {"name": "open", "label": "open"},
+                {"name": "closed", "label": "closed"},
+            ],
+            "transitions": [
+                {
+                    "trigger": "close",
+                    "source": "open",
+                    "dest": "closed",
+                    "conditions": [],
+                    "unless": [],
+                    "rule_text": "Closing is final.",
+                    "settled": True,
+                }
+            ],
+            "rules": [
+                {
+                    "id": "FIX-BRANCH-FINAL",
+                    "text": "A closed node does not reopen.",
+                    "kind": "policy",
+                    "settled": False,
+                    "cites": [],
+                }
+            ],
+            "diagnostics": ["A fixture diagnostic, so the shape carries one."],
+        },
+    },
+    "by_type": {
+        "DECISION": ["FIX_BRANCH"],
+        "MECHANISM": ["FIX_LADDER"],
+    },
+}
+
 
 # The one real file this suite touches, and a committed FIXTURE rather than a
 # corpus file: dev/scripts/test_sdoc_extractors.py asserts the same ids
@@ -276,6 +387,69 @@ class AdapterContractTest(unittest.TestCase):
         self.assertEqual(by_uid["MECH-FIX-TWO"]["OUT_COUNT"], 1)
         self.assertEqual(by_uid["MECH-FIX-TWO"]["FILE_COUNT"], 1)
         self.assertEqual(by_uid["DEC-FIX-ONE"]["IN_COUNT"], 1)
+
+
+class SemanticsCarriageTest(unittest.TestCase):
+    """The board carries the engine's answer; it never computes one.
+
+    Both cases matter equally. A payload has to arrive on the snapshot
+    BYTE-FOR-BYTE, because the tab renders rules as sentences and a helpful
+    normalisation here would be an edit to the model. And an ABSENT payload
+    has to arrive as the same shape with a reason in it, because a missing
+    `semantics` key would make every consumer branch, and a silently empty
+    one would read as "this type has no lifecycle" when the truth is "no
+    engine answered".
+    """
+
+    def test_a_payload_rides_the_snapshot_verbatim(self) -> None:
+        snapshot = adapt(
+            FIXTURE_INDEX,
+            FIXTURE_PATHS,
+            FIXTURE_GRAMMAR,
+            FIXTURE_PROJECT,
+            semantics=FIXTURE_SEMANTICS,
+        )["snapshot"]
+        self.assertEqual(snapshot["semantics"], FIXTURE_SEMANTICS)
+        self.assertNotIn("unavailable", snapshot["semantics"])
+
+    def test_by_type_is_the_reverse_index_the_tab_reads(self) -> None:
+        # grammars.js looks a type up in by_type and never scans machines,
+        # so the two have to agree or a type silently loses its lifecycle.
+        machines = FIXTURE_SEMANTICS["machines"]
+        for field, machine in machines.items():
+            for tag in machine["applies_to"]:
+                self.assertIn(field, FIXTURE_SEMANTICS["by_type"][tag])
+        for tag, fields in FIXTURE_SEMANTICS["by_type"].items():
+            for field in fields:
+                self.assertIn(tag, machines[field]["applies_to"])
+
+    def test_no_payload_yields_the_named_unavailable_shape(self) -> None:
+        semantics = adapted()["snapshot"]["semantics"]
+        self.assertEqual(semantics["schema"], SEMANTICS_SCHEMA)
+        self.assertEqual(semantics["machines"], {})
+        self.assertEqual(semantics["by_type"], {})
+        self.assertTrue(semantics["unavailable"])
+
+    def test_the_boundary_always_answers_in_the_payload_shape(self) -> None:
+        # True whether or not dev/scripts/sdoc_semantics is importable here,
+        # which is the point: this suite runs under a bare python3.
+        semantics = semantics_payload(FIXTURE_GRAMMAR)
+        self.assertEqual(semantics["schema"], SEMANTICS_SCHEMA)
+        self.assertIn("machines", semantics)
+        self.assertIn("by_type", semantics)
+
+    def test_a_raising_engine_costs_the_operator_nothing(self) -> None:
+        engine = types.ModuleType("sdoc_semantics")
+
+        def build_payload(_grammar):
+            raise RuntimeError("two transitions on advance from sketch")
+
+        engine.build_payload = build_payload
+        with mock.patch.dict(sys.modules, {"sdoc_semantics": engine}):
+            semantics = semantics_payload(FIXTURE_GRAMMAR)
+        self.assertEqual(semantics["machines"], {})
+        self.assertIn("two transitions on advance", semantics["unavailable"])
+        self.assertIn("RuntimeError", semantics["unavailable"])
 
 
 class FakeSource:

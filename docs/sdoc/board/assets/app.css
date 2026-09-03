@@ -1226,6 +1226,276 @@ html[data-status="error"] .status-dot {
   font-size: var(--fs-small);
 }
 
+/* ---- rules and the lifecycle widget ----------------------------------- */
+
+/* The Grammars inspector's last two sections. Everything here is sized off
+ * the --fs-* ramp and the --u unit, so both ride the one font-size knob; the
+ * SVG inside is the exception the widget handles itself, in measured pixels
+ * (see fsm.js). --accent is the per-type color the inspector sets on its
+ * content root. */
+
+.rule-list {
+  display: grid;
+  gap: calc(8 * var(--u));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rule-item {
+  padding: calc(9 * var(--u)) calc(10 * var(--u));
+  border: 1px solid var(--border-subtle);
+  border-left: calc(3 * var(--u)) solid var(--border-default);
+  border-radius: 6px;
+  background: var(--surface-input);
+}
+
+/* A rule the engine has NOT settled: written down, not decided. Dashed, so
+ * the pill beside it keeps meaning only one thing -- where the rule is
+ * from -- and an operator scanning for what is still theirs to decide can
+ * find it without reading a word. */
+.rule-item.is-unsettled {
+  border-left-style: dashed;
+  border-left-color: var(--accent-warning);
+}
+
+.rule-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: calc(3 * var(--u)) calc(7 * var(--u));
+  margin-bottom: calc(6 * var(--u));
+}
+
+.rule-field {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.rule-id {
+  overflow-wrap: anywhere;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+.rule-kind {
+  margin-left: auto;
+  padding: calc(2 * var(--u)) calc(7 * var(--u));
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rule-kind.is-transcription {
+  border-color: var(--border-default);
+  color: var(--accent-info);
+}
+
+.rule-kind.is-policy {
+  border-color: rgb(74 222 128 / 45%);
+  color: var(--accent-success);
+}
+
+.rule-kind.is-derived {
+  color: var(--text-secondary);
+}
+
+/* Undecided has to READ as undecided at a glance -- it is the whole reason
+ * the section exists this early in the model's life. */
+.rule-kind.is-open {
+  border-color: rgb(251 191 36 / 55%);
+  background: rgb(251 191 36 / 10%);
+  color: var(--accent-warning);
+  font-weight: 700;
+}
+
+.rule-text {
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+
+.rule-cites {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(4 * var(--u));
+  margin-top: calc(6 * var(--u));
+}
+
+.rule-cite {
+  overflow-wrap: anywhere;
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+.rule-note {
+  padding: calc(9 * var(--u)) calc(10 * var(--u));
+  border: 1px dashed var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+
+.rule-note.is-unavailable {
+  overflow-wrap: anywhere;
+  border-color: rgb(251 191 36 / 45%);
+  color: var(--accent-warning);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+.fsm-list {
+  display: grid;
+  gap: calc(16 * var(--u));
+}
+
+.fsm-figure {
+  margin: 0;
+  padding: calc(10 * var(--u)) calc(11 * var(--u)) calc(8 * var(--u));
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-secondary);
+}
+
+.fsm-figure-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(3 * var(--u)) calc(8 * var(--u));
+}
+
+.fsm-field {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.fsm-counts,
+.fsm-meta {
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+.fsm-meta {
+  overflow-wrap: anywhere;
+  margin-top: calc(4 * var(--u));
+  color: var(--text-tertiary);
+}
+
+.fsm-svg {
+  display: block;
+  width: 100%;
+  margin-top: calc(10 * var(--u));
+  overflow: visible;
+}
+
+.fsm-state-body {
+  fill: var(--surface-input);
+  stroke: var(--border-default);
+  stroke-width: 1;
+}
+
+.fsm-state.is-initial .fsm-state-body,
+.fsm-state.is-current .fsm-state-body {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+}
+
+.fsm-state.is-current .fsm-state-body {
+  fill: var(--surface-quaternary);
+}
+
+.fsm-state-inner {
+  fill: none;
+  stroke: var(--border-default);
+  stroke-width: 1;
+}
+
+/* A state nothing can reach is a finding, not decoration: it is drawn so the
+ * diagnostic under the diagram has something to point at. */
+.fsm-state.is-unreachable .fsm-state-body {
+  stroke: var(--accent-danger);
+  stroke-dasharray: 4 3;
+}
+
+.fsm-state-label {
+  fill: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+.fsm-state.is-unreachable .fsm-state-label {
+  fill: var(--accent-danger);
+}
+
+.fsm-edge-path {
+  fill: none;
+  stroke: rgb(100 255 218 / 40%);
+  stroke-width: 1.4;
+}
+
+.fsm-edge.is-unsettled .fsm-edge-path {
+  stroke: var(--accent-warning);
+  stroke-dasharray: 5 3;
+}
+
+.fsm-arrow-head {
+  fill: rgb(100 255 218 / 55%);
+}
+
+.fsm-start-dot {
+  fill: var(--accent);
+}
+
+/* The halo is the same trick the graph's edge labels use: stroke the
+ * background color under the glyphs so a label crossing an arrow stays
+ * readable without a box behind it. */
+.fsm-edge-label {
+  fill: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.02em;
+  paint-order: stroke;
+  stroke: var(--surface-secondary);
+  stroke-linejoin: round;
+  stroke-width: calc(4 * var(--u));
+}
+
+.fsm-edge-label.is-unsettled {
+  fill: var(--accent-warning);
+}
+
+.fsm-diagnostics {
+  display: grid;
+  gap: calc(4 * var(--u));
+  margin: calc(9 * var(--u)) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fsm-diagnostics li {
+  padding: calc(5 * var(--u)) calc(8 * var(--u));
+  border: 1px solid rgb(251 113 133 / 45%);
+  border-radius: 5px;
+  color: var(--accent-danger);
+  font-size: var(--fs-small);
+  line-height: 1.45;
+}
+
 /* The Board inspector's type name links into this view. */
 .type-link {
   height: auto;

@@ -33,7 +33,13 @@ sys.path.insert(0, str(REPO_ROOT / "dev" / "scripts"))
 
 from scribe_client import ClientError, NoDaemon, call_for_root  # noqa: E402,F401
 
-from adapter import adapt, load_index, parse_sgra, uid_paths  # noqa: E402
+from adapter import (  # noqa: E402
+    adapt,
+    load_index,
+    parse_sgra,
+    semantics_unavailable,
+    uid_paths,
+)
 
 
 @dataclass(frozen=True)
@@ -79,11 +85,13 @@ class DaemonSource:
                 "root": str(self.root),
                 "generation": exported["generation"],
             }
+            grammar = parse_sgra(self.grammar_path)
             adapted = adapt(
                 index,
                 uid_paths(self.root),
-                parse_sgra(self.grammar_path),
+                grammar,
                 project,
+                semantics=semantics_payload(grammar),
             )
             self._cached = Payloads(
                 generation=exported["generation"],
@@ -96,6 +104,31 @@ class DaemonSource:
         return call_for_root(
             self.root, method, params, override=self._socket_override
         )
+
+
+def semantics_payload(grammar: dict) -> dict:
+    """The `sdoc-semantics/1` payload, or an explicit refusal to have one.
+
+    A SOFT import, deliberately, and the only soft thing about it: the
+    engine lives in `dev/scripts/sdoc_semantics` -- `build_payload` is its
+    declared seam, not `payload(semantics(), ...)`, which is the plumbing --
+    and it depends on `transitions`, which the board's interpreter may not
+    carry yet. Every failure mode -- the package absent, the dependency
+    absent, a malformed machine that raises while it is being built --
+    collapses to the same unavailable shape carrying the reason, so the tab
+    renders Fields and Relations as it always did and says why Lifecycle is
+    empty.
+
+    This is the ONE place the board tolerates a broken engine. It is not a
+    fallback that computes a lesser answer (DEC-SCRIBE-DAEMON-NO-FALLBACK
+    forbids those); it is the absence of an answer, named.
+    """
+    try:
+        from sdoc_semantics import build_payload
+
+        return build_payload(grammar)
+    except Exception as error:  # noqa: BLE001 - a widget is never worth a 500
+        return semantics_unavailable(f"{type(error).__name__}: {error}")
 
 
 def _encode(payload: dict) -> bytes:
