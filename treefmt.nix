@@ -130,5 +130,16 @@
     # doubled-words) — it used to live in checks/split-code-spans.nix
     # and moved when the second scanner started sharing the file set.
     "docs/plans/kiro-v3-research-raw/**"
+    # Steering probe fixtures whose YAML SHAPE is the experiment. Two of
+    # them carry a multi-line flow sequence that kiro's frontmatter parser
+    # rejects — the rejection is the finding — and prettier normalizes both
+    # into a shape that parses, silently deleting it. cspell already ignores
+    # the sentinel markers via project terms; checks/markdown-scan.nix
+    # carries the matching scan exclusion, and the probe README states why.
+    # Renaming this directory touches THREE surfaces: this list,
+    # checks/markdown-scan.nix, and dev/probes/kiro-steering/README.md. The
+    # cspell terms are keyed on the sentinel words rather than the path, so a
+    # rename deliberately does NOT touch them.
+    "dev/probes/kiro-steering/fixture/**"
   ];
 }

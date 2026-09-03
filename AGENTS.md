@@ -105,6 +105,12 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
   - Read:
     [`packages/kimchi/docs/kimchi-factory.md`](packages/kimchi/docs/kimchi-factory.md)
 
+- **`kiro-steering`**
+  - Match: `lib/ai/ai-common.nix`, `lib/ai/transformers/kiro.nix`,
+    `packages/kiro-cli/**`
+  - Read:
+    [`packages/kiro-cli/docs/steering-inclusion.md`](packages/kiro-cli/docs/steering-inclusion.md)
+
 - **`kiro-wrapper`**
   - Match: `checks/kiro-fhs-contract.nix`, `checks/kiro-wrapper-argv.nix`,
     `lib/idempotentFlags.nix`, `overlays/kiro-cli.nix`,
