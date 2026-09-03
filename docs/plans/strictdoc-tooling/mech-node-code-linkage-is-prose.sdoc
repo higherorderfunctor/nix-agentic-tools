@@ -10,10 +10,61 @@ TITLE: The link between a node and its code is prose in both directions, and unc
 DEPTH: sketch
 AUTHORED_BY: llm
 STATEMENT: >>>
-Nothing joins a node to the code it describes. Outward, three File relations exist in the whole 144-node graph, on two nodes, all naming implementation files — `packages/semble/lib/withGrammars.nix` twice and `packages/semble/patches/extra-grammars.patch` — against 15 nodes at implemented and 3 at verified. `SLICE-GRAPH-CHECKS` is verified and `checks/strictdoc-cycle-check.nix` exists for it with no edge between them; `SLICE-GRAMMAR-FROM-NIX` is implemented against five flake checks and a package directory with no edge to any of them. So the claim that code landed is prose in NOTES, and the query `DEPTH == implemented` cannot be joined to what it implemented. Inward, measured over the git-tracked non-.sdoc tree: 67 UID citations in 34 files, 61 of them naming a node under `docs/plans/` and 27 distinct plan nodes cited, plus two tokens that resolve to nothing at all — `MECH-SAMPLE` and `SLICE-UID`. Two mechanisms are wanted and they share one input: require a File edge to the implementing file or check at implemented, and lint the source-comment citations against the same UID-to-file map `MECH-PLAN-REFS-CHECK` builds.
+TWO READINGS, both kept, because the later one is what this node was filed to
+provoke.
+
+AS MEASURED 2026-08-27. Nothing joined a node to the code it describes.
+Outward, three File relations existed in the whole 144-node graph, on two
+nodes, all naming implementation files -- `packages/semble/lib/withGrammars.nix`
+twice and `packages/semble/patches/extra-grammars.patch` -- against 15 nodes at
+implemented and 3 at verified. `SLICE-GRAPH-CHECKS` was verified and
+`checks/strictdoc-cycle-check.nix` existed for it with no edge between them;
+`SLICE-GRAMMAR-FROM-NIX` was implemented against five flake checks and a
+package directory with no edge to any of them. So the claim that code landed
+was prose in NOTES, and the query `DEPTH == implemented` could not be joined to
+what it implemented. Inward, measured over the git-tracked non-.sdoc tree: 67
+UID citations in 34 files, 61 of them naming a node under `docs/plans/` and 27
+distinct plan nodes cited, plus two tokens that resolved to nothing at all --
+`MECH-SAMPLE` and `SLICE-UID`. Two mechanisms were wanted and they shared one
+input: require a File edge to the implementing file or check at implemented,
+and lint the source-comment citations against the same UID-to-file map
+`MECH-PLAN-REFS-CHECK` builds.
+
+AS OF 2026-09-03. The outward half is mostly closed and the inward half has a
+carrier. The corpus carries 64 File relations on 37 nodes, 4 of them
+element-grained -- an ELEMENT and ID naming one item of a file rather than the
+whole of it -- and none using a LINE_RANGE. Source traceability is on, so
+strictdoc resolves those relations itself at parse time, and
+`dev/scripts/element-check.py` gates the element-grained ones as
+strictdoc-element-check in nix flake check. Inward, a source comment can now
+carry a real edge rather than a citation: `@relation(UID, scope=function)`
+written as the FIRST line of a comment block links code to a node, in any file
+a configured glob claims. One such marker exists, in devenv.nix, naming
+EV-STRICTDOC-EXPORT-TIMING.
+
+WHAT IS STILL OPEN is exactly the pair of mechanisms named above. Nothing
+requires a File edge of a node at implemented, so the join remains a
+convention. And the 67 prose citations are still prose: an extractor reads
+`@relation()` markers, not a bare UID in a sentence, so no lint over them
+exists and none of them became an edge.
 <<<
 RATIONALE: >>>
-The inward half arms on a date nobody chooses. None of the 67 is an edge today, so none can dangle; all 61 plan-node citations become inbound violations of `INV-NO-EXTERNAL-PLAN-REFS` on the day a source-comment extractor exists, which is `DEC-ARCH-COLOCATION`'s retirement condition, and a dangling Parent relation is a hard export error. The lint needs no extractor and is a grep plus a map lookup. The outward half is what makes the requirement worth stating at all: a File relation whose VALUE names a path that does not exist exports with exit 0 (`MECH-FILE-RELATION-EXISTENCE`), so requiring the edge means nothing without that check beside it.
+The inward half was expected to arm on a date nobody chooses, and that
+prediction was wrong in a way worth recording. It read: none of the 67 is an
+edge today, so none can dangle; all 61 plan-node citations become inbound
+violations of `INV-NO-EXTERNAL-PLAN-REFS` on the day a source-comment
+extractor exists, which is `DEC-ARCH-COLOCATION`'s retirement condition. The
+extractor landed on 2026-09-02 and none of them became anything. An extractor
+reads `@relation()` markers with a Lark grammar; a bare UID in prose is not a
+marker and is not parsed. So the citations are inert by shape rather than by
+timing, and the lint that would check them is still unbuilt and still wanted.
+
+The outward half is what makes the requirement worth stating at all: a File
+relation whose VALUE names a path that does not exist used to export with exit
+0 (`MECH-FILE-RELATION-EXISTENCE`), so requiring the edge meant nothing without
+that check beside it. That gap is closed twice over now -- by the corpus
+checker and by upstream's own validation -- which leaves the requirement itself
+as the only missing piece.
 <<<
 NOTES: >>>
 Measured 2026-08-27. `MECH-PLAN-REFS-CHECK` puts the source-annotation arm explicitly out of scope with a reason — strictdoc_config.py sets no source root and `@relation` comments never reach the JSON export — so this is unowned rather than deferred. `MECH-TESTS-AS-CONTRACT` scopes its verified requirement to flows deliberately, noting that the same rule applied to every node would invalidate both then-verified nodes on the day it landed; the same corpus-first order applies here. Not decided here: whether the 61 existing citations are remediated or grandfathered until the extractor lands.
@@ -21,6 +72,12 @@ Measured 2026-08-27. `MECH-PLAN-REFS-CHECK` puts the source-annotation arm expli
 Absorbs the proposed `MECH-ANNOTATION-TARGET-DURABILITY` and `MECH-NODE-TO-CODE-EDGE-COVERAGE`.
 
 Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it records what was observed once, not how something always behaves. Noted for a later split: The closing sentence names two mechanisms wanted, one of them a requirement to be written: 'require a File edge to the implementing file or check at implemented', plus a lint of source-comment citations against the UID-to-file map. The UID keeps its prefix: DEC-UID-OUTLIVES-TYPE.
+Updated 2026-09-03 for commits 0496adfe, c64a0147, 7d6886d1 and 62a1be71.
+`MECH-PLAN-REFS-CHECK`'s note that the source-annotation arm is out of scope
+because strictdoc_config.py sets no source root is stale on its premise: the
+config now sets source_root_path and turns REQUIREMENT_TO_SOURCE_TRACEABILITY
+on, and an `@relation` comment in a file a glob claims does reach the export.
+The arm is still unowned, but it is no longer unreachable.
 <<<
 RELATIONS:
 - TYPE: Parent

@@ -19,8 +19,28 @@ downstream consumer reads the same bytes it reads today.
 The payload is written to a directory rather than returned, because the current
 export is 10.3 MB. An export reconciles first, like any read.
 
-Nothing downstream changes: wireline, view-check, render and status all consume
-the export JSON and none of them imports strictdoc.
+One thing about those bytes did change, deliberately, and it is the only
+divergence from a hand-run export. StrictDoc's JSON generator reads exactly
+TYPE, FORMAT, VALUE and LINE_RANGE off a File relation, so an element-grained
+relation would export as a whole-file one and every consumer would see a
+coarser graph than the corpus declares. sdoc_model.carry_file_element_into_json
+patches that one generator method in memory before each export -- idempotent,
+and fail-closed on an upstream rename -- so the daemon's export carries ELEMENT
+and ID too. The patch lives here rather than in the package because
+overlays/dev-tools/strictdoc.nix re-exports upstream's derivation unchanged for
+cache-hit parity. `strictdoc export` run by hand therefore still drops both
+fields, and that asymmetry is the cost.
+
+No downstream code changed. Wireline, view-check, render and status read the
+shape they always read, with two more optional keys on a File relation, and
+none of them imports strictdoc. The daemon's own graph load passes
+skip_source_files=True, so the source-traceability walk the project config
+turns on does not run inside it and none of that walk's cost reaches a read.
+<<<
+NOTES: >>>
+Updated 2026-09-03 for commits 6fbaa76b and c64a0147: the daemon's export
+carries ELEMENT and ID through an in-memory patch, and the daemon's own load
+is exempt from the source-traceability walk the project config now enables.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -41,3 +61,7 @@ RELATIONS:
   VALUE: dev/tasks/generate.nix
   ELEMENT: function
   ID: tasks."generate:devenv-yaml"
+- TYPE: File
+  VALUE: dev/scripts/sdoc_model.py
+- TYPE: File
+  VALUE: dev/scripts/scribe_workspace.py

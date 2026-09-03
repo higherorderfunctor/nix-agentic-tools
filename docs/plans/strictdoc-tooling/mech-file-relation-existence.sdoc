@@ -26,36 +26,57 @@ Any other shape is a finding in its own right rather than a path to normalize
 and then resolve. The target must be an existing regular file; a directory is
 a finding. That rule is upstream's, not ours -- strictdoc's own
 file-traceability validation accepts precisely this shape and rejects ./x,
-../x, an absolute path and a directory with the same message -- so holding to
-it keeps the corpus able to turn that feature on later.
+../x, an absolute path and a directory with the same message.
 
-The sdoc CLI checks only the VALUEs it is about to write, applying the same
-well-formedness rule plus one stat: microseconds, not a whole-graph pass. The
-corpus-wide gate stays alongside it, because a write-time check cannot see a
-file deleted or moved after its relation was written, and that is the
-direction the ghost problem actually runs.
+Upstream's validation is no longer hypothetical: source traceability was
+turned on for this project on 2026-09-02, so strictdoc now applies that rule
+itself at parse time. file-check.py stays beside it for two reasons rather
+than out of caution. Upstream reports one broken relation per run, and the
+checker reports every finding in one pass at 0.03 s. And the scribe daemon's
+own graph load passes skip_source_files=True, so nothing upstream checks runs
+on the path most writes actually take.
+
+The scribe CLI checks only the VALUEs it is about to write, applying the same
+well-formedness rule plus one stat: microseconds, not a whole-graph pass. It
+also verifies the grain now, since a File relation may name an item rather
+than a whole file: an ELEMENT and ID pair is checked against the items the
+configured extractor really finds in that file, and a missing id is refused
+with the nearest names and the command that lists them. The corpus-wide gate
+stays alongside both, because a write-time check cannot see a file deleted or
+moved after its relation was written, and that is the direction the ghost
+problem actually runs. dev/scripts/element-check.py is the corpus-wide half
+of the grain check and runs as strictdoc-element-check in nix flake check.
 
 Two exclusions, both deliberate and both cheap to reverse. Targets outside
 the repository are not supported; no File relation names one today. Forward
 references are not supported either -- a node may not name a path its own
-unbuilt work will create. All three File relations in the corpus sit on
-implemented nodes, so the strict rule costs nothing now, and relaxing it
+unbuilt work will create. The corpus carries 64 File relations on 37 nodes,
+4 of them element-grained and none using LINE_RANGE, and they sit on nodes at
+implemented or better, so the strict rule still costs nothing and relaxing it
 later by gating existence on DEPTH is a one-line change, where tightening it
 later would not be.
 <<<
 RATIONALE: >>>
 This node's own earlier premise -- that the parser will not do it -- is
 refuted. StrictDoc validates File relations exactly this way, but only when
-REQUIREMENT_TO_SOURCE_TRACEABILITY is in project_features, which this project
-does not set. Enabling it is one config line, and it was rejected on three
-measurements rather than on taste. It costs 12.32 s against 1.52 s on this
-890-file tree, and that cost lands on every export, including the whole-graph
-validation the sdoc CLI runs per write, which is budgeted at about a second.
-It reports one broken relation per run, so N defects cost N runs of 12 s. And
-its predicate is "is an indexed source file", not "exists": a File relation
-naming a file that is present but binary is reported as not existing. A
-checker over the JSON export has the exact predicate, reports every finding
-in one pass, and costs 0.03 s.
+REQUIREMENT_TO_SOURCE_TRACEABILITY is in project_features.
+
+That feature was rejected on 2026-08-27 and turned ON on 2026-09-02, and the
+thing that changed in between was the reader, not the appetite for the cost.
+The rejection was measured: 12.32 s against 1.52 s on the 890-file tree, one
+broken relation reported per run, and a predicate of "is an indexed source
+file" rather than "exists", so a present-but-binary file read as missing. What
+made it affordable was the operator's ruling that no generic parsing happens
+at all. strictdoc's generic textX reader was 77% of a cold export, recompiling
+its grammar once per file; with the reader registry replaced by a glob
+manifest, every file outside the manifest gets a null reader. Measured on the
+current 1397-file corpus: cold 9.3 s against 2.4 s off, warm 2.8 s against
+2.1 s off, so about +0.6 s on every export. EV-STRICTDOC-EXPORT-TIMING records
+it and `devenv tasks run strictdoc:bench` reproduces it.
+
+A checker over the JSON export still has the exact predicate, reports every
+finding in one pass, and costs 0.03 s, which is why it was kept rather than
+retired when the feature came on.
 
 The defect itself is worth closing rather than tolerating because a design
 that claims code which no longer exists is the ghost problem the File role
@@ -125,8 +146,8 @@ naming an untracked file passes locally and fails in CI -- correct behaviour,
 but the failure appears at a distance from the edit.
 
 sdoc_fp.iter_nodes walks only each document's top-level NODES and does not
-recurse into sections. A recursive walk finds the same 3 File relations on
-today's corpus, so the two are currently equivalent; use iter_nodes for
+recurse into sections. A recursive walk found the same 3 File relations on
+that day's corpus, so the two were equivalent then; use iter_nodes for
 consistency with the other two checkers and fix it in one place if sections
 ever nest nodes.
 
@@ -143,7 +164,28 @@ Positive control rather than a clean run reported as proof: against the real
 corpus the checker reports 3 File relations and 0 findings, and against an
 export with two VALUEs rewritten -- one to a deleted path, one to
 './packages/semble' -- it reports both and exits 1.
+Updated 2026-09-03 for commits c64a0147, 7d6886d1 and 66f73b03. Three claims
+above were true when measured and are false now, and each is corrected in
+place rather than deleted:
+
+- REQUIREMENT_TO_SOURCE_TRACEABILITY is ON. strictdoc_config.py sets it, and
+  the reader registry is REPLACED rather than extended: dev/scripts/
+  sdoc_extractors/registry.py's SOURCE_EXTRACTORS is the whole manifest, and
+  every path it does not claim gets a NullSourceReader. No internal strictdoc
+  reader is ever reached, .py and .rs included.
+- The cost is 9.3 s cold and 2.8 s warm against 2.4 s and 2.1 s with the
+  feature off, not the 12.32 s the rejection was argued on. The globs decide
+  what is PARSED, never what is INDEXED, so every file still enters the index
+  and a whole-file relation to any path still resolves. Narrowing
+  include_source_paths instead would break exactly those relations.
+- "All three File relations in the corpus" is now 64 on 37 nodes, 4 of them
+  element-grained. The upstream-accepted-forms probe below still holds; only
+  the counts and the on/off state moved.
 <<<
 RELATIONS:
 - TYPE: File
   VALUE: dev/scripts/file-check.py
+- TYPE: File
+  VALUE: dev/scripts/element-check.py
+- TYPE: File
+  VALUE: strictdoc_config.py

@@ -21,6 +21,22 @@ imports nothing from strictdoc, so ./serve runs under any python3, and
 devenv.nix declares it as processes.board -- `devenv up board`, `-d`, and
 `devenv processes down`, the same lifecycle as processes.scribe and
 independent of it.
+
+source.py also builds the snapshot's semantics key, by calling
+sdoc_semantics.build_payload over the same parsed grammar the adapter already
+reads. That is the server's only optional dependency: the engine needs
+transitions, which reaches this process through grammarPython in devenv.nix,
+and an import that fails becomes a named refusal inside the payload rather
+than a missing key or a dead process. The same holds for the extractor the
+adapter asks for KIND words. So "any python3" still serves the app, and what a
+leaner interpreter costs is those two enrichments, each of which says out loud
+that it is absent.
+<<<
+NOTES: >>>
+Updated 2026-09-03 for commits 8823edf1 and 46cd3cf1: the static allowlist
+grew grammar-groups.json and fsm.js, and source.py gained the semantics
+payload. The three JSON routes are unchanged -- semantics rides inside
+/api/graph rather than on a fourth route.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -41,3 +57,5 @@ RELATIONS:
   VALUE: docs/sdoc/board/source.py
 - TYPE: File
   VALUE: docs/sdoc/board/serve
+- TYPE: File
+  VALUE: dev/scripts/sdoc_semantics/__init__.py

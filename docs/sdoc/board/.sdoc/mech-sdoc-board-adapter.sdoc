@@ -22,12 +22,35 @@ degree facets; and relations, one row per declared relation, denormalized with
 both endpoints' type, title, state and path. Every row of a table carries the
 union key set with nulls for absent fields, because Perspective infers its
 column schema from the rows.
+
+A File relation may name part of a file rather than the whole of it, and both
+payloads carry that grain: ELEMENT and ID for a named item, or a LINE_RANGE,
+travel onto the relation row and onto the node's own fileRelations list. One
+thing beside them is not in the export at all -- the extractor's KIND word for
+the named item, such as option, module or binding -- and the adapter joins it
+by asking dev/scripts/sdoc_extractors for the items of that file. That lookup
+is optional by construction. The board is served and tested by a plain
+python3, so an extractor that cannot be imported, or a file no configured glob
+covers, leaves kind null and the card falls back to the ELEMENT word.
+Reporting that an ID names nothing is element-check.py's job, not the board's;
+a null kind here means "unknown", never "wrong".
+
+The snapshot carries a third top-level key, semantics, and the adapter does
+not compute it: the caller passes the sdoc-semantics/1 payload in. When none
+arrives the adapter writes an explicit refusal record naming the reason rather
+than omitting the key, because a missing key gives a reader no null to branch
+on and reads as a settled empty answer.
 <<<
 RATIONALE: >>>
 The spike squashed relations into comma-joined facet strings on the node row;
 Perspective cannot explode a string back into rows, so relations were
 unqueryable (the operator's report, 2026-09-01). The denormalized second table
 is the fix.
+<<<
+NOTES: >>>
+Updated 2026-09-03 for commits 6fbaa76b, 7d6886d1 and 46cd3cf1: File
+relations became element-grained in both payloads, the KIND word is joined
+from the extractor, and the snapshot gained the semantics key.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -38,3 +61,5 @@ RELATIONS:
   ROLE: Proven_By
 - TYPE: File
   VALUE: docs/sdoc/board/adapter.py
+- TYPE: File
+  VALUE: dev/scripts/sdoc_extractors/registry.py

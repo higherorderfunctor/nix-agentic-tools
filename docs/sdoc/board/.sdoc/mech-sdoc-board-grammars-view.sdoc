@@ -19,8 +19,15 @@ layout docs/sdoc/board/grammar-groups.json, whose sections are top-level
 headings over a rule and whose groups are subtitles over a widget -- "cards",
 a centered row of named types, or "grid", a 2x2 matrix with one type per
 cell. The Definition grid's axis words are DEC-NODE-FAMILIES' own: normative
-or descriptive by row, universal or particular by column. One "cards" group
-may take the "rest", every type the layout places nowhere else, so a type the
+or descriptive by row, universal or particular by column. The layout also
+carries one-line glosses, one per axis word and one per card title, and its
+own $comment names where each of them came from: the four axis glosses are
+copied verbatim from NAR-CANON-TYPES-GRID, and a type gloss is the first
+sentence of that type's NAR-SEMANTIC-LAYER-TYPE-* narrative, so a type with
+no narrative carries no gloss.
+The tab prints a gloss as given and composes none of them, and both guards
+refuse a gloss on a name the layout places nowhere. One "cards" group may
+take the "rest", every type the layout places nowhere else, so a type the
 grammar grows lands in Unsorted rather than off the tab. The layout is the
 operator's exception to REQ-BOARD-GRAMMAR-DRIVEN and is guarded twice:
 statically by dev/scripts/grammar-groups-check.py, run as the
@@ -37,10 +44,31 @@ String); an element with zero nodes still gets a card, which is how an empty
 vocabulary such as COMMENTARY stays visible. The Board inspector's type name
 links here: clicking it switches the view and selects that element's card.
 The switcher order is Grammars, Plan, Graph, Perspective.
+
+Two further sections close the right-hand pane, and neither reads the
+grammar. They read the snapshot's semantics key, the sdoc-semantics/1 payload
+the engine computes: Rules, the sentences that engine states about this
+type's state fields, then Lifecycle, one machine per state field drawn as an
+inline SVG by assets/fsm.js. The grammar says a type has a STATUS field with
+four words in it; the semantics engine says which of those words a node may
+move to next and under what rule. Rules come first because an operator
+shaping the model reads the sentence before the diagram. fsm.js knows no
+field name -- DEPTH, STATUS and AUTHORED_BY arrive as data, so a field rename
+does not reach it -- and it lays its machines out transposed, rank running
+down and branches spreading across, because the pane is 350px wide and a
+six-rung ladder never fit it sideways. Its geometry is measured in CSS pixels
+with no viewBox, so no label is scaled below the app's 10px floor. Each
+section degrades to a named absence: no engine, no machine for this type, or
+a machine with no rules yet all still render a section that says so, because
+a missing section reads as settled and nothing here is.
 <<<
 NOTES: >>>
 Updated 2026-09-02 for commits 8823edf1 and 35f2a499 (grammar-groups.json,
 coverage check, pill order).
+
+Updated 2026-09-03 for commits b6c01bd4 and 46cd3cf1: the layout now carries
+the canon's glosses verbatim, and the inspector gained the Rules and
+Lifecycle sections over the sdoc-semantics/1 payload.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -53,3 +81,7 @@ RELATIONS:
   VALUE: docs/sdoc/board/assets/grammars.js
 - TYPE: File
   VALUE: docs/sdoc/board/index.html
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/fsm.js
+- TYPE: File
+  VALUE: docs/sdoc/board/grammar-groups.json
