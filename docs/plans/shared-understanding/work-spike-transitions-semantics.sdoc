@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-SPIKE-TRANSITIONS-SEMANTICS
 TITLE: Spike: pytransitions/transitions as the semantics engine
-DEPTH: sketch
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 A spike on the transitions Python library (https://github.com/pytransitions/transitions)
@@ -28,6 +28,35 @@ https://github.com/pytransitions/transitions for semantics engine. looks
 simple, possibly to influence a nix version or config wrapper.
 - relate the node about scripts embedded in sdoc (literal scripts). store
   semantic rules in literal sdocs"
+
+Landed 2026-09-03 (46cd3cf and the commit before it) as
+dev/scripts/sdoc_semantics/: a `transitions`-backed engine (engine.py, the
+only module that imports the library) with declarations in direct Python
+under machines/ -- one file per field (depth.py, status.py,
+authored_by.py), listed in registry.py in presentation order. This is an
+explicit WAIVER of DEC-LAYER-STACK for the spike ("for the spike the
+semantics can be written in direct python" -- operator, stated in
+engine.py's own docstring); machines/ is a transcription surface meant to be
+reshaped by hand, and becomes the fixture the typed Nix surface has to
+reproduce once SLICE-BEHAVIOUR-MODEL lands, not the thing that ships.
+
+WHERE TO SHAPE a lifecycle: edit the one file under
+dev/scripts/sdoc_semantics/machines/ for that field; registry.py's _ORDERED
+tuple is the single place that lists which machines exist and in what
+order. `scribe semantics <TYPE>` and the board's Grammars tab both read the
+same registry, so a change to a machine file shows up in both without
+further wiring.
+
+Three questions deliberately left open, transcribed as rules on the
+declarations themselves rather than settled here: whether DEPTH may ever
+fall (a design invalidated by a spike arguably returns to needs-design, but
+a falling DEPTH erases the record it once stood higher -- nobody has
+ruled); whether `implemented` and `verified` belong on the DEPTH ladder at
+all, since they describe the artifact rather than the thinking; and whether
+one machine per FIELD (what ships) or one machine per (type, field) is the
+right grain -- the former is cheaper and is what six node types sharing one
+DEPTH ladder assumes, the latter would let a REQUIREMENT and a WORK disagree
+about what a rung means, at the cost of keeping six tables aligned.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -36,3 +65,9 @@ RELATIONS:
 - TYPE: Parent
   VALUE: WORK-SDOC-EMBEDDED-LANGUAGE-FIELDS
   ROLE: Assumes
+- TYPE: Child
+  VALUE: EV-TRANSITIONS-ENGINE-SPIKE
+  ROLE: Produces
+- TYPE: Parent
+  VALUE: MECH-SEMANTICS-DEFINITION-BOUNDARY
+  ROLE: Crosses

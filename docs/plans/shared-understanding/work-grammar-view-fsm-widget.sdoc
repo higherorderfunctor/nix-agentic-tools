@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-GRAMMAR-VIEW-FSM-WIDGET
 TITLE: Grammars view: a state-machine widget for the lifecycle, with external events
-DEPTH: sketch
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 The Grammars view renders each type's lifecycle ladder as a state-machine
@@ -21,9 +21,7 @@ WORK-SPIKE-TRANSITIONS-SEMANTICS settles on for representing the machine
 itself.
 <<<
 NOTES: >>>
-Operator, 2026-09-02, verbatim: "grammar view include state machine style
-widget for the lifecycle. consider adding external events to the widget.
-[event:create] -> [state:opened] kinda thing."
+first cut landed 46cd3cf; events labelled; external events beyond the machine triggers still open.
 <<<
 RELATIONS:
 - TYPE: Parent

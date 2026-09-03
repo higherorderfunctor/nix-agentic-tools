@@ -1,0 +1,78 @@
+[DOCUMENT]
+TITLE: pytransitions as the semantics engine: findings from the spike
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-TRANSITIONS-ENGINE-SPIKE
+TITLE: pytransitions as the semantics engine: findings from the spike
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: dev/scripts/sdoc_semantics/, transitions 0.9.3, dev shell + strictdoc-grammar-extract, 2026-09; see dev/scripts/test_sdoc_semantics.py for the exercised traps
+STATEMENT: >>>
+A spike on `transitions` (pytransitions) 0.9.3 as the semantics engine behind
+DEPTH, DECISION STATUS, and AUTHORED_BY, landed at
+dev/scripts/sdoc_semantics/. Three library traps were measured and are all
+avoided by construction rather than by an assertion after the fact:
+`add_ordered_transitions` ROTATES its sequence to the machine's `initial`,
+dropping the first edge for a wrap-around one nobody asked for (avoided by
+declare.ordered expanding adjacent pairs itself, and by Semantic.initial being
+the first rung by construction); that same helper's `loop=True` default closes
+every ladder into a ring (same avoidance -- the shape cannot be produced
+here); and `Machine`'s `auto_transitions=True` default synthesises a
+`to_<state>()` trigger per state that never appears in `markup` but does
+appear in `get_triggers()`, which would silently empty every machine's
+`terminal` list since that is exactly the call terminal detection makes
+(passed off explicitly as `auto_transitions=False` everywhere a Machine is
+built).
+
+Mermaid rendering (`transitions.extensions.diagrams.GraphMachine`,
+`graph_engine="mermaid"`) needs no graphviz -- it is a text emitter, not a
+renderer -- so `mermaid()` in engine.py has a real fallback path (returning
+`None` on any exception, including the extra being absent) rather than one
+that can never fire on this build.
+
+What the library cannot express is two shapes, both left to callers: a
+cross-node invariant (STATUS-SUPERSEDE-NEEDS-A-TARGET -- reaching `superseded`
+without a `Superseded_By` relation is a dangling supersession, which is a rule
+about the GRAPH, not a rule about one node's field) and a relation BETWEEN two
+nodes' fields (nothing here compares one item's DEPTH against another's).
+Neither is a `transitions` gap so much as a scope boundary: the library models
+one field's own lifecycle and nothing wider -- no actor attached to a
+transition (who may raise AUTHORED_BY is unruled), and no notion of a
+transition rippling into a second machine.
+
+Delivered to both interpreters that run this code: `grammarPython` in
+devenv.nix (`pkgs.python3.withPackages (ps: [ps.ast-grep-py ps.transitions])`,
+the board server's own interpreter) and `strictdocGrammarExtract`
+(packages/strictdoc-grammar/lib/mkExtract.nix, the wrapper every scribe
+program runs under, which every other strictdoc check in this repo already
+uses) -- `transitions` is pure Python with no compiled coupling to the
+tree-sitter grammar the extractor pins, so it rides along in both without the
+minor-version alignment the compiled extras need.
+
+The three eval-time diagnostics engine.py computes by INTERROGATING the built
+machine rather than trusting the declaration: an unreachable state (declared
+but no transition reaches it), a lifecycle with no terminal state at all
+(`get_triggers(state) == []` empty across every state), and two transitions
+firing on the same trigger from the same state (an ambiguous dispatch). All
+three are exercised in dev/scripts/test_sdoc_semantics.py by building a
+naively-shaped machine first and showing the diagnostic fire on it, then
+showing the shipped machines pass clean -- an absence assertion over a shape
+that cannot be produced proves nothing on its own.
+
+`scribe semantics` (dev/scripts/scribe_cmd.py) answers with the daemon down: it
+imports sdoc_semantics directly rather than going through the RPC socket, so a
+missing engine costs one subcommand rather than the whole CLI, and the board
+degrades the same way -- the payload's absence yields a named "unavailable"
+shape rather than a missing key.
+<<<
+NOTES: >>>
+DEPTH implemented, not verified: a completed observation run by its own author, not independently re-taken -- this corpus's convention.
+<<<
+RELATIONS:
+- TYPE: File
+  VALUE: dev/scripts/sdoc_semantics/engine.py
+- TYPE: File
+  VALUE: dev/scripts/sdoc_semantics/machines/depth.py
