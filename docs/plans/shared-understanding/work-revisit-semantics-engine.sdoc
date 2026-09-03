@@ -1,0 +1,73 @@
+[DOCUMENT]
+TITLE: Revisit the semantics engine choice before shaping the real semantics
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-REVISIT-SEMANTICS-ENGINE
+TITLE: Revisit the semantics engine choice before shaping the real semantics
+DEPTH: implemented
+AUTHORED_BY: llm
+STATEMENT: >>>
+Before the real semantics get shaped, re-open the engine choice the spike made.
+The spike put the transitions library behind DEPTH, STATUS and AUTHORED_BY and
+recorded what it cannot express: a cross-node invariant, a relation between two
+nodes' fields, an actor on a transition, a transition rippling into a second
+machine, and a gate that has to see the graph. This item assesses alternatives
+against those gaps and against the vocabulary SLICE-BEHAVIOUR-MODEL settles,
+as an evidence node first, and only then proposes a path.
+
+The operator's brief for the assessment: do not keep transitions if another
+framework handles all of it; several libraries are acceptable; a Nix-side
+normalizer is acceptable after the spike, and the path to Nix, if it surfaces,
+is logged as sdoc; only well-maintained projects, with evidence rather than
+impressions.
+
+Outcome: EV-SEMANTICS-ENGINE-ALTERNATIVES (eight candidates probed on a
+seventeen-row rubric) and DEC-SEMANTICS-MODEL-IS-DATA in docs/spec, open, the
+operator's to accept. The work that decision implies is filed as
+WORK-SEMANTICS-MODEL-AS-DATA, WORK-SEMANTICS-STDLIB-INTERPRETER and
+WORK-SEMANTICS-DROP-TRANSITIONS, with the path to Nix logged as
+WORK-SEMANTICS-NIX-EMITTER-PATH.
+
+The three questions the spike left open stay the operator's and are untouched
+by this item: whether DEPTH may regress, whether implemented and verified
+belong to it, and one machine per field or one per type and field.
+<<<
+NOTES: >>>
+Operator, 2026-09-03, verbatim: "this session i want to revisit transitions.
+you define the work. codex implements. same worktree so you do the research,
+pick the path or reject a pivot, plan out the work, and give me a boostrap
+prompt. at that point you are ro until its done."
+
+"I'm not opposed to multiple libraries and nix the normalizer (nix opyion set
+can still be post spike to prove it first, but make sure path to nix if it
+surfaces is logged as sdocs), but dont keep transitions if another framework
+can handle it all. may consider other frameworks, looking for well maintained.
+can be newish/modern or established so long as there is evidence its not some
+project that will be vaporware."
+
+"really trying to get to semantics layer as its the thing I hope really starts
+making this system useable."
+
+Method note. The operator supplied a Codex research dump (it recommended
+keeping transitions and adding a selector, predicate, effect and propagation
+layer beside it, with python-statemachine and Sismic as alternates). The dump
+was held back from every finder and assessor and shown only to a completeness
+critic at the end, so the assessment ran with clean context. The operator
+first called the dump Copilot's; it was Codex's.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SEMANTICS-AND-WORDS
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-SPIKE-TRANSITIONS-SEMANTICS
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-SEMANTICS-DEFINITION-BOUNDARY
+  ROLE: Crosses
+- TYPE: Child
+  VALUE: EV-SEMANTICS-ENGINE-ALTERNATIVES
+  ROLE: Produces

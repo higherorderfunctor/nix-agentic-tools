@@ -1,0 +1,147 @@
+[DOCUMENT]
+TITLE: Semantics engine survey: eight candidates probed on a seventeen-row rubric
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SEMANTICS-ENGINE-ALTERNATIVES
+TITLE: Semantics engine survey: eight candidates probed on a seventeen-row rubric
+DEPTH: implemented
+AUTHORED_BY: llm
+SOURCE: Claude workflow wf_29569539-fe2 on 2026-09-03 (five finder lenses, a shortlist, eight deep assessments each with a runnable probe, eight independent verifications, a synthesis); every number from gh api or nix eval; probes, verifier transcripts and synthesis.md archived untracked under private/semantics-engine/ in the worktree
+STATEMENT: >>>
+WHAT WAS ASSESSED. Whether a framework should replace the transitions spike
+behind the three enum fields, before the real behaviour model is shaped. Five
+finder lenses (Python statecharts; rules, logic and Datalog engines; graph-shape
+validators and embedded graph databases; workflow and process engines; engines
+outside Python, including Nix itself as the evaluator) kept 38 candidates and
+rejected 35, mostly dead, archived or unpackaged. After deduplication 35
+distinct projects remained; seven were shortlisted, 28 dropped with a reason
+each, and a no-library baseline was added so the comparison had an honest
+floor. Sismic was the runner-up statechart and was dropped at the shortlist:
+it is the only library found with an invariant primitive as data and a monitor
+statechart mechanism, but it is a fifth statechart entry behind a healthier
+one.
+
+HOW. Each candidate was judged on seventeen rows: three lifecycle shapes
+(ordered ladder, branching, rise-only with an actor gate), four rules that
+reach beyond one field (a graph invariant, a cross-edge comparison, the ripple
+to a fixed point, a state tuple over two fields), commands versus events,
+checkpoints with what a gate sees, flows, relation contracts, eval-time
+diagnostics, rendering for the board, declarative form, Nix delivery,
+in-process callability, and maintenance. Each row got one verdict: native (the
+library expresses it as data or a first-class API), glue (caller code, lines
+counted), or no (not expressible without reimplementing the concept). Every
+candidate was probed against a toy graph shaped like this corpus: a DECISION
+with and without a Superseded_By edge, two MECHANISMs at different DEPTHs, a
+WORK that Crosses one, and per-edge PARENT_FP entries. Each probe carried
+negative controls, so a gate that never fires could not pass as working. A
+second agent that had not written the probe re-ran it and re-pulled every
+maintenance number; the corrections it made are applied below.
+
+WHAT WAS SKIPPED. Checkpoints and flows were not probed for transitions, there
+being no API to point a probe at. The branching lifecycle was not probed for
+pySHACL or the baseline. Nothing was measured at real corpus scale except
+pySHACL, which validated the real 489-file corpus in 43 ms.
+
+WHAT WAS MEASURED, per candidate.
+
+transitions 0.9.3, the incumbent. Ladder, branching and mermaid native; the
+actor gate, the graph gate, the cross-edge comparison and the ripple worked
+only as caller code (5, 9, 16 and 26 lines, the last a floor); checkpoints,
+flows and relation contracts have no API at all. Every gate body is a Python
+callable or a name resolved on the model. Maintenance: 2 commits in 12 months,
+none for 11.8; 1 release in 24 months; no maintainer reply on any issue or
+pull request opened in 2026. The nixpkgs package propagates pygraphviz
+unconditionally, a 312 MB closure at both delivery sites, for a backend the
+probe showed is never imported when rendering mermaid.
+
+python-statemachine 3.2.1. The healthiest library of the same shape: 126
+commits in 12 months, seven releases, zero runtime dependencies, in nixpkgs.
+Loads a machine from JSON, YAML or SCXML against a published schema, and ran
+DEPTH crossed with AUTHORED_BY as one parallel-state document. Guard bodies are
+method names, so every graph-reaching gate is still Python. Two silent traps:
+the loader disables three of four diagnostics, and a refused send raises
+nothing unless a flag is set. Checkpoints and relation contracts have no
+representation.
+
+clingo 5.8.2. Every row was expressed, but as an 85-line answer-set program
+the assessor wrote; the library models no lifecycle, gate, actor or diagnostic.
+Verification re-graded every native to glue. The probe's flow harness
+duplicated its gate bodies, had already lost one gate in the copy, and
+certified a step as taken that the command path refused. A compiled extension,
+so the strictdoc venv splice would gain a Python-minor coupling.
+
+pySHACL 0.40.1 with rdflib 7.6.0. The graph rules that broke the incumbent cost
+nothing: the dangling-supersession invariant is eight lines of SHACL Core. But
+there is no state, no transition and no renderer; rules only add triples (a
+field held signed and drifted at once); no fixed point across shapes; the rule
+layer is a non-normative 2017 note; the corpus needs a projection into RDF (30
+lines, 71 ms). Bus factor one.
+
+Nix lib.evalModules on the evaluator already in use. The whole model
+serialised to a 6583-byte JSON with zero functions, because gates are data in
+a closed operation enum that rejects anything else at eval time. Gate
+placement was derived from what each checkpoint declares it sees and
+correctly excluded a gate from a checkpoint that could not see its inputs.
+Authored machinery: 231 lines of schema and 214 of engine. A full evaluation
+costs 29 ms with a pinned lib and 825 ms through the flake registry.
+
+XState 5.32.6. Fans one event to N per-edge actors in a deterministic order
+that settles with no driver loop. Guards cannot be data (expression strings
+throw, and composed guards vanish silently from a JSON round trip). Commands
+versus events, checkpoints and relation contracts are absent. Not in nixpkgs;
+a third runtime and a vendored npm lockfile; subprocess only from Python.
+
+OPA 1.19.1. The model ran as 79 lines of JSON against one fixed 224-line Rego
+interpreter carrying no rule-specific knowledge, every gate confirmed by a
+mutated-graph control. It holds no state and never mutates, so the ladder, the
+branch, the tuple and the write half of the ripple are outside it. A Go binary
+delivered on PATH, 15 ms per call as a subprocess. The healthiest project
+measured: 951 commits in 12 months, 141 contributors.
+
+No-library baseline. A 318-line standard-library interpreter over a 250-line
+JSON model covered every row, 49 assertions passing under positive and
+negative controls; load and dispatch under a millisecond in-process. Seven
+predicate operations exist and three appear in any gate. Two defects surfaced
+during its own probe, an unreachable state and a ripple that ignored one event
+kind, both caught only by the controls.
+
+Row totals after correction, over the thirteen behaviour rows (native, glue,
+no): transitions 3, 7, 3; python-statemachine 4, 7, 2; clingo 0, 13, 0;
+pySHACL 4, 9, 0; Nix evalModules 9, 4, 0; XState 2, 7, 4; OPA 0, 9, 4;
+baseline 7, 6, 0.
+
+THE ARCHITECTURES THE EVIDENCE SUPPORTS. Four, assembled from measured parts:
+keep the incumbent and add a graph-mechanics layer beside it; swap it for
+python-statemachine; emit the model from Nix and read it with a small fixed
+interpreter; or split into a lifecycle engine plus a graph-query engine. One
+structural finding stands out. In every statechart library the gate body is
+code, so the rows that broke the spike are caller code regardless of the
+library, and the library holds only the ladder, the branch and the diagram.
+And the Nix option-tree probe and the no-library baseline, run separately
+against different framings, arrived at the same shape: a JSON model with a
+closed predicate vocabulary plus a fixed interpreter of a few hundred lines.
+
+WHAT THIS DOES NOT SETTLE. How many distinct gate shapes the real model needs
+is unknown, and every declarative claim here holds only if that number is
+small. Nothing was measured at corpus scale except pySHACL. No candidate
+supplies a transaction primitive. Whether a rule library in a second language
+satisfies DEC-LAYER-STACK is a reading of that decision, not a measurement.
+<<<
+NOTES: >>>
+DEPTH implemented, not verified: a completed observation run by its own
+author, not independently re-taken, this corpus's convention. Each probe WAS
+re-run by a second agent inside the run; that is verification of the
+measurements, not of this node.
+
+A completeness critic that saw the operator's Codex dump ran after the
+synthesis; whether it triggered a further assessment (Sismic is the likely
+one) is recorded here when it lands.
+
+The full matrix, the maintenance table with commands, the eight verified
+assessments and every probe are archived untracked under
+private/semantics-engine/ in the worktree (5 MB; gitignored). Nothing in this
+node depends on them; they are the working papers.
+<<<
