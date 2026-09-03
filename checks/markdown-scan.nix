@@ -23,10 +23,12 @@
 #     README).
 #
 # treefmt.nix states those exclusions for the FORMATTER and this is their
-# scan-side mirror; keep the two in step. Both name this file back, and so do
-# docs/plans/kiro-v3-research-raw/README.md and
-# dev/probes/kiro-steering/README.md — so an exclusion spans four surfaces,
-# which is why it is stated once here and not once per scanner. Deriving them
+# scan-side mirror; keep the two in step. Each excluded directory also
+# documents its own exclusion — docs/plans/kiro-v3-research-raw/README.md and
+# dev/probes/kiro-steering/README.md both do — so renaming any one of them
+# spans THREE surfaces: treefmt.nix, this file, and that directory's README.
+# Stating the exclusion once here rather than once per scanner is what keeps
+# that count at three instead of growing with the scanners. Deriving them
 # mechanically from `settings.global.excludes`
 # was rejected: that list is glob-shaped and mostly about non-markdown
 # files, so a glob-to-find translation would be a second source of truth

@@ -27,17 +27,26 @@ string-exact question rather than a judgement call.
 | `s-fm-inline.md`     | inline `["a"]`                             | correct             |
 | `s-fm-scalar.md`     | scalar `"a"`                               | correct             |
 | `s-fm-block.md`      | block sequence `- "a"`                     | correct             |
+| `s-fm-match.md`      | scalar pattern that DOES match             | loads on read       |
 
-**The `fileMatch` patterns deliberately point at a file that does not exist**
-(`**/nope-xyzzy.json`). That inverts the test into a clean negative control: a
-correctly-parsed `fileMatch` document must NEVER inject. If its sentinel shows
-up anyway, its frontmatter failed to parse and it silently degraded to `always`
-— which is the whole finding. Do not "fix" the patterns to match a real file;
-that destroys the discriminator.
+**Every `s-fm-*` pattern except `s-fm-match.md`'s deliberately points at a file
+that does not exist** (`**/nope-xyzzy.json`). That inverts the test into a clean
+negative control: a correctly-parsed `fileMatch` document must NEVER inject. If
+its sentinel shows up anyway, its frontmatter failed to parse and it silently
+degraded to `always` — which is the whole finding. Do not "fix" those patterns
+to match a real file; that destroys the discriminator.
 
-`target-match.json` and `src/plain.txt` are inert files to read so the
-turn-start and mid-turn `fileMatch` scans actually run. Their contents do not
-matter; their existence does.
+`s-fm-match.md` is the deliberate exception, and the only one: it uses a shape
+already measured as correct and a pattern that DOES match, so it can prove the
+`fileMatch` machinery ran at all.
+
+`target-match.json` is the file `s-fm-match.md` matches on; `src/plain.txt` is a
+second readable file that matches nothing. Their contents do not matter; being
+readable does.
+
+**`s-fm-match.md` was added after the measured run and has NOT itself been
+exercised.** It is the instrument for P4 below, not a recorded result. Every
+other row in the table above was measured.
 
 ## Reproducing
 
@@ -73,16 +82,26 @@ kiro-cli chat --no-interactive --trust-all-tools --model gpt-5.6-luna --effort l
   'Call disclose_context with name="s-manual". Do not read any files. Report the
    tool error verbatim, then list the exact set of names disclose_context offers.'
 
-# P3 — positive control. Without this, P2 proves nothing.
+# P3 — positive control for P2. Without this, P2 proves nothing.
 kiro-cli chat --no-interactive --trust-all-tools --model gpt-5.6-luna --effort low \
   'Call disclose_context with name="s-auto", then report SENTINEL tokens you received.'
+
+# P4 — positive control for P1. Proves the fileMatch machinery RAN rather than
+#      never firing. Unverified — see the note above.
+kiro-cli chat --no-interactive --trust-all-tools --model gpt-5.6-luna --effort low \
+  'Read target-match.json, then list every SENTINEL token visible in your context.'
 ```
 
 ## Reading the result
 
 - **P1** is the `fileMatch` verdict. `SENTINEL_ALWAYS` present and every
   `SENTINEL_*` from an `fm-` document absent is the correct outcome. A present
-  `SENTINEL_TRAILCOMMA` or `SENTINEL_CLEAN` reproduces the degrade.
+  `SENTINEL_TRAILCOMMA` or `SENTINEL_CLEAN` reproduces the degrade. Note what P1
+  alone CANNOT tell you: a correctly-scoped document that stays absent looks
+  identical to one whose scan never ran, since this probe reads nothing. That
+  ambiguity is what P4 exists to close.
+- **P4** should surface `SENTINEL_MATCH`, and still no other `fm-` sentinel.
+  That separates "scoping works" from "scoping never executed".
 - **P2** should fail with
   `No skill or auto inclusion steering file found with name "s-manual"`, and the
   "Available items" list should contain `s-auto` and no `s-manual`. The error

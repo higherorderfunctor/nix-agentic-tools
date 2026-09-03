@@ -136,7 +136,10 @@
     # into a shape that parses, silently deleting it. cspell already ignores
     # the sentinel markers via project terms; checks/markdown-scan.nix
     # carries the matching scan exclusion, and the probe README states why.
-    # Four surfaces to move together if this directory is ever renamed.
+    # Renaming this directory touches THREE surfaces: this list,
+    # checks/markdown-scan.nix, and dev/probes/kiro-steering/README.md. The
+    # cspell terms are keyed on the sentinel words rather than the path, so a
+    # rename deliberately does NOT touch them.
     "dev/probes/kiro-steering/fixture/**"
   ];
 }

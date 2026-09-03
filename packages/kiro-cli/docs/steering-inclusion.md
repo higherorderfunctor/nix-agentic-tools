@@ -5,7 +5,9 @@
 > against a live `kiro-cli` 2.21.0 run that reproduced each verdict. Byte
 > offsets below are into that 0.46.1 bundle and WILL move on the next bump; the
 > mechanisms are what to carry forward, and the re-measure recipe at the end is
-> how to re-derive the offsets. If you change `lib/ai/transformers/kiro.nix`,
+> how to re-derive the offsets. They are grep LANDMARKS falling inside the named
+> function, not the address of its declaration, so slice BACKWARDS from them as
+> the recipe shows. If you change `lib/ai/transformers/kiro.nix`,
 > `kiroInclusionOption` in `lib/ai/ai-common.nix`, or bump kiro-cli and this
 > fragment is not updated in the same commit, stop and fix it.)
 
@@ -140,6 +142,11 @@ present as an always-loaded document rather than as an error. **The exact parse
 fault has not been traced** — only that the consequence is the documented
 degrade. Prefer the block sequence: it is the one shape that both parses and
 survives formatting unchanged.
+
+**This trap does not reach Nix-managed steering.**
+`lib/ai/transformers/kiro.nix` emits a scalar for a single path and an INLINE
+array for several, and both of those shapes measured correct. The hazard is
+confined to hand-authored steering files.
 
 ## What the transformer already guarantees
 
