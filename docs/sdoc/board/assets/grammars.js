@@ -266,9 +266,12 @@ function card(tag, element, gloss) {
     );
     facts.append(fact);
   }
-  item.append(head);
-  if (gloss) item.append(htmlNode("p", "grammar-card-gloss", gloss));
-  item.append(facts);
+  // The middle band is drawn whether or not the type carries a gloss: it is
+  // the box fitCards() measures against, and an empty one still holds the
+  // facts down on the card's floor.
+  const body = htmlNode("div", "grammar-card-body");
+  if (gloss) body.append(htmlNode("p", "grammar-card-gloss", gloss));
+  item.append(head, body, facts);
   item.addEventListener("click", () => selectGrammar(tag));
   return item;
 }
@@ -591,6 +594,120 @@ export function selectGrammar(tag) {
   renderInspector(tag);
 }
 
+// ---- one height for every card on the tab ------------------------------
+//
+// Two requirements CSS cannot express on its own. Every card must render
+// the same height -- but the tab's cards sit in three different formatting
+// contexts (the axis grid, and a centred flex row per "cards" group), and
+// no single CSS box equalizes across those, which is why the grid's own
+// `1fr` rows only ever levelled the Definition group. And an oversized
+// gloss must cost FONT SIZE before it costs height, for which there is no
+// property at all. So the page measures, in two batched passes:
+//
+//   1. Release the shared height and set every gloss to the ramp FLOOR.
+//      Each card is then as short as it can be, and the tallest of those
+//      is the shared height: the tightest one that fits every card without
+//      any gloss going under 10px.
+//   2. Apply that height everywhere, then walk the ramp from the top,
+//      writing one step across all glosses still overflowing and reading
+//      back which now fit. A card that fits at a step keeps it; the rest
+//      drop to the next. By construction the floor always fits, since
+//      pass 1 sized the card for exactly that.
+//
+// Idempotent: pass 1 discards the previous run's state before it measures,
+// so re-running settles on the same number rather than ratcheting up. Each
+// pass writes every card before it reads any, so the layout flushes once
+// per ramp step (at most four) rather than once per card.
+const RAMP = ["--fs-body", "--fs-meta", "--fs-small", "--fs-micro"];
+const FLOOR_PX = 10;
+const REFIT_MS = 100;
+
+// The ramp resolved to px, largest first. Read off a probe rather than
+// recomputed from --fs-base, so app.css stays the one definition of the
+// steps. A token the knob has pushed under the floor is dropped: app.css's
+// ramp says nothing renders below 10px, and that holds here too.
+function rampSteps(root) {
+  const probe = htmlNode("span");
+  probe.style.cssText =
+    "position:absolute;visibility:hidden;pointer-events:none;";
+  root.append(probe);
+  const sizes = new Set();
+  for (const token of RAMP) {
+    probe.style.fontSize = `var(${token})`;
+    const px = Number.parseFloat(getComputedStyle(probe).fontSize);
+    if (Number.isFinite(px) && px >= FLOOR_PX) sizes.add(px);
+  }
+  probe.remove();
+  const steps = [...sizes].sort((a, b) => b - a);
+  return steps.length ? steps : [FLOOR_PX];
+}
+
+// Returns the height it settled on, or null when there was nothing to
+// measure -- a hidden tab has no width, and measuring it would set every
+// card to the height of a zero-width column.
+function fitCards() {
+  const root = elements.grid;
+  if (!root?.isConnected || !root.clientWidth) return null;
+  const cards = [...root.querySelectorAll(".grammar-card")];
+  if (!cards.length) {
+    root.style.removeProperty("--card-h");
+    return null;
+  }
+  const steps = rampSteps(root);
+  const floor = steps[steps.length - 1];
+  const parts = cards.map((item) => ({
+    body: item.querySelector(".grammar-card-body"),
+    card: item,
+    gloss: item.querySelector(".grammar-card-gloss"),
+  }));
+
+  root.style.setProperty("--card-h", "auto");
+  for (const part of parts) {
+    if (part.gloss) part.gloss.style.fontSize = `${floor}px`;
+  }
+  // Rounded up: a fractional height leaves a sub-pixel overflow behind,
+  // and the whole point of pass 1 is that the floor is guaranteed to fit.
+  const height = Math.ceil(
+    Math.max(...parts.map((part) => part.card.getBoundingClientRect().height)),
+  );
+  root.style.setProperty("--card-h", `${height}px`);
+
+  let pending = parts.filter((part) => part.gloss && part.body);
+  for (const size of steps) {
+    if (!pending.length) break;
+    for (const part of pending) part.gloss.style.fontSize = `${size}px`;
+    pending = pending.filter(
+      (part) => part.gloss.offsetHeight > part.body.clientHeight,
+    );
+  }
+  return height;
+}
+
+// The tab's width decides how many lines a gloss takes, so a width change
+// invalidates the fit. Height changes do NOT -- those are this function's
+// own doing, and re-fitting on them would loop forever, which is what the
+// width guard in the observer is for. Web fonts landing after first paint
+// change the line count too, hence document.fonts.ready.
+let fitWidth = null;
+let fitTimer = 0;
+
+function runFit() {
+  fitWidth = elements.grid?.clientWidth ?? null;
+  return fitCards();
+}
+
+function scheduleFit() {
+  clearTimeout(fitTimer);
+  fitTimer = setTimeout(runFit, REFIT_MS);
+}
+
+if (elements.grid) {
+  new ResizeObserver(() => {
+    if (elements.grid.clientWidth !== fitWidth) scheduleFit();
+  }).observe(elements.grid);
+  document.fonts?.ready.then(runFit);
+}
+
 // `groups` is app.js's cached fetch of grammar-groups.json, {layout, error}.
 // An unreadable layout is a finding, not an exception: the tab still draws
 // every type, all of them under a synthetic Unsorted.
@@ -638,9 +755,16 @@ export function renderGrammars(nextSnapshot, groups = {}) {
   }
   elements.grid.replaceChildren(banner(findings), ...outline);
   if (selected) selectGrammar(selected);
+  runFit();
 }
 
 // For a verifier or the operator's console: the guard itself, plus what the
 // last render ran it over, so a mutated layout can be checked in-page
-// without editing a file.
-window.boardGrammarGroups = { check: checkGroups, layout: null, types: [] };
+// without editing a file. `fit` re-runs the card fit and hands back the
+// height it settled on -- calling it twice must give the same answer.
+window.boardGrammarGroups = {
+  check: checkGroups,
+  fit: runFit,
+  layout: null,
+  types: [],
+};

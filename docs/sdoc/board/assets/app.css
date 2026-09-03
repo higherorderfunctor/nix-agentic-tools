@@ -952,9 +952,14 @@ html[data-status="error"] .status-dot {
   letter-spacing: 0.03em;
 }
 
+/* align-items is deliberately NOT stretch: every card carries the tab's one
+ * --card-h, and fitCards() measures each card's natural height with that
+ * released. A stretching row would hand back the row's height instead of
+ * the card's and the shared height would ratchet up on every run. */
 .grammar-cards {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: center;
   gap: 12px;
 }
@@ -972,15 +977,15 @@ html[data-status="error"] .status-dot {
  * header reads them on one line, the row label stands them on end down
  * the left edge (vertical-rl turned 180deg reads bottom to top, and the
  * grid sizes the label's untransformed box, so the track stays two lines
- * wide). A stood-up label can be taller than its cards, and the card rows
- * share one height so a long gloss on one row does not leave the other
- * row's cards shorter. Both labels keep the caption style the tab already
- * uses. */
+ * wide). Row height is the tab's one --card-h with a floor, not a ceiling:
+ * a stood-up label can be taller than its cards, and minmax() lets that row
+ * grow for the label without taking the cards with it. Both labels keep the
+ * caption style the tab already uses. */
 .grammar-matrix {
   display: grid;
   grid-template-columns: auto repeat(var(--columns, 2), minmax(200px, 260px));
   grid-template-rows: auto;
-  grid-auto-rows: 1fr;
+  grid-auto-rows: minmax(var(--card-h, auto), auto);
   justify-content: center;
   align-items: stretch;
   gap: 12px;
@@ -1023,8 +1028,11 @@ html[data-status="error"] .status-dot {
   display: block;
 }
 
+/* align-content: start for the same reason .grammar-cards is flex-start --
+ * the cell stretches to its grid row, the card inside it must not. */
 .grammar-cell {
   display: grid;
+  align-content: start;
   gap: 12px;
 }
 
@@ -1033,8 +1041,9 @@ html[data-status="error"] .status-dot {
 }
 
 .grammar-cell.is-empty {
+  place-content: center;
   place-items: center;
-  min-height: calc(76 * var(--u));
+  min-height: var(--card-h, calc(76 * var(--u)));
   border: 1px dashed var(--accent-danger);
   border-radius: 9px;
   color: var(--accent-danger);
@@ -1046,7 +1055,9 @@ html[data-status="error"] .status-dot {
 
 .grammar-ghost {
   display: grid;
+  align-content: center;
   gap: calc(4 * var(--u));
+  min-height: var(--card-h, auto);
   padding: calc(14 * var(--u)) calc(14 * var(--u)) calc(12 * var(--u));
   border: 1px dashed var(--accent-danger);
   border-radius: 9px;
@@ -1075,9 +1086,18 @@ html[data-status="error"] .status-dot {
   color: var(--accent-danger);
 }
 
+/* A card is a column with three bands: the title block at the top, the
+ * facts at the bottom, and the gloss centred in whatever is left. Its
+ * height is --card-h -- ONE value for every card on the tab, set on
+ * .grammar-outline by fitCards() in grammars.js, which steps an oversized
+ * gloss down the type ramp before it lets that shared height grow. The
+ * fallback is the card's own content height, which is what renders on a
+ * hidden tab, before the first fit, or with scripting off. */
 .grammar-card {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: calc(12 * var(--u));
+  height: var(--card-h, auto);
   padding: calc(14 * var(--u)) calc(14 * var(--u)) calc(12 * var(--u));
   border: 1px solid var(--border-subtle);
   border-left: 3px solid var(--accent);
@@ -1104,6 +1124,7 @@ html[data-status="error"] .status-dot {
 
 .grammar-card-head {
   display: grid;
+  flex: 0 0 auto;
   gap: calc(4 * var(--u));
 }
 
@@ -1121,10 +1142,30 @@ html[data-status="error"] .status-dot {
   font-size: var(--fs-meta);
 }
 
+/* The middle band. It takes every pixel the head and the facts do not
+ * (flex: 1) and centres the gloss in it, so a one-line gloss sits on the
+ * card's midline rather than under its header. min-height: 0 lets it be
+ * SMALLER than its content -- without it a flex item floors at its content
+ * height, the card would grow past --card-h and the fit would have nothing
+ * to detect. overflow: hidden is the backstop for that detection failing;
+ * a clipped gloss is a bug, not a design. This box is what fitCards()
+ * measures the gloss against. It is rendered even when a type has no
+ * gloss, so the facts land on the same baseline on every card. */
+.grammar-card-body {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* The canon's one-line gloss for the type, between the title block and the
  * facts: reading size, muted, in the prose face rather than the mono the
- * rest of the card is set in. */
+ * rest of the card is set in. font-size is the ONE property fitCards()
+ * writes inline, stepping down the ramp (body 12 -> meta 11 -> small 10.5
+ * -> micro 10) when the gloss will not fit the shared height. */
 .grammar-card-gloss {
+  width: 100%;
   margin: 0;
   color: var(--text-secondary);
   font-size: var(--fs-body);
@@ -1133,8 +1174,9 @@ html[data-status="error"] .status-dot {
 
 .grammar-card-facts {
   display: flex;
+  flex: 0 0 auto;
   gap: calc(14 * var(--u));
-  margin: 0;
+  margin: auto 0 0;
 }
 
 .grammar-card-facts div {
