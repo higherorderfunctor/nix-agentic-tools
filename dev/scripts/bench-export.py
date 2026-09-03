@@ -44,7 +44,7 @@ strictdoc farms the per-file reads out to a process pool and a profiled parent
 otherwise records 79% of its time inside multiprocessing queue plumbing. Read
 its shares; its wall time is a serialized run's and belongs to no arm above.
 
-NOTHING IS WRITTEN INTO THE REPOSITORY. The two derived configs, both caches and
+NOTHING IS WRITTEN INTO THE REPOSITORY. The one derived config, both caches and
 both output trees live under a scratch root (`$TMPDIR` by default, `--scratch`
 to place it); the repository is read as an input path only.
 
