@@ -302,6 +302,15 @@
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs;};
       optionsDocsCheck = import ./checks/options-doc.nix {inherit lib pkgs self;};
       pnpmFetcherParityCheck = import ./checks/pnpm-fetcher-parity.nix {inherit lib pkgs self;};
+      # The tree-sitter parsers strictdoc's source readers dlopen, as plain
+      # name/value pairs. The checks that run `strictdoc export` over `${self}`
+      # invoke strictdoc's OWN CLI rather than the wrapped interpreter, so
+      # mkExtract.nix's `--set-default` never reaches them; since
+      # strictdoc_config.py turned REQUIREMENT_TO_SOURCE_TRACEABILITY on, an
+      # export without these dies on the first `.nix` source file. This is the
+      # same splice devenv.nix carries for a hand-run export, and it imports
+      # the ONE registry rather than re-listing the languages.
+      sdocTsEnv = (import ./packages/strictdoc-grammar/lib/tsGrammars.nix {inherit lib pkgs;}).env;
       sembleTemplatesCheck = import ./checks/semble-templates.nix {inherit lib pkgs self;};
       repoValidationChecks = repoValidation.mkCiChecks {
         gitHooksRun = inputs.git-hooks.lib.${system}.run;
@@ -309,8 +318,8 @@
       };
       splitCodeSpansCheck = {split-code-spans = import ./checks/split-code-spans.nix {inherit pkgs;};};
       strictdocBoardGrammarGroupsCheck = {strictdoc-board-grammar-groups = import ./checks/strictdoc-board-grammar-groups.nix {inherit pkgs self;};};
-      strictdocCycleCheck = {strictdoc-cycle-check = import ./checks/strictdoc-cycle-check.nix {inherit pkgs self;};};
-      strictdocCommentaryCheck = {strictdoc-commentary-check = import ./checks/strictdoc-commentary-check.nix {inherit pkgs self;};};
+      strictdocCycleCheck = {strictdoc-cycle-check = import ./checks/strictdoc-cycle-check.nix {inherit pkgs sdocTsEnv self;};};
+      strictdocCommentaryCheck = {strictdoc-commentary-check = import ./checks/strictdoc-commentary-check.nix {inherit pkgs sdocTsEnv self;};};
       # The grammar extractor's environment, built ONCE for the seven checks
       # that run it. It is not an overlay attribute: an overlay converts an
       # upstream package, wrapping belongs to the consumer, and the consumer
@@ -322,8 +331,8 @@
         inherit (pkgs.ai.devTools) strictdoc;
       };
       strictdocElementCheck = {strictdoc-element-check = import ./checks/strictdoc-element-check.nix {inherit pkgs self strictdocGrammarExtract;};};
-      strictdocFileCheck = {strictdoc-file-check = import ./checks/strictdoc-file-check.nix {inherit pkgs self;};};
-      strictdocFpCheck = {strictdoc-fp-check = import ./checks/strictdoc-fp-check.nix {inherit pkgs self;};};
+      strictdocFileCheck = {strictdoc-file-check = import ./checks/strictdoc-file-check.nix {inherit pkgs sdocTsEnv self;};};
+      strictdocFpCheck = {strictdoc-fp-check = import ./checks/strictdoc-fp-check.nix {inherit pkgs sdocTsEnv self;};};
       strictdocGrammarCorpusCheck = {strictdoc-grammar-corpus = import ./checks/strictdoc-grammar-corpus.nix {inherit lib pkgs self;};};
       strictdocGrammarForeignRoundtripCheck = {strictdoc-grammar-foreign-roundtrip = import ./checks/strictdoc-grammar-foreign-roundtrip.nix {inherit lib pkgs self strictdocGrammarExtract;};};
       strictdocGrammarModelEqualCheck = {strictdoc-grammar-model-equal = import ./checks/strictdoc-grammar-model-equal.nix {inherit lib pkgs self strictdocGrammarExtract;};};

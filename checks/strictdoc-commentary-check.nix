@@ -25,13 +25,24 @@
 # checks/strictdoc-file-check.nix: `strictdoc export` caches under its output
 # dir, and a broken input can exit 1 then exit 0 on re-run against a warm one.
 # `runCommand` gives every build its own fresh $TMPDIR.
+#
+# `sdocTsEnv` is the tree-sitter parser registry
+# (packages/strictdoc-grammar/lib/tsGrammars.nix), spliced into the build
+# environment because this gate runs strictdoc's OWN CLI rather than the
+# `strictdoc-grammar-extract` wrapper that carries the same values as
+# `--set-default`. Since strictdoc_config.py turned
+# REQUIREMENT_TO_SOURCE_TRACEABILITY on, an export without them dies on the
+# first `.nix` source file it reads. Same splice devenv.nix carries for a
+# hand-run export.
 {
   pkgs,
+  sdocTsEnv,
   self,
 }:
-pkgs.runCommand "strictdoc-commentary-check" {
-  nativeBuildInputs = [pkgs.ai.devTools.strictdoc pkgs.python3];
-} ''
+pkgs.runCommand "strictdoc-commentary-check" (sdocTsEnv
+  // {
+    nativeBuildInputs = [pkgs.ai.devTools.strictdoc pkgs.python3];
+  }) ''
   set -euETo pipefail
   shopt -s inherit_errexit 2>/dev/null || :
 
