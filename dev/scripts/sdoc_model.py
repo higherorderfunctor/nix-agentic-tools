@@ -471,7 +471,8 @@ class Graph:
 
     # ---- mutation ------------------------------------------------------
 
-    def _touch(self, document: SDocDocument) -> None:
+    def touch_document(self, document: SDocDocument) -> None:
+        """Mark a document for rendering and persistence."""
         self._dirty[document.meta.input_doc_full_path] = document
 
     def set_field(self, uid: str, field: str, value: str | None) -> None:
@@ -491,7 +492,7 @@ class Graph:
             check_value_delimiters(field, value)
         node.set_field_value(field_name=field, form_field_index=0, value=value)
         self.validate(node)
-        self._touch(node.get_document())
+        self.touch_document(node.get_document())
 
     def add_relation(
         self,
@@ -517,7 +518,7 @@ class Graph:
             )
         node.relations.append(self._build_reference(node, element, spec))
         self.validate(node)
-        self._touch(node.get_document())
+        self.touch_document(node.get_document())
 
     def remove_relation(
         self,
@@ -539,7 +540,7 @@ class Graph:
             existing = self._sole_relation_to(node, spec)
         node.relations.remove(existing)
         self.validate(node)
-        self._touch(node.get_document())
+        self.touch_document(node.get_document())
 
     @staticmethod
     def _sole_relation_to(node: SDocNode, spec: RelationSpec):
@@ -910,7 +911,7 @@ class Graph:
                 self._build_reference(node, element, RelationSpec(*relation))
             )
         self.validate(node)
-        self._touch(document)
+        self.touch_document(document)
         return node
 
     def remove_node(self, uid: str) -> Path:

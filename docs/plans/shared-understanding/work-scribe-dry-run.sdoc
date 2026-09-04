@@ -1,41 +1,48 @@
 [DOCUMENT]
-TITLE: scribe has no --dry-run
+TITLE: scribe previews every writing verb
 
 [GRAMMAR]
 IMPORT_FROM_FILE: @repo
 
 [WORK]
 UID: WORK-SCRIBE-DRY-RUN
-TITLE: scribe has no --dry-run
+TITLE: scribe previews every writing verb
 DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 scribe grows --dry-run on every writing verb: new (every type leaf), set,
 relate, unrelate, move, delete. The flag is added once, by walking the built
-subparsers for every name in scribe_ops.WRITES, and folded into the RPC payload
-once, not per verb. A dry run performs everything the real run does up to the
-write: it applies the change in memory, runs the same prechecks, and proves
-every touched document renders and reparses. Then it prints a unified diff of
-what would be written, path by path, computed from Graph.pending() against the
-file's current bytes, and writes nothing. An empty diff prints that nothing
-would change. A change the real run would refuse is refused by the dry run with
-the same message and exit code. For move, the dry run prints the rename it would
-perform and any content it would rewrite. After a dry run the daemon's next read
-is identical to before it; how that is achieved (discard and reload, or mutate a
+subparsers for every name in scribe_protocol.WRITES, and folded into the RPC
+payload once, not per verb. A dry run performs everything the real run does up
+to the write: it applies the change in memory, runs the same prechecks, and
+proves every touched document renders and reparses. Then it prints a unified
+diff of what would be written, path by path, computed from Graph.pending()
+against the file's current bytes, and writes nothing. An empty diff prints that
+nothing would change. A change the real run would refuse is refused by the dry
+run with the same message and exit code. For move, the dry run prints the rename
+it would perform. A move preserves the file's bytes, but both its dry and real
+paths render and reparse the source before the rename, so either refuses a
+document that does not round-trip. After a dry run the daemon's next read is
+identical to before it; how that is achieved (discard and reload, or mutate a
 copy) is chosen by measurement and recorded on this node. The diff helper is
 shared between scribe and sdoc_cli.py rather than copied. The sdoc skill and
-docs/sdoc/README.md, which today document the absence, say the flag exists and
-what it prints.
+docs/sdoc/README.md say the flag exists and what it prints.
 <<<
 NOTES: >>>
 Implemented 2026-09-03. The client walks the built parser leaves named by
-scribe_ops.WRITES, adds --dry-run in one place, and folds dry_run into every
-write payload in one place. Both writer CLIs use scribe_diff.py for byte-based,
-path-by-path unified diffs. Workspace.write runs the ordinary mutation,
-precheck, render and reparse pipeline, captures Graph.pending(), then discards
-the speculative generation instead of saving it. A separate last-published
-counter survives that discard, so the next reload always advances the generation
-used by the board cache.
+scribe_protocol.WRITES, adds --dry-run in one place, and folds dry_run into
+every write payload in one place. Both writer CLIs use scribe_diff.py for
+byte-based, path-by-path unified diffs. Workspace.write runs the ordinary
+mutation, precheck, render and reparse pipeline, captures Graph.pending(), then
+discards the speculative generation instead of saving it. A separate
+last-published counter survives that discard, so the next reload always advances
+the generation used by the board cache.
+
+A move preserves the source bytes and therefore previews only its rename. Both
+the real and dry-run move paths explicitly touch, render and reparse the source
+document before rename; this preserves validation parity and deliberately means
+either path refuses a document that does not round-trip. Graph.touch_document is
+the public mutation seam used for that validation.
 
 The held-state choice was remeasured on 2026-09-04 on the tracked corpus after
 making the generation counter monotonic. Across three isolated runs, capturing

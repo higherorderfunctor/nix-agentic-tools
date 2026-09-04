@@ -264,7 +264,7 @@ def _move(workspace: Workspace, uid: str, destination: Path, *, dry_run: bool) -
     # validation boundary as every other writing verb. Touching the held
     # document makes Workspace render and reparse it; dry_run=True then drops
     # that speculative dirty state before either branch below can reach disk.
-    workspace.write(lambda g: g._touch(document), dry_run=True)
+    workspace.write(lambda g: g.touch_document(document), dry_run=True)
     if dry_run:
         return {
             "text": (

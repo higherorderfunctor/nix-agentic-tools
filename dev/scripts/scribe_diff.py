@@ -16,7 +16,7 @@ def unified_pending_diff(pending: Mapping[Path, str | None], root: Path) -> str:
         name = str(path.relative_to(root))
         before = path.read_bytes() if path.exists() else b""
         after = content.encode("utf8") if content is not None else b""
-        fromfile = f"a/{name}".encode()
+        fromfile = (f"a/{name}" if path.exists() else "/dev/null").encode()
         tofile = (f"b/{name}" if content is not None else "/dev/null").encode()
         chunks.extend(
             difflib.diff_bytes(

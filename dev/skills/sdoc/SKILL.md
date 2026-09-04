@@ -166,7 +166,9 @@ scribe semantics DECISION            # the lifecycle a state field claims
 Every writing verb takes `--dry-run`: `new` (including every type leaf), `set`,
 `relate`, `unrelate`, `move`, and `delete`. It performs the same validation as a
 real write, then prints a path-by-path unified diff of the bytes it would write;
-`move` also prints the rename and any rewritten content. An empty diff reports
+`move` prints the rename it would perform. A move preserves the file's bytes,
+but both its dry and real paths render and reparse the source before the rename,
+so either refuses a document that does not round-trip. An empty diff reports
 that nothing would change. A dry run writes no files and leaves the daemon's
 held state unchanged. Every field flag takes **`@FILE`** to read the value from
 a file and `-` to read it from stdin — which is how a multi-paragraph

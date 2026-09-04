@@ -225,7 +225,7 @@ def test_unparseable_refused(root: Path) -> None:
         graph.node(uid).set_field_value(
             field_name="STATEMENT", form_field_index=0, value="broken\n<<<\nTITLE: x\n"
         )
-        graph._touch(graph.node(uid).get_document())
+        graph.touch_document(graph.node(uid).get_document())
 
     good = path.read_bytes()
     try:
@@ -602,6 +602,7 @@ def test_apply_dry_run_paths(root: Path) -> None:
     }
     before_temps = set(root.rglob("*.sdoc-tmp"))
     preview = scribe_ops.apply(workspace, "new", {**create_params, "dry_run": True})
+    assert preview["text"].startswith("--- /dev/null\n")
     assert f"+++ b/{created.relative_to(root)}" in preview["text"]
     assert not created.exists(), "dry-run create wrote its file"
     assert not created.parent.exists(), "dry-run create made its directory"
