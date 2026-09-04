@@ -47,6 +47,7 @@ PREDICATE_OPERATIONS = (
     "or",
 )
 RULE_KINDS = ("transcription", "policy", "derived", "open")
+SEES_LITERALS = ("actor", "git_base_ref")
 PAYLOAD_KEYS = (
     "schema",
     "machines",
@@ -126,6 +127,31 @@ def _require_shape(
 def _require_list(value: Any, location: str) -> None:
     if not isinstance(value, list):
         raise ModelError(f"{location} must be a list in presentation order")
+
+
+def _validate_sees(
+    values: Any, grammar: Mapping[str, Any] | None, location: str
+) -> None:
+    _require_list(values, location)
+    known_forms = "actor, git_base_ref, field:<field>, role:<role>"
+    for token in values:
+        if token in SEES_LITERALS:
+            continue
+        if not isinstance(token, str) or ":" not in token:
+            raise ModelError(
+                f"{location} names unknown input {token!r}; known inputs: {known_forms}"
+            )
+        kind, name = token.split(":", 1)
+        if kind not in ("field", "role") or not name:
+            raise ModelError(
+                f"{location} names unknown input {token!r}; known inputs: {known_forms}"
+            )
+        if grammar is None:
+            continue
+        vocabulary = (
+            _grammar_fields(grammar) if kind == "field" else _grammar_roles(grammar)
+        )
+        _require_reference(name, vocabulary, kind, location)
 
 
 def _validate_predicate(predicate: Any, location: str) -> None:
@@ -417,7 +443,7 @@ def validate_model(
         _require_shape(
             gate, ("name", "sees", "predicate"), f"gate {gate.get('name')!r}"
         )
-        _require_list(gate["sees"], f"gate {gate['name']!r} sees")
+        _validate_sees(gate["sees"], grammar, f"gate {gate['name']!r} sees")
         _validate_predicate(gate.get("predicate"), f"gate {gate['name']!r}")
         _validate_predicate_references(
             gate["predicate"], model, grammar, f"gate {gate['name']!r}"
@@ -588,7 +614,9 @@ def validate_model(
             ("name", "sees"),
             f"checkpoint {checkpoint.get('name')!r}",
         )
-        _require_list(checkpoint["sees"], f"checkpoint {checkpoint['name']!r} sees")
+        _validate_sees(
+            checkpoint["sees"], grammar, f"checkpoint {checkpoint['name']!r} sees"
+        )
     for rule in model.get("rules", []):
         _require_shape(
             rule,

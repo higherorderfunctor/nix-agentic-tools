@@ -545,13 +545,41 @@ def test_subject_validation() -> None:
         assert "unknown subject kind" in str(error)
     else:
         raise AssertionError("unknown milestone subject loaded")
+    model = fixture_model(
+        gate={
+            "name": "bad-sees-field",
+            "sees": ["field:MISSING"],
+            "predicate": {"op": "field_is", "field": "F", "value": "a"},
+        }
+    )
+    try:
+        validate_model(model, grammar)
+    except ModelError as error:
+        assert "known fields" in str(error)
+    else:
+        raise AssertionError("unknown sees field loaded")
+    model = fixture_model()
+    model["checkpoints"] = [{"name": "bad-sees-role", "sees": ["role:Missing"]}]
+    try:
+        validate_model(model, grammar)
+    except ModelError as error:
+        assert "known roles" in str(error)
+    else:
+        raise AssertionError("unknown sees role loaded")
+    model["checkpoints"][0]["sees"] = ["relations"]
+    try:
+        validate_model(model, grammar)
+    except ModelError as error:
+        assert "known inputs" in str(error) and "git_base_ref" in str(error)
+    else:
+        raise AssertionError("malformed sees token loaded")
 
 
 @contract("a refused gate leaves the graph byte-for-byte unchanged")
 def test_transaction_refusal() -> None:
     gate = {
         "name": "ready",
-        "sees": ["READY"],
+        "sees": ["field:READY"],
         "predicate": {"op": "field_is", "field": "READY", "value": "yes"},
     }
     interpreter = Interpreter(fixture_model(gate=gate))
@@ -687,8 +715,18 @@ def test_gate_placement() -> None:
     ]
     model["checkpoints"] = [
         {"name": "too-early", "sees": ["field:F"]},
-        {"name": "ready", "sees": ["field:F", "actor", "relations"]},
+        {
+            "name": "ready",
+            "sees": ["field:F", "actor", "role:Assumes", "git_base_ref"],
+        },
     ]
+    grammar = {
+        "WORK": {
+            "fields": [{"name": "F", "options": []}],
+            "roles": [{"role": "Assumes", "type": "Parent"}],
+        }
+    }
+    validate_model(model, grammar)
     assert gate_placement(model) == [{"gate": "g", "checkpoints": ["ready"]}]
     assert gate_placement(SHIPPED) == []
 
