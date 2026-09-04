@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-SEMANTICS-DROP-TRANSITIONS
 TITLE: Remove transitions from both Nix delivery sites
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Remove ps.transitions from grammarPython in devenv.nix and
@@ -28,6 +28,27 @@ devenv.nix change; restart keeps the old environment.
 NOTES: >>>
 Ordered last of the three: the interpreter must be green under the old
 environment before the dependency goes, so a failure is attributable.
+
+Implemented and measured 2026-09-03 (commit pending), after the 32-contract
+interpreter suite and strictdoc-semantics check passed under the old
+environment.
+
+- grammarPython: 357,486,880 bytes before
+  (/nix/store/dc5wkfiaald1wr4fayymylv7805ivrzc-python3-3.14.7-env),
+  265,083,120 bytes after
+  (/nix/store/d5x04gv12zvaz9nqax3ns12wk4d0hk8i-python3-3.14.7-env):
+  -92,403,760 bytes (-88.12 MiB).
+- strictdocGrammarExtract: 1,020,635,152 bytes before
+  (/nix/store/i4irxk8h3057261bw5nr6w3pvznli4lp-strictdoc-grammar-extract-0.1.0),
+  928,235,704 bytes after
+  (/nix/store/k90nymxmi1v5i4d63gpg9cpp4dabvkw4-strictdoc-grammar-extract-0.1.0):
+  -92,399,448 bytes (-88.12 MiB).
+
+Each number is `nix path-info -S` on the named realized path. Recursive path
+inspection finds neither transitions nor pygraphviz in either after closure;
+`nix why-depends` against both former store paths reports no dependency. The
+daemon and board were taken down and brought up on the new environment; the
+board again serves sdoc-semantics/2 without its unavailable marker.
 <<<
 RELATIONS:
 - TYPE: Parent

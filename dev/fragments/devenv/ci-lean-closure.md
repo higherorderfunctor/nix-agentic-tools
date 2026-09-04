@@ -1,24 +1,26 @@
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-08-30 (commit pending — the Home Manager layer has
-> migrated to named permissions, while this repository temporarily selects
-> `danger-full-access`; the obsolete workspace-write roots and diagnostic
-> assertions are gone). Prior: 2026-08-29 (`devenv test` is now an on-demand
-> diagnostic instead of an automatic PR/push workflow. Deterministic
-> instruction-copy, shared-hook-isolation, and validation-projection contracts
-> moved under `nix flake check`; `$CI` no longer removes validation hooks).
-> Prior: 2026-08-17 (commit pending — the staged Codex named-profile migration
-> now receives the canonical Git common directory automatically, including from
-> linked worktrees, while this repository's still-legacy config retains its
-> existing `.git` workspace root until the separate migration). Prior:
-> 2026-08-17 (commit pending — enabled treefmt now contributes its effective
-> cache through the same permission-model-aware Codex root pool; enterTest
-> expects five local roots and four in CI). Prior: 2026-08-17 (commit pending —
-> named Codex permission tables are enabled at the module boundary, but this
-> repository deliberately remains on legacy workspace-write until its Home
-> Manager user layer migrates first; Codex does not compose the two models
-> across config layers). Prior: 2026-08-15 (commit pending — the
-> interactive-only Semble gate moved unchanged to
+> **Last verified:** 2026-09-03 (commit pending — the standard-library semantics
+> interpreter removed `transitions` from `grammarPython`, reducing that realized
+> closure from 357,486,880 to 265,083,120 bytes). Prior: 2026-08-30 (commit
+> pending — the Home Manager layer has migrated to named permissions, while this
+> repository temporarily selects `danger-full-access`; the obsolete
+> workspace-write roots and diagnostic assertions are gone). Prior: 2026-08-29
+> (`devenv test` is now an on-demand diagnostic instead of an automatic PR/push
+> workflow. Deterministic instruction-copy, shared-hook-isolation, and
+> validation-projection contracts moved under `nix flake check`; `$CI` no longer
+> removes validation hooks). Prior: 2026-08-17 (commit pending — the staged
+> Codex named-profile migration now receives the canonical Git common directory
+> automatically, including from linked worktrees, while this repository's
+> still-legacy config retains its existing `.git` workspace root until the
+> separate migration). Prior: 2026-08-17 (commit pending — enabled treefmt now
+> contributes its effective cache through the same permission-model-aware Codex
+> root pool; enterTest expects five local roots and four in CI). Prior:
+> 2026-08-17 (commit pending — named Codex permission tables are enabled at the
+> module boundary, but this repository deliberately remains on legacy
+> workspace-write until its Home Manager user layer migrates first; Codex does
+> not compose the two models across config layers). Prior: 2026-08-15 (commit
+> pending — the interactive-only Semble gate moved unchanged to
 > `ai.codex.programs.semble.enable`; grammar and path customization now follow
 > the same generated runtime program tree). Prior: 2026-08-14 (commit pending —
 > the local shell now enables the flake-pinned Semble module with AWK and jq
