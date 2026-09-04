@@ -229,6 +229,46 @@ def test_rpc_dry_run(root: Path, runtime: Path) -> None:
         assert source.stat().st_mtime_ns != before_mtime
 
 
+@contract("workspace generations stay monotonic across real and dry-run writes")
+def test_rpc_dry_run_generation(root: Path, runtime: Path) -> None:
+    with served(root, runtime) as (workspace, path):
+        uid = next(
+            node.reserved_uid
+            for node in workspace.graph.iter_nodes()
+            if node.reserved_uid and getattr(node, "reserved_title", None)
+        )
+        generations = [call(path, "workspace.describe")["generation"]]
+        for title in ("First real generation", "Second real generation"):
+            call(
+                path,
+                "scribe.apply",
+                {
+                    "op": "set",
+                    "uid": uid,
+                    "fields": {"TITLE": title},
+                    "unset": [],
+                },
+            )
+            generations.append(call(path, "workspace.describe")["generation"])
+
+        call(
+            path,
+            "scribe.apply",
+            {
+                "op": "set",
+                "uid": uid,
+                "fields": {"TITLE": "Dry-run generation"},
+                "unset": [],
+                "dry_run": True,
+            },
+        )
+        generations.append(call(path, "workspace.describe")["generation"])
+
+        assert all(
+            before < after for before, after in zip(generations, generations[1:])
+        ), f"generation did not increase monotonically: {generations}"
+
+
 @contract("dry-run and real CLI refusals have the same message and exit code")
 def test_cli_dry_run_refusal(root: Path, runtime: Path) -> None:
     with served(root, runtime) as (workspace, _path):
@@ -329,6 +369,7 @@ CONTRACTS = [
     test_root_assertion,
     test_cli_dry_run_surface,
     test_rpc_dry_run,
+    test_rpc_dry_run_generation,
     test_cli_dry_run_refusal,
     test_export_matches,
 ]

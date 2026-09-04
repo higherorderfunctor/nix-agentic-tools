@@ -33,14 +33,17 @@ scribe_ops.WRITES, adds --dry-run in one place, and folds dry_run into every
 write payload in one place. Both writer CLIs use scribe_diff.py for byte-based,
 path-by-path unified diffs. Workspace.write runs the ordinary mutation,
 precheck, render and reparse pipeline, captures Graph.pending(), then discards
-the speculative generation instead of saving it.
+the speculative generation instead of saving it. A separate last-published
+counter survives that discard, so the next reload always advances the generation
+used by the board cache.
 
-The held-state choice was measured on this 495-document corpus. Across three
-runs, capturing and discarding a no-change preview averaged 5.0 ms and the next
-full read averaged 1,134.2 ms (800.6, 1,301.8 and 1,300.2 ms). A deepcopy of the
-held graph took 4,444.9 ms in one run, about 3.9 times the discard/reload cost,
-so copying was rejected. The focused suites pass 30 contracts: 20 workspace and
-operation contracts plus 10 client and RPC contracts.
+The held-state choice was remeasured on 2026-09-04 on the tracked corpus after
+making the generation counter monotonic. Across three isolated runs, capturing
+and discarding a no-change preview averaged 6.3 ms (6.5, 6.1 and 6.3 ms), and
+the next full read averaged 943.1 ms (955.1, 895.1 and 979.2 ms). The earlier
+deepcopy measurement was 4,444.9 ms in one run, about 4.7 times the remeasured
+discard/reload cost, so copying remains rejected. The focused suite count is
+updated by the follow-up commits that complete the reviewed contracts.
 <<<
 RELATIONS:
 - TYPE: Parent

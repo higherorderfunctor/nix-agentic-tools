@@ -116,6 +116,7 @@ class Workspace:
         self.root = Path(root).resolve()
         self.output_dir = output_dir
         self._generation: Generation | None = None
+        self._last_generation_number = 0
         self._dirty = False
         # One writer at a time. Reads take an immutable generation and need
         # no lock; this exists because the daemon is a threading server and
@@ -284,16 +285,21 @@ class Workspace:
     def _discard(self) -> None:
         """Drop the held graph so the next read re-derives from disk.
 
-        Clearing BOTH fields is load-bearing. An earlier version left them
-        set on a failed rebuild, which wedged the workspace permanently:
-        every later read failed, and repairing the file on disk did not help
-        because the rebuild ran over the in-memory objects.
+        Clearing the generation and dirty bit is load-bearing. An earlier
+        version left them set on a failed rebuild, which wedged the workspace
+        permanently: every later read failed, and repairing the file on disk
+        did not help because the rebuild ran over the in-memory objects.
+
+        The last published number survives. Board responses are cached by
+        generation, so reusing 1 after a discard could make a fresh graph look
+        identical to stale cached content.
         """
         self._generation = None
         self._dirty = False
 
     def _republish(self, graph: Graph) -> Generation:
-        number = 1 if self._generation is None else self._generation.number + 1
+        self._last_generation_number += 1
+        number = self._last_generation_number
         self._generation = Generation(number, graph, self._fingerprint())
         self._dirty = False
         return self._generation
