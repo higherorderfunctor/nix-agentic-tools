@@ -7,6 +7,8 @@ description: >-
   loop, and the parser gotchas that fail closed.
 ---
 
+<!-- cspell:ignore unrelate -->
+
 Design nodes in this repo live in one StrictDoc graph rooted at the repository
 root. Plans decay and are eventually collected; settled architecture outlives
 them.
@@ -161,11 +163,14 @@ scribe check                         # every node, relation and File path
 scribe semantics DECISION            # the lifecycle a state field claims
 ```
 
-**No writing verb takes `--dry-run`** — the flag is on `dev/scripts/sdoc_cli.py`
-only, never on the daemon client, and WORK-SCRIBE-DRY-RUN tracks the gap. The
-rollback described below is what stands in for it. Every field flag takes
-**`@FILE`** to read the value from a file and `-` to read it from stdin — which
-is how a multi-paragraph `STATEMENT` gets in without a shell-quoting accident.
+Every writing verb takes `--dry-run`: `new` (including every type leaf), `set`,
+`relate`, `unrelate`, `move`, and `delete`. It performs the same validation as a
+real write, then prints a path-by-path unified diff of the bytes it would write;
+`move` also prints the rename and any rewritten content. An empty diff reports
+that nothing would change. A dry run writes no files and leaves the daemon's
+held state unchanged. Every field flag takes **`@FILE`** to read the value from
+a file and `-` to read it from stdin — which is how a multi-paragraph
+`STATEMENT` gets in without a shell-quoting accident.
 
 What the tool does that hand-editing does not: it validates against the grammar,
 writes **canonical form through strictdoc's own writer**, then reloads the whole

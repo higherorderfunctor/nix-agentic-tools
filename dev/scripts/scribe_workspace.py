@@ -97,6 +97,14 @@ class Generation:
     fingerprint: str
 
 
+@dataclass(frozen=True)
+class WriteResult:
+    """The rendered proposal and the paths a real write replaced."""
+
+    pending: dict[Path, str | None]
+    written: tuple[Path, ...]
+
+
 class WorkspaceError(SdocError):
     """A write that was refused, or a graph that would not build."""
 
@@ -197,8 +205,9 @@ class Workspace:
         mutate: Callable[[Graph], None],
         *,
         precheck: Callable[[Graph], None] | None = None,
-    ) -> list[Path]:
-        """Apply, CHECK, then save. A refused write moves nothing.
+        dry_run: bool = False,
+    ) -> WriteResult:
+        """Apply and check, then either preview or save.
 
         `mutate` edits the held graph in memory. `precheck` runs after it and
         raises to refuse -- it is where a cross-document rule lives that can
@@ -209,8 +218,10 @@ class Workspace:
         is parsed. A document that would not read back is refused here, with
         the disk untouched.
 
-        The whole-graph reload stays deferred to the next read, so a batch of
-        writes pays it once.
+        A dry run captures the rendered proposal and discards the mutated
+        generation. Its next read reloads unchanged disk, so no speculative
+        state survives the reply. A real write defers that reload as before,
+        so a batch pays it once.
         """
         with self._lock:
             graph = self._held()
@@ -225,9 +236,14 @@ class Workspace:
                 self._discard()
                 raise WorkspaceError(str(exc)) from exc
 
+            pending = graph.pending()
+            if dry_run:
+                self._discard()
+                return WriteResult(pending, ())
+
             restore = {
                 path: path.read_text(encoding="utf8") if path.exists() else None
-                for path in graph.pending()
+                for path in pending
             }
             try:
                 written = graph.save()
@@ -240,7 +256,7 @@ class Workspace:
                 raise WorkspaceError(f"save failed and was rolled back: {exc}") from exc
 
             self._dirty = True
-            return written
+            return WriteResult(pending, tuple(written))
 
     def reload(self) -> Generation:
         """Rebuild now rather than at the next read."""

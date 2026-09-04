@@ -46,11 +46,11 @@ Two rules here are NOT instance semantics and are enforced:
 from __future__ import annotations
 
 import argparse
-import difflib
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from scribe_diff import unified_pending_diff  # noqa: E402
 from sdoc_model import (  # noqa: E402
     FILE_ELEMENTS,
     GUARDED_FIELDS,
@@ -658,17 +658,7 @@ def do_check(graph, _args, root: Path) -> int:
 
 
 def print_diff(graph, root: Path) -> None:
-    for path, content in graph.pending().items():
-        name = str(path.relative_to(root))
-        before = source_bytes(path) or ""
-        after = content if content is not None else ""
-        diff = difflib.unified_diff(
-            before.splitlines(keepends=True),
-            after.splitlines(keepends=True),
-            fromfile=f"a/{name}",
-            tofile=f"b/{name}" if content is not None else "/dev/null",
-        )
-        sys.stdout.writelines(diff)
+    sys.stdout.write(unified_pending_diff(graph.pending(), root))
 
 
 def load_graph(root: Path):

@@ -3,7 +3,8 @@
 """The `scribe` command: turn a command line into one typed operation
 (WORK-SCRIBE-CLIENT, docs/plans/scribe-daemon/).
 
-Stdlib only. No strictdoc import, no corpus load, no graph.
+No corpus load and no graph. The operation-name registry is imported from the
+daemon pipeline so the two sides cannot disagree about which verbs write.
 
 WHERE THE FLAGS COME FROM
 -------------------------
@@ -46,6 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from scribe_client import ClientError, call_for_root  # noqa: E402
 from scribe_grammar import parse_sgra  # noqa: E402
+from scribe_ops import WRITES  # noqa: E402
 from scribe_paths import RootError, resolve_root  # noqa: E402
 
 # MECH-RUNTIME-WRITE-GUARD: no flag is generated for either, and naming one
@@ -189,19 +191,40 @@ def build_parser(grammar: dict, command: str | None, tag: str | None):
     output = semantics_parser.add_mutually_exclusive_group()
     output.add_argument("--json", action="store_true", help="the sdoc-semantics/1 payload")
     output.add_argument("--mermaid", action="store_true", help="stateDiagram-v2 per machine")
+
+    def leaves(candidate):
+        nested = [
+            action
+            for action in candidate._actions
+            if isinstance(action, argparse._SubParsersAction)
+        ]
+        if not nested:
+            return [candidate]
+        return [
+            leaf
+            for action in nested
+            for child in action.choices.values()
+            for leaf in leaves(child)
+        ]
+
+    for name in WRITES:
+        for write_parser in leaves(subparsers.choices[name]):
+            write_parser.add_argument(
+                "--dry-run",
+                action="store_true",
+                help="validate and print what would change without writing",
+            )
     return parser
 
 
 def run_semantics(args, grammar: dict) -> int:
     """`scribe semantics` -- ONE renderer, shared with `python -m sdoc_semantics`.
 
-    Imported HERE rather than at module import, and the reason is the module
-    docstring above: `scribe` is stdlib-only so that every other subcommand
-    keeps working on any interpreter. `sdoc_semantics.engine` imports
-    `transitions`, which is delivered on the two interpreters that matter
-    (packages/strictdoc-grammar/lib/mkExtract.nix and devenv.nix's
-    grammarPython) and on nothing else. A missing engine must cost this one
-    subcommand, never `scribe set`.
+    Imported HERE rather than at module import so `transitions` stays a cost of
+    this subcommand alone. It is delivered on the two interpreters that matter
+    (packages/strictdoc-grammar/lib/mkExtract.nix and devenv.nix's grammarPython)
+    and on nothing else. A missing engine must cost this one subcommand, never
+    `scribe set`.
     """
     try:
         from sdoc_semantics import cli as semantics_cli
@@ -259,12 +282,17 @@ def fields_from(args, grammar: dict) -> dict:
 def operation(args, grammar: dict) -> dict:
     command = args.command
     if command == "show":
-        return {"op": "show", "uid": args.uid}
-    if command == "list":
-        return {"op": "list", "type": args.node_type, "depth": args.depth, "status": args.status}
-    if command == "check":
-        return {"op": "check"}
-    if command == "new":
+        payload = {"op": "show", "uid": args.uid}
+    elif command == "list":
+        payload = {
+            "op": "list",
+            "type": args.node_type,
+            "depth": args.depth,
+            "status": args.status,
+        }
+    elif command == "check":
+        payload = {"op": "check"}
+    elif command == "new":
         relations = []
         for spec in args.relate:
             role, separator, target = spec.partition("=")
@@ -272,17 +300,17 @@ def operation(args, grammar: dict) -> dict:
                 raise SystemExit(f"scribe: --relate wants ROLE=TARGET, got {spec!r}")
             relations.append({"role": role, "target": target})
         fields = fields_from(args, grammar)
-        return {
+        payload = {
             "op": "new", "type": args.node_type, "uid": fields.pop("UID", None),
             "fields": fields, "relations": relations, "path": args.path,
         }
-    if command == "set":
-        return {
+    elif command == "set":
+        payload = {
             "op": "set", "uid": args.uid,
             "fields": fields_from(args, grammar), "unset": args.unset,
         }
-    if command in ("relate", "unrelate"):
-        return {
+    elif command in ("relate", "unrelate"):
+        payload = {
             "op": command,
             "uid": args.uid,
             "role": args.role,
@@ -291,9 +319,13 @@ def operation(args, grammar: dict) -> dict:
             "id": args.element_id,
             "line_range": args.line_range,
         }
-    if command == "move":
-        return {"op": "move", "uid": args.uid, "path": args.path}
-    return {"op": "delete", "uid": args.uid}
+    elif command == "move":
+        payload = {"op": "move", "uid": args.uid, "path": args.path}
+    else:
+        payload = {"op": "delete", "uid": args.uid}
+    if command in WRITES:
+        payload["dry_run"] = args.dry_run
+    return payload
 
 
 def main(argv: list[str] | None = None) -> int:

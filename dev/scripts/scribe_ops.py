@@ -37,6 +37,7 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import sdoc_cli  # noqa: E402
+from scribe_diff import unified_pending_diff  # noqa: E402
 from scribe_workspace import (  # noqa: E402
     Workspace,
     WorkspaceError,
@@ -125,9 +126,10 @@ def apply(workspace: Workspace, op: str, params: dict) -> dict:
     validate_guarded(graph)
     fields = dict(params.get("fields") or {})
     _guard(fields)
+    dry_run = bool(params.get("dry_run", False))
 
     if op == "new":
-        return _new(workspace, params, fields)
+        return _new(workspace, params, fields, dry_run=dry_run)
 
     uid = _need(params, "uid")
     if not graph.has_node(uid):
@@ -147,7 +149,7 @@ def apply(workspace: Workspace, op: str, params: dict) -> dict:
             for name in unset:
                 g.set_field(uid, name, None)
 
-        return _written(workspace, mutate, refuse_dangling_links)
+        return _written(workspace, mutate, refuse_dangling_links, dry_run=dry_run)
 
     if op in ("relate", "unrelate"):
         # `File` is the role a client NAMES and the empty string is the role
@@ -168,14 +170,20 @@ def apply(workspace: Workspace, op: str, params: dict) -> dict:
                 line_range=spec.line_range,
             ),
             refuse_dangling_links if op == "relate" else None,
+            dry_run=dry_run,
         )
 
     if op == "delete":
-        return _written(workspace, lambda g: g.remove_node(uid), refuse_if_referenced(uid))
+        return _written(
+            workspace,
+            lambda g: g.remove_node(uid),
+            refuse_if_referenced(uid),
+            dry_run=dry_run,
+        )
 
     if op == "move":
         destination = sdoc_cli.target_path(_need(params, "path"), uid, workspace.root)
-        return _move(workspace, uid, destination)
+        return _move(workspace, uid, destination, dry_run=dry_run)
 
     raise SdocError(f"operation {op!r} is not implemented")
 
@@ -200,12 +208,17 @@ def _need(params: dict, name: str):
     return value
 
 
-def _written(workspace: Workspace, mutate, precheck) -> dict:
-    written = workspace.write(mutate, precheck=precheck)
-    return {"written": [str(p.relative_to(workspace.root)) for p in written]}
+def _written(workspace: Workspace, mutate, precheck, *, dry_run: bool) -> dict:
+    result = workspace.write(mutate, precheck=precheck, dry_run=dry_run)
+    response = {
+        "written": [str(path.relative_to(workspace.root)) for path in result.written]
+    }
+    if dry_run:
+        response["text"] = unified_pending_diff(result.pending, workspace.root)
+    return response
 
 
-def _new(workspace: Workspace, params: dict, fields: dict) -> dict:
+def _new(workspace: Workspace, params: dict, fields: dict, *, dry_run: bool) -> dict:
     """Create a node in a file of its own -- an ordinary deferred write.
 
     The document is built in memory by Graph.new_document, so this goes
@@ -239,14 +252,30 @@ def _new(workspace: Workspace, params: dict, fields: dict) -> dict:
     def mutate(g):
         g.add_node(g.new_document(path, values.get("TITLE", uid)), tag, values, relations)
 
-    return _written(workspace, mutate, refuse_dangling_links)
+    return _written(workspace, mutate, refuse_dangling_links, dry_run=dry_run)
 
 
-def _move(workspace: Workspace, uid: str, destination: Path) -> dict:
+def _move(workspace: Workspace, uid: str, destination: Path, *, dry_run: bool) -> dict:
     graph = workspace._held()
-    source = graph.path_of(graph.node(uid))
+    node = graph.node(uid)
+    document = node.get_document()
+    source = graph.path_of(node)
     if destination.exists():
         raise WorkspaceError(f"{destination} already exists")
+
+    # A move does not rewrite the document, but it still crosses the same
+    # validation boundary as every other writing verb. Touching the held
+    # document makes Workspace render and reparse it; dry_run=True then drops
+    # that speculative dirty state before either branch below can reach disk.
+    workspace.write(lambda g: g._touch(document), dry_run=True)
+    if dry_run:
+        return {
+            "text": (
+                f"move {source.relative_to(workspace.root)} -> "
+                f"{destination.relative_to(workspace.root)}\n"
+            ),
+            "written": [],
+        }
     destination.parent.mkdir(parents=True, exist_ok=True)
     source.rename(destination)
     workspace._discard()

@@ -1,5 +1,7 @@
 # The design graph — operator notes
 
+<!-- cspell:ignore unrelate -->
+
 Everything here is mechanics: how to restore a working setup and how to tee up a
 session. The design itself lives in the graph, not in this file.
 
@@ -115,10 +117,12 @@ scribe semantics DECISION                 # the lifecycle its state field claims
 `set` **replaces** a field rather than appending to it: read the current value
 with `show`, then write old plus new. Every field flag takes `@FILE` to read the
 value from a file, which is how a multi-paragraph `STATEMENT` or `NOTES` gets in
-without a shell-quoting accident. No `scribe` verb takes `--dry-run` — the flag
-exists only on `dev/scripts/sdoc_cli.py`, not on the daemon client, and
-WORK-SCRIBE-DRY-RUN tracks the gap. What stands in for it is the write itself: a
-change that does not validate leaves the original bytes on disk.
+without a shell-quoting accident. Every writing verb — `new` (including every
+type leaf), `set`, `relate`, `unrelate`, `move`, and `delete` — accepts
+`--dry-run`. It validates exactly like the real write, then prints a unified
+diff path by path. For `move`, it also prints the rename and any rewritten
+content. An empty diff reports that nothing would change. A dry run writes no
+files and leaves the daemon's held state unchanged.
 
 **A `File` relation can name an item inside the file**, not only the path:
 
