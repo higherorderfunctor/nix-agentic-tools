@@ -802,8 +802,9 @@ def adapt_graph(loaded_graph: Any) -> dict[str, Any]:
     for source in loaded_graph.iter_nodes():
         uid = str(source.reserved_uid)
         fields = {
-            str(name): field.get_text_value()
-            for name, field in source.ordered_fields_lookup.items()
+            str(name): entries[0].get_text_value()
+            for name, entries in source.ordered_fields_lookup.items()
+            if entries
         }
         nodes[uid] = {
             "uid": uid,

@@ -825,13 +825,13 @@ def test_load_model() -> None:
     first = SimpleNamespace(
         reserved_uid="A",
         node_type="WORK",
-        ordered_fields_lookup={"DEPTH": Field("sketch")},
+        ordered_fields_lookup={"DEPTH": [Field("sketch")]},
         relations=[SimpleNamespace(ref_uid="B", role="Assumes")],
     )
     second = SimpleNamespace(
         reserved_uid="B",
         node_type="REQUIREMENT",
-        ordered_fields_lookup={"DEPTH": Field("verified")},
+        ordered_fields_lookup={"DEPTH": [Field("verified")]},
         relations=[],
     )
     loaded = SimpleNamespace(iter_nodes=lambda: iter((first, second)))
