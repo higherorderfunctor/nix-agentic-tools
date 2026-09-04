@@ -7,13 +7,25 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-SCRIBE-DRY-RUN
 TITLE: scribe has no --dry-run
-DEPTH: sketch
+DEPTH: interface-settled
 AUTHORED_BY: llm
 STATEMENT: >>>
-scribe has no --dry-run: the sdoc skill promises every writing verb takes
---dry-run, but scribe_cmd.py (the daemon client) exposes none; sdoc_cli.py
-has it. Found 2026-09-02 verifying element/id refusal; a bogus-id relate
-could only be tested safely on sdoc_cli.py.
+scribe grows --dry-run on every writing verb: new (every type leaf), set,
+relate, unrelate, move, delete. The flag is added once, by walking the built
+subparsers for every name in scribe_ops.WRITES, and folded into the RPC payload
+once, not per verb. A dry run performs everything the real run does up to the
+write: it applies the change in memory, runs the same prechecks, and proves
+every touched document renders and reparses. Then it prints a unified diff of
+what would be written, path by path, computed from Graph.pending() against the
+file's current bytes, and writes nothing. An empty diff prints that nothing
+would change. A change the real run would refuse is refused by the dry run with
+the same message and exit code. For move, the dry run prints the rename it would
+perform and any content it would rewrite. After a dry run the daemon's next read
+is identical to before it; how that is achieved (discard and reload, or mutate a
+copy) is chosen by measurement and recorded on this node. The diff helper is
+shared between scribe and sdoc_cli.py rather than copied. The sdoc skill and
+docs/sdoc/README.md, which today document the absence, say the flag exists and
+what it prints.
 <<<
 RELATIONS:
 - TYPE: Parent
