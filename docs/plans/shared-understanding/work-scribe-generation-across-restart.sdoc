@@ -1,0 +1,32 @@
+[DOCUMENT]
+TITLE: Keep workspace generations monotonic across a daemon restart
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SCRIBE-GENERATION-ACROSS-RESTART
+TITLE: Keep workspace generations monotonic across a daemon restart
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The workspace generation counter is monotonic within one daemon process only
+(scribe_workspace.py, _last_generation_number). A scribe restart resets it, so
+a long-lived board process that cached generation N can take a false cache hit
+after the daemon comes back with the same number for different content. Make
+the number survive a restart (persist it beside the socket, or derive it from
+content: a hash of the loaded corpus) or make the board key its cache on
+something the daemon cannot repeat.
+<<<
+NOTES: >>>
+Found by the dry-run re-review on 2026-09-04 after the in-process fix landed in
+ede251ef; the within-process contract (test_rpc_dry_run_generation) does not
+cover a restart.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-SCRIBE-DRY-RUN
+  ROLE: Assumes

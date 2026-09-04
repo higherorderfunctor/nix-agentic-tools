@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: Put the move round-trip refusal under a contract
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SCRIBE-MOVE-ROUNDTRIP-CONTRACT
+TITLE: Put the move round-trip refusal under a contract
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Since 07518382 both the dry and the real move path render and reparse the
+source document before the rename, so a document that does not round-trip is
+refused. The behaviour is documented in the sdoc skill, docs/sdoc/README.md
+and WORK-SCRIBE-DRY-RUN, and no test exercises it. Add a contract with a
+positive control: a document made non-round-trippable is refused by both paths
+with the same message, and a clean one moves.
+<<<
+NOTES: >>>
+Found by the dry-run re-review on 2026-09-04.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-SCRIBE-DRY-RUN
+  ROLE: Assumes

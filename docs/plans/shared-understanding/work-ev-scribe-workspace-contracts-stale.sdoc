@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: Refresh the workspace-contracts evidence node to the current suite
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-EV-SCRIBE-WORKSPACE-CONTRACTS-STALE
+TITLE: Refresh the workspace-contracts evidence node to the current suite
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+EV-SCRIBE-WORKSPACE-CONTRACTS still says seven contracts pass against an
+isolated copy of the 374-node canon. The suite is at 23 contracts over a
+494-node tracked-tree fixture after 0eeb5cfc and ea4f5d6a. Re-take the
+measurement and record it on the evidence node (a NOTES append; the original
+observation stays as history).
+<<<
+NOTES: >>>
+Found by the dry-run re-review on 2026-09-04.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-SCRIBE-DRY-RUN
+  ROLE: Assumes
