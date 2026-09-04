@@ -49,8 +49,9 @@ making the generation counter monotonic. Across three isolated runs, capturing
 and discarding a no-change preview averaged 6.3 ms (6.5, 6.1 and 6.3 ms), and
 the next full read averaged 943.1 ms (955.1, 895.1 and 979.2 ms). The earlier
 deepcopy measurement was 4,444.9 ms in one run, about 4.7 times the remeasured
-discard/reload cost, so copying remains rejected. The focused suite count is
-updated by the follow-up commits that complete the reviewed contracts.
+discard/reload cost, so copying remains rejected. The focused suites pass 35
+contracts: 23 workspace and operation contracts plus 12 client and RPC
+contracts.
 <<<
 RELATIONS:
 - TYPE: Parent

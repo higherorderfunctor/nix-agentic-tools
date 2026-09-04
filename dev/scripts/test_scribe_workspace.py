@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cspell:ignore uids sdoc precheck
+# cspell:ignore uids sdoc precheck unrelate
 """Contracts for scribe_workspace (WORK-SCRIBE-WORKSPACE).
 
 Runs against an ISOLATED COPY of the canon, never the working tree: every
@@ -84,6 +84,32 @@ def any_node(workspace: Workspace) -> str:
         if node.reserved_uid and field_value(node, "TITLE"):
             return node.reserved_uid
     raise AssertionError("corpus copy has no usable node")
+
+
+def preview_unchanged(
+    workspace: Workspace,
+    operation: str,
+    params: dict,
+    path: Path,
+) -> tuple[dict, bytes, int]:
+    """Preview one existing node and prove neither disk nor held read changed."""
+    import scribe_ops
+
+    uid = params["uid"]
+    before_read = scribe_ops.apply(workspace, "show", {"uid": uid})
+    before_bytes = path.read_bytes()
+    before_mtime = path.stat().st_mtime_ns
+    preview = scribe_ops.apply(
+        workspace,
+        operation,
+        {**params, "dry_run": True},
+    )
+    assert preview["written"] == []
+    assert path.read_bytes() == before_bytes, f"dry-run {operation} changed bytes"
+    assert path.stat().st_mtime_ns == before_mtime, f"dry-run {operation} changed mtime"
+    after_read = scribe_ops.apply(workspace, "show", {"uid": uid})
+    assert after_read == before_read, f"dry-run {operation} changed the held read"
+    return preview, before_bytes, before_mtime
 
 
 # Every field DocumentMeta carries. The derived-versus-rebuilt comparison is
@@ -638,6 +664,93 @@ def test_apply_dry_run_paths(root: Path) -> None:
     assert moved.stat().st_mtime_ns == before_mtime, "the real move changed the file mtime"
 
 
+@contract("delete dry-run previews removal and the real operation deletes")
+def test_apply_dry_run_delete(root: Path) -> None:
+    import scribe_ops
+
+    workspace = Workspace(root)
+    uid = "WORK-CONTRACT-DRY-RUN-DELETE"
+    path = root / "docs" / "plans" / "scribe-daemon" / f"{uid.lower()}.sdoc"
+    create(workspace, path, uid, tag="WORK")
+    params = {"op": "delete", "uid": uid}
+
+    preview, _before_bytes, _before_mtime = preview_unchanged(
+        workspace, "delete", params, path
+    )
+    assert f"--- a/{path.relative_to(root)}" in preview["text"]
+    assert "+++ /dev/null" in preview["text"]
+
+    # POSITIVE CONTROL: the identical delete without dry-run removes the path.
+    written = scribe_ops.apply(workspace, "delete", params)
+    assert written["written"] == [str(path.relative_to(root))]
+    assert not path.exists(), "the real delete left its file behind"
+
+
+@contract("relate dry-run previews an edge and the real operation writes it")
+def test_apply_dry_run_relate(root: Path) -> None:
+    import scribe_ops
+
+    workspace = Workspace(root)
+    source_uid = "WORK-CONTRACT-DRY-RUN-RELATE"
+    target_uid = "MECH-CONTRACT-DRY-RUN-RELATE-TARGET"
+    plan = root / "docs" / "plans" / "scribe-daemon"
+    source = plan / f"{source_uid.lower()}.sdoc"
+    create(workspace, source, source_uid, tag="WORK")
+    create(workspace, plan / f"{target_uid.lower()}.sdoc", target_uid)
+    params = {
+        "op": "relate",
+        "uid": source_uid,
+        "role": "Assumes",
+        "target": target_uid,
+    }
+
+    preview, before_bytes, before_mtime = preview_unchanged(
+        workspace, "relate", params, source
+    )
+    assert f"+  VALUE: {target_uid}" in preview["text"]
+
+    # POSITIVE CONTROL: the identical relate without dry-run writes the edge.
+    written = scribe_ops.apply(workspace, "relate", params)
+    assert written["written"] == [str(source.relative_to(root))]
+    assert source.read_bytes() != before_bytes, "the real relate did not change bytes"
+    assert source.stat().st_mtime_ns != before_mtime, "the real relate did not change mtime"
+    assert target_uid in scribe_ops.apply(workspace, "show", {"uid": source_uid})["text"]
+
+
+@contract("unrelate dry-run previews edge removal and the real operation writes it")
+def test_apply_dry_run_unrelate(root: Path) -> None:
+    import scribe_ops
+
+    workspace = Workspace(root)
+    source_uid = "WORK-CONTRACT-DRY-RUN-UNRELATE"
+    target_uid = "MECH-CONTRACT-DRY-RUN-UNRELATE-TARGET"
+    plan = root / "docs" / "plans" / "scribe-daemon"
+    source = plan / f"{source_uid.lower()}.sdoc"
+    create(workspace, source, source_uid, tag="WORK")
+    create(workspace, plan / f"{target_uid.lower()}.sdoc", target_uid)
+    params = {
+        "op": "unrelate",
+        "uid": source_uid,
+        "role": "Assumes",
+        "target": target_uid,
+    }
+    scribe_ops.apply(workspace, "relate", {**params, "op": "relate"})
+
+    preview, before_bytes, before_mtime = preview_unchanged(
+        workspace, "unrelate", params, source
+    )
+    assert f"-  VALUE: {target_uid}" in preview["text"]
+
+    # POSITIVE CONTROL: the identical unrelate without dry-run writes removal.
+    written = scribe_ops.apply(workspace, "unrelate", params)
+    assert written["written"] == [str(source.relative_to(root))]
+    assert source.read_bytes() != before_bytes, "the real unrelate did not change bytes"
+    assert source.stat().st_mtime_ns != before_mtime, "the real unrelate did not change mtime"
+    assert target_uid not in scribe_ops.apply(
+        workspace, "show", {"uid": source_uid}
+    )["text"]
+
+
 @contract("a File relation names an item, through the daemon's own op path")
 def test_file_relation_names_an_item(root: Path) -> None:
     """WORK-SCRIBE-RELATE-FILE-ROLE, and the export slots with it.
@@ -735,6 +848,9 @@ CONTRACTS = [
     test_apply_dry_run_refusal,
     test_apply_dry_run_empty,
     test_apply_dry_run_paths,
+    test_apply_dry_run_delete,
+    test_apply_dry_run_relate,
+    test_apply_dry_run_unrelate,
     test_file_relation_names_an_item,
 ]
 
