@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import sdoc_cli  # noqa: E402
 from scribe_diff import unified_pending_diff  # noqa: E402
+from scribe_protocol import OPERATIONS, READS  # noqa: E402
 from scribe_workspace import (  # noqa: E402
     Workspace,
     WorkspaceError,
@@ -50,10 +51,6 @@ from sdoc_model import (  # noqa: E402
     relation_role,
     validate_guarded,
 )
-
-READS = ("show", "list", "check")
-WRITES = ("new", "set", "relate", "unrelate", "move", "delete")
-OPERATIONS = READS + WRITES
 
 # MECH-RUNTIME-WRITE-GUARD. Named here as well as in the command line,
 # because a typed client is a second door onto the same pipeline and a guard

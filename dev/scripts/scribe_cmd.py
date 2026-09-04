@@ -3,8 +3,7 @@
 """The `scribe` command: turn a command line into one typed operation
 (WORK-SCRIBE-CLIENT, docs/plans/scribe-daemon/).
 
-No corpus load and no graph. The operation-name registry is imported from the
-daemon pipeline so the two sides cannot disagree about which verbs write.
+Stdlib only. No strictdoc import, no corpus load, no graph.
 
 WHERE THE FLAGS COME FROM
 -------------------------
@@ -47,8 +46,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from scribe_client import ClientError, call_for_root  # noqa: E402
 from scribe_grammar import parse_sgra  # noqa: E402
-from scribe_ops import WRITES  # noqa: E402
 from scribe_paths import RootError, resolve_root  # noqa: E402
+from scribe_protocol import WRITES  # noqa: E402
 
 # MECH-RUNTIME-WRITE-GUARD: no flag is generated for either, and naming one
 # is refused before anything else happens.

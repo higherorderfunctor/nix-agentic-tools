@@ -197,6 +197,32 @@ def test_cli_dry_run_surface(root: Path, _runtime: Path) -> None:
         assert real["dry_run"] is False
 
 
+@contract("the client imports and prints help with only the standard library")
+def test_cli_stdlib_only(root: Path, _runtime: Path) -> None:
+    script_dir = root / "dev" / "scripts"
+    code = (
+        "import sys; "
+        f"sys.path.insert(0, {str(script_dir)!r}); "
+        "import scribe_cmd; "
+        "raise SystemExit(scribe_cmd.main("
+        f"['--root', {str(root)!r}, '--help']))"
+    )
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in ("PYTHONHOME", "PYTHONPATH")
+    }
+    result = subprocess.run(
+        [sys.executable, "-I", "-S", "-c", code],
+        capture_output=True,
+        text=True,
+        env=environment,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("usage: scribe "), result.stdout
+
+
 @contract("a socket dry-run returns its diff and leaves disk and reads unchanged")
 def test_rpc_dry_run(root: Path, runtime: Path) -> None:
     with served(root, runtime) as (_workspace, path):
@@ -368,6 +394,7 @@ CONTRACTS = [
     test_unknown_method,
     test_root_assertion,
     test_cli_dry_run_surface,
+    test_cli_stdlib_only,
     test_rpc_dry_run,
     test_rpc_dry_run_generation,
     test_cli_dry_run_refusal,
