@@ -16,6 +16,7 @@ defect is caught, the same harness is shown accepting the sound version.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -49,31 +50,26 @@ def contract(name: str):
     return wrap
 
 
-# What an isolated copy of the canon must carry to be exportable. Defined
-# here and imported by test_scribe_rpc, because two suites building the same
-# corpus from two lists diverge silently: the copy that misses a dependency
-# still passes every in-process contract, where the harness's own sys.path
-# supplies it, and fails only in the one contract that shells out.
-#
-# dev/scripts is on the list because strictdoc_config.py is NOT
-# self-contained -- it puts that directory on sys.path and imports the .nix
-# source reader from it, and says so by name when the import fails. The whole
-# tracked directory, rather than the modules that config imports today:
-# naming them here would be a second place obliged to agree with its import
-# block.
-CORPUS_PATHS = ("*.sdoc", "*.sgra", "strictdoc_config.py", "dev/scripts")
-
-
 def corpus(destination: Path) -> Path:
+    """Copy the tracked tree so every File relation remains resolvable.
+
+    A hand-maintained subset drifted as soon as the canon gained a File edge
+    outside dev/scripts. The export contract is specifically meant to catch
+    integration drift, so its fixture has to include every tracked target.
+    """
     repo = Path(__file__).resolve().parents[2]
     listed = subprocess.run(
-        ["git", "ls-files", "-z", *CORPUS_PATHS],
+        ["git", "ls-files", "-z"],
         cwd=repo, capture_output=True, text=True, check=True,
     ).stdout.split("\0")
     for name in filter(None, listed):
+        source = repo / name
         target = destination / name
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(repo / name, target)
+        if source.is_symlink():
+            target.symlink_to(os.readlink(source))
+        else:
+            shutil.copy2(source, target)
     assert (destination / "strictdoc_config.py").is_file()
     return destination
 
@@ -499,6 +495,143 @@ def test_unreadable_destination_refused(root: Path) -> None:
     raise AssertionError("a create into an unread directory was accepted")
 
 
+@contract("apply dry-run returns a diff without changing disk or held state")
+def test_apply_dry_run(root: Path) -> None:
+    import scribe_ops
+
+    workspace = Workspace(root)
+    uid = any_node(workspace)
+    path = workspace.graph.path_of(workspace.graph.node(uid))
+    before_read = scribe_ops.apply(workspace, "show", {"op": "show", "uid": uid})
+    before_bytes = path.read_bytes()
+    before_mtime = path.stat().st_mtime_ns
+    params = {
+        "op": "set",
+        "uid": uid,
+        "fields": {"TITLE": "A dry-run contract title"},
+        "unset": [],
+    }
+
+    preview = scribe_ops.apply(workspace, "set", {**params, "dry_run": True})
+    assert preview["written"] == []
+    assert f"--- a/{path.relative_to(root)}" in preview["text"]
+    assert "+TITLE: A dry-run contract title" in preview["text"]
+    assert path.read_bytes() == before_bytes, "dry-run changed the file bytes"
+    assert path.stat().st_mtime_ns == before_mtime, "dry-run changed the file mtime"
+    after_read = scribe_ops.apply(workspace, "show", {"op": "show", "uid": uid})
+    assert after_read == before_read, "dry-run changed the daemon's held state"
+
+    # POSITIVE CONTROL: the identical operation without dry-run writes.
+    written = scribe_ops.apply(workspace, "set", params)
+    assert written["written"] == [str(path.relative_to(root))]
+    assert path.read_bytes() != before_bytes, "the real operation did not change bytes"
+    assert path.stat().st_mtime_ns != before_mtime, "the real operation did not change mtime"
+
+
+@contract("dry-run refuses the same invalid change as a real write")
+def test_apply_dry_run_refusal(root: Path) -> None:
+    import scribe_ops
+
+    workspace = Workspace(root)
+    uid = any_node(workspace)
+    path = workspace.graph.path_of(workspace.graph.node(uid))
+    original = path.read_bytes()
+    params = {
+        "op": "set",
+        "uid": uid,
+        "fields": {"STATEMENT": "Points at [LINK: NO-SUCH-DRY-RUN-UID]."},
+        "unset": [],
+    }
+    messages = []
+    for dry_run in (True, False):
+        try:
+            scribe_ops.apply(workspace, "set", {**params, "dry_run": dry_run})
+        except WorkspaceError as exc:
+            messages.append(str(exc))
+        else:
+            raise AssertionError(f"the invalid {'dry' if dry_run else 'real'} write passed")
+        assert path.read_bytes() == original, "a refused operation changed bytes"
+    assert messages[0] == messages[1], "dry-run and real write refused differently"
+
+
+@contract("an empty dry-run diff says nothing would change")
+def test_apply_dry_run_empty(root: Path) -> None:
+    import scribe_ops
+
+    workspace = Workspace(root)
+    uid = any_node(workspace)
+    node = workspace.graph.node(uid)
+    path = workspace.graph.path_of(node)
+    original = path.read_bytes()
+    mtime = path.stat().st_mtime_ns
+    params = {
+        "op": "set",
+        "uid": uid,
+        "fields": {"TITLE": field_value(node, "TITLE")},
+        "unset": [],
+    }
+    preview = scribe_ops.apply(workspace, "set", {**params, "dry_run": True})
+    assert preview["text"] == "nothing would change\n"
+    assert path.read_bytes() == original
+    assert path.stat().st_mtime_ns == mtime
+
+    # POSITIVE CONTROL: the identical real operation reaches the save path.
+    written = scribe_ops.apply(workspace, "set", params)
+    assert written["written"] == [str(path.relative_to(root))]
+    assert path.read_bytes() == original, "the no-op real write changed canonical bytes"
+    assert path.stat().st_mtime_ns != mtime, "the real write did not replace the file"
+
+
+@contract("new and move dry-runs leave no path, directory, temp file or rename")
+def test_apply_dry_run_paths(root: Path) -> None:
+    import scribe_ops
+
+    workspace = Workspace(root)
+    created = root / "docs" / "plans" / "dry-run-contract" / "work-contract-new.sdoc"
+    create_params = {
+        "op": "new",
+        "type": "WORK",
+        "uid": "WORK-CONTRACT-NEW",
+        "fields": {
+            "TITLE": "Dry-run create contract",
+            "DEPTH": "sketch",
+            "STATEMENT": "A proposed node.",
+        },
+        "relations": [],
+        "path": str(created),
+    }
+    before_temps = set(root.rglob("*.sdoc-tmp"))
+    preview = scribe_ops.apply(workspace, "new", {**create_params, "dry_run": True})
+    assert f"+++ b/{created.relative_to(root)}" in preview["text"]
+    assert not created.exists(), "dry-run create wrote its file"
+    assert not created.parent.exists(), "dry-run create made its directory"
+    assert set(root.rglob("*.sdoc-tmp")) == before_temps, "dry-run left a temp file"
+
+    # POSITIVE CONTROL: the identical create without dry-run writes the path.
+    scribe_ops.apply(workspace, "new", create_params)
+    assert created.is_file(), "the real create did not write its file"
+
+    moved = root / "docs" / "plans" / "dry-run-moved" / created.name
+    before_bytes = created.read_bytes()
+    before_mtime = created.stat().st_mtime_ns
+    move_params = {"op": "move", "uid": "WORK-CONTRACT-NEW", "path": str(moved)}
+    preview = scribe_ops.apply(workspace, "move", {**move_params, "dry_run": True})
+    assert preview["text"] == (
+        f"move {created.relative_to(root)} -> {moved.relative_to(root)}\n"
+    )
+    assert created.read_bytes() == before_bytes, "dry-run move changed the source bytes"
+    assert created.stat().st_mtime_ns == before_mtime, "dry-run move changed the source mtime"
+    assert not moved.exists(), "dry-run move renamed the file"
+    assert not moved.parent.exists(), "dry-run move made the destination directory"
+    assert set(root.rglob("*.sdoc-tmp")) == before_temps, "dry-run move left a temp file"
+
+    # POSITIVE CONTROL: the identical move without dry-run performs the rename.
+    scribe_ops.apply(workspace, "move", move_params)
+    assert not created.exists(), "the real move left its source behind"
+    assert moved.read_bytes() == before_bytes, "the real move changed the file bytes"
+    assert moved.stat().st_mtime_ns == before_mtime, "the real move changed the file mtime"
+
+
 @contract("a File relation names an item, through the daemon's own op path")
 def test_file_relation_names_an_item(root: Path) -> None:
     """WORK-SCRIBE-RELATE-FILE-ROLE, and the export slots with it.
@@ -592,6 +725,10 @@ CONTRACTS = [
     test_created_node_is_a_target,
     test_refused_create_leaves_nothing,
     test_unreadable_destination_refused,
+    test_apply_dry_run,
+    test_apply_dry_run_refusal,
+    test_apply_dry_run_empty,
+    test_apply_dry_run_paths,
     test_file_relation_names_an_item,
 ]
 

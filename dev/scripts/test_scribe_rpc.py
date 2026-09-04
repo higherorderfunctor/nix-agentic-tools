@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cspell:ignore sdoc sockaddr
+# cspell:ignore sdoc sockaddr unrelate
 """Contracts for the scribe socket, its client, and the export
 (WORK-SCRIBE-RPC-AND-SERVICE, WORK-SCRIBE-CLIENT, WORK-SCRIBE-EXPORT-PAYLOAD).
 
@@ -21,20 +21,22 @@ import sys
 import tempfile
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import scribe_paths  # noqa: E402
 from scribe_client import ClientError, NoDaemon, call, call_for_root  # noqa: E402
+import scribe_cmd  # noqa: E402
+from scribe_grammar import parse_sgra  # noqa: E402
+import scribe_paths  # noqa: E402
 from scribe_rpc import build_server  # noqa: E402
 from scribe_workspace import Workspace  # noqa: E402
 
 # One definition of an exportable corpus copy, shared with the workspace
-# suite. See CORPUS_PATHS there for what it must carry and why -- in
-# particular, this file is the only place a corpus that omits dev/scripts
-# fails, because it is the only one that shells out to `strictdoc export`.
+# suite. This file is the one that proves the copy can go through a separate
+# `strictdoc export` process rather than only through in-process imports.
 from test_scribe_workspace import corpus  # noqa: E402
 
 PASSED: list[str] = []
@@ -139,6 +141,121 @@ def test_root_assertion(root: Path, runtime: Path) -> None:
         raise AssertionError("the client accepted another workspace's answer")
 
 
+def _new_argv(tag: str, element: dict) -> list[str]:
+    argv = ["new", tag]
+    for field in element["fields"]:
+        if not field["required"] or field["name"] in scribe_cmd.GUARDED:
+            continue
+        if field["name"] == "UID":
+            value = f"{element['prefix']}CLI-DRY-RUN"
+        elif field["options"]:
+            value = field["options"][0]
+        else:
+            value = f"CLI value for {field['name']}"
+        argv.extend((scribe_cmd.flag_for(field["name"]), value))
+    return [*argv, "--path", "docs/plans/cli-dry-run/", "--dry-run"]
+
+
+@contract("the client accepts dry-run on every writing parser and sends it once")
+def test_cli_dry_run_surface(root: Path, _runtime: Path) -> None:
+    grammar = parse_sgra(root / "docs" / "sdoc" / "grammar.sgra")
+    commands = {
+        "delete": ["delete", "MECH-CLI-DRY-RUN", "--dry-run"],
+        "move": ["move", "MECH-CLI-DRY-RUN", "--path", "docs/spec/", "--dry-run"],
+        "relate": [
+            "relate", "MECH-CLI-DRY-RUN", "--role", "Assumes",
+            "--target", "MECH-TARGET", "--dry-run",
+        ],
+        "set": ["set", "MECH-CLI-DRY-RUN", "--title", "Preview", "--dry-run"],
+        "unrelate": [
+            "unrelate", "MECH-CLI-DRY-RUN", "--role", "Assumes",
+            "--target", "MECH-TARGET", "--dry-run",
+        ],
+    }
+    for command, argv in commands.items():
+        parser = scribe_cmd.build_parser(grammar, command, None)
+        payload = scribe_cmd.operation(parser.parse_args(argv), grammar)
+        assert payload["op"] == command
+        assert payload["dry_run"] is True
+        real = scribe_cmd.operation(
+            parser.parse_args([argument for argument in argv if argument != "--dry-run"]),
+            grammar,
+        )
+        assert real["dry_run"] is False
+
+    for tag, element in grammar.items():
+        parser = scribe_cmd.build_parser(grammar, "new", tag)
+        argv = _new_argv(tag, element)
+        payload = scribe_cmd.operation(parser.parse_args(argv), grammar)
+        assert payload["op"] == "new"
+        assert payload["type"] == tag
+        assert payload["dry_run"] is True
+        real = scribe_cmd.operation(
+            parser.parse_args([argument for argument in argv if argument != "--dry-run"]),
+            grammar,
+        )
+        assert real["dry_run"] is False
+
+
+@contract("a socket dry-run returns its diff and leaves disk and reads unchanged")
+def test_rpc_dry_run(root: Path, runtime: Path) -> None:
+    with served(root, runtime) as (_workspace, path):
+        uid = next(
+            node.reserved_uid
+            for node in _workspace.graph.iter_nodes()
+            if node.reserved_uid and getattr(node, "reserved_title", None)
+        )
+        source = _workspace.graph.path_of(_workspace.graph.node(uid))
+        before_read = call(path, "scribe.apply", {"op": "show", "uid": uid})
+        before_bytes = source.read_bytes()
+        before_mtime = source.stat().st_mtime_ns
+        params = {
+            "op": "set",
+            "uid": uid,
+            "fields": {"TITLE": "RPC dry-run contract title"},
+            "unset": [],
+        }
+        preview = call(path, "scribe.apply", {**params, "dry_run": True})
+        assert "+TITLE: RPC dry-run contract title" in preview["text"]
+        assert preview["written"] == []
+        assert source.read_bytes() == before_bytes
+        assert source.stat().st_mtime_ns == before_mtime
+        assert call(path, "scribe.apply", {"op": "show", "uid": uid}) == before_read
+
+        # POSITIVE CONTROL: the identical RPC without dry-run writes.
+        written = call(path, "scribe.apply", params)
+        assert written["written"] == [str(source.relative_to(root))]
+        assert source.read_bytes() != before_bytes
+        assert source.stat().st_mtime_ns != before_mtime
+
+
+@contract("dry-run and real CLI refusals have the same message and exit code")
+def test_cli_dry_run_refusal(root: Path, runtime: Path) -> None:
+    with served(root, runtime) as (workspace, _path):
+        uid = next(
+            node.reserved_uid
+            for node in workspace.graph.iter_nodes()
+            if node.reserved_uid and getattr(node, "reserved_title", None)
+        )
+        source = workspace.graph.path_of(workspace.graph.node(uid))
+        original = source.read_bytes()
+        outcomes = []
+        base = [
+            "--root", str(root), "set", uid, "--statement",
+            "Points at [LINK: NO-SUCH-CLI-DRY-RUN-UID].",
+        ]
+        for argv in ([*base, "--dry-run"], base):
+            stdout = StringIO()
+            stderr = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = scribe_cmd.main(argv)
+            outcomes.append((code, stdout.getvalue(), stderr.getvalue()))
+            assert source.read_bytes() == original, "a refused CLI operation changed bytes"
+        assert outcomes[0] == outcomes[1]
+        assert outcomes[0][0] == 1
+        assert "NO-SUCH-CLI-DRY-RUN-UID" in outcomes[0][2]
+
+
 def _without_item_slots(index: dict) -> tuple[dict, int]:
     """The export as strictdoc's own CLI would write it, and how many item
     slots were dropped to get there."""
@@ -210,6 +327,9 @@ CONTRACTS = [
     test_stale_socket,
     test_unknown_method,
     test_root_assertion,
+    test_cli_dry_run_surface,
+    test_rpc_dry_run,
+    test_cli_dry_run_refusal,
     test_export_matches,
 ]
 

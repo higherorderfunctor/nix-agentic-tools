@@ -1,0 +1,25 @@
+[DOCUMENT]
+TITLE: Replace private argparse traversal in the dry-run flag injector
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SCRIBE-DRY-RUN-ARGPARSE-API
+TITLE: Replace private argparse traversal in the dry-run flag injector
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+The dry-run flag injector walks argparse's private \_SubParsersAction and
+\_actions attributes because argparse exposes no public subparser traversal API.
+Replace that private-API dependency with a parser registry or another public
+construction seam before a Python upgrade can silently break write-leaf
+coverage.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-DEBT-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-SCRIBE-DRY-RUN
+  ROLE: Assumes

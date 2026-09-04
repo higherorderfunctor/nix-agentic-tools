@@ -30,13 +30,15 @@ sdocw. Scribe won on carrying "writes the record under another's authority",
 which matches identity coming from the environment rather than from the tool.
 <<<
 NOTES: >>>
-Ruled by the operator on 2026-08-28. The binary and the script are still
-spelled sdoc; the rename is implementation and is owed, not done. The library
-form is PARTIAL today, measured the same day: sdoc_model.Graph imports cleanly
-and dev/scripts/fp-accept.py already drives it in-process, but the pipeline
-around it -- the argv guard, the prefix and filename checks, the restore map,
-verify and rollback, dry-run -- lives in sdoc_cli.py's main and does not. The
-ruling is that both forms fire the same joints, so a phase only the CLI runs
-is a defect to close, not a difference to document. AUTHORED_BY reads llm
-because the writer has no flag for the other value.
+Ruled by the operator on 2026-08-28. The binary and the script are still spelled
+sdoc; the rename is implementation and is owed, not done. The library form is
+PARTIAL today, measured the same day: sdoc_model.Graph imports cleanly and
+dev/scripts/fp-accept.py already drives it in-process, but the pipeline around
+it -- the argv guard, the prefix and filename checks, the restore map, verify
+and rollback, dry-run -- lives in sdoc_cli.py's main and does not. The ruling is
+that both forms fire the same joints, so a phase only the CLI runs is a defect
+to close, not a difference to document. AUTHORED_BY reads llm because the writer
+has no flag for the other value.
+
+The daemon client closed the --dry-run gap in feat/scribe-dry-run on 2026-09-03.
 <<<

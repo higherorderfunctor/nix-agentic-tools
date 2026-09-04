@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-SCRIBE-DRY-RUN
 TITLE: scribe has no --dry-run
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 scribe grows --dry-run on every writing verb: new (every type leaf), set,
@@ -26,6 +26,21 @@ copy) is chosen by measurement and recorded on this node. The diff helper is
 shared between scribe and sdoc_cli.py rather than copied. The sdoc skill and
 docs/sdoc/README.md, which today document the absence, say the flag exists and
 what it prints.
+<<<
+NOTES: >>>
+Implemented 2026-09-03. The client walks the built parser leaves named by
+scribe_ops.WRITES, adds --dry-run in one place, and folds dry_run into every
+write payload in one place. Both writer CLIs use scribe_diff.py for byte-based,
+path-by-path unified diffs. Workspace.write runs the ordinary mutation,
+precheck, render and reparse pipeline, captures Graph.pending(), then discards
+the speculative generation instead of saving it.
+
+The held-state choice was measured on this 495-document corpus. Across three
+runs, capturing and discarding a no-change preview averaged 5.0 ms and the next
+full read averaged 1,134.2 ms (800.6, 1,301.8 and 1,300.2 ms). A deepcopy of the
+held graph took 4,444.9 ms in one run, about 3.9 times the discard/reload cost,
+so copying was rejected. The focused suites pass 30 contracts: 20 workspace and
+operation contracts plus 10 client and RPC contracts.
 <<<
 RELATIONS:
 - TYPE: Parent
