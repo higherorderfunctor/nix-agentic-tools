@@ -1,26 +1,16 @@
 # cspell:ignore behaviour sdoc sgra
-"""The VOCABULARY a semantic is written in. Stdlib only, no `transitions`.
+"""Temporary records adapting ``model.json`` to the spike interpreter.
 
-This layer is deliberately inert. A `Semantic` is a record an operator reads,
-edits and argues with; nothing here runs a machine, validates a rung against
-the grammar, or knows what a diagnostic is. `engine.py` is the only module in
-this package that imports `transitions`, and keeping the declarations free of
-it is what lets a machine file be reviewed as prose.
-
-THE FIELD NAME IS DATA, NEVER A CONSTANT IN THE CODE. WORK-DEPTH-RENAME is
-live, so `DEPTH` may not be spelled anywhere outside `machines/depth.py`.
-Everything downstream keys off `Semantic.field`.
-
-ORDER IS THE LADDER, NOT THE ALPHABET. `states` is written in the order the
-values are meant to be climbed and is never sorted -- the position of a rung
-IS the claim being made, and sorting it would silently rewrite the semantics
-into alphabetical nonsense (`implemented` before `sketch`).
+The model document is the only declaration surface.  These records preserve
+the old engine's input until WORK-SEMANTICS-STDLIB-INTERPRETER replaces that
+engine; none of the lifecycle content is repeated here.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field as dataclass_field
-from typing import Iterable, Sequence
+from pathlib import Path
 
 #: The vocabulary `Rule.kind` may use. Each answers a different question about
 #: where the rule CAME FROM, which is the thing an operator reshaping these
@@ -118,41 +108,34 @@ class Semantic:
         return tuple(state.name for state in self.states)
 
 
-def ordered(
-    states: Sequence[State] | Sequence[str],
-    trigger: str,
-    *,
-    rule_text: str = "",
-    settled: bool = False,
-) -> tuple[Transition, ...]:
-    """A forward-only ladder: each rung to the next, one trigger, no wrap.
-
-    Hand-expanded rather than handed to `Machine.add_ordered_transitions`, and
-    that is the whole reason this helper exists. Upstream's version defaults to
-    `loop=True`, which closes the ladder into a ring by adding a last -> first
-    edge -- for `AUTHORED_BY` that edge is a laundering path from `human` back
-    to `llm`, which DEC-AUTHORSHIP-LADDER forbids outright. A shape that cannot
-    be produced needs no flag remembered at every call site.
-    """
-    names = [
-        state.name if isinstance(state, State) else str(state) for state in states
-    ]
+def load_semantics(path: Path) -> tuple[Semantic, ...]:
+    """Adapt the ordered lifecycle declarations without changing their data."""
+    document = json.loads(path.read_text())
     return tuple(
-        Transition(
-            trigger=trigger,
-            source=source,
-            dest=dest,
-            rule_text=rule_text,
-            settled=settled,
+        Semantic(
+            field=lifecycle["subject"]["field"],
+            states=tuple(State(**state) for state in lifecycle["states"]),
+            transitions=tuple(
+                Transition(
+                    trigger=transition["trigger"],
+                    source=transition["from"],
+                    dest=transition["to"],
+                    rule_text=transition["rule_text"],
+                    settled=transition["settled"],
+                    conditions=tuple(transition["gates"]),
+                )
+                for transition in lifecycle["transitions"]
+            ),
+            rules=tuple(
+                Rule(
+                    id=rule["id"],
+                    text=rule["text"],
+                    kind=rule["kind"],
+                    settled=rule["settled"],
+                    cites=tuple(rule["cites"]),
+                )
+                for rule in lifecycle["rules"]
+            ),
         )
-        for source, dest in zip(names, names[1:])
+        for lifecycle in document["lifecycles"]
     )
-
-
-def states_of(*rows: Iterable) -> tuple[State, ...]:
-    """`(name, label, note)` tuples to `State`s, order preserved."""
-    out = []
-    for row in rows:
-        values = list(row)
-        out.append(State(*values))
-    return tuple(out)

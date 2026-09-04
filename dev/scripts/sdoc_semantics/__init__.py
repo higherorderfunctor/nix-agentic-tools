@@ -1,29 +1,15 @@
 # cspell:ignore behaviour sdoc sgra
-"""Hand-written state-field semantics for this repository's `.sdoc` graph.
+"""Data-defined state-field semantics for this repository's `.sdoc` graph.
 
 WHAT THIS IS. Three of the grammar's SingleChoice fields -- DEPTH, STATUS and
 AUTHORED_BY -- describe a lifecycle nothing has ever written down. This package
-writes them down as `transitions` machines so the claims can be printed,
-diagrammed, cross-checked against the grammar and argued with. It is a SPIKE:
-the transitions are transcriptions and placeholders, and the questions nobody
-has answered travel as `kind="open"` rules rather than being quietly decided.
+writes them in ``model.json`` so the claims can be printed, diagrammed,
+cross-checked against the grammar and argued with. The transitions are
+transcriptions and placeholders, and unanswered questions travel as open rules.
 
-THE DEC-LAYER-STACK WAIVER. That decision rules SEMANTICS ARE NEVER WRITTEN
-DIRECTLY INTO A TOOL -- a rule in the body of a script rather than in an L3
-definition that decomposes onto L2 is a layering violation regardless of
-whether the rule is right. This package is exactly that, WAIVED BY THE OPERATOR
-for the spike ("for the spike the semantics can be written in direct python").
-When SLICE-BEHAVIOUR-MODEL lands, `machines/` becomes the fixture the typed Nix
-surface must reproduce -- not the thing that ships.
-
-THREE LAYERS, and the split is what makes a new field cheap:
-
-* `declare` -- the vocabulary (State, Transition, Rule, Semantic, `ordered`).
-  Stdlib only, no `transitions` import, nothing runs.
-* `machines/<field>` -- one module per state field. Pure declaration.
-* `engine` -- the only module that imports `transitions`. Builds the machine,
-  asks it which states are terminal, computes the diagnostics, renders the
-  `sdoc-semantics/1` payload and the mermaid diagram.
+``declare`` temporarily adapts the document to the spike engine. The next work
+item replaces that engine with the standard-library interpreter over the same
+document.
 
 Nothing here imports strictdoc and nothing loads the corpus. The grammar
 arrives as a `scribe_grammar.parse_sgra` dict, which is read from one file.
@@ -34,7 +20,9 @@ authority, ripple, and readiness -- which is a graph query over a node and its
 parents, never a value a node carries.
 """
 
-from .declare import RULE_KINDS, Rule, Semantic, State, Transition, ordered, states_of
+from pathlib import Path
+
+from .declare import RULE_KINDS, Rule, Semantic, State, Transition, load_semantics
 from .engine import (
     SCHEMA,
     applies_to,
@@ -47,7 +35,19 @@ from .engine import (
     reachable_states,
     terminal_states,
 )
-from .registry import SEMANTICS, fields, semantics
+
+_MODEL_PATH = Path(__file__).with_name("model.json")
+_ORDERED = load_semantics(_MODEL_PATH)
+SEMANTICS = {semantic.field: semantic for semantic in _ORDERED}
+
+
+def semantics() -> tuple[Semantic, ...]:
+    """Every data-defined lifecycle, in presentation order."""
+    return _ORDERED
+
+
+def fields() -> tuple[str, ...]:
+    return tuple(SEMANTICS)
 
 
 def build_payload(grammar) -> dict:
@@ -82,10 +82,8 @@ __all__ = [
     "machine_payload",
     "markup_of",
     "mermaid",
-    "ordered",
     "payload",
     "reachable_states",
     "semantics",
-    "states_of",
     "terminal_states",
 ]

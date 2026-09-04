@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-SEMANTICS-MODEL-AS-DATA
 TITLE: Turn the three transcribed machines into one model document
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Replace dev/scripts/sdoc_semantics/machines/depth.py, status.py,
@@ -65,12 +65,20 @@ prove it first, but make sure path to nix if it surfaces is logged as sdocs".
 The path is WORK-SEMANTICS-NIX-EMITTER-PATH.
 
 The shaping of the real content is the operator's and starts only when they
-say so. This item must leave DEPTH-REGRESSION-UNDECIDED, DEPTH-RUNGS-UNDECIDED
-and DEPTH-SHARED-MACHINE-UNDECIDED as open rules in the document, unchanged.
+say so. This item must leave DEPTH-REGRESSION-UNDECIDED,
+DEPTH-RUNGS-UNDECIDED and DEPTH-SHARED-MACHINE-UNDECIDED as open rules in the
+document, unchanged.
 
 Why one document and not one per lifecycle: SLICE-BEHAVIOUR-MODEL emits one
 JSON carrying a schema version, a model version and the resolved model, and
 relation contracts, checkpoints and flows are not per-lifecycle things.
+
+Implemented 2026-09-03 (commit pending). The committed model carries 3
+lifecycles, 14 states, 11 transitions and 10 rules: 4 transcription and 6 open.
+Gates and each other model collection are empty. The DEPTH, STATUS and
+AUTHORED_BY text renderings each diff to zero lines against the pre-change
+scribe semantics baseline. The three former machine modules and registry.py
+are deleted; model.json is the only lifecycle declaration surface.
 <<<
 RELATIONS:
 - TYPE: Parent

@@ -1,0 +1,298 @@
+{
+  "schema": "sdoc-semantics-model/1",
+  "model_version": "1",
+  "lifecycles": [
+    {
+      "name": "DEPTH",
+      "subject": { "kind": "field", "field": "DEPTH" },
+      "states": [
+        {
+          "name": "sketch",
+          "label": "sketch",
+          "note": "a shape, not yet a design"
+        },
+        {
+          "name": "needs-design",
+          "label": "needs design",
+          "note": "the shape is agreed; the design is not"
+        },
+        {
+          "name": "needs-spike",
+          "label": "needs spike",
+          "note": "the design turns on something unmeasured"
+        },
+        {
+          "name": "interface-settled",
+          "label": "interface settled",
+          "note": "the seam is fixed; the body is not"
+        },
+        { "name": "implemented", "label": "implemented", "note": "it exists" },
+        {
+          "name": "verified",
+          "label": "verified",
+          "note": "something other than its author has checked it"
+        }
+      ],
+      "initial": "sketch",
+      "terminal": ["verified"],
+      "transitions": [
+        {
+          "trigger": "advance",
+          "from": "sketch",
+          "to": "needs-design",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "one rung at a time, forwards, with nothing gating the move",
+          "settled": false
+        },
+        {
+          "trigger": "advance",
+          "from": "needs-design",
+          "to": "needs-spike",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "one rung at a time, forwards, with nothing gating the move",
+          "settled": false
+        },
+        {
+          "trigger": "advance",
+          "from": "needs-spike",
+          "to": "interface-settled",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "one rung at a time, forwards, with nothing gating the move",
+          "settled": false
+        },
+        {
+          "trigger": "advance",
+          "from": "interface-settled",
+          "to": "implemented",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "one rung at a time, forwards, with nothing gating the move",
+          "settled": false
+        },
+        {
+          "trigger": "advance",
+          "from": "implemented",
+          "to": "verified",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "one rung at a time, forwards, with nothing gating the move",
+          "settled": false
+        }
+      ],
+      "rules": [
+        {
+          "id": "DEPTH-ORDERED",
+          "text": "The six values are a LADDER in the order the grammar declares them, and the spike reads that order as the only legal path: one trigger, adjacent rungs, no skipping.",
+          "kind": "transcription",
+          "settled": false,
+          "cites": ["SLICE-GRAMMAR-FROM-NIX"]
+        },
+        {
+          "id": "DEPTH-REGRESSION-UNDECIDED",
+          "text": "May DEPTH fall? A design invalidated by a spike arguably returns to needs-design, but a falling DEPTH also erases the record that it once stood higher. Nobody has ruled.",
+          "kind": "open",
+          "settled": false,
+          "cites": []
+        },
+        {
+          "id": "DEPTH-RUNGS-UNDECIDED",
+          "text": "Do implemented and verified belong to DEPTH? They describe the artifact rather than the thinking, and a node can be interface-settled forever without either being false.",
+          "kind": "open",
+          "settled": false,
+          "cites": []
+        },
+        {
+          "id": "DEPTH-SHARED-MACHINE-UNDECIDED",
+          "text": "One machine per FIELD is the cheapest shape and is what the spike builds: the six types carrying DEPTH share this lifecycle exactly. The alternative is one machine per (type, field), which lets a REQUIREMENT and a WORK disagree about what a rung means, at the cost of six tables to keep aligned.",
+          "kind": "open",
+          "settled": false,
+          "cites": []
+        }
+      ]
+    },
+    {
+      "name": "STATUS",
+      "subject": { "kind": "element", "tag": "DECISION", "field": "STATUS" },
+      "states": [
+        {
+          "name": "open",
+          "label": "open",
+          "note": "proposed, and nobody has ruled"
+        },
+        {
+          "name": "accepted",
+          "label": "accepted",
+          "note": "in force; its statement is now immutable"
+        },
+        {
+          "name": "rejected",
+          "label": "rejected",
+          "note": "ruled against -- terminal, and not the same as withdrawn"
+        },
+        {
+          "name": "superseded",
+          "label": "superseded",
+          "note": "replaced by a later decision that must be named"
+        }
+      ],
+      "initial": "open",
+      "terminal": ["rejected", "superseded"],
+      "transitions": [
+        {
+          "trigger": "accept",
+          "from": "open",
+          "to": "accepted",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "a human rules for it; the statement becomes immutable at this moment",
+          "settled": false
+        },
+        {
+          "trigger": "reject",
+          "from": "open",
+          "to": "rejected",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "a human rules against it; the node stays as the record of the ruling",
+          "settled": false
+        },
+        {
+          "trigger": "supersede",
+          "from": "accepted",
+          "to": "superseded",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "only an ACCEPTED decision can be superseded; a rejected one was never in force",
+          "settled": false
+        }
+      ],
+      "rules": [
+        {
+          "id": "STATUS-SUPERSEDE-NEVER-EDIT",
+          "text": "Never edit an accepted DECISION's STATEMENT. Set STATUS to superseded, add Superseded_By, and write a new decision (dev/skills/sdoc/SKILL.md rule 4; DEC-UID-OUTLIVES-TYPE records four accepted decisions whose statements are frozen).",
+          "kind": "transcription",
+          "settled": true,
+          "cites": ["DEC-UID-OUTLIVES-TYPE"]
+        },
+        {
+          "id": "STATUS-SUPERSEDE-NEEDS-A-TARGET",
+          "text": "Reaching superseded without a Superseded_By relation is a dangling supersession. That is a rule ABOUT TWO NODES, so no state machine can carry it -- it wants the graph query the closure verdict already uses.",
+          "kind": "open",
+          "settled": false,
+          "cites": ["DEC-UID-OUTLIVES-TYPE"]
+        },
+        {
+          "id": "STATUS-WITHDRAWN-MISSING-UNDECIDED",
+          "text": "COMMENTARY's STANDING carries a withdrawn value and STATUS does not. Whether an open DECISION can be taken back without being rejected is unruled.",
+          "kind": "open",
+          "settled": false,
+          "cites": []
+        }
+      ]
+    },
+    {
+      "name": "AUTHORED_BY",
+      "subject": { "kind": "field", "field": "AUTHORED_BY" },
+      "states": [
+        {
+          "name": "llm",
+          "label": "llm",
+          "note": "written by a model, not looked at -- free to reverse"
+        },
+        {
+          "name": "llm-accepted",
+          "label": "llm accepted",
+          "note": "a human saw it and let it stand -- an undo must surface"
+        },
+        {
+          "name": "llm-adopted",
+          "label": "llm adopted",
+          "note": "a human took it on as their own -- a model may not reverse it"
+        },
+        {
+          "name": "human",
+          "label": "human",
+          "note": "written by a human -- differs from adopted only in lineage"
+        }
+      ],
+      "initial": "llm",
+      "terminal": ["human"],
+      "transitions": [
+        {
+          "trigger": "raise",
+          "from": "llm",
+          "to": "llm-accepted",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "rises one rung; who is permitted to raise it is undecided",
+          "settled": false
+        },
+        {
+          "trigger": "raise",
+          "from": "llm-accepted",
+          "to": "llm-adopted",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "rises one rung; who is permitted to raise it is undecided",
+          "settled": false
+        },
+        {
+          "trigger": "raise",
+          "from": "llm-adopted",
+          "to": "human",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "rises one rung; who is permitted to raise it is undecided",
+          "settled": false
+        }
+      ],
+      "rules": [
+        {
+          "id": "AUTHORED-BY-RISES-ONLY",
+          "text": "The ladder is one-directional: a value may rise and never fall, so there is no reachability question and no way to launder a human commitment back into a free one.",
+          "kind": "transcription",
+          "settled": true,
+          "cites": ["DEC-AUTHORSHIP-LADDER"]
+        },
+        {
+          "id": "AUTHORED-BY-TREATMENT",
+          "text": "Three classes over four values: llm is FREE to reverse, llm-accepted is SOFT (an undo has to surface in the closing report), llm-adopted and human are HARD -- being unable to meet one is a STOP condition, not a workaround.",
+          "kind": "transcription",
+          "settled": true,
+          "cites": ["DEC-AUTHORSHIP-LADDER"]
+        },
+        {
+          "id": "AUTHORED-BY-WHO-MAY-RAISE-UNDECIDED",
+          "text": "No actor is attached to any transition. The decision's own notes say raising to llm-accepted is a human act with no natural place to happen, and the write guard makes the field the operator's, so the machine below is a shape with no hand on it yet.",
+          "kind": "open",
+          "settled": false,
+          "cites": ["DEC-AUTHORSHIP-LADDER", "MECH-RUNTIME-WRITE-GUARD"]
+        }
+      ]
+    }
+  ],
+  "actors": [],
+  "commands": [],
+  "events": [],
+  "operations": [],
+  "gates": [],
+  "relation_contracts": [],
+  "checkpoints": [],
+  "milestones": [],
+  "flows": [],
+  "rules": []
+}

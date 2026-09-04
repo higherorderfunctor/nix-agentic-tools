@@ -19,8 +19,8 @@ import json
 import sys
 from pathlib import Path
 
+from . import SEMANTICS
 from .engine import mermaid
-from .registry import SEMANTICS
 
 # dev/scripts, so `scribe_grammar` resolves when this package is reached as a
 # plain script path as well as with `-m`.

@@ -74,5 +74,3 @@ DEPTH implemented, not verified: a completed observation run by its own author, 
 RELATIONS:
 - TYPE: File
   VALUE: dev/scripts/sdoc_semantics/engine.py
-- TYPE: File
-  VALUE: dev/scripts/sdoc_semantics/machines/depth.py
