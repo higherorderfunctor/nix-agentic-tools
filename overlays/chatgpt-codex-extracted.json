@@ -6053,6 +6053,12 @@
     },
     {
       "defaultReasoningLevel": "low",
+      "displayName": "GPT-6-Astra",
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-6-astra"
+    },
+    {
+      "defaultReasoningLevel": "low",
       "displayName": "Daybreak Blue",
       "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
       "slug": "gpt-daybreak-blue-latest"
@@ -6065,7 +6071,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.153.0",
+    "codexVersion": "0.153.2",
     "extractorSchema": 1
   }
 }
