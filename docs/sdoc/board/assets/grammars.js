@@ -453,14 +453,13 @@ function roleItem(role) {
   return item;
 }
 
-// The v2 semantics payload keys machines by FIELD and indexes them by type, so
-// the inspector never has to know which fields a type carries -- that answer
-// is the engine's, computed from the same parsed grammar.
+// The v2 semantics payload keys machines by lifecycle name and indexes those
+// names by type, so two type-specific lifecycles over one field stay distinct.
 function machinesFor(tag) {
   const semantics = snapshot.semantics ?? {};
-  const fields = semantics.by_type?.[tag] ?? [];
-  return fields
-    .map((field) => semantics.machines?.[field])
+  const names = semantics.by_type?.[tag] ?? [];
+  return names
+    .map((name) => semantics.machines?.[name])
     .filter((machine) => machine);
 }
 

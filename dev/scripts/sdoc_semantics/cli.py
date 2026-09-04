@@ -20,14 +20,7 @@ import sys
 from pathlib import Path
 
 from .engine import MODEL_PATH, load_model, mermaid
-
-# dev/scripts, so `scribe_grammar` resolves when this package is reached as a
-# plain script path as well as with `-m`.
-_SCRIPTS = str(Path(__file__).resolve().parent.parent)
-if _SCRIPTS not in sys.path:
-    sys.path.insert(0, _SCRIPTS)
-
-from scribe_grammar import parse_sgra  # noqa: E402
+from .grammar import parse_sgra
 
 #: Repository root as seen from dev/scripts/sdoc_semantics/cli.py.
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -40,7 +33,7 @@ def load_grammar(root: Path) -> dict:
 
 
 def select(data: dict, selector: str | None) -> list[str]:
-    """FIELD, or TYPE, or everything. Refuses anything else by name.
+    """Machine name, FIELD, TYPE, or everything. Refuse anything else.
 
     A TYPE selector goes through `by_type`, which is the same reverse index
     the board reads, so `scribe semantics DECISION` and the board's inspector
@@ -51,11 +44,19 @@ def select(data: dict, selector: str | None) -> list[str]:
     wanted = selector.upper()
     if wanted in data["machines"]:
         return [wanted]
+    matching_fields = [
+        name
+        for name, machine in data["machines"].items()
+        if machine["field"] == wanted
+    ]
+    if matching_fields:
+        return matching_fields
     if wanted in data["by_type"]:
         return list(data["by_type"][wanted])
     raise SystemExit(
         f"no machine or node type named {selector!r}. "
-        f"fields: {', '.join(data['machines'])}. "
+        f"machines: {', '.join(data['machines'])}. "
+        f"fields: {', '.join(dict.fromkeys(row['field'] for row in data['machines'].values()))}. "
         f"types: {', '.join(data['by_type'])}"
     )
 
@@ -75,9 +76,9 @@ def render(data: dict, selector: str | None = None) -> str:
     chosen = select(data, selector)
     if not chosen:
         return f"{selector}: no state field on this type\n"
-    for field in chosen:
-        entry = data["machines"][field]
-        lines.append(f"{field}   [{data['schema']}]")
+    for name in chosen:
+        entry = data["machines"][name]
+        lines.append(f"{entry['field']}   [{data['schema']}]")
         lines.append(f"  on        {', '.join(entry['applies_to']) or '(no type)'}")
         lines.append(
             f"  initial   {entry['initial']}"
@@ -122,14 +123,11 @@ def render(data: dict, selector: str | None = None) -> str:
 
 def render_mermaid(data: dict, selector: str | None = None) -> str:
     model = load_model(MODEL_PATH)
-    by_field = {
-        lifecycle["subject"]["field"]: lifecycle
-        for lifecycle in model["lifecycles"]
-    }
+    by_name = {lifecycle["name"]: lifecycle for lifecycle in model["lifecycles"]}
     out: list[str] = []
-    for field in select(data, selector):
-        out.append(f"%% {field}")
-        out.append(mermaid(by_field[field]))
+    for name in select(data, selector):
+        out.append(f"%% {name}")
+        out.append(mermaid(by_name[name]))
         out.append("")
     return "\n".join(out) + "\n"
 

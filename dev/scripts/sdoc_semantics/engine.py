@@ -20,6 +20,21 @@ from .declare import FireResult, ModelError
 MODEL_SCHEMA = "sdoc-semantics-model/1"
 SCHEMA = "sdoc-semantics/2"
 MODEL_PATH = Path(__file__).with_name("model.json")
+MODEL_KEYS = (
+    "schema",
+    "model_version",
+    "lifecycles",
+    "actors",
+    "commands",
+    "events",
+    "operations",
+    "gates",
+    "relation_contracts",
+    "checkpoints",
+    "milestones",
+    "flows",
+    "rules",
+)
 PREDICATE_OPERATIONS = (
     "actor_in",
     "all_related",
@@ -31,6 +46,7 @@ PREDICATE_OPERATIONS = (
     "not",
     "or",
 )
+RULE_KINDS = ("transcription", "policy", "derived", "open")
 PAYLOAD_KEYS = (
     "schema",
     "machines",
@@ -83,6 +99,35 @@ def _require_reference(
         )
 
 
+def _require_shape(
+    value: Any,
+    required: Iterable[str],
+    location: str,
+    optional: Iterable[str] = (),
+) -> None:
+    if not isinstance(value, dict):
+        raise ModelError(f"{location} must be an object")
+    required_keys = tuple(required)
+    allowed = set(required_keys) | set(optional)
+    missing = [key for key in required_keys if key not in value]
+    unexpected = [key for key in value if key not in allowed]
+    if missing or unexpected:
+        details = []
+        if missing:
+            details.append(f"missing {', '.join(missing)}")
+        if unexpected:
+            details.append(f"unexpected {', '.join(unexpected)}")
+        raise ModelError(
+            f"{location} has the wrong shape ({'; '.join(details)}); "
+            f"known fields: {', '.join(required_keys)}"
+        )
+
+
+def _require_list(value: Any, location: str) -> None:
+    if not isinstance(value, list):
+        raise ModelError(f"{location} must be a list in presentation order")
+
+
 def _validate_predicate(predicate: Any, location: str) -> None:
     if not isinstance(predicate, dict):
         raise ModelError(f"{location} predicate must be an object")
@@ -92,7 +137,27 @@ def _validate_predicate(predicate: Any, location: str) -> None:
             f"{location} names unknown predicate operation {operation!r}; "
             f"{_known('operations', PREDICATE_OPERATIONS)}"
         )
+    shapes = {
+        "actor_in": (("op", "actors"), ()),
+        "all_related": (
+            ("op", "role", "predicate", "empty"),
+            ("direction",),
+        ),
+        "and": (("op", "predicates"), ()),
+        "any_related": (
+            ("op", "role", "predicate", "empty"),
+            ("direction",),
+        ),
+        "field_at_least": (("op", "field", "value"), ()),
+        "field_is": (("op", "field", "value"), ()),
+        "has_relation": (("op", "role"), ("direction", "target_type")),
+        "not": (("op", "predicate"), ()),
+        "or": (("op", "predicates"), ()),
+    }
+    required, optional = shapes[operation]
+    _require_shape(predicate, required, f"{location} predicate", optional)
     if operation in ("and", "or"):
+        _require_list(predicate["predicates"], f"{location}.{operation}.predicates")
         for index, child in enumerate(predicate.get("predicates", [])):
             _validate_predicate(child, f"{location}.{operation}[{index}]")
     elif operation == "not":
@@ -172,8 +237,15 @@ def _validate_predicate_references(
             )
     elif operation == "actor_in":
         declared = _names(model.get("actors", []))
-        for actor in predicate.get("actors", predicate.get("values", [])):
+        for actor in predicate["actors"]:
             _require_reference(actor, declared, "actor", f"{location}.actor_in")
+    elif operation == "field_is" and grammar is not None:
+        _require_reference(
+            predicate.get("field"),
+            _grammar_fields(grammar),
+            "field",
+            f"{location}.field_is",
+        )
     elif operation == "field_at_least":
         field = predicate.get("field")
         lifecycles = [
@@ -186,7 +258,11 @@ def _validate_predicate_references(
                 f"{location}.field_at_least names unknown lifecycle field {field!r}; "
                 f"{_known('fields', [row.get('subject', {}).get('field') for row in model.get('lifecycles', [])])}"
             )
-        states = _names(lifecycles[0].get("states", []))
+        states = [
+            state
+            for lifecycle in lifecycles
+            for state in _names(lifecycle.get("states", []))
+        ]
         _require_reference(
             predicate.get("value"), states, "state", f"{location}.field_at_least"
         )
@@ -197,12 +273,20 @@ def _validate_subject(
     grammar: Mapping[str, Any] | None,
     location: str,
 ) -> None:
+    if not isinstance(subject, dict):
+        raise ModelError(f"{location} subject must be an object")
     kind = subject.get("kind")
     if kind not in ("element", "field", "role"):
         raise ModelError(
             f"{location} has unknown subject kind {kind!r}; "
             "known subject kinds: element, field, role"
         )
+    required = {
+        "element": ("kind", "tag", "field"),
+        "field": ("kind", "field"),
+        "role": ("kind", "role", "field"),
+    }[kind]
+    _require_shape(subject, required, f"{location} subject")
     if grammar is None:
         return
     _require_reference(subject.get("field"), _grammar_fields(grammar), "field", location)
@@ -227,12 +311,22 @@ def validate_model(
     model: Mapping[str, Any], grammar: Mapping[str, Any] | None = None
 ) -> None:
     """Refuse unresolved vocabulary while preserving list presentation order."""
+    if not isinstance(model, dict):
+        raise ModelError("model document must be an object")
     if model.get("schema") != MODEL_SCHEMA:
         raise ModelError(
             f"unknown model schema {model.get('schema')!r}; known schemas: {MODEL_SCHEMA}"
         )
+    _require_shape(model, MODEL_KEYS, "model document")
+    if not isinstance(model["model_version"], str):
+        raise ModelError("model_version must be a string")
+    collection_names = MODEL_KEYS[2:]
+    for collection in collection_names:
+        _require_list(model[collection], f"model document {collection}")
+        if not all(isinstance(row, dict) for row in model[collection]):
+            raise ModelError(f"model document {collection} entries must be objects")
 
-    lifecycles = model.get("lifecycles", [])
+    lifecycles = model["lifecycles"]
     lifecycle_names = _names(lifecycles)
     gate_names = _names(model.get("gates", []))
     actor_names = _names(model.get("actors", []))
@@ -245,16 +339,35 @@ def validate_model(
         ("event", event_names),
         ("checkpoint", checkpoint_names),
         ("command", _names(model.get("commands", []))),
+        ("flow", _names(model.get("flows", []))),
+        ("milestone", _names(model.get("milestones", []))),
         ("operation", _names(model.get("operations", []))),
     )
     for label, values in named_collections:
         if len(values) != len(set(values)):
             raise ModelError(f"duplicate {label} name; {_known(label + 's', values)}")
+    rule_ids = [str(rule.get("id")) for rule in model["rules"]]
+    if len(rule_ids) != len(set(rule_ids)):
+        raise ModelError(f"duplicate rule id; {_known('rules', rule_ids)}")
 
     grammar_roles = _grammar_roles(grammar or {})
     grammar_types = list((grammar or {}).keys())
     for lifecycle in lifecycles:
+        _require_shape(
+            lifecycle,
+            ("name", "subject", "states", "initial", "terminal", "transitions"),
+            f"lifecycle {lifecycle.get('name')!r}",
+        )
         name = lifecycle["name"]
+        _require_list(lifecycle["states"], f"lifecycle {name!r} states")
+        _require_list(lifecycle["terminal"], f"lifecycle {name!r} terminal")
+        _require_list(lifecycle["transitions"], f"lifecycle {name!r} transitions")
+        for state in lifecycle["states"]:
+            _require_shape(
+                state,
+                ("name", "label", "note"),
+                f"lifecycle {name!r} state {state.get('name')!r}",
+            )
         states = _names(lifecycle.get("states", []))
         if len(states) != len(set(states)):
             raise ModelError(
@@ -269,6 +382,28 @@ def validate_model(
             )
         for index, transition in enumerate(lifecycle.get("transitions", [])):
             location = f"lifecycle {name!r} transition {index}"
+            _require_shape(
+                transition,
+                (
+                    "trigger",
+                    "from",
+                    "to",
+                    "gates",
+                    "writes",
+                    "emits",
+                    "rule_text",
+                    "settled",
+                ),
+                location,
+            )
+            for key in ("gates", "writes", "emits"):
+                _require_list(transition[key], f"{location} {key}")
+            for write in transition["writes"]:
+                _require_shape(write, ("field", "value"), f"{location} write")
+                if grammar is not None:
+                    _require_reference(
+                        write["field"], _grammar_fields(grammar), "field", location
+                    )
             _require_reference(transition.get("from"), states, "state", location)
             _require_reference(transition.get("to"), states, "state", location)
             for gate in transition.get("gates", []):
@@ -279,12 +414,22 @@ def validate_model(
         _validate_subject(lifecycle.get("subject", {}), grammar, f"lifecycle {name!r}")
 
     for gate in model.get("gates", []):
+        _require_shape(
+            gate, ("name", "sees", "predicate"), f"gate {gate.get('name')!r}"
+        )
+        _require_list(gate["sees"], f"gate {gate['name']!r} sees")
         _validate_predicate(gate.get("predicate"), f"gate {gate['name']!r}")
         _validate_predicate_references(
             gate["predicate"], model, grammar, f"gate {gate['name']!r}"
         )
 
     for command in model.get("commands", []):
+        _require_shape(
+            command,
+            ("name", "lifecycle", "trigger"),
+            f"command {command.get('name')!r}",
+            ("actor",),
+        )
         location = f"command {command['name']!r}"
         lifecycle_name = command.get("lifecycle")
         _require_reference(lifecycle_name, lifecycle_names, "lifecycle", location)
@@ -308,15 +453,54 @@ def validate_model(
             )
 
     for operation in model.get("operations", []):
+        _require_shape(
+            operation,
+            ("name", "subject", "writes", "emits"),
+            f"operation {operation.get('name')!r}",
+        )
+        _require_list(operation["writes"], f"operation {operation['name']!r} writes")
+        _require_list(operation["emits"], f"operation {operation['name']!r} emits")
         _validate_subject(
             operation.get("subject", {}), grammar, f"operation {operation['name']!r}"
         )
+        lifecycle_fields = {
+            row["subject"]["field"] for row in model.get("lifecycles", [])
+        }
+        for write in operation["writes"]:
+            _require_shape(
+                write, ("field", "value"), f"operation {operation['name']!r} write"
+            )
+            if write["field"] in lifecycle_fields:
+                raise ModelError(
+                    f"operation {operation['name']!r} writes lifecycle field "
+                    f"{write['field']!r}; operations mutate without moving state"
+                )
+            if grammar is not None:
+                _require_reference(
+                    write["field"],
+                    _grammar_fields(grammar),
+                    "field",
+                    f"operation {operation['name']!r}",
+                )
         for event in operation.get("emits", []):
             _require_reference(
                 event, event_names, "event", f"operation {operation['name']!r}"
             )
-    if grammar is not None:
-        for contract in model.get("relation_contracts", []):
+    for contract in model.get("relation_contracts", []):
+        _require_shape(
+            contract,
+            ("role", "from_types", "to_types", "admits_cycles", "propagates"),
+            f"relation contract {contract.get('role')!r}",
+        )
+        _require_list(
+            contract["from_types"],
+            f"relation contract {contract['role']!r} from_types",
+        )
+        _require_list(
+            contract["to_types"],
+            f"relation contract {contract['role']!r} to_types",
+        )
+        if grammar is not None:
             _require_reference(
                 contract.get("role"),
                 grammar_roles,
@@ -332,6 +516,14 @@ def validate_model(
                         f"relation contract {contract['role']!r} {key}",
                     )
     for milestone in model.get("milestones", []):
+        _require_shape(
+            milestone,
+            ("name", "subject", "achieved_when", "stale_when"),
+            f"milestone {milestone.get('name')!r}",
+        )
+        _validate_subject(
+            milestone["subject"], grammar, f"milestone {milestone['name']!r}"
+        )
         for key in ("achieved_when", "stale_when"):
             _require_reference(
                 milestone.get(key),
@@ -346,7 +538,24 @@ def validate_model(
         for transition in lifecycle.get("transitions", [])
     ]
     for flow in model.get("flows", []):
+        _require_shape(flow, ("name", "steps"), f"flow {flow.get('name')!r}")
+        _require_list(flow["steps"], f"flow {flow['name']!r} steps")
         for index, step in enumerate(flow.get("steps", [])):
+            _require_shape(
+                step,
+                ("transition", "expected"),
+                f"flow {flow['name']!r} step {index}",
+                ("refused_by",),
+            )
+            if step["expected"] not in ("taken", "refused"):
+                raise ModelError(
+                    f"flow {flow['name']!r} step {index} has unknown outcome "
+                    f"{step['expected']!r}; known outcomes: taken, refused"
+                )
+            if step["expected"] == "refused" and "refused_by" not in step:
+                raise ModelError(
+                    f"flow {flow['name']!r} step {index} refuses without naming a gate"
+                )
             _require_reference(
                 step.get("transition"),
                 all_transition_refs,
@@ -361,14 +570,33 @@ def validate_model(
                     "gate",
                     f"flow {flow['name']!r} step {index}",
                 )
-        checkpoint = flow.get("checkpoint")
-        if checkpoint is not None:
-            _require_reference(
-                checkpoint,
-                checkpoint_names,
-                "checkpoint",
-                f"flow {flow['name']!r}",
+    for actor in model.get("actors", []):
+        _require_shape(actor, ("name",), f"actor {actor.get('name')!r}")
+    for event in model.get("events", []):
+        _require_shape(
+            event, ("name", "external"), f"event {event.get('name')!r}"
+        )
+        if not isinstance(event["external"], bool):
+            raise ModelError(f"event {event['name']!r} external must be a bool")
+    for checkpoint in model.get("checkpoints", []):
+        _require_shape(
+            checkpoint,
+            ("name", "sees"),
+            f"checkpoint {checkpoint.get('name')!r}",
+        )
+        _require_list(checkpoint["sees"], f"checkpoint {checkpoint['name']!r} sees")
+    for rule in model.get("rules", []):
+        _require_shape(
+            rule,
+            ("id", "text", "kind", "settled", "cites"),
+            f"rule {rule.get('id')!r}",
+        )
+        if rule["kind"] not in RULE_KINDS:
+            raise ModelError(
+                f"rule {rule['id']!r} has unknown kind {rule['kind']!r}; "
+                f"{_known('rule kinds', RULE_KINDS)}"
             )
+        _require_list(rule["cites"], f"rule {rule['id']!r} cites")
 
 
 def load_model(
@@ -439,9 +667,7 @@ def diagnostics(
                 found.append(
                     f"{name}: state {state!r} is unreachable from {lifecycle['initial']!r}"
                 )
-    outgoing = {transition["from"] for transition in lifecycle.get("transitions", [])}
-    actual_terminals = [state for state in _reachable(lifecycle) if state not in outgoing]
-    if not lifecycle.get("terminal") or not actual_terminals:
+    if not lifecycle.get("terminal"):
         found.append(f"{name}: no terminal state")
     seen: dict[tuple[str, str], str] = {}
     for transition in lifecycle.get("transitions", []):
@@ -457,7 +683,9 @@ def diagnostics(
     if grammar is not None:
         declared = set(states)
         field = lifecycle["subject"]["field"]
-        for tag, options in grammar_options(field, grammar).items():
+        options_by_tag = grammar_options(field, grammar)
+        for tag in applies_to(lifecycle["subject"], grammar):
+            options = options_by_tag.get(tag, [])
             extra = declared - set(options)
             missing = set(options) - declared
             if extra:
@@ -473,7 +701,18 @@ def diagnostics(
     return found
 
 
-def machine_payload(lifecycle: Mapping[str, Any], grammar: Mapping[str, Any]) -> dict:
+def _rules_for(
+    lifecycle: Mapping[str, Any], rules: Iterable[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    prefix = str(lifecycle["name"]).replace("_", "-") + "-"
+    return [dict(rule) for rule in rules if str(rule["id"]).startswith(prefix)]
+
+
+def machine_payload(
+    lifecycle: Mapping[str, Any],
+    grammar: Mapping[str, Any],
+    rules: Iterable[Mapping[str, Any]] = (),
+) -> dict:
     """Render one lifecycle in the stable v1-compatible machine shape."""
     return {
         "field": lifecycle["subject"]["field"],
@@ -496,7 +735,7 @@ def machine_payload(lifecycle: Mapping[str, Any], grammar: Mapping[str, Any]) ->
             }
             for transition in lifecycle.get("transitions", [])
         ],
-        "rules": [dict(rule) for rule in lifecycle.get("rules", [])],
+        "rules": _rules_for(lifecycle, rules),
         "diagnostics": diagnostics(lifecycle, grammar),
     }
 
@@ -522,11 +761,13 @@ def payload(model: Mapping[str, Any], grammar: Mapping[str, Any]) -> dict:
     validate_model(model, grammar)
     machines: dict[str, dict] = {}
     for lifecycle in model.get("lifecycles", []):
-        machines[lifecycle["subject"]["field"]] = machine_payload(lifecycle, grammar)
+        machines[lifecycle["name"]] = machine_payload(
+            lifecycle, grammar, model.get("rules", [])
+        )
     by_type: dict[str, list[str]] = {tag: [] for tag in grammar}
-    for field, machine in machines.items():
+    for name, machine in machines.items():
         for tag in machine["applies_to"]:
-            by_type[tag].append(field)
+            by_type[tag].append(name)
     values = {
         "schema": SCHEMA,
         "machines": machines,
@@ -547,6 +788,40 @@ def payload(model: Mapping[str, Any], grammar: Mapping[str, Any]) -> dict:
 
 def build_payload(grammar: Mapping[str, Any]) -> dict:
     return payload(load_model(MODEL_PATH, grammar), grammar)
+
+
+def adapt_graph(loaded_graph: Any) -> dict[str, Any]:
+    """Project an ``sdoc_model.Graph`` into the interpreter's tiny graph shape.
+
+    This is deliberately duck typed: importing the StrictDoc-backed model here
+    would put that implementation and its dependencies in the interpreter's
+    closure. Callers that already hold a loaded graph cross the seam explicitly.
+    """
+    nodes: dict[str, dict[str, Any]] = {}
+    edges: list[dict[str, str]] = []
+    for source in loaded_graph.iter_nodes():
+        uid = str(source.reserved_uid)
+        fields = {
+            str(name): field.get_text_value()
+            for name, field in source.ordered_fields_lookup.items()
+        }
+        nodes[uid] = {
+            "uid": uid,
+            "type": str(source.node_type),
+            "fields": fields,
+        }
+        for relation in source.relations:
+            target = getattr(relation, "ref_uid", None)
+            role = getattr(relation, "role", None)
+            if target is not None and role:
+                edges.append(
+                    {
+                        "role": str(role),
+                        "source": uid,
+                        "target": str(target),
+                    }
+                )
+    return {"nodes": nodes, "edges": edges}
 
 
 def _node_map(graph: Mapping[str, Any]) -> dict[str, MutableMapping[str, Any]]:
@@ -1035,23 +1310,9 @@ class Interpreter:
                     adjacency.setdefault(str(edge["source"]), []).append(
                         str(edge["target"])
                     )
-            visiting: set[str] = set()
-            visited: set[str] = set()
-
-            def visit(uid: str) -> bool:
-                if uid in visiting:
-                    return True
-                if uid in visited:
-                    return False
-                visiting.add(uid)
-                cyclic = any(visit(target) for target in adjacency.get(uid, []))
-                visiting.remove(uid)
-                visited.add(uid)
-                return cyclic
-
-            if any(visit(uid) for uid in list(adjacency)):
+            for cycle in _simple_cycles(adjacency):
                 found.append(
-                    f"role {role!r} admits no cycles, but the graph has one"
+                    f"role {role!r} admits no cycles: {' -> '.join(cycle)}"
                 )
         return found
 
@@ -1067,6 +1328,25 @@ def fire(
 
 def check(graph: Mapping[str, Any]) -> list[str]:
     return Interpreter(load_model()).check(graph)
+
+
+def _simple_cycles(adjacency: Mapping[str, Iterable[str]]) -> list[tuple[str, ...]]:
+    """Enumerate each directed simple cycle once, with its least UID first."""
+    cycles: list[tuple[str, ...]] = []
+    nodes = sorted(
+        set(adjacency) | {target for targets in adjacency.values() for target in targets}
+    )
+    for start in nodes:
+
+        def walk(current: str, path: tuple[str, ...], seen: set[str]) -> None:
+            for target in sorted(set(adjacency.get(current, ()))):
+                if target == start:
+                    cycles.append((*path, start))
+                elif target >= start and target not in seen:
+                    walk(target, (*path, target), seen | {target})
+
+        walk(start, (start,), {start})
+    return cycles
 
 
 def mermaid(lifecycle: Mapping[str, Any]) -> str:

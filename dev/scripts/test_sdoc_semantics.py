@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -22,6 +23,7 @@ from sdoc_semantics import (  # noqa: E402
     SCHEMA,
     Interpreter,
     ModelError,
+    adapt_graph,
     build_payload,
     diagnostics,
     evaluate,
@@ -99,7 +101,6 @@ def lifecycle(
         "initial": initial,
         "terminal": list(terminal),
         "transitions": list(transitions),
-        "rules": [],
     }
 
 
@@ -334,11 +335,15 @@ def test_initial_diagnostic() -> None:
 
 @contract("a missing terminal is diagnosed beside silent shipped lifecycles")
 def test_terminal_diagnostic() -> None:
-    row = lifecycle(
+    row = lifecycle(transitions=[transition()], terminal=())
+    assert any("no terminal" in message for message in diagnostics(row))
+    declared_ring = lifecycle(
         transitions=[transition(), transition("back", "b", "a")],
         terminal=("b",),
     )
-    assert any("no terminal" in message for message in diagnostics(row))
+    assert not [
+        message for message in diagnostics(declared_ring) if "no terminal" in message
+    ]
     assert not [message for message in diagnostics(lifecycle(transitions=[transition()])) if "no terminal" in message]
     assert_shipped_diagnostics_silent("no terminal")
 
@@ -394,6 +399,12 @@ def test_unknown_schema() -> None:
         assert "sdoc-semantics-model/1" in str(error)
     else:
         raise AssertionError("unknown schema loaded")
+    try:
+        validate_model({"schema": "sdoc-semantics-model/1"})
+    except ModelError as error:
+        assert "wrong shape" in str(error) and "model_version" in str(error)
+    else:
+        raise AssertionError("partial model loaded")
 
 
 @contract("load validation rejects a bogus predicate operation")
@@ -408,6 +419,22 @@ def test_unknown_predicate_operation() -> None:
         assert "field_is" in str(error)
     else:
         raise AssertionError("bogus operation loaded")
+    model = fixture_model()
+    model["rules"] = [
+        {
+            "id": "BAD-RULE",
+            "text": "fixture",
+            "kind": "executable-python",
+            "settled": False,
+            "cites": [],
+        }
+    ]
+    try:
+        validate_model(model)
+    except ModelError as error:
+        assert "unknown kind" in str(error) and "open" in str(error)
+    else:
+        raise AssertionError("executable rule kind loaded")
 
 
 @contract("load validation rejects an unknown transition state")
@@ -423,7 +450,7 @@ def test_unknown_state() -> None:
         raise AssertionError("unknown state loaded")
 
 
-@contract("gate lifecycle actor checkpoint and transition references resolve")
+@contract("gate lifecycle actor flow and transition references resolve")
 def test_reference_validation() -> None:
     cases = []
     model = fixture_model()
@@ -437,7 +464,7 @@ def test_reference_validation() -> None:
     cases.append((model, "known actors"))
     model = fixture_model()
     model["flows"] = [{"name": "F", "checkpoint": "missing", "steps": []}]
-    cases.append((model, "known checkpoints"))
+    cases.append((model, "wrong shape"))
     model = fixture_model()
     model["flows"] = [{"name": "F", "steps": [{"transition": "missing", "expected": "taken"}]}]
     cases.append((model, "known transitions"))
@@ -490,6 +517,34 @@ def test_subject_validation() -> None:
         assert "known roles" in str(error)
     else:
         raise AssertionError("unknown role loaded")
+    model = fixture_model(
+        gate={
+            "name": "bad-field",
+            "sees": [],
+            "predicate": {"op": "field_is", "field": "MISSING", "value": "x"},
+        }
+    )
+    try:
+        validate_model(model, grammar)
+    except ModelError as error:
+        assert "known fields" in str(error)
+    else:
+        raise AssertionError("unknown predicate field loaded")
+    model = fixture_model()
+    model["milestones"] = [
+        {
+            "name": "bad-subject",
+            "subject": {"kind": "NOPE"},
+            "achieved_when": "missing",
+            "stale_when": "missing",
+        }
+    ]
+    try:
+        validate_model(model)
+    except ModelError as error:
+        assert "unknown subject kind" in str(error)
+    else:
+        raise AssertionError("unknown milestone subject loaded")
 
 
 @contract("a refused gate leaves the graph byte-for-byte unchanged")
@@ -508,6 +563,21 @@ def test_transaction_refusal() -> None:
     allowed = graph(node("N", F="a", READY="yes"))
     result = interpreter.fire(allowed, {"name": "move", "subject": "N"}, "human")
     assert result.taken and allowed["nodes"]["N"]["fields"]["F"] == "b"
+    invalid = fixture_model(command=False)
+    invalid["operations"] = [
+        {
+            "name": "quiet-move",
+            "subject": {"kind": "field", "field": "F"},
+            "writes": [{"field": "F", "value": "b"}],
+            "emits": [],
+        }
+    ]
+    try:
+        validate_model(invalid)
+    except ModelError as error:
+        assert "without moving state" in str(error)
+    else:
+        raise AssertionError("operation moved lifecycle state")
     assert SHIPPED["gates"] == []
 
 
@@ -583,9 +653,13 @@ def test_relation_contracts() -> None:
     invalid = graph(
         node("A", "REQUIREMENT"),
         node("B", "WORK"),
+        node("C", "REQUIREMENT"),
+        node("D", "WORK"),
         edges=[
             {"role": "Assumes", "source": "A", "target": "B"},
             {"role": "Assumes", "source": "B", "target": "A"},
+            {"role": "Assumes", "source": "C", "target": "D"},
+            {"role": "Assumes", "source": "D", "target": "C"},
             {"role": "Unknown", "source": "A", "target": "B"},
         ],
     )
@@ -593,7 +667,10 @@ def test_relation_contracts() -> None:
     assert any("source type" in message for message in found)
     assert any("target type" in message for message in found)
     assert any("no relation contract" in message for message in found)
-    assert any("cycle" in message for message in found)
+    assert [message for message in found if "admits no cycles:" in message] == [
+        "role 'Assumes' admits no cycles: A -> B -> A",
+        "role 'Assumes' admits no cycles: C -> D -> C",
+    ]
     assert SHIPPED["relation_contracts"] == []
 
 
@@ -625,6 +702,13 @@ def test_flows() -> None:
     ]
     validate_model(model)
     assert model["flows"][0]["steps"][0]["transition"] == reference
+    model["flows"][0]["steps"][0]["expected"] = "exploded"
+    try:
+        validate_model(model)
+    except ModelError as error:
+        assert "known outcomes" in str(error)
+    else:
+        raise AssertionError("unknown flow outcome loaded")
     assert SHIPPED["flows"] == []
 
 
@@ -651,6 +735,33 @@ def test_presentation_order() -> None:
         "implemented",
         "verified",
     ]
+    assert all("rules" not in lifecycle for lifecycle in SHIPPED["lifecycles"])
+    model = empty_model()
+    model["lifecycles"] = [
+        lifecycle(
+            "ONE_F",
+            "F",
+            transitions=[transition()],
+            subject={"kind": "element", "tag": "ONE", "field": "F"},
+        ),
+        lifecycle(
+            "TWO_F",
+            "F",
+            transitions=[transition()],
+            subject={"kind": "element", "tag": "TWO", "field": "F"},
+        ),
+    ]
+    grammar = {
+        tag: {
+            "fields": [{"name": "F", "options": ["a", "b"]}],
+            "roles": [],
+        }
+        for tag in ("ONE", "TWO")
+    }
+    emitted = payload(model, grammar)
+    assert list(emitted["machines"]) == ["ONE_F", "TWO_F"]
+    assert emitted["by_type"] == {"ONE": ["ONE_F"], "TWO": ["TWO_F"]}
+    assert all(not machine["diagnostics"] for machine in emitted["machines"].values())
 
 
 @contract("the shipped lifecycle rows exactly match the v1 baseline")
@@ -703,6 +814,32 @@ def test_load_model() -> None:
         path = Path(directory) / "model.json"
         path.write_text(json.dumps(model))
         assert load_model(path) == model
+
+    class Field:
+        def __init__(self, value):
+            self.value = value
+
+        def get_text_value(self):
+            return self.value
+
+    first = SimpleNamespace(
+        reserved_uid="A",
+        node_type="WORK",
+        ordered_fields_lookup={"DEPTH": Field("sketch")},
+        relations=[SimpleNamespace(ref_uid="B", role="Assumes")],
+    )
+    second = SimpleNamespace(
+        reserved_uid="B",
+        node_type="REQUIREMENT",
+        ordered_fields_lookup={"DEPTH": Field("verified")},
+        relations=[],
+    )
+    loaded = SimpleNamespace(iter_nodes=lambda: iter((first, second)))
+    assert adapt_graph(loaded) == graph(
+        node("A", "WORK", DEPTH="sketch"),
+        node("B", "REQUIREMENT", DEPTH="verified"),
+        edges=[{"role": "Assumes", "source": "A", "target": "B"}],
+    )
 
 
 def main() -> int:

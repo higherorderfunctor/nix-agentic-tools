@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: Represent rule-to-lifecycle association without semantic IDs
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SEMANTICS-RULE-LIFECYCLE-ASSOCIATION
+TITLE: Represent rule-to-lifecycle association without semantic IDs
+DEPTH: sketch
+AUTHORED_BY: llm
+STATEMENT: >>>
+Eliminate the compatibility renderer inference that a top-level rule belongs to a lifecycle when its ID begins with the normalized lifecycle name. The fixed model shape gives rules no lifecycle reference while the sdoc-semantics/1 compatibility rows nest rules under machines. Decide and represent that association without making opaque IDs semantic, while preserving the readable output.
+<<<
+NOTES: >>>
+Filed from the independent audit of WORK-SEMANTICS-MODEL-AS-DATA. The current prefix match is confined to the compatibility payload and documented as debt; it does not gate, dispatch, or otherwise shape the model.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-DEBT-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-SEMANTICS-MODEL-AS-DATA
+  ROLE: Assumes
