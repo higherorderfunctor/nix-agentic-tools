@@ -34,9 +34,10 @@ import scribe_paths  # noqa: E402
 from scribe_rpc import build_server  # noqa: E402
 from scribe_workspace import Workspace  # noqa: E402
 
-# One definition of an exportable corpus copy, shared with the workspace
-# suite. This file is the one that proves the copy can go through a separate
-# `strictdoc export` process rather than only through in-process imports.
+# One tracked-tree corpus fixture, shared with the workspace suite. This file
+# proves the copy can go through a separate `strictdoc export` process rather
+# than relying on the test interpreter's imports; see `corpus` for why File
+# targets and symlinks require the complete tracked shape.
 from test_scribe_workspace import corpus  # noqa: E402
 
 PASSED: list[str] = []

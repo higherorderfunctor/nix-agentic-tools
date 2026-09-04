@@ -50,13 +50,18 @@ def contract(name: str):
     return wrap
 
 
+# One definition of an exportable corpus copy, imported by test_scribe_rpc.
+# It copies every tracked path rather than a hand-maintained source subset:
+# File relations may target any tracked file, and StrictDoc's external export
+# resolves those edges from the copied root. The old four-glob subset therefore
+# let in-process dry-run contracts pass while test_export_matches failed on File
+# targets under devenv.nix, docs/sdoc/board, and packages.
+#
+# Preserve symlinks as symlinks. Dereferencing one can copy a directory into a
+# path Git models as one entry, making the fixture structurally unlike the tree
+# whose export it claims to compare.
 def corpus(destination: Path) -> Path:
-    """Copy the tracked tree so every File relation remains resolvable.
-
-    A hand-maintained subset drifted as soon as the canon gained a File edge
-    outside dev/scripts. The export contract is specifically meant to catch
-    integration drift, so its fixture has to include every tracked target.
-    """
+    """Copy the tracked tree so every File relation remains resolvable."""
     repo = Path(__file__).resolve().parents[2]
     listed = subprocess.run(
         ["git", "ls-files", "-z"],
