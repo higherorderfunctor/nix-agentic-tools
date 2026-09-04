@@ -6,12 +6,10 @@
 #
 # 1. The contract suite, dev/scripts/test_sdoc_semantics.py. Its subject is not
 #    "do the machines say what we meant" -- nobody has decided what they mean
-#    yet, which is the point of the spike -- but the three `transitions` traps
-#    the package avoids BY CONSTRUCTION, the four eval-time diagnostics, and
-#    the `sdoc-semantics/1` payload the board consumes. Every negative contract
-#    demonstrates its trap firing on a naively-built machine first, because an
-#    absence assertion over a shape that cannot be produced is worth nothing on
-#    its own.
+#    yet, which is the point of the spike -- but every closed predicate
+#    operation, transactional dispatch and ripple, relation contracts, the five
+#    eval-time diagnostics, and the `sdoc-semantics/2` payload the board
+#    consumes. Every negative contract has a positive fixture beside it.
 #
 # 2. The CLI, run once, on the REAL grammar. Arm 1 renders through the same
 #    functions but never crosses a process boundary, so it cannot see an entry
@@ -20,10 +18,8 @@
 #    invocation closes that, and it is the invocation the operator types.
 #
 # THE INTERPRETER IS THE DELIVERY SEAM. `strictdocGrammarExtract` is the wrap
-# every scribe program takes as its runner, so running here proves the same
-# `transitions` splice a session gets. A second interpreter (devenv.nix's
-# `grammarPython`, for the board server) carries its own copy; that one is the
-# board's to prove.
+# every scribe program takes as its runner, so running here proves that seam.
+# The interpreter itself imports only the standard library.
 {
   pkgs,
   self,

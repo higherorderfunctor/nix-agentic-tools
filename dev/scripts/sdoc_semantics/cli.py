@@ -19,8 +19,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import SEMANTICS
-from .engine import mermaid
+from .engine import MODEL_PATH, load_model, mermaid
 
 # dev/scripts, so `scribe_grammar` resolves when this package is reached as a
 # plain script path as well as with `-m`.
@@ -122,11 +121,15 @@ def render(data: dict, selector: str | None = None) -> str:
 
 
 def render_mermaid(data: dict, selector: str | None = None) -> str:
+    model = load_model(MODEL_PATH)
+    by_field = {
+        lifecycle["subject"]["field"]: lifecycle
+        for lifecycle in model["lifecycles"]
+    }
     out: list[str] = []
     for field in select(data, selector):
         out.append(f"%% {field}")
-        drawn = mermaid(SEMANTICS[field])
-        out.append(drawn if drawn else "%% (diagram extra unavailable)")
+        out.append(mermaid(by_field[field]))
         out.append("")
     return "\n".join(out) + "\n"
 
@@ -182,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--root", help="repository root (default: derived)")
     output = parser.add_mutually_exclusive_group()
-    output.add_argument("--json", action="store_true", help="the sdoc-semantics/1 payload")
+    output.add_argument("--json", action="store_true", help="the sdoc-semantics/2 payload")
     output.add_argument("--mermaid", action="store_true", help="stateDiagram-v2 per machine")
     args = parser.parse_args(argv)
 

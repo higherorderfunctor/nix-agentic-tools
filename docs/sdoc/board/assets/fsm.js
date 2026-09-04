@@ -1,13 +1,13 @@
 // The lifecycle widget: one state field's machine, drawn as an inline SVG.
 //
-// Data is the snapshot's `semantics` key (schema sdoc-semantics/1), which the
+// Data is the snapshot's `semantics` key (schema sdoc-semantics/2), which the
 // engine computes from the SAME parsed grammar the Grammars tab already
 // renders. Nothing here knows a field name: DEPTH, STATUS, STANDING and
 // AUTHORED_BY are data, and a machine the engine stops emitting stops being
 // drawn (WORK-DEPTH-RENAME is live -- hard-coding a field name here would
 // hard-code a rename).
 //
-// THE LAYOUT IS TRANSPOSED, on purpose. A transitions machine reads left to
+// THE LAYOUT IS TRANSPOSED, on purpose. A lifecycle reads left to
 // right; this pane is 350px wide and a six-rung ladder never fit that, so
 // rank runs DOWN and branches spread ACROSS: one row per BFS depth from the
 // initial state, siblings sharing the row's width. An ordered ladder becomes

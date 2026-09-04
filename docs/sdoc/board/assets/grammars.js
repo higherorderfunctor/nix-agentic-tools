@@ -453,7 +453,7 @@ function roleItem(role) {
   return item;
 }
 
-// The semantics payload keys machines by FIELD and indexes them by type, so
+// The v2 semantics payload keys machines by FIELD and indexes them by type, so
 // the inspector never has to know which fields a type carries -- that answer
 // is the engine's, computed from the same parsed grammar.
 function machinesFor(tag) {

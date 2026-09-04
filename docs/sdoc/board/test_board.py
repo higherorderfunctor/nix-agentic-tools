@@ -95,13 +95,12 @@ FIXTURE_GRAMMAR = {
 }
 FIXTURE_PROJECT = {"name": "fixture", "root": "/fixture", "generation": 7}
 
-# A hand-written `sdoc-semantics/1` payload. It is INVENTED -- two small
+# A hand-written `sdoc-semantics/2` payload. It is INVENTED -- two small
 # machines under names no grammar carries -- because it exists to pin the
 # SHAPE, and a fixture that paraphrases the real lifecycles would read as the
 # model and rot against it the first time the operator changes their mind.
 # The model lives in dev/scripts/sdoc_semantics; this suite must stay
-# hermetic under a bare python3, where that engine's `transitions` dependency
-# is not importable.
+# hermetic under a bare python3 and independent of the shipped model.
 #
 # Two things the shape demands and this fixture shows. `states` is in LADDER
 # order, not alphabetical -- the order IS the semantics, and sorting it would
@@ -195,6 +194,16 @@ FIXTURE_SEMANTICS = {
         "DECISION": ["FIX_BRANCH"],
         "MECHANISM": ["FIX_LADDER"],
     },
+    "gates": [],
+    "relation_contracts": [],
+    "actors": [],
+    "commands": [],
+    "events": [],
+    "operations": [],
+    "milestones": [],
+    "checkpoints": [],
+    "flows": [],
+    "gate_placement": [],
 }
 
 
@@ -428,6 +437,16 @@ class SemanticsCarriageTest(unittest.TestCase):
         self.assertEqual(semantics["schema"], SEMANTICS_SCHEMA)
         self.assertEqual(semantics["machines"], {})
         self.assertEqual(semantics["by_type"], {})
+        self.assertEqual(semantics["gates"], [])
+        self.assertEqual(semantics["relation_contracts"], [])
+        self.assertEqual(semantics["actors"], [])
+        self.assertEqual(semantics["commands"], [])
+        self.assertEqual(semantics["events"], [])
+        self.assertEqual(semantics["operations"], [])
+        self.assertEqual(semantics["milestones"], [])
+        self.assertEqual(semantics["checkpoints"], [])
+        self.assertEqual(semantics["flows"], [])
+        self.assertEqual(semantics["gate_placement"], [])
         self.assertTrue(semantics["unavailable"])
 
     def test_the_boundary_always_answers_in_the_payload_shape(self) -> None:

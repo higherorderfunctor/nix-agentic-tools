@@ -7,7 +7,7 @@ IMPORT_FROM_FILE: @repo
 [WORK]
 UID: WORK-SEMANTICS-STDLIB-INTERPRETER
 TITLE: Replace the transitions engine with a standard-library interpreter over the model document
-DEPTH: interface-settled
+DEPTH: implemented
 AUTHORED_BY: llm
 STATEMENT: >>>
 Rewrite dev/scripts/sdoc_semantics/engine.py as a standard-library-only
@@ -83,6 +83,19 @@ rather than checkpoint-only, because scribe is the only writer; the write side
 of a ripple is the interpreter's and rolls back as a whole; termination is
 enforced by the interpreter, not assumed of the model; the board consumes the
 same payload as the daemon.
+
+Implemented 2026-09-03 (commit pending). The executable suite passes 32
+contracts: positive and negative controls for all 9 closed predicate
+operations; all 5 model diagnostics with failing fixtures beside the silent
+shipped model; reference refusal; transactional gate refusal; deterministic
+ripple provenance and cyclic-bound refusal; relation contracts; derived gate
+placement; flow data; presentation order; exact v2 keys; safe Mermaid ids; an
+isolated-Python CLI import; and exact equality of all 3 shipped machine rows to
+the recorded sdoc-semantics/1 baseline. The board serves sdoc-semantics/2 on
+127.0.0.1:8766 with no unavailable marker. Comparing the three readable
+listings before and after has zero changed lines below the schema header; that
+header alone moves from sdoc-semantics/1 to sdoc-semantics/2. The daemon remains
+an observer: no write path calls fire().
 <<<
 RELATIONS:
 - TYPE: Parent

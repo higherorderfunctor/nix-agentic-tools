@@ -187,7 +187,7 @@ def build_parser(grammar: dict, command: str | None, tag: str | None):
         help="one state field (DEPTH) or one node type (DECISION); default all",
     )
     output = semantics_parser.add_mutually_exclusive_group()
-    output.add_argument("--json", action="store_true", help="the sdoc-semantics/1 payload")
+    output.add_argument("--json", action="store_true", help="the sdoc-semantics/2 payload")
     output.add_argument("--mermaid", action="store_true", help="stateDiagram-v2 per machine")
     return parser
 
@@ -196,20 +196,15 @@ def run_semantics(args, grammar: dict) -> int:
     """`scribe semantics` -- ONE renderer, shared with `python -m sdoc_semantics`.
 
     Imported HERE rather than at module import, and the reason is the module
-    docstring above: `scribe` is stdlib-only so that every other subcommand
-    keeps working on any interpreter. `sdoc_semantics.engine` imports
-    `transitions`, which is delivered on the two interpreters that matter
-    (packages/strictdoc-grammar/lib/mkExtract.nix and devenv.nix's
-    grammarPython) and on nothing else. A missing engine must cost this one
-    subcommand, never `scribe set`.
+    docstring above: a missing or malformed semantics model must cost this one
+    subcommand, never `scribe set`. Both the command and the interpreter use
+    only the standard library.
     """
     try:
         from sdoc_semantics import cli as semantics_cli
-    except ImportError as exc:
+    except (ImportError, ValueError) as exc:
         print(
-            f"scribe: the semantics engine is unavailable ({exc}). It needs "
-            f"`transitions` on this interpreter; run under the dev shell or "
-            f"strictdoc-grammar-extract.",
+            f"scribe: the semantics engine is unavailable ({exc}).",
             file=sys.stderr,
         )
         return 1

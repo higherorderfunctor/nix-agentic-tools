@@ -76,7 +76,7 @@ uid_paths = _view_check().uid_paths
 
 SNAPSHOT_SCHEMA = "sdoc-board/2"
 ROWS_SCHEMA = "sdoc-perspective/2"
-SEMANTICS_SCHEMA = "sdoc-semantics/1"
+SEMANTICS_SCHEMA = "sdoc-semantics/2"
 STATE_FIELDS = ("STATUS", "DEPTH")
 STRUCTURAL = ("_TOC", "_NODE_TYPE", "RELATIONS")
 
@@ -157,6 +157,16 @@ def semantics_unavailable(reason: str) -> dict:
         "schema": SEMANTICS_SCHEMA,
         "machines": {},
         "by_type": {},
+        "gates": [],
+        "relation_contracts": [],
+        "actors": [],
+        "commands": [],
+        "events": [],
+        "operations": [],
+        "milestones": [],
+        "checkpoints": [],
+        "flows": [],
+        "gate_placement": [],
         "unavailable": reason,
     }
 
@@ -173,7 +183,7 @@ def adapt(
     """One export in, both payloads out. `project` is passed through verbatim
     into each payload's `project` key (root, generation, and friends).
 
-    `semantics` is the `sdoc-semantics/1` payload the engine computes from
+    `semantics` is the `sdoc-semantics/2` payload the engine computes from
     the same parsed grammar (states, transitions and rules per state field).
     The adapter does not compute it and does not validate it -- it carries
     it through onto the snapshot so one fetch answers both questions the

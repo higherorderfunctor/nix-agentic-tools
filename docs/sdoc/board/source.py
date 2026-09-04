@@ -107,14 +107,13 @@ class DaemonSource:
 
 
 def semantics_payload(grammar: dict) -> dict:
-    """The `sdoc-semantics/1` payload, or an explicit refusal to have one.
+    """The `sdoc-semantics/2` payload, or an explicit refusal to have one.
 
     A SOFT import, deliberately, and the only soft thing about it: the
     engine lives in `dev/scripts/sdoc_semantics` -- `build_payload` is its
     declared seam, not `payload(semantics(), ...)`, which is the plumbing --
-    and it depends on `transitions`, which the board's interpreter may not
-    carry yet. Every failure mode -- the package absent, the dependency
-    absent, a malformed machine that raises while it is being built --
+    and uses only the standard library. Every failure mode -- the package
+    absent, a malformed model, or a machine that raises while it is built --
     collapses to the same unavailable shape carrying the reason, so the tab
     renders Fields and Relations as it always did and says why Lifecycle is
     empty.

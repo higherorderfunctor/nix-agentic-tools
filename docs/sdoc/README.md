@@ -137,7 +137,7 @@ silently dropped.
 
 `scribe semantics` works with the daemon down. With no argument it prints every
 machine; give it a state field (`DEPTH`) or a node type (`DECISION`) to narrow
-it. `--json` prints the `sdoc-semantics/1` payload the board consumes;
+it. `--json` prints the `sdoc-semantics/2` payload the board consumes;
 `--mermaid` prints one `stateDiagram-v2` per machine.
 
 ### Listing what a source file offers
@@ -193,7 +193,7 @@ relation to the task binding by id, and the binding carries a marker back.
 | `strictdoc-grammar-surface-current`               | the generated grammar surface still matches the pinned strictdoc                     |
 | `strictdoc-grammar-surface-live`                  | the typed grammar DSL evaluates and cannot weaken its types                          |
 | `strictdoc-nix-extractor`                         | the tree-sitter source extractors: nix, bash, and bash injected into nix strings     |
-| `strictdoc-semantics`                             | the state-field semantics engine and its `sdoc-semantics/1` payload                  |
+| `strictdoc-semantics`                             | the data-defined semantics interpreter and its `sdoc-semantics/2` payload            |
 
 ### Two things that will cost you an hour
 

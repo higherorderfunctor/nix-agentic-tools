@@ -1,70 +1,51 @@
 #!/usr/bin/env python3
-# cspell:ignore PYTHONDONTWRITEBYTECODE behaviour behaviourally mermaid sdoc sgra synthesises
-"""Contracts for dev/scripts/sdoc_semantics/ (the state-field semantics spike).
-
-    strictdoc-grammar-extract dev/scripts/test_sdoc_semantics.py
-
-THE INTERPRETER. Anything carrying `transitions` runs this -- the dev shell's
-`python3` does, and so does `strictdoc-grammar-extract`. CI uses the latter,
-because it is the same runner every scribe program and every other strictdoc
-check already uses, so one delivery seam is exercised rather than two.
-
-EVERY NEGATIVE CONTRACT CARRIES ITS POSITIVE CONTROL, and here that is not a
-formality: the three `transitions` traps this package avoids are avoided BY
-CONSTRUCTION, so an assertion that the bad shape is absent would pass just as
-happily against a library that never had the trap. Each one therefore also
-demonstrates the trap firing on a machine built the naive way, in the same
-contract, so the guard is shown to be guarding something.
-
-  1. `add_ordered_transitions` ROTATES to the machine's initial, dropping the
-     first edge and inventing a wrap-around one.
-  2. its `loop=True` default closes the ladder into a ring.
-  3. `auto_transitions=True` (Machine's default) synthesises `to_<state>()`
-     triggers that never appear in `markup` but DO appear in `get_triggers`,
-     so no state is ever terminal.
-
-The grammar read here is the REPOSITORY's, not a fixture, because the whole
-claim of `applies_to` is that it is derived rather than written down.
-"""
+# cspell:ignore PYTHONDONTWRITEBYTECODE sdoc sgra
+"""Executable contracts for the standard-library semantics interpreter."""
 
 from __future__ import annotations
 
-import dataclasses
+import copy
 import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from transitions.extensions.markup import MarkupMachine  # noqa: E402
-
 from scribe_grammar import parse_sgra  # noqa: E402
 from sdoc_semantics import (  # noqa: E402
+    MODEL_PATH,
+    PAYLOAD_KEYS,
+    PREDICATE_OPERATIONS,
     SCHEMA,
-    SEMANTICS,
-    Rule,
-    Semantic,
-    State,
-    Transition,
-    build_machine,
+    Interpreter,
+    ModelError,
+    build_payload,
     diagnostics,
+    evaluate,
+    gate_placement,
+    load_model,
     mermaid,
-    ordered,
     payload,
-    semantics,
-    states_of,
-    terminal_states,
+    validate_model,
 )
-from sdoc_semantics import cli as semantics_cli  # noqa: E402
-from sdoc_semantics.machines import depth as depth_machine  # noqa: E402
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 GRAMMAR = parse_sgra(REPO_ROOT / "docs" / "sdoc" / "grammar.sgra")
-PAYLOAD = payload(semantics(), GRAMMAR)
-
-PASSED: list = []
+SHIPPED = load_model(MODEL_PATH, GRAMMAR)
+SHIPPED_PAYLOAD = build_payload(GRAMMAR)
+EXPECTED_MACHINES = json.loads(
+    (
+        Path(__file__).parent
+        / "sdoc_semantics"
+        / "tests"
+        / "fixtures"
+        / "shipped-machines.json"
+    ).read_text()
+)
+PASSED: list[str] = []
 
 
 def contract(name: str):
@@ -80,425 +61,637 @@ def contract(name: str):
     return wrap
 
 
-def fixture_grammar(tag_fields: dict) -> dict:
-    """A `parse_sgra`-shaped grammar: `{TAG: [(field, options), ...]}`."""
+def empty_model() -> dict:
     return {
-        tag: {
-            "prefix": tag[:3] + "-",
-            "fields": [
-                {"name": name, "kind": "SingleChoice", "options": list(options),
-                 "required": True}
-                for name, options in fields
-            ],
-            "roles": [],
-        }
-        for tag, fields in tag_fields.items()
+        "schema": "sdoc-semantics-model/1",
+        "model_version": "fixture",
+        "lifecycles": [],
+        "actors": [],
+        "commands": [],
+        "events": [],
+        "operations": [],
+        "gates": [],
+        "relation_contracts": [],
+        "checkpoints": [],
+        "milestones": [],
+        "flows": [],
+        "rules": [],
     }
 
 
-def edges(semantic: Semantic) -> list:
-    return [(t.source, t.dest) for t in semantic.transitions]
+def lifecycle(
+    name="L",
+    field="F",
+    states=("a", "b"),
+    transitions=(),
+    *,
+    initial="a",
+    terminal=("b",),
+    subject=None,
+) -> dict:
+    return {
+        "name": name,
+        "subject": subject or {"kind": "field", "field": field},
+        "states": [
+            {"name": state, "label": state, "note": f"state {state}"}
+            for state in states
+        ],
+        "initial": initial,
+        "terminal": list(terminal),
+        "transitions": list(transitions),
+        "rules": [],
+    }
 
 
-# ── the three transitions traps, each with the trap demonstrated ─────────
+def transition(
+    trigger="go", source="a", dest="b", *, gates=(), writes=(), emits=()
+) -> dict:
+    return {
+        "trigger": trigger,
+        "from": source,
+        "to": dest,
+        "gates": list(gates),
+        "writes": list(writes),
+        "emits": list(emits),
+        "rule_text": "fixture move",
+        "settled": False,
+    }
 
 
-@contract("no machine closes into a ring (loop=True is never reachable)")
-def test_no_wrap_around_edge() -> None:
-    for semantic in semantics():
-        names = semantic.state_names()
-        assert (names[-1], names[0]) not in edges(semantic), semantic.field
-        assert all(t.dest != semantic.initial for t in semantic.transitions), (
-            f"{semantic.field}: something re-enters the initial state"
+def node(uid="N", node_type="WORK", **fields) -> dict:
+    return {"uid": uid, "type": node_type, "fields": fields}
+
+
+def graph(*nodes, edges=()) -> dict:
+    return {"nodes": {row["uid"]: row for row in nodes}, "edges": list(edges)}
+
+
+def fixture_model(*, gate=None, command=True) -> dict:
+    model = empty_model()
+    gates = [gate] if gate else []
+    model["gates"] = gates
+    model["lifecycles"] = [
+        lifecycle(transitions=[transition(gates=[gate["name"]] if gate else [])])
+    ]
+    if command:
+        model["commands"] = [
+            {"name": "move", "lifecycle": "L", "trigger": "go", "actor": None}
+        ]
+    return model
+
+
+def assert_shipped_diagnostics_silent(fragment: str) -> None:
+    found = [
+        message
+        for row in SHIPPED["lifecycles"]
+        for message in diagnostics(row, GRAMMAR)
+        if fragment in message
+    ]
+    assert found == [], found
+
+
+PREDICATE_GRAPH = graph(
+    node("A", "WORK", DEPTH="implemented", FLAG="yes"),
+    node("B", "REQUIREMENT", DEPTH="verified", FLAG="yes"),
+    node("C", "EVIDENCE", DEPTH="sketch", FLAG="no"),
+    edges=(
+        {"role": "Assumes", "source": "A", "target": "B"},
+        {"role": "Assumes", "source": "A", "target": "C"},
+    ),
+)
+PREDICATE_NODE = PREDICATE_GRAPH["nodes"]["A"]
+
+
+@contract("field_is has positive and negative controls")
+def test_field_is() -> None:
+    assert evaluate(
+        {"op": "field_is", "field": "FLAG", "value": "yes"},
+        PREDICATE_NODE,
+        PREDICATE_GRAPH,
+        "human",
+        SHIPPED,
+    )
+    assert not evaluate(
+        {"op": "field_is", "field": "FLAG", "value": "no"},
+        PREDICATE_NODE,
+        PREDICATE_GRAPH,
+        "human",
+        SHIPPED,
+    )
+
+
+@contract("field_at_least uses ladder rank in both directions")
+def test_field_at_least() -> None:
+    assert evaluate(
+        {"op": "field_at_least", "field": "DEPTH", "value": "needs-spike"},
+        PREDICATE_NODE,
+        PREDICATE_GRAPH,
+        "human",
+        SHIPPED,
+    )
+    assert not evaluate(
+        {"op": "field_at_least", "field": "DEPTH", "value": "verified"},
+        PREDICATE_NODE,
+        PREDICATE_GRAPH,
+        "human",
+        SHIPPED,
+    )
+
+
+@contract("has_relation checks direction and optional target type")
+def test_has_relation() -> None:
+    assert evaluate(
+        {"op": "has_relation", "role": "Assumes", "direction": "out", "target_type": "REQUIREMENT"},
+        PREDICATE_NODE,
+        PREDICATE_GRAPH,
+        "human",
+        SHIPPED,
+    )
+    assert not evaluate(
+        {"op": "has_relation", "role": "Assumes", "direction": "in", "target_type": "REQUIREMENT"},
+        PREDICATE_NODE,
+        PREDICATE_GRAPH,
+        "human",
+        SHIPPED,
+    )
+
+
+@contract("all_related says explicitly what an empty set means")
+def test_all_related() -> None:
+    common = {
+        "op": "all_related",
+        "role": "Assumes",
+        "direction": "out",
+        "predicate": {"op": "field_is", "field": "FLAG", "value": "yes"},
+    }
+    assert evaluate(
+        dict(common, empty="pass"),
+        PREDICATE_GRAPH["nodes"]["C"],
+        PREDICATE_GRAPH,
+        "human",
+        SHIPPED,
+    )
+    assert not evaluate(
+        dict(common, empty="pass"),
+        PREDICATE_NODE,
+        PREDICATE_GRAPH,
+        "human",
+        SHIPPED,
+    )
+    assert not evaluate(
+        dict(common, empty="fail"),
+        PREDICATE_GRAPH["nodes"]["C"],
+        PREDICATE_GRAPH,
+        "human",
+        SHIPPED,
+    )
+
+
+@contract("any_related says explicitly what an empty set means")
+def test_any_related() -> None:
+    common = {
+        "op": "any_related",
+        "role": "Assumes",
+        "direction": "out",
+        "predicate": {"op": "field_is", "field": "FLAG", "value": "no"},
+    }
+    assert evaluate(
+        dict(common, empty="fail"),
+        PREDICATE_NODE,
+        PREDICATE_GRAPH,
+        "human",
+        SHIPPED,
+    )
+    assert not evaluate(
+        dict(common, empty="fail"),
+        PREDICATE_GRAPH["nodes"]["B"],
+        PREDICATE_GRAPH,
+        "human",
+        SHIPPED,
+    )
+    assert evaluate(
+        dict(common, empty="pass"),
+        PREDICATE_GRAPH["nodes"]["B"],
+        PREDICATE_GRAPH,
+        "human",
+        SHIPPED,
+    )
+
+
+@contract("actor_in has positive and negative controls")
+def test_actor_in() -> None:
+    predicate = {"op": "actor_in", "actors": ["human"]}
+    assert evaluate(predicate, PREDICATE_NODE, PREDICATE_GRAPH, "human", SHIPPED)
+    assert not evaluate(predicate, PREDICATE_NODE, PREDICATE_GRAPH, "llm", SHIPPED)
+
+
+@contract("and has positive and negative controls")
+def test_and() -> None:
+    yes = {"op": "field_is", "field": "FLAG", "value": "yes"}
+    no = {"op": "field_is", "field": "FLAG", "value": "no"}
+    assert evaluate({"op": "and", "predicates": [yes, yes]}, PREDICATE_NODE, PREDICATE_GRAPH, "human", SHIPPED)
+    assert not evaluate({"op": "and", "predicates": [yes, no]}, PREDICATE_NODE, PREDICATE_GRAPH, "human", SHIPPED)
+
+
+@contract("or has positive and negative controls")
+def test_or() -> None:
+    yes = {"op": "field_is", "field": "FLAG", "value": "yes"}
+    no = {"op": "field_is", "field": "FLAG", "value": "no"}
+    assert evaluate({"op": "or", "predicates": [no, yes]}, PREDICATE_NODE, PREDICATE_GRAPH, "human", SHIPPED)
+    assert not evaluate({"op": "or", "predicates": [no, no]}, PREDICATE_NODE, PREDICATE_GRAPH, "human", SHIPPED)
+
+
+@contract("not has positive and negative controls")
+def test_not() -> None:
+    yes = {"op": "field_is", "field": "FLAG", "value": "yes"}
+    no = {"op": "field_is", "field": "FLAG", "value": "no"}
+    assert evaluate({"op": "not", "predicate": no}, PREDICATE_NODE, PREDICATE_GRAPH, "human", SHIPPED)
+    assert not evaluate({"op": "not", "predicate": yes}, PREDICATE_NODE, PREDICATE_GRAPH, "human", SHIPPED)
+
+
+@contract("the closed operation table and shipped empty gates are explicit")
+def test_closed_operation_table() -> None:
+    assert tuple(sorted(PREDICATE_OPERATIONS)) == PREDICATE_OPERATIONS
+    assert len(PREDICATE_OPERATIONS) == 9
+    assert SHIPPED["gates"] == []
+
+
+@contract("an unreachable state is diagnosed beside silent shipped lifecycles")
+def test_unreachable_diagnostic() -> None:
+    row = lifecycle(states=("a", "b", "lost"), transitions=[transition()])
+    assert any("unreachable" in message and "lost" in message for message in diagnostics(row))
+    assert not [message for message in diagnostics(lifecycle(transitions=[transition()])) if "unreachable" in message]
+    assert_shipped_diagnostics_silent("unreachable")
+
+
+@contract("a missing initial is diagnosed beside silent shipped lifecycles")
+def test_initial_diagnostic() -> None:
+    row = lifecycle(transitions=[transition()], initial=None)
+    assert any("no initial" in message for message in diagnostics(row))
+    assert not [message for message in diagnostics(lifecycle(transitions=[transition()])) if "no initial" in message]
+    assert_shipped_diagnostics_silent("no initial")
+
+
+@contract("a missing terminal is diagnosed beside silent shipped lifecycles")
+def test_terminal_diagnostic() -> None:
+    row = lifecycle(transitions=[transition()], terminal=())
+    assert any("no terminal" in message for message in diagnostics(row))
+    assert not [message for message in diagnostics(lifecycle(transitions=[transition()])) if "no terminal" in message]
+    assert_shipped_diagnostics_silent("no terminal")
+
+
+@contract("ambiguous dispatch is diagnosed beside silent shipped lifecycles")
+def test_ambiguous_diagnostic() -> None:
+    row = lifecycle(
+        states=("a", "b", "c"),
+        transitions=[transition(dest="b"), transition(dest="c")],
+        terminal=("b", "c"),
+    )
+    assert any("ambiguous" in message for message in diagnostics(row))
+    named = lifecycle(
+        states=("a", "b", "c"),
+        transitions=[transition("left", dest="b"), transition("right", dest="c")],
+        terminal=("b", "c"),
+    )
+    assert not [message for message in diagnostics(named) if "ambiguous" in message]
+    assert_shipped_diagnostics_silent("ambiguous")
+
+
+@contract("grammar vocabulary mismatch is diagnosed beside the real match")
+def test_vocabulary_diagnostic() -> None:
+    grammar = {
+        "WORK": {
+            "fields": [{"name": "F", "options": ["a", "different"]}],
+            "roles": [],
+        }
+    }
+    row = lifecycle(transitions=[transition()])
+    found = diagnostics(row, grammar)
+    assert any("does not declare" in message for message in found)
+    assert any("has no state" in message for message in found)
+    assert all(diagnostics(item, GRAMMAR) == [] for item in SHIPPED["lifecycles"])
+
+
+@contract("load validation rejects an unknown schema with known vocabulary")
+def test_unknown_schema() -> None:
+    model = empty_model()
+    model["schema"] = "unknown"
+    try:
+        validate_model(model)
+    except ModelError as error:
+        assert "sdoc-semantics-model/1" in str(error)
+    else:
+        raise AssertionError("unknown schema loaded")
+
+
+@contract("load validation rejects a bogus predicate operation")
+def test_unknown_predicate_operation() -> None:
+    model = fixture_model(
+        gate={"name": "blocked", "sees": [], "predicate": {"op": "python"}}
+    )
+    try:
+        validate_model(model)
+    except ModelError as error:
+        assert "unknown predicate operation" in str(error)
+        assert "field_is" in str(error)
+    else:
+        raise AssertionError("bogus operation loaded")
+
+
+@contract("load validation rejects an unknown transition state")
+def test_unknown_state() -> None:
+    model = fixture_model()
+    model["lifecycles"][0]["transitions"][0]["to"] = "missing"
+    try:
+        validate_model(model)
+    except ModelError as error:
+        assert "missing" in str(error)
+        assert "known states: a, b" in str(error)
+    else:
+        raise AssertionError("unknown state loaded")
+
+
+@contract("gate lifecycle actor checkpoint and transition references resolve")
+def test_reference_validation() -> None:
+    cases = []
+    model = fixture_model()
+    model["lifecycles"][0]["transitions"][0]["gates"] = ["missing"]
+    cases.append((model, "known gates"))
+    model = fixture_model()
+    model["commands"][0]["lifecycle"] = "missing"
+    cases.append((model, "known lifecycles"))
+    model = fixture_model()
+    model["commands"][0]["actor"] = "missing"
+    cases.append((model, "known actors"))
+    model = fixture_model()
+    model["flows"] = [{"name": "F", "checkpoint": "missing", "steps": []}]
+    cases.append((model, "known checkpoints"))
+    model = fixture_model()
+    model["flows"] = [{"name": "F", "steps": [{"transition": "missing", "expected": "taken"}]}]
+    cases.append((model, "known transitions"))
+    for candidate, expected in cases:
+        try:
+            validate_model(candidate)
+        except ModelError as error:
+            assert expected in str(error), (expected, str(error))
+        else:
+            raise AssertionError(f"unresolved reference loaded: {expected}")
+
+
+@contract("grammar validation rejects an unknown field and role")
+def test_subject_validation() -> None:
+    grammar = {
+        "WORK": {
+            "fields": [{"name": "F", "options": ["a", "b"]}],
+            "roles": [{"role": "Assumes", "type": "Parent"}],
+        }
+    }
+    model = fixture_model()
+    model["lifecycles"][0]["subject"]["field"] = "MISSING"
+    try:
+        validate_model(model, grammar)
+    except ModelError as error:
+        assert "known fields" in str(error)
+    else:
+        raise AssertionError("unknown field loaded")
+    model = fixture_model()
+    model["lifecycles"][0]["subject"] = {
+        "kind": "role",
+        "role": "Missing",
+        "field": "F",
+    }
+    try:
+        validate_model(model, grammar)
+    except ModelError as error:
+        assert "known roles" in str(error)
+    else:
+        raise AssertionError("unknown role loaded")
+
+
+@contract("a refused gate leaves the graph byte-for-byte unchanged")
+def test_transaction_refusal() -> None:
+    gate = {
+        "name": "ready",
+        "sees": ["READY"],
+        "predicate": {"op": "field_is", "field": "READY", "value": "yes"},
+    }
+    interpreter = Interpreter(fixture_model(gate=gate))
+    original = graph(node("N", F="a", READY="no"))
+    before = copy.deepcopy(original)
+    result = interpreter.fire(original, {"name": "move", "subject": "N"}, "human")
+    assert result.verdict == "refused" and result.refused_by == "ready"
+    assert original == before
+    allowed = graph(node("N", F="a", READY="yes"))
+    result = interpreter.fire(allowed, {"name": "move", "subject": "N"}, "human")
+    assert result.taken and allowed["nodes"]["N"]["fields"]["F"] == "b"
+    assert SHIPPED["gates"] == []
+
+
+@contract("ripple order and provenance are deterministic")
+def test_ripple() -> None:
+    model = empty_model()
+    model["events"] = [
+        {"name": "tick", "external": False},
+        {"name": "pong", "external": False},
+    ]
+    model["operations"] = [
+        {"name": "start", "subject": {"kind": "field", "field": "A"}, "writes": [], "emits": ["tick"]}
+    ]
+    model["lifecycles"] = [
+        lifecycle("FIRST", "A", transitions=[transition("tick", emits=["pong"])]),
+        lifecycle("SECOND", "B", states=("x", "y"), transitions=[transition("pong", "x", "y")], initial="x", terminal=("y",)),
+    ]
+    data = graph(node("Z", A="a", B="x"), node("A", A="a", B="x"))
+    result = Interpreter(model).fire(data, {"name": "start", "subject": "Z"}, "human")
+    assert result.taken
+    assert [entry["subject"] for entry in result.log] == ["Z", "A", "Z", "A", "Z"]
+    assert result.log[1]["event"] == "tick" and result.log[1]["emitter"] == "Z"
+    assert result.log[-1]["transition"] == "SECOND:pong:x:y"
+    assert SHIPPED["events"] == [] and SHIPPED["operations"] == []
+
+
+@contract("a cyclic ripple refuses by the bound without committing")
+def test_ripple_bound() -> None:
+    model = empty_model()
+    model["events"] = [
+        {"name": "forward", "external": False},
+        {"name": "back", "external": False},
+    ]
+    model["operations"] = [
+        {"name": "start", "subject": {"kind": "field", "field": "F"}, "writes": [], "emits": ["forward"]}
+    ]
+    model["lifecycles"] = [
+        lifecycle(
+            transitions=[
+                transition("forward", "a", "b", emits=["back"]),
+                transition("back", "b", "a", emits=["forward"]),
+            ]
         )
-
-    # POSITIVE CONTROL: upstream's helper adds exactly that edge by DEFAULT,
-    # which for AUTHORED_BY would be a laundering path from human back to llm.
-    naive = MarkupMachine(
-        model=None, states=["a", "b", "c"], initial="a", auto_transitions=False
+    ]
+    data = graph(node("N", F="a"))
+    before = copy.deepcopy(data)
+    result = Interpreter(model, step_bound=4).fire(
+        data, {"name": "start", "subject": "N"}, "human"
     )
-    naive.add_ordered_transitions(states=["a", "b", "c"], trigger="go")
-    ring = [(t["source"], t["dest"]) for t in naive.markup["transitions"]]
-    assert ("c", "a") in ring, ring
+    assert result.verdict == "refused" and result.refused_by == "step-bound"
+    assert data == before
 
 
-@contract("initial is the first rung, so nothing rotates")
-def test_initial_is_the_first_rung() -> None:
-    for semantic in semantics():
-        assert semantic.initial == semantic.states[0].name, semantic.field
-        assert edges(semantic)[0][0] == semantic.initial, semantic.field
-
-    # POSITIVE CONTROL: with initial NOT first, add_ordered_transitions rotates
-    # the sequence -- the a->b edge is gone and a c->a edge nobody wrote is
-    # there. This is why `Semantic.initial` is a property and not a field.
-    rotated = MarkupMachine(
-        model=None, states=["a", "b", "c"], initial="b", auto_transitions=False
+@contract("relation contracts report role endpoint and cycle violations")
+def test_relation_contracts() -> None:
+    model = empty_model()
+    model["relation_contracts"] = [
+        {
+            "role": "Assumes",
+            "from_types": ["WORK"],
+            "to_types": ["REQUIREMENT"],
+            "admits_cycles": False,
+            "propagates": [],
+        }
+    ]
+    interpreter = Interpreter(model)
+    valid = graph(
+        node("A", "WORK"),
+        node("B", "REQUIREMENT"),
+        edges=[{"role": "Assumes", "source": "A", "target": "B"}],
     )
-    rotated.add_ordered_transitions(states=["a", "b", "c"], trigger="go", loop=False)
-    pairs = [(t["source"], t["dest"]) for t in rotated.markup["transitions"]]
-    assert ("a", "b") not in pairs, pairs
-    assert ("c", "a") in pairs, pairs
-
-
-@contract("auto_transitions is off, so terminal states are real")
-def test_no_auto_transitions() -> None:
-    for semantic in semantics():
-        machine = build_machine(semantic)
-        for name in semantic.state_names():
-            assert not any(
-                trigger.startswith("to_") for trigger in machine.get_triggers(name)
-            ), (semantic.field, name, machine.get_triggers(name))
-        assert terminal_states(semantic, machine), semantic.field
-
-    # POSITIVE CONTROL: the default synthesises to_<state> for every state, and
-    # `markup` does NOT show them -- so a reviewer reading the payload would
-    # see nothing wrong while every terminal list silently emptied.
-    leaky = MarkupMachine(model=None, states=["a", "b"], initial="a")
-    leaky.add_transition("go", "a", "b")
-    assert "to_a" in leaky.get_triggers("b"), leaky.get_triggers("b")
-    assert not any(
-        t["trigger"].startswith("to_") for t in leaky.markup["transitions"]
-    ), leaky.markup["transitions"]
-
-
-# ── the diagnostics ──────────────────────────────────────────────────────
-
-
-@contract("an unreachable state is reported, and a reachable one is not")
-def test_unreachable_state() -> None:
-    stranded = Semantic(
-        field="F",
-        states=states_of(("a",), ("b",), ("orphan",)),
-        transitions=(Transition(trigger="go", source="a", dest="b"),),
+    assert interpreter.check(valid) == []
+    invalid = graph(
+        node("A", "REQUIREMENT"),
+        node("B", "WORK"),
+        edges=[
+            {"role": "Assumes", "source": "A", "target": "B"},
+            {"role": "Assumes", "source": "B", "target": "A"},
+            {"role": "Unknown", "source": "A", "target": "B"},
+        ],
     )
-    found = diagnostics(stranded, build_machine(stranded))
-    assert any("orphan" in message and "unreachable" in message for message in found), found
-
-    # POSITIVE CONTROL: the same shape with the edge added reports nothing.
-    joined = Semantic(
-        field="F",
-        states=stranded.states,
-        transitions=stranded.transitions
-        + (Transition(trigger="go", source="b", dest="orphan"),),
-    )
-    assert not [m for m in diagnostics(joined, build_machine(joined)) if "unreachable" in m]
+    found = interpreter.check(invalid)
+    assert any("source type" in message for message in found)
+    assert any("target type" in message for message in found)
+    assert any("no relation contract" in message for message in found)
+    assert any("cycle" in message for message in found)
+    assert SHIPPED["relation_contracts"] == []
 
 
-@contract("two transitions on one trigger from one state are reported")
-def test_ambiguous_trigger() -> None:
-    forked = Semantic(
-        field="F",
-        states=states_of(("a",), ("b",), ("c",)),
-        transitions=(
-            Transition(trigger="go", source="a", dest="b"),
-            Transition(trigger="go", source="a", dest="c"),
-        ),
-    )
-    found = diagnostics(forked, build_machine(forked))
-    assert any("ambiguous" in message for message in found), found
+@contract("gate placement derives checkpoint visibility in list order")
+def test_gate_placement() -> None:
+    model = empty_model()
+    model["actors"] = [{"name": "human"}]
+    model["gates"] = [
+        {
+            "name": "g",
+            "sees": ["field:F", "actor"],
+            "predicate": {"op": "actor_in", "actors": ["human"]},
+        }
+    ]
+    model["checkpoints"] = [
+        {"name": "too-early", "sees": ["field:F"]},
+        {"name": "ready", "sees": ["field:F", "actor", "relations"]},
+    ]
+    assert gate_placement(model) == [{"gate": "g", "checkpoints": ["ready"]}]
+    assert gate_placement(SHIPPED) == []
 
-    # POSITIVE CONTROL: the SAME fork on two DIFFERENT triggers is legal, and
-    # is exactly what STATUS does -- so this must not fire on it.
-    named = Semantic(
-        field="F",
-        states=forked.states,
-        transitions=(
-            Transition(trigger="accept", source="a", dest="b"),
-            Transition(trigger="reject", source="a", dest="c"),
-        ),
-    )
-    assert not [m for m in diagnostics(named, build_machine(named)) if "ambiguous" in m]
-    assert not [
-        m for m in PAYLOAD["machines"]["STATUS"]["diagnostics"] if "ambiguous" in m
+
+@contract("flows remain data and their references validate")
+def test_flows() -> None:
+    model = fixture_model()
+    reference = "L:go:a:b"
+    model["flows"] = [
+        {"name": "happy", "steps": [{"transition": reference, "expected": "taken"}]}
+    ]
+    validate_model(model)
+    assert model["flows"][0]["steps"][0]["transition"] == reference
+    assert SHIPPED["flows"] == []
+
+
+@contract("payload v2 keys are exact and additions stay ordered")
+def test_payload_keys() -> None:
+    assert tuple(SHIPPED_PAYLOAD) == PAYLOAD_KEYS
+    assert set(SHIPPED_PAYLOAD) == set(PAYLOAD_KEYS)
+    assert SHIPPED_PAYLOAD["schema"] == SCHEMA
+
+
+@contract("presentation order survives model loading and payload emission")
+def test_presentation_order() -> None:
+    assert [row["name"] for row in SHIPPED["lifecycles"]] == [
+        "DEPTH",
+        "STATUS",
+        "AUTHORED_BY",
+    ]
+    assert list(SHIPPED_PAYLOAD["machines"]) == ["DEPTH", "STATUS", "AUTHORED_BY"]
+    assert [row["name"] for row in SHIPPED_PAYLOAD["machines"]["DEPTH"]["states"]] == [
+        "sketch",
+        "needs-design",
+        "needs-spike",
+        "interface-settled",
+        "implemented",
+        "verified",
     ]
 
 
-@contract("a lifecycle with no terminal state is reported")
-def test_no_terminal_state() -> None:
-    ring = Semantic(
-        field="F",
-        states=states_of(("a",), ("b",)),
-        transitions=(
-            Transition(trigger="go", source="a", dest="b"),
-            Transition(trigger="go", source="b", dest="a"),
-        ),
-    )
-    found = diagnostics(ring, build_machine(ring))
-    assert any("no terminal state" in message for message in found), found
-
-    # POSITIVE CONTROL: drop the closing edge and the complaint goes away.
-    line = Semantic(field="F", states=ring.states, transitions=ring.transitions[:1])
-    assert not [m for m in diagnostics(line, build_machine(line)) if "terminal" in m]
+@contract("the shipped lifecycle rows exactly match the v1 baseline")
+def test_shipped_rows() -> None:
+    assert SHIPPED_PAYLOAD["machines"] == EXPECTED_MACHINES
 
 
-@contract("a state the grammar does not declare is reported")
-def test_grammar_vocabulary_cross_check() -> None:
-    """SLICE-BEHAVIOUR-MODEL's cross-check, and the one an operator hand-editing
-    a rung trips first."""
-    grammar = fixture_grammar({"THING": [("F", ["a", "b"])]})
-    typo = Semantic(
-        field="F",
-        states=states_of(("a",), ("bb",)),
-        transitions=(Transition(trigger="go", source="a", dest="bb"),),
-    )
-    found = diagnostics(typo, build_machine(typo), grammar)
-    assert any("does not declare" in message for message in found), found
-
-    # POSITIVE CONTROL, twice: the corrected spelling is silent, and so is the
-    # REAL corpus -- every rung of every machine is a value the grammar knows.
-    fixed = Semantic(
-        field="F",
-        states=states_of(("a",), ("b",)),
-        transitions=(Transition(trigger="go", source="a", dest="b"),),
-    )
-    assert not diagnostics(fixed, build_machine(fixed), grammar)
-    for field, entry in PAYLOAD["machines"].items():
-        assert entry["diagnostics"] == [], (field, entry["diagnostics"])
-
-
-# ── the payload contract ─────────────────────────────────────────────────
-
-
-@contract("the payload is sdoc-semantics/1, exactly as the board reads it")
-def test_payload_shape() -> None:
-    assert PAYLOAD["schema"] == SCHEMA == "sdoc-semantics/1", PAYLOAD["schema"]
-    assert set(PAYLOAD) == {"schema", "machines", "by_type"}, sorted(PAYLOAD)
-    for field, entry in PAYLOAD["machines"].items():
-        assert entry["field"] == field, entry
-        assert set(entry) == {
-            "field", "applies_to", "initial", "terminal", "states",
-            "transitions", "rules", "diagnostics",
-        }, sorted(entry)
-        for state in entry["states"]:
-            assert set(state) <= {"name", "label", "note"}, sorted(state)
-            assert state["name"] and state["label"], state
-        for transition in entry["transitions"]:
-            assert set(transition) == {
-                "trigger", "source", "dest", "conditions", "unless",
-                "rule_text", "settled",
-            }, sorted(transition)
-            assert transition["settled"] is False, transition
-        for rule in entry["rules"]:
-            assert set(rule) == {"id", "text", "kind", "settled", "cites"}, sorted(rule)
-    # JSON-able, which is the actual requirement -- the board eats this.
-    assert json.loads(json.dumps(PAYLOAD)) == PAYLOAD
-
-
-@contract("build_payload is the seam every consumer reaches for")
-def test_build_payload_is_the_seam() -> None:
-    """The board, `scribe semantics` and the CLI all enter here, so this one
-    call has to be the whole contract -- a parsed grammar in, sdoc-semantics/1
-    out, with no registry plumbing on the caller's side."""
-    import sdoc_semantics
-
-    assert sdoc_semantics.build_payload(GRAMMAR) == PAYLOAD
-    assert semantics_cli.build_payload(GRAMMAR) == PAYLOAD
-
-
-@contract("states are in LADDER order, not alphabetical")
-def test_ladder_order_survives() -> None:
-    names = [state["name"] for state in PAYLOAD["machines"]["DEPTH"]["states"]]
-    assert names[0] == "sketch" and names[-1] == "verified", names
-    assert names != sorted(names), names
-    assert PAYLOAD["machines"]["STATUS"]["states"][0]["name"] == "open"
-
-
-@contract("by_type is the reverse index, and lists every grammar tag")
-def test_by_type_reverse_index() -> None:
-    assert set(PAYLOAD["by_type"]) == set(GRAMMAR), sorted(PAYLOAD["by_type"])
-    for field, entry in PAYLOAD["machines"].items():
-        for tag in entry["applies_to"]:
-            assert field in PAYLOAD["by_type"][tag], (tag, field)
-    for tag, fields in PAYLOAD["by_type"].items():
-        for field in fields:
-            assert tag in PAYLOAD["machines"][field]["applies_to"], (tag, field)
-    # COMMENTARY carries STANDING, which has no machine yet -- so it is present
-    # with only AUTHORED_BY rather than absent. Indexing it must not KeyError.
-    assert PAYLOAD["by_type"]["COMMENTARY"] == ["AUTHORED_BY"], PAYLOAD["by_type"]
-
-
-# ── derivation from the grammar, never hard-coded ────────────────────────
-
-
-@contract("applies_to is read from the real grammar")
-def test_applies_to_matches_the_corpus() -> None:
-    assert PAYLOAD["machines"]["DEPTH"]["applies_to"] == [
-        "MECHANISM", "REQUIREMENT", "EVIDENCE", "USE_CASE", "NARRATIVE", "WORK",
-    ], PAYLOAD["machines"]["DEPTH"]["applies_to"]
-    assert PAYLOAD["machines"]["STATUS"]["applies_to"] == ["DECISION"]
-    assert PAYLOAD["machines"]["AUTHORED_BY"]["applies_to"] == list(GRAMMAR)
-
-
-@contract("applies_to follows a DIFFERENT grammar, so it is derived")
-def test_applies_to_is_not_a_constant() -> None:
-    """The control the previous contract cannot be: asserting six tags is also
-    what a hard-coded list would do."""
-    grammar = fixture_grammar(
-        {
-            "ONLY": [("DEPTH", list(depth_machine.SEMANTIC.state_names()))],
-            "OTHER": [("AUTHORED_BY", ["llm", "llm-accepted", "llm-adopted", "human"])],
-        }
-    )
-    other = payload(semantics(), grammar)
-    assert other["machines"]["DEPTH"]["applies_to"] == ["ONLY"]
-    assert other["machines"]["STATUS"]["applies_to"] == []
-    assert other["by_type"] == {"ONLY": ["DEPTH"], "OTHER": ["AUTHORED_BY"]}
-
-
-@contract("the field name is data: renaming it moves everything downstream")
-def test_field_name_is_data() -> None:
-    """WORK-DEPTH-RENAME is live, so a rename must be ONE edit inside
-    machines/depth.py. Asserted behaviourally rather than by grepping for the
-    word: prose mentions it everywhere, and a grep would either fail on those
-    or be so narrow it proved nothing. Rename the field on the record and every
-    downstream key has to follow it, with no leftover under the old name."""
-    renamed = dataclasses.replace(depth_machine.SEMANTIC, field="RIPENESS")
-    grammar = fixture_grammar(
-        {"THING": [("RIPENESS", list(renamed.state_names()))]}
-    )
-    data = payload([renamed], grammar)
-    assert list(data["machines"]) == ["RIPENESS"], list(data["machines"])
-    assert data["machines"]["RIPENESS"]["field"] == "RIPENESS"
-    assert data["machines"]["RIPENESS"]["applies_to"] == ["THING"]
-    assert data["by_type"] == {"THING": ["RIPENESS"]}, data["by_type"]
-    assert "RIPENESS" in semantics_cli.render(data, "THING")
-    assert data["machines"]["RIPENESS"]["diagnostics"] == []
-
-
-# ── declarations, rendering and the front ends ───────────────────────────
-
-
-@contract("a rule kind outside the vocabulary is refused")
-def test_rule_kind_is_closed() -> None:
-    for semantic in semantics():
-        for rule in semantic.rules:
-            assert rule.kind in ("transcription", "policy", "derived", "open"), rule
-    try:
-        Rule(id="X", text="y", kind="vibes")
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("Rule accepted a kind outside RULE_KINDS")
-
-
-@contract("every machine carries at least one OPEN question")
-def test_open_questions_travel() -> None:
-    """The spike's actual deliverable. A machine with no open rule is claiming
-    to be finished, and none of these are."""
-    for semantic in semantics():
-        assert any(rule.kind == "open" for rule in semantic.rules), semantic.field
-        assert all(not t.settled for t in semantic.transitions), semantic.field
-
-
-@contract("ordered() expands adjacent pairs and nothing else")
-def test_ordered_helper() -> None:
-    built = ordered(states_of(("a",), ("b",), ("c",)), "go")
-    assert [(t.source, t.dest) for t in built] == [("a", "b"), ("b", "c")]
-    assert {t.trigger for t in built} == {"go"}
-    assert ordered([State("only")], "go") == ()
-
-
-@contract("mermaid renders a stateDiagram-v2 with every edge")
+@contract("mermaid uses safe identifiers and carries gate names")
 def test_mermaid() -> None:
-    drawn = mermaid(SEMANTICS["STATUS"])
-    assert drawn is not None, "the diagrams extra did not load"
-    assert "stateDiagram-v2" in drawn, drawn
-    for transition in SEMANTICS["STATUS"].transitions:
-        assert (
-            f"{transition.source} --> {transition.dest}: {transition.trigger}" in drawn
-        ), drawn
-
-
-@contract("the renderer shows the rules and the open flag")
-def test_render() -> None:
-    text = semantics_cli.render(PAYLOAD, "DEPTH")
-    assert "DEPTH-REGRESSION-UNDECIDED" in text, text
-    assert "[OPEN]" in text, text
-    assert "MECHANISM" in text, text
-    # A TYPE selector goes through by_type, the same index the board reads.
-    assert "STATUS" in semantics_cli.render(PAYLOAD, "DECISION")
-    assert "STATUS" not in semantics_cli.render(PAYLOAD, "WORK")
-
-
-@contract("an unknown selector is refused, naming the choices")
-def test_selector_refusal() -> None:
-    try:
-        semantics_cli.select(PAYLOAD, "NOPE")
-    except SystemExit as exc:
-        assert "DEPTH" in str(exc.code) and "DECISION" in str(exc.code), exc.code
-    else:
-        raise AssertionError("an unknown selector was accepted")
-
-
-def run_scribe(*arguments: str, **overrides) -> subprocess.CompletedProcess:
-    """`scribe` in a child process that CANNOT reach a daemon.
-
-    PYTHONPATH is carried over deliberately: on strictdoc's venv that variable
-    IS the delivery of `transitions` and of this repository's own modules
-    (packages/strictdoc-grammar/lib/mkExtract.nix splices it onto the wrapper),
-    so a child started without it is not testing the shipped environment.
-    """
-    environment = {
-        "PATH": "/nonexistent",
-        "HOME": "/nonexistent",
-        "SCRIBE_SOCKET": "/nonexistent/scribe.sock",
-        "PYTHONDONTWRITEBYTECODE": "1",
-        "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
-    }
-    environment.update(overrides)
-    return subprocess.run(
-        [sys.executable, str(REPO_ROOT / "dev/scripts/scribe_cmd.py"),
-         "--root", str(REPO_ROOT), *arguments],
-        capture_output=True, text=True, env=environment,
+    row = lifecycle(
+        states=("needs-design", "implemented"),
+        transitions=[transition("advance", "needs-design", "implemented", gates=["ready-gate"])],
+        initial="needs-design",
+        terminal=("implemented",),
     )
+    drawing = mermaid(row)
+    assert "state_0 --> state_1 : advance [ready-gate]" in drawing
+    assert "needs-design -->" not in drawing
+    assert 'state "needs-design" as state_0' in drawing
 
 
-@contract("scribe semantics answers with no daemon in sight")
-def test_scribe_subcommand_short_circuits() -> None:
-    """It short-circuits BEFORE call_for_root, so it must answer with the
-    socket pointed at nothing -- which is the state an operator is in when the
-    graph will not load and they want to know what a value MEANS."""
-    result = run_scribe("semantics", "--json", "DEPTH")
-    assert result.returncode == 0, (result.returncode, result.stderr)
-    data = json.loads(result.stdout)
-    assert data["schema"] == SCHEMA, data
-    assert list(data["machines"]) == ["DEPTH"], list(data["machines"])
-    assert "daemon" not in result.stderr, result.stderr
+@contract("the CLI imports and renders with an isolated standard-library Python")
+def test_cli_stdlib() -> None:
+    environment = {
+        "PATH": os.environ.get("PATH", ""),
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            str(REPO_ROOT / "dev" / "scripts" / "sdoc_semantics" / "__main__.py"),
+            "--root",
+            str(REPO_ROOT),
+            "DEPTH",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "DEPTH   [sdoc-semantics/2]" in completed.stdout
 
 
-@contract("a missing engine costs one subcommand, not a traceback")
-def test_scribe_without_the_engine() -> None:
-    """POSITIVE CONTROL for the lazy import in `scribe_cmd.run_semantics`.
-
-    Stripping PYTHONPATH removes `transitions` on strictdoc's venv and removes
-    nothing on an interpreter that has it built in, so the contract is written
-    to hold on BOTH: either it still answers, or it refuses in ONE line that
-    names what is missing and how to get it. What it may never do is exit on an
-    ImportError traceback -- `scribe set` must survive an absent engine."""
-    result = run_scribe("semantics", "DEPTH", PYTHONPATH="")
-    if result.returncode == 0:
-        assert "DEPTH" in result.stdout, result.stdout
-        return
-    assert result.returncode == 1, result.returncode
-    assert "Traceback" not in result.stderr, result.stderr
-    assert "transitions" in result.stderr, result.stderr
-    assert "strictdoc-grammar-extract" in result.stderr, result.stderr
+@contract("load_model reads and validates a JSON fixture")
+def test_load_model() -> None:
+    model = fixture_model()
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "model.json"
+        path.write_text(json.dumps(model))
+        assert load_model(path) == model
 
 
 def main() -> int:
-    contracts = [
+    tests = [
         value
-        for name, value in sorted(globals().items())
-        if name.startswith("test_") and callable(value)
+        for name, value in globals().items()
+        if name.startswith("test_") and hasattr(value, "contract_name")
     ]
-    print(f"sdoc_semantics contracts: {len(contracts)}")
-    for check in contracts:
-        check()
-    print(f"{len(PASSED)} contract(s) passed")
-    assert len(PASSED) == len(contracts)
-    assert len(SEMANTICS) == 3, sorted(SEMANTICS)
+    for test in tests:
+        test()
+    print(f"{len(PASSED)} semantics contract(s) passed")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())
