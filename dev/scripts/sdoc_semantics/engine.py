@@ -124,6 +124,12 @@ def _validate_predicate_references(
             predicate["predicate"], model, grammar, f"{location}.not"
         )
     elif operation in ("all_related", "any_related"):
+        direction = predicate.get("direction", "out")
+        if direction not in ("in", "out", "either"):
+            raise ModelError(
+                f"{location}.{operation} has unknown direction {direction!r}; "
+                "known directions: in, out, either"
+            )
         if grammar is not None:
             _require_reference(
                 predicate.get("role"),
@@ -138,12 +144,32 @@ def _validate_predicate_references(
             f"{location}.{operation}.predicate",
         )
     elif operation == "has_relation" and grammar is not None:
+        direction = predicate.get("direction", "out")
+        if direction not in ("in", "out", "either"):
+            raise ModelError(
+                f"{location}.has_relation has unknown direction {direction!r}; "
+                "known directions: in, out, either"
+            )
         _require_reference(
             predicate.get("role"),
             _grammar_roles(grammar),
             "role",
             f"{location}.has_relation",
         )
+        if predicate.get("target_type") is not None:
+            _require_reference(
+                predicate["target_type"],
+                grammar.keys(),
+                "element",
+                f"{location}.has_relation",
+            )
+    elif operation == "has_relation":
+        direction = predicate.get("direction", "out")
+        if direction not in ("in", "out", "either"):
+            raise ModelError(
+                f"{location}.has_relation has unknown direction {direction!r}; "
+                "known directions: in, out, either"
+            )
     elif operation == "actor_in":
         declared = _names(model.get("actors", []))
         for actor in predicate.get("actors", predicate.get("values", [])):
@@ -413,7 +439,9 @@ def diagnostics(
                 found.append(
                     f"{name}: state {state!r} is unreachable from {lifecycle['initial']!r}"
                 )
-    if not lifecycle.get("terminal"):
+    outgoing = {transition["from"] for transition in lifecycle.get("transitions", [])}
+    actual_terminals = [state for state in _reachable(lifecycle) if state not in outgoing]
+    if not lifecycle.get("terminal") or not actual_terminals:
         found.append(f"{name}: no terminal state")
     seen: dict[tuple[str, str], str] = {}
     for transition in lifecycle.get("transitions", []):
@@ -743,21 +771,18 @@ class Interpreter:
         }
         self._gates = {row["name"]: row for row in self.model.get("gates", [])}
 
-    def _transition(
+    def _transitions(
         self,
         lifecycle: Mapping[str, Any],
         trigger: str,
         subject: Mapping[str, Any],
-    ) -> Mapping[str, Any] | None:
+    ) -> list[Mapping[str, Any]]:
         current = _field_value(subject, lifecycle["subject"]["field"])
-        return next(
-            (
-                row
-                for row in lifecycle.get("transitions", [])
-                if row["trigger"] == trigger and row["from"] == current
-            ),
-            None,
-        )
+        return [
+            row
+            for row in lifecycle.get("transitions", [])
+            if row["trigger"] == trigger and row["from"] == current
+        ]
 
     def _apply(
         self,
@@ -884,13 +909,21 @@ class Interpreter:
                     f"unknown or mismatched subject {subject_uid!r}",
                     "subject",
                 )
-            transition = self._transition(
+            transitions = self._transitions(
                 lifecycle, declaration["trigger"], subject
             )
-            if transition is None:
+            if not transitions:
                 return FireResult(
                     "refused", (), "no transition from current state", "transition"
                 )
+            if len(transitions) > 1:
+                return FireResult(
+                    "refused",
+                    (),
+                    "ambiguous transition from current state",
+                    "ambiguous-dispatch",
+                )
+            transition = transitions[0]
             taken, gate = self._apply(
                 staged,
                 lifecycle,
@@ -916,24 +949,34 @@ class Interpreter:
             event, emitter = queued.popleft()
             for lifecycle in self.model.get("lifecycles", []):
                 for ripple_subject in _subjects(staged, lifecycle):
-                    transition = self._transition(lifecycle, event, ripple_subject)
-                    if transition is None:
+                    transitions = self._transitions(lifecycle, event, ripple_subject)
+                    if not transitions:
                         continue
+                    if len(transitions) > 1:
+                        return FireResult(
+                            "refused",
+                            tuple(log),
+                            "ambiguous ripple transition from current state",
+                            "ambiguous-dispatch",
+                        )
+                    transition = transitions[0]
                     key = (
                         lifecycle["name"],
                         str(ripple_subject["uid"]),
                         transition_reference(lifecycle["name"], transition),
                         event,
                     )
+                    repeated = key in visited
+                    visited.add(key)
                     steps += 1
-                    if key in visited or steps > self.step_bound:
+                    if steps > self.step_bound:
+                        kind = "cyclic ripple" if repeated else "ripple"
                         return FireResult(
                             "refused",
                             tuple(log),
-                            f"ripple exceeded step bound {self.step_bound}",
+                            f"{kind} exceeded step bound {self.step_bound}",
                             "step-bound",
                         )
-                    visited.add(key)
                     taken, gate = self._apply(
                         staged,
                         lifecycle,

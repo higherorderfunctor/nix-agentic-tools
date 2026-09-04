@@ -334,7 +334,10 @@ def test_initial_diagnostic() -> None:
 
 @contract("a missing terminal is diagnosed beside silent shipped lifecycles")
 def test_terminal_diagnostic() -> None:
-    row = lifecycle(transitions=[transition()], terminal=())
+    row = lifecycle(
+        transitions=[transition(), transition("back", "b", "a")],
+        terminal=("b",),
+    )
     assert any("no terminal" in message for message in diagnostics(row))
     assert not [message for message in diagnostics(lifecycle(transitions=[transition()])) if "no terminal" in message]
     assert_shipped_diagnostics_silent("no terminal")
@@ -354,6 +357,15 @@ def test_ambiguous_diagnostic() -> None:
         terminal=("b", "c"),
     )
     assert not [message for message in diagnostics(named) if "ambiguous" in message]
+    model = fixture_model()
+    model["lifecycles"][0]["transitions"].append(
+        transition("go", "a", "b")
+    )
+    result = Interpreter(model).fire(
+        graph(node("N", F="a")), {"name": "move", "subject": "N"}, "human"
+    )
+    assert result.verdict == "refused"
+    assert result.refused_by == "ambiguous-dispatch"
     assert_shipped_diagnostics_silent("ambiguous")
 
 
@@ -429,6 +441,18 @@ def test_reference_validation() -> None:
     model = fixture_model()
     model["flows"] = [{"name": "F", "steps": [{"transition": "missing", "expected": "taken"}]}]
     cases.append((model, "known transitions"))
+    model = fixture_model(
+        gate={
+            "name": "bad-direction",
+            "sees": [],
+            "predicate": {
+                "op": "has_relation",
+                "role": "Assumes",
+                "direction": "sideways",
+            },
+        }
+    )
+    cases.append((model, "known directions"))
     for candidate, expected in cases:
         try:
             validate_model(candidate)
