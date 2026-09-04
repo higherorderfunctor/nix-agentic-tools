@@ -556,6 +556,10 @@ def validate_model(
                 raise ModelError(
                     f"flow {flow['name']!r} step {index} refuses without naming a gate"
                 )
+            if step["expected"] == "taken" and "refused_by" in step:
+                raise ModelError(
+                    f"flow {flow['name']!r} step {index} is taken but names a refusing gate"
+                )
             _require_reference(
                 step.get("transition"),
                 all_transition_refs,

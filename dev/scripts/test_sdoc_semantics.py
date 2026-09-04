@@ -709,6 +709,33 @@ def test_flows() -> None:
         assert "known outcomes" in str(error)
     else:
         raise AssertionError("unknown flow outcome loaded")
+    refused = fixture_model(
+        gate={
+            "name": "stop",
+            "sees": ["field:F"],
+            "predicate": {"op": "field_is", "field": "F", "value": "a"},
+        }
+    )
+    refused["flows"] = [
+        {
+            "name": "refusal",
+            "steps": [
+                {
+                    "transition": reference,
+                    "expected": "refused",
+                    "refused_by": "stop",
+                }
+            ],
+        }
+    ]
+    validate_model(refused)
+    refused["flows"][0]["steps"][0]["expected"] = "taken"
+    try:
+        validate_model(refused)
+    except ModelError as error:
+        assert "taken but names a refusing gate" in str(error)
+    else:
+        raise AssertionError("contradictory flow outcome loaded")
     assert SHIPPED["flows"] == []
 
 
