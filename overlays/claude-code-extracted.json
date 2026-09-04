@@ -64,6 +64,7 @@
       "modelProposedGoals",
       "policyHelpers",
       "quietHours",
+      "remoteControl",
       "remoteTools",
       "skipWorkflowUsageWarning",
       "totalTokensReminder",
@@ -2290,6 +2291,13 @@
         "type": "object"
       },
       "remote.defaultEnvironmentId": {
+        "type": "string"
+      },
+      "remoteControl": {
+        "type": "object"
+      },
+      "remoteControl.shareHostProfile": {
+        "enum": ["basic", "full", "off"],
         "type": "string"
       },
       "remoteControlAtStartup": {
