@@ -805,6 +805,9 @@
       "axScreenReader": {
         "type": "boolean"
       },
+      "bashOutputMaxChars": {
+        "type": "integer"
+      },
       "blockedMarketplaces": {
         "type": "array"
       },
@@ -3034,6 +3037,9 @@
       "syntaxHighlightingDisabled": {
         "type": "boolean"
       },
+      "taskOutputMaxChars": {
+        "type": "integer"
+      },
       "teammateMode": {
         "enum": ["auto", "in-process", "iterm2", "tmux"],
         "type": "string"
@@ -3199,6 +3205,7 @@
       "awsAuthRefresh",
       "awsCredentialExport",
       "axScreenReader",
+      "bashOutputMaxChars",
       "blockedMarketplaces",
       "channelsEnabled",
       "claudeMd",
@@ -3313,6 +3320,7 @@
       "syncClaudeAiPlugins",
       "syncClaudeAiSkills",
       "syntaxHighlightingDisabled",
+      "taskOutputMaxChars",
       "teammateMode",
       "terminalProgressBarEnabled",
       "terminalTitleFromRename",
