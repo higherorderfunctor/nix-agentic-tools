@@ -1,0 +1,16 @@
+[DOCUMENT]
+TITLE: F2b
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[FOO]
+AUTHORED_BY: >>>
+llm
+<<<
+UID: F2b
+FLAG: false
+RELATIONS:
+- TYPE: Parent
+  VALUE: F2
+  ROLE: H

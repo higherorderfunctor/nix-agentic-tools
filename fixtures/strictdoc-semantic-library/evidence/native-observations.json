@@ -1,0 +1,213 @@
+{
+  "kind": "native-observations-not-semantic-approval",
+  "observations": {
+    "bar_authored_document": "[DOCUMENT]\nTITLE: M\n\n[GRAMMAR]\nIMPORT_FROM_FILE: @repo\n\n[BAR]\nAUTHORED_BY: >>>\nllm\n<<<\nUID: M\nRELATIONS:\n- TYPE: Parent\n  VALUE: F0\n  ROLE: P\n- TYPE: Child\n  VALUE: F2\n  ROLE: Q\n",
+    "bar_new": {
+      "id": 15,
+      "jsonrpc": "2.0",
+      "result": {
+        "written": ["documents/M.sdoc"]
+      }
+    },
+    "check": {
+      "id": 26,
+      "jsonrpc": "2.0",
+      "result": {
+        "text": "6 nodes, 0 finding(s)\n"
+      }
+    },
+    "cold_restart": {
+      "id": 36,
+      "jsonrpc": "2.0",
+      "result": {
+        "dirty": false,
+        "documents": 7,
+        "generation": 1,
+        "nodes": 6,
+        "root": "/tmp/sdoc-fixture-zdjn7o3a/smoke"
+      }
+    },
+    "cold_restart_nodes": {
+      "F1": {
+        "text": "[DOCUMENT]\nTITLE: F1\n\n[GRAMMAR]\nIMPORT_FROM_FILE: @repo\n\n[FOO]\nAUTHORED_BY: >>>\nllm\n<<<\nUID: F1\nFLAG: false\n"
+      },
+      "I0": {
+        "text": "[DOCUMENT]\nTITLE: I0\n\n[GRAMMAR]\nIMPORT_FROM_FILE: @repo\n\n[FOO]\nAUTHORED_BY: >>>\nllm\n<<<\nUID: I0\nFLAG: true\n"
+      },
+      "M": {
+        "text": "[DOCUMENT]\nTITLE: M\n\n[GRAMMAR]\nIMPORT_FROM_FILE: @repo\n\n[BAR]\nAUTHORED_BY: >>>\nllm\n<<<\nUID: M\nRELATIONS:\n- TYPE: Parent\n  VALUE: F0\n  ROLE: P\n- TYPE: Child\n  VALUE: F2\n  ROLE: Q\n\n--- relations resolved ---\n  P             F0  --  None\n  Q             F2  --  None\n"
+      }
+    },
+    "discovery": {
+      "id": 7,
+      "jsonrpc": "2.0",
+      "result": {
+        "framing": "one-json-value-per-newline",
+        "methods": [
+          "daemon.ping",
+          "rpc.discover",
+          "scribe.apply",
+          "workspace.describe",
+          "workspace.export",
+          "workspace.grammar",
+          "workspace.reload"
+        ],
+        "root": "/tmp/sdoc-fixture-zdjn7o3a/smoke",
+        "schema": "scribe-rpc/2"
+      }
+    },
+    "dry_run": {
+      "id": 17,
+      "jsonrpc": "2.0",
+      "result": {
+        "text": "--- a/documents/I0.sdoc\n+++ b/documents/I0.sdoc\n@@ -9,4 +9,4 @@\n llm\n <<<\n UID: I0\n-FLAG: false\n+FLAG: true\n",
+        "written": []
+      }
+    },
+    "invalid_flag_refusal": {
+      "error": {
+        "code": -32002,
+        "data": "error: could not parse file: /tmp/sdoc-fixture-zdjn7o3a/smoke/documents/I0.sdoc.\nSemantic error: Requirement field has an invalid SingleChoice value: invalid.\nLocation: /tmp/sdoc-fixture-zdjn7o3a/smoke/documents/I0.sdoc:7:1\nHint: Problematic field: FLAG. Compare with the document grammar: [AUTHORED_BY, PARENT_FP, UID, FLAG] for type: FOO.",
+        "message": "Refused"
+      },
+      "id": 19,
+      "jsonrpc": "2.0"
+    },
+    "mixed_cycle": {
+      "id": 11,
+      "jsonrpc": "2.0",
+      "result": {
+        "written": ["documents/Z0.sdoc"]
+      }
+    },
+    "mixed_cycle_changed_files": true,
+    "mixed_cycle_check": {
+      "id": 12,
+      "jsonrpc": "2.0",
+      "result": {
+        "text": "3 nodes, 0 finding(s)\n"
+      }
+    },
+    "mixed_cycle_reload": {
+      "id": 13,
+      "jsonrpc": "2.0",
+      "result": {
+        "dirty": false,
+        "documents": 4,
+        "generation": 3,
+        "nodes": 3,
+        "root": "/tmp/sdoc-fixture-zdjn7o3a/mixed-cycle"
+      }
+    },
+    "reload": {
+      "id": 25,
+      "jsonrpc": "2.0",
+      "result": {
+        "dirty": false,
+        "documents": 7,
+        "generation": 6,
+        "nodes": 6,
+        "root": "/tmp/sdoc-fixture-zdjn7o3a/smoke"
+      }
+    },
+    "rpc_array": [
+      {
+        "id": 9,
+        "jsonrpc": "2.0",
+        "result": {
+          "written": ["documents/I0.sdoc"]
+        }
+      },
+      {
+        "error": {
+          "code": -32002,
+          "data": "error: could not parse file: /tmp/sdoc-fixture-zdjn7o3a/rpc-array/documents/I1.sdoc.\nSemantic error: Requirement field has an invalid SingleChoice value: invalid.\nLocation: /tmp/sdoc-fixture-zdjn7o3a/rpc-array/documents/I1.sdoc:None:None\nHint: Problematic field: FLAG. Compare with the document grammar: [AUTHORED_BY, PARENT_FP, UID, FLAG] for type: FOO.",
+          "message": "Refused"
+        },
+        "id": 10,
+        "jsonrpc": "2.0"
+      }
+    ],
+    "rpc_array_first_write_persisted": true,
+    "rpc_array_postreload_nodes": {
+      "I0": {
+        "id": 12,
+        "jsonrpc": "2.0",
+        "result": {
+          "text": "[DOCUMENT]\nTITLE: I0\n\n[GRAMMAR]\nIMPORT_FROM_FILE: @repo\n\n[FOO]\nAUTHORED_BY: >>>\nllm\n<<<\nUID: I0\nFLAG: true\n"
+        }
+      },
+      "I1": {
+        "id": 13,
+        "jsonrpc": "2.0",
+        "result": {
+          "text": "[DOCUMENT]\nTITLE: I1\n\n[GRAMMAR]\nIMPORT_FROM_FILE: @repo\n\n[FOO]\nAUTHORED_BY: >>>\nllm\n<<<\nUID: I1\nFLAG: false\n"
+        }
+      }
+    },
+    "rpc_array_reload": {
+      "id": 11,
+      "jsonrpc": "2.0",
+      "result": {
+        "dirty": false,
+        "documents": 3,
+        "generation": 2,
+        "nodes": 2,
+        "root": "/tmp/sdoc-fixture-zdjn7o3a/rpc-array"
+      }
+    },
+    "set": {
+      "id": 23,
+      "jsonrpc": "2.0",
+      "result": {
+        "written": ["documents/I0.sdoc"]
+      }
+    },
+    "unimplemented_bar_cardinality": {
+      "id": 14,
+      "jsonrpc": "2.0",
+      "result": {
+        "written": ["documents/INCOMPLETE.sdoc"]
+      }
+    },
+    "unimplemented_boundary": {
+      "id": 13,
+      "jsonrpc": "2.0",
+      "result": {
+        "written": ["documents/M.sdoc"]
+      }
+    },
+    "unimplemented_semantics_note": "Recorded native outcomes only. Target types, closed-boundary traversal, and final BAR cardinality remain proposed/unimplemented; accepting these candidates is a gap, not a semantic pass.",
+    "unimplemented_target_type": {
+      "id": 12,
+      "jsonrpc": "2.0",
+      "result": {
+        "written": ["documents/F1.sdoc"]
+      }
+    },
+    "unknown_target_refusal": {
+      "error": {
+        "code": -32002,
+        "data": "relation target 'MISSING' is not a node in the graph",
+        "message": "Refused"
+      },
+      "id": 21,
+      "jsonrpc": "2.0"
+    },
+    "unrelate": {
+      "id": 24,
+      "jsonrpc": "2.0",
+      "result": {
+        "written": ["documents/F1.sdoc"]
+      }
+    }
+  },
+  "runtime": {
+    "devenv_lock_sha256": "1b9934b10d3fec40cf2e2eca22e6d4d1fb1bfa6cad563b2abd3de370834d4c17",
+    "grammar_sha256": "b90ca37e092700dd15828c898fa8a2a4658179f04fb3f3bddeb590d6db61aece",
+    "interpreter": "/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/bin/python3.14",
+    "profile_bin": "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-module-restack/fixtures/strictdoc-semantic-library/.devenv/profile/bin",
+    "scribe_daemon": "/nix/store/cip6rl26xnf2xrl140vfpdr4nx1y3aw7-scribe-daemon/bin/scribe-daemon",
+    "timestamp_utc": "2026-09-13T00:28:11.854732+00:00"
+  }
+}

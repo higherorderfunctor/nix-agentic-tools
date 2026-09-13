@@ -28,6 +28,10 @@
     {
       "dictionaries": ["python", "node", "npm", "rust"],
       "filename": ["**/*.md", "**/*.mjs", "**/*.nix", "**/*.py", "**/*.sh"]
+    },
+    {
+      "filename": "fixtures/strictdoc-semantic-library/evidence/*.json",
+      "ignoreRegExpList": ["/[\\s\\S]+/g"]
     }
   ],
   "version": "0.2"
