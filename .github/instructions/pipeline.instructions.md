@@ -7,8 +7,9 @@ applyTo: ".github/workflows/update.yml,config/fragment-categories.nix,config/gen
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-09-12 — source paths and ownership guidance follow
-> native package assembly.
+> **Last verified:** 2026-09-12 — cold-build timing and cache reuse verified
+> against runs 34710827449 and 34729241702; publishing receives a fresh App
+> token after the sweep.
 >
 > Full lineage:
 > `git show ff610ca0:dev/fragments/pipeline/ci-update-workflow.md`.
@@ -22,7 +23,7 @@ darwin build only holds back that specific dependency, not the entire batch.
 
 ### Trigger
 
-The workflow runs on a **nightly `schedule`** (cron) plus manual
+The workflow runs on a **four-times-daily `schedule`** (cron) plus manual
 `workflow_dispatch`; it does NOT run on push. It opens per-dependency PRs
 against the default branch (the `BRANCH_NAME` env is the PR base). It previously
 ran on push to a long-lived integration branch; the trunk-based migration moved
@@ -52,9 +53,11 @@ Renovate's rebasing strategy, with the same `rebaseWhen: conflicted` exception.
 
 #### Phase 2 runs on `always()` — a timeout must not discard finished work
 
-This step carries `if: always()`, and that is load-bearing rather than
-defensive. Without it a sweep that runs out of wall clock throws away every
-dependency it had already finished.
+Token creation and PR publishing remain eligible through `always()` after a
+pipeline failure or timeout. Token creation requires the base commit to have
+been recorded; publishing requires successful token creation. Without this
+failure path, a sweep that runs out of wall clock throws away every dependency
+it had already finished.
 
 Measured on run `30713330569`: ninja was `cancelled` at the 60-minute
 `timeout-minutes` with **47 of 52 edges already done**, this step was `skipped`,
@@ -63,11 +66,12 @@ regenerated its extracted sidecar. The `if: always()` steps AFTER it every one
 reported `success` in that same run, which is the evidence the condition is
 honoured on a timeout and not only on a plain failure.
 
-Publishing a partial sweep is safe because of where each target commits: a
-target commits into its own worktree branch only AFTER its build verification
-passes. A killed ninja therefore leaves every branch either at the base commit
-(skipped by the base-SHA guard) or carrying a complete, verified commit. There
-is no half-written state to publish.
+Publishing a partial sweep relies on where each target commits: a target writes
+its lock, hashes, and formatting before committing into its own worktree branch.
+A killed ninja leaves each branch either at the base commit (skipped by the
+base-SHA guard) or carrying a complete commit. Build verification can still
+fail: the pipeline deliberately publishes those updates as red PRs, where branch
+CI reports the failure.
 
 **The sentinel is what makes this safe, and it moved.** `ninja-completed.flag`
 now requires BOTH that ninja itself succeeded (`steps.ninja.outcome`, read
@@ -77,14 +81,23 @@ destructive, not untidy: the close step DELETES any `update/*` PR missing from
 `touched-branches`, so a sentinel written after a partial sweep would close
 exactly the PRs whose targets never got to run.
 
-**Do not substitute raising `timeout-minutes` for this.** It cannot help the
-resource-exhaustion death described under the evaluator budget below — that one
-reports `failure`, not `cancelled` — and even for a genuine time bound it only
-moves the cliff. This removes it.
+The job allows 120 minutes. Its first step records a deadline 105 minutes ahead;
+after setup, the remaining whole minutes become the pipeline's step timeout.
+Setup therefore consumes the same budget as the pipeline, leaving approximately
+15 minutes for publishing and diagnostics. If setup exhausts that budget, the
+pipeline is skipped. This accommodates measured uncached compilation: run
+`34729241702` spent 56m09s verifying oxlint under a nixpkgs bump, while rumdl
+took 49m35s. Other input targets still waited behind that verification. The
+preceding run `34710827449` timed out before the package-layout refactor; its
+oxlint update had the same derivation path as the next run, which finished and
+cached it. Completed dependency reports rose from 39 to 48 between those runs.
+This was real compilation and cache progress, not evidence that moving recipes
+invalidated that package.
 
-One honest limitation: a cancelled job gets a finite grace period, so a sweep
-with very many branches to push could still be cut off mid-loop. That degrades
-to "some dependencies landed" instead of "none", which is the point.
+The larger budget does not replace partial publishing or the evaluator resource
+limits below. An exhausted job still has only a finite cancellation grace
+period; the earlier pipeline deadline normally keeps publishing within the live
+job budget.
 
 **Phase 3 — Validation** (triggered automatically):
 
@@ -271,10 +284,21 @@ sweep silently rewrote the update commit.
 
 ### GitHub App token
 
-PRs created with the default `GITHUB_TOKEN` do NOT trigger cross-workflow events
-(GitHub security feature to prevent recursive workflow triggers). This workflow
-uses a GitHub App token (`nix-agentic-tools-bot`) instead. App installation
-tokens DO trigger `pull_request` events in ci.yml.
+PRs created or updated with the default `GITHUB_TOKEN` trigger approval-required
+CI runs. This workflow uses a GitHub App token (`nix-agentic-tools-bot`) so
+those `pull_request` runs in ci.yml start automatically; see
+[GitHub's workflow-trigger rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
+
+Installation tokens expire after one hour. Minting one at job startup caused
+both September 12 timeout runs to fail with
+`could not read Username for 'https://github.com'` when publishing their
+completed work; the later run also failed public upstream fetches just before
+cancellation. The pipeline now uses the job's `GITHUB_TOKEN` for GitHub API
+reads, while public upstream Git fetches are anonymous. The App token is minted
+immediately before publishing. Checkout sets `persist-credentials: false`; the
+publish step runs `gh auth setup-git` so Git pushes and `gh` API calls both use
+the fresh App token. Merely changing the environment token leaves a persisted
+checkout Authorization header taking precedence over the helper.
 
 The App needs these permissions:
 
@@ -348,13 +372,13 @@ with cryptic errors about branches named `+ update/foo`.
 
 ### Environment requirements
 
-| Variable            | Source                             | Purpose                                              |
-| ------------------- | ---------------------------------- | ---------------------------------------------------- |
-| `CACHIX_AUTH_TOKEN` | Repository secret                  | Pushes fetched sources + built outputs               |
-| `GITHUB_TOKEN`      | App token step output              | Authenticates git push + gh CLI                      |
-| `NIX_PATH`          | `nixpkgs=flake:nixpkgs`            | Required by nix-update (uses `import <nixpkgs>`)     |
-| `NAT_UPDATE_JOBS`   | `update.yml` step env (`4`)        | Bounds ninja `-j` AND the evaluator budget (below)   |
-| `WORKTREE_LOCK`     | `$RUNNER_TEMP/nix-update-worktree` | Serializes `git worktree add` (not concurrency-safe) |
+| Variable            | Source                                                    | Purpose                                                          |
+| ------------------- | --------------------------------------------------------- | ---------------------------------------------------------------- |
+| `CACHIX_AUTH_TOKEN` | Repository secret                                         | Pushes fetched sources + built outputs                           |
+| `GITHUB_TOKEN`      | Job token during sweep; fresh App token during publishing | Authenticates GitHub API reads, then Git pushes and PR API calls |
+| `NIX_PATH`          | `nixpkgs=flake:nixpkgs`                                   | Required by nix-update (uses `import <nixpkgs>`)                 |
+| `NAT_UPDATE_JOBS`   | `update.yml` step env (`4`)                               | Bounds ninja `-j` AND the evaluator budget (below)               |
+| `WORKTREE_LOCK`     | `$RUNNER_TEMP/nix-update-worktree`                        | Serializes `git worktree add` (not concurrency-safe)             |
 
 ### Package edges are explicit, not universal
 
