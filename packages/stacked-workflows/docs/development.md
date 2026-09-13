@@ -1,7 +1,8 @@
 ## Stacked Workflows Development
 
-> **Last verified:** 2026-08-16 — this package-specific architecture guide is
-> co-located under `packages/stacked-workflows/docs/` and routed from there.
+> **Last verified:** 2026-09-13 — package structure re-stated for the owner
+> layout: the content derivation is `packages/stacked-workflows-content/`, and
+> the three git tools are separate owner facets rather than one shared dir.
 >
 > Full lineage:
 > `git show 89dce4c4:packages/stacked-workflows/docs/development.md`.

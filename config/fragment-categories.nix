@@ -332,9 +332,11 @@ _: {
     # here any more — it moved to the `ifd` row above, which re-scopes these
     # same two globs plus the CI paths that warm the IFD cache, so an
     # recipe editor still gets it.
-    # Excludes content-only fragments dirs, and deliberately does NOT scope
-    # `packages/*/overlay.nix` (stacked-workflows) — those are content
-    # overlays with no `ourPkgs` seam. Three globs
+    # Excludes content-only fragments dirs. The old exclusion for
+    # `packages/*/overlay.nix` (stacked-workflows) is dropped: that file no
+    # longer exists — its content derivation is now
+    # `packages/stacked-workflows/packages/stacked-workflows-content/package.nix`.
+    # Three globs
     # (`packages/{ai-clis,git-tools,mcp-servers}/*.nix`) were dropped here:
     # all three directories are gone, and every file they aimed at now lives
     # under `packages/<owner>/packages/**`, covered by the two globs below.

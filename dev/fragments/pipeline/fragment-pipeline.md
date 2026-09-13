@@ -1,8 +1,8 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-08-19 — no dead package-sourced categories remain: a
-> retired one, and the consumer documentation it generated, were removed
-> together.
+> **Last verified:** 2026-09-13 — category declaration is SPLIT: shared
+> categories in `config/fragment-categories.nix`, owner-specific ones in the
+> owning package's `registry.nix`, merged by `lib/facets/registry.nix`.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 25ec0738:dev/fragments/pipeline/fragment-pipeline.md`.
