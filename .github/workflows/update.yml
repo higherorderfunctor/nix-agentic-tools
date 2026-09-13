@@ -1,656 +1,265 @@
-# CI pipeline v4: Renovate-style per-dependency PRs.
-#
-# Runs the ninja update pipeline. Each target leaves its commits on
-# a per-dependency worktree branch (update/<name>); the PR-creation
-# step pushes those branches and opens one PR per updated dependency.
-#
-# ci.yml validates PRs on both platforms (linux + darwin).
-# PRs that pass both can be merged.
-#
-# Uses a GitHub App token so PRs trigger ci.yml's pull_request event.
+# Each dependency is prepared and published independently on a pinned main base.
+# Automation comes from the selected workflow ref; bot PRs never include it.
 name: Update
 
 on:
   schedule:
-    # Dependency sweep, 4x/day (was: nightly at 06:00; before that, a push to
-    # the old integration branch). 06:00 is kept as the anchor so the old
-    # nightly slot survives. This changes LATENCY-TO-PR, not PR volume: the
-    # pipeline is per-dependency and only opens a PR when a source actually
-    # moved, so a sweep that finds nothing opens nothing.
     - cron: "0 0,6,12,18 * * *"
   workflow_dispatch:
+    inputs:
+      targets:
+        description:
+          Optional comma-separated target names (disables stale PR cleanup)
+        required: false
+        default: ""
+        type: string
 
+# All workflow refs publish the same update/* branches. A newer Update sweep
+# cancels the older sweep; CI uses a separate concurrency group.
 concurrency:
-  group: update-${{ github.ref }}
+  group: update-refs/heads/main
   cancel-in-progress: true
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   BRANCH_NAME: main
 
+defaults:
+  run:
+    shell: bash
+    working-directory: source
+
 jobs:
-  update:
+  discover:
     runs-on: ubuntu-latest
-    # Cold nixpkgs updates rebuild Rust packages: run 34729241702 spent
-    # 56 minutes verifying oxlint alone, before the remaining input targets.
-    timeout-minutes: 120
-    # Vestigial guard from the old push trigger. Under schedule the actor
-    # is never the bot, so the first clause runs it; workflow_dispatch runs
-    # it via the second clause regardless of actor. Effectively always true.
-    if: >-
-      github.actor != 'nix-agentic-tools-bot[bot]' || github.event_name ==
-      'workflow_dispatch'
+    timeout-minutes: 15
+    outputs:
+      base: ${{ steps.base.outputs.sha }}
+      matrix: ${{ steps.targets.outputs.matrix }}
     steps:
-      - name: Record pipeline deadline
-        id: deadline
+      - uses: actions/checkout@v6
+        with:
+          path: automation
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          path: source
+          ref: main
+          persist-credentials: false
+      - name: Pin update base
+        id: base
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          # Setup and the pipeline share 105 minutes from this first step.
-          echo "epoch=$(( $(date +%s) + 105 * 60 ))" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          # Publishing configures Git with a fresh App token below. A stored
-          # checkout Authorization header would override that credential helper.
-          persist-credentials: false
-
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
-
+      - name: Discover update targets
+        id: targets
+        env:
+          REQUESTED_TARGETS: ${{ inputs.targets || '' }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          nix eval --json --option allow-import-from-derivation false .#updateTargets > "$RUNNER_TEMP/targets.json"
+          python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" discover
+  update:
+    needs: discover
+    name: update (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    env:
+      NAT_UPDATE_EVAL_MAX_MEMORY: 4096
+      NAT_UPDATE_EVAL_WORKERS: 1
+      NAT_UPDATE_JOBS: 1
+      NAT_UPDATE_VERIFY_PACKAGES: 0
+      NIX_CONFIG: |
+        max-jobs = 1
+        cores = 0
+      NIX_PATH: nixpkgs=flake:nixpkgs
+      UPDATE_BASE_SHA: ${{ needs.discover.outputs.base }}
+      UPDATE_TARGET: ${{ matrix.name }}
+    steps:
+      - name: Record preparation deadline
+        id: deadline
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          echo "epoch=$(( $(date +%s) + 105 * 60 ))" >> "$GITHUB_OUTPUT"
+        working-directory: ${{ github.workspace }}
+      - uses: actions/checkout@v6
+        with:
+          path: automation
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          path: source
+          ref: ${{ needs.discover.outputs.base }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
       - uses: cachix/cachix-action@v17
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          # This job must publish NO kiro paths at all.
-          #
-          # `verify_all_packages` (dev/scripts/update-common.sh) builds the
-          # WHOLE package set on every input bump, with no `--select` filter —
-          # deliberately, because the patched build runs the patched binary
-          # (`postInstallCheck` -> `kiro-cli-chat --version`) and that smoke
-          # test is the point. But cachix-action's watch-store daemon pushes
-          # EVERY path realized in the job, so that verification was silently
-          # publishing the patched proprietary binary. ci.yml's `--select
-          # removeAttrs` never covered this path; measured 2026-08-12 with the
-          # patched 2.17.0 unwrapped output live in the public cache, eleven
-          # days after #665 supposedly made it local-only.
-          #
-          # Filtering ALL kiro rather than just the patched variant is
-          # deliberate on two counts. Nothing is lost: ci.yml's build job is
-          # what publishes the unpatched package on merge, so this job never
-          # needed to publish any of it. And it covers the layers the rename
-          # cannot reach — upstream hardcodes the `-bwrap` / `-fhsenv-rootfs`
-          # names, so those are identical strings for both variants and a
-          # surgical regex could not separate them.
-          #
-          # `pushFilter` EXCLUDES matching paths — cachix-action's action.yml:
-          # "Regular expression to exclude derivations from being pushed".
-          # Worth stating because it reads like an allow-list and a reviewer
-          # already misread it that way; inverting it would publish ONLY kiro,
-          # which is the exact opposite of the intent.
-          #
-          # Its own documented limitation is why this is not the whole fix:
-          # "paths may still be pushed if they are part of another path's
-          # closure". Nothing outside the kiro closure depends on the patched
-          # output today, and every layer inside it matches this regex, so the
-          # filter holds — but that is a property of the current graph, not a
-          # guarantee from the filter. It is also silent if it ever stops
-          # holding. Note too that `pushFilter` is IGNORED entirely if
-          # `pathsToPush` is ever set on this step.
-          #
-          # So ci.yml's "Assert the patched output is not published" step is
-          # the actual guarantee: it asks the cache whether the patched closure
-          # is fetchable and fails if it is. Keep the two in sync. It lives in
-          # ci.yml rather than a flake check because a check derivation is
-          # sandboxed and cannot reach the network to ask the cache anything.
-          pushFilter: "kiro-cli"
-
-      # Resolves the bot's numeric user ID at run time rather than
-      # hardcoding it, same as docs.yml. The previous address omitted the
-      # ID entirely, so GitHub had nothing to match these commits against
-      # — the "<id>+<login>" form is what attributes them to the bot
-      # account, which is also the login the stale-PR step's allowlist
-      # checks via .commits[].authors[].
-      - uses: ./.github/actions/git-bot-identity
+          pushFilter: kiro-cli
+      - uses: ./automation/.github/actions/git-bot-identity
         with:
           account: nix-agentic-tools-bot[bot]
+          path: source
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      # `--inputs-from .` resolves against THIS flake's locked nixpkgs.
-      # The bare `nixpkgs#` form read the rolling registry channel,
-      # pulling in a second, unpinned nixpkgs and unpacking the
-      # nixpkgs-unstable channel tarball before the pipeline's own eval.
-      # jq is not installed at all: ubuntu-latest ships 1.7.1.
-      - name: Install pipeline tools
+      - name: Install preparation tools
         run: |
-          nix profile add --inputs-from . nixpkgs#ninja
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
           nix profile add --inputs-from . nixpkgs#devenv
           nix profile add ".#formatter.x86_64-linux"
-
-      # Record base commit before the pipeline runs.
-      # Used to identify which worktree branches have actual updates.
-      - name: Record base commit
-        id: base
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      # Warm the flake eval cache BEFORE the ninja pipeline. Our overlays
-      # use IFD (builtins.readFile on fetchFromGitHub) to compute versions
-      # at eval time; nix-update (which runs nix-instantiate) crashes on
-      # cold runners if those sources aren't realized first. This is the
-      # shared warm-ifd composite (also used by ci.yml's build + test jobs).
-      # Unlike CI, the pipeline cannot proceed without warm sources, so
-      # retries: "1" + best-effort: "false" keep the original single-shot,
-      # fail-hard behavior. Cachix daemon pushes the fetched sources.
-      - name: Warm IFD sources (single-shot, fail-hard)
-        uses: ./.github/actions/warm-ifd
+      - name: Warm IFD sources
+        uses: ./automation/.github/actions/warm-ifd
         with:
           best-effort: "false"
+          path: source
           retries: "1"
           systems: x86_64-linux
-
-      - name: Calculate remaining pipeline time
+      - name: Calculate remaining preparation time
         id: budget
+        env:
+          PIPELINE_DEADLINE: ${{ steps.deadline.outputs.epoch }}
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           minutes=$(( (PIPELINE_DEADLINE - $(date +%s)) / 60 ))
           if [ "$minutes" -lt 1 ]; then
-            echo "::error::Setup exhausted the update budget; preserving time for publishing and diagnostics."
+            echo "::error::Setup exhausted the preparation budget."
             exit 1
           fi
           echo "minutes=$minutes" >> "$GITHUB_OUTPUT"
-          echo "Pipeline has $minutes minutes remaining after setup."
-        env:
-          PIPELINE_DEADLINE: ${{ steps.deadline.outputs.epoch }}
-
-      # Run ninja pipeline:
-      # - Each target creates a worktree branch (update/<name>)
-      # - Branches are pushed and PRs created after ninja completes
-      #
-      # `id` is load-bearing: the PR step below runs on `always()` and reads
-      # `steps.ninja.outcome` to decide whether the sweep was COMPLETE, which
-      # is what gates the stale-PR sentinel.
-      - name: Run ninja update pipeline
-        id: ninja
-        # Subtract setup time, leaving about 15 minutes for publishing and
-        # diagnostics. The fallback is only for an earlier failed/skipped step.
+      - name: Prepare dependency branch
+        id: prepare
         timeout-minutes: ${{ fromJSON(steps.budget.outputs.minutes || '1') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NAT_UPDATE_WORKTREES_DIR: ${{ runner.temp }}/nat-update-worktrees
+          WORKTREE_LOCK: ${{ runner.temp }}/nix-update-worktree
+          UPDATE_TARGET_JSON: ${{ toJSON(matrix) }}
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          mkdir -p "$RUNNER_TEMP"
-          export WORKTREE_LOCK="$RUNNER_TEMP/nix-update-worktree"
-          # Read `-j` back from the pipeline library rather than straight
-          # from the env var: update-common.sh CLAMPS NAT_UPDATE_JOBS to
-          # the core count and re-exports it, and ninja's fan-out has to
-          # be the same number the evaluator budget was derived from. A
-          # bare `-j${{ env.NAT_UPDATE_JOBS }}` here would silently ignore
-          # that clamp and re-create the overcommit on any runner with
-          # fewer cores than the requested job count.
-          # shellcheck source=dev/scripts/update-common.sh
-          source dev/scripts/update-common.sh
-          nix run .#generate-update-ninja
-          ninja -j"$NAT_UPDATE_JOBS" -v -k0 -f .update.ninja update-report
-        env:
-          # The job token remains valid throughout the sweep. App installation
-          # tokens expire after one hour, including on public upstream fetches.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Requested target fan-out; update-common.sh clamps it to the
-          # core count. ONE knob on purpose: it bounds ninja's -j here
-          # AND, through nfb_eval_flags, the evaluator budget of every
-          # nix-fast-build those targets spawn. The two MULTIPLY — a bare
-          # `-j4` against nix-fast-build's solo-sized defaults
-          # (--eval-workers $(nproc), --eval-max-memory-size 4096 per
-          # worker) is 64 GiB of evaluator heap budget on a 16 GiB
-          # runner, which is what took the runner down in run
-          # 30181958460. Do not raise this without reading
-          # nfb_eval_flags.
-          NAT_UPDATE_JOBS: 4
-          # Per-job worktree root, OUTSIDE $GITHUB_WORKSPACE (the flake root)
-          # so devenv/Nix doesn't scan it, and under $RUNNER_TEMP (per-job,
-          # auto-cleaned) so concurrent runs on a self-hosted runner can't
-          # collide on a shared /tmp path.
-          NAT_UPDATE_WORKTREES_DIR: ${{ runner.temp }}/nat-update-worktrees
-          NIX_PATH: nixpkgs=flake:nixpkgs
-
-      # Mint only when publishing is about to begin. Both failed sweeps on
-      # 2026-09-12 reached publication after their startup App token expired.
-      # Keep this eligible after a pipeline timeout so completed updates survive.
+          mkdir -p .update-logs
+          python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" prepare 2>&1 | tee .update-logs/prepare.log
       - name: Generate publishing App token
         id: app-token
-        if: always() && steps.base.outcome == 'success'
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      # Push worktree branches and create/update PRs.
-      # Each update/<name> branch with commits gets a PR.
-      # Records every touched branch in $RUNNER_TEMP/touched-branches
-      # so the next step can identify untouched (stale) PRs. Writes a
-      # ninja-completed.flag sentinel only if ninja itself finished AND
-      # the loop completes cleanly — the close step refuses to act
-      # without it.
-      #
-      # `always()` so a sweep that ran out of wall clock still SHIPS what it
-      # finished. Every target commits into its own worktree branch only
-      # after the change is fully WRITTEN — lock, hashes, formatting — so a
-      # killed ninja leaves each branch either at the base commit (skipped
-      # by the base-SHA guard) or carrying a complete commit. It is NOT
-      # necessarily a verified one: since the hold-back split, a target
-      # whose build fails deliberately still commits and opens a red PR,
-      # and branch CI is what reports it. Discarding those was pure
-      # waste: measured on run 30713330569, ninja was `cancelled` at the
-      # 60-minute timeout with 47 of 52 edges DONE, this step was `skipped`,
-      # and every finished dependency — glab's regenerated sidecar included —
-      # was thrown away. The `if: always()` steps after it all reported
-      # `success` in that same run, which is the evidence this condition is
-      # honoured on a timeout rather than only on a plain failure.
-      #
-      # Raising `timeout-minutes` is NOT the fix and must not be substituted
-      # for this one. It cannot help the resource-exhaustion death documented
-      # under the evaluator budget below, and even for a genuine time bound it
-      # only moves the cliff — this removes it.
-      - name: Create per-dependency PRs
-        if: always() && steps.app-token.outcome == 'success'
+      - name: Publish completed dependency PR
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-
-          # Git and gh must both use this step's fresh App token. The default
-          # workflow token would require manual approval for downstream PR CI.
-          gh auth setup-git --hostname github.com
-
-          base_head="${{ steps.base.outputs.sha }}"
-          : >"$RUNNER_TEMP/touched-branches"
-
-          # Read back the identity git-bot-identity configured above; the
-          # human-commit guard below compares every remote commit's author
-          # against it. Assert it is non-empty rather than let it degrade:
-          # an empty value makes EVERY commit look human, which would
-          # silently stop the pipeline pushing anything at all.
-          bot_email=$(git config user.email)
-          if [ -z "$bot_email" ]; then
-            echo "::error::git user.email is unset — the human-commit guard cannot run"
-            exit 1
-          fi
-
-          # Arm GitHub-native auto-merge on a bot update PR, squash method.
-          #
-          # WHY this is safe to do unattended here:
-          #   - Branch protection on the base requires ZERO approving reviews
-          #     but DOES require review threads to be resolved. No human
-          #     sign-off is being bypassed, and an unresolved Copilot thread
-          #     deliberately leaves the PR armed but unmerged.
-          #   - The Copilot review comes from a separate ruleset rule that
-          #     REQUESTS a review. It is not a required approval or status
-          #     check, but an inline finding gates indirectly through the
-          #     review-thread rule.
-          #   - What auto-merge actually waits on is the six required status
-          #     checks — build (x86_64-linux, ubuntu-latest),
-          #     build (aarch64-darwin, macos-latest),
-          #     kiro-patched (x86_64-linux, ubuntu-latest),
-          #     kiro-patched (aarch64-darwin, macos-latest), test, and
-          #     gitleaks. A red check leaves the PR sitting armed and unmerged.
-          #     The full Devenv Diagnostic is NOT among them: after its
-          #     2026-08-05 demotion, it became workflow_dispatch-only on
-          #     2026-08-29 when deterministic contracts moved into `test`.
-          #     Read the ruleset before trusting this list — it is the safety
-          #     rationale for unattended auto-merge, so a wrong count here is
-          #     the one that actually matters:
-          #       gh api repos/OWNER/REPO/rulesets/<id> --jq '.rules[]
-          #         | select(.type=="required_status_checks")
-          #         | [.parameters.required_status_checks[].context]'
-          #   - A merge conflict DISABLES auto-merge on GitHub, so a
-          #     conflicted update PR drops out of the queue rather than
-          #     merging something unresolved. The `gh pr edit` path below
-          #     re-arms it on the next sweep once the force-push has
-          #     rebuilt the branch on the current base.
-          #
-          # Squash is the only method the repository settings permit
-          # (allow_squash_merge only), so it is passed explicitly.
-          #
-          # NO label gating, deliberately. The scope guard here is
-          # structural: this loop only ever iterates `update/*` branches
-          # built and pushed by the bot in this job, so a human-authored PR
-          # is never reached. Do not "helpfully" add a label check.
-          #
-          # Arming is NON-FATAL. The enclosing script runs under
-          # `set -euETo pipefail`, so an unguarded non-zero exit would kill
-          # the whole step; one PR that cannot be armed must never abort the
-          # sweep for every other dependency. A failure is logged as a
-          # warning naming the branch and PR so the residual — that PR needs
-          # a manual land — is visible in the job log.
-          arm_auto_merge() {
-            arm_pr="$1"
-            arm_branch="$2"
-            if gh pr merge "$arm_pr" --squash --auto; then
-              echo "Auto-merge armed (squash) for $arm_branch ($arm_pr)"
-            else
-              echo "::warning title=Auto-merge not armed::Could not arm auto-merge on $arm_pr ($arm_branch) — this PR needs a manual squash-merge."
-            fi
-          }
-
-          # Find all update/* branches with commits ahead of base
-          git branch --list 'update/*' | while read -r branch; do
-            branch=$(echo "$branch" | tr -d ' *+')
-            wt_head=$(git rev-parse "$branch")
-
-            if [ "$wt_head" = "$base_head" ]; then
-              echo "Skipping $branch (no changes)"
-              continue
-            fi
-
-            # `git log -1 …`, NOT `git log … | head -1`. This step runs under
-            # `set -euETo pipefail`; `head -1` closes the pipe after the first
-            # subject, so on any branch with more than one commit ahead of base
-            # git dies with SIGPIPE (141), pipefail promotes it, and errexit
-            # aborts the ENTIRE branch sweep — every other dependency included.
-            # `-1` selects the same newest commit with no pipe at all.
-            subject=$(git log -1 --format='%s' "$base_head".."$branch")
-
-            # Look up the existing PR once: its number and its
-            # mergeability both feed the push decision below.
-            pr_json=$(gh pr list --base "$BRANCH_NAME" --head "$branch" \
-              --json number,mergeable --jq '.[0] // empty' 2>/dev/null || true)
-            existing_pr=$(printf '%s' "$pr_json" | jq -r '.number // empty')
-            pr_mergeable=$(printf '%s' "$pr_json" | jq -r '.mergeable // "UNKNOWN"')
-
-            # Every run rebuilds this branch on the CURRENT base, so its
-            # tip SHA always differs even when the dependency did not
-            # move — and an unconditional force-push would fire a
-            # duplicate 4-job CI run to re-validate a byte-identical
-            # patch. `git patch-id --stable` hashes the diff alone, so a
-            # pure rebase onto an UNCHANGED base compares equal and the
-            # push is skipped.
-            #
-            # Three conditions keep this honest:
-            #   - an empty patch-id means "could not compare", never a
-            #     match, or every no-op branch would collapse together;
-            #   - a CONFLICTING PR is force-pushed anyway, so branches
-            #     cannot rot against a base they no longer apply to
-            #     (Renovate's rebaseWhen=conflicted, in effect);
-            #   - a branch whose remote base has fallen behind the
-            #     current base_head (old_base != base_head) is rebased
-            #     and re-pushed even when the dep patch is identical, so
-            #     the PR is re-validated against the base it will merge
-            #     into (Renovate's rebaseWhen=behind-base-branch). This
-            #     is what lets a PR self-heal after a base-branch CI fix
-            #     instead of staying pinned to a stale, possibly broken
-            #     base.
-            remote_ref="refs/remotes/origin/$branch"
-            new_id=$(git diff "$base_head".."$branch" | git patch-id --stable | awk '{print $1}')
-            old_id=""
-            old_base=""
-            if git rev-parse --verify --quiet "$remote_ref" >/dev/null; then
-              old_base=$(git merge-base "$remote_ref" "$base_head" || true)
-              if [ -n "$old_base" ]; then
-                old_id=$(git diff "$old_base".."$remote_ref" \
-                  | git patch-id --stable | awk '{print $1}')
-              fi
-            fi
-
-            if [ -n "$new_id" ] && [ "$new_id" = "$old_id" ] \
-              && [ "$pr_mergeable" != "CONFLICTING" ] \
-              && [ "$old_base" = "$base_head" ]; then
-              echo "Skipping $branch (patch unchanged, already on current base)"
-              # MUST still count as touched: the stale-PR step below
-              # closes and DELETES any update/* PR missing from this
-              # file, so a silent skip would make the pipeline close its
-              # own valid PR and recreate it on the next run.
-              echo "$branch" >>"$RUNNER_TEMP/touched-branches"
-              continue
-            fi
-
-            # Never clobber human work. Every run REBUILDS this branch
-            # from base in a fresh worktree, so a commit someone pushed
-            # to the open PR exists only on the remote — the rebuilt
-            # local branch has never seen it, and the force-push below
-            # would destroy it silently.
-            #
-            # The patch-id guard above cannot catch this: a human commit
-            # CHANGES the remote diff, so old_id != new_id and the guard
-            # reads it as "the dependency moved, push".
-            #
-            # The stale-PR step's bot allowlist is also a different
-            # property — it decides whether to CLOSE a PR a human has
-            # engaged with, not whether to overwrite commits on its
-            # branch.
-            #
-            # So compare authorship directly against the identity
-            # git-bot-identity configured for this job, and REFUSE the
-            # push when anything else authored a commit in range. A
-            # refusal is the honest outcome: replaying the commits onto
-            # a freshly re-derived tree could silently combine a human's
-            # hand-fix with a bot hash that superseded it, and the human
-            # is the only one who can say which wins. The branch simply
-            # stops auto-updating until they resolve it.
-            human_range=""
-            if git rev-parse --verify --quiet "$remote_ref" >/dev/null; then
-              # Prefer the merge-base range; fall back to base_head when
-              # merge-base could not be computed. The fallback can only
-              # WIDEN the range, so it errs toward refusing to push.
-              human_range="${old_base:-$base_head}..$remote_ref"
-            fi
-            if [ -n "$human_range" ]; then
-              human_commits=$(git log --format='%H %ae' "$human_range" \
-                | awk -v bot="$bot_email" '$2 != bot {print $1}')
-              if [ -n "$human_commits" ]; then
-                n=$(printf '%s\n' "$human_commits" | wc -l | tr -d ' ')
-                echo "::warning title=Update branch has human commits::" \
-                  "Refusing to force-push $branch — $n non-bot commit(s)" \
-                  "on the remote branch would be destroyed."
-                printf '%s\n' "$human_commits" | while read -r sha; do
-                  git log --no-walk --format='  %h %an <%ae>: %s' "$sha"
-                done
-                # Same reasoning as the patch-id skip above: count it as
-                # touched so the stale-PR step does not close the PR.
-                echo "$branch" >>"$RUNNER_TEMP/touched-branches"
-                continue
-              fi
-            fi
-
-            echo "Pushing $branch ($subject)..."
-            git push -f origin "$branch"
-
-            if [ -n "$existing_pr" ]; then
-              gh pr edit "$existing_pr" --title "$subject"
-              echo "PR #$existing_pr updated for $branch"
-              # Re-arm: covers PRs opened before auto-merge existed, and
-              # PRs whose auto-merge GitHub disabled on a conflict.
-              arm_auto_merge "$existing_pr" "$branch"
-            else
-              pr_body="Automated dependency update.\n\n**Branch:** \`$branch\`\n\nValidated on both x86_64-linux and aarch64-darwin via CI.\nAuto-merge (squash) is armed; this lands itself once the required checks are green.\n\n---\nGenerated by the update pipeline."
-              echo -e "$pr_body" > "$RUNNER_TEMP/pr-body.md"
-              # `gh pr create` prints the new PR's URL on stdout, and that
-              # URL is a valid PR reference for `gh pr merge`.
-              if pr_url=$(gh pr create \
-                --base "$BRANCH_NAME" \
-                --head "$branch" \
-                --title "$subject" \
-                --body-file "$RUNNER_TEMP/pr-body.md"); then
-                echo "PR created for $branch: $pr_url"
-                arm_auto_merge "$pr_url" "$branch"
-              else
-                echo "PR creation failed for $branch"
-              fi
-            fi
-
-            echo "$branch" >>"$RUNNER_TEMP/touched-branches"
-          done
-
-          # Sentinel — written only when ninja itself SUCCEEDED and this
-          # loop then exited cleanly. Both halves are required, and the
-          # ninja half is what this step's `always()` makes necessary:
-          # reaching this line no longer implies the sweep was complete.
-          #
-          # Getting this wrong is destructive rather than merely untidy.
-          # The close step DELETES any `update/*` PR missing from
-          # touched-branches, so a sentinel written after a partial sweep
-          # would close every PR whose target never got to run — the exact
-          # dependencies the timeout already delayed.
-          #
-          # Read through `env:` rather than interpolating a workflow
-          # expression into the shell, per this workflow's standing rule.
-          # (Do not write a literal expression delimiter in these comments
-          # either — actionlint parses `run:` bodies and an empty one is a
-          # hard lint error.)
-          if [ "$NINJA_OUTCOME" = "success" ]; then
-            touch "$RUNNER_TEMP/ninja-completed.flag"
-          else
-            echo "::warning::ninja outcome was '$NINJA_OUTCOME' — pushed what completed, but skipping the stale-PR sentinel so no PR is closed on a partial sweep."
-          fi
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-          NINJA_OUTCOME: ${{ steps.ninja.outcome }}
-
-      # Close stale dependency PRs that were not touched this run.
-      # Renovate-style policy: only auto-close PRs with NO human activity
-      # (author=bot, all commits=bot, all reviews=bot/copilot, all
-      # comments=bot/copilot). Anything with human touches is preserved.
-      # `gh pr close --delete-branch` removes the remote branch in one call.
-      - name: Close stale dependency PRs
-        run: |
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-
-          # Refuse to act if the previous step didn't complete.
-          if [ ! -f "$RUNNER_TEMP/ninja-completed.flag" ]; then
-            echo "Pipeline did not complete cleanly — skipping stale PR cleanup."
-            exit 0
-          fi
-
-          touched="$RUNNER_TEMP/touched-branches"
-
-          # Allowlist of "non-human" actors. Any review or comment from
-          # one of these still counts as untouched-by-humans.
-          #
-          # Login surface is inconsistent across `gh pr view` fields:
-          #   .author.login         → "app/nix-agentic-tools-bot"  (App slug)
-          #   .commits[].authors[]  → "nix-agentic-tools-bot[bot]" (User login)
-          #   .reviews[].author     → "nix-agentic-tools-bot[bot]" (User login)
-          #   .comments[].author    → same
-          # So the allowlist needs BOTH forms for our bot, plus the
-          # equivalent for GitHub's Copilot reviewer and github-actions.
-          allowed_logins='[
-            "app/nix-agentic-tools-bot",
-            "nix-agentic-tools-bot",
-            "nix-agentic-tools-bot[bot]",
-            "app/copilot-swe-agent",
-            "Copilot",
-            "copilot",
-            "copilot[bot]",
-            "app/github-actions",
-            "github-actions[bot]"
-          ]'
-
-          is_bot_only_pr() {
-            local pr=$1
-            local data
-            data=$(gh pr view "$pr" --json author,commits,reviews,comments)
-
-            # Author must be a known bot login (exact match on allowlist)
-            jq -e --argjson allow "$allowed_logins" \
-              '(.author.login // "") as $a | $allow | any(. == $a)' \
-              <<<"$data" >/dev/null || return 1
-
-            # No commits authored by anyone outside the allowlist
-            jq -e --argjson allow "$allowed_logins" \
-              '[.commits[].authors[]?.login // empty]
-               | all(. as $u | $allow | any(. == $u))' \
-              <<<"$data" >/dev/null || return 1
-
-            # No reviews by anyone outside the allowlist
-            jq -e --argjson allow "$allowed_logins" \
-              '[.reviews[]?.author.login // empty]
-               | all(. as $u | $allow | any(. == $u))' \
-              <<<"$data" >/dev/null || return 1
-
-            # No comments by anyone outside the allowlist
-            jq -e --argjson allow "$allowed_logins" \
-              '[.comments[]?.author.login // empty]
-               | all(. as $u | $allow | any(. == $u))' \
-              <<<"$data" >/dev/null || return 1
-
-            return 0
-          }
-
-          echo "Touched this run:"
-          if [ -s "$touched" ]; then
-            sed 's/^/  /' "$touched"
-          else
-            echo "  (none)"
-          fi
-
-          gh pr list --base "$BRANCH_NAME" --state open \
-            --json number,headRefName \
-            --jq '.[] | select(.headRefName | startswith("update/")) | "\(.number)|\(.headRefName)"' \
-          | while IFS='|' read -r pr_num pr_branch; do
-              if grep -qxF "$pr_branch" "$touched"; then
-                echo "PR #$pr_num ($pr_branch): TOUCHED — keep"
-                continue
-              fi
-              if is_bot_only_pr "$pr_num"; then
-                echo "PR #$pr_num ($pr_branch): BOT-ONLY, untouched — closing + deleting branch"
-                gh pr close "$pr_num" --delete-branch \
-                  --comment "Auto-closed: dependency no longer needs updating (removed from matrix or merged into base). No human activity on the PR." \
-                  || echo "  WARN: close failed for #$pr_num"
-              else
-                echo "PR #$pr_num ($pr_branch): HUMAN ACTIVITY — preserving"
-              fi
-            done
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-
-      - name: Upload update report
+          bash "$GITHUB_WORKSPACE/automation/dev/scripts/update-publish.sh"
+          python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" receipt
+      - name: Upload published target receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-receipt-${{ matrix.name }}
+          path: ${{ runner.temp }}/update-receipt.json
+          if-no-files-found: error
+      - name: Upload update diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          if-no-files-found: error
+          name: update-report-${{ matrix.name }}
+          path: |
+            source/.update-report.txt
+            source/.update-logs/
           include-hidden-files: true
-          name: update-report
-          path: .update-report.txt
-
+          if-no-files-found: warn
       - name: Print update report
-        if: always()
-        run: |
-          if [ -f .update-report.txt ]; then
-            echo "::group::Update Report"
-            bash dev/scripts/update-report.sh
-            echo "::endgroup::"
-          else
-            echo "No report generated"
-          fi
-
-      # Cosmetic red: fail the job if any per-dependency target was held
-      # back. Runs last so PR creation, stale-PR cleanup, and report steps
-      # all complete first — the surviving updates still land as PRs.
-      # No untrusted input; report is produced by in-repo scripts.
-      - name: Surface held-back updates as a warning
         if: always()
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          if [ -f .update-report.txt ]; then
-            while IFS= read -r line; do
-              pkg=$(echo "$line" | sed -E 's/^HELD BACK: ([^ |]+).*/\1/')
-              reason=$(echo "$line" | grep -oE '\([^)]+\)$' || true)
-              echo "::warning::held back: ${pkg} ${reason}"
-            done < <(grep '^HELD BACK:' .update-report.txt || true)
-          fi
-
-      # Detect whether upstream nixos-unstable HEAD has restored per-platform
-      # SEA support for github-copilot-cli. Our overlay is a STANDALONE
-      # derivation targeting SEA — if upstream offers it again, we could
-      # consider switching back to an overrideAttrs overlay on upstream.
-      # See packages/copilot-cli/packages/ai/copilot-cli/package.nix for rationale.
+          cat .update-report.txt || true
+          ps -Ao pid,ppid,etime,command | command grep -E "nix|update-" || true
+  cleanup:
+    needs:
+      - discover
+      - update
+    if:
+      ${{ !cancelled() && needs.discover.result == 'success' && !inputs.targets
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      UPDATE_BASE_SHA: ${{ needs.discover.outputs.base }}
+      UPDATE_MATRIX: ${{ needs.discover.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: automation
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          path: source
+          ref: ${{ needs.discover.outputs.base }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: update-receipt-*
+          path: source/receipts
+      - name: Require complete sweep receipts
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" collect
+      - name: Generate publishing App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - name: Close stale dependency PRs
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          bash "$GITHUB_WORKSPACE/automation/dev/scripts/update-cleanup.sh"
+  annotations:
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: automation
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          path: source
+          ref: ${{ needs.discover.outputs.base }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
       - name: Detect upstream copilot-cli SEA restoration
         if: always()
         run: |
@@ -671,13 +280,6 @@ jobs:
               echo "::warning::copilot-cli: upstream nixos-unstable HEAD sourceRoot is unexpected value \"${sr}\". Upstream may have changed packaging mechanism — re-evaluate packages/copilot-cli/packages/ai/copilot-cli/package.nix."
               ;;
           esac
-
-      # Detect a pnpm major upstream that this repo does not carry yet.
-      # The per-major update rows keep each carried major current; only a
-      # HUMAN slides the window (adopt the new major, retire the oldest),
-      # because that changes the pnpm owner recipes, registry metadata,
-      # source sidecars, and generated docs. This step
-      # only prompts. See packages/pnpm/lib/mkMajor.nix.
       - name: Detect a new pnpm major upstream
         if: always()
         run: |
@@ -713,15 +315,6 @@ jobs:
           else
             echo "pnpm: upstream stable majors top out at ${upstream_max}; this repo carries up to pnpm_${ours}. No annotation."
           fi
-
-      # Detect a newer @aihubmix/mcp than the version this repo carries.
-      # aihubmix-mcp is deliberately NOT a config.update.targets row: it
-      # carries a local patch against upstream's published build output,
-      # and no update script can re-author a patch across an upstream
-      # rewrite. That is about SWEEPABILITY, not about lagging — the repo
-      # tracks dist-tags.latest, so this step is normally SILENT and only
-      # speaks when a new release lands. It costs one HTTP GET per sweep
-      # and names the human work. See packages/aihubmix-mcp/packages/ai/mcpServers/aihubmix-mcp/package.nix.
       - name: Detect a newer @aihubmix/mcp on npm
         if: always()
         run: |
@@ -753,40 +346,4 @@ jobs:
             echo "::warning::aihubmix-mcp: npm dist-tags.latest is ${upstream}, this repo carries ${ours}. Bumping is HUMAN work, not a hash refresh: re-author packages/aihubmix-mcp/patches/aihubmix-mcp-save-to-file.patch against the new build/tools/painting-tools.js and confirm it applies with NO fuzz, regenerate aihubmix-mcp-package-lock.json (npm publishes none), re-derive both hashes via lib.fakeHash, and check whether image_generate's model enum or tool set changed. If upstream has grown a native save-to-disk argument, drop the patch instead and convert this package to a real config.update.targets row, deleting this step. Not auto-bumped and not auto-PRed on purpose."
           else
             echo "aihubmix-mcp: npm dist-tags.latest is ${upstream}; this repo carries ${ours}. No annotation."
-          fi
-
-      # Diagnostic dump — runs on success/fail/cancel/timeout.
-      # Surfaces per-target sidecar logs and process state even when
-      # ninja's stdout capture is lost (e.g., on cancellation).
-      - name: Diagnostic dump
-        if: always()
-        env:
-          NAT_UPDATE_WORKTREES_DIR: ${{ runner.temp }}/nat-update-worktrees
-        run: |
-          set +e
-          echo "::group::.update-report.txt"
-          [ -f .update-report.txt ] && cat .update-report.txt || echo "(no report)"
-          echo "::endgroup::"
-
-          echo "::group::orphaned worktrees"
-          ls -la "${NAT_UPDATE_WORKTREES_DIR}/" 2>/dev/null || echo "(none)"
-          echo "::endgroup::"
-
-          echo "::group::lingering nix/ninja/bash processes"
-          pgrep -af "nix|ninja|update-" || echo "(none)"
-          echo "::endgroup::"
-
-          if [ -d .update-logs ]; then
-            # Glob `*` (not `*.log`) — forensic JSON result files from
-            # the run_nfb_build wrapper land alongside the .log sidecars
-            # and need to be dumped too when builds fail.
-            for f in .update-logs/*; do
-              [ -f "$f" ] || continue
-              name=$(basename "$f")
-              echo "::group::log: $name"
-              cat "$f"
-              echo "::endgroup::"
-            done
-          else
-            echo "(no .update-logs/ directory)"
           fi

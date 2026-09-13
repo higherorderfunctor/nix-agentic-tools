@@ -252,8 +252,8 @@ asserted.
 
 ## AI CLI Packages
 
-> **Last verified:** 2026-09-12 — CLI recipes, extraction machinery, and
-> sidecars live in their owner directories.
+> **Last verified:** 2026-09-13 — native shard exclusions and input-worker cache
+> filters protect patched variants.
 
 ### Overview
 
@@ -333,18 +333,23 @@ check.
 public cache: it is a MODIFIED proprietary binary, and republishing one is a
 different act from mirroring the vendor's own build.
 
-**Excluding it from `ci.yml`'s build job is necessary and NOT sufficient.** That
-was the whole mitigation from #665 (2026-08-01), and the patched 2.17.0 binary
-was live in the public cache on 2026-08-12 anyway — eleven days later, so
-`ci.yml` provably was not the source. Two jobs hold `CACHIX_AUTH_TOKEN`, and
-only one of them was covered:
+**Excluding it from `ci.yml`'s native package shards is necessary and NOT
+sufficient.** That was the whole mitigation from #665 (2026-08-01), and the
+patched 2.17.0 binary was live in the public cache on 2026-08-12 anyway — eleven
+days later, so `ci.yml` provably was not the source. Two workflow paths hold
+`CACHIX_AUTH_TOKEN`, and only one of them was covered:
 
-| job                | builds patched?                 | pushes?                        |
-| ------------------ | ------------------------------- | ------------------------------ |
-| `ci.yml` build     | no — `--select removeAttrs`     | yes (token)                    |
-| `update.yml` sweep | **yes — `verify_all_packages`** | yes (token) → **`pushFilter`** |
-| `kiro-patched`     | yes                             | no token                       |
-| `ci.yml` test      | no                              | no token                       |
+| job                     | builds patched?                  | pushes?                        |
+| ----------------------- | -------------------------------- | ------------------------------ |
+| `ci.yml` build-packages | no — `ci-packages.py` exclusions | yes (token)                    |
+| `ci.yml` test           | no                               | no token                       |
+| `kiro-patched`          | yes                              | no token                       |
+| `update.yml` inputs     | **yes — `verify_all_packages`**  | yes (token) → **`pushFilter`** |
+
+`ci-packages.py` removes its `EXCLUDED` names before partitioning the native
+package set and emits a positive `--select` expression for each shard. Keep the
+patched variant in that exclusion set; the dedicated native jobs validate it
+without cache credentials.
 
 `verify_all_packages` (`dev/scripts/update-common.sh`) builds `.#packages.<sys>`
 with **no `--select`**, on every input bump. That is deliberate and stays:

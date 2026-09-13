@@ -34,23 +34,47 @@ def partition(names, index, count):
     return {"count": count, "index": index, "packages": selected, "universe": universe}
 
 
-def validate_results(plan, results):
+def result_rows(results):
     if isinstance(results, dict):
         results = results.get("results")
     if not isinstance(results, list) or not results:
         raise ValueError("missing nix-fast-build results")
+    if any(not isinstance(row, dict) for row in results):
+        raise ValueError("malformed nix-fast-build result")
+    return results
+
+
+def validate_result_coverage(packages, results):
+    if not isinstance(packages, list) or not packages or len(packages) != len(set(packages)):
+        raise ValueError("expected package enumeration must be a nonempty unique list")
+    results = result_rows(results)
+    evaluations = [row for row in results if row.get("type") == "EVAL"]
+    if any(not isinstance(row.get("attr"), str) or not isinstance(row.get("success"), bool) or row.get("skipped") for row in evaluations):
+        raise ValueError("malformed nix-fast-build evaluation result")
+    names = [row["attr"] for row in evaluations]
+    if sorted(names) != sorted(packages):
+        raise ValueError("evaluated package set differs from the expected package set")
+
+    builds = [row for row in results if row.get("type") == "BUILD"]
+    if any(not isinstance(row.get("attr"), str) for row in builds):
+        raise ValueError("malformed nix-fast-build build result")
+    built = {row["attr"] for row in builds}
+    built_drvs = {row["drvPath"] for row in builds if row.get("drvPath")}
+    # nix-fast-build may omit drvPath from BUILD rows. Recover it from the
+    # corresponding EVAL row so aliases of the same derivation still count.
+    built_drvs.update(
+        row["drvPath"] for row in evaluations if row["attr"] in built and row.get("drvPath")
+    )
+    for row in evaluations:
+        if row["success"] and row.get("cacheStatus") not in {"cached", "local"} and row["attr"] not in built and row.get("drvPath") not in built_drvs:
+            raise ValueError(f"package was neither built nor cached: {row['attr']}")
+    return results
+
+
+def validate_results(plan, results):
+    results = validate_result_coverage(plan["packages"], results)
     if any(row.get("success") is not True or row.get("skipped") or row.get("error") for row in results):
         raise ValueError("failed or skipped nix-fast-build result")
-    evaluations = [row for row in results if row.get("type") == "EVAL"]
-    names = [row["attr"] for row in evaluations]
-    if sorted(names) != sorted(plan["packages"]):
-        raise ValueError("evaluated package set differs from the planned shard")
-    built = {row["attr"] for row in results if row.get("type") == "BUILD"}
-    # nix-fast-build coalesces aliases by derivation, producing one BUILD row.
-    built_drvs = {row["drvPath"] for row in evaluations if row["attr"] in built and row.get("drvPath")}
-    for row in evaluations:
-        if row.get("cacheStatus") not in {"cached", "local"} and row["attr"] not in built and row.get("drvPath") not in built_drvs:
-            raise ValueError(f"package was neither built nor cached: {row['attr']}")
 
 
 def validate_coverage(plans, count):
@@ -77,6 +101,9 @@ def main():
     verify = sub.add_parser("verify")
     verify.add_argument("plan", type=Path)
     verify.add_argument("results", type=Path)
+    update_verify = sub.add_parser("update-verify")
+    update_verify.add_argument("packages", type=Path)
+    update_verify.add_argument("results", type=Path)
     coverage = sub.add_parser("coverage")
     coverage.add_argument("directory", type=Path)
     coverage.add_argument("count", type=int)
@@ -88,6 +115,8 @@ def main():
         print(f"packages: builtins.listToAttrs (map (name: {{ inherit name; value = packages.${{name}}; }}) [ {names} ])")
     elif args.command == "verify":
         validate_results(json.loads(args.plan.read_text()), json.loads(args.results.read_text()))
+    elif args.command == "update-verify":
+        validate_result_coverage(json.loads(args.packages.read_text()), json.loads(args.results.read_text()))
     else:
         validate_coverage([json.loads(p.read_text()) for p in args.directory.glob("*/receipt.json")], args.count)
 

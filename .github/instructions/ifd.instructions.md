@@ -101,9 +101,10 @@ before it builds:
   on `build`. This bullet was missing while the list claimed to cover "every
   workflow that evaluates before it builds" — added 2026-08-14.
 - `update.yml` — `systems: x86_64-linux`, `retries: "1"`,
-  `best-effort: "false"`. The ninja pipeline cannot proceed without warm sources
-  (nix-update crashes), so it keeps the original single-shot, fail-hard behavior
-  via the inputs.
+  `best-effort: "false"`. CI matrix workers use the separate `source/` checkout
+  through the action's `path` input. The update worker cannot proceed without
+  warm sources (nix-update crashes), so it keeps the original single-shot,
+  fail-hard behavior via the inputs.
 
 Do not reach for `--all-systems` casually — it would turn the required check red
 today. Measured 2026-07-25 on a linux host:

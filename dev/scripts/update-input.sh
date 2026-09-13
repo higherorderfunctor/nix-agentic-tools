@@ -154,7 +154,15 @@ set +e
   # Repair-on-failure, not a prophylactic sweep: a healthy bump pays
   # NOTHING, which matters because this runs once per changed input and
   # the fixers each drive their own `nix build`.
-  if ! verify_all_packages; then
+  verify_rc=0
+  verify_all_packages || verify_rc=$?
+  if [ "$verify_rc" -ne 0 ]; then
+    # Return 2 means verification could not start. It is not evidence of an
+    # ordinary red build and must never enter the publication path below.
+    if [ "$verify_rc" -eq 2 ]; then
+      log_failure "Package verification could not start"
+      exit 1
+    fi
     log_info "Build failed — re-deriving sidecar hashes and retrying once..."
     # A hash we cannot DERIVE is the one failure here that stops the PR
     # from being writable, so it is the only one that holds the input
@@ -179,7 +187,17 @@ set +e
     fixer_rc=0
     fix_sidecar_hashes || fixer_rc=$?
 
-    if ! verify_all_packages; then
+    verify_rc=0
+    verify_all_packages || verify_rc=$?
+    if [ "$verify_rc" -ne 0 ]; then
+      if [ "$verify_rc" -eq 2 ] || [ "$verify_rc" -eq 4 ]; then
+        log_failure "Package verification retry was incomplete"
+        exit 1
+      fi
+      if [ "$verify_rc" -eq 3 ]; then
+        log_failure "Package verification still reports an unresolved fixed-output hash"
+        exit 1
+      fi
       if [ "$fixer_rc" -ne 0 ]; then
         # The repair could not run to completion AND the tree still does
         # not build, so we cannot show the hashes are right: the PR may

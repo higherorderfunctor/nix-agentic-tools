@@ -58,6 +58,8 @@ jobs:
           require: |
             ^accept-flake-config = true
             ^max-jobs = 1
+      # This action owns uploads. NFB's optional second Cachix daemon had
+      # forced shutdowns on macOS; its duplicate uploader is unnecessary.
       - uses: cachix/cachix-action@v17
         with:
           name: nix-agentic-tools
@@ -84,7 +86,7 @@ jobs:
             --flake ".#packages.$SYSTEM" \
             --select "$(cat "$RUNNER_TEMP/select.nix")" \
             --eval-workers 1 --eval-max-memory-size 4096 --max-jobs 1 \
-            --skip-cached --cachix-cache nix-agentic-tools --no-link \
+            --skip-cached --no-link \
             --result-file "$RUNNER_TEMP/results.json" --result-format json
           python3 dev/scripts/ci-packages.py verify "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/results.json"
           cp "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/receipt.json"
@@ -253,21 +255,14 @@ jobs:
           echo "needed=${needed}" >> "$GITHUB_OUTPUT"
           echo "patched Kiro validation needed: ${needed}"
 
-      # Same single installer as the `build` job — see the long note there for
-      # the deadlock that drove darwin off nix-quick-install-action.
-      #
-      # This job never deadlocked and could have kept the fast installer,
-      # which is why its darwin leg passed in 2m40s inside the very runs where
-      # `build` hung. The governing rule is NOT "it installs no cachix-action"
-      # — state it on the real axis: no long-lived process holds the Nix store
-      # open while this job's `nix build` runs. cachix-action is one way to
-      # get such a process; `--cachix-cache` is another, because nix-fast-build
-      # spawns its OWN cachix daemon (the hung `build` job had two, on
-      # different sockets). Adding either to this job re-arms the hang.
-      #
-      # It moves anyway so there is ONE macOS installer story rather than two,
-      # and so darwin stops running a different nix (2.34.7) from every other
-      # leg (2.35.2) — that skew is what made the hang possible at all.
+      # Use the same multi-user installer as package shards. The old
+      # single-user nix-quick-install setup deadlocked when clients of
+      # different Nix versions requested LocalStore's migration lock while a
+      # Cachix process held the store open. With the daemon-backed store,
+      # clients do not take that lock themselves: retaining both Cachix
+      # upload processes after the installer fix passed runs 31837837510 and
+      # 34743961738. Uploader count alone was not the deadlock condition.
+      # Kiro omits uploads to keep the patched artifact out of public caches.
       #
       # Its darwin builds had never run under a multi-user daemon before this
       # change, moving from `runner` to `_nixbld*`, which put the ad-hoc
@@ -396,6 +391,17 @@ jobs:
               ;;
           esac
 
+          # Process substitution would hide enumeration failure from errexit.
+          closure_file="$RUNNER_TEMP/patched-closure"
+          if ! nix path-info --recursive "$OUT" > "$closure_file"; then
+            echo "::error::could not enumerate the patched closure" >&2
+            exit 1
+          fi
+          if ! command grep -Fx -- "$OUT" "$closure_file" >/dev/null; then
+            echo "::error::patched closure listing omitted its root output" >&2
+            exit 1
+          fi
+
           published=0
           while read -r path; do
             name="${path##*/}"
@@ -443,12 +449,12 @@ jobs:
                 published=$((published + 1))
                 ;;
             esac
-          done < <(nix path-info --recursive "$OUT")
+          done < "$closure_file"
 
           if [ "$published" -ne 0 ]; then
             echo "::error::${published} patched path(s) failed the not-published" \
                  "assertion against $CACHE (published, or inconclusive — see above)." \
-                 "Check update.yml's pushFilter and ci.yml's --select removeAttrs."
+                 "Check update.yml's pushFilter and ci-packages.py's EXCLUDED set."
             exit 1
           fi
           echo "No patched Kiro path is fetchable from $CACHE."
@@ -464,11 +470,12 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
-      - name: Test CI coverage gate
+      - name: Test CI workflow gates
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           python3 dev/scripts/test-ci-packages.py
+          python3 dev/scripts/test-update-matrix.py
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |

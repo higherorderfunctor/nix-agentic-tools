@@ -372,11 +372,17 @@ _: {
     # config.update.targets.
     pipeline = {
       scopes = [
+        ".github/actions/warm-ifd/**"
+        ".github/workflows/ci.yml"
         ".github/workflows/update.yml"
         "config/fragment-categories.nix"
         "config/generate-update-ninja.nix"
         "config/update-targets.nix"
         "dev/generate.nix"
+        "dev/scripts/ci-*.py"
+        "dev/scripts/test-ci-*.py"
+        "dev/scripts/test-update-*.py"
+        "dev/scripts/update-*.py"
         "dev/scripts/update-*.sh"
         "dev/tasks/generate.nix"
         "lib/ai/transformers/**"

@@ -213,9 +213,12 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
     [`dev/fragments/packaging/platforms.md`](dev/fragments/packaging/platforms.md)
 
 - **`pipeline`**
-  - Match: `.github/workflows/update.yml`, `config/fragment-categories.nix`,
+  - Match: `.github/actions/warm-ifd/**`, `.github/workflows/ci.yml`,
+    `.github/workflows/update.yml`, `config/fragment-categories.nix`,
     `config/generate-update-ninja.nix`, `config/update-targets.nix`,
-    `dev/generate.nix`, `dev/scripts/update-*.sh`, `dev/tasks/generate.nix`,
+    `dev/generate.nix`, `dev/scripts/ci-*.py`, `dev/scripts/test-ci-*.py`,
+    `dev/scripts/test-update-*.py`, `dev/scripts/update-*.py`,
+    `dev/scripts/update-*.sh`, `dev/tasks/generate.nix`,
     `lib/ai/transformers/**`, `lib/fragments-registry.nix`, `lib/fragments.nix`,
     `lib/update.nix`, `packages/*/registry.nix`
   - Read:
