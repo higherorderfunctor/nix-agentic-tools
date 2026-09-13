@@ -17,6 +17,23 @@ Coordinator review/provenance documents and the separate interface proposals are
 additional review artifacts. Downloaded dependency/source trees, build products,
 and coordinator scratchpads are excluded from the tracked package.
 
+The ideal workflow received reviewed requirements and the public toolchain,
+without tooling research. The tools-informed workflow received the same contract
+and the research, without the ideal output. Both froze before the comparison
+workflow received them. Design and review workers used fresh Astra/high
+contexts; mechanical audits and the runtime pairing probe used Astra/medium.
+Read boundaries excluded the repository's existing grammar values, semantic
+implementation and specification/plan corpus. These were context boundaries, not
+a claim of hostile filesystem isolation.
+
+The [interface publication map](interface-publication.json) records original and
+published checksums. Publication edits relocate links, apply repository
+formatting and Nix style fixes, and repair whitespace in the public-toolchain
+brief. Frozen originals remain in the private session backup. Audit line
+references refer to their frozen inputs, before publication formatting.
+Alternative proposals remain historical inputs; the recommendation is the review
+candidate.
+
 All interfaces and playbooks in this Gate 2 package remain proposals. Syntax
 parsing and experimental capability results are separate from production Scribe
 integration acceptance. Gate 3 requires the next human review.

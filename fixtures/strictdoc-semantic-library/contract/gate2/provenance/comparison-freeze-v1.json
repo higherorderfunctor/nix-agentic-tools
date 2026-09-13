@@ -1,0 +1,32 @@
+{
+  "workflow": "independent comparison after ideal and tools-informed freezes",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "version": 1,
+  "files": [
+    {
+      "path": "review.md",
+      "sha256": "3c75ae99a03d76ddb7ddc8f1d873f8b1ea94429c505b1dc16cbf50a066824583"
+    },
+    {
+      "path": "interface.md",
+      "sha256": "e64cca9e8f85215061c17d53ec4723d388f6fb37ea2731ad4d371330615e8f5d"
+    },
+    {
+      "path": "recommended.nix",
+      "sha256": "7b1f26145e06a3cdc3dc61895fae910fae8f9e358169a67f7faf7f3239334d29"
+    },
+    {
+      "path": "playbooks.md",
+      "sha256": "e1b834747d1e1b9339ad9b480a8985f467cdf8b68935a145f8a03b307c5064a5"
+    },
+    {
+      "path": "findings.md",
+      "sha256": "1f015f7e2c2df8eec20245c3292a5e526acb84f270ff63a905095cdbaa3fc1b5"
+    },
+    {
+      "path": "progress.json",
+      "sha256": "5525b3d92b8a235e6b50426c2f412091fd0bc31feade75c35644179e2dcfa1f6"
+    }
+  ]
+}

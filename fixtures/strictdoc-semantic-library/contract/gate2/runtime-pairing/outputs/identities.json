@@ -1,0 +1,11 @@
+{
+  "nixpkgsSource": "/nix/store/cc7ff4ysismx0c3778v8gc6b14plrz3z-source",
+  "python": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6",
+  "pythonVersion": "3.14.6",
+  "rustworkx": "/nix/store/zlwbwsaaihzsvmiyyl2yspb368n1m9hz-python3.14-rustworkx-0.17.1",
+  "rustworkxDrv": "/nix/store/sf4crlkr3fhvdi2kda93438zf8lkp9r8-python3.14-rustworkx-0.17.1.drv",
+  "rustworkxVersion": "0.17.1",
+  "strictdoc": "/nix/store/qc5w0rnlr2pl8zvaaq5gi6jfhm7h50im-strictdoc",
+  "strictdocDrv": "/nix/store/y51kgnhb2q2lhwr6cn9zvlpxrzf5y8nd-strictdoc.drv",
+  "strictdocSource": "/nix/store/ja15hkfp0pdgjs5l9pinj84zmgc1ww11-source"
+}

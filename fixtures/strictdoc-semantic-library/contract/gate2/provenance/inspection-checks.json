@@ -1,0 +1,132 @@
+{
+  "checks": [
+    {
+      "path": "inputs/research/experiments/scripts/cost_probe.py",
+      "check": "Python AST syntax",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/scripts/cozo_lock_probe.py",
+      "check": "Python AST syntax",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/scripts/finalists.py",
+      "check": "Python AST syntax",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/scripts/native_probe.py",
+      "check": "Python AST syntax",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/scripts/native_scope_probe.py",
+      "check": "Python AST syntax",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/scripts/providers.py",
+      "check": "Python AST syntax",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/scripts/interop.sh",
+      "check": "bash -n",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/scripts/run.sh",
+      "check": "bash -n",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/scripts/setup.sh",
+      "check": "bash -n",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/results/cost.json",
+      "check": "JSON parse",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/results/cozo-lock.json",
+      "check": "JSON parse",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/results/finalists.json",
+      "check": "JSON parse",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/results/native-scope.json",
+      "check": "JSON parse",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/results/native-source-evidence.json",
+      "check": "JSON parse",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/results/native.json",
+      "check": "JSON parse",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/results/neutral-input.json",
+      "check": "JSON parse",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/results/nix-package-versions.json",
+      "check": "JSON parse",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/results/opa-acquisition.json",
+      "check": "JSON parse",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/results/opa-bun.json",
+      "check": "JSON parse",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/results/opa-default-error.json",
+      "check": "JSON parse",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/results/opa-strict-error.json",
+      "check": "JSON parse",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/results/providers.json",
+      "check": "JSON parse",
+      "status": "pass"
+    },
+    {
+      "path": "inputs/research/experiments/scripts/opa-bun.cjs",
+      "check": "node --check",
+      "status": "pass"
+    }
+  ],
+  "experiment_reruns": false,
+  "cost_cells": 12,
+  "cost_medians_verified": 9,
+  "captured_traversal_cases_checked": 8,
+  "captured_backend_answer_maps_checked": 24,
+  "native_result_rows_checked": 11,
+  "reproduction_paths": {
+    "documented_setup_present_at_workspace_root": false,
+    "documented_runner_present_at_workspace_root": false,
+    "documented_filtered_toolchain_present": false,
+    "frozen_setup_present": true,
+    "frozen_runner_present": true
+  }
+}

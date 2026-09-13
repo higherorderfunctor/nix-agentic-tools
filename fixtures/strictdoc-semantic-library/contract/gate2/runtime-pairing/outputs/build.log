@@ -1,0 +1,20 @@
+error:
+       … while calling the 'import' builtin
+         at /home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-gate2-workers/runtime-qualification/outputs/probe.nix:14:10:
+           13|   in result // { inherit inputs; outPath = src; }) lock.nodes;
+           14|   pkgs = import nodes.nixpkgs_4.outPath { system = "x86_64-linux"; config = {}; overlays = []; };
+             |          ^
+           15|   strictdoc = nodes.root.packages.x86_64-linux.strictdoc;
+
+       … while realising the context of a path
+
+       … in the left operand of the update (//) operator
+         at /home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-gate2-workers/runtime-qualification/outputs/probe.nix:13:6:
+           12|     result = (import (src + "/flake.nix")).outputs (inputs // { self = result; });
+           13|   in result // { inherit inputs; outPath = src; }) lock.nodes;
+             |      ^
+           14|   pkgs = import nodes.nixpkgs_4.outPath { system = "x86_64-linux"; config = {}; overlays = []; };
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: opening a connection to remote store 'daemon' previously failed
