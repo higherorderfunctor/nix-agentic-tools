@@ -1,0 +1,13 @@
+Parallelization: Disabled
+Step 'Parse SDoc project tree' start.
+Step 'Find and read SDoc files' start.
+Completed finding SDoc and assets ........................... 0.00s
+Reading SDOC: 1 tasks
+.
+Completed parsing all documents ............................. 0.00s
+Completed building document tree ............................ 0.00s
+Step 'Find and read SDoc files' took: 0.01 sec.
+Step 'Build traceability graph' start.
+error: [DocumentIndex.create] Requirement A references parent requirement which doesn't exist: ABSENT.
+error source: /nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/lib/python3.14/site-packages/strictdoc/core/traceability_index_builder.py:663, function: create_from_document_tree()
+Rerun with strictdoc --debug <...> to enable stack trace printing.

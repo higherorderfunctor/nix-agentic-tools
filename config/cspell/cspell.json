@@ -30,6 +30,24 @@
       "filename": ["**/*.md", "**/*.mjs", "**/*.nix", "**/*.py", "**/*.sh"]
     },
     {
+      "filename": "fixtures/strictdoc-semantic-library/contract/gate2/**",
+      "ignoreRegExpList": ["/\\/nix\\/store\\/[a-z0-9]{32}-/g"],
+      "words": [
+        "cozo",
+        "datalog",
+        "functors",
+        "microbenchmark",
+        "networkx",
+        "petgraph",
+        "recomputations",
+        "rego",
+        "rustworkx",
+        "uids",
+        "unconfigured",
+        "unroled"
+      ]
+    },
+    {
       "filename": "fixtures/strictdoc-semantic-library/evidence/*.json",
       "ignoreRegExpList": ["/[\\s\\S]+/g"]
     }

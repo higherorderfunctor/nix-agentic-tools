@@ -1,0 +1,42 @@
+{
+  "status": "complete",
+  "frozen": true,
+  "date": "2026-09-13",
+  "stage": "evidence v2 corrections and composed replay frozen",
+  "completed": [
+    "Reviewed clean-context boundary and neutral inputs",
+    "Native Parent-only/Child-only/mixed role controls plus explicit all-role native detector control",
+    "Upstream source and compliance/OTS tailoring audit",
+    "Broad tools/libraries comparison and three finalist capability experiments",
+    "Bun Wasm and existing N-API/PyO3 health/error interoperability controls",
+    "External executable statuses and captured snapshot changes",
+    "Bounded 1k/10k cost probes and Cozo memory-lock reproducer",
+    "Pinned nixpkgs attribute version inspection without builds",
+    "Primary sources, recommendation, self-contained designer handoff, reproduction notes and explicit publication allowlist"
+  ],
+  "remaining": [],
+  "later_qualification": [
+    "Scribe transactions/publication recovery",
+    "Public extension registration and production diagnostic equivalence",
+    "Authenticated identity and full ownership-sensitive projection",
+    "Incremental/full parity and actual supported-platform devenv closures"
+  ],
+  "nix_lane": "free; no new builds or acquisition for v2",
+  "publication_allowlist": "publication-allowlist.json",
+  "production_mutations": false,
+  "git_commits_or_pushes": false,
+  "evidence_version": 2,
+  "versioned_errata": "evidence-corrections-v2.md",
+  "original_hashes": "evidence-v1-sha256.json",
+  "v2_hashes": "evidence-v2-sha256.json",
+  "v2_checks": [
+    "Independent audit findings read without interface design access",
+    "Parent/Child projections corrected in Python and Rego",
+    "Literal selected-Child truth rows and boundary opening pass on all three backends and Wasm",
+    "Oracle normalization separated from shared backend helper",
+    "Same nonempty snapshot accepts unchanged protection and rejects changed projection in CLI/Wasm",
+    "Scratch-copy replay instructions and standalone --backends mode",
+    "Composed --all runner executed successfully with existing dependencies",
+    "Original raw finalist/cost/Wasm results retained and current cost claims refreshed"
+  ]
+}

@@ -1,0 +1,6 @@
+warning: ignoring the client-specified setting 'auto-optimise-store', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'max-free', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'min-free', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-substituters', because it is a restricted setting and you are not a trusted user
+warning: Nix search path entry '/home/caubut/.nix-defexpr/channels' does not exist, ignoring

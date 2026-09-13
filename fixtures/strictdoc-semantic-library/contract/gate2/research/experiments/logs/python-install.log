@@ -1,0 +1,16 @@
+Using Python 3.13.15 environment at: outputs/experiments/venv
+Resolved 4 packages in 855ms
+Downloading networkx (2.0MiB)
+Downloading rustworkx (2.3MiB)
+Downloading cozo-embedded (10.6MiB)
+Downloading numpy (15.9MiB)
+ Downloaded networkx
+ Downloaded rustworkx
+ Downloaded cozo-embedded
+ Downloaded numpy
+Prepared 4 packages in 1.70s
+Installed 4 packages in 10ms
+ + cozo-embedded==0.7.6
+ + networkx==3.6.1
+ + numpy==2.5.3
+ + rustworkx==0.18.1

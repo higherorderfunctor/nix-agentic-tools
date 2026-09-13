@@ -1,0 +1,183 @@
+{
+  "nodes": {
+    "F0": {
+      "closed": false
+    },
+    "F1": {
+      "closed": false
+    },
+    "F1a": {
+      "closed": false
+    },
+    "F2": {
+      "closed": true
+    },
+    "F2a": {
+      "closed": false
+    },
+    "F2b": {
+      "closed": false
+    },
+    "G0": {
+      "closed": false
+    },
+    "G1": {
+      "closed": false
+    },
+    "I0": {
+      "closed": false
+    },
+    "Z0": {
+      "closed": false
+    }
+  },
+  "relations": [
+    {
+      "model": "neutral",
+      "owner": "F1",
+      "owner_type": "record",
+      "kind": "Parent",
+      "role": "H",
+      "target": "F0"
+    },
+    {
+      "model": "neutral",
+      "owner": "F1a",
+      "owner_type": "record",
+      "kind": "Parent",
+      "role": "H",
+      "target": "F1"
+    },
+    {
+      "model": "neutral",
+      "owner": "F2",
+      "owner_type": "record",
+      "kind": "Parent",
+      "role": "H",
+      "target": "F0"
+    },
+    {
+      "model": "neutral",
+      "owner": "F2a",
+      "owner_type": "record",
+      "kind": "Parent",
+      "role": "H",
+      "target": "F2"
+    },
+    {
+      "model": "neutral",
+      "owner": "F2b",
+      "owner_type": "record",
+      "kind": "Parent",
+      "role": "H",
+      "target": "F2"
+    },
+    {
+      "model": "neutral",
+      "owner": "G1",
+      "owner_type": "record",
+      "kind": "Parent",
+      "role": "H",
+      "target": "G0"
+    },
+    {
+      "model": "neutral",
+      "owner": "Z0",
+      "owner_type": "other",
+      "kind": "Parent",
+      "role": "R",
+      "target": "F0"
+    },
+    {
+      "model": "neutral",
+      "owner": "Z0",
+      "owner_type": "other",
+      "kind": "Child",
+      "role": "Q",
+      "target": "G1"
+    }
+  ],
+  "hierarchy": {
+    "model": "neutral",
+    "owner_type": "record",
+    "kind": "Parent",
+    "role": "H"
+  },
+  "queries": [
+    {
+      "id": "closed_endpoint",
+      "origin": "F1a",
+      "target": "F2",
+      "mode": "visible",
+      "expected": true
+    },
+    {
+      "id": "blocked_interior",
+      "origin": "F1a",
+      "target": "F2a",
+      "mode": "visible",
+      "expected": false
+    },
+    {
+      "id": "internal_peer",
+      "origin": "F2a",
+      "target": "F2b",
+      "mode": "visible",
+      "expected": true
+    },
+    {
+      "id": "internal_exit",
+      "origin": "F2a",
+      "target": "F1a",
+      "mode": "visible",
+      "expected": true
+    },
+    {
+      "id": "closed_start",
+      "origin": "F2",
+      "target": "F2a",
+      "mode": "downward",
+      "expected": true
+    },
+    {
+      "id": "cross_root",
+      "origin": "F1a",
+      "target": "G1",
+      "mode": "visible",
+      "expected": false
+    },
+    {
+      "id": "bridge_endpoint",
+      "origin": "F0",
+      "target": "F2",
+      "mode": "downward",
+      "expected": true
+    },
+    {
+      "id": "bridge_blocked",
+      "origin": "F0",
+      "target": "F2a",
+      "mode": "downward",
+      "expected": false
+    },
+    {
+      "id": "bridge_sibling",
+      "origin": "F1",
+      "target": "F2",
+      "mode": "downward",
+      "expected": false
+    },
+    {
+      "id": "unselected_shortcut",
+      "origin": "F0",
+      "target": "G1",
+      "mode": "downward",
+      "expected": false
+    }
+  ],
+  "snapshot": {
+    "id": "empty-1",
+    "records": {}
+  },
+  "projection": {}
+}

@@ -1,0 +1,522 @@
+{
+  "evidence_version": 2,
+  "versions": {
+    "cozo-embedded": "0.7.6",
+    "networkx": "3.6.1",
+    "rustworkx": "0.18.1"
+  },
+  "results": [
+    {
+      "case": "base",
+      "backend": "rustworkx",
+      "milliseconds": 0.13624003622680902,
+      "answers": {
+        "closed_endpoint": true,
+        "blocked_interior": false,
+        "internal_peer": true,
+        "internal_exit": true,
+        "closed_start": true,
+        "cross_root": false,
+        "bridge_endpoint": true,
+        "bridge_blocked": false,
+        "bridge_sibling": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "base",
+      "backend": "cozo",
+      "milliseconds": 3.3614319982007146,
+      "answers": {
+        "closed_endpoint": true,
+        "blocked_interior": false,
+        "internal_peer": true,
+        "internal_exit": true,
+        "closed_start": true,
+        "cross_root": false,
+        "bridge_endpoint": true,
+        "bridge_blocked": false,
+        "bridge_sibling": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "base",
+      "backend": "opa",
+      "milliseconds": 11.694375076331198,
+      "answers": {
+        "blocked_interior": false,
+        "bridge_blocked": false,
+        "bridge_endpoint": true,
+        "bridge_sibling": false,
+        "closed_endpoint": true,
+        "closed_start": true,
+        "cross_root": false,
+        "internal_exit": true,
+        "internal_peer": true,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "selected_child_base",
+      "backend": "rustworkx",
+      "milliseconds": 0.07335504051297903,
+      "answers": {
+        "open_downward": true,
+        "reverse_downward": false,
+        "closed_endpoint": true,
+        "blocked_interior": false,
+        "closed_start": true,
+        "internal_peer": true,
+        "internal_exit": true,
+        "external_blocked": false,
+        "sibling_downward": false,
+        "unselected_parent_shortcut": false
+      }
+    },
+    {
+      "case": "selected_child_base",
+      "backend": "cozo",
+      "milliseconds": 2.441036980599165,
+      "answers": {
+        "open_downward": true,
+        "reverse_downward": false,
+        "closed_endpoint": true,
+        "blocked_interior": false,
+        "closed_start": true,
+        "internal_peer": true,
+        "internal_exit": true,
+        "external_blocked": false,
+        "sibling_downward": false,
+        "unselected_parent_shortcut": false
+      }
+    },
+    {
+      "case": "selected_child_base",
+      "backend": "opa",
+      "milliseconds": 11.579266982153058,
+      "answers": {
+        "blocked_interior": false,
+        "closed_endpoint": true,
+        "closed_start": true,
+        "external_blocked": false,
+        "internal_exit": true,
+        "internal_peer": true,
+        "open_downward": true,
+        "reverse_downward": false,
+        "sibling_downward": false,
+        "unselected_parent_shortcut": false
+      }
+    },
+    {
+      "case": "selected_child_open_boundary",
+      "backend": "rustworkx",
+      "milliseconds": 0.07375201676040888,
+      "answers": {
+        "open_downward": true,
+        "reverse_downward": false,
+        "closed_endpoint": true,
+        "blocked_interior": true,
+        "closed_start": true,
+        "internal_peer": true,
+        "internal_exit": true,
+        "external_blocked": true,
+        "sibling_downward": false,
+        "unselected_parent_shortcut": false
+      }
+    },
+    {
+      "case": "selected_child_open_boundary",
+      "backend": "cozo",
+      "milliseconds": 2.345966990105808,
+      "answers": {
+        "open_downward": true,
+        "reverse_downward": false,
+        "closed_endpoint": true,
+        "blocked_interior": true,
+        "closed_start": true,
+        "internal_peer": true,
+        "internal_exit": true,
+        "external_blocked": true,
+        "sibling_downward": false,
+        "unselected_parent_shortcut": false
+      }
+    },
+    {
+      "case": "selected_child_open_boundary",
+      "backend": "opa",
+      "milliseconds": 12.18109205365181,
+      "answers": {
+        "blocked_interior": true,
+        "closed_endpoint": true,
+        "closed_start": true,
+        "external_blocked": true,
+        "internal_exit": true,
+        "internal_peer": true,
+        "open_downward": true,
+        "reverse_downward": false,
+        "sibling_downward": false,
+        "unselected_parent_shortcut": false
+      }
+    },
+    {
+      "case": "open_boundary_rechecks_unchanged_queries",
+      "backend": "rustworkx",
+      "milliseconds": 0.07973902393132448,
+      "answers": {
+        "closed_endpoint": true,
+        "blocked_interior": true,
+        "internal_peer": true,
+        "internal_exit": true,
+        "closed_start": true,
+        "cross_root": false,
+        "bridge_endpoint": true,
+        "bridge_blocked": true,
+        "bridge_sibling": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "open_boundary_rechecks_unchanged_queries",
+      "backend": "cozo",
+      "milliseconds": 2.428852953016758,
+      "answers": {
+        "closed_endpoint": true,
+        "blocked_interior": true,
+        "internal_peer": true,
+        "internal_exit": true,
+        "closed_start": true,
+        "cross_root": false,
+        "bridge_endpoint": true,
+        "bridge_blocked": true,
+        "bridge_sibling": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "open_boundary_rechecks_unchanged_queries",
+      "backend": "opa",
+      "milliseconds": 11.768479947932065,
+      "answers": {
+        "blocked_interior": true,
+        "bridge_blocked": true,
+        "bridge_endpoint": true,
+        "bridge_sibling": false,
+        "closed_endpoint": true,
+        "closed_start": true,
+        "cross_root": false,
+        "internal_exit": true,
+        "internal_peer": true,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "nested_boundary_from_internal_origin",
+      "backend": "rustworkx",
+      "milliseconds": 0.04063604865223169,
+      "answers": {
+        "nested_block": false
+      }
+    },
+    {
+      "case": "nested_boundary_from_internal_origin",
+      "backend": "cozo",
+      "milliseconds": 1.8739670049399137,
+      "answers": {
+        "nested_block": false
+      }
+    },
+    {
+      "case": "nested_boundary_from_internal_origin",
+      "backend": "opa",
+      "milliseconds": 10.091962991282344,
+      "answers": {
+        "nested_block": false
+      }
+    },
+    {
+      "case": "selector_context_model",
+      "backend": "rustworkx",
+      "milliseconds": 0.07241300772875547,
+      "answers": {
+        "closed_endpoint": true,
+        "blocked_interior": false,
+        "internal_peer": true,
+        "internal_exit": true,
+        "closed_start": true,
+        "cross_root": false,
+        "bridge_endpoint": true,
+        "bridge_blocked": false,
+        "bridge_sibling": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "selector_context_model",
+      "backend": "cozo",
+      "milliseconds": 2.511714003048837,
+      "answers": {
+        "closed_endpoint": true,
+        "blocked_interior": false,
+        "internal_peer": true,
+        "internal_exit": true,
+        "closed_start": true,
+        "cross_root": false,
+        "bridge_endpoint": true,
+        "bridge_blocked": false,
+        "bridge_sibling": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "selector_context_model",
+      "backend": "opa",
+      "milliseconds": 11.290544061921537,
+      "answers": {
+        "blocked_interior": false,
+        "bridge_blocked": false,
+        "bridge_endpoint": true,
+        "bridge_sibling": false,
+        "closed_endpoint": true,
+        "closed_start": true,
+        "cross_root": false,
+        "internal_exit": true,
+        "internal_peer": true,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "selector_context_owner_type",
+      "backend": "rustworkx",
+      "milliseconds": 0.09107205551117659,
+      "answers": {
+        "closed_endpoint": true,
+        "blocked_interior": false,
+        "internal_peer": true,
+        "internal_exit": true,
+        "closed_start": true,
+        "cross_root": false,
+        "bridge_endpoint": true,
+        "bridge_blocked": false,
+        "bridge_sibling": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "selector_context_owner_type",
+      "backend": "cozo",
+      "milliseconds": 2.4602330522611737,
+      "answers": {
+        "closed_endpoint": true,
+        "blocked_interior": false,
+        "internal_peer": true,
+        "internal_exit": true,
+        "closed_start": true,
+        "cross_root": false,
+        "bridge_endpoint": true,
+        "bridge_blocked": false,
+        "bridge_sibling": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "selector_context_owner_type",
+      "backend": "opa",
+      "milliseconds": 11.583157000131905,
+      "answers": {
+        "blocked_interior": false,
+        "bridge_blocked": false,
+        "bridge_endpoint": true,
+        "bridge_sibling": false,
+        "closed_endpoint": true,
+        "closed_start": true,
+        "cross_root": false,
+        "internal_exit": true,
+        "internal_peer": true,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "selector_context_kind",
+      "backend": "rustworkx",
+      "milliseconds": 0.07513095624744892,
+      "answers": {
+        "closed_endpoint": true,
+        "blocked_interior": false,
+        "internal_peer": true,
+        "internal_exit": true,
+        "closed_start": true,
+        "cross_root": false,
+        "bridge_endpoint": true,
+        "bridge_blocked": false,
+        "bridge_sibling": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "selector_context_kind",
+      "backend": "cozo",
+      "milliseconds": 2.5380849838256836,
+      "answers": {
+        "closed_endpoint": true,
+        "blocked_interior": false,
+        "internal_peer": true,
+        "internal_exit": true,
+        "closed_start": true,
+        "cross_root": false,
+        "bridge_endpoint": true,
+        "bridge_blocked": false,
+        "bridge_sibling": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "selector_context_kind",
+      "backend": "opa",
+      "milliseconds": 11.130461934953928,
+      "answers": {
+        "blocked_interior": false,
+        "bridge_blocked": false,
+        "bridge_endpoint": true,
+        "bridge_sibling": false,
+        "closed_endpoint": true,
+        "closed_start": true,
+        "cross_root": false,
+        "internal_exit": true,
+        "internal_peer": true,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "selector_context_role",
+      "backend": "rustworkx",
+      "milliseconds": 0.08140504360198975,
+      "answers": {
+        "closed_endpoint": true,
+        "blocked_interior": false,
+        "internal_peer": true,
+        "internal_exit": true,
+        "closed_start": true,
+        "cross_root": false,
+        "bridge_endpoint": true,
+        "bridge_blocked": false,
+        "bridge_sibling": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "selector_context_role",
+      "backend": "cozo",
+      "milliseconds": 3.075969056226313,
+      "answers": {
+        "closed_endpoint": true,
+        "blocked_interior": false,
+        "internal_peer": true,
+        "internal_exit": true,
+        "closed_start": true,
+        "cross_root": false,
+        "bridge_endpoint": true,
+        "bridge_blocked": false,
+        "bridge_sibling": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "selector_context_role",
+      "backend": "opa",
+      "milliseconds": 10.952493990771472,
+      "answers": {
+        "blocked_interior": false,
+        "bridge_blocked": false,
+        "bridge_endpoint": true,
+        "bridge_sibling": false,
+        "closed_endpoint": true,
+        "closed_start": true,
+        "cross_root": false,
+        "internal_exit": true,
+        "internal_peer": true,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "subtree_move",
+      "backend": "rustworkx",
+      "milliseconds": 0.07386400830000639,
+      "answers": {
+        "closed_endpoint": true,
+        "blocked_interior": true,
+        "internal_peer": false,
+        "internal_exit": true,
+        "closed_start": false,
+        "cross_root": false,
+        "bridge_endpoint": true,
+        "bridge_blocked": true,
+        "bridge_sibling": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "subtree_move",
+      "backend": "cozo",
+      "milliseconds": 2.3572740610688925,
+      "answers": {
+        "closed_endpoint": true,
+        "blocked_interior": true,
+        "internal_peer": false,
+        "internal_exit": true,
+        "closed_start": false,
+        "cross_root": false,
+        "bridge_endpoint": true,
+        "bridge_blocked": true,
+        "bridge_sibling": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "subtree_move",
+      "backend": "opa",
+      "milliseconds": 11.927347048185766,
+      "answers": {
+        "blocked_interior": true,
+        "bridge_blocked": true,
+        "bridge_endpoint": true,
+        "bridge_sibling": false,
+        "closed_endpoint": true,
+        "closed_start": false,
+        "cross_root": false,
+        "internal_exit": true,
+        "internal_peer": false,
+        "unselected_shortcut": false
+      }
+    },
+    {
+      "case": "mixed_role_cycle",
+      "backend": "rustworkx",
+      "cycle": [["A", "Z"], ["Z", "B"], ["B", "A"]]
+    },
+    {
+      "case": "external_snapshot_change",
+      "backend": "opa",
+      "captured_old_rejects": true,
+      "new_empty_accepts": true,
+      "same_nonempty_snapshot": "protected-1",
+      "unchanged_protected_changes": [],
+      "changed_protected_changes": ["I0"]
+    },
+    {
+      "case": "sidecar_transaction",
+      "backend": "cozo",
+      "staged_read_your_writes": true,
+      "abort_restores": true,
+      "commit_visible": true,
+      "independent_read_during_write": "blocked beyond 10 seconds; experiment killed at 20 seconds",
+      "scribe_files_git_atomic": "NOT TESTED; NOT PROVIDED"
+    },
+    {
+      "case": "public_custom_fixed_rule",
+      "backend": "cozo",
+      "sum": [[5]],
+      "callback_error_propagated": true
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "errors": [
+    {
+      "message": "div: divide by zero",
+      "code": "eval_builtin_error",
+      "location": {
+        "file": "",
+        "row": 1,
+        "col": 1
+      }
+    }
+  ]
+}

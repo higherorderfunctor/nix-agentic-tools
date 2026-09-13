@@ -1,0 +1,24 @@
+Parallelization: Disabled
+Step 'Parse SDoc project tree' start.
+Step 'Find and read SDoc files' start.
+Completed finding SDoc and assets ........................... 0.00s
+Reading SDOC: 1 tasks
+.
+Completed parsing all documents ............................. 0.00s
+Completed building document tree ............................ 0.00s
+Step 'Find and read SDoc files' took: 0.01 sec.
+Step 'Build traceability graph' start.
+Step 'Build traceability graph' took: 0.01 sec.
+Step 'Parse SDoc project tree' took: 0.01 sec.
+Step 'Export SDoc' start.
+Step 'Find and read SDoc files' start.
+Completed finding SDoc and assets ........................... 0.00s
+Reading SDOC: 1 tasks
+.
+Completed parsing all documents ............................. 0.00s
+Completed building document tree ............................ 0.00s
+Step 'Find and read SDoc files' took: 0.01 sec.
+Step 'Build traceability graph' start.
+Step 'Build traceability graph' took: 0.01 sec.
+Step 'Export SDoc' took: 0.01 sec.
+Total execution time ........................................ 0.70s
