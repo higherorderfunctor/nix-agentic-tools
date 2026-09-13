@@ -7,9 +7,8 @@ applyTo: "flake.nix,devenv.nix"
 
 ## Binary Cache Maintenance
 
-> **Last verified:** 2026-08-15 — the interactive closure gate lives at
-> `ai.codex.programs.semble.enable` (moved, unchanged in effect, from bare
-> `semble.enable`; capability-gated).
+> **Last verified:** 2026-09-13 — native package shards retain the Numtide
+> substitution and Semble mirroring policy.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show b330b5af:dev/fragments/flake/binary-cache.md`.
@@ -38,13 +37,13 @@ the input provides pre-built binaries independent of nixpkgs.
 Semble is the deliberate exception. The unfollowed `llm-agents` input supplies
 an already-built package whose exact derivation is part of this repository's
 public contract. Keep `cache.numtide.com` and its key on the CI package-build
-runners only — as a job-level `NIX_CONFIG` on ci.yml's `build` job, NOT on the
-installer step, whose `extra_nix_config` cachix-action discards (see the marker
-above for the measurement). Authenticated `main` builds explicitly pipe the
-realized Semble path to `cachix push nix-agentic-tools`, mirroring its runtime
-closure into the project cache. Do not add Numtide's cache to public `flake.nix`
-`nixConfig` or `devenv.nix` `cachix.pull`; consumers should need only the
-project cache.
+runners only — as a job-level `NIX_CONFIG` on ci.yml's `build-packages` job, NOT
+on the installer step, whose `extra_nix_config` cachix-action discards (see the
+marker above for the measurement). On authenticated `main` builds, the shard
+containing Semble pipes the realized Semble path to
+`cachix push nix-agentic-tools`, mirroring its runtime closure into the project
+cache. Do not add Numtide's cache to public `flake.nix` `nixConfig` or
+`devenv.nix` `cachix.pull`; consumers should need only the project cache.
 
 Extra Semble grammars already in nixpkgs remain direct consumer-owned
 `pkgs.tree-sitter-grammars` inputs. Do not re-export them from this flake:

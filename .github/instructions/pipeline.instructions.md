@@ -116,6 +116,25 @@ gh api "repos/OWNER/REPO/rulesets/<id>" \
         | [.parameters.required_status_checks[].context]'
 ```
 
+### Native package build shards
+
+`ci.yml` distributes the full eligible package set across five shards per native
+platform. Every runner builds one derivation at a time with all native CPU
+cores; Rust release profiles, fat LTO, package tests, and install checks stay
+intact. The one-hour macOS nixpkgs update failure in run `34732693179` did not
+start oxlint until minute 44, after other packages consumed its build slots.
+Sharding removes that queue; a 120-minute worker ceiling also accommodates cold
+builds.
+
+`dev/scripts/ci-packages.py` selects every eligible package exactly once,
+including new exports. The existing generated-document and patched-Kiro
+exclusions remain. Each shard must report every selected evaluation and a
+successful build or cache hit. Missing, failed, or skipped results fail
+validation. The two existing required `build (system, runner)` contexts check
+all worker outcomes and complete native coverage receipts. Both fail if any
+worker fails; no required context is renamed. The dedicated Kiro jobs, flake
+checks, and secret scanning still run.
+
 ### Non-blocking annotation steps
 
 A small family of `if: always()` steps runs after PR creation. Each is

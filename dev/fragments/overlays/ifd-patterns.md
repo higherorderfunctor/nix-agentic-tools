@@ -1,7 +1,7 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-09-12 — source paths and ownership guidance follow
-> native package assembly.
+> **Last verified:** 2026-09-13 — native package shards warm their own platform
+> before evaluation; source ownership follows native package assembly.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -66,8 +66,9 @@ The warm logic is a single composite action,
 `.github/actions/warm-ifd/action.yml`, consumed by every workflow that evaluates
 before it builds:
 
-- `ci.yml` build job — `systems: ${{ matrix.system }}` (defaults: 3 retries,
-  best-effort) so a transient fetch doesn't flake the per-system build eval.
+- `ci.yml` build-packages job — `systems: ${{ matrix.system }}` (defaults: 3
+  retries, best-effort) so a transient fetch doesn't flake the per-system build
+  eval.
 - `devenv-test.yml` — manual-only, `systems: x86_64-linux` (defaults).
   `devenv test` evaluates devenv.nix, which applies the repo overlays, so its
   eval reads the same IFD sources; the fetches are fixed-output, so warming via
