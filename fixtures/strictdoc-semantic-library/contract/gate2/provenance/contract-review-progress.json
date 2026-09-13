@@ -1,0 +1,79 @@
+{
+  "review": "gate2-contract-consistency",
+  "state": "complete",
+  "completion": {
+    "all_supplied_inputs_read_in_full": true,
+    "contract_review_complete": true,
+    "actionable_findings": 0,
+    "output_formatting_complete": true
+  },
+  "input_hash_algorithm": "sha256",
+  "input_hashes": {
+    "inputs/interface.md": "5049528db71a452e8752007afedd50850fc13c913200efa80d6e245fb9425265",
+    "inputs/public-toolchain.md": "a9e29940a9f6b9d2f46235dd5fb69c521a59a391be417efda6a075803a2d371c",
+    "inputs/recommended.nix": "8dd62b000bf6a0e212ad2bed4250cde612f0d4ba06d8a0c6251a058545444b37",
+    "inputs/reference-model.md": "5e9b3b349188fd7b38261ca80417929c6ece11df8fa4ef968b90ece55e51aa6f",
+    "inputs/review.md": "3b89140635e7ffa41662f0e1066a602d4c9b7c04f28f35a5c38d9619a9379cdc",
+    "inputs/reviewed-requirements.md": "1c1662fc10da0b1174060cdbd372d4643e0e7769af296ddb38060be968d98f4d"
+  },
+  "control_hashes": {
+    "prompt.txt": "0bc6c7062f5af6ce90aa790141895813761530e9022f1678a763dcc985f5fbda",
+    "treefmt.toml": "22748be627b1006958b0816b624e903a9a0082a861d825945c3de37025618b4d"
+  },
+  "actual_checks": [
+    {
+      "check": "Required treefmt formatting of review and progress outputs",
+      "command": "/nix/store/gxd8g3pfl781m59yfwvr176kjryzfx1m-treefmt-2.6.0/bin/treefmt --config-file treefmt.toml --tree-root . --walk filesystem --no-cache outputs/review.md outputs/progress.json",
+      "exit_code": 0,
+      "result": "passed",
+      "configuration_isolation": "Temporary outputs/.prettierrc.json and outputs/.editorconfig stop ancestor formatter-configuration discovery; removed after formatting. Filesystem walking avoids Git operations."
+    },
+    {
+      "check": "Full supplied-input read and manual contract/Nix/requirements comparison",
+      "result": "passed; no actionable findings",
+      "coverage": [
+        "helper and plain target descriptor correspondence",
+        "contextual selectors and model-wide record identity",
+        "input/config/result shapes and first-slice deferrals",
+        "public registrations and contract/per-rule assignment",
+        "native DAG, selected forest, origin-sensitive boundaries and bridge connectivity",
+        "preservation projection and consumer lifecycle/trust examples",
+        "daemon, commit and combined boundaries; refusal and recovery",
+        "reviewed constraints, scope claims and later obligations"
+      ]
+    },
+    {
+      "check": "Nix syntax parse",
+      "command": "NIX_USER_CONF_FILES=/dev/null NIX_CONF_DIR=/tmp/contract-review-no-nix-config nix-instantiate --parse inputs/recommended.nix > /dev/null",
+      "exit_code": 0,
+      "result": "passed; syntax only"
+    },
+    {
+      "check": "SHA-256 of all supplied inputs and task/formatter controls",
+      "command": "sha256sum inputs/* prompt.txt treefmt.toml",
+      "exit_code": 0,
+      "result": "recorded"
+    }
+  ],
+  "unverified": [
+    "Nix evaluation and proposed helper implementations",
+    "concrete schema/conformance examples deferred to C1/C2",
+    "runtime registration, protocol and cross-implementation decisions",
+    "Scribe refusal, unchanged bytes/held state and reload",
+    "group staging, commit enforcement, publication and recovery",
+    "trusted identity/facts and callback isolation",
+    "runtime closure compatibility and backend experiment claims",
+    "incremental/full equivalence",
+    "playbooks not supplied and still in preparation"
+  ],
+  "boundaries_observed": {
+    "external_or_repository_sources_read": false,
+    "git_operations": false,
+    "builds_or_installs": false,
+    "delegation": false,
+    "production_changes": false,
+    "fake_libraries": false,
+    "writes_outside_outputs": false
+  },
+  "outputs": ["outputs/review.md", "outputs/progress.json"]
+}

@@ -1,0 +1,10 @@
+Nix parse: passed
+Shell syntax: passed
+Python compile: passed
+Existing-closure runner: passed; result matches host
+traversed 5 files
+emitted 5 files for processing
+formatted 4 files (3 changed) in 171ms
+traversed 2 files
+emitted 2 files for processing
+formatted 2 files (1 changed) in 123ms

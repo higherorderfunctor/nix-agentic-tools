@@ -1,0 +1,29 @@
+{
+  "frozen_utc": "2026-09-13T08:23:00.294678+00:00",
+  "worker": "/root/gate2_ideal_interface",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "isolation": "Fresh context; no backend research or sibling outputs; worker explicitly attested read boundary",
+  "files": [
+    {
+      "path": "workflow-1-ideal/outputs/coverage.md",
+      "bytes": 25307,
+      "sha256": "4a00773f70a9c209389943f27540cfeba41d8f37ba081d295d2d0b504323d47a"
+    },
+    {
+      "path": "workflow-1-ideal/outputs/design.md",
+      "bytes": 27949,
+      "sha256": "74bf691410ae4d5c6c82e875ae459be98b6c4d71c2a8ec8d21527132bd947947"
+    },
+    {
+      "path": "workflow-1-ideal/outputs/examples.nix",
+      "bytes": 13349,
+      "sha256": "b0558a46ce3eaa2b38c79272f08fd80d9e63066f87daf0cb6670e7d04e790ce3"
+    },
+    {
+      "path": "workflow-1-ideal/outputs/progress.json",
+      "bytes": 2068,
+      "sha256": "8433a44c3921c02ef334e8a3ba6c9e4fe531451c82b4ae59b4b0561ef76edc97"
+    }
+  ]
+}

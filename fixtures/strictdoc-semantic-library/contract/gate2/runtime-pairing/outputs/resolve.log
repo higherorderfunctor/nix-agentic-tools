@@ -1,0 +1,14 @@
+error:
+       … while evaluating attribute 'nixpkgsSource'
+         at «string»:1:166:
+            1| let f = builtins.getFlake (toString ./inputs/toolchain); s = f.inputs.strictdoc; p = s.inputs.nixpkgs.legacyPackages.x86_64-linux; in { strictdocSource = s.outPath; nixpkgsSource = s.inputs.nixpkgs.outPath; strictdoc = f.packages.x86_64-linux.strictdoc.outPath; strictdocDrv = f.packages.x86_64-linux.strictdoc.drvPath; python = p.python314.outPath; pythonVersion = p.python314.version; rustworkx = p.python314Packages.rustworkx.outPath; rustworkxVersion = p.python314Packages.rustworkx.version; rustworkxDrv = p.python314Packages.rustworkx.drvPath; }
+             |                                                                                                                                                                      ^
+
+       … while calling the 'getFlake' builtin
+         at «string»:1:9:
+            1| let f = builtins.getFlake (toString ./inputs/toolchain); s = f.inputs.strictdoc; p = s.inputs.nixpkgs.legacyPackages.x86_64-linux; in { strictdocSource = s.outPath; nixpkgsSource = s.inputs.nixpkgs.outPath; strictdoc = f.packages.x86_64-linux.strictdoc.outPath; strictdocDrv = f.packages.x86_64-linux.strictdoc.drvPath; python = p.python314.outPath; pythonVersion = p.python314.version; rustworkx = p.python314Packages.rustworkx.outPath; rustworkxVersion = p.python314Packages.rustworkx.version; rustworkxDrv = p.python314Packages.rustworkx.drvPath; }
+             |         ^
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: cannot connect to socket at '/nix/var/nix/daemon-socket/socket': Operation not permitted

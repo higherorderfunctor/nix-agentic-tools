@@ -1,0 +1,12 @@
+{
+  "python": "3.14.6",
+  "executable": "/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/bin/python3.14",
+  "base_prefix": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6",
+  "strictdoc": "0.28.3",
+  "strictdoc_module": "/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/lib/python3.14/site-packages/strictdoc/__init__.py",
+  "cli_import": "passed",
+  "rustworkx": {
+    "status": "unavailable",
+    "error": "No module named 'rustworkx'"
+  }
+}

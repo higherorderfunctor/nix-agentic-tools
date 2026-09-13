@@ -1,0 +1,17 @@
+{
+  "status": "passed",
+  "python": "3.14.6",
+  "executable": "/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/bin/python3.14",
+  "strictdoc": "0.28.3",
+  "strictdoc_module": "/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/lib/python3.14/site-packages/strictdoc/__init__.py",
+  "rustworkx": "0.17.1",
+  "rustworkx_module": "/nix/store/6cy53r1c3lj260drvpz6g82dqr1wq405-gate2-runtime-probe-closure/lib/python3.14/site-packages/rustworkx/__init__.py",
+  "normalized_edges": [["A", "B"], ["B", "C"]],
+  "path": ["A", "B", "C"],
+  "controls": [
+    "acyclic graph",
+    "reverse unreachable",
+    "isolated unreachable",
+    "cycle detected"
+  ]
+}

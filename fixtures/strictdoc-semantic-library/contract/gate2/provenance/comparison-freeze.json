@@ -1,0 +1,32 @@
+{
+  "workflow": "independent comparison; final factual runtime follow-up",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "version": 2,
+  "files": [
+    {
+      "path": "review.md",
+      "sha256": "53df6f2b3b5079a438c2cce3bb0734ead464878a7c68127bcb25e41f7c5de1a9"
+    },
+    {
+      "path": "interface.md",
+      "sha256": "fc10ea7c069932bd4e3916ed32ca8082b36ca8a865ab79ae485a0630ecfb1d9a"
+    },
+    {
+      "path": "recommended.nix",
+      "sha256": "7b1f26145e06a3cdc3dc61895fae910fae8f9e358169a67f7faf7f3239334d29"
+    },
+    {
+      "path": "playbooks.md",
+      "sha256": "e1b834747d1e1b9339ad9b480a8985f467cdf8b68935a145f8a03b307c5064a5"
+    },
+    {
+      "path": "findings.md",
+      "sha256": "575a94557bfcdf4e71b750c07f31dda2053061baa8d23c7cddc24649680e3b53"
+    },
+    {
+      "path": "progress.json",
+      "sha256": "8ee45552f3575926feb849833851873b19f983c5bb8c6554dbbb91e539e4f00d"
+    }
+  ]
+}
