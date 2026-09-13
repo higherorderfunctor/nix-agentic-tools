@@ -18,8 +18,9 @@ Each skill's own description states which operations it covers.
 
 ## Stacked Workflows Development
 
-> **Last verified:** 2026-08-16 — this package-specific architecture guide is
-> co-located under `packages/stacked-workflows/docs/` and routed from there.
+> **Last verified:** 2026-09-13 — package structure re-stated for the owner
+> layout: the content derivation is `packages/stacked-workflows-content/`, and
+> the three git tools are separate owner facets rather than one shared dir.
 >
 > Full lineage:
 > `git show 89dce4c4:packages/stacked-workflows/docs/development.md`.
@@ -33,7 +34,7 @@ content package with per-backend modules:
   definitions
 - `packages/stacked-workflows/references/*.md` — tool reference docs shared by
   all skills (bundled as REAL files inside each skill dir at build time; see
-  `overlay.nix`)
+  `packages/stacked-workflows/packages/stacked-workflows-content/package.nix`)
 - `packages/stacked-workflows/router.nix` — the keyed skill-routing rule, shared
   by both backend modules
 - `packages/stacked-workflows/modules/homeManager/` — user-global module
@@ -42,7 +43,9 @@ content package with per-backend modules:
   skill-routing rule)
 - `packages/stacked-workflows/docs/development.md` — this package-owned
   development guide
-- `packages/git-tools/` — overlay for git-absorb, git-branchless, git-revise
+- `packages/git-absorb/`, `packages/git-branchless/`, `packages/git-revise/` —
+  the three git tools, each now its own owner facet with its recipe at
+  `packages/<name>/packages/ai/gitTools/<name>/package.nix`
 
 ### Git Config Presets
 

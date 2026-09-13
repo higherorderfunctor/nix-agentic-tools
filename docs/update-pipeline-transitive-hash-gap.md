@@ -68,7 +68,8 @@ output.
 
 ### Mode B — Shared let-binding invisible to nix-update (PR #145: modelcontextprotocol rev → filesystem-mcp npmDepsHash stale)
 
-`overlays/mcp-servers/modelcontextprotocol/default.nix:34` declares
+`packages/model-context-protocol/packages/ai/mcpServers/modelContextProtocol/all-mcps/package.nix:32`
+declares
 
 ```nix
 npmDepsHash = "sha256-bj6q6TWOmZT+MGVugutU6vCpwaxedcraLB1Q/UfPIvc=";
@@ -77,14 +78,13 @@ npmDepsHash = "sha256-bj6q6TWOmZT+MGVugutU6vCpwaxedcraLB1Q/UfPIvc=";
 as a let-binding consumed by 4 `mkJsPackage` calls (filesystem, memory,
 sequential-thinking, fetch).
 
-The update target is `modelcontextprotocol-all-mcps`, the meta-derivation at
-line 148. That derivation has `dontUnpack = true; dontBuild = true;` and no
-`npmDepsHash` field of its own — it only symlinks binaries from the six child
-packages.
+The update target is `all-mcps` (renamed from `modelcontextprotocol-all-mcps` in
+the owner reorg, with no compat alias), the meta-derivation at line 148. That
+derivation has `dontUnpack = true; dontBuild = true;` and no `npmDepsHash` field
+of its own — it only symlinks binaries from the six child packages.
 
 `update-pkg.sh` Phase 0 sed-bumps `rev` + `src.hash`
-(`dev/scripts/update-pkg.sh:39-55`). Phase 1 runs
-`nix-update --flake modelcontextprotocol-all-mcps`
+(`dev/scripts/update-pkg.sh:39-55`). Phase 1 runs `nix-update --flake all-mcps`
 (`dev/scripts/update-pkg.sh:156`). `nix-update` introspects the target
 derivation's attributes, finds no hash fields on `all-mcps`, and exits with no
 changes. The shared `npmDepsHash` in let-scope used by the children is
@@ -140,13 +140,15 @@ CI fails with `ERR_PNPM_NO_OFFLINE_TARBALL` on `@inquirer/core@11.1.1.tgz`. The
 merged base hash (`f3PX…`) still builds locally and via cache.nixos.org — but
 the new hash doesn't work in CI either.
 
-**Root cause:** `overlays/mcp-servers/context7-mcp.nix:50-54` declares its own
-`pnpmDeps` via `ourPkgs.fetchPnpmDeps` **without threading the matching `pnpm`
-interpreter**. The fetcher defaults to `ourPkgs.pnpm` (= `pnpmLatest`), which
-moved from `pnpm_10` to `pnpm_11` when nixpkgs unstable shifted its default.
-Meanwhile the **parent derivation's `buildPhase`** still runs `pnpm_10`, because
-nixpkgs's `pkgs/by-name/co/context7-mcp/package.nix:17` hardcodes
-`pnpm = pnpm_10;` and our `overrideAttrs` doesn't replace `nativeBuildInputs`.
+**Root cause:**
+`packages/context7-mcp/packages/ai/mcpServers/context7-mcp/package.nix:48-53`
+declares its own `pnpmDeps` via `ourPkgs.fetchPnpmDeps` **without threading the
+matching `pnpm` interpreter**. The fetcher defaults to `ourPkgs.pnpm` (=
+`pnpmLatest`), which moved from `pnpm_10` to `pnpm_11` when nixpkgs unstable
+shifted its default. Meanwhile the **parent derivation's `buildPhase`** still
+runs `pnpm_10`, because nixpkgs's `pkgs/by-name/co/context7-mcp/package.nix:17`
+hardcodes `pnpm = pnpm_10;` and our `overrideAttrs` doesn't replace
+`nativeBuildInputs`.
 
 Net effect:
 
@@ -172,11 +174,11 @@ caching**. Distinct from Mode A (target was correctly opened by the pipeline;
 nothing transitive), Mode B (nix-update saw the hash and updated it correctly
 given the inputs it had), and Mode C (no Python constraint involved).
 
-`effect-mcp.nix` is fine today because it uses `mkDerivation` with `pnpm` and
+effect-mcp's recipe is fine today because it uses `mkDerivation` with `pnpm` and
 `pnpmConfigHook` both pulled from the same `ourPkgs` attribute set — fetcher and
-build are bound to the same pnpm. `context7-mcp.nix` is fragile because it uses
-`overrideAttrs` against a nixpkgs derivation that pins one pnpm version while
-the fetcher default tracks another.
+build are bound to the same pnpm. context7-mcp's recipe is fragile because it
+uses `overrideAttrs` against a nixpkgs derivation that pins one pnpm version
+while the fetcher default tracks another.
 
 ## Summary table
 
@@ -241,35 +243,36 @@ sub-packages (filesystem-mcp, memory-mcp, sequential-thinking-mcp) have
 underlying content (and therefore the hash they all assert) is identical.
 
 The mistake is in `config.update.targets` (`config/update-targets.nix`): it
-points `nix-update` at `modelcontextprotocol-all-mcps`, the meta-derivation that
-exists only to symlink binaries. `all-mcps` has no `npmDepsHash` attribute
-itself, so nix-update sees nothing to refresh and exits clean. The shared
-let-binding stays stale.
+points `nix-update` at `all-mcps`, the meta-derivation that exists only to
+symlink binaries. `all-mcps` has no `npmDepsHash` attribute itself, so
+nix-update sees nothing to refresh and exits clean. The shared let-binding stays
+stale.
 
-**Two-line fix:**
+**Two-line fix (as written in 2026-05; step 1 is now obsolete — see below):**
 
-1. Expose one JS child as a top-level flake package next to the existing meta
-   (`flake.nix:397`):
+1. ~~Expose one JS child as a top-level flake package next to the existing meta
+   (`flake.nix:397`).~~ **Obsolete.** `flake.nix` no longer carries per-package
+   attributes at all; packages are exposed by native discovery through
+   `lib/facets/repository.nix`. There is nothing to add by hand.
 
-   ```nix
-   modelcontextprotocol-all-mcps = pkgs.ai.mcpServers.modelContextProtocol.all-mcps;
-   modelcontextprotocol-filesystem-mcp = pkgs.ai.mcpServers.modelContextProtocol.filesystem-mcp;
-   ```
+2. Replace the entry key in `config.update.targets`. That table also moved:
+   `config/update-targets.nix` now holds only workspace exclusion policy, and
+   the row lives in `packages/model-context-protocol/registry.nix:11-15` as
+   `update.targets.filesystem-mcp`. Note the key lost its
+   `modelcontextprotocol-` prefix in the same move. The `git` field stays the
+   same.
 
-2. Replace the entry key in `config.update.targets`
-   (`config/update-targets.nix`): `modelcontextprotocol-all-mcps` →
-   `modelcontextprotocol-filesystem-mcp`. The `git` field stays the same.
+Phase 0 of `update-pkg.sh` is unaffected: rev-bump resolves the recipe through
+`dev/scripts/resolve-recipe-file.sh`, which searches owner package trees under
+`packages/<owner>/packages/`, finds the same file, and applies the same
+rev+src.hash sed regardless of the config.update.targets key. The `# upstream:`
+markers continue to drive per-child version re-derivation.
 
-Phase 0 of `update-pkg.sh` is unaffected: rev-bump greps for the repo name
-"servers" in `overlays/`, finds the same file, and applies the same rev+src.hash
-sed regardless of the config.update.targets key. The `# upstream:` markers
-continue to drive per-child version re-derivation.
-
-Phase 1 then runs `nix-update --flake modelcontextprotocol-filesystem-mcp`,
-which finds the `npmDepsHash` literal on the child, reads the runtime FOD's
-actual hash, and replaces the string in source. Because every JS child
-references the same let-binding via `inherit npmDepsHash;`, updating one updates
-them all.
+Phase 1 then runs `nix-update --flake filesystem-mcp` (the output lost its
+`modelcontextprotocol-` prefix in the owner reorg), which finds the
+`npmDepsHash` literal on the child, reads the runtime FOD's actual hash, and
+replaces the string in source. Because every JS child references the same
+let-binding via `inherit npmDepsHash;`, updating one updates them all.
 
 Why this works: nix-update's update mechanism is **string-replacement on the
 source file**, not symbolic introspection. It finds the stored hash literal as
@@ -297,10 +300,11 @@ considered and rejected.
 
 ### Gap 4 — Cross-package-version skew in overlays (real fix for Mode D / #160)
 
-Two parts — a one-line content fix for `context7-mcp.nix` plus a structural
+Two parts — a one-line content fix for the context7-mcp recipe plus a structural
 guard to prevent recurrence.
 
-**Content fix (`overlays/mcp-servers/context7-mcp.nix:50-54`):**
+**Content fix
+(`packages/context7-mcp/packages/ai/mcpServers/context7-mcp/package.nix:48-53`):**
 
 ```nix
 pnpmDeps = ourPkgs.fetchPnpmDeps {
@@ -419,26 +423,31 @@ runs). That's a cosmetic cleanup, not load-bearing, and can wait.
 
 ## Code map
 
-| File                                                                 | Role                                                                                                               |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `dev/scripts/update-input.sh:20-31`                                  | Where input bumps land — currently no downstream hash refresh (Gap 1)                                              |
-| `dev/scripts/update-pkg.sh:39-55`                                    | Rev bump + src.hash sed for main-tracking packages                                                                 |
-| `dev/scripts/update-pkg.sh:156`                                      | `nix-update` invocation — sees only target attrs                                                                   |
-| `dev/scripts/update-pkg.sh:179-189`                                  | Phase 2 build + held-back rollback — already correct shape; Gap 5 just needs `run_build` to actually run           |
-| `dev/scripts/update-common.sh:75/79`                                 | `setup_worktree` checks out fresh from `$BRANCH`                                                                   |
-| `dev/scripts/update-common.sh:91-97`                                 | **Dead-code `CI_MODE` guard on `run_build`** — Gap 5 removes this short-circuit                                    |
-| `dev/scripts/update-common.sh:117-120`                               | `merge_to_branch` no-op in CI — by design (Renovate model), don't touch                                            |
-| `dev/scripts/update-common.sh:183-191`                               | `report_held_back` — already handles the build-failed case Gap 5 needs                                             |
-| `config/generate-update-ninja.nix:36-42`                             | DAG edges — currently ordering-only, no content propagation (Gap 1)                                                |
-| `.github/workflows/update.yml:295-304`                               | "Fail if any updates were held back" gate — grep'es `^HELD BACK:`, already wired for Gap 5                         |
-| `overlays/lib.nix:14-27`                                             | `readPackageJsonVersion`, `readCargoWorkspaceVersion`, `readPyprojectVersion` — not needed for Gap 5; kept for ref |
-| `overlays/mcp-servers/modelcontextprotocol/default.nix:34`           | Shared `npmDepsHash` let-binding (Gap 2)                                                                           |
-| `overlays/mcp-servers/modelcontextprotocol/default.nix:148`          | `all-mcps` meta-derivation with no hash attrs (Gap 2)                                                              |
-| `overlays/mcp-servers/effect-mcp.nix:34-38`                          | `pnpmDeps.hash` that breaks on pnpm-version-change in nixpkgs                                                      |
-| `overlays/mcp-servers/mcp-proxy.nix`                                 | `pythonRuntimeDepsCheckHook` enforces upstream dep floors (Gap 5 canary)                                           |
-| `overlays/mcp-servers/context7-mcp.nix:50-54`                        | Fetcher without `pnpm` binding — Gap 4 content fix lands here                                                      |
-| Upstream `pkgs/by-name/co/context7-mcp/package.nix:17`               | nixpkgs's `pnpm = pnpm_10;` pin — the truth our overlay must follow                                                |
-| Upstream `pkgs/build-support/node/fetch-pnpm-deps/default.nix:16,29` | `pnpm ? pnpmLatest` default — the trap that produces Mode D                                                        |
+> Rows naming a `dev/scripts/*` FUNCTION rather than a line number are
+> deliberate. Those scripts change often and line-numbered rows here drifted
+> badly before anyone noticed; grep the function name instead. Line numbers are
+> kept only for package recipes, which move rarely.
+
+| File                                                                                                  | Role                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dev/scripts/update-input.sh:20-31`                                                                   | Where input bumps land — currently no downstream hash refresh (Gap 1)                                                                                                            |
+| `dev/scripts/update-pkg.sh:39-55`                                                                     | Rev bump + src.hash sed for main-tracking packages                                                                                                                               |
+| `dev/scripts/update-pkg.sh` — the `nix-update` invocation                                             | sees only target attrs                                                                                                                                                           |
+| `dev/scripts/update-pkg.sh` — Phase 2 build + held-back rollback                                      | already the correct shape; Gap 5 just needs `run_build` to actually run                                                                                                          |
+| `dev/scripts/update-common.sh` — `setup_worktree()`                                                   | checks out fresh from `$BRANCH`                                                                                                                                                  |
+| `dev/scripts/update-common.sh` — `run_build()`                                                        | the dead-code `CI_MODE` short-circuit this row used to name is GONE from the script                                                                                              |
+| (removed)                                                                                             | `merge_to_branch` no longer exists in `update-common.sh`                                                                                                                         |
+| `dev/scripts/update-common.sh` — `report_held_back()`                                                 | already handles the build-failed case Gap 5 needs                                                                                                                                |
+| `config/generate-update-ninja.nix:36-42`                                                              | DAG edges — currently ordering-only, no content propagation (Gap 1)                                                                                                              |
+| `.github/workflows/update.yml` — step "Surface held-back updates as a warning"                        | emits `::warning::` under `if: always()`. It does NOT fail the job, so Gap 5 still has no gate — the old "Fail if any updates were held back" description was wrong              |
+| `lib/packaging.nix:20-40`                                                                             | `readCargoVersion`, `readCargoWorkspaceVersion`, `readPyprojectVersion`, `readPackageJsonVersion`, `readPythonDunderVersion` — not needed for Gap 5; kept for ref                |
+| `packages/model-context-protocol/packages/ai/mcpServers/modelContextProtocol/all-mcps/package.nix:32` | Shared `npmDepsHash` let-binding (Gap 2)                                                                                                                                         |
+| same file, `:156-164`                                                                                 | `all-mcps` meta-derivation with no hash attrs (Gap 2)                                                                                                                            |
+| `packages/effect-mcp/packages/ai/mcpServers/effect-mcp/package.nix:37-41`                             | `pnpmDeps.hash` that breaks on pnpm-version-change in nixpkgs                                                                                                                    |
+| `packages/mcp-proxy/packages/ai/mcpServers/mcp-proxy/package.nix`                                     | WAS the `pythonRuntimeDepsCheckHook` Gap 5 canary; that hook is no longer present in the recipe (drifted before the reorg, unrelated cause) — the canary claim needs re-deriving |
+| `packages/context7-mcp/packages/ai/mcpServers/context7-mcp/package.nix:48-53`                         | Fetcher without `pnpm` binding — Gap 4 content fix lands here                                                                                                                    |
+| Upstream `pkgs/by-name/co/context7-mcp/package.nix:17`                                                | nixpkgs's `pnpm = pnpm_10;` pin — the truth our recipe must follow                                                                                                               |
+| Upstream `pkgs/build-support/node/fetch-pnpm-deps/default.nix:16,29`                                  | `pnpm ? pnpmLatest` default — the trap that produces Mode D                                                                                                                      |
 
 ## Session log
 
