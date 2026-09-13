@@ -21,9 +21,9 @@ from sdoc_model import (
 
 
 def check_prefix(graph, tag: str, uid: str) -> None:
-    """Require a new node to carry its grammar element's current prefix."""
+    """Require a declared, nonempty prefix; an absent prefix imposes no rule."""
     prefix = graph.element(tag).property_prefix
-    if not uid.startswith(prefix):
+    if prefix and not uid.startswith(prefix):
         raise SdocError(
             f"{uid!r} is not a {tag} name: the grammar gives {tag} the prefix "
             f"{prefix!r}. UIDs are hand-chosen and semantic; nothing here mints one."
@@ -33,7 +33,8 @@ def check_prefix(graph, tag: str, uid: str) -> None:
 def prefix_owner(graph, uid: str):
     """Return the element owning this current prefix, or None for history."""
     for tag in graph.tags():
-        if uid.startswith(graph.element(tag).property_prefix):
+        prefix = graph.element(tag).property_prefix
+        if prefix and uid.startswith(prefix):
             return tag
     return None
 

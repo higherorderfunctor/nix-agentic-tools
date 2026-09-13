@@ -19,6 +19,10 @@
 # `devenvModules.nix-agentic-tools`. It remains a project-only toolchain;
 # checks/modules/options-doc.nix checks its explicit Home Manager exclusion.
 #
+# Installed scribe code is independent of the consuming project's source tree.
+# `scribeSource = "project"` retains live repository scripts, including its
+# semantics command and board. Those domain-specific sources are not installed.
+#
 # ── `generate:sgra` WRITES the files, and what that does not oblige ─────────
 #
 # Each declared grammar is rendered at evaluation and written into the working
@@ -66,38 +70,32 @@
     strictdoc = cfg.package;
   };
 
-  # `scribe` — SLICE-SDOC-CLI's entry point. Takes the runner above rather than
-  # deriving a second interpreter; see ../../lib/mkScribe.nix for why the
-  # script itself is resolved at run time instead of being baked in.
-  scribe = import ../../lib/mkScribe.nix {
-    inherit lib pkgs;
-    runner = extract;
-  };
+  # Each launcher shares the interpreter and the chosen source delivery mode.
+  mkScribe = args:
+    import ../../lib/mkScribe.nix ({
+        inherit lib pkgs;
+        runner = extract;
+        sourceMode = cfg.scribeSource;
+      }
+      // args);
 
-  # The resident writer, its client, and the board server. Same wrapper, same
-  # run-time script resolution, different entry points -- parameterized rather
-  # than copied so the root-walk and the interpreter indirection stay in one
-  # place. The board deliberately shares this interpreter: strictdoc's venv
-  # already carries pydantic, which the server's reply validation will use.
-  scribeDaemon = import ../../lib/mkScribe.nix {
-    inherit lib pkgs;
-    runner = extract;
+  scribe = mkScribe {};
+
+  # Entry points share one interpreter and source-selection factory. Only
+  # project mode includes the board, whose assets remain repository-local.
+  scribeDaemon = mkScribe {
     name = "scribe-daemon";
     script = "dev/scripts/scribe_daemon.py";
     description = "Resident scribe: one held graph per worktree";
   };
 
-  scribeClient = import ../../lib/mkScribe.nix {
-    inherit lib pkgs;
-    runner = extract;
+  scribeClient = mkScribe {
     name = "scribe-client";
     script = "dev/scripts/scribe_client.py";
     description = "Talk to a scribe daemon, and fail when there isn't one";
   };
 
-  sdocBoard = import ../../lib/mkScribe.nix {
-    inherit lib pkgs;
-    runner = extract;
+  sdocBoard = mkScribe {
     name = "sdoc-board";
     script = "docs/sdoc/board/server.py";
     description = "Serve the read-only StrictDoc board over the scribe daemon";
@@ -145,6 +143,23 @@ in {
         speaking a different grammar type-checks values against a grammar
         nothing is running. `packages/strictdoc-grammar/checks/strictdoc-grammar-surface-current.nix` is
         what notices; it is a check, not a constraint on this option.
+      '';
+    };
+
+    scribeSource = mkOption {
+      type = types.enum ["installed" "project"];
+      default = "installed";
+      description = ''
+        Where scribe's implementation comes from. `installed` uses the Nix
+        store toolchain independently of the document root. It includes the
+        CLI, client and daemon, but no project semantics model or board.
+        The `semantics` command reports an unavailable engine unless one is
+        provided by the invoking environment; other commands do not need it.
+
+        `project` runs live scripts from the project containing the caller's
+        working directory and also enables this repository's board launcher.
+        This development mode requires the matching scripts and assets in
+        that project. Root and socket selection remain scribe's responsibility.
       '';
     };
 
@@ -230,14 +245,15 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    packages = [
-      cfg.package
-      extract
-      scribe
-      scribeClient
-      scribeDaemon
-      sdocBoard
-    ];
+    packages =
+      [
+        cfg.package
+        extract
+        scribe
+        scribeClient
+        scribeDaemon
+      ]
+      ++ lib.optional (cfg.scribeSource == "project") sdocBoard;
 
     # MECH-SCRIBE-DEVENV-PROCESS. Per-worktree isolation is inherited rather
     # than built: devenv derives root, state and runtime from the checkout
@@ -252,7 +268,7 @@ in {
       exec = "${lib.getExe scribeDaemon} --root \"$DEVENV_ROOT\"";
     };
 
-    processes.board = {
+    processes.board = lib.mkIf (cfg.scribeSource == "project") {
       exec = "${lib.getExe sdocBoard} --root \"$DEVENV_ROOT\"";
     };
 

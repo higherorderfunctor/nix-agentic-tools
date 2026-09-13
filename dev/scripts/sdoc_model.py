@@ -1204,20 +1204,30 @@ def open_graph(root: Path, *, output_dir: Path | None = None) -> Graph:
     # progress bar in the middle of --dry-run's diff and in front of every
     # machine-readable listing. Held in a buffer and re-emitted only when the
     # load fails, where it carries the parse error's context.
-    chatter = io.StringIO()
-    try:
-        with contextlib.redirect_stdout(chatter):
-            project_config = ProjectConfigLoader.load(
-                input_path=str(root), output_dir=str(output_dir)
-            )
-            index = TraceabilityIndexBuilder.create(
-                project_config=project_config,
-                parallelizer=NullParallelizer(),
-                skip_source_files=True,
-            )
-    except BaseException:
-        print(chatter.getvalue(), end="", file=sys.stderr)
-        raise
-    finally:
-        os.chdir(previous)
+    # Default export-format imports may call stdout.fileno() (html2pdf4doc
+    # does this at import). A StringIO capture fails before a plain consumer
+    # config can load. Keep a real descriptor while preserving quiet reads and
+    # replaying diagnostics only on failure.
+    with tempfile.TemporaryFile(mode="w+", encoding="utf8") as chatter:
+        try:
+            with contextlib.redirect_stdout(chatter):
+                try:
+                    project_config = ProjectConfigLoader.load(
+                        input_path=str(root), output_dir=str(output_dir)
+                    )
+                    index = TraceabilityIndexBuilder.create(
+                        project_config=project_config,
+                        parallelizer=NullParallelizer(),
+                        skip_source_files=True,
+                    )
+                finally:
+                    # An imported library may replace stdout with another
+                    # stream over the same descriptor, so flush the active one.
+                    sys.stdout.flush()
+        except BaseException:
+            chatter.seek(0)
+            print(chatter.read(), end="", file=sys.stderr)
+            raise
+        finally:
+            os.chdir(previous)
     return Graph(root, project_config, index)

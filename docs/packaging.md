@@ -148,11 +148,14 @@ composed registry and ninja DAG:
   `packages/semble/.sdoc/dec-grammar-patch-not-fork.sdoc`
   (DEC-GRAMMAR-PATCH-NOT-FORK) and
   `checks/strictdoc/strictdoc-grammar-corpus.nix` for the regression gate.
-- **In-repo source**: packaged from a path in this repo (no upstream rev/hash,
-  not version-tracked). **No package uses this shape today** —
-  `kiro-memory-distiller` was the only one, and it was removed on 2026-09-01
-  along with the openmemory-mcp backend it fed. The shape is kept in this
-  taxonomy because nothing about it was wrong; it simply has no consumer.
+- **In-repo source** (`strictdoc-toolchain-source`): a native package under the
+  StrictDoc grammar owner assembles a filtered consumer flake.
+  `nix build .#strictdoc-toolchain-source` exports the public grammar library,
+  devenv module and installed scribe implementation with the repository's pinned
+  upstream StrictDoc dependency. The explicit source lists exclude grammar
+  values, project semantics, document corpus, board assets and tests. Its output
+  uses fixed consumer paths even when the source owner is renamed. This source
+  artifact has no independent upstream version or update target.
 
 ## Package table
 

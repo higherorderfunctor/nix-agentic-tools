@@ -119,7 +119,7 @@
       "$jq" --exit-status '[keys[] | select(startswith("ai.strictdoc."))] | length == 0' "${hmJson}" >/dev/null
       "$jq" --exit-status '
         [keys[] | select(startswith("ai.strictdoc.")) | split(".")[0:3] | join(".")]
-        | unique == ["ai.strictdoc.enable", "ai.strictdoc.grammars", "ai.strictdoc.package"]
+        | unique == ["ai.strictdoc.enable", "ai.strictdoc.grammars", "ai.strictdoc.package", "ai.strictdoc.scribeSource"]
       ' "${devenvJson}" >/dev/null
       "$grep" -Fq 'ai\.strictdoc\.enable' "${docs.devenvOptionsDoc.optionsCommonMark}"
 
