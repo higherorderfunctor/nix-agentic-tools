@@ -14,6 +14,15 @@ without an added connectedness requirement. Hooks can schedule evaluation but
 cannot change validity. These user constraints apply even where today's public
 runtime does not enforce them completely.
 
+User-approved requirement (2026-09-13): the current fixture accommodations for
+`AUTHORED_BY` and `PARENT_FP` are temporarily permitted. By the end of the
+entire plan, the semantic engine must handle the repository-specific policies
+behind these fields so generic Scribe and neutral consumers do not need either
+field name. Completion requires exercising the repository policy through the
+semantic engine and demonstrating a neutral Scribe consumer without either
+field. This requirement does not approve decisions D01–D15 or select an API or
+backend.
+
 This retained consumer fixture lives inside the repository and uses native
 devenv, a filtered public toolchain dependency, and the normal shared host and
 Nix store. It has no fixture flake or private-store/offline harness. The
