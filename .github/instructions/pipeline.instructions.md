@@ -733,9 +733,13 @@ validation.
 ### Extension points (how to add things)
 
 - **New dev fragment**: create markdown file at the right location, add to
-  `config.fragments.categories.<category>.sources` in
-  `config/fragment-categories.nix`, run
-  `devenv tasks run --mode before generate:all`.
+  `config.fragments.categories.<category>.sources`, then run
+  `devenv tasks run --mode before generate:all`. WHICH file declares the
+  category depends on who owns it: a shared/workspace category lives in
+  `config/fragment-categories.nix`, while an owner-specific one lives in that
+  package's `registry.nix` (the `claude-code` category above is declared in
+  `packages/claude-code/registry.nix`). `lib/facets/registry.nix` merges the two
+  sources.
 - **New content package published fragment**: create markdown at
   `packages/<pkg>/fragments/<name>.md`, declare in the package's
   `passthru.fragments.<name>` using

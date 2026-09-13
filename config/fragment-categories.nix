@@ -50,8 +50,8 @@ _: {
     # developer's user-global config, and why every runtime answers "yes".
     # Scoped to the factories and wrappers that COULD redirect a config root,
     # plus devenv.nix where the runtimes are enabled. Deliberately NOT scoped
-    # to `overlays/*` — an overlay packages a binary and never decides where
-    # that binary looks for config.
+    # to package recipes under `packages/*/packages/**` — a recipe packages a
+    # binary and never decides where that binary looks for config.
     ai-config-scope = {
       scopes = [
         "devenv.nix"
@@ -327,16 +327,17 @@ _: {
       sources = ["nix-standards"];
     };
     # overlays: cache-hit parity, the overlay pattern, and the unfree guard.
-    # Scoped to overlay package files under overlays/. IFD guidance is NOT
+    # Scoped to package recipe files under `packages/*/packages/**`. IFD
+    # guidance is NOT
     # here any more — it moved to the `ifd` row above, which re-scopes these
     # same two globs plus the CI paths that warm the IFD cache, so an
-    # overlays editor still gets it.
+    # recipe editor still gets it.
     # Excludes content-only fragments dirs, and deliberately does NOT scope
     # `packages/*/overlay.nix` (stacked-workflows) — those are content
     # overlays with no `ourPkgs` seam. Three globs
     # (`packages/{ai-clis,git-tools,mcp-servers}/*.nix`) were dropped here:
     # all three directories are gone, and every file they aimed at now lives
-    # under `overlays/`, covered by the two globs below.
+    # under `packages/<owner>/packages/**`, covered by the two globs below.
     overlays = {
       scopes = [
         "lib/facets/**"

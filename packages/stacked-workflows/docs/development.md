@@ -15,7 +15,7 @@ content package with per-backend modules:
   definitions
 - `packages/stacked-workflows/references/*.md` — tool reference docs shared by
   all skills (bundled as REAL files inside each skill dir at build time; see
-  `overlay.nix`)
+  `packages/stacked-workflows/packages/stacked-workflows-content/package.nix`)
 - `packages/stacked-workflows/router.nix` — the keyed skill-routing rule, shared
   by both backend modules
 - `packages/stacked-workflows/modules/homeManager/` — user-global module
@@ -24,7 +24,9 @@ content package with per-backend modules:
   skill-routing rule)
 - `packages/stacked-workflows/docs/development.md` — this package-owned
   development guide
-- `packages/git-tools/` — overlay for git-absorb, git-branchless, git-revise
+- `packages/git-absorb/`, `packages/git-branchless/`, `packages/git-revise/` —
+  the three git tools, each now its own owner facet with its recipe at
+  `packages/<name>/packages/ai/gitTools/<name>/package.nix`
 
 ### Git Config Presets
 
