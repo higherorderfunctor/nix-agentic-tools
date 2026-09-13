@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "dependencies": {
+    "@open-policy-agent/opa-wasm": "1.10.0"
+  }
+}

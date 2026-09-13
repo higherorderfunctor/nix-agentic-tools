@@ -1,0 +1,49 @@
+[DOCUMENT]
+TITLE: Native controls
+
+[GRAMMAR]
+ELEMENTS:
+- TAG: REQUIREMENT
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  RELATIONS:
+  - TYPE: Parent
+  - TYPE: Child
+  - TYPE: Parent
+    ROLE: H
+  - TYPE: Parent
+    ROLE: R
+  - TYPE: Child
+    ROLE: Q
+
+[REQUIREMENT]
+UID: A
+STATEMENT: A
+RELATIONS:
+- TYPE: Parent
+  VALUE: B
+  ROLE: H
+
+[REQUIREMENT]
+UID: B
+STATEMENT: B
+
+[REQUIREMENT]
+UID: Z
+STATEMENT: Z
+RELATIONS:
+- TYPE: Parent
+  VALUE: A
+  ROLE: R
+- TYPE: Child
+  VALUE: B
+  ROLE: Q
+
+[REQUIREMENT]
+UID: ISOLATED
+STATEMENT: ISOLATED

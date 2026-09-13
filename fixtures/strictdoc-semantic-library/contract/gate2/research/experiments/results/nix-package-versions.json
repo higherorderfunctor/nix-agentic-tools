@@ -1,0 +1,11 @@
+{
+  "bun": "1.3.13",
+  "cozo": null,
+  "networkx313": "3.6.1",
+  "nixpkgs": "f13ff45afd1bb73e640eaa08a7066dbed07e3238",
+  "opa": "1.16.2",
+  "rustworkx313": "0.17.1",
+  "rustworkx314": "0.17.1",
+  "souffle": "2.5",
+  "system": "x86_64-linux"
+}

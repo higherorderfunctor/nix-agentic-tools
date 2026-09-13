@@ -1,0 +1,282 @@
+{
+  "method": "Direct GitHub MCP file retrieval at immutable main revision; SHA256 compared to frozen research evidence",
+  "revision": "b56ebb266c0a58f016c3be6ed5337c8a9833be0e",
+  "files": [
+    {
+      "path": "strictdoc/core/traceability_index_builder.py",
+      "sha256": "87d4b68643547fb0c749b3f35aa228fe60c1f9195960f656c40f875e7dc14dea",
+      "matches_research": true,
+      "locators": [
+        {
+          "line": 33,
+          "text": "ChildReqReference,"
+        },
+        {
+          "line": 34,
+          "text": "ParentReqReference,"
+        },
+        {
+          "line": 67,
+          "text": "from strictdoc.core.tree_cycle_detector import TreeCycleDetector"
+        },
+        {
+          "line": 655,
+          "text": "parent_reference: ParentReqReference = assert_cast("
+        },
+        {
+          "line": 656,
+          "text": "reference, ParentReqReference"
+        },
+        {
+          "line": 702,
+          "text": "child_reference: ChildReqReference = assert_cast("
+        },
+        {
+          "line": 703,
+          "text": "reference, ChildReqReference"
+        },
+        {
+          "line": 752,
+          "text": "parents_cycle_detector = TreeCycleDetector()"
+        },
+        {
+          "line": 753,
+          "text": "children_cycle_detector = TreeCycleDetector()"
+        },
+        {
+          "line": 780,
+          "text": "traceability_index.graph_database.get_link_values("
+        },
+        {
+          "line": 802,
+          "text": "traceability_index.graph_database.get_link_values("
+        }
+      ],
+      "source_url": "https://github.com/strictdoc-project/strictdoc/blob/b56ebb266c0a58f016c3be6ed5337c8a9833be0e/strictdoc/core/traceability_index_builder.py"
+    },
+    {
+      "path": "strictdoc/core/tree_cycle_detector.py",
+      "sha256": "5f985eaf2f4b6593713cc379112cd13831e15c73e479b84874ec85fc27615311",
+      "matches_research": true,
+      "locators": [
+        {
+          "line": 10,
+          "text": "class TreeCycleDetector:"
+        },
+        {
+          "line": 11,
+          "text": "def __init__(self) -> None:"
+        },
+        {
+          "line": 14,
+          "text": "def check_node("
+        },
+        {
+          "line": 30,
+          "text": "cycled_nodes = []"
+        },
+        {
+          "line": 34,
+          "text": "cycled_nodes.append(uid)"
+        },
+        {
+          "line": 35,
+          "text": "raise DocumentTreeError.cycle_error("
+        },
+        {
+          "line": 36,
+          "text": "node_link, cycled_nodes"
+        },
+        {
+          "line": 47,
+          "text": "class SingleShotTreeCycleDetector:"
+        },
+        {
+          "line": 48,
+          "text": "def check_node("
+        },
+        {
+          "line": 55,
+          "text": "Detect if a new node creates a cycle in the traceability index."
+        },
+        {
+          "line": 57,
+          "text": "FIXME: Both cycle detector classes are very similar. Find a way to merge"
+        },
+        {
+          "line": 59,
+          "text": "checks for cycles possibly added by a new node."
+        },
+        {
+          "line": 75,
+          "text": "cycled_nodes = [new_uid]"
+        },
+        {
+          "line": 79,
+          "text": "cycled_nodes.append(uid)"
+        },
+        {
+          "line": 80,
+          "text": "raise DocumentTreeError.cycle_error("
+        },
+        {
+          "line": 81,
+          "text": "node_link, cycled_nodes"
+        }
+      ],
+      "source_url": "https://github.com/strictdoc-project/strictdoc/blob/b56ebb266c0a58f016c3be6ed5337c8a9833be0e/strictdoc/core/tree_cycle_detector.py"
+    },
+    {
+      "path": "strictdoc/core/graph_database.py",
+      "sha256": "2ff077b24518108e5807a37b3990089a824f4a94b13310c7b1f1ba7ed82fbfd9",
+      "matches_research": true,
+      "locators": [
+        {
+          "line": 33,
+          "text": "edge: Optional[str] = None,"
+        },
+        {
+          "line": 50,
+          "text": "self, *, link_type: Hashable, lhs_node: Any, edge: Optional[str] = None"
+        },
+        {
+          "line": 56,
+          "text": "def get_link_values("
+        },
+        {
+          "line": 57,
+          "text": "self, *, link_type: Hashable, lhs_node: Any, edge: Optional[str] = None"
+        },
+        {
+          "line": 63,
+          "text": "def get_link_values_with_edges("
+        },
+        {
+          "line": 64,
+          "text": "self, *, link_type: Hashable, lhs_node: Any, edge: Optional[str] = None"
+        },
+        {
+          "line": 70,
+          "text": "def get_link_values_reverse("
+        },
+        {
+          "line": 83,
+          "text": "edge: Optional[str] = None,"
+        },
+        {
+          "line": 97,
+          "text": "edge: Optional[str] = None,"
+        }
+      ],
+      "source_url": "https://github.com/strictdoc-project/strictdoc/blob/b56ebb266c0a58f016c3be6ed5337c8a9833be0e/strictdoc/core/graph_database.py"
+    },
+    {
+      "path": "strictdoc/core/graph/many_to_many_set.py",
+      "sha256": "c63fb2436d3e9259aeff52441668c4c2c30dc8900f9263cd2c5c18e5b6839355",
+      "matches_research": true,
+      "locators": [
+        {
+          "line": 4,
+          "text": "from strictdoc.core.graph.abstract_bucket import ALL_EDGES, AbstractBucket"
+        },
+        {
+          "line": 22,
+          "text": "self, *, lhs_node: Any, rhs_node: Any, edge: Optional[str] = None"
+        },
+        {
+          "line": 27,
+          "text": "def get_count(self, edge: Optional[str] = None) -> int:"
+        },
+        {
+          "line": 31,
+          "text": "if edge in (ALL_EDGES, edge_):"
+        },
+        {
+          "line": 36,
+          "text": "self, *, lhs_node: Any, edge: Optional[str] = None"
+        },
+        {
+          "line": 43,
+          "text": "def get_link_values("
+        },
+        {
+          "line": 44,
+          "text": "self, *, lhs_node: Any, edge: Optional[str] = ALL_EDGES"
+        },
+        {
+          "line": 47,
+          "text": "if edge == ALL_EDGES:"
+        },
+        {
+          "line": 58,
+          "text": "def get_link_values_with_edges("
+        },
+        {
+          "line": 59,
+          "text": "self, *, lhs_node: Any, edge: Optional[str] = ALL_EDGES"
+        },
+        {
+          "line": 64,
+          "text": "if edge in (ALL_EDGES, edge_):"
+        },
+        {
+          "line": 69,
+          "text": "def get_link_values_reverse("
+        },
+        {
+          "line": 70,
+          "text": "self, *, rhs_node: Any, edge: Optional[str] = ALL_EDGES"
+        },
+        {
+          "line": 73,
+          "text": "if edge == ALL_EDGES:"
+        },
+        {
+          "line": 86,
+          "text": "self, *, lhs_node: Any, rhs_node: Any, edge: Optional[str] = None"
+        },
+        {
+          "line": 88,
+          "text": "assert edge != ALL_EDGES"
+        },
+        {
+          "line": 115,
+          "text": "edge: Optional[str] = ALL_EDGES,"
+        },
+        {
+          "line": 124,
+          "text": "if edge == ALL_EDGES:"
+        },
+        {
+          "line": 132,
+          "text": "if edge == ALL_EDGES:"
+        },
+        {
+          "line": 140,
+          "text": "self, *, lhs_node: Any, rhs_node: Any, edge: Optional[str] = ALL_EDGES"
+        },
+        {
+          "line": 147,
+          "text": "if edge == ALL_EDGES:"
+        },
+        {
+          "line": 156,
+          "text": "if edge == ALL_EDGES:"
+        }
+      ],
+      "source_url": "https://github.com/strictdoc-project/strictdoc/blob/b56ebb266c0a58f016c3be6ed5337c8a9833be0e/strictdoc/core/graph/many_to_many_set.py"
+    },
+    {
+      "path": "strictdoc/core/graph/abstract_bucket.py",
+      "sha256": "e003d402e09026549a73513f484543b3c124e95413b1bb869c78fc2837fa0d5d",
+      "matches_research": true,
+      "locators": [
+        {
+          "line": 6,
+          "text": "ALL_EDGES = \".all\""
+        }
+      ],
+      "source_url": "https://github.com/strictdoc-project/strictdoc/blob/b56ebb266c0a58f016c3be6ed5337c8a9833be0e/strictdoc/core/graph/abstract_bucket.py"
+    }
+  ]
+}

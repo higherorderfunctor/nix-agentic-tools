@@ -1,0 +1,24 @@
+[
+  {
+    "edge_selector": null,
+    "adjacency": {
+      "A": [],
+      "B": [],
+      "Z": [],
+      "ISOLATED": []
+    },
+    "cycle_rejected": false,
+    "witness": []
+  },
+  {
+    "edge_selector": ".all",
+    "adjacency": {
+      "A": ["Z"],
+      "B": ["A"],
+      "Z": ["B"],
+      "ISOLATED": []
+    },
+    "cycle_rejected": true,
+    "witness": ["A", "Z", "B"]
+  }
+]

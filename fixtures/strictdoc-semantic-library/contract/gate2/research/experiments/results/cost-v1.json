@@ -1,0 +1,124 @@
+{
+  "host": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "python": "3.13.15",
+  "method": "3 serial full recomputations plus deep closed-boundary control; setup/serialization included by backend, no Scribe/provider/Git; 8-second per-worker process budget",
+  "rows": [
+    {
+      "backend": "rustworkx",
+      "nodes": 1000,
+      "shape": "deep",
+      "three_full_runs_ms": [
+        2.3699350422248244, 1.887248014099896, 1.7548799514770508
+      ],
+      "median_ms": 1.887248014099896,
+      "json_bytes": 135821,
+      "deep_boundary_control": true
+    },
+    {
+      "backend": "cozo",
+      "nodes": 1000,
+      "shape": "deep",
+      "status": "8-second process budget exceeded; no timing claim"
+    },
+    {
+      "backend": "opa",
+      "nodes": 1000,
+      "shape": "deep",
+      "three_full_runs_ms": [
+        36.84456006158143, 35.74310999829322, 35.45178705826402
+      ],
+      "median_ms": 35.74310999829322,
+      "json_bytes": 135821,
+      "deep_boundary_control": true
+    },
+    {
+      "backend": "rustworkx",
+      "nodes": 1000,
+      "shape": "wide",
+      "three_full_runs_ms": [
+        1.1443779803812504, 0.8592590456828475, 0.8280110778287053
+      ],
+      "median_ms": 0.8592590456828475,
+      "json_bytes": 135601,
+      "deep_boundary_control": false
+    },
+    {
+      "backend": "cozo",
+      "nodes": 1000,
+      "shape": "wide",
+      "three_full_runs_ms": [
+        23.656654986552894, 21.90214500296861, 21.715897019021213
+      ],
+      "median_ms": 21.90214500296861,
+      "json_bytes": 135601,
+      "deep_boundary_control": false
+    },
+    {
+      "backend": "opa",
+      "nodes": 1000,
+      "shape": "wide",
+      "three_full_runs_ms": [
+        267.4160860478878, 268.49342591594905, 271.90072007942945
+      ],
+      "median_ms": 268.49342591594905,
+      "json_bytes": 135601,
+      "deep_boundary_control": false
+    },
+    {
+      "backend": "rustworkx",
+      "nodes": 10000,
+      "shape": "deep",
+      "three_full_runs_ms": [
+        78.38741806335747, 76.58807106781751, 78.7753650220111
+      ],
+      "median_ms": 78.38741806335747,
+      "json_bytes": 1386821,
+      "deep_boundary_control": true
+    },
+    {
+      "backend": "cozo",
+      "nodes": 10000,
+      "shape": "deep",
+      "status": "8-second process budget exceeded; no timing claim"
+    },
+    {
+      "backend": "opa",
+      "nodes": 10000,
+      "shape": "deep",
+      "three_full_runs_ms": [
+        271.7008979525417, 269.7329050861299, 269.74734698887914
+      ],
+      "median_ms": 269.74734698887914,
+      "json_bytes": 1386821,
+      "deep_boundary_control": true
+    },
+    {
+      "backend": "rustworkx",
+      "nodes": 10000,
+      "shape": "wide",
+      "three_full_runs_ms": [
+        10.509661980904639, 9.636308997869492, 9.274516953155398
+      ],
+      "median_ms": 9.636308997869492,
+      "json_bytes": 1384601,
+      "deep_boundary_control": false
+    },
+    {
+      "backend": "cozo",
+      "nodes": 10000,
+      "shape": "wide",
+      "three_full_runs_ms": [
+        244.81266003567725, 240.04612991120666, 236.91675101872534
+      ],
+      "median_ms": 240.04612991120666,
+      "json_bytes": 1384601,
+      "deep_boundary_control": false
+    },
+    {
+      "backend": "opa",
+      "nodes": 10000,
+      "shape": "wide",
+      "status": "8-second process budget exceeded; no timing claim"
+    }
+  ]
+}

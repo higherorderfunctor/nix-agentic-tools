@@ -1,0 +1,6 @@
+{
+  "engine": "Cozo 0.7.6 mem",
+  "status": "read blocked beyond 3-second process budget",
+  "stdout": "write transaction staged; next call is independent read\n",
+  "termination": "subprocess.run killed and waited for isolated worker"
+}

@@ -1,0 +1,211 @@
+[
+  {
+    "case": "multiple_roots",
+    "accepted": true,
+    "expected": true,
+    "satisfies_required_behavior": true,
+    "input_unchanged": true,
+    "seconds": 1.2243468929082155,
+    "command": [
+      "/nix/store/qc5w0rnlr2pl8zvaaq5gi6jfhm7h50im-strictdoc/bin/strictdoc",
+      "export",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/multiple_roots/input.sdoc",
+      "--formats",
+      "sdoc",
+      "--no-parallelization",
+      "--output-dir",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/multiple_roots/export"
+    ],
+    "exit": 0
+  },
+  {
+    "case": "multiple_native_parents",
+    "accepted": true,
+    "expected": true,
+    "satisfies_required_behavior": true,
+    "input_unchanged": true,
+    "seconds": 1.2470042940694839,
+    "command": [
+      "/nix/store/qc5w0rnlr2pl8zvaaq5gi6jfhm7h50im-strictdoc/bin/strictdoc",
+      "export",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/multiple_native_parents/input.sdoc",
+      "--formats",
+      "sdoc",
+      "--no-parallelization",
+      "--output-dir",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/multiple_native_parents/export"
+    ],
+    "exit": 0
+  },
+  {
+    "case": "child_owned_bridge",
+    "accepted": true,
+    "expected": true,
+    "satisfies_required_behavior": true,
+    "input_unchanged": true,
+    "seconds": 1.2197154619498178,
+    "command": [
+      "/nix/store/qc5w0rnlr2pl8zvaaq5gi6jfhm7h50im-strictdoc/bin/strictdoc",
+      "export",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/child_owned_bridge/input.sdoc",
+      "--formats",
+      "sdoc",
+      "--no-parallelization",
+      "--output-dir",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/child_owned_bridge/export"
+    ],
+    "exit": 0
+  },
+  {
+    "case": "combined_role_cycle",
+    "accepted": true,
+    "expected": false,
+    "satisfies_required_behavior": false,
+    "input_unchanged": true,
+    "seconds": 1.23314276302699,
+    "command": [
+      "/nix/store/qc5w0rnlr2pl8zvaaq5gi6jfhm7h50im-strictdoc/bin/strictdoc",
+      "export",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/combined_role_cycle/input.sdoc",
+      "--formats",
+      "sdoc",
+      "--no-parallelization",
+      "--output-dir",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/combined_role_cycle/export"
+    ],
+    "exit": 0
+  },
+  {
+    "case": "self_cycle",
+    "accepted": false,
+    "expected": false,
+    "satisfies_required_behavior": true,
+    "input_unchanged": true,
+    "seconds": 1.2449708869680762,
+    "command": [
+      "/nix/store/qc5w0rnlr2pl8zvaaq5gi6jfhm7h50im-strictdoc/bin/strictdoc",
+      "export",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/self_cycle/input.sdoc",
+      "--formats",
+      "sdoc",
+      "--no-parallelization",
+      "--output-dir",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/self_cycle/export"
+    ],
+    "exit": 1
+  },
+  {
+    "case": "missing_endpoint",
+    "accepted": false,
+    "expected": false,
+    "satisfies_required_behavior": true,
+    "input_unchanged": true,
+    "seconds": 1.2360467800172046,
+    "command": [
+      "/nix/store/qc5w0rnlr2pl8zvaaq5gi6jfhm7h50im-strictdoc/bin/strictdoc",
+      "export",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/missing_endpoint/input.sdoc",
+      "--formats",
+      "sdoc",
+      "--no-parallelization",
+      "--output-dir",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/missing_endpoint/export"
+    ],
+    "exit": 1
+  },
+  {
+    "case": "unroled_cycle",
+    "accepted": false,
+    "expected": false,
+    "satisfies_required_behavior": true,
+    "input_unchanged": true,
+    "seconds": 1.231086046085693,
+    "command": [
+      "/nix/store/qc5w0rnlr2pl8zvaaq5gi6jfhm7h50im-strictdoc/bin/strictdoc",
+      "export",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/unroled_cycle/input.sdoc",
+      "--formats",
+      "sdoc",
+      "--no-parallelization",
+      "--output-dir",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/unroled_cycle/export"
+    ],
+    "exit": 1
+  },
+  {
+    "case": "unroled_child_cycle",
+    "accepted": false,
+    "expected": false,
+    "satisfies_required_behavior": true,
+    "input_unchanged": true,
+    "seconds": 1.2323945509269834,
+    "command": [
+      "/nix/store/qc5w0rnlr2pl8zvaaq5gi6jfhm7h50im-strictdoc/bin/strictdoc",
+      "export",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/unroled_child_cycle/input.sdoc",
+      "--formats",
+      "sdoc",
+      "--no-parallelization",
+      "--output-dir",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/unroled_child_cycle/export"
+    ],
+    "exit": 1
+  },
+  {
+    "case": "named_parent_cycle",
+    "accepted": true,
+    "expected": false,
+    "satisfies_required_behavior": false,
+    "input_unchanged": true,
+    "seconds": 1.2447952709626406,
+    "command": [
+      "/nix/store/qc5w0rnlr2pl8zvaaq5gi6jfhm7h50im-strictdoc/bin/strictdoc",
+      "export",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/named_parent_cycle/input.sdoc",
+      "--formats",
+      "sdoc",
+      "--no-parallelization",
+      "--output-dir",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/named_parent_cycle/export"
+    ],
+    "exit": 0
+  },
+  {
+    "case": "named_child_cycle",
+    "accepted": true,
+    "expected": false,
+    "satisfies_required_behavior": false,
+    "input_unchanged": true,
+    "seconds": 1.2539328479906544,
+    "command": [
+      "/nix/store/qc5w0rnlr2pl8zvaaq5gi6jfhm7h50im-strictdoc/bin/strictdoc",
+      "export",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/named_child_cycle/input.sdoc",
+      "--formats",
+      "sdoc",
+      "--no-parallelization",
+      "--output-dir",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/named_child_cycle/export"
+    ],
+    "exit": 0
+  },
+  {
+    "case": "unroled_mixed_cycle",
+    "accepted": false,
+    "expected": false,
+    "satisfies_required_behavior": true,
+    "input_unchanged": true,
+    "seconds": 1.2530975709669292,
+    "command": [
+      "/nix/store/qc5w0rnlr2pl8zvaaq5gi6jfhm7h50im-strictdoc/bin/strictdoc",
+      "export",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/unroled_mixed_cycle/input.sdoc",
+      "--formats",
+      "sdoc",
+      "--no-parallelization",
+      "--output-dir",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research/outputs/experiments/native/unroled_mixed_cycle/export"
+    ],
+    "exit": 1
+  }
+]
