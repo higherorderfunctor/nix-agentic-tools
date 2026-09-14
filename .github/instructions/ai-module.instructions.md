@@ -7,8 +7,8 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/agent.nix,
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-12 — package modules own consumer checks; the
-> shared harness discovers backend imports and owner activation probes.
+> **Last verified:** 2026-09-14 — Kimchi supports layered guidance and agents at
+> its native user and project paths.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -65,7 +65,7 @@ sole gate for that ecosystem's product output:
 | `ai.claude.enable = true`  | claude fanout block + `programs.claude-code.enable = mkDefault true`  |
 | `ai.codex.enable = true`   | Codex package + guidance, skills, settings, agents, hooks fanout      |
 | `ai.copilot.enable = true` | copilot fanout block + `programs.copilot-cli.enable = mkDefault true` |
-| `ai.kimchi.enable = true`  | Kimchi package + context, MCP, settings, skills, environment fanout   |
+| `ai.kimchi.enable = true`  | Kimchi package + agents, guidance, MCP, settings, skills, environment |
 | `ai.kiro.enable = true`    | kiro fanout block + `programs.kiro-cli.enable = mkDefault true`       |
 
 Where an upstream module exists, each per-CLI block implicitly flips its enable
@@ -370,12 +370,10 @@ shell resolution. A per-runtime pool write that the runtime cannot consume is
 therefore an unknown-option error. A ROOT pool value stays portable and degrades
 to the neutral value for an incapable runtime.
 
-Kimchi is the sharp example: it supports `context`, `environmentVariables`,
-`mcpServers`, `settings`, and `skills`, but not `rules`. Consequently root
-`ai.rules` remains valid when Kimchi is enabled, while `ai.kimchi.rules` and
-`ai.kimchi.rulesDir` do not exist. Capability tests pair every eval-failure
-assertion with a supported-runtime positive control so harness failure cannot
-masquerade as correct exclusion.
+Kimchi consumes agents, context, environment variables, MCP, rules, settings and
+skills. Portable hooks, LSP and shell selection remain unsupported. Root values
+for unsupported pools remain portable; their Kimchi runtime options are absent.
+Capability tests pair eval failures with a supported-runtime control.
 
 ### Assertion semantics
 
@@ -624,8 +622,8 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-12 — package modules own consumer checks; the
-> shared harness discovers backend imports and owner activation probes.
+> **Last verified:** 2026-09-14 — Kimchi supports layered guidance and agents at
+> its native user and project paths.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -821,11 +819,11 @@ null filtering, and backend lowering. Package callbacks may render entries into
 the runtime map but must not read that map to define normalized inputs; keeping
 the edge one-way is what makes the module fixed point evaluable.
 
-Repository-local Codex/Kiro `AGENTS.md` is the shared-target exception, not a B7
-exception. `sharedAgentsMd.nix` admits applicable public entries from enabled
-runtimes into its hidden final map before the one native sink; a disabled
-runtime's declared map remains inert. The generated composition is a lazy
-default there, so ordinary replacements and null tombstones arbitrate at B7
+Repository-local Codex/Kimchi/Kiro `AGENTS.md` is the shared-target exception,
+not a B7 exception. `sharedAgentsMd.nix` admits applicable public entries from
+enabled runtimes into its hidden final map before the one native sink; a
+disabled runtime's declared map remains inert. The generated composition is a
+lazy default there, so ordinary replacements and null tombstones arbitrate at B7
 without reading discarded source-backed generator content; equal runtime entries
 deduplicate and divergent ones fail. Size guards read only the surviving inline
 final entry. A surviving store-backed `source` remains lazy and is not
@@ -862,10 +860,8 @@ owner rather than changing root/runtime precedence.
 
 ## ai.\* Dir Helpers
 
-> **Last verified:** 2026-08-15 — directory-generated per-runtime entries
-> replace or null-suppress same-key root entries under the normalized keyed-pool
-> contract; see "Consumer patterns" below. Full lineage:
-> `git show bfb6b663:dev/fragments/ai-module/dir-helpers.md`.
+> **Last verified:** 2026-09-14 — Kimchi supports layered guidance and agents at
+> its native user and project paths.
 
 ### The helpers
 
@@ -876,7 +872,7 @@ All live in `lib/ai/dir-helpers.nix`, re-exported under `lib.ai.*`:
 - `skillsFromDir` — directory-of-directories → `attrsOf path`. Key is the subdir
   name unchanged.
 - `agentsFromDir` — directory of `.md` files → `attrsOf path`. Key is basename
-  minus `.md`. Claude + Copilot only.
+  minus `.md`. Claude + Copilot + Kimchi; Codex requires semantic records.
 - `hooksFromDir` — directory of regular files → `attrsOf lines` (via
   `readFile`). Key is the filename unchanged (hooks are typically extensionless
   shell scripts). Claude-only.
@@ -959,8 +955,8 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-12 — package modules own consumer checks; the
-> shared harness discovers backend imports and owner activation probes.
+> **Last verified:** 2026-09-14 — Kimchi supports layered guidance and agents at
+> its native user and project paths.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1038,9 +1034,9 @@ path types".
 - **Rule matchers lower only before L4.** `matcher = null` is always-on; a
   non-empty glob list becomes native routing metadata where one exists and
   explicit prose for flat AGENTS.md consumers. In the shared devenv AGENTS.md,
-  Codex contributes both unscoped rules and scoped rules degraded to prose; Kiro
-  contributes only unscoped always-on rules. The keyed writer deduplicates
-  byte-identical same-key contributions.
+  Codex and Kimchi contribute both unscoped rules and scoped rules degraded to
+  prose; Kiro contributes only unscoped always-on rules. The keyed writer
+  deduplicates byte-identical same-key contributions.
 - **Normalized settings are a uniform scalar-field surface.** Every runtime
   declares the same closed `settings` submodule. Each field resolves root versus
   per-runtime with `resolveOverride`; native lowering remains per-runtime and
@@ -1126,10 +1122,8 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-08-16 — resolves #877: Kiro's FHS root supplies bash
-> but hides a host zsh, and that does not justify a runtime-specific implicit
-> shell default. `ai.shell` stays null; see below for the standing decision and
-> the override rule it shares with normalized `settings`.
+> **Last verified:** 2026-09-14 — Kimchi supports layered guidance and agents at
+> its native user and project paths.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -1147,7 +1141,7 @@ places:
 An unsupported per-runtime write is therefore an "option does not exist" eval
 error. An unsupported ROOT value is different: root `ai.*` is the portable
 surface, so its fanout degrades to the pool's neutral value for that runtime.
-For example, `ai.kimchi.rules` does not exist, while root `ai.rules` remains
+For example, `ai.kimchi.shell` does not exist, while root `ai.shell` remains
 valid and simply does not reach Kimchi.
 
 The list is read off the RECORD, keeping it a build-time parameter in the same
@@ -1373,6 +1367,5 @@ exclusion tests. Those assert an eval failure, which a broken harness satisfies
 for free; the control runs the identical `tryEval` shape against a supported
 runtime and requires success. Delete them as a set or not at all.
 
-The generalized gate has the same paired controls for Kimchi's removed `rules`
-and `rulesDir` options: `module-ai-rules{-dir,}-accepted-for-claude` and
-`module-ai-rules{-dir,}-excluded-for-kimchi`.
+Kimchi now supports rules through flat AGENTS.md composition. Its shell option
+remains excluded independently of that rule capability.

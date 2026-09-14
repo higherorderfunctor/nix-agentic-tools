@@ -25,6 +25,18 @@ in rec {
 
   render = fragments.mkRenderer agentsmdTransformer {};
 
+  # Flat consumers express scope as guidance because they have no native matcher.
+  renderRule = {
+    matcher,
+    text,
+  }:
+    lib.optionalString (matcher != null) (
+      "_Apply this guidance only when working with files matching: "
+      + lib.concatMapStringsSep ", " (path: "`${path}`") matcher
+      + "_\n\n"
+    )
+    + render {inherit text;};
+
   # Render the shared AGENTS.md target from named units. The context body is
   # always first; rules follow in attribute-name order. The rule comments keep
   # key provenance without introducing frontmatter or another metadata schema.

@@ -18,9 +18,8 @@ Each skill's own description states which operations it covers.
 
 ## Stacked Workflows Development
 
-> **Last verified:** 2026-09-13 — package structure re-stated for the owner
-> layout: the content derivation is `packages/stacked-workflows-content/`, and
-> the three git tools are separate owner facets rather than one shared dir.
+> **Last verified:** 2026-09-14 — Kimchi supports layered guidance and agents at
+> its native user and project paths.
 >
 > Full lineage:
 > `git show 89dce4c4:packages/stacked-workflows/docs/development.md`.
@@ -61,13 +60,13 @@ or devenv lowering.
 `ai.programs.stacked-workflows.enable = true` fans the (unprefixed) `stack-*`
 skills into the PER-RUNTIME `ai.<runtime>.skills` pool of every supported
 runtime present in the evaluation. The `stacked-workflows-router` rule also fans
-into each runtime that exposes an `ai.<runtime>.rules` pool; Kimchi has no rules
-capability and receives only the skills. Each enabled AI CLI installs its
-contribution at its native path.
-`ai.<runtime>.programs.stacked-workflows.enable = false` disables that runtime's
-contribution only. Both backend modules delegate to the shared
-`lib/ai/mkSkillPackageModule` factory; those pools are per-`evalModules`, so the
-HM (user-global) and devenv (project-local) contributions are independent.
+into each runtime that exposes an `ai.<runtime>.rules` pool, including Kimchi
+through its AGENTS.md composition. Each enabled AI CLI installs its contribution
+at its native path. `ai.<runtime>.programs.stacked-workflows.enable = false`
+disables that runtime's contribution only. Both backend modules delegate to the
+shared `lib/ai/mkSkillPackageModule` factory; those pools are per-`evalModules`,
+so the HM (user-global) and devenv (project-local) contributions are
+independent.
 
 It writes the per-runtime pools rather than root `ai.skills` because a root pool
 belongs to consumers as a portable default surface — the provenance guard in

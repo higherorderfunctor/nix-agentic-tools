@@ -180,9 +180,8 @@ in {
         `instructions/<name>.instructions.md` under `ai.copilot.projectDir`;
         Copilot Home Manager deliberately emits no normalized rules because
         github.com's reviewer consumes only the committed project tree). Codex
-        instead appends rules in key order
+        and Kimchi append rules in key order
         to its single AGENTS.md, translating `matcher` to a prose scope note.
-        Kimchi has no rules pool, so root rules silently degrade for it.
         Per-app entries replace root entries at the same key; null suppresses
         an inherited rule for that runtime. Set exactly one of `text` or
         `source` for each non-null rule. Kiro's native `inclusion` override
@@ -205,7 +204,7 @@ in {
       default = null;
       description = ''
         Directory of `.md` rule files fanned out to Claude, Codex, Copilot,
-        and Kiro. Each file becomes one entry in `ai.rules` keyed by the
+        Kimchi and Kiro. Each file becomes one entry in `ai.rules` keyed by the
         basename minus `.md`. Explicit `ai.rules.<name>` values arbitrate with
         these generated defaults; per-runtime entries then replace or suppress
         the resulting root entry. Accepts either a Nix path literal or `{ path,
@@ -259,17 +258,20 @@ in {
       type = lib.types.attrsOf (lib.types.nullOr agent.agentType);
       default = {};
       description = ''
-        Agent definitions fanned out to Claude and Copilot. Portable semantic
+        Agent definitions fanned out to Claude, Copilot and Kimchi. Portable semantic
         records (`{ description, instructions, tools?, codex? }`) also fan out
-        to Codex; `tools` is rendered only for Claude and Copilot because Codex
-        has no equivalent agent field. Legacy Markdown/path values remain
-        Claude/Copilot-only and cause a clear assertion when Codex is enabled.
+        to Codex. Portable `tools` allowlists are supported only by Claude and
+        Copilot; Codex ignores them and Kimchi rejects nonempty lists. Use native Kimchi Markdown for
+        its own tool vocabulary. Markdown/path values cause a clear assertion
+        when Codex is enabled.
         Each entry becomes a file:
         - Claude  → ~/.claude/agents/<name>.md
         - Copilot → .github/agents/<name>.agent.md (devenv) or
                     ~/.copilot/agents/<name>.md (HM)
         - Codex   → ~/.codex/agents/<name>.toml (HM) or
                     .codex/agents/<name>.toml (devenv)
+        - Kimchi  → ~/.config/kimchi/harness/agents/<name>.md (HM) or
+                    .kimchi/agents/<name>.md (devenv)
         Kiro intentionally excluded, but no longer because its agents are
         untyped JSON — `ai.kiro.agents` is a typed record now. The blocker is
         the tool vocabulary: this pool's `tools` list uses Claude/Copilot tool
@@ -285,11 +287,11 @@ in {
       type = lib.types.nullOr aiCommon.dirOptionType;
       default = null;
       description = ''
-        Directory of legacy `.md` agent files fanned out to Claude and
-        Copilot. Each file becomes one entry in `ai.agents` keyed by the
+        Directory of native `.md` agent files fanned out to Claude, Copilot
+        and Kimchi. Each file becomes one entry in `ai.agents` keyed by the
         basename minus `.md`. Codex is excluded because it requires semantic
         records rendered as standalone TOML; use explicit `ai.agents` records
-        for three-runtime fanout. Kiro is excluded because these are Markdown
+        for semantic fanout. Kiro is excluded because these are Markdown
         files while Kiro's agents are JSON, and because its tool tags are a
         different vocabulary from the Claude/Copilot tool names this pool
         carries; use `ai.kiro.agentsDir` for that ecosystem.

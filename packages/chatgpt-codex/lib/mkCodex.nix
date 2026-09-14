@@ -636,16 +636,9 @@
     "projects"
   ];
 
-  renderScope = matcher:
-    lib.optionalString (matcher != null) (
-      "_Apply this guidance only when working with files matching: "
-      + lib.concatMapStringsSep ", " (path: "`${path}`") matcher
-      + "_\n\n"
-    );
-
   mkRuleBody = _name: rule:
-    renderScope rule.matcher
-    + lib.ai.transformers.agentsmd.render {
+    lib.ai.transformers.agentsmd.renderRule {
+      inherit (rule) matcher;
       text = aiCommon.readContent rule;
     };
 

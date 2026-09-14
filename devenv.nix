@@ -313,12 +313,8 @@ in {
       };
     };
     copilot.enable = true;
-    # Kimchi's BINARY comes from this repo's overlay like every other runtime.
-    # Its config fanout is a separate, still-open problem: `configDir` is
-    # HOME-shaped while the writes land at a project path the binary does not
-    # read, so `.config/kimchi/**` is materialized-but-inert today. Enabling
-    # the runtime is still correct — it stops `kimchi` resolving to whatever
-    # the developer happens to have installed user-globally.
+    # Kimchi comes from this repo's overlay and reads project config under
+    # .kimchi/, Pi settings under .config/kimchi/harness/, and shared AGENTS.md.
     kimchi.enable = true;
     kiro = {
       enable = true;

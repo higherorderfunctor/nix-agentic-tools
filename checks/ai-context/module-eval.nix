@@ -101,6 +101,7 @@ in {
           ai = {
             codex.enable = true;
             context.text = "Shared context.";
+            kimchi.enable = true;
             kiro.enable = true;
             rules.shared.text = "Shared rule.";
           };
@@ -113,24 +114,23 @@ in {
     );
 
     module-shared-agentsmd-rejects-divergent-units = mkTest "shared-agentsmd-rejects-divergent-units" (
-      let
-        attempt = builtins.tryEval (let
+      lib.all (runtime:
+        !(builtins.tryEval (let
           result = evalDevenv {
             ai = {
               codex = {
                 enable = true;
                 rules.shared.text = "Codex view.";
               };
-              kiro = {
+              ${runtime} = {
                 enable = true;
-                rules.shared.text = "Kiro view.";
+                rules.shared.text = "Other view.";
               };
             };
           };
         in
-          builtins.deepSeq result.config.files."AGENTS.md" true);
-      in
-        !attempt.success
+          builtins.deepSeq result.config.files."AGENTS.md" true)).success)
+      ["kimchi" "kiro"]
     );
 
     module-shared-agentsmd-omits-absent-runtime-context = mkTest "shared-agentsmd-omits-absent-runtime-context" (
@@ -141,6 +141,10 @@ in {
               context.text = "Codex-only context.";
               enable = true;
             };
+            kimchi = {
+              enable = true;
+              rules.kimchi-only.text = "Kimchi rule.";
+            };
             kiro = {
               enable = true;
               rules.kiro-only.text = "Kiro rule.";
@@ -150,6 +154,7 @@ in {
         agents = result.config.files."AGENTS.md".text;
       in
         lib.hasInfix "Codex-only context." agents
+        && lib.hasInfix "Kimchi rule." agents
         && lib.hasInfix "Kiro rule." agents
     );
 
@@ -196,33 +201,6 @@ in {
         probe.success
     );
 
-    module-ai-rules-excluded-for-kimchi = mkTest "ai-rules-excluded-for-kimchi" (
-      let
-        probe =
-          builtins.tryEval
-          (evalHm {
-            ai.kimchi = {
-              enable = true;
-              rules.test.text = "test";
-            };
-          })
-      .config.home.packages;
-      in
-        !probe.success
-    );
-
-    module-ai-rules-root-degrades-for-kimchi = mkTest "ai-rules-root-degrades-for-kimchi" (
-      let
-        result = evalHm {
-          ai.kimchi.enable = true;
-          ai.rules.test.text = "test";
-        };
-      in
-        builtins.length result.config.home.packages
-        == 1
-        && !(result.config.ai.kimchi ? rules)
-    );
-
     module-ai-rules-dir-accepted-for-claude = mkTest "ai-rules-dir-accepted-for-claude" (
       let
         probe =
@@ -230,7 +208,7 @@ in {
           (evalHm {
             ai.claude = {
               enable = true;
-              rulesDir = ../fixtures;
+              rulesDir = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
             };
           })
       .config.home.packages;
@@ -238,23 +216,20 @@ in {
         probe.success
     );
 
-    module-ai-rules-dir-excluded-for-kimchi = mkTest "ai-rules-dir-excluded-for-kimchi" (
+    module-ai-rules-dir-accepted-for-kimchi = mkTest "ai-rules-dir-accepted-for-kimchi" (
       let
-        probe =
-          builtins.tryEval
-          (evalHm {
-            ai.kimchi = {
-              enable = true;
-              rulesDir = ../fixtures;
-            };
-          })
-      .config.home.packages;
+        result = evalHm {
+          ai.kimchi = {
+            enable = true;
+            rulesDir = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
+          };
+        };
       in
-        !probe.success
+        result.config.home.file ? ".config/kimchi/harness/AGENTS.md"
     );
 
     # Top-level `ai.agentsDir` fans out to every enabled agent-
-    # consumer (Claude, Copilot — NOT kiro).
+    # consumer (Claude, Copilot, Kimchi — NOT Kiro).
     module-top-level-agentsdir-fans-out-to-claude = mkTest "top-level-agentsdir-fans-out-to-claude" (
       let
         result = evalHm {

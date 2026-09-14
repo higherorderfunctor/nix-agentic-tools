@@ -1,9 +1,7 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-08-16 — resolves #877: Kiro's FHS root supplies bash
-> but hides a host zsh, and that does not justify a runtime-specific implicit
-> shell default. `ai.shell` stays null; see below for the standing decision and
-> the override rule it shares with normalized `settings`.
+> **Last verified:** 2026-09-14 — Kimchi supports layered guidance and agents at
+> its native user and project paths.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -21,7 +19,7 @@ places:
 An unsupported per-runtime write is therefore an "option does not exist" eval
 error. An unsupported ROOT value is different: root `ai.*` is the portable
 surface, so its fanout degrades to the pool's neutral value for that runtime.
-For example, `ai.kimchi.rules` does not exist, while root `ai.rules` remains
+For example, `ai.kimchi.shell` does not exist, while root `ai.shell` remains
 valid and simply does not reach Kimchi.
 
 The list is read off the RECORD, keeping it a build-time parameter in the same
@@ -247,6 +245,5 @@ exclusion tests. Those assert an eval failure, which a broken harness satisfies
 for free; the control runs the identical `tryEval` shape against a supported
 runtime and requires success. Delete them as a set or not at all.
 
-The generalized gate has the same paired controls for Kimchi's removed `rules`
-and `rulesDir` options: `module-ai-rules{-dir,}-accepted-for-claude` and
-`module-ai-rules{-dir,}-excluded-for-kimchi`.
+Kimchi now supports rules through flat AGENTS.md composition. Its shell option
+remains excluded independently of that rule capability.

@@ -90,7 +90,7 @@ in rec {
   #
   # Kiro is intentionally excluded from the agents fanout in
   # the factory (its agent shape is JSON, not markdown). This
-  # helper is therefore only wired into Claude + Copilot via
+  # helper is therefore wired into Claude + Copilot + Kimchi via
   # `ai.<cli>.agentsDir` options.
   agentsFromDir = arg: let
     cfg = resolveDirArg (name: lib.hasSuffix ".md" name) arg;

@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-12 — package modules own consumer checks; the
-> shared harness discovers backend imports and owner activation probes.
+> **Last verified:** 2026-09-14 — Kimchi supports layered guidance and agents at
+> its native user and project paths.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -79,9 +79,9 @@
 - **Rule matchers lower only before L4.** `matcher = null` is always-on; a
   non-empty glob list becomes native routing metadata where one exists and
   explicit prose for flat AGENTS.md consumers. In the shared devenv AGENTS.md,
-  Codex contributes both unscoped rules and scoped rules degraded to prose; Kiro
-  contributes only unscoped always-on rules. The keyed writer deduplicates
-  byte-identical same-key contributions.
+  Codex and Kimchi contribute both unscoped rules and scoped rules degraded to
+  prose; Kiro contributes only unscoped always-on rules. The keyed writer
+  deduplicates byte-identical same-key contributions.
 - **Normalized settings are a uniform scalar-field surface.** Every runtime
   declares the same closed `settings` submodule. Each field resolves root versus
   per-runtime with `resolveOverride`; native lowering remains per-runtime and

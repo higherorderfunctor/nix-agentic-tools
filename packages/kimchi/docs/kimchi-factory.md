@@ -1,101 +1,97 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-14 — the package builds from the release source
-> with pinned pnpm and Go dependencies; module delivery still uses the same
-> executable and asset layout.
+> **Last verified:** 2026-09-14 — source-audited Kimchi 1.1.21 project paths,
+> agent Markdown, and shared AGENTS.md rule composition.
 
-`packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
-closest in shape to `mkKiro` (dual config trees + activation-merge for the
-mutable tree). The HM and devenv modules are thin shims that apply `hmTransform`
-/ `devenvTransform` to the record.
+`packages/kimchi/lib/mkKimchi.nix` produces one `lib.ai.app.mkAiApp` record for
+Home Manager and devenv. Both backends consume the same normalized pools:
+`agents`, `context`, `environmentVariables`, `mcpServers`, `rules`, `settings`,
+and `skills`. Same-key runtime pool entries replace root entries wholesale; null
+suppresses an inherited entry. Dir helpers populate those same pools.
 
-The factory consumes Kimchi-shaped JSON from `ai.kimchi.nativeSettings`. The
-closed `ai.kimchi.settings` submodule is the shared normalized surface; a field
-may be present there before Kimchi has a lossless native lowering, in which case
-it remains declarative data rather than being guessed into either native file.
+## Native destinations
 
-## Two config trees (the load-bearing fact)
+Kimchi's account tree, Pi runtime tree, and project configuration have different
+lookup rules. Do not relocate its global root to make project config work: that
+also moves authentication and sessions.
 
-Kimchi splits config across two roots under `<configDir>` (default
-`.config/kimchi`):
+| Artifact          | Home Manager                           | devenv                                 |
+| ----------------- | -------------------------------------- | -------------------------------------- |
+| CLI config        | `.config/kimchi/config.json`           | `.kimchi/config.json`                  |
+| Harness settings  | `.config/kimchi/harness/settings.json` | `.config/kimchi/harness/settings.json` |
+| MCP servers       | `.config/kimchi/harness/mcp.json`      | `.kimchi/mcp.json`                     |
+| Agents            | `.config/kimchi/harness/agents/*.md`   | `.kimchi/agents/*.md`                  |
+| Context and rules | `.config/kimchi/harness/AGENTS.md`     | `AGENTS.md`                            |
+| Skills            | `.config/kimchi/harness/skills/`       | `.kimchi/skills/`                      |
 
-- `config.json` — account/CLI settings (`telemetry`, `llmEndpoint`,
-  `skillPaths`, `preferences`). Ordinary **nested** JSON.
-- `harness/` — agent runtime: `settings.json` (`modelRoles`, `resources`),
-  `mcp.json`, `AGENTS.md`, `skills/`.
+HM paths are relative to HOME; devenv paths are relative to the project. The
+unusual project harness-settings path comes from upstream package.json's
+`piConfig.configDir`. MCP and agent discovery instead explicitly use `.kimchi`.
+Old devenv MCP and context files under `.config/kimchi/harness/` were ignored.
+Skills there were discoverable by Pi, so that entire tree was never inert.
 
-The `harness/` tree is **mutable at runtime** — Kimchi rewrites `settings.json`
-(`/multi-model`, `kimchi resources`) and downloads vendor content into it. So
-`config.json` and `harness/settings.json` go through
-`helpers.mkSettingsActivationScript` (jq `.[0] * .[1]` merge) on HM and a static
-write on devenv — never a raw symlink-to-store. Immutable artifacts ultimately
-use static `home.file` / `files.*`, but normalized context first renders into
-the final `ai.kimchi.files` map and only then reaches that generic sink. This
-makes `harness/AGENTS.md` a whole-entry consumer replacement/tombstone point;
-`mcp.json` and skills retain their existing typed owners. When both root and
-Kimchi-specific context are configured, their bodies concatenate root-first;
-`ai.kimchi.context.filename` controls the artifact name.
+Native project lookup is current-directory based for CLI config, MCP and agents;
+launch from the project root. Guidance walks ancestors; project skills use the
+nearest ancestor `.kimchi/skills` root. No wrapper changes a config-root
+variable.
 
-## Normalized pool capability boundary
+## Guidance and agents
 
-The app record's `supportedPools` is exactly `context`, `environmentVariables`,
-`mcpServers`, `settings`, and `skills`. Kimchi has no native path-scoped rules,
-portable agents, LSP, portable hooks, or shell-selection landing key. Those
-per-runtime normalized options are absent; root values for them remain valid and
-silently degrade for Kimchi. `settings` is the uniform closed normalized
-namespace; its current field has no Kimchi-native lowering.
+Rules render after context in key order. Kimchi has no native glob matcher;
+scoped rules carry the same explicit scope prose as Codex. In devenv, Kimchi
+contributes to the shared keyed AGENTS.md writer alongside Codex and Kiro.
+Identical contributions deduplicate; divergent same-key contributions fail. The
+public `ai.kimchi.files."AGENTS.md"` entry can replace or suppress the shared
+artifact. Home Manager uses the corresponding harness path. `context.filename`
+is restricted to `AGENTS.md`, which both Kimchi config scopes discover.
 
-The three keyed pools Kimchi consumes (`environmentVariables`, `mcpServers`, and
-`skills`) follow the shared atomic replacement rule. A Kimchi-specific same-key
-value replaces the root entry wholesale; null suppresses it before Kimchi's
-wrapper or file emitters run.
+Agents accept native Markdown (inline or source path), `agentsDir`, or semantic
+`{ description, instructions }` records. Native frontmatter uses Kimchi's own
+fields, such as `model`, `thinking`, `tools`, `skills`, and `extensions`.
+Non-empty semantic tool allowlists are rejected: the portable pool uses
+Claude/Copilot names, whereas Kimchi uses its own lowercase builtin names.
+Declare native Kimchi Markdown when tool restrictions are needed. A runtime null
+can suppress an inherited agent that has an incompatible tool list.
 
-In particular, `ai.kimchi.rules` and `ai.kimchi.rulesDir` do not exist. Do not
-restore them in anticipation of future rules support: Kimchi's rules support is
-deliberately unimplemented.
+Guidance, agents, MCP and project JSON render into `ai.kimchi.files` as whole
+`mkDefault` entries. Consumers can replace or null-suppress each artifact before
+the generic backend sink. Skills retain the shared composable Layout B helper;
+Home Manager reconciles mutable `config.json` and `harness/settings.json`
+through activation; `mcp.json` remains a static declarative file.
 
-## Gotcha: config.json is NESTED, not flat
+## Settings boundaries
 
-Do **not** run `config.json` settings through `aiCommon.flattenDotKeysUntil` —
-that helper is Kiro-specific (Kiro's `cli.json` wants flat dot keys like
-`chat.enableTangentMode`). Kimchi's `config.json` is nested JSON; flattening
-turns `settings.telemetry.enabled` into a literal `"telemetry.enabled"` string
-key Kimchi cannot read. Locked by `module-kimchi-config-json-nested`.
+`nativeSettings` is nested JSON. Never flatten dotted keys as Kiro does.
+`nativeSettings.skillPaths` defaults to null so enabling Kimchi preserves its
+default and user-global discovery paths. An explicit list replaces that scope's
+paths; an explicit empty list opts out of those additional paths.
+`harnessSettings.modelRoles` uses `provider/model` strings or lists;
+orchestrator and compactor require single strings. The former
+`{ provider, model }` shape was not accepted by the pinned upstream parser.
 
-## Gotcha: apiKey is a runtime SOPS credential, never a store literal
+Pi project settings such as `defaultModel` and `defaultThinkingLevel` are
+supported. Kimchi's `modelRoles` and `resources` readers use user settings only,
+so devenv explicitly rejects those entries instead of writing ineffective
+project config. Home Manager reconciles them into writable user settings. Some
+account-only native settings, including telemetry and preferences, also remain
+user scoped; use the process-scoped `telemetry` option in devenv. Normalized
+`settings` stays the shared closed schema. LSP, portable hooks and shell
+selection remain unsupported pools; root values degrade for Kimchi and
+corresponding runtime options are absent.
 
-`apiKey` is `lib.mcp.mkCredentialsOption "KIMCHI_API_KEY"` — the same
-`{ file | helper }` discriminated union the MCP servers use. The key is exported
-at launch via `lib.mcp.mkCredentialsSnippet`
-(`KIMCHI_API_KEY="$(<coreutils>/bin/cat <file>)"`) injected through
-`wrapProgram --run`, so the decrypted secret is read at runtime and the store
-holds only the **path**, never the key. Never reintroduce a plaintext `str`
-apiKey funneled into `--set`: that bakes the secret into a world-readable
-`/nix/store` wrapper. Mimic the existing credential pattern; do not invent a new
-secret surface.
+## Mutable state and credentials
 
-## Gotcha: wrapProgram separator
+HM merges declarative CLI and harness JSON after `linkGeneration`, preserving
+runtime-added fields. Project config remains a static Nix-owned artifact;
+changes made through the CLI are not declarative and may be replaced on shell
+entry. Config and MCP readers still inherit user-global state.
 
-Join `wrapProgram` flags with a single space — `lib.concatStringsSep " "`,
-matching `mkKiro` / `mkCopilot`. A `" \<newline>  "` separator inside a regular
-Nix string collapses the backslash, so with two or more env vars the second
-`--set` runs as its own command → `exit 127`. The package is wrapped in **both**
-backends (the wrapper owns the env vars and the credential export), so HM and
-devenv stay at parity by construction. Locked by `module-kimchi-wrapper-builds`.
-
-## Orientation-only steering
-
-`defaults.outputPath = null` and
-`transformers.markdown = lib.ai.transformers.agentsmd`: Kimchi takes a flat,
-always-injected `harness/AGENTS.md` (orientation tier, like Codex). It has
-**no** path-scoped steering (no Claude `rules/` or Kiro `steering/` equivalent),
-so the scoped-fragment transforms do not apply to it.
-
-## Shared prep
-
-`mkPrep` (top-level `let`) computes the backend-agnostic values (filtered
-settings, effective env, agency text, the wrapped package) once; the `hm` and
-`devenv` config closures each call it rather than duplicating the logic.
+`apiKey` uses the shared `{ file | helper }` credential option and exports
+`KIMCHI_API_KEY` at launch. The store contains the credential path or helper,
+never the secret. Non-secret environment variables and telemetry/update toggles
+are applied by the same wrapper in both backends. Join `wrapProgram` arguments
+with spaces: a backslash-newline inside the Nix string previously caused later
+`--set` arguments to execute as shell commands.
 
 ## Source packaging
 

@@ -1,9 +1,7 @@
 ## ai.\* Dir Helpers
 
-> **Last verified:** 2026-08-15 — directory-generated per-runtime entries
-> replace or null-suppress same-key root entries under the normalized keyed-pool
-> contract; see "Consumer patterns" below. Full lineage:
-> `git show bfb6b663:dev/fragments/ai-module/dir-helpers.md`.
+> **Last verified:** 2026-09-14 — Kimchi supports layered guidance and agents at
+> its native user and project paths.
 
 ### The helpers
 
@@ -14,7 +12,7 @@ All live in `lib/ai/dir-helpers.nix`, re-exported under `lib.ai.*`:
 - `skillsFromDir` — directory-of-directories → `attrsOf path`. Key is the subdir
   name unchanged.
 - `agentsFromDir` — directory of `.md` files → `attrsOf path`. Key is basename
-  minus `.md`. Claude + Copilot only.
+  minus `.md`. Claude + Copilot + Kimchi; Codex requires semantic records.
 - `hooksFromDir` — directory of regular files → `attrsOf lines` (via
   `readFile`). Key is the filename unchanged (hooks are typically extensionless
   shell scripts). Claude-only.
