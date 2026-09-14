@@ -54,6 +54,12 @@ in
     inherit (sources) version;
     src = ourPkgs.fetchzip {inherit (sources.src) url hash;};
 
+    patches = [./store-skills.patch];
+
+    preBuild = ''
+      cp ${./store-skills.test.ts} src/shared/skill-discovery/store-skills.test.ts
+    '';
+
     pnpmDeps = ourPkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname src version;
       inherit pnpm;
@@ -107,6 +113,16 @@ in
       mkdir -p "$out"
       cp -r dist/bin dist/share "$out/"
       runHook postInstall
+    '';
+
+    doCheck = true;
+    checkPhase = ''
+      runHook preCheck
+      pnpm exec vitest run --maxWorkers=2 \
+        src/shared/skill-discovery/resolve-skill-roots.test.ts \
+        src/shared/skill-discovery/store-skills.test.ts \
+        src/extensions/prompt-construction/prompt-enrichment.test.ts
+      runHook postCheck
     '';
 
     doInstallCheck = true;

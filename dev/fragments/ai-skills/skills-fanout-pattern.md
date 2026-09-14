@@ -1,7 +1,7 @@
 ## ai.skills Fanout Delegation Pattern
 
-> **Last verified:** 2026-08-19 — the retired generated-skill exception is
-> removed; Stacked Workflows remains the sole skill-package program consumer.
+> **Last verified:** 2026-09-17 — per-file devenv links preserve the same
+> skill-root store identity as Codex directory links.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -78,6 +78,16 @@ that require Layout B use `mkDevenvSkillEntries`, which enumerates each leaf at
 evaluation time and preserves nested relative paths. Codex instead relies on
 devenv's identity behavior: one directory source creates the exact Layout A link
 its scanner requires at project-root `.agents/skills/<name>`.
+
+### Preserve source identity across layouts
+
+`mkDevenvSkillEntries` reads the original directory while enumerating leaves so
+devenv tracks source changes. Emitted leaf paths are strings under the single
+interpolated skill root. Do not interpolate each leaf as a separate Nix path:
+that creates standalone store objects with different canonical paths from
+Codex's whole-directory link. Kimchi/Pi discovers both layouts and uses realpath
+identity to deduplicate; byte-identical files at different store paths still
+collide.
 
 ### Skill-package program gating
 

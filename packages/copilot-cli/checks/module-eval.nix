@@ -42,7 +42,7 @@ in {
         && lib.hasInfix "Review the change."
         (devenv.config.files.".custom-github/agents/reviewer.agent.md".text or "")
         && devenv.config.files.".custom-github/skills/example/SKILL.md".source
-        == ../../claude-code/checks/fixtures/claude-skills/skill-a/SKILL.md
+        == "${config.ai.copilot.skills.example}/SKILL.md"
         && !(devenv.config.files ? ".github/instructions/security.instructions.md")
     );
 

@@ -105,13 +105,16 @@ in rec {
   # `{configDir}/skills/{name}/SKILL.md` entry mirroring how
   # `mkSkillEntries` handles the same case.
   mkDevenvSkillEntries = configDir: attrs: let
-    walkDir = prefix: dir:
+    # Traverse the original path so devenv can trace source changes, but keep
+    # each leaf inside the one store-copied skill root. Copying leaves into
+    # separate store objects defeats realpath-based deduplication across CLIs.
+    walkDir = prefix: dir: storeDir:
       lib.concatMapAttrs (
         name: kind:
           if kind == "directory"
-          then walkDir "${prefix}/${name}" (dir + "/${name}")
+          then walkDir "${prefix}/${name}" (dir + "/${name}") "${storeDir}/${name}"
           else if kind == "regular" || kind == "symlink"
-          then {"${prefix}/${name}".source = dir + "/${name}";}
+          then {"${prefix}/${name}".source = "${storeDir}/${name}";}
           else {} # skip unknown entries
       )
       (builtins.readDir dir);
@@ -123,7 +126,7 @@ in rec {
       # from both `./rel/path` literals and `"${pkg}/share"`
       # interpolation results uniformly.
         if (builtins.readFileType skillPath) == "directory"
-        then walkDir "${configDir}/skills/${skillName}" skillPath
+        then walkDir "${configDir}/skills/${skillName}" skillPath "${skillPath}"
         else {"${configDir}/skills/${skillName}/SKILL.md".source = skillPath;}
     )
     attrs;

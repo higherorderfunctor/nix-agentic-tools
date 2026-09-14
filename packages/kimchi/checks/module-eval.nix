@@ -7,8 +7,25 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
+  helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
 in {
   checks = {
+    module-kimchi-skill-source-identity = mkTest "kimchi-skill-source-identity" (
+      let
+        skill = ./fixtures/store-skill;
+        skills.example = skill;
+        directories = helpers.mkSkillDirectoryEntries ".agents" skills;
+        leaves = helpers.mkDevenvSkillEntries ".kimchi" skills;
+        packageLeaves = helpers.mkDevenvSkillEntries ".claude" {example = "${skill}";};
+        root = "${directories.".agents/skills/example".source}";
+      in
+        toString leaves.".kimchi/skills/example/SKILL.md".source
+        == "${root}/SKILL.md"
+        && toString leaves.".kimchi/skills/example/references/context.txt".source == "${root}/references/context.txt"
+        && toString packageLeaves.".claude/skills/example/SKILL.md".source == "${root}/SKILL.md"
+        && "${skill + "/SKILL.md"}" != "${root}/SKILL.md"
+    );
+
     # `supportedPools` now owns every normalized per-runtime option gate, not
     # shell alone. Each failure has an identical supported-runtime control so an
     # unrelated eval failure cannot make the exclusion look correct.
