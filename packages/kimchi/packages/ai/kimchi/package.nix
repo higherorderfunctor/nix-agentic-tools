@@ -1,102 +1,137 @@
-# Kimchi CLI — standalone derivation against per-platform release tarball.
-#
-# Kimchi (getkimchi/kimchi) is a coding-agent CLI "powered by Cast AI",
-# distributed as bun-compiled per-platform tarballs on GitHub Releases.
-# The tarball is NOT a lone binary: it is an FHS-style tree —
-#   bin/kimchi                     (bun single-exec, dynamically linked)
-#   share/kimchi/bin/proxy-helper  (small stripped ELF helper)
-#   share/kimchi/{theme,oauth,export-html,package.json}  (runtime assets)
-# kimchi resolves share/ relative to the executable, so we preserve the
-# whole tree under $out and do not relocate the binary.
-#
-# Standalone (not overrideAttrs): there is no nixpkgs base package to
-# inherit from, and the artifact is a self-contained tarball, so we build
-# a fresh stdenv.mkDerivation. On Linux both ELFs need autoPatchelfHook to
-# repoint the interpreter/rpath at the nix glibc.
-#
-# Free (Apache-2.0). ensureUnfreeCheck in default.nix passes free packages
-# through unwrapped.
+# Build the release source and its proxy helper with pinned Nix toolchains.
+# Keep upstream's bin/ + share/ layout: the compiled CLI resolves its assets
+# relative to the executable, including when the module wraps that executable.
 {
+  inputs,
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  ourPkgs = pkgs;
-  inherit (ourPkgs) fetchurl lib autoPatchelfHook stdenv;
-  inherit (ourPkgs.stdenv.hostPlatform) system;
-  vu = packageLib;
-
+  ourPkgs = import inputs.nixpkgs {
+    inherit (pkgs.stdenv.hostPlatform) system;
+    overlays = [inputs.go-overlay.overlays.default];
+  };
+  inherit (ourPkgs) lib;
+  pnpm = ourPkgs.pnpm_10;
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
-  platformSrc = sources.${system} or (throw "kimchi: unsupported system ${system}");
+  sourcesFile = repoPath ../../../sources.json;
+  goFloor = sources.goFloor or packageLib.goFloorUnknown;
+  goModPath = "tools/proxy-helper/go.mod";
+  fixPnpmDepsHash = packageLib.mkHashFix {
+    attr = "kimchi";
+    name = "pnpm-deps";
+    pkgs = ourPkgs;
+    pname = "kimchi";
+    inherit sourcesFile;
+    targets = [packageLib.hashFixTargets.pnpmDeps];
+  };
+  goUpdate = packageLib.mkGoUpdateExtract {
+    attr = "kimchi.proxyHelper";
+    extraAfter = "${fixPnpmDepsHash}";
+    inherit goModPath sourcesFile;
+    pkgs = ourPkgs;
+    pname = "kimchi";
+  };
 in
-  ourPkgs.stdenv.mkDerivation {
+  ourPkgs.stdenv.mkDerivation (finalAttrs: let
+    proxyHelper =
+      (packageLib.mkGoBuilder {
+        floor = goFloor;
+        pkgs = ourPkgs;
+        pname = "kimchi-proxy-helper";
+      }) {
+        pname = "kimchi-proxy-helper";
+        inherit (finalAttrs) src version;
+        modRoot = "tools/proxy-helper";
+        vendorHash = sources.vendorHash or lib.fakeHash;
+        env.CGO_ENABLED = "0";
+        ldflags = ["-s" "-w"];
+        meta.mainProgram = "proxy-helper";
+      };
+  in {
     pname = "kimchi";
     inherit (sources) version;
-    src = fetchurl {inherit (platformSrc) url hash;};
+    src = ourPkgs.fetchzip {inherit (sources.src) url hash;};
 
-    sourceRoot = ".";
+    pnpmDeps = ourPkgs.fetchPnpmDeps {
+      inherit (finalAttrs) pname src version;
+      inherit pnpm;
+      fetcherVersion = 3;
+      hash = sources.pnpmDepsHash or lib.fakeHash;
+    };
+    nativeBuildInputs =
+      [
+        ourPkgs.bun
+        ourPkgs.nodejs
+        pnpm
+        ourPkgs.pnpmConfigHook
+      ]
+      ++ lib.optionals ourPkgs.stdenv.hostPlatform.isDarwin [ourPkgs.rcodesign];
+
+    # macOS codesign is not available in Nix's build sandbox. Use the same
+    # ad-hoc signature repair as nixpkgs' Bun package.
+    postPatch = lib.optionalString ourPkgs.stdenv.hostPlatform.isDarwin ''
+      substituteInPlace scripts/build-binary.js \
+        --replace-fail 'run("codesign (strip)", `codesign --remove-signature dist/bin/''${target.binaryName}`)' \
+          'run("codesign (ad-hoc)", `rcodesign sign --code-signature-flags linker-signed dist/bin/''${target.binaryName}`)' \
+        --replace-fail 'run("codesign (ad-hoc)", `codesign -s - dist/bin/''${target.binaryName}`)' ""
+    '';
+
+    # Bun's compiled module graph is part of the executable. Generic ELF
+    # rewriting and stripping must not alter it after compilation.
+    dontPatchELF = true;
     dontStrip = true;
+    env.HUSKY = "0";
 
-    nativeBuildInputs = lib.optionals stdenv.hostPlatform.isLinux [autoPatchelfHook];
-
-    buildInputs = lib.optionals stdenv.hostPlatform.isLinux [
-      stdenv.cc.cc.lib
-    ];
-
-    # The bun single-exec bundles its own runtime; autoPatchelf would
-    # otherwise chase optional deps that don't matter for a self-contained
-    # binary.
-    autoPatchelfIgnoreMissingDeps = true;
+    buildPhase = ''
+      runHook preBuild
+      node scripts/set-version.js v${finalAttrs.version}
+      node scripts/patch-pi-ai-oauth.js
+      mkdir -p tools/proxy-helper/bin
+      cp ${proxyHelper}/bin/proxy-helper tools/proxy-helper/bin/proxy-helper
+      CI=1 node scripts/build-binary.js
+      runHook postBuild
+    '';
 
     installPhase = ''
       runHook preInstall
-      mkdir -p $out
-      cp -r bin share $out/
-      chmod +x $out/bin/kimchi $out/share/kimchi/bin/proxy-helper
+      mkdir -p "$out"
+      cp -r dist/bin dist/share "$out/"
       runHook postInstall
     '';
 
-    # Lenient smoke test: confirm the patched binary actually executes
-    # (loader resolves, bun payload still found post-patchelf) rather than
-    # failing with a loader/exec error. Tolerant of non-zero exits from a
-    # CLI that may want config/network — we only fail on a hard exec error.
     doInstallCheck = true;
     installCheckPhase = ''
       runHook preInstallCheck
-      out_txt=$(timeout 30 $out/bin/kimchi --version 2>&1 || true)
-      echo "kimchi --version => $out_txt"
-      case "$out_txt" in
-        *"No such file or directory"* | *"cannot execute"* | *"not found"*)
-          echo "kimchi: binary failed to execute after patching" >&2
-          exit 1
-          ;;
-      esac
+      export KIMCHI_NO_UPDATE_CHECK=1 KIMCHI_TELEMETRY_ENABLED=0
+      version_output=$(timeout 30 "$out/bin/kimchi" --version)
+      printf '%s\n' "$version_output"
+      test "$version_output" = '${finalAttrs.version}'
+      "$out/share/kimchi/bin/proxy-helper" --help > /dev/null
+      test -f "$out/share/kimchi/theme/dark.json"
+      test -f "$out/share/kimchi/export-html/template.html"
+      test -f "$out/share/kimchi/skills/improve/SKILL.md"
       runHook postInstallCheck
     '';
 
     passthru = {
-      updateScript = vu.mkUpdateScript {
-        sourcesFile = repoPath ../../../sources.json;
-
-        pname = "kimchi";
-        versionCheck.cmd = vu.ghLatestVersionCmd {
-          pkgs = ourPkgs;
-          repo = "getkimchi/kimchi";
-        };
-        platforms = {
-          "x86_64-linux" = ver: "https://github.com/getkimchi/kimchi/releases/download/v${ver}/kimchi_linux_amd64.tar.gz";
-          "aarch64-darwin" = ver: "https://github.com/getkimchi/kimchi/releases/download/v${ver}/kimchi_darwin_arm64.tar.gz";
-        };
+      inherit fixPnpmDepsHash goFloor goModPath proxyHelper;
+      inherit (goUpdate) fixGoFloor fixVendorHash;
+      goUpdateExtract = goUpdate.extract;
+      updateScript = packageLib.ghArchiveUpdateScript {
+        extraExtract = "${goUpdate.extract}";
         pkgs = ourPkgs;
+        pname = "kimchi";
+        repo = "getkimchi/kimchi";
+        inherit sourcesFile;
       };
     };
-
     meta = {
       description = "Kimchi — coding agent CLI powered by Cast AI";
       homepage = "https://github.com/getkimchi/kimchi";
       license = lib.licenses.asl20;
-      platforms = builtins.attrNames (builtins.removeAttrs sources ["version"]);
       mainProgram = "kimchi";
+      platforms = ["aarch64-darwin" "x86_64-linux"];
     };
-  }
+  })
