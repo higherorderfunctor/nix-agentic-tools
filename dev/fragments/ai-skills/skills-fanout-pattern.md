@@ -1,7 +1,7 @@
 ## ai.skills Fanout Delegation Pattern
 
-> **Last verified:** 2026-09-14 — per-file devenv links preserve the same
-> skill-root store identity as Codex directory links.
+> **Last verified:** 2026-09-14 — Kimchi uses native project paths; per-file
+> skill links share Codex's store identity.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -70,6 +70,9 @@ locations from the current working directory up to the repository root and
 supports symlinked skill folders. Therefore HM emits `.agents/skills`, while
 devenv emits project-root `.agents/skills`; neither destination is derived from
 `ai.codex.configDir`.
+
+Kimchi project skills use `.kimchi/skills`, while Home Manager uses the user
+harness skill directory. Both preserve Layout B.
 
 ### Devenv counterpart
 

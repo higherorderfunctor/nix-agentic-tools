@@ -132,7 +132,10 @@ in {
             claude.enable = true;
             codex.enable = true;
             copilot.enable = true;
-            kimchi.enable = true;
+            kimchi = {
+              enable = true;
+              rules.kimchi-only.text = "KIMCHI-RULE";
+            };
             kiro.enable = true;
           };
         };
@@ -151,9 +154,9 @@ in {
         && devenvConfig.ai.claude.files ? ".claude/rules/scoped.md"
         && devenvConfig.ai.copilot.files ? ".github/copilot-instructions.md"
         && devenvConfig.ai.copilot.files ? ".github/instructions/scoped.instructions.md"
-        && devenvConfig.ai.kimchi.files ? ".config/kimchi/harness/AGENTS.md"
-        && devenvConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
         && devenvConfig.ai.internal.files ? "AGENTS.md"
+        && devenvConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
+        && lib.hasInfix "KIMCHI-RULE" devenvConfig.ai.internal.files."AGENTS.md".text
         && devenvConfig.ai.internal.files."AGENTS.md".text == devenvConfig.files."AGENTS.md".text
         && !(devenvConfig.files."AGENTS.md" ? source)
     );
@@ -164,32 +167,46 @@ in {
           ai = {
             codex.enable = true;
             context.text = "GENERATED-SHARED-CONTEXT";
+            kimchi.enable = true;
             kiro.enable = true;
           };
         };
-        replaced = evalDevenv (lib.recursiveUpdate base {
-          ai.codex.files."AGENTS.md".text = "CONSUMER-REPLACEMENT";
-        });
-        suppressed = evalDevenv (lib.recursiveUpdate base {
-          ai.kiro.files."AGENTS.md" = null;
-        });
+        runtimeNames = ["codex" "kimchi" "kiro"];
+        replaced = map (runtime:
+          evalDevenv (lib.recursiveUpdate base {
+            ai.${runtime}.files."AGENTS.md".text = "CONSUMER-REPLACEMENT";
+          }))
+        runtimeNames;
+        suppressed = map (runtime:
+          evalDevenv (lib.recursiveUpdate base {
+            ai.${runtime}.files."AGENTS.md" = null;
+          }))
+        runtimeNames;
         deduplicated = evalDevenv (lib.recursiveUpdate base {
-          ai.codex.files."AGENTS.md".text = "SHARED-CONSUMER";
-          ai.kiro.files."AGENTS.md".text = "SHARED-CONSUMER";
+          ai = {
+            codex.files."AGENTS.md".text = "SHARED-CONSUMER";
+            kimchi.files."AGENTS.md".text = "SHARED-CONSUMER";
+            kiro.files."AGENTS.md".text = "SHARED-CONSUMER";
+          };
         });
         divergent = builtins.tryEval (let
           evaluated = evalDevenv (lib.recursiveUpdate base {
             ai.codex.files."AGENTS.md".text = "CODEX-CONSUMER";
-            ai.kiro.files."AGENTS.md".text = "KIRO-CONSUMER";
+            ai.kimchi.files."AGENTS.md".text = "KIMCHI-CONSUMER";
           });
         in
           builtins.deepSeq evaluated.config.ai.internal.files."AGENTS.md" true);
       in
-        replaced.config.ai.internal.files."AGENTS.md".text
-        == "CONSUMER-REPLACEMENT"
-        && replaced.config.files."AGENTS.md".text == "CONSUMER-REPLACEMENT"
-        && suppressed.config.ai.internal.files."AGENTS.md" == null
-        && !(suppressed.config.files ? "AGENTS.md")
+        lib.all (result:
+          result.config.ai.internal.files."AGENTS.md".text
+          == "CONSUMER-REPLACEMENT"
+          && result.config.files."AGENTS.md".text == "CONSUMER-REPLACEMENT")
+        replaced
+        && lib.all (result:
+          result.config.ai.internal.files."AGENTS.md"
+          == null
+          && !(result.config.files ? "AGENTS.md"))
+        suppressed
         && deduplicated.config.ai.internal.files."AGENTS.md".text == "SHARED-CONSUMER"
         && deduplicated.config.files."AGENTS.md".text == "SHARED-CONSUMER"
         && !divergent.success
@@ -209,28 +226,13 @@ in {
               ${dormantRuntime}.files."AGENTS.md" = entry;
             };
           };
-        evaluations = [
-          (withDormantEntry {
-            activeRuntime = "codex";
-            dormantRuntime = "kiro";
-            entry.text = "DORMANT-KIRO";
-          })
-          (withDormantEntry {
-            activeRuntime = "codex";
-            dormantRuntime = "kiro";
-            entry = null;
-          })
-          (withDormantEntry {
-            activeRuntime = "kiro";
-            dormantRuntime = "codex";
-            entry.text = "DORMANT-CODEX";
-          })
-          (withDormantEntry {
-            activeRuntime = "kiro";
-            dormantRuntime = "codex";
-            entry = null;
-          })
-        ];
+        runtimeNames = ["codex" "kimchi" "kiro"];
+        evaluations = lib.concatMap (activeRuntime:
+          lib.concatMap (dormantRuntime:
+            map (entry: withDormantEntry {inherit activeRuntime dormantRuntime entry;})
+            [{text = "DORMANT-${dormantRuntime}";} null])
+          (lib.filter (name: name != activeRuntime) runtimeNames))
+        runtimeNames;
       in
         lib.all (evaluated:
           evaluated.config.files ? "AGENTS.md"
@@ -449,7 +451,7 @@ in {
             kimchi = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".config/kimchi/harness/AGENTS.md".text = "KIMCHI-REPLACEMENT";
+              files."AGENTS.md".text = "KIMCHI-REPLACEMENT";
             };
           };
         };
@@ -459,7 +461,7 @@ in {
         && devenvClaude.config.files.".claude/CLAUDE.md".text == "CLAUDE-REPLACEMENT"
         && devenvCopilot.config.files.".github/copilot-instructions.md".text == "COPILOT-REPLACEMENT"
         && hmKimchi.config.home.file.".config/kimchi/harness/AGENTS.md".text == "KIMCHI-REPLACEMENT"
-        && devenvKimchi.config.files.".config/kimchi/harness/AGENTS.md".text == "KIMCHI-REPLACEMENT"
+        && devenvKimchi.config.files."AGENTS.md".text == "KIMCHI-REPLACEMENT"
     );
   };
 }

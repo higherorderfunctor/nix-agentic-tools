@@ -1,7 +1,7 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-12 — package modules own consumer checks; the
-> shared harness discovers backend imports and owner activation probes.
+> **Last verified:** 2026-09-14 — Kimchi supports layered guidance and agents at
+> its native user and project paths.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -58,7 +58,7 @@ sole gate for that ecosystem's product output:
 | `ai.claude.enable = true`  | claude fanout block + `programs.claude-code.enable = mkDefault true`  |
 | `ai.codex.enable = true`   | Codex package + guidance, skills, settings, agents, hooks fanout      |
 | `ai.copilot.enable = true` | copilot fanout block + `programs.copilot-cli.enable = mkDefault true` |
-| `ai.kimchi.enable = true`  | Kimchi package + context, MCP, settings, skills, environment fanout   |
+| `ai.kimchi.enable = true`  | Kimchi package + agents, guidance, MCP, settings, skills, environment |
 | `ai.kiro.enable = true`    | kiro fanout block + `programs.kiro-cli.enable = mkDefault true`       |
 
 Where an upstream module exists, each per-CLI block implicitly flips its enable
@@ -363,12 +363,10 @@ shell resolution. A per-runtime pool write that the runtime cannot consume is
 therefore an unknown-option error. A ROOT pool value stays portable and degrades
 to the neutral value for an incapable runtime.
 
-Kimchi is the sharp example: it supports `context`, `environmentVariables`,
-`mcpServers`, `settings`, and `skills`, but not `rules`. Consequently root
-`ai.rules` remains valid when Kimchi is enabled, while `ai.kimchi.rules` and
-`ai.kimchi.rulesDir` do not exist. Capability tests pair every eval-failure
-assertion with a supported-runtime positive control so harness failure cannot
-masquerade as correct exclusion.
+Kimchi consumes agents, context, environment variables, MCP, rules, settings and
+skills. Portable hooks, LSP and shell selection remain unsupported. Root values
+for unsupported pools remain portable; their Kimchi runtime options are absent.
+Capability tests pair eval failures with a supported-runtime control.
 
 ### Assertion semantics
 

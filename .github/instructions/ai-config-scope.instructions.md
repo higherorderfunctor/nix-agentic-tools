@@ -7,17 +7,8 @@ applyTo: "devenv.nix,packages/chatgpt-codex/lib/mkCodex.nix,packages/claude-code
 
 ## Devenv runtimes merge with host config — the reason is auth, not tidiness
 
-> **Last verified:** 2026-09-02 (commit pending — first landing. States as one
-> cross-runtime rule what previously had to be inferred by reading three
-> factories side by side: no `ai.*` runtime redirects its config root, on either
-> backend, and the reason is identical in every case. The per-runtime MECHANISMS
-> differ, and that difference is the whole content — Copilot has an additive
-> flag, Codex does not and must materialize into the host directory instead.
-> Motivation hoisted from the measurement already recorded in
-> `dev/fragments/ai-clis/copilot-config-delivery.md`, which stated it only for
-> Copilot. If you add a runtime, change how one delivers config, or set any
-> `*_HOME` / `*_CONFIG_DIR` variable in a wrapper, update this fragment in the
-> same commit.)
+> **Last verified:** 2026-09-14 — Kimchi project delivery uses native lookup
+> paths while preserving the host authentication and session root.
 
 ### The rule
 
@@ -90,13 +81,13 @@ the developer's interactive session and everything else running in it. That is
 process-scope containment and it is orthogonal to config scope — do not cite one
 as evidence about the other.
 
-**Kimchi is outside the table on purpose.** Its BINARY is repo-sourced like
-every other runtime, but it has no config row because its config fanout does not
-currently reach the binary: `configDir` is HOME-shaped while the writes land at
-a project path Kimchi never reads, so `.config/kimchi/**` is
-materialized-but-inert. Binary delivery and config delivery are separate
-problems for that runtime, and fixing one did not fix the other. Do not read its
-presence on PATH as evidence that this rule has been applied to it.
+**Kimchi uses native project scope.** Its CLI config and MCP entries land under
+`.kimchi/`, agents and skills in that tree's corresponding subdirectories, and
+guidance joins the shared project AGENTS.md. Pi project settings use
+`.config/kimchi/harness/settings.json`. The former blanket claim that the
+project `.config/kimchi` tree was inert was wrong: Pi already discovered skills
+there. Kimchi's own model-role and resource readers remain user scoped; devenv
+rejects those entries explicitly. The global root stays unchanged.
 
 ### What would change this decision
 

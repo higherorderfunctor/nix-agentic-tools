@@ -631,10 +631,11 @@ the repo before committing.
 
 ## Delegate Sizing — choose the model AND the effort per delegate
 
-> **Last verified:** 2026-09-08 — a delegate must never inherit the interactive
-> session's model and effort by default. If a harness gains or loses a
-> per-delegate model or effort control, update the routing table in the same
-> commit: a wrong cell is worse than one saying `unknown`.
+> **Last verified:** 2026-09-14 — Kimchi exposes native agent Markdown; a
+> delegate must never inherit the interactive session's model and effort by
+> default. If a harness gains or loses a per-delegate model or effort control,
+> update the routing table in the same commit: a wrong cell is worse than one
+> saying `unknown`.
 
 An unsized delegate inherits the session's model and reasoning effort unless a
 spawn override, agent default or custom agent configuration says otherwise. When
@@ -705,8 +706,8 @@ whole point of the column is to tell you which control actually exists.
 | Claude Code | subagent, and `agent()` inside a workflow script                               | yes, per call — `agent()` takes `model`, documented as defaulting to the session model         | yes, per call — `agent()` takes `effort` (`low` … `max`)                                   | workflow scripts: `parallel()`, `pipeline()`, `phase()`, and a shared token `budget` that throws once spent                 |
 | Codex       | native subagent tools; built-in roles and custom agents under `.codex/agents/` | yes — explicit spawn `model`; custom-agent `model`; `[agents].default_subagent_model` fallback | yes — spawn `reasoning_effort`; custom-agent `model_reasoning_effort`; `[agents]` fallback | prompt-driven spawn, follow-up/steer, wait/collect, inspect and interrupt/close; no separate workflow-script DSL documented |
 | Copilot CLI | agent record emitted under `agents/`                                           | unknown — the record carries no model field                                                    | unknown — the record carries no effort field                                               | unknown                                                                                                                     |
+| Kimchi      | native Markdown agents under harness/agents or .kimchi/agents                  | unknown per-call control; native frontmatter has model                                         | unknown per-call control; native frontmatter has thinking                                  | unknown                                                                                                                     |
 | Kiro CLI    | workflow `step` agent, `orchestrate_subagent`, and static agent definitions    | yes — per-step `modelId` cascading step over workflow over session, and a per-agent `model`    | yes — per-step `effortLevel`, and a per-agent `effortLevel`                                | workflow JSON node types: `step`, `sequence`, `parallel`, `repeat`, `watch`                                                 |
-| Kimchi      | none — its supported pools carry no agent surface                              | not applicable                                                                                 | not applicable                                                                             | none documented                                                                                                             |
 
 Sources: `dev/references/claude-workflows.md` §2; the
 [OpenAI Codex Subagents documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents),

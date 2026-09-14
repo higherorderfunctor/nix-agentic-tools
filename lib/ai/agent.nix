@@ -23,7 +23,7 @@
         tools = lib.mkOption {
           type = lib.types.nullOr (lib.types.listOf lib.types.str);
           default = null;
-          description = "Optional Claude/Copilot tool allowlist; Codex has no equivalent agent field.";
+          description = "Optional Claude/Copilot tool allowlist; Codex ignores portable allowlists. Kimchi rejects nonempty lists; restrictions use native agent Markdown.";
         };
       };
     };
@@ -62,6 +62,12 @@ in {
   renderClaude = name: value:
     renderMarkdown {
       includeName = true;
+      inherit name value;
+    };
+
+  renderKimchi = name: value:
+    renderMarkdown {
+      includeName = false;
       inherit name value;
     };
 

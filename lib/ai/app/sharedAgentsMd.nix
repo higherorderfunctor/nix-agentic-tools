@@ -2,7 +2,7 @@
 # AGENTS.md-standard runtimes. Runtime factories contribute named context/rule
 # units; this module renders each filename once after the module system has
 # deduplicated equal definitions and rejected divergent definitions for a key.
-# Applicable public final-file entries from enabled Codex/Kiro runtimes
+# Applicable public final-file entries from enabled Codex/Kimchi/Kiro runtimes
 # arbitrate here too, before the single native sink, so replacement and
 # tombstones cannot bypass ownership or their runtime's sole enable gate.
 {
@@ -103,7 +103,7 @@
       '';
     })
     config.ai.internal.agentsMd;
-  sharedRuntimeNames = ["codex" "kiro"];
+  sharedRuntimeNames = ["codex" "kimchi" "kiro"];
   sharedOverrideDefinitions = map (runtime: let
     enabled = lib.attrByPath ["ai" runtime "enable"] false config;
     files = lib.attrByPath ["ai" runtime "files"] {} config;
