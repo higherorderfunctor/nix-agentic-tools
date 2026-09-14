@@ -1,7 +1,7 @@
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-09-12 — source paths and ownership guidance follow
-> native package assembly.
+> **Last verified:** 2026-09-17 — Kimchi source builds require fresh closure
+> measurements; old binary-release figures are not current estimates.
 >
 > Full lineage: `git show d1c28a21:dev/fragments/devenv/ci-lean-closure.md`.
 
@@ -58,25 +58,17 @@ are enabled — codex, copilot and kiro always did, `claude` was supposed to and
 did not (it installed on neither backend), and `kimchi` was enabled here on
 2026-09-02.
 
-The weight is real and worth stating rather than discovering — but state the
-MARGINAL cost, which is neither the binary size nor the total closure. Measured
-at kimchi 1.0.10, the version `packages/kimchi/sources.json` currently pins:
+Measure the MARGINAL runtime cost: the store paths Kimchi adds to the existing
+shell, excluding dependencies already present. Neither the executable's size
+(which misses supporting assets) nor the full closure (which counts shared
+dependencies again) measures that cost.
 
-| figure                   | bytes           | what it means                              |
-| ------------------------ | --------------- | ------------------------------------------ |
-| `bin/kimchi` alone       | 116,974,792     | what a naive `stat` reports                |
-| **kimchi's output path** | **124,037,485** | **the only path not already in the shell** |
-| total closure            | 161,764,840     | includes deps every other package shares   |
-
-Quote the middle row. kimchi's closure is 5 store paths and **4 were already
-present** in the pre-change devenv profile — glibc and friends, there for
-everything else — so the shell gains one path, not a whole closure.
-
-Both neighbouring figures have shipped here as the answer, wrong in opposite
-directions: the binary size is too low (it misses the rest of the output path),
-and the total closure is too high by ~36 MiB (it bills shared dependencies to
-whichever package happens to be measured). Neither is what adding this to the
-shell costs.
+Kimchi 1.1.25 now builds from source in
+`packages/kimchi/packages/ai/kimchi/package.nix`. The former 1.0.10
+binary-release measurements are obsolete; no current marginal size is recorded
+here. Bun, pnpm and Go belong to the build inputs, so their download size is not
+a runtime closure estimate. Measure the installed result and its actual
+references.
 
 Measure the marginal set on a bump rather than scaling any of these:
 
