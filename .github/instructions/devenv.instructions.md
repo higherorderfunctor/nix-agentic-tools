@@ -170,12 +170,12 @@ this paragraph would rot the next time one is added.)
 
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-09-28 — Claude's skills are `ai.*` delivery entries.
+> **Last verified:** 2026-09-30 — Claude's skills are `ai.*` delivery entries.
 > The repository's instruction files are `ai.*`'s own read-only copies (`own`),
 > never `files.*` symlinks; the generator's materializer and the AGENTS.md seed
 > are gone. Copilot, Kiro and Kimchi settings and Codex daemon settings are
-> owned copies; link-delivered settings remain limited to Claude's configuration
-> files and Codex's `config.toml`.
+> owned copies. Recursive leaf links target one source-tree store root while
+> retaining per-file input contexts.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -331,6 +331,13 @@ devenv backend. A factory therefore declares the tree ONCE, with a directory
 source, and each backend expands it its own way — this walk, or Home Manager's
 native recursion. It replaced three hand-written copies of the same recursion
 (the skill helper, its devenv twin, and kiro's inline agents-directory walker).
+
+The walk separates traversal identity from target identity. It traverses the
+original source, interpolates that directory once, and points every native leaf
+link beneath the resulting store root. It also appends each independently
+interpolated leaf's string context to the target. The visible target therefore
+shares a real path with a whole-directory Layout A link, while devenv still sees
+the per-file inputs that make direnv reload after an edit.
 
 Codex is the exception. Its 0.147.0 scanner ignores a real skill directory
 containing symlinked leaves but discovers a symlinked skill directory. Codex

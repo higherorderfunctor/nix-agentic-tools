@@ -7,11 +7,11 @@ applyTo: "lib/ai/hm-helpers.nix,lib/ai/mkSkillPackageModule.nix,packages/chatgpt
 
 ## ai.skills Fanout Pattern
 
-> **Last verified:** 2026-09-27 — every runtime's skills go through
+> **Last verified:** 2026-09-30 — every runtime's skills go through
 > `mkSkillFiles`; no runtime delegates them to a native `programs.<cli>.skills`
 > option, and the delivery layer has no method that could. Kimchi's Layout B
-> directory is backend-specific: Home Manager uses the user harness, while
-> devenv uses Kimchi's native project root.
+> directory is backend-specific, and recursive devenv leaves retain per-file
+> input contexts while targeting one shared store root.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -98,6 +98,20 @@ devenv and a `<configDir>/harness/skills/<name>` user path on Home Manager.
 A skill entry states `executable = null`, which reaches the sink as an absent
 attribute and leaves every file's mode alone. Stating a mode there would clear
 the executable bit on a script a skill ships.
+
+### Preserve source identity across layouts
+
+`lib/ai/formats.nix:walk` traverses the original directory but builds every
+devenv leaf target beneath one interpolated store root. Do not point each leaf
+at its separately interpolated Nix path: Kimchi/Pi discovers both Codex's Layout
+A directory link and Kimchi's Layout B leaf links, and it deduplicates them by
+real path rather than by file contents.
+
+Each emitted target also carries the separately interpolated leaf's string
+context. That context keeps devenv's per-file direnv inputs without changing the
+path the native symlink targets.
+`module-delivery-recursive-entry-walks-for-devenv` locks both properties and
+keeps standalone leaf identities as negative controls.
 
 ### Skill-package program gating
 

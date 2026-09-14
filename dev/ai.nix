@@ -333,14 +333,13 @@ in {
       # dirs (real reference files bundled inside each) as dev-stack-*.
       prefixDev pkgs.stacked-workflows-content.passthru.skills
       // {
-        # Dev skills (repo-local tooling, not published packages). Handed over
-        # as bare paths: `mkDevenvSkillEntries` (lib/ai/hm-helpers.nix) walks
-        # each directory with `readDir` and emits one `files.<path>.source`
-        # entry per leaf, for kind `regular` AND kind `symlink`. That is a
-        # per-file store realization, not a read — but granularity is what
-        # direnv keys on, so each leaf lands in `.devenv/input-paths.txt`
-        # individually, where a whole-directory store copy would register only
-        # the directory (mechanism in lib/traceSource.nix).
+        # Dev skills (repo-local tooling, not published packages). The delivery
+        # router walks each bare-path directory and emits one `files.*.source`
+        # target per regular or symlink leaf. Each target points beneath one
+        # directory store root, but retains the separately interpolated leaf's
+        # string context. That context keeps each leaf in
+        # `.devenv/input-paths.txt`; a directory context alone would not create
+        # usable direnv watches (mechanism in lib/traceSource.nix).
         #
         # Wrapping these in `lib/traceSource.nix` therefore cannot add a path:
         # the per-file set is a strict superset of what that wrapper's

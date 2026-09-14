@@ -1201,9 +1201,14 @@ in {
     );
 
     # One walk, two backends: Home Manager expands a directory source itself,
-    # the router expands it for devenv, and the leaves are the same either way.
+    # while the router expands it for devenv. Devenv's leaf targets remain
+    # beneath the same store root as Home Manager's tree, while their added
+    # per-file contexts retain the input granularity needed by direnv.
     module-delivery-recursive-entry-walks-for-devenv = mkTest "delivery-recursive-entry-walks-for-devenv" (
       let
+        sourceRoot = "${./fixtures/probe-skill}";
+        standaloneSkill = "${./fixtures/probe-skill/SKILL.md}";
+        standaloneNested = "${./fixtures/probe-skill/references/nested.md}";
         tree = {
           content.source = ./fixtures/probe-skill;
           # A tree of source files keeps its own modes; stating one here would
@@ -1219,6 +1224,8 @@ in {
         };
         hm = (evalHm config).config;
         devenv = (evalDevenv config).config;
+        skillSource = devenv.files.".kiro/tree/SKILL.md".source;
+        nestedSource = devenv.files.".kiro/tree/references/nested.md".source;
         notADirectory = builtins.tryEval (builtins.deepSeq
           (evalDevenv {
             ai.kiro = {
@@ -1237,9 +1244,12 @@ in {
           recursive = true;
           source = ./fixtures/probe-skill;
         }
-        && devenv.files.".kiro/tree/SKILL.md" == {source = ./fixtures/probe-skill/SKILL.md;}
-        && devenv.files.".kiro/tree/references/nested.md"
-        == {source = ./fixtures/probe-skill/references/nested.md;}
+        && skillSource == "${sourceRoot}/SKILL.md"
+        && nestedSource == "${sourceRoot}/references/nested.md"
+        && standaloneSkill != "${sourceRoot}/SKILL.md"
+        && standaloneNested != "${sourceRoot}/references/nested.md"
+        && builtins.hasAttr (builtins.unsafeDiscardStringContext standaloneSkill) (builtins.getContext skillSource)
+        && builtins.hasAttr (builtins.unsafeDiscardStringContext standaloneNested) (builtins.getContext nestedSource)
         && !(devenv.files ? ".kiro/tree")
         # `recursive` with a file source is a declaration error, not a file
         # whose leaves silently never appear.

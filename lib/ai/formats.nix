@@ -49,14 +49,25 @@
   # Nix path literals and absolute path STRINGS work — a skill that comes from
   # a package is `"${pkg}/share/skill"`, and treating that as a file writes the
   # path itself as the file's content.
+  #
+  # Traverse the original path but point every emitted leaf through one
+  # interpolated store root. The original leaf's string context stays attached:
+  # devenv therefore keeps its per-file input watches without making the native
+  # symlink target a distinct store object, which lets realpath-based consumers
+  # deduplicate Layout A and Layout B views of the same tree.
   walk = path: source: let
-    walkDir = prefix: directory:
+    walkDir = prefix: directory: storeDirectory:
       lib.concatMapAttrs (
         name: kind:
           if kind == "directory"
-          then walkDir "${prefix}/${name}" (directory + "/${name}")
+          then walkDir "${prefix}/${name}" (directory + "/${name}") "${storeDirectory}/${name}"
           else if kind == "regular" || kind == "symlink"
-          then {"${prefix}/${name}" = directory + "/${name}";}
+          then let
+            leaf = directory + "/${name}";
+            storeLeaf = "${storeDirectory}/${name}";
+          in {
+            "${prefix}/${name}" = builtins.appendContext storeLeaf (builtins.getContext "${leaf}");
+          }
           # Anything else — a socket, a device node — is not a file this layer
           # can deliver, and silently skipping it is what the helper it
           # replaced did.
@@ -65,7 +76,7 @@
       (builtins.readDir directory);
   in
     if (builtins.readFileType source) == "directory"
-    then walkDir path source
+    then walkDir path source "${source}"
     else
       throw ''
         ai delivery: "${path}" sets `recursive`, but its `content.source` is
