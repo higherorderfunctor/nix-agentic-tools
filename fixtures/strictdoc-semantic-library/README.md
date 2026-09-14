@@ -1,8 +1,9 @@
 # StrictDoc semantic-library fixture
 
-**Gate 1 review draft.** This is a small retained native-devenv consumer and a
-proposed behavior contract. Semantic rules are unimplemented, their outcomes
-await review, and no backend has been selected.
+**Gate 2 interface review.** Start with the
+[consumer walkthrough](contract/gate2/README.md) for inline grammar, policy,
+backend, and validation examples. The semantic interface remains proposed. This
+page describes the retained native-devenv fixture and its existing commands.
 
 From this directory, refresh the public toolchain and generate the grammar:
 

@@ -1,5 +1,26 @@
 # Review artifact provenance
 
+## Consumer walkthrough revision
+
+The 2026-09-14 review revision replaces the entry README with a self-contained
+consumer walkthrough. The original README from commit `46d20688` is preserved
+byte for byte as [recommendation.md](../recommendation.md). The freeze and
+publication records below describe that original review, not unchanged bytes for
+subsequently revised files. The [revision map](consumer-readme-publication.json)
+records these changes separately.
+
+The [normalized authoring probe](../normalized-authoring/README.md) verifies the
+existing grammar layer and identifies the missing Boolean document-field
+contract. The walkthrough adds no implemented policy API. An isolated author and
+[independent reviewer](consumer-readme-review.md) used the reviewed cases,
+proposed contracts, neutral fixture and explicit public interface findings. The
+coordinator alone read the old plan document supplied by the user and shared
+only source-verified interface findings. The
+[snippet checks](consumer-readme-checks.json) distinguish grammar evaluation and
+standalone Python/Rego execution from syntax checks on proposed Nix interfaces.
+
+## Original Gate 2 publication
+
 The research worker froze two evidence revisions. Version 2 explicitly corrects
 the selected Child traversal and protection controls, and verifies the combined
 runner. Its correction note identifies the differences from version 1.
