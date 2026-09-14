@@ -88,6 +88,7 @@
     pnpmPackages = [
       "context7-mcp"
       "effect-mcp"
+      "kimchi"
       "oxlint"
     ];
 

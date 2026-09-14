@@ -7,10 +7,9 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-08-16 — normalized context renders into
-> `ai.kimchi.files` before the generic backend sink, so the final
-> `harness/AGENTS.md` is replaceable or suppressible as one whole entry. Full
-> lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> **Last verified:** 2026-09-17 — the package builds from the release source
+> with pinned pnpm and Go dependencies; module delivery still uses the same
+> executable and asset layout.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -104,3 +103,20 @@ so the scoped-fragment transforms do not apply to it.
 `mkPrep` (top-level `let`) computes the backend-agnostic values (filtered
 settings, effective env, agency text, the wrapped package) once; the `hm` and
 `devenv` config closures each call it rather than duplicating the logic.
+
+## Source packaging
+
+The package builds upstream's Bun executable and its Go proxy helper from the
+same pinned release. `pnpmDeps` and `proxyHelper.goModules` have independent
+hashes pinned in `sources.json`. `ghArchiveUpdateScript` refreshes the source;
+`mkGoUpdateExtract` derives the new Go floor before rebuilding the helper vendor
+hash, then runs the shared pnpm hash fixer. The standalone dependency fixers
+also participate in input-bump repairs. The source checkout reports version
+`0.0.0`, so upstream's `set-version.js` runs before compiling and staging the
+resources.
+
+Upstream's `bin/` and `share/kimchi/` layout remains intact. Generic ELF
+rewriting and stripping are disabled to preserve Bun's compiled module graph.
+The install check requires the exact release version, a runnable helper, and the
+theme, export, and bundled-skill assets. Linux and Darwin builds run in CI. This
+packaging change does not alter discovery or configuration behavior.

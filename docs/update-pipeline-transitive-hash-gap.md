@@ -396,9 +396,9 @@ What the build actually catches, and what now happens:
   to eight weeks the upstream dep floors needed, invisibly.
 - **Mode D** — the build hits `ERR_PNPM_NO_OFFLINE_TARBALL` because the FOD
   output does not match. This one IS a hash we could not produce, so it still
-  holds back — provided a fixer exists for that hash kind. **It currently does
-  not for pnpmDeps or cargoDeps** — there is no `fixPnpmDepsHash` and no
-  `fixCargoHash`. See the KNOWN GAP comment on `fix_sidecar_hashes` in
+  holds back — provided a fixer exists for that package. Kimchi now declares
+  `fixPnpmDepsHash`; other pnpm packages still need owner wiring. No
+  `fixCargoHash` exists. See the KNOWN GAP comment on `fix_sidecar_hashes` in
   `dev/scripts/update-common.sh`, and GitHub issue #1570.
 - **Any future class of build-time failure** specific to the targeted package
   (test failures, missing native deps, etc.) — still caught for free, and still
