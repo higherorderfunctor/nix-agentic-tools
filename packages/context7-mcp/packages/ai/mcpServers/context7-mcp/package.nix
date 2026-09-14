@@ -14,17 +14,17 @@
   ourPkgs = pkgs;
   vu = packageLib;
 
-  rev = "6f42b66f3b6dee20ba870dd6f70f1b565eb62e6e";
+  rev = "b653c3a07d7936bdc4c23fc1c88903120e0ece77";
   src = ourPkgs.fetchFromGitHub {
     owner = "upstash";
     repo = "context7";
     inherit rev;
-    hash = "sha256-CnaFEEPHMmMaqXfD+hvo+0mGIj4jJM948pe+QUrGOyY=";
+    hash = "sha256-T0jxHt26GUm5oM3l8dPkw0FeQu0WBhxyz3xAj1XGD/8=";
   };
 in
   ourPkgs.context7-mcp.overrideAttrs (finalAttrs: _prev: let
     # upstream: readPackageJsonVersion @ packages/mcp/package.json
-    upstreamVersion = "4.1.0";
+    upstreamVersion = "4.1.1";
   in {
     version = vu.mkVersion {
       upstream = upstreamVersion;
