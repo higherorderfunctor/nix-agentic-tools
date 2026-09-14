@@ -526,8 +526,8 @@ verify_all_packages() {
 # BACK, parking every later nixpkgs update behind a hash a human has to
 # fix by hand.
 #
-# `passthru.fixVendorHash` / `passthru.fixNpmDepsHash` were exposed
-# standalone for precisely this, and until now had no caller at all.
+# Dependency fixers (`fixVendorHash`, `fixNpmDepsHash`, `fixPnpmDepsHash`)
+# expose this repair independently of version updates.
 #
 # The roster is DISCOVERED from the flake, never listed here: a hardcoded
 # list would silently stop covering the next absorbed Go package, and a
@@ -547,13 +547,14 @@ fix_sidecar_hashes() {
   #
   # Two separate shortfalls, and only the first is about missing fixers:
   #
-  #   1. NO FIXER EXISTS for pnpmDeps or cargoDeps. A nixpkgs bump that
-  #      invalidates either has nothing to re-derive it. The build then
+  #   1. Cargo dependencies and pnpm packages without a declared fixer
+  #      still lack automatic repair. Kimchi declares fixPnpmDepsHash;
+  #      other pnpm owners must opt into the same seam. The build then
   #      fails with every available hash-derivation step reporting success;
   #      the retry's fixed-output mismatch classification holds it back.
   #
   #   2. A FIXER EXISTS BUT IS NOT DISCOVERED. The expression below
-  #      collects `fixVendorHash` and `fixNpmDepsHash` only, so glab's
+  #      collects dependency fixers only, so glab's
   #      `passthru.fixSrcHash` has no caller at all — see the note on
   #      `mkGoUpdateExtract` in lib/packaging.nix, which also explains why
   #      that case presents as a CONFUSING `fixVendorHash` failure
@@ -576,8 +577,9 @@ fix_sidecar_hashes() {
       fixersOf = n:
         let p = builtins.getAttr n ps;
         in builtins.filter (x: x != null) [
-          (p.fixVendorHash or null)
           (p.fixNpmDepsHash or null)
+          (p.fixPnpmDepsHash or null)
+          (p.fixVendorHash or null)
         ];
     in builtins.concatMap fixersOf (builtins.attrNames ps)'
 

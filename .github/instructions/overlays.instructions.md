@@ -348,8 +348,8 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-09-12 — native owner recipes replace grouped overlay
-> barrels; pinned build identity and consumer guards are preserved.
+> **Last verified:** 2026-09-14 — Kimchi joins the release-derived Go-floor
+> update chain and declares a pnpm dependency-hash fixer.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -975,12 +975,14 @@ returns `ourGo` and the seam **silently does nothing**.
 
 So the floor is extracted from the pinned source's go.mod, by mechanism:
 
-- **Release mode (sidecar-versioned: `gh`, `glab`, `gluetun`, `oh-my-posh`,
-  `otel-tui`)** — `vu.mkGoFloorFix` runs as `extraExtract` and writes a
-  `goFloor` key into the sidecar. Correct home for it because the floor is a
-  function of the pinned version, so it changes only when the version does —
-  unlike `vendorHash`, which can be invalidated with no version bump and
-  therefore also needs a standalone `passthru` escape hatch.
+- **Release mode (sidecar-versioned: `gh`, `glab`, `gluetun`, `kimchi`,
+  `oh-my-posh`, `otel-tui`)** — `vu.mkGoFloorFix` runs as `extraExtract` and
+  writes a `goFloor` key into the sidecar. Correct home for it because the floor
+  is a function of the pinned version, so it changes only when the version does
+  — unlike `vendorHash`, which can be invalidated with no version bump and
+  therefore also needs a standalone `passthru` escape hatch. Kimchi chains its
+  pnpm dependency fixer after the Go stages; input-bump repair also discovers
+  its `passthru.fixPnpmDepsHash`.
 - **Trunk mode (rev-pinned: `github-mcp`, `mcp-language-server`)** — a literal
   in the overlay. These have no sidecar and are bumped by `nix-update` (`git`
   targets in owner `registry.nix`), so there is no repo-owned update script to

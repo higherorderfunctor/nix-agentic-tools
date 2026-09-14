@@ -1,8 +1,4 @@
-{
-  facetOwner,
-  repoPath,
-  ...
-}: {
+{facetOwner, ...}: {
   checks.cacheHitParity.kimchi = {consumerPath = ["ai" "kimchi"];};
   documentation.aiCliDescriptions.kimchi = "Kimchi CLI";
   # kimchi: two-tree factory (config.json + harness/), runtime SOPS
@@ -19,5 +15,7 @@
       }
     ];
   };
-  update.targets.kimchi = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/ai/kimchi/package.nix)];};
+  update.targets.kimchi = {
+    flags = ["--use-update-script"];
+  };
 }
