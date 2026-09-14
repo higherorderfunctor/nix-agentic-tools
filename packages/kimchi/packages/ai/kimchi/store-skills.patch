@@ -1,0 +1,92 @@
+--- a/src/shared/skill-discovery/resolve-skill-roots.ts
++++ b/src/shared/skill-discovery/resolve-skill-roots.ts
+@@ -1,5 +1,5 @@
+-import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs"
+-import { homedir, tmpdir } from "node:os"
++import { existsSync, readdirSync, statSync } from "node:fs"
++import { homedir } from "node:os"
+ import { dirname, isAbsolute, join, resolve } from "node:path"
+ import { fileURLToPath } from "node:url"
+ import { resolveAuxiliaryFilesDir } from "../../auxiliary-files/resolver.js"
+@@ -107,7 +107,7 @@
+  * - The harness dir is excluded because pi loads it natively via
+  *   includeDefaults (agentDir/skills) — contributing it again is redundant.
+  * - Bundled skills already present in a stronger path (harness, config, or
+- *   project) are silently skipped via a filtered temp copy, so no collision
++ *   project) are silently skipped; remaining bundled directories are used directly, so no collision
+  *   warnings are emitted. New bundled skills not present elsewhere are still
+  *   contributed.
+  *
+@@ -165,10 +165,10 @@
+ 		if (!existsSync(normalized)) continue
+ 
+ 		if (root.kind === "bundled") {
+-			const filtered = filterBundledSkills(normalized, skillNamesFromStronger)
+-			if (filtered) {
+-				seen.add(filtered)
+-				paths.push(filtered)
++			for (const skillPath of filterBundledSkills(normalized, skillNamesFromStronger)) {
++				if (seen.has(skillPath)) continue
++				seen.add(skillPath)
++				paths.push(skillPath)
+ 			}
+ 			continue
+ 		}
+@@ -192,7 +192,13 @@
+ function listSkillNames(dir: string): string[] {
+ 	try {
+ 		return readdirSync(dir, { withFileTypes: true })
+-			.filter((e) => e.isDirectory())
++			.filter((e) => {
++				try {
++					return e.isDirectory() || (e.isSymbolicLink() && statSync(join(dir, e.name)).isDirectory())
++				} catch {
++					return false
++				}
++			})
+ 			.map((e) => e.name)
+ 	} catch {
+ 		return []
+@@ -205,17 +211,10 @@
+ 	}
+ }
+ 
+-function filterBundledSkills(bundledDir: string, existingSkillNames: Set<string>): string | undefined {
+-	const bundledSkills = listSkillNames(bundledDir)
+-	if (bundledSkills.length === 0) return undefined
+-	const newSkills = bundledSkills.filter((name) => !existingSkillNames.has(name))
+-	if (newSkills.length === 0) return undefined
+-	const tempDir = mkdtempSync(join(tmpdir(), "kimchi-bundled-skills-"))
+-	process.once("exit", () => {
+-		rmSync(tempDir, { recursive: true, force: true })
+-	})
+-	for (const name of newSkills) {
+-		cpSync(join(bundledDir, name), join(tempDir, name), { recursive: true })
+-	}
+-	return tempDir
+-}
++function filterBundledSkills(bundledDir: string, existingSkillNames: Set<string>): string[] {
++	// Pi accepts individual skill directories and resolves supporting files relative
++	// to SKILL.md. Keep immutable package assets at their original paths.
++	return listSkillNames(bundledDir)
++		.filter((name) => !existingSkillNames.has(name))
++		.map((name) => join(bundledDir, name))
++}
+--- a/src/extensions/prompt-construction/prompt-enrichment.test.ts
++++ b/src/extensions/prompt-construction/prompt-enrichment.test.ts
+@@ -384,12 +384,12 @@
+ 			| undefined
+ 
+ 		// Bundled skills not already in the harness dir are contributed via a
+-		// filtered temp copy (e.g. dap-debugging). Skills already in the harness
++		// direct directory paths (e.g. dap-debugging). Skills already in the harness
+ 		// dir (e.g. improve if previously deployed) are silently skipped.
+ 		const paths = result?.skillPaths ?? []
+ 		expect(paths.length).toBeGreaterThan(0)
+-		// At least one contributed path should contain a bundled skill dir.
+-		expect(paths.some((p) => existsSync(join(p, "dap-debugging")) || existsSync(join(p, "improve")))).toBe(true)
++		// At least one contributed path is a bundled skill directory.
++		expect(paths.some((p) => p.startsWith(bundledDir) && existsSync(join(p, "SKILL.md")))).toBe(true)
+ 	})
+ 
+ 	it("contributes configured native skill paths through resources_discover", async () => {

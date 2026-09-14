@@ -120,3 +120,19 @@ rewriting and stripping are disabled to preserve Bun's compiled module graph.
 The install check requires the exact release version, a runnable helper, and the
 theme, export, and bundled-skill assets. Linux and Darwin builds run in CI. This
 packaging change does not alter discovery or configuration behavior.
+
+## Immutable skill discovery
+
+The Nix patch returns individual bundled skill directories directly to Pi's
+resource inventory. Pi supports those paths and resolves supporting files
+relative to SKILL.md, so no temporary copy or exit cleanup is needed. Upstream's
+copy preserved the store's 0555 directory modes, causing EACCES during recursive
+cleanup. Filtering still omits bundled names supplied by stronger roots and now
+recognizes symlinked skill directories, including broken-link tolerance.
+
+Cross-harness duplicate discovery is a separate issue. Codex owns project
+`.agents/skills`; Kimchi also scans it through Pi. The devenv skill helper now
+interpolates the whole skill root once and points every leaf inside it. Thus a
+Codex directory link and a Kimchi leaf link resolve to the same store file,
+which Pi already deduplicates. The helper still traverses the original source
+path for devenv invalidation and preserves the composable per-file layout.
