@@ -24,6 +24,23 @@ rather than prohibited; Python, Node with Bun preferred, and Rust remain
 eligible. Workers do not publish externally; the coordinator handles the already
 authorized review branch.
 
+## Additional user requirements for design review
+
+- Make the review README self-contained with inline examples that explain the
+  recommended declaration and its behavior; linked supporting files do not
+  substitute for that walkthrough.
+- Preserve the existing normalized upper DSL as the authoring surface. Resolve
+  the Boolean document-field declaration, encode/decode and metadata contract at
+  design review, including the proposed all-String snapshot representation.
+  Grammar booleans for `required` and `isComposite` do not satisfy that
+  requirement. Do not invent an API while recording the gap; use the
+  [public-surface evidence](normalized-authoring/README.md).
+- Include runtime dependencies only for enabled backends, and verify the
+  resulting dependency closures during implementation and qualification.
+- Retain the Cozo experiments for consideration as an optional adapter. The user
+  is open to additional backends; this does not adopt Cozo or change the current
+  backend recommendation.
+
 ## Current review package
 
 - Preserve the ideal interface proposal before comparing it with tooling
