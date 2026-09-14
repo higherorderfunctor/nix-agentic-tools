@@ -1,8 +1,7 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-09-12 — owner registries supply update targets and
-> source paths; the resolver scans owner recipes. Retired prototype pointers are
-> replaced by the settled ownership reference.
+> **Last verified:** 2026-09-13 — local Ninja and CI matrix workers share the
+> same complete-branch preparation scripts and owner registry.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -13,9 +12,30 @@
 >
 > Full lineage: `git show ed5898b1:dev/fragments/pipeline/update-pipeline.md`.
 
-### Execution model: ninja DAG
+### Execution models: local Ninja and CI matrix
 
-The update pipeline uses ninja as a DAG executor. A nix expression
+Local updates use Ninja as a DAG executor. CI uses one independent runner per
+input or package, discovered from the same lock and owner registry; see
+`ci-update-workflow.md` for publication, receipts, and checkout isolation.
+`dependsOn` remains local scheduling policy: predecessor branches do not feed
+changes into another target's worktree. CI package workers omit only the final
+informational build; hashes, extracted files, and formatting remain preparation
+work, while native PR CI validates the completed branch. Local input
+verification reduces evaluator workers when the core-derived count would violate
+the 60% memory budget. If no viable evaluator can start, that setup failure
+holds the input back instead of being classified as an executed, ordinary red
+build. Before each verifier attempt, the updater enumerates the package
+universe. The pinned producer must then report exactly one evaluation per
+attribute, and every successful evaluation needs cached/local or build evidence;
+aliases may share one build through a common derivation path. Empty, partial, or
+malformed coverage is incomplete verification and holds the input back after the
+retry. The retry also distinguishes Nix's fixed-output hash mismatch from a
+compiler or test failure. Missing cargoDeps/pnpmDeps fixers can still require
+human repair (issue #1570), but a known unresolved hash now holds the input
+branch back; a fully covered update with an ordinary build failure remains
+eligible for a red PR.
+
+The local pipeline uses the Ninja DAG. A nix expression
 (`config/generate-update-ninja.nix`) reads `flake.lock` and
 `config.update.targets` (the `.#updateTargets` flake output) to emit
 `.update.ninja` with dependency edges (e.g., agnix and git-absorb depend on
@@ -62,11 +82,11 @@ on exit (`teardown_worktree`) and any registration stranded by a crash or wiped
 temp is reaped by `git worktree prune` in `update-init.sh`, so nothing persists
 between runs.
 
-After each target finishes its update + build verification in the worktree, it
-leaves the resulting commits on its named branch and emits a single report line.
-The pipeline never merges those branches itself; the CI workflow's PR-creation
-step pushes each `update/<name>` branch that has commits ahead of the base SHA
-and opens (or updates) one PR per dependency.
+After each target finishes preparation (and any enabled verification), it leaves
+the resulting commits on its named branch and emits a single report line. The
+pipeline never merges those branches itself; the CI workflow's PR-creation step
+pushes each `update/<name>` branch that has commits ahead of the base SHA and
+opens (or updates) one PR per dependency.
 
 ### Rev bump flow (main-tracking packages)
 
@@ -89,7 +109,10 @@ receives the repo URL as a trailing argument:
    to what the resolver would print, so the two paths can never diverge. `sed`
    then replaces the old `rev` in that resolved file.
 3. `nix flake prefetch github:<owner>/<repo>/<new-rev>` fetches the new source
-   hash.
+   hash. A failed, empty, malformed response or one without a hash holds the
+   target back before `nix-update` can mistake a source mismatch for a
+   dependency hash. Recipes with source-version markers also require the
+   returned source tree; every marker is resolved from that same prefetch.
 4. `sed` replaces the old `hash` in the overlay `.nix` file.
 5. `git commit` creates a commit with the rev + src hash change.
 6. `nix-update --version skip` runs to update dependency hashes (cargo, pnpm,
@@ -140,10 +163,10 @@ registry every package contributes a row to. It replaced the flat, top-level
   ; ownership validation rejects competing package keys before priorities can
   hide them. `excludePatterns` remains available to the completeness check
   through the same result.
-- **Consumers** — `config/generate-update-ninja.nix` reads `updateTargets` for
-  the ninja DAG (flags space-joined, git, and `dependsOn` → `update-<dep>`
-  edges); `update-pkg.sh` reads `.#updateTargets.<name>.file` for the rev-bump
-  target.
+- **Consumers** — `update-matrix.py` reads `updateTargets` for the CI matrix.
+  `config/generate-update-ninja.nix` reads the same registry for the ninja DAG
+  (flags space-joined, git, and `dependsOn` → `update-<dep>` edges);
+  `update-pkg.sh` reads `.#updateTargets.<name>.file` for the rev-bump target.
 - **`checks/packaging/update-targets-parity.nix`** — the permanent bidirectional
   CI gate (and sole update-target check; the former
   `overlay-target-resolution.nix` folded into it). Packages → targets: every
@@ -183,7 +206,10 @@ One rule: **hold back only when the PR cannot be written.**
 | Failure                             | PR writable?                                  | Outcome                                        |
 | ----------------------------------- | --------------------------------------------- | ---------------------------------------------- |
 | `nix flake update` fails            | no — no lock to commit                        | `HELD BACK`                                    |
+| source prefetch is incomplete       | no — source hash/markers are unresolved       | `HELD BACK`                                    |
 | a dependency hash cannot be derived | no — the PR needs a value that does not exist | `HELD BACK`                                    |
+| verifier setup cannot start         | no — validation never ran                     | `HELD BACK`                                    |
+| verifier result coverage incomplete | no — validation may have terminated early     | `HELD BACK`                                    |
 | formatter errors                    | no — tree left non-canonical                  | `HELD BACK`                                    |
 | `git add` / `git commit` fails      | no                                            | `HELD BACK`                                    |
 | everything written, build fails     | **yes**                                       | `UPDATED` — red PR, `::warning::` in the sweep |

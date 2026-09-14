@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # dev/scripts/update-common.sh — shared functions for update pipeline.
-# Sourced by update-input.sh, update-pkg.sh, update-combo.sh.
+# Sourced by update-init.sh, update-input.sh, and update-pkg.sh.
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
@@ -269,7 +269,10 @@ export NAT_UPDATE_JOBS
 # `failure`.
 #
 # So bound the PRODUCT. Both knobs are derived from the machine, never
-# hardcoded, so a larger runner automatically uses its headroom:
+# hardcoded, so a larger runner automatically uses its headroom. When the
+# core-derived worker count would leave less than 1 GiB per evaluator, reduce
+# workers before refusing the target; the target fan-out and memory ceiling
+# remain fixed:
 #
 #   * never more than ONE evaluator per core, across all concurrent
 #     invocations — `jobs * floor(cores/jobs) <= cores`, which holds only
@@ -289,28 +292,50 @@ export NAT_UPDATE_JOBS
 # variant yields 119% of RAM — the exact failure class this exists to
 # prevent.
 nfb_eval_flags() {
-  local workers mem_mib mem_per_worker cores="$NAT_UPDATE_CORES"
+  local workers max_memory_workers mem_mib mem_per_worker cores="$NAT_UPDATE_CORES"
 
   [ "$cores" -gt 0 ] || cores="$NAT_UPDATE_JOBS"
   workers=$((cores / NAT_UPDATE_JOBS))
   [ "$workers" -ge 1 ] || workers=1
-
-  printf -- '--eval-workers %s' "$workers"
+  # Isolated CI targets can lower evaluator concurrency without constraining
+  # compiler cores. Overrides only reduce the existing safe resource bounds.
+  if [ -n "${NAT_UPDATE_EVAL_WORKERS:-}" ]; then
+    [[ $NAT_UPDATE_EVAL_WORKERS =~ ^[1-9][0-9]*$ ]] || return 1
+    [ "$workers" -le "$NAT_UPDATE_EVAL_WORKERS" ] || workers="$NAT_UPDATE_EVAL_WORKERS"
+  fi
 
   # /proc/meminfo is Linux-only. The update job runs on ubuntu-latest,
   # but these scripts are runnable by hand on darwin, so degrade to
   # nix-fast-build's own default rather than emit a bogus ceiling.
   mem_mib=$(awk '/^MemTotal:/ {printf "%d", $2 / 1024; exit}' /proc/meminfo 2>/dev/null) || mem_mib=0
   if [ "${mem_mib:-0}" -gt 0 ]; then
+    max_memory_workers=$(((mem_mib * 60 / 100) / (NAT_UPDATE_JOBS * 1024)))
+    [ "$max_memory_workers" -ge 1 ] || {
+      echo "Evaluator budget is below 1024 MiB per worker; reduce NAT_UPDATE_JOBS." >&2
+      return 1
+    }
+    [ "$workers" -le "$max_memory_workers" ] || workers="$max_memory_workers"
     mem_per_worker=$(((mem_mib * 60 / 100) / (NAT_UPDATE_JOBS * workers)))
-    # Floor: below ~1 GiB a worker thrashes on restart instead of
-    # evaluating, trading an OOM for a livelock.
-    [ "$mem_per_worker" -ge 1024 ] || mem_per_worker=1024
+    # Below ~1 GiB a worker thrashes on restart. The memory worker cap above
+    # normally prevents this; retain the refusal as an arithmetic guard.
+    if [ "$mem_per_worker" -lt 1024 ]; then
+      echo "Evaluator budget is below 1024 MiB per worker; reduce NAT_UPDATE_JOBS or NAT_UPDATE_EVAL_WORKERS." >&2
+      return 1
+    fi
+    if [ -n "${NAT_UPDATE_EVAL_MAX_MEMORY:-}" ]; then
+      [[ $NAT_UPDATE_EVAL_MAX_MEMORY =~ ^[1-9][0-9]*$ ]] || return 1
+      [ "$NAT_UPDATE_EVAL_MAX_MEMORY" -ge 1024 ] || return 1
+      [ "$mem_per_worker" -le "$NAT_UPDATE_EVAL_MAX_MEMORY" ] || mem_per_worker="$NAT_UPDATE_EVAL_MAX_MEMORY"
+    fi
+  fi
+  printf -- '--eval-workers %s' "$workers"
+  if [ "${mem_per_worker:-0}" -gt 0 ]; then
     printf -- ' --eval-max-memory-size %s' "$mem_per_worker"
   fi
 }
 
-# nix-fast-build wrapper that gates on four independent signals.
+# nix-fast-build wrapper that gates on independent completion and failure
+# signals.
 #
 # Upstream bug: nix-fast-build's async_main `finally: stack.aclose()` can
 # swallow non-zero exit on the build-failure path, so per-build failures
@@ -319,12 +344,14 @@ nfb_eval_flags() {
 #
 # Defense in depth — fail if ANY of these tripwires fire:
 #   1. nix-fast-build's own exit code is non-zero
-#   2. The JSON result file shows any `success: false` (or is empty/missing)
-#   3. nix-fast-build's stderr contains
+#   2. The JSON result file omits any pre-enumerated package evaluation or a
+#      successful evaluation has neither cached/local nor build evidence
+#   3. The JSON result file shows any `success: false`
+#   4. nix-fast-build's stderr contains
 #      `ERROR:nix_fast_build:BUILD: N successes, M failures` with M > 0 —
 #      the consistent signal observed in CI run 26473689694 when (1) and
 #      (2) both missed.
-#   4. nix-fast-build's stderr contains
+#   5. nix-fast-build's stderr contains
 #      `ERROR:nix_fast_build:EVAL: N successes, M failures` with M > 0 —
 #      eval-time throws are invisible to gates 1-3.
 #
@@ -337,14 +364,28 @@ nfb_eval_flags() {
 # `dump_json`) is:
 #   {"results": [{"attr": "...", "success": bool, "error": "..." | null, ...}]}
 #
-# Usage: run_nfb_build nix run --inputs-from . nix-fast-build -- ...
+# Usage: run_nfb_build expected-packages.json nix run --inputs-from . nix-fast-build -- ...
 run_nfb_build() {
-  local rf stderr_log exit_code=0 failed=0
-  mkdir -p "$UPDATE_LOGS_DIR"
-  rf=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.json nfb-result-XXXXXX) || return 1
+  local expected_packages=$1 rf stderr_log exit_code=0 failed=0 incomplete=0 unresolved_hash=0
+  shift
+  # Return 2 when verification could not start and 3 when Nix reports a
+  # fixed-output mismatch. Return 4 when the verifier ran but its result does
+  # not cover the pre-enumerated package universe. Callers must distinguish all
+  # three from return 1, which means a completed verifier found an ordinary red
+  # package set.
+  local -a eval_flags
+  local eval_options
+  if ! eval_options=$(nfb_eval_flags); then
+    log_failure "Invalid evaluator resource limits"
+    return 2
+  fi
+  read -r -a eval_flags <<<"$eval_options"
+
+  mkdir -p "$UPDATE_LOGS_DIR" || return 2
+  rf=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.json nfb-result-XXXXXX) || return 2
   stderr_log=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.log nfb-stderr-XXXXXX) || {
     rm -f "$rf"
-    return 1
+    return 2
   }
 
   # Buffered stderr capture (not `2> >(tee ...)`): bash process
@@ -361,9 +402,6 @@ run_nfb_build() {
   # otherwise multiply into a memory overcommit that kills the runner.
   # Word-splitting is intended and safe: the function emits only flag
   # names and integers it computed itself.
-  local -a eval_flags
-  read -r -a eval_flags <<<"$(nfb_eval_flags)"
-
   "$@" "${eval_flags[@]}" --result-file "$rf" --result-format json \
     2>"$stderr_log" || exit_code=$?
   cat "$stderr_log" >&2
@@ -374,20 +412,29 @@ run_nfb_build() {
     failed=1
   fi
 
-  # Gate 2: JSON result file. Empty/missing file is also a failure (we
-  # asked for one; not getting one means the build verification was
-  # incomplete and we should not trust it).
+  # Gate 2: JSON coverage. Enumeration happened before the producer started,
+  # so an empty or partial result cannot masquerade as a completed red build.
+  # Successful evaluations need cached/local evidence or a BUILD row; aliases
+  # may share one BUILD row through their common drvPath.
   if [ ! -s "$rf" ]; then
     log_failure "nix-fast-build wrote no result file (expected $rf)"
-    failed=1
-  elif ! jq -e '.results | all(.success)' "$rf" >/dev/null 2>&1; then
+    incomplete=1
+  elif ! python3 "$(dirname "${BASH_SOURCE[0]}")/ci-packages.py" \
+    update-verify "$expected_packages" "$rf"; then
+    log_failure "nix-fast-build result coverage is incomplete"
+    incomplete=1
+  fi
+
+  # Gate 3: completed result rows may still report an ordinary build or eval
+  # failure. Those remain publishable-red after the caller's repair pass.
+  if [ -s "$rf" ] && ! jq -e '.results | all(.success)' "$rf" >/dev/null 2>&1; then
     log_failure "nix-fast-build result file shows per-build failures:"
     jq -r '.results[] | select(.success | not) | "    \(.attr): \(.error // "<no error message>")"' \
       "$rf" >&2 || true
     failed=1
   fi
 
-  # Gate 3: stderr fallback. Observed in CI run 26473689694 — the JSON
+  # Gate 4: stderr fallback. Observed in CI run 26473689694 — the JSON
   # gate missed a copilot-cli build failure but this stderr line was
   # present. nix-fast-build emits it consistently when builds fail, even
   # when its own exit code and JSON output are misleading.
@@ -397,7 +444,7 @@ run_nfb_build() {
     failed=1
   fi
 
-  # Gate 4: evaluation failures. nix-fast-build reports eval-time errors on a
+  # Gate 5: evaluation failures. nix-fast-build reports eval-time errors on a
   # separate line from build failures. An attribute that throws during
   # evaluation (e.g. an input bump that breaks a package's eval) never becomes
   # a build, so it produces no `success: false` result entry (gate 2) and does
@@ -412,8 +459,29 @@ run_nfb_build() {
     failed=1
   fi
 
-  if [ "$failed" -eq 1 ]; then
+  # A fixed-output mismatch is a distinct preparation result. It is the Nix
+  # producer's direct statement that a recorded hash is stale, including the
+  # cargoDeps/pnpmDeps gap whose packages expose no automatic fixer. For BUILD
+  # failures, pinned nix-fast-build's JSON says only "build exited with N";
+  # its renderer forwards the detailed Nix message to the captured stderr, so
+  # that grep is load-bearing. The JSON arm covers detailed EVAL errors.
+  # Preserve the ordinary failure status for compiler and test failures, but
+  # return 3 when verifier evidence proves required update content is missing.
+  if grep -q "hash mismatch in fixed-output derivation" "$stderr_log" ||
+    { [ -s "$rf" ] && jq -e '
+        [.results[]? | (.error // "")
+         | select(test("hash mismatch in fixed-output derivation"; "i"))]
+        | length > 0
+      ' "$rf" >/dev/null 2>&1; }; then
+    log_failure "Package verification found an unresolved fixed-output hash"
+    unresolved_hash=1
+    failed=1
+  fi
+
+  if [ "$failed" -eq 1 ] || [ "$incomplete" -eq 1 ]; then
     log_failure "(forensic data preserved: $rf, $stderr_log)"
+    [ "$incomplete" -eq 0 ] || return 4
+    [ "$unresolved_hash" -eq 0 ] || return 3
     return 1
   fi
 
@@ -425,9 +493,19 @@ run_nfb_build() {
 # update-input.sh's initial attempt and repair retry must invoke it identically;
 # when copies drifted they silently verified different things.
 verify_all_packages() {
-  run_nfb_build nix run --inputs-from . nix-fast-build -- \
+  local system expected_packages verify_rc=0
+  system=$(nix eval --impure --raw --expr 'builtins.currentSystem') || return 2
+  mkdir -p "$UPDATE_LOGS_DIR" || return 2
+  expected_packages=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.json nfb-packages-XXXXXX) || return 2
+  if ! nix eval --json ".#packages.$system" --apply builtins.attrNames >"$expected_packages"; then
+    log_failure "Could not enumerate packages before verification"
+    return 2
+  fi
+  run_nfb_build "$expected_packages" nix run --inputs-from . nix-fast-build -- \
     --skip-cached --no-nom --no-link \
-    --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
+    --flake ".#packages.$system" || verify_rc=$?
+  [ "$verify_rc" -ne 0 ] || rm -f "$expected_packages"
+  return "$verify_rc"
 }
 
 # Re-derive every sidecar-recorded fixed-output hash whose package
@@ -461,19 +539,18 @@ fix_sidecar_hashes() {
 
   # ── KNOWN GAP: this roster is narrower than the fixers that exist ─────
   #
-  # IF A NIXPKGS BUMP BREAKS A HASH AND THE PR OPENED RED INSTEAD OF
-  # BEING HELD BACK, THIS IS WHY. Read this before re-deriving it.
-  # Tracked as GitHub issue #1570. Grep `fixPnpmDepsHash` or
-  # `fixSrcHash` to find every place the gap is written down.
+  # IF A NIXPKGS BUMP BREAKS A HASH, this is why the automated repair may
+  # leave it unresolved. The retry now recognizes Nix's fixed-output mismatch
+  # and holds the input back, so a known stale hash no longer opens a PR.
+  # Tracked as GitHub issue #1570. Grep `fixPnpmDepsHash` or `fixSrcHash` to
+  # find every place the missing-fixer gap is written down.
   #
   # Two separate shortfalls, and only the first is about missing fixers:
   #
   #   1. NO FIXER EXISTS for pnpmDeps or cargoDeps. A nixpkgs bump that
   #      invalidates either has nothing to re-derive it. The build then
-  #      fails with every hash-derivation step reporting success, so
-  #      update-input.sh classifies it as "well-formed but does not
-  #      build" and opens a red PR — when the true cause is a hash we
-  #      could not produce, which the rule says should hold back.
+  #      fails with every available hash-derivation step reporting success;
+  #      the retry's fixed-output mismatch classification holds it back.
   #
   #   2. A FIXER EXISTS BUT IS NOT DISCOVERED. The expression below
   #      collects `fixVendorHash` and `fixNpmDepsHash` only, so glab's
@@ -483,11 +560,9 @@ fix_sidecar_hashes() {
   #      ("goModules build failed without a '-go-modules' hash
   #      mismatch") rather than as a src problem.
   #
-  # Shortfall 1 is a MISCLASSIFICATION, not a regression: before the
-  # hold-back split there was no hold-back on the input path at all, so
-  # these already surfaced as red PRs. Deferred deliberately rather than
-  # designed upfront — adding a fixer means per-package `extraExtract`
-  # plumbing, and we would rather see a real failure shape it.
+  # Shortfall 1 remains a missing automatic repair, not a publication gap:
+  # adding a fixer means per-package `extraExtract` plumbing and is still
+  # deferred, while the input branch waits for a later sweep or human repair.
   #
   # Shortfall 2 is a one-line addition to the list below and is only
   # unfixed because nobody has verified glab's fixer against a live

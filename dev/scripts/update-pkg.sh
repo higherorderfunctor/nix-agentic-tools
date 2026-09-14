@@ -70,15 +70,25 @@ if [ -n "$git_url" ]; then
         storePath=""
         if [ -n "$old_hash" ]; then
           flake_ref="github:$(echo "$git_url" | sed 's|\.git$||' | grep -oP 'github\.com/\K.*')/$new_rev"
-          prefetch_json=$(nix flake prefetch --json "$flake_ref" 2>/dev/null || true)
-          if [ -n "$prefetch_json" ]; then
-            new_hash=$(echo "$prefetch_json" | jq -r '.hash // empty')
-            storePath=$(echo "$prefetch_json" | jq -r '.storePath // empty')
-            if [ -n "$new_hash" ]; then
-              sed -i "s|$old_hash|$new_hash|" "$target_file"
-              log_info "Hash updated in $(basename "$target_file")"
-            fi
+          prefetch_rc=0
+          prefetch_json=$(nix flake prefetch --json "$flake_ref" 2>/dev/null) || prefetch_rc=$?
+          if [ "$prefetch_rc" -ne 0 ] ||
+            ! jq -e 'type == "object" and (.hash | type == "string" and test("^sha256-[A-Za-z0-9+/]{43}=$"))' \
+              <<<"$prefetch_json" >/dev/null 2>&1; then
+            git -C "$wt" reset --hard "$base_head"
+            report_held_back "$name" "source prefetch did not produce a valid hash"
+            exit 0
           fi
+          new_hash=$(jq -r .hash <<<"$prefetch_json")
+          storePath=$(jq -r '.storePath // empty' <<<"$prefetch_json")
+          if grep -qE '^[[:space:]]*# upstream: ' "$target_file" &&
+            { [ -z "$storePath" ] || [ ! -d "$storePath" ]; }; then
+            git -C "$wt" reset --hard "$base_head"
+            report_held_back "$name" "source prefetch did not produce the marker source tree"
+            exit 0
+          fi
+          sed -i "s|$old_hash|$new_hash|" "$target_file"
+          log_info "Hash updated in $(basename "$target_file")"
         fi
         log_info "Rev: ${old_rev:0:7} -> ${new_rev:0:7} in $(basename "$target_file")"
 
@@ -348,7 +358,11 @@ set +e
   # This USED to be the last command in the subshell, which is the only
   # reason a failing build held the package back: errexit is disabled for
   # an `if` condition, so position was doing the work, not intent.
-  if ! run_build nix build ".#$name" --no-link --log-format bar-with-logs; then
+  # CI publishes after preparation; native PR shards perform this validation.
+  # Local Ninja retains its informational build and all resource safeguards.
+  if [ "${NAT_UPDATE_VERIFY_PACKAGES:-1}" = "0" ]; then
+    log_info "Prepared update — native PR CI will verify the build"
+  elif ! run_build nix build ".#$name" --no-link --log-format bar-with-logs; then
     log_info "Build failed — opening the PR; branch CI is the gate"
     echo "::warning::${name}: build verification failed, PR opens red"
   fi

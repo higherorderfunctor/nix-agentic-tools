@@ -16,6 +16,10 @@ inputs:
       the step). "false" → exit nonzero so the step fails the job.
     required: false
     default: "true"
+  path:
+    description: Repository checkout relative to the workspace.
+    required: false
+    default: "."
   retries:
     description: Maximum warm attempts per system before giving up.
     required: false
@@ -31,6 +35,7 @@ runs:
   using: composite
   steps:
     - shell: bash
+      working-directory: ${{ github.workspace }}/${{ inputs.path }}
       env:
         BEST_EFFORT: ${{ inputs.best-effort }}
         RETRIES: ${{ inputs.retries }}
