@@ -13,7 +13,11 @@ inputs are the [reviewed requirements](reviewed-requirements.md) and
 
 **Authoring and options.** The proposed `policy` library, abbreviated `p`, is
 separate from `grammar.dsl`, abbreviated `g`. All builders are pure Nix-to-data
-functions; runtime acquisition never happens during Nix evaluation.
+functions; runtime acquisition never happens during Nix evaluation. The proposed
+`native =` input accepts existing normalized grammar elements, including values
+authored with `g.el`; it is not a faithful-constructor or validation bypass. The
+current DSL already preserves this normalized authoring layer. See the
+[public-surface controls](normalized-authoring/README.md).
 
 | Proposed signature                                                           | Result and required meaning                                                                                                                                                         |
 | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -377,7 +381,12 @@ capabilities merely by naming them:
   clarification: one FOO/BAZ candidate with duplicate UID, missing endpoint and
   valid wrong-type alternatives, plus the exact extracted snapshots/diagnostics.
   Add documents and native forms losslessly; unsupported forms must remain
-  visible.
+  visible. The snapshot and projected-record sketches above currently represent
+  all document fields as `[String]`. Resolve their relationship to typed Boolean
+  document fields, including declaration, encode/decode and metadata
+  preservation, before claiming the user-requested normalized field support.
+  Current booleans for grammar `required`/`isComposite` do not settle this
+  contract; no new constructor is established here.
 - **C2 — before Gate 3 implementation:** freeze runner request/result schemas,
   helper target lowering, assignment and capability negotiation. Show one
   shipped target entry and an independent process entry consuming the same

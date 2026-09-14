@@ -1,0 +1,81 @@
+{
+  "date": "2026-09-14",
+  "files": {
+    "README.md": {
+      "byteIdentical": false,
+      "original": "evidence.md",
+      "originalSha256": "0506f6c13afa47532c9c76b72c3335e723ef53272e80d601250eac0903503ff6",
+      "publishedSha256": "fb6a549c0fde9d9762dfb7fb18897abda4a4aea6225baabd4fad45b78259e870"
+    },
+    "comparison.json": {
+      "byteIdentical": true,
+      "original": "comparison.json",
+      "originalSha256": "6ee0cc551022fead6048a5e585c2b124b0e9bf7af2c7d5223582afd11e429013",
+      "parsedJsonEqual": true,
+      "publishedSha256": "6ee0cc551022fead6048a5e585c2b124b0e9bf7af2c7d5223582afd11e429013"
+    },
+    "gate1.json": {
+      "byteIdentical": true,
+      "original": "gate1.json",
+      "originalSha256": "0d5fc312248a16c696be75d34cc20941627472e8ab996507b9ee1578a0f70c4d",
+      "parsedJsonEqual": true,
+      "publishedSha256": "0d5fc312248a16c696be75d34cc20941627472e8ab996507b9ee1578a0f70c4d"
+    },
+    "probe.nix": {
+      "byteIdentical": false,
+      "original": "probe.nix",
+      "originalSha256": "1bdb046a911605b7ef66ea85e974dd407a2b24b5b470e13b902a0e058f1a188d",
+      "publishedSha256": "0a15ce6fe8ab201a2b71dbd25debd4f1d2b618c8684f771533d9e857f767243d"
+    },
+    "rendered.sgra": {
+      "byteIdentical": true,
+      "original": "rendered.sgra",
+      "originalSha256": "060c0c69bf1e52d835a06f9fe791c96cf64c30a60d70231e961aaaf9cbc38bf9",
+      "publishedSha256": "060c0c69bf1e52d835a06f9fe791c96cf64c30a60d70231e961aaaf9cbc38bf9"
+    },
+    "trial.json": {
+      "byteIdentical": true,
+      "original": "trial.json",
+      "originalSha256": "6fce833954b2a638c0350e8816de3cdd42d450463557c28a5c9bb68e7e6a8294",
+      "parsedJsonEqual": true,
+      "publishedSha256": "6fce833954b2a638c0350e8816de3cdd42d450463557c28a5c9bb68e7e6a8294"
+    },
+    "verification.txt": {
+      "byteIdentical": true,
+      "original": "verification.txt",
+      "originalSha256": "42fc25c85fbe701c7624e022c4030b2006e9d958375da558f5ab6b452643635b",
+      "publishedSha256": "42fc25c85fbe701c7624e022c4030b2006e9d958375da558f5ab6b452643635b"
+    }
+  },
+  "historicalArtifactReplay": false,
+  "originalDirectory": "/tmp/strictdoc-normalized-surface-20260914",
+  "replay": {
+    "builds": false,
+    "command": [
+      "nix",
+      "eval",
+      "--offline",
+      "--impure",
+      "--json",
+      "--expr",
+      "(import ./fixtures/strictdoc-semantic-library/contract/gate2/normalized-authoring/probe.nix { libPath = /nix/store/j2r11kxv91yl5xqppy3vy84klwxjbz1i-source/lib; })"
+    ],
+    "controlsPassed": 14,
+    "controlsTotal": 14,
+    "defaultGrammarPathResolved": true,
+    "excludedComparisonKeys": ["source"],
+    "exitCode": 0,
+    "lockChanges": false,
+    "network": false,
+    "nixpkgsQualification": "Existing local library; not the absent filtered artifact original dependency pin.",
+    "originalResultsEqualExcludingSource": {
+      "gate1.json": true,
+      "trial.json": true
+    },
+    "renderedMatchesOriginal": true,
+    "source": {
+      "grammar": "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/packages/strictdoc-grammar/lib",
+      "nixpkgsLib": "/nix/store/j2r11kxv91yl5xqppy3vy84klwxjbz1i-source/lib"
+    }
+  }
+}

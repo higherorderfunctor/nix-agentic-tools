@@ -1,0 +1,19 @@
+[GRAMMAR]
+ELEMENTS:
+- TAG: PROBE
+  PROPERTIES:
+    IS_COMPOSITE: True
+    PREFIX: P-
+    VIEW_STYLE: Table
+  FIELDS:
+  - TITLE: FLAG
+    HUMAN_TITLE: Display flag
+    TYPE: String
+    REQUIRED: True
+  - TITLE: STATUS
+    TYPE: SingleChoice(Draft, "Ready (reviewed)")
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: Refines
+    REVERSE_ROLE: Refined_By
