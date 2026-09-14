@@ -1,7 +1,7 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-09-13 — local Ninja and CI matrix workers share the
-> same complete-branch preparation scripts and owner registry.
+> **Last verified:** 2026-09-14 — verifier status precedence retains hash repair
+> when incomplete coverage accompanies a fixed-output mismatch.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -34,6 +34,12 @@ compiler or test failure. Missing cargoDeps/pnpmDeps fixers can still require
 human repair (issue #1570), but a known unresolved hash now holds the input
 branch back; a fully covered update with an ordinary build failure remains
 eligible for a red PR.
+
+Verifier failures can overlap. `run_nfb_build` returns incomplete coverage (4)
+before an observed fixed-output mismatch (3), so code 4 does not mean there is
+nothing to repair. Keep the input worker's repair attempt before re-verifying;
+skipping repair solely for code 4 can strand a repairable update. Setup failure
+(2) still exits before repair because verification could not start.
 
 The local pipeline uses the Ninja DAG. A nix expression
 (`config/generate-update-ninja.nix`) reads `flake.lock` and
