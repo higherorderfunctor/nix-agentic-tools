@@ -206,6 +206,12 @@ repository; stable pnpm detection must use `latest-<N>`, not prerelease
 `next-<N>` tags. A local patch against published build output requires human
 re-authoring and must not quietly become a swept hash-only update.
 
+For receipt-based diagnosis, retry evidence, and the measured rollout baseline,
+read the
+[operations guide](https://github.com/higherorderfunctor/nix-agentic-tools/blob/main/docs/update-ci-operations.md).
+A green sweep may contain held-back targets; read receipt statuses before
+claiming every update was prepared successfully.
+
 The Python fixture suites exercise package coverage, completion reports, cleanup
 receipts, and PR publication against disposable local Git repositories. They run
 inside the required `test` job without evaluating or building Nix themselves.
