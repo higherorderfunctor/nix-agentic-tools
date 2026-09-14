@@ -16,12 +16,12 @@
   vu = packageLib;
   tsgolint = import ../../../../../tsgolint/packages/ai/devTools/tsgolint/package.nix {inherit inputs packageLib pkgs repoPath;};
 
-  rev = "4d5c812d6b16c23fa71d106cf87f7f20ddee69b1";
+  rev = "8ca76da7147c747421d6043fc13717dc5b667002";
   unpatchedSrc = ourPkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-QId99ZZTBMjlPIyUcyCUtr+lWxIc6M4GfJdfixGMKMU=";
+    hash = "sha256-HBVxvrJPJIwMvP+rLwZEat3APByLIUXNgO53bSQcV9g=";
   };
   # @napi-rs/cli's filesystem reconciliation probes a process incarnation with
   # execFile(/bin/ps) on Darwin. Node can reject that spawn synchronously under
@@ -110,7 +110,7 @@ in
       inherit (finalAttrs) pname version src;
       pnpm = ourPkgs.pnpm_11;
       fetcherVersion = 4;
-      hash = "sha256-bIbBs6+QYoJsRqCV2q7enpw5UIw1ugzRJff4OUOGQ+s=";
+      hash = "sha256-sLUhngSprYpzrvFkO7nQbek+nG/TfP0BAnCv0mP1w5A=";
     };
     # Oxc declares pnpm@12.3.2 in `packageManager`, and we DELIBERATELY stay on
     # pnpm 11. nixpkgs' fetcher interpolates `--registry="$NIX_NPM_REGISTRY"`
