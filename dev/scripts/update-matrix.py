@@ -36,9 +36,10 @@ def report_status(report, name):
 
 
 # A HELD BACK target preserves its branch and leaves the sweep GREEN on
-# purpose: the PR could not be WRITTEN, so branch CI has nothing to judge and
-# preserving the old PR is correct. What is not correct is that the condition
-# then repeats every six hours with nobody told.
+# purpose: no new PR or branch update could be WRITTEN for the attempt, so
+# branch CI has nothing to judge for it, and preserving whatever PR already
+# exists is correct. What is not correct is that the condition then repeats
+# every six hours with nobody told.
 #
 # `docs/update-ci-operations.md` has instructed a human to go read receipt
 # statuses since 2026-09-14 (commit b8653e57). Two days later oxlint was held
@@ -125,37 +126,47 @@ def gh(*args, required=True):
     return result.stdout
 
 
-def previous_sweeps(repo, current_run_id, limit=6):
-    """Completed Update runs, newest first, excluding this one.
+def previous_sweep(repo, current_run_id):
+    """The scheduled Update run immediately before this one, or None.
 
-    `status=completed` already excludes the in-flight sweep that is asking, but
-    a re-run keeps the same id, so filter explicitly. Conclusion is deliberately
-    NOT filtered: once this gate fires, the failing sweep is the predecessor the
-    next one must compare against, and skipping it would reset the count every
-    other sweep and never escalate twice.
+    Only SCHEDULED runs count. A workflow_dispatch sweep may carry an explicit
+    target subset, so its receipts cover only those targets; treating one as the
+    predecessor would read "this target was not in that sweep" as "not held
+    back" and silently reset the count.
+
+    Conclusion is deliberately NOT filtered. Once this gate fires the failing
+    sweep is the predecessor the next one must compare against, and skipping it
+    would reset the count every other sweep and never escalate twice running.
     """
-    listing = gh("api", f"repos/{repo}/actions/workflows/update.yml/runs?status=completed&per_page={limit}")
-    return [run for run in json.loads(listing)["workflow_runs"] if str(run["id"]) != str(current_run_id)]
+    listing = gh("api", f"repos/{repo}/actions/workflows/update.yml/runs?status=completed&event=schedule&per_page=5")
+    earlier = [run for run in json.loads(listing)["workflow_runs"] if str(run["id"]) != str(current_run_id)]
+    return earlier[0] if earlier else None
 
 
-def previous_status(repo, runs, name, workspace):
-    """`name`'s status in the newest earlier sweep that has a receipt for it.
+def previous_status(repo, run, name, workspace):
+    """`name`'s status in that one sweep: (status, run_url), status None if unreadable.
 
-    Returns (status, run_url), or (None, None) when no sweep in range carries
-    one. Walking past a sweep with no receipt matters: a target added, renamed,
-    or filtered out by a dispatched subset leaves gaps, and reading a gap as
-    "not held back" would reset the count.
+    ONLY the immediate predecessor is consulted. An earlier version walked back
+    to the newest sweep that happened to carry a receipt, which would let a gap
+    turn two NON-consecutive hold-backs into an escalation -- precisely what the
+    two-sweep threshold exists to prevent.
     """
-    for run in runs:
-        destination = workspace / f"previous-{run['id']}-{name}"
-        if gh("run", "download", str(run["id"]), "--repo", repo, "--name", f"update-receipt-{name}", "--dir", str(destination), required=False) is None:
-            continue
-        try:
-            receipt = json.loads((destination / "update-receipt.json").read_text())
-        except (OSError, ValueError):
-            continue
-        return receipt.get("status"), run["html_url"]
-    return None, None
+    if run is None:
+        return None, None
+    destination = workspace / f"previous-{run['id']}-{name}"
+    if gh("run", "download", str(run["id"]), "--repo", repo, "--name", f"update-receipt-{name}", "--dir", str(destination), required=False) is None:
+        return None, run["html_url"]
+    try:
+        receipt = json.loads((destination / "update-receipt.json").read_text())
+    except (OSError, ValueError):
+        return None, run["html_url"]
+    # Well-formed JSON of the wrong SHAPE is unreadable, not authoritative: a
+    # bare `[]` would raise AttributeError on .get and abort the cleanup job
+    # rather than decline to escalate. The name must match too, so a
+    # mis-attached artifact cannot answer for a different target.
+    if not isinstance(receipt, dict) or receipt.get("name") != name:
+        return None, run["html_url"]
+    return receipt.get("status"), run["html_url"]
 
 
 def preparation_reason(repo, run_id, name, workspace):
@@ -229,16 +240,18 @@ def main():
             print("No target was held back this sweep.")
             return
         # Only pay for the API when something is actually held back.
-        runs = previous_sweeps(repo, run_id)
-        seen = {name: previous_status(repo, runs, name, temp) for name in held}
+        previous = previous_sweep(repo, run_id)
+        seen = {name: previous_status(repo, previous, name, temp) for name in held}
         repeated, fresh = escalation(held, {name: status for name, (status, _) in seen.items()})
         for name in fresh:
             print(f"::warning title=Update target held back::{held[name]} | first sweep in a row; a repeat next sweep fails this job.")
         for name in repeated:
             lines = [
                 held[name],
-                f"Held back on {HOLD_BACK_SWEEPS_BEFORE_ESCALATION} consecutive sweeps. No PR exists for branch CI to judge,",
-                "so this cannot clear itself -- a person has to unblock preparation.",
+                f"Held back on {HOLD_BACK_SWEEPS_BEFORE_ESCALATION} consecutive sweeps. Preparation failed, so no",
+                "new PR or branch update was written for this attempt and branch CI has nothing to",
+                "judge for it -- any update PR still open is an EARLIER proposal, not this one.",
+                "It cannot clear itself; a person has to unblock preparation.",
                 f"Previous sweep: {seen[name][1]}",
             ]
             reason = preparation_reason(repo, run_id, name, temp)

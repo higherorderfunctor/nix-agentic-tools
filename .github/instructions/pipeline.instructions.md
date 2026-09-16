@@ -7,8 +7,10 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-09-14 — newer Update sweeps cancel older sweeps; main
-> CI remains independent and cancelled sweeps skip stale PR cleanup.
+> **Last verified:** 2026-09-16 — a target held back on two consecutive
+> scheduled sweeps now fails the cleanup job; one hold-back still warns on a
+> green sweep. Newer Update sweeps cancel older sweeps; main CI remains
+> independent and cancelled sweeps skip stale PR cleanup.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -219,10 +221,12 @@ read the
 A green sweep may contain held-back targets, but only once each. The first sweep
 that holds a target back warns and stays green; the
 `Escalate repeated hold-backs` step fails `cleanup` when the same target is held
-back on two consecutive sweeps. That threshold exists because a hold-back means
-no PR was written, so branch CI has nothing to judge and the condition cannot
-clear itself. Read receipt statuses before claiming every update was prepared
-successfully.
+back on two consecutive SCHEDULED sweeps. That threshold exists because a
+hold-back means no new PR or branch update was written for the attempt, so
+branch CI has nothing to judge for it and the condition cannot clear itself. Any
+update PR still open on a held-back target is an EARLIER proposal that
+publication preserved, not the blocked one. Read receipt statuses before
+claiming every update was prepared successfully.
 
 The Python fixture suites exercise package coverage, completion reports, cleanup
 receipts, and PR publication against disposable local Git repositories. They run

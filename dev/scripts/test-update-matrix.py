@@ -1168,37 +1168,54 @@ class HoldBackEscalationTest(unittest.TestCase):
     def test_reason_is_absent_rather_than_wrong_without_builder_output(self):
         self.assertIsNone(matrix.held_back_reason("HELD BACK: oxlint\nnothing quoted here\n"))
 
-    def test_run_listing_keeps_a_failed_predecessor(self):
+    def test_predecessor_is_the_immediate_scheduled_sweep_whatever_its_conclusion(self):
         # Once this gate fires the failing sweep IS the predecessor the next one
         # must compare against. Filtering on conclusion would reset the count
-        # every other sweep and never escalate twice in a row.
+        # every other sweep and never escalate twice in a row. Scheduled-only
+        # matters separately: a dispatched sweep may carry a target SUBSET, and
+        # its missing receipt would read as "not held back".
         runs = {"workflow_runs": [
             {"id": 3, "conclusion": "failure", "html_url": "u3"},
             {"id": 2, "conclusion": "success", "html_url": "u2"},
         ]}
-        with mock.patch.object(matrix, "gh", return_value=json.dumps(runs)):
-            self.assertEqual([r["id"] for r in matrix.previous_sweeps("o/r", "9")], [3, 2])
-            self.assertEqual([r["id"] for r in matrix.previous_sweeps("o/r", "3")], [2])
+        captured = []
 
-    def test_previous_status_walks_past_sweeps_with_no_receipt(self):
-        # A target added, renamed, or filtered out by a dispatched subset leaves
-        # gaps. Reading a gap as "not held back" would reset the count.
-        runs = [{"id": 5, "html_url": "u5"}, {"id": 4, "html_url": "u4"}]
+        def fake_gh(*args, required=True):
+            captured.append(args)
+            return json.dumps(runs)
+
+        with mock.patch.object(matrix, "gh", side_effect=fake_gh):
+            self.assertEqual(matrix.previous_sweep("o/r", "9")["id"], 3)
+            self.assertEqual(matrix.previous_sweep("o/r", "3")["id"], 2)
+        self.assertIn("event=schedule", captured[0][1])
+
+    def test_an_unreadable_immediate_predecessor_yields_no_status(self):
+        # Walking back to an older sweep that happens to carry a receipt would
+        # let a gap turn two NON-consecutive hold-backs into an escalation,
+        # which is what the two-sweep threshold exists to prevent.
+        run = {"id": 4, "html_url": "u4"}
         with tempfile.TemporaryDirectory() as workspace:
-            def fake_gh(*args, required=True):
-                arguments = list(args)
-                run_id = arguments[2]
-                destination = Path(arguments[arguments.index("--dir") + 1])
-                if run_id == "5":
-                    return None
-                destination.mkdir(parents=True, exist_ok=True)
-                (destination / "update-receipt.json").write_text(json.dumps(self.receipt("oxlint", "HELD BACK")))
-                return ""
+            def serve(payload):
+                def fake_gh(*args, required=True):
+                    arguments = list(args)
+                    destination = Path(arguments[arguments.index("--dir") + 1])
+                    destination.mkdir(parents=True, exist_ok=True)
+                    (destination / "update-receipt.json").write_text(payload)
+                    return ""
+                return fake_gh
 
-            with mock.patch.object(matrix, "gh", side_effect=fake_gh):
-                self.assertEqual(matrix.previous_status("o/r", runs, "oxlint", Path(workspace)), ("HELD BACK", "u4"))
+            with mock.patch.object(matrix, "gh", side_effect=serve(json.dumps(self.receipt("oxlint", "HELD BACK")))):
+                self.assertEqual(matrix.previous_status("o/r", run, "oxlint", Path(workspace)), ("HELD BACK", "u4"))
+            # Download failed, malformed JSON, valid JSON of the wrong shape, and
+            # a receipt belonging to a DIFFERENT target are all "unreadable" --
+            # never "not held back", and never an AttributeError that would
+            # abort the cleanup job.
             with mock.patch.object(matrix, "gh", return_value=None):
-                self.assertEqual(matrix.previous_status("o/r", runs, "oxlint", Path(workspace)), (None, None))
+                self.assertEqual(matrix.previous_status("o/r", run, "oxlint", Path(workspace)), (None, "u4"))
+            for payload in ("{not json", "[]", "null", json.dumps(self.receipt("beads", "HELD BACK"))):
+                with mock.patch.object(matrix, "gh", side_effect=serve(payload)):
+                    self.assertEqual(matrix.previous_status("o/r", run, "oxlint", Path(workspace)), (None, "u4"), payload)
+            self.assertEqual(matrix.previous_status("o/r", None, "oxlint", Path(workspace)), (None, None))
 
     def escalate(self, receipts, previous_status_value):
         """Run the escalate command against fixture receipts; return (rc, stdout)."""
@@ -1215,7 +1232,7 @@ class HoldBackEscalationTest(unittest.TestCase):
                 "import importlib.util, json, sys\n"
                 f"spec = importlib.util.spec_from_file_location('m', {str(SCRIPTS / 'update-matrix.py')!r})\n"
                 "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
-                f"m.previous_sweeps = lambda *a, **k: [{{'id': 8, 'html_url': 'prev-url'}}]\n"
+                f"m.previous_sweep = lambda *a, **k: {{'id': 8, 'html_url': 'prev-url'}}\n"
                 f"m.previous_status = lambda *a, **k: ({previous_status_value!r}, 'prev-url')\n"
                 "m.preparation_reason = lambda *a, **k: 'the guard said bump napi.version'\n"
                 "sys.argv = ['update-matrix.py', 'escalate']\n"
@@ -1230,6 +1247,10 @@ class HoldBackEscalationTest(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn("::error title=Update target held back twice::", output)
         self.assertIn("prev-url", output)
+        # An older update PR may still be open on a held-back target, so the
+        # annotation must not claim none exists.
+        self.assertNotIn("No PR exists", output)
+        self.assertIn("EARLIER proposal", output)
         # The operator judges; the annotation carries what they need to judge on.
         self.assertIn("bump napi.version", output)
 
