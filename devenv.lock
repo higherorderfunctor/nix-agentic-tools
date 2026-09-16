@@ -804,17 +804,17 @@
         "uv2nix": "uv2nix"
       },
       "locked": {
-        "lastModified": 1789483316,
-        "narHash": "sha256-3D3wSfmFDNs/i2irIIydhWznNdxzvlz4lJVzaspU91k=",
+        "lastModified": 1789518320,
+        "narHash": "sha256-IoKRPlXh0RrrNt1XINRI74Eh+ShuFImrqHKNBgJjXYg=",
         "owner": "oraios",
         "repo": "serena",
-        "rev": "704e8c3d1929bdd74bf0c8eee1596aeddf03fdb2",
+        "rev": "1bbe53546124c00e4238972f1599a91fbf8c6539",
         "type": "github"
       },
       "original": {
         "owner": "oraios",
         "repo": "serena",
-        "rev": "704e8c3d1929bdd74bf0c8eee1596aeddf03fdb2",
+        "rev": "1bbe53546124c00e4238972f1599a91fbf8c6539",
         "type": "github"
       }
     },
