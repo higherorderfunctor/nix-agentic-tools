@@ -78,7 +78,7 @@ Counting additions: evaluation under the new stub.
 Setup commands run from the directory containing inputs and out5.
 $ python3 - <<'PY'
 from pathlib import Path
-p.write_text(p.read_text().replace('../../../../../packages/strictdoc-grammar/lib/dsl.nix', '/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/packages/strictdoc-grammar/lib/dsl.nix'))
+p.write_text(p.read_text().replace('../../../../../packages/strictdoc-grammar/lib/dsl.nix', 'the repository copy of packages/strictdoc-grammar/lib/dsl.nix'))
 PY
 Only the temporary stub has an absolute grammar import.
 
@@ -138,7 +138,7 @@ All five comparisons preserve both operands for count/number, number/count, coun
 Temporary evaluation copies removed after this run.
 
 Counting authoring fix: evaluation using a temporary copy of inputs/current6/dsl.nix.
-Only the temporary copy has its grammar import replaced with /home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/packages/strictdoc-grammar/lib/dsl.nix.
+Only the temporary copy has its grammar import replaced with the repository copy of packages/strictdoc-grammar/lib/dsl.nix.
 The evaluated counting.nix is byte-identical to counting.nix; its ./dsl.nix import is unchanged.
 Evaluation working directory: .eval-v_2f_zgr (removed after evaluation).
 
