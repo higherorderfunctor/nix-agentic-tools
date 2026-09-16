@@ -33,6 +33,12 @@ let
     _op = op;
     inherit args;
   };
+  count = collection: sym "count" [collection];
+  lt = left: right: sym "lt" [left right];
+  lte = left: right: sym "lte" [left right];
+  gt = left: right: sym "gt" [left right];
+  gte = left: right: sym "gte" [left right];
+  eq = left: right: sym "eq" [left right];
   check = name: expr: {inherit name expr;};
   on = subject: rule: {
     _on = true;
@@ -343,14 +349,16 @@ let
     };
 in {
   inherit el field rel model normalize check on parentOf childOf fieldOf;
+  inherit count lt lte gt gte eq;
   contribute = name: subject: checks: {inherit name subject checks;};
   record = bind: {
     _op = "record";
     inherit bind;
   };
   isNodeType = node: element: sym "isNodeType" [node element];
-  atMost = n: collection: sym "atMost" [n collection];
-  exactly = n: collection: sym "exactly" [n collection];
+  atMost = n: c: lte (count c) n;
+  atLeast = n: c: gte (count c) n;
+  exactly = n: c: eq (count c) n;
   only = collection: let
     singleton = sym "only" [collection];
   in
