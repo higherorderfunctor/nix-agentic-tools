@@ -209,8 +209,13 @@ re-authoring and must not quietly become a swept hash-only update.
 For receipt-based diagnosis, retry evidence, and the measured rollout baseline,
 read the
 [operations guide](https://github.com/higherorderfunctor/nix-agentic-tools/blob/main/docs/update-ci-operations.md).
-A green sweep may contain held-back targets; read receipt statuses before
-claiming every update was prepared successfully.
+A green sweep may contain held-back targets, but only once each. The first sweep
+that holds a target back warns and stays green; the
+`Escalate repeated hold-backs` step fails `cleanup` when the same target is held
+back on two consecutive sweeps. That threshold exists because a hold-back means
+no PR was written, so branch CI has nothing to judge and the condition cannot
+clear itself. Read receipt statuses before claiming every update was prepared
+successfully.
 
 The Python fixture suites exercise package coverage, completion reports, cleanup
 receipts, and PR publication against disposable local Git repositories. They run

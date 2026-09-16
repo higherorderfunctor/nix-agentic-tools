@@ -204,6 +204,12 @@ jobs:
       ${{ !cancelled() && needs.discover.result == 'success' && !inputs.targets
       }}
     runs-on: ubuntu-latest
+    # Reading the PREVIOUS sweep's receipt artifact is what makes a repeated
+    # hold-back distinguishable from a first one. A job-level block REPLACES the
+    # workflow default rather than extending it, so contents is restated.
+    permissions:
+      actions: read
+      contents: read
     timeout-minutes: 15
     env:
       UPDATE_BASE_SHA: ${{ needs.discover.outputs.base }}
@@ -241,6 +247,23 @@ jobs:
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           bash "$GITHUB_WORKSPACE/automation/dev/scripts/update-cleanup.sh"
+      # A HELD BACK target leaves the sweep green by design: no PR was written,
+      # so branch CI has nothing to judge. That is correct and it is also how a
+      # blocked target stayed invisible for three sweeps on 2026-09-16. This
+      # step fails the sweep once a target has been held back TWICE running.
+      #
+      # Placement after `Close stale dependency PRs` is load-bearing: the
+      # completion sentinel and the cleanup script have both already run, so a
+      # failure here cannot disable stale-PR cleanup repo-wide the way one
+      # raised earlier in this job would. It uses the default workflow token,
+      # not the App token above -- it only reads its own runs' artifacts.
+      - name: Escalate repeated hold-backs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" escalate
   annotations:
     needs: discover
     runs-on: ubuntu-latest

@@ -1127,5 +1127,134 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
         self.assertIn("build verification failed, PR opens red", result.stdout)
 
 
+class HoldBackEscalationTest(unittest.TestCase):
+    """A held-back target leaves the sweep green; only a REPEAT may fail it."""
+
+    def receipt(self, name, status, detail=None):
+        return {"base": "b", "detail": detail or f"{status}: {name}", "name": name, "status": status, "touched": []}
+
+    def test_repeat_escalates_while_a_first_offense_only_warns(self):
+        held = {"oxlint": "HELD BACK: oxlint (nix-update...)", "beads": "HELD BACK: beads"}
+        repeated, fresh = matrix.escalation(held, {"beads": "UPDATED", "oxlint": "HELD BACK"})
+        self.assertEqual(repeated, ["oxlint"])
+        self.assertEqual(fresh, ["beads"])
+
+    def test_unreadable_previous_sweep_never_escalates(self):
+        # A first-ever hold-back and one whose predecessor aged out must not be
+        # indistinguishable from a repeat. Erring toward silence here only
+        # restores today's behavior; erring the other way pages someone for a
+        # transient upstream blip.
+        for previous in ({}, {"oxlint": None}, {"oxlint": "NO UPDATES"}):
+            repeated, fresh = matrix.escalation({"oxlint": "HELD BACK: oxlint"}, previous)
+            self.assertEqual((repeated, fresh), ([], ["oxlint"]), previous)
+
+    def test_reason_takes_the_newest_builder_block_and_stays_bounded(self):
+        # The plain tail of a preparation log is useless: it ends on the generic
+        # completion line, well after the sentence naming the blocker.
+        log = "\n".join([
+            "       > a stale earlier block",
+            "error: Cannot build '/nix/store/...-source-patched.drv'.",
+            "       Last 8 log lines:",
+            *[f"       > filler {index}" for index in range(20)],
+            "       > oxlint: catalog no longer pins @napi-rs/cli at 3.9.1",
+            "HELD BACK: oxlint (nix-update, formatter or commit failed)",
+        ])
+        reason = matrix.held_back_reason(log)
+        self.assertIn("catalog no longer pins", reason)
+        self.assertNotIn("a stale earlier block", reason)
+        self.assertNotIn("HELD BACK", reason)
+        self.assertEqual(len(reason.splitlines()), matrix.REASON_MAX_LINES)
+
+    def test_reason_is_absent_rather_than_wrong_without_builder_output(self):
+        self.assertIsNone(matrix.held_back_reason("HELD BACK: oxlint\nnothing quoted here\n"))
+
+    def test_run_listing_keeps_a_failed_predecessor(self):
+        # Once this gate fires the failing sweep IS the predecessor the next one
+        # must compare against. Filtering on conclusion would reset the count
+        # every other sweep and never escalate twice in a row.
+        runs = {"workflow_runs": [
+            {"id": 3, "conclusion": "failure", "html_url": "u3"},
+            {"id": 2, "conclusion": "success", "html_url": "u2"},
+        ]}
+        with mock.patch.object(matrix, "gh", return_value=json.dumps(runs)):
+            self.assertEqual([r["id"] for r in matrix.previous_sweeps("o/r", "9")], [3, 2])
+            self.assertEqual([r["id"] for r in matrix.previous_sweeps("o/r", "3")], [2])
+
+    def test_previous_status_walks_past_sweeps_with_no_receipt(self):
+        # A target added, renamed, or filtered out by a dispatched subset leaves
+        # gaps. Reading a gap as "not held back" would reset the count.
+        runs = [{"id": 5, "html_url": "u5"}, {"id": 4, "html_url": "u4"}]
+        with tempfile.TemporaryDirectory() as workspace:
+            def fake_gh(*args, required=True):
+                arguments = list(args)
+                run_id = arguments[2]
+                destination = Path(arguments[arguments.index("--dir") + 1])
+                if run_id == "5":
+                    return None
+                destination.mkdir(parents=True, exist_ok=True)
+                (destination / "update-receipt.json").write_text(json.dumps(self.receipt("oxlint", "HELD BACK")))
+                return ""
+
+            with mock.patch.object(matrix, "gh", side_effect=fake_gh):
+                self.assertEqual(matrix.previous_status("o/r", runs, "oxlint", Path(workspace)), ("HELD BACK", "u4"))
+            with mock.patch.object(matrix, "gh", return_value=None):
+                self.assertEqual(matrix.previous_status("o/r", runs, "oxlint", Path(workspace)), (None, None))
+
+    def escalate(self, receipts, previous_status_value):
+        """Run the escalate command against fixture receipts; return (rc, stdout)."""
+        with tempfile.TemporaryDirectory() as root:
+            source, temp = Path(root) / "source", Path(root) / "temp"
+            (source / "receipts").mkdir(parents=True)
+            temp.mkdir()
+            for receipt in receipts:
+                folder = source / "receipts" / f"update-receipt-{receipt['name']}"
+                folder.mkdir()
+                (folder / "update-receipt.json").write_text(json.dumps(receipt))
+            environment = dict(os.environ, GITHUB_REPOSITORY="o/r", GITHUB_RUN_ID="9", RUNNER_TEMP=str(temp))
+            script = (
+                "import importlib.util, json, sys\n"
+                f"spec = importlib.util.spec_from_file_location('m', {str(SCRIPTS / 'update-matrix.py')!r})\n"
+                "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
+                f"m.previous_sweeps = lambda *a, **k: [{{'id': 8, 'html_url': 'prev-url'}}]\n"
+                f"m.previous_status = lambda *a, **k: ({previous_status_value!r}, 'prev-url')\n"
+                "m.preparation_reason = lambda *a, **k: 'the guard said bump napi.version'\n"
+                "sys.argv = ['update-matrix.py', 'escalate']\n"
+                "m.main()\n"
+            )
+            result = subprocess.run([os.sys.executable, "-c", script], cwd=source, env=environment, capture_output=True, text=True)
+            return result.returncode, result.stdout + result.stderr
+
+    def test_escalate_fails_the_sweep_only_on_a_repeat(self):
+        held = self.receipt("oxlint", "HELD BACK", "HELD BACK: oxlint (nix-update, formatter or commit failed)")
+        code, output = self.escalate([held], "HELD BACK")
+        self.assertEqual(code, 1, output)
+        self.assertIn("::error title=Update target held back twice::", output)
+        self.assertIn("prev-url", output)
+        # The operator judges; the annotation carries what they need to judge on.
+        self.assertIn("bump napi.version", output)
+
+        code, output = self.escalate([held], "UPDATED")
+        self.assertEqual(code, 0, output)
+        self.assertIn("::warning title=Update target held back::", output)
+        self.assertNotIn("::error", output)
+
+    def test_escalate_is_silent_and_cheap_when_nothing_is_held_back(self):
+        code, output = self.escalate([self.receipt("beads", "UPDATED")], "HELD BACK")
+        self.assertEqual(code, 0, output)
+        self.assertNotIn("::error", output)
+        self.assertNotIn("::warning", output)
+
+    def test_escalation_runs_after_stale_pr_cleanup_and_may_read_prior_runs(self):
+        workflow = WORKFLOW.read_text()
+        cleanup = workflow.split("\n  cleanup:\n", 1)[1].split("\n  annotations:", 1)[0]
+        # Reading a PREVIOUS sweep's receipt artifact needs actions: read, and a
+        # job-level block replaces the workflow default rather than extending it.
+        self.assertIn("actions: read", cleanup)
+        self.assertIn("contents: read", cleanup)
+        # Ordering is load-bearing: failing BEFORE the cleanup script would skip
+        # stale-PR cleanup repo-wide.
+        self.assertLess(cleanup.index("update-cleanup.sh"), cleanup.index('update-matrix.py" escalate'))
+
+
 if __name__ == "__main__":
     unittest.main()
