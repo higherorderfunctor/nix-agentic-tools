@@ -807,8 +807,29 @@ in {
           control-search \
           "$TMPDIR/workspace" \
           >"$TMPDIR/acp.json"
-        touch "$out"
+        # Keep the driver's record, do not discard it. Each agent's result
+        # carries a `teardown` object saying whether the harness had to SIGKILL
+        # the child and how long it waited. Nix prints no log for a build that
+        # SUCCEEDS, so a child that quietly stops exiting cleanly would leave no
+        # trace anyone reads -- the teardown branch is a pass by design, and a
+        # pass with an unread log is indistinguishable from a healthy one.
+        cp "$TMPDIR/acp.json" "$out"
       '';
+
+    # The check above SIGKILLs a child that outlives its post-stdin-EOF budget
+    # and then reads its exit status. Nothing exercised those branches, so a
+    # harness kill was reported as a product crash for five weeks. The real
+    # `kiro-cli-chat` cannot be asked to hang, to panic, or to take a
+    # third-party signal, so the contract is proved against a fake server that
+    # can -- including that an autonomous non-zero exit still FAILS, which is
+    # the assertion the fix had to keep.
+    module-semble-kiro-acp-teardown = pkgs.runCommandLocal "module-test-semble-kiro-acp-teardown" {nativeBuildInputs = [pkgs.python3];} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      python3 ${./teardown-contract.py} ${./semble-kiro-acp.py} ${./fake-acp.py}
+      touch "$out"
+    '';
 
     module-semble-package-override-and-named-kiro-rule = mkTest "semble-package-override-and-named-kiro-rule" (
       let
