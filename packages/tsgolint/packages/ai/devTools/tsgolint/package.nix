@@ -10,12 +10,12 @@
   ourPkgs = pkgs;
   vu = packageLib;
 
-  rev = "8debfb82f52e5ac2ac80e8a368f2e2201c93c548";
+  rev = "e112d42895366d7e74a8b2b776f22ac79a572120";
   src = ourPkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "tsgolint";
     inherit rev;
-    hash = "sha256-B0tHuuRYJCylLdV1p8u86/K/1YBVyMCpHSYgZrT2Mh0=";
+    hash = "sha256-txsICSg1a7vwnP0ITH2oEyg0yDJ+BD3fc9QJ/72g+nU=";
     fetchSubmodules = true;
   };
 in
