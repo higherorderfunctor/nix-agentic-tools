@@ -127,6 +127,15 @@ in
     src = fetchzip {inherit (beadsSources.src) url hash;};
     vendorHash = beadsSources.vendorHash or lib.fakeHash;
 
+    # Darwin's orphan-server cleanup test discovers processes with ps and
+    # resolves their working directories with lsof; neither is in stdenv PATH.
+    nativeCheckInputs =
+      (prev.nativeCheckInputs or [])
+      ++ lib.optionals ourPkgs.stdenv.hostPlatform.isDarwin [
+        ourPkgs.darwin.ps
+        ourPkgs.lsof
+      ];
+
     # This test installs `#!/usr/bin/env sh` hooks and then asks git to execute
     # them while creating a worktree. The Nix build sandbox intentionally has
     # no `/usr/bin/env`, so the hook fails before exercising Beads' worktree
