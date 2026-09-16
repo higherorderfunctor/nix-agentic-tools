@@ -264,13 +264,13 @@ callback gets the name `"predicate"`, so it would not match a differently named
 check. Either form rejects F1a's R targeting Z0, and neither adds that rule to
 Z0's own R.
 
-| Constructor | Signature                 | Arguments                                                                                       | Checks over                                                        | Real today                                                                           |
-| ----------- | ------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `check`     | `check NAME EXPRESSION`   | Name you choose; symbolic predicate, `record` expression, or callback receiving an edge binder. | each relation occurrence / each record / whole model, by placement | Names and lowers the predicate; rejects raw Boolean predicates.                      |
-| `record`    | `record BIND`             | Predicate-building function receiving a binder with `parents ROLE` and `children ROLE`.         | each record                                                        | Calls the function symbolically; rejects use outside record scope.                   |
-| `atMost`    | `atMost COUNT COLLECTION` | Integer bound; collection from the record binder's `parents` or `children`.                     | each record                                                        | sugar; see Counting.                                                                 |
-| `on`        | `on SUBJECT CHECK`        | Relation reference from `parentOf` or `childOf`; named predicate from `check`.                  | each relation occurrence                                           | Attaches the check to the selected relation.                                         |
-| `parentOf`  | `parentOf ELEMENT ROLE`   | Element reference from `el`; reference key naming its declared Parent role.                     | none                                                               | Builds a reference qualified by owner and direction; normalization checks it exists. |
+| Constructor | Signature               | Arguments                                                                                       | Checks over                                                        | Real today                                                                           |
+| ----------- | ----------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `check`     | `check NAME EXPRESSION` | Name you choose; symbolic predicate, `record` expression, or callback receiving an edge binder. | each relation occurrence / each record / whole model, by placement | Names and lowers the predicate; rejects raw Boolean predicates.                      |
+| `record`    | `record BIND`           | Predicate-building function receiving a binder with `parents ROLE` and `children ROLE`.         | each record                                                        | Calls the function symbolically; rejects use outside record scope.                   |
+| `atMost`    | `atMost N COLLECTION`   | Integer bound; collection from the record binder's `parents` or `children`.                     | each record                                                        | sugar; see Counting.                                                                 |
+| `on`        | `on SUBJECT CHECK`      | Relation reference from `parentOf` or `childOf`; named predicate from `check`.                  | each relation occurrence                                           | Attaches the check to the selected relation.                                         |
+| `parentOf`  | `parentOf ELEMENT ROLE` | Element reference from `el`; reference key naming its declared Parent role.                     | none                                                               | Builds a reference qualified by owner and direction; normalization checks it exists. |
 
 ## 5. Counting: the lowest form and its sugar
 
@@ -287,9 +287,9 @@ lines 10–12 omitted):
   };
 ```
 
-The three spellings you will actually write are `atMost`, `atLeast`, and
-`exactly`. Each takes the number first and the collection second (fragment of
-counting.nix, lines 10–12):
+For inclusive bounds you will usually write `atMost`, `atLeast`, or `exactly`.
+Each takes the number first and the collection second (fragment of counting.nix,
+lines 10–12):
 
 ```nix
       (check "at-most-one-link" (record (node: atMost 1 (node.parents "link"))))
@@ -297,8 +297,11 @@ counting.nix, lines 10–12):
       (check "exactly-one-link" (record (node: exactly 1 (node.parents "link"))))
 ```
 
-The sugar lowers to count plus comparison, and counting.nix proves the `atMost`
-pair identical with `==` on the lowered output.
+The sugar lowers to count plus comparison. The `sugarEqualsLowest` attribute of
+counting.nix proves the `atMost` pair identical with `==` on the lowered output,
+and `transcript.txt` beside this file records it as true; `atLeast` and
+`exactly` are defined the same way. "Fewer than" and "more than" have no sugar:
+write `lt` or `gt` over `count`, as in the first example above.
 
 | Constructor | Signature              | Arguments in words                                                                | Lowers to                  | Real today                                            |
 | ----------- | ---------------------- | --------------------------------------------------------------------------------- | -------------------------- | ----------------------------------------------------- |
@@ -473,7 +476,7 @@ boundary.
 
 | Constructor  | Signature                       | Arguments                                                                                   | Checks over | Real today                                                                         |
 | ------------ | ------------------------------- | ------------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------- |
-| `exactly`    | `exactly COUNT COLLECTION`      | Integer count; collection from a record binder's `parents` or `children`.                   | each record | sugar; see Counting.                                                               |
+| `exactly`    | `exactly N COLLECTION`          | Integer count; collection from a record binder's `parents` or `children`.                   | each record | sugar; see Counting.                                                               |
 | `only`       | `only COLLECTION`               | Collection from the record binder; `.target` selects the sole relation's declared endpoint. | each record | Emits singleton selection and endpoint access; runtime blocking is specified only. |
 | `canDescend` | `canDescend VIEW ORIGIN TARGET` | View from `visibility`; node references from the two singleton `.target` expressions.       | each record | Emits the downward-path predicate; does not traverse the graph.                    |
 
@@ -744,24 +747,24 @@ establish no promise for that placement. Every “stub accepts” entry assumes 
 all operands have been supplied and can be lowered. The stub checks symbolic
 shape and binder placement, but does not enforce the operators' intended scopes.
 
-| Constructor  | Legal in relation scope   | Legal in record scope               | Legal in model scope      | Where its operands come from                                                                                                                               |
-| ------------ | ------------------------- | ----------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `isNodeType` | Stub accepts; specified.  | Stub accepts; unattested.           | Stub accepts; unattested. | Node: `edge.origin` or `edge.target` in the example; stub also accepts a singleton's `.target`; element: declaration from `el`.                            |
-| `count`      | Stub accepts; unattested. | Stub accepts; specified as a value. | Stub accepts; unattested. | Collection: a record binder's `parents ROLE` or `children ROLE`; returns a symbolic count.                                                                 |
-| `lt`         | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
-| `lte`        | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
-| `gt`         | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
-| `gte`        | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
-| `eq`         | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
-| `atMost`     | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Count: integer literal by contract; collection: `parents ROLE` or `children ROLE` supplied by `record`.                                                    |
-| `atLeast`    | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Count: integer literal by contract; collection: a record binder's `parents ROLE` or `children ROLE`.                                                       |
-| `exactly`    | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Count: integer literal by contract; collection: the same record binder methods.                                                                            |
-| `only`       | Stub accepts; unattested. | Stub accepts; specified as a value. | Stub accepts; unattested. | Collection: a record binder's `parents ROLE` or `children ROLE`; returns the sole relation, whose `.target` supplies a node.                               |
-| `visible`    | Stub accepts; specified.  | Stub accepts; unattested.           | Stub accepts; unattested. | View: registered `visibility` declaration; nodes: `edge.origin` and `edge.target` in the example, or singleton `.target` expressions accepted by the stub. |
-| `canDescend` | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | View: registered `visibility` declaration; nodes: singleton `.target` expressions in the example, or edge endpoints accepted by the stub.                  |
-| `nativeDag`  | Stub accepts; unattested. | Stub accepts; unattested.           | Stub accepts; specified.  | No author-supplied operands; the constructor fixes all native Parent/Child roles and parent-to-child orientation.                                          |
-| `preserve`   | Stub accepts; unattested. | Stub accepts; unattested.           | Stub accepts; specified.  | Registered `input` and `projection` declarations; no binder.                                                                                               |
-| `const`      | Stub accepts; specified.  | Stub accepts; specified.            | Stub accepts; specified.  | A Nix Boolean literal; no binder.                                                                                                                          |
+| Constructor       | Legal in relation scope   | Legal in record scope               | Legal in model scope      | Where its operands come from                                                                                                                               |
+| ----------------- | ------------------------- | ----------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isNodeType`      | Stub accepts; specified.  | Stub accepts; unattested.           | Stub accepts; unattested. | Node: `edge.origin` or `edge.target` in the example; stub also accepts a singleton's `.target`; element: declaration from `el`.                            |
+| `count`           | Stub accepts; unattested. | Stub accepts; specified as a value. | Stub accepts; unattested. | Collection: a record binder's `parents ROLE` or `children ROLE`; returns a symbolic count.                                                                 |
+| `lt`              | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
+| `lte`             | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
+| `gt`              | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
+| `gte`             | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
+| `eq`              | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
+| `atMost` (sugar)  | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Count: integer literal by contract; collection: `parents ROLE` or `children ROLE` supplied by `record`.                                                    |
+| `atLeast` (sugar) | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Count: integer literal by contract; collection: a record binder's `parents ROLE` or `children ROLE`.                                                       |
+| `exactly` (sugar) | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Count: integer literal by contract; collection: the same record binder methods.                                                                            |
+| `only`            | Stub accepts; unattested. | Stub accepts; specified as a value. | Stub accepts; unattested. | Collection: a record binder's `parents ROLE` or `children ROLE`; returns the sole relation, whose `.target` supplies a node.                               |
+| `visible`         | Stub accepts; specified.  | Stub accepts; unattested.           | Stub accepts; unattested. | View: registered `visibility` declaration; nodes: `edge.origin` and `edge.target` in the example, or singleton `.target` expressions accepted by the stub. |
+| `canDescend`      | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | View: registered `visibility` declaration; nodes: singleton `.target` expressions in the example, or edge endpoints accepted by the stub.                  |
+| `nativeDag`       | Stub accepts; unattested. | Stub accepts; unattested.           | Stub accepts; specified.  | No author-supplied operands; the constructor fixes all native Parent/Child roles and parent-to-child orientation.                                          |
+| `preserve`        | Stub accepts; unattested. | Stub accepts; unattested.           | Stub accepts; specified.  | Registered `input` and `projection` declarations; no binder.                                                                                               |
+| `const`           | Stub accepts; specified.  | Stub accepts; specified.            | Stub accepts; specified.  | A Nix Boolean literal; no binder.                                                                                                                          |
 
 For these non-constant operators, the stub rejects direct Boolean operands but
 does not otherwise check operand types. A bare callback receives the edge binder
@@ -1043,9 +1046,9 @@ executes.
 | `gt`                                                   | Lowered by stub, semantics prose only | Emits the `gt` comparison over count expressions or numbers without evaluating it.                                |
 | `gte`                                                  | Lowered by stub, semantics prose only | Emits the `gte` comparison over count expressions or numbers without evaluating it.                               |
 | `eq`                                                   | Lowered by stub, semantics prose only | Emits the `eq` comparison over count expressions or numbers without evaluating it.                                |
-| `atMost`                                               | Lowered by stub, semantics prose only | Emits a count comparison without collecting or counting occurrences.                                              |
+| `atMost`                                               | Lowered by stub, semantics prose only | Expands to `lte (count COLLECTION) N` without computing a count.                                                  |
 | `atLeast`                                              | Lowered by stub, semantics prose only | Expands to `gte (count COLLECTION) N` without computing a count.                                                  |
-| `exactly`                                              | Lowered by stub, semantics prose only | Emits an exact-count expression without computing a count.                                                        |
+| `exactly`                                              | Lowered by stub, semantics prose only | Expands to `eq (count COLLECTION) N` without computing a count.                                                   |
 | `only`                                                 | Lowered by stub, semantics prose only | Emits singleton selection and endpoint access; blocked runtime results are not implemented.                       |
 | `forest`                                               | Lowered by stub, semantics prose only | Emits selected edges, owner-kind vertices, parent-to-child orientation, and permission for disconnected roots.    |
 | `isForest`                                             | Lowered by stub, semantics prose only | Emits the structural predicate without finding cycles or counting hierarchy parents.                              |
