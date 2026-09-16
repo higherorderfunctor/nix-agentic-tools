@@ -1,21 +1,21 @@
-diff --git a/patches/@napi-rs__cli@3.9.1.patch b/patches/@napi-rs__cli@3.9.1.patch
+diff --git a/patches/@napi-rs__cli@3.10.1.patch b/patches/@napi-rs__cli@3.10.1.patch
 new file mode 100644
-index 0000000..e20b8b5
+index 0000000..fa44a41
 --- /dev/null
-+++ b/patches/@napi-rs__cli@3.9.1.patch
++++ b/patches/@napi-rs__cli@3.10.1.patch
 @@ -0,0 +1,90 @@
 +diff --git a/dist/cli.js b/dist/cli.js
-+index 18449a6073ae86c1a1ae21f68c58bd22f092014e..3d6f0c4446943a0c97129b33e917824ae6912394 100755
++index 49121847bea8b8abb1f8894287ac596f9f680b7f..76033c166a707827f7a8bf6f381e96da0a7a7493 100755
 +--- a/dist/cli.js
 ++++ b/dist/cli.js
-+@@ -2592,18 +2592,22 @@ async function readPosixProcessIncarnation(pid) {
++@@ -2690,18 +2690,22 @@ async function readPosixProcessIncarnation(pid) {
 + }
-+ function executeProcessIncarnationCommand(command, args, env = process.env) {
++ function executeProcessIncarnationCommand(command, args, env = process.env, timeout = processIncarnationCommandTimeout) {
 + 	return new Promise((resolveCommand) => {
 +-		execFile(command, args, {
 +-			encoding: "utf8",
 +-			env,
-+-			timeout: processIncarnationCommandTimeout,
++-			timeout,
 +-			windowsHide: true
 +-		}, (error, stdout) => {
 +-			if (error) {
@@ -28,7 +28,7 @@ index 0000000..e20b8b5
 ++			execFile(command, args, {
 ++				encoding: "utf8",
 ++				env,
-++				timeout: processIncarnationCommandTimeout,
+++				timeout,
 ++				windowsHide: true
 ++			}, (error, stdout) => {
 ++				if (error) {
@@ -44,11 +44,11 @@ index 0000000..e20b8b5
 + }
 + function assertReconciliationLockAcquisitionTimeRemaining(acquisitionDeadline, key) {
 +diff --git a/src/utils/misc.ts b/src/utils/misc.ts
-+index 843b59ee93562d8f0df70107aee6de31cb958efb..12fa0baf12327bd93c49259ce0bebf4a4805e259 100644
++index 0b10aa463a99072c89e7e34acfe4ceb65a55877a..0e6f7aa1599932ac6169f0bb4c7d5d68c6941b81 100644
 +--- a/src/utils/misc.ts
 ++++ b/src/utils/misc.ts
-+@@ -3689,24 +3689,28 @@ function executeProcessIncarnationCommand(
-+   env: NodeJS.ProcessEnv = process.env,
++@@ -3962,24 +3962,28 @@ function executeProcessIncarnationCommand(
++   timeout: number = processIncarnationCommandTimeout,
 + ): Promise<string | null> {
 +   return new Promise((resolveCommand) => {
 +-    execFile(
@@ -57,7 +57,7 @@ index 0000000..e20b8b5
 +-      {
 +-        encoding: 'utf8',
 +-        env,
-+-        timeout: processIncarnationCommandTimeout,
++-        timeout,
 +-        windowsHide: true,
 +-      },
 +-      (error, stdout) => {
@@ -76,7 +76,7 @@ index 0000000..e20b8b5
 ++        {
 ++          encoding: 'utf8',
 ++          env,
-++          timeout: processIncarnationCommandTimeout,
+++          timeout,
 ++          windowsHide: true,
 ++        },
 ++        (error, stdout) => {

@@ -16,12 +16,12 @@
   vu = packageLib;
   tsgolint = import ../../../../../tsgolint/packages/ai/devTools/tsgolint/package.nix {inherit inputs packageLib pkgs repoPath;};
 
-  rev = "6c4b6d6306d0e8e2c7fbe0f827065fb68674853b";
+  rev = "0db906ef0c1582d7f42246f2610d825a781db400";
   unpatchedSrc = ourPkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-NIIiXGt4GbF6yJKY5lDTkYoLy2/LpHuh75mOqpy86m4=";
+    hash = "sha256-3kQPAKGX2vuQ/vRyYdtg4REz19+EvHRUwkV7p74hcM0=";
   };
   # @napi-rs/cli's filesystem reconciliation probes a process incarnation with
   # execFile(/bin/ps) on Darwin. Node can reject that spawn synchronously under
@@ -49,9 +49,40 @@
   # `deleted file mode` stanzas it emits — and prove the result with a
   # `pnpm install --frozen-lockfile` before landing it. The ifd-patterns
   # fragment carries the full loop.
+  # WHY THIS BLOCK KEEPS NEEDING A HUMAN, and what has NOT been decided.
+  #
+  # `version` tracks UPSTREAM's pnpm catalog pin for @napi-rs/cli; it is not our
+  # choice. When oxc moves that pin, this patch stops naming a file pnpm
+  # resolves, the awk guard below exits 1 in postPatch, `source-patched` fails,
+  # and nix-update cannot derive cargoDeps.vendorStaging -- so the target is
+  # HELD BACK and no PR is written at all. It is not a hash problem and no hash
+  # fixer can reach it: regenerating the patch means re-authoring a code change
+  # against a bundle whose body moved (3.10.1 gave
+  # executeProcessIncarnationCommand an explicit `timeout` parameter, so the
+  # 3.9.1 hunks do not apply).
+  #
+  # Measured 2026-09-16: upstream moved 3.9.1 -> 3.10.1 and oxlint was held back
+  # on three consecutive sweeps, every Update run green, nobody told.
+  #
+  # OPEN, DELIBERATELY NOT DECIDED -- none of these is settled, and the operator
+  # has not read the argument yet. Do not pick one on their behalf:
+  #   - Make the fix version-independent: match the code SHAPE in postPatch
+  #     instead of pinning a pnpm patchedDependencies entry to an exact version,
+  #     so an upstream repin carries through and only a shape change stops the
+  #     build. Costs the property the comment below records -- pnpm applying it
+  #     to every peer variant, with the dependency layer owning it.
+  #   - Take oxlint off auto-bump the way aihubmix-mcp is, annotating instead of
+  #     carrying an update target. Cheap, and probably wrong: oxlint auto-bumped
+  #     cleanly through 23 consecutive sweeps (#1407..#1707), so it would pay for
+  #     a rare event with a constant loss.
+  #   - Leave it manual. Cheapest, and the recurrence is at least LOUD now: a
+  #     second consecutive hold-back fails the sweep's cleanup job.
+  # Upstream shipping the catch would dissolve all three. It had NOT as of
+  # 3.10.1 -- re-read executeProcessIncarnationCommand on every repin rather
+  # than assuming, which is the same instruction the block below already gives.
   napi = rec {
     pkg = "@napi-rs/cli";
-    version = "3.9.1";
+    version = "3.10.1";
     # DERIVED, never hand-written. As two independent literals a stale patch
     # could pair with a matching version key and build GREEN: `version =
     # "3.8.6"` alongside `patchPath = ".../@napi-rs__cli@3.9.0.patch"` produced
@@ -63,7 +94,7 @@
     # bytes — so it moves only when that file does, not when upstream's lock
     # does. It is the sha256 of the INNER pnpm patch the outer git patch
     # creates, NOT of that outer file.
-    patchHash = "cd0ec720c5bdecf81d61c893359063f100271bd27eac5541d8338ec38b239668";
+    patchHash = "24eab49aceb2eba43f333360752cf3b8e95a39f45d02bf302c092867632c754a";
   };
   # The other half of the coupling. Deriving patchPath stops it disagreeing
   # with `version`; this stops BOTH disagreeing with the file on disk. A repin
@@ -104,13 +135,13 @@ in
     inherit version src;
     cargoDeps = ourPkgs.rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
-      hash = "sha256-TrjR9jmSydT8dKud6hT0Px5bV29y7MLo1udo9FCUhbA=";
+      hash = ourPkgs.lib.fakeHash;
     };
     pnpmDeps = ourPkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
       pnpm = ourPkgs.pnpm_11;
       fetcherVersion = 4;
-      hash = "sha256-UrQOYOojAUfG2z9bdJLf4w09nQfj4g485K4NkLEsi6w=";
+      hash = ourPkgs.lib.fakeHash;
     };
     # Oxc declares pnpm@12.3.2 in `packageManager`, and we DELIBERATELY stay on
     # pnpm 11. nixpkgs' fetcher interpolates `--registry="$NIX_NPM_REGISTRY"`
