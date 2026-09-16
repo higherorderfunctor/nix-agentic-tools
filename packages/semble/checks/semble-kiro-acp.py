@@ -13,6 +13,10 @@ import time
 
 COMMANDS_AVAILABLE = "_kiro.dev/commands/available"
 
+# How long the child gets to exit after stdin EOF. Overrunning it is a HARNESS
+# action, not a product failure -- see the shutdown_kill branch in run().
+SHUTDOWN_BUDGET_SECONDS = 8
+
 
 def command_statuses(
     notifications: list[dict[str, object]],
@@ -122,6 +126,9 @@ def run(kiro: str, agent: str, workspace: str) -> dict[str, object]:
             )
         return result
 
+    shutdown_kill = False
+    shutdown_seconds = 0.0
+
     try:
         initialized = call(
             1,
@@ -141,11 +148,14 @@ def run(kiro: str, agent: str, workspace: str) -> dict[str, object]:
         wait_until_commands_ready()
     finally:
         proc.stdin.close()
+        closed_at = time.monotonic()
         try:
-            proc.wait(timeout=8)
+            proc.wait(timeout=SHUTDOWN_BUDGET_SECONDS)
         except subprocess.TimeoutExpired:
+            shutdown_kill = True
             proc.kill()
             proc.wait()
+        shutdown_seconds = time.monotonic() - closed_at
         stdout_thread.join(timeout=2)
         stderr_thread.join(timeout=2)
 
@@ -160,9 +170,31 @@ def run(kiro: str, agent: str, workspace: str) -> dict[str, object]:
             break
         handle(json.loads(line), reply_to_requests=False)
 
-    if proc.returncode != 0:
+    # `proc.returncode` is only the PRODUCT's exit status when the harness sent
+    # no signal. On the kill path above it is our own SIGKILL, and reporting
+    # that as the product's status is what made four CI runs unreadable
+    # (2026-09-02, 09-08, 09-14, 09-16 -- all "ACP exited with status -9" with
+    # an empty stderr, on three branches and two derivation hashes, while every
+    # assertion this check exists to make had already passed).
+    #
+    # Reaching here means the try block returned: initialize, session/new and
+    # commands/available all succeeded. So a slow exit afterwards costs the
+    # check nothing. An AUTONOMOUS non-zero exit still fails, which keeps the
+    # one real regression this assertion was buying -- an ACP server that
+    # panics on stdin EOF -- and now says so in words that name the source.
+    if shutdown_kill:
+        print(
+            f"{agent}: harness SIGKILLed ACP after {shutdown_seconds:.2f}s "
+            f"waiting for it to exit after stdin EOF (budget "
+            f"{SHUTDOWN_BUDGET_SECONDS}s); returncode {proc.returncode} is the "
+            f"harness's, not the product's",
+            file=sys.stderr,
+        )
+    elif proc.returncode != 0:
         raise RuntimeError(
-            f"{agent}: ACP exited with status {proc.returncode}: {'; '.join(errors)}"
+            f"{agent}: ACP exited on its own with status {proc.returncode} "
+            f"{shutdown_seconds:.2f}s after stdin EOF, harness sent no signal: "
+            f"{'; '.join(errors)}"
         )
     return {
         "agent": agent,
