@@ -20,9 +20,14 @@ count changes with the registry; do not assume the rollout's 52 targets forever.
 Paginate artifact listings: the first production sweep had 104 artifacts, more
 than one 100-item API page, because reports and receipts are separate artifacts.
 
-- `HELD BACK` preserves an existing branch and can appear in a green sweep.
-  Inspect the corresponding `update-report-*` artifact for the preparation
-  failure before declaring the update healthy.
+- `HELD BACK` preserves an existing branch and can appear in a green sweep --
+  but only once. `Escalate repeated hold-backs` fails the `cleanup` job when a
+  target is held back on two consecutive scheduled sweeps, and its annotation
+  quotes the preparation failure so the decision needs no artifact download. A
+  single hold-back still only warns, because one is routinely transient; inspect
+  the corresponding `update-report-*` artifact before declaring the update
+  healthy. The preserved PR, if any, is an earlier proposal -- no new PR or
+  branch update was written for the held-back attempt.
 - `NO UPDATES` means the target produced no diff from the pinned base.
 - `UPDATED` means preparation completed and publication returned successfully;
   inspect the PR and publisher log for whether it was created, refreshed,
