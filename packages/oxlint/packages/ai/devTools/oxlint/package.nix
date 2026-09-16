@@ -135,13 +135,13 @@ in
     inherit version src;
     cargoDeps = ourPkgs.rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
-      hash = ourPkgs.lib.fakeHash;
+      hash = "sha256-AK/7Ge08Nv5fDvkL7V0Znaq/Q9de5SK/BYr9WcCfYYE=";
     };
     pnpmDeps = ourPkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
       pnpm = ourPkgs.pnpm_11;
       fetcherVersion = 4;
-      hash = ourPkgs.lib.fakeHash;
+      hash = "sha256-k++Y/oK7kQh6fbmvkU3pfjR13dbtJ7crpTE01c1a3w4=";
     };
     # Oxc declares pnpm@12.3.2 in `packageManager`, and we DELIBERATELY stay on
     # pnpm 11. nixpkgs' fetcher interpolates `--registry="$NIX_NPM_REGISTRY"`
