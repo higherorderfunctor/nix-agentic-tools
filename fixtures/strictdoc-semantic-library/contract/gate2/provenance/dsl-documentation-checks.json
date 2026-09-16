@@ -1,0 +1,467 @@
+{
+  "scope": "Owned documentation only; source evidence not mutated",
+  "checks": {
+    "sevenLessons": true,
+    "codeFenceBalance": true,
+    "jsonExamplesParse": true,
+    "pythonExamplesParse": true,
+    "publicationTargetsAndAnchors": true,
+    "canonicalNativeTailoringExact": true,
+    "canonicalFieldDescriptorConfigMatches": true,
+    "fixtureModuleMatches": true,
+    "recordedEvidenceCountsConsistent": {
+      "control-results.json": 57,
+      "runtime-results.json": 110
+    },
+    "producerFreezeHashesMatch": true,
+    "canonicalFourSourcesAndNormalizedRenderedUnchanged": true,
+    "tutorialUnchanged": true,
+    "repositoryRootCommandsSyntaxAndExplicitArgs": true
+  },
+  "notExecuted": [
+    "Nix prototype",
+    "Python helper harness",
+    "Git identity command/provider",
+    "Scribe",
+    "builds",
+    "services",
+    "common process transport"
+  ],
+  "publicationLinks": [
+    {
+      "document": "README.md",
+      "target": "tutorial-dsl.md",
+      "publicationDestination": "contract/gate2/tutorial-dsl.md",
+      "verifiedAgainst": "outputs/tutorial-dsl.md",
+      "rootProvidesDestination": false
+    },
+    {
+      "document": "README.md",
+      "target": "setup.md",
+      "publicationDestination": "contract/gate2/setup.md",
+      "verifiedAgainst": "outputs/setup.md",
+      "rootProvidesDestination": false
+    },
+    {
+      "document": "README.md",
+      "target": "recommended.nix",
+      "publicationDestination": "contract/gate2/recommended.nix",
+      "verifiedAgainst": "inputs/canonical/recommended.nix",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "README.md",
+      "target": "composition.nix",
+      "publicationDestination": "contract/gate2/composition.nix",
+      "verifiedAgainst": "inputs/canonical/composition.nix",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "README.md",
+      "target": "native-tailoring.nix",
+      "publicationDestination": "contract/gate2/native-tailoring.nix",
+      "verifiedAgainst": "inputs/canonical/native-tailoring.nix",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "README.md",
+      "target": "field-alternative.nix",
+      "publicationDestination": "contract/gate2/field-alternative.nix",
+      "verifiedAgainst": "inputs/canonical/field-alternative.nix",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "README.md",
+      "target": "authoring-prototype/public-shape.md",
+      "publicationDestination": "contract/gate2/authoring-prototype/public-shape.md",
+      "verifiedAgainst": "inputs/canonical/public-shape.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "README.md",
+      "target": "authoring-prototype/design.md",
+      "publicationDestination": "contract/gate2/authoring-prototype/design.md",
+      "verifiedAgainst": "inputs/canonical/design.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "README.md",
+      "target": "setup.md#what-the-evidence-establishes",
+      "publicationDestination": "contract/gate2/setup.md",
+      "verifiedAgainst": "outputs/setup.md",
+      "rootProvidesDestination": false
+    },
+    {
+      "document": "README.md",
+      "target": "reviewed-requirements.md",
+      "publicationDestination": "contract/gate2/reviewed-requirements.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/reviewed-requirements.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "README.md",
+      "target": "scope-reconciliation.md",
+      "publicationDestination": "contract/gate2/scope-reconciliation.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/scope-reconciliation.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "README.md",
+      "target": "interface.md",
+      "publicationDestination": "contract/gate2/interface.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/interface.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "README.md",
+      "target": "../model.md",
+      "publicationDestination": "contract/model.md",
+      "verifiedAgainst": "inputs/current-contract/model.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "README.md",
+      "target": "../scenarios.md",
+      "publicationDestination": "contract/scenarios.md",
+      "verifiedAgainst": "inputs/current-contract/scenarios.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "README.md",
+      "target": "playbooks.md",
+      "publicationDestination": "contract/gate2/playbooks.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/playbooks.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "README.md",
+      "target": "closing-plan.md",
+      "publicationDestination": "contract/gate2/closing-plan.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/closing-plan.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "README.md",
+      "target": "recommendation.md",
+      "publicationDestination": "contract/gate2/recommendation.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/recommendation.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "tutorial-dsl.md",
+      "target": "setup.md",
+      "publicationDestination": "contract/gate2/setup.md",
+      "verifiedAgainst": "outputs/setup.md",
+      "rootProvidesDestination": false
+    },
+    {
+      "document": "tutorial-dsl.md",
+      "target": "recommended.nix",
+      "publicationDestination": "contract/gate2/recommended.nix",
+      "verifiedAgainst": "inputs/canonical/recommended.nix",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "tutorial-dsl.md",
+      "target": "recommended.nix",
+      "publicationDestination": "contract/gate2/recommended.nix",
+      "verifiedAgainst": "inputs/canonical/recommended.nix",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "tutorial-dsl.md",
+      "target": "composition.nix",
+      "publicationDestination": "contract/gate2/composition.nix",
+      "verifiedAgainst": "inputs/canonical/composition.nix",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "tutorial-dsl.md",
+      "target": "recommended.nix",
+      "publicationDestination": "contract/gate2/recommended.nix",
+      "verifiedAgainst": "inputs/canonical/recommended.nix",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "tutorial-dsl.md",
+      "target": "composition.nix",
+      "publicationDestination": "contract/gate2/composition.nix",
+      "verifiedAgainst": "inputs/canonical/composition.nix",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "tutorial-dsl.md",
+      "target": "authoring-prototype/public-shape.md",
+      "publicationDestination": "contract/gate2/authoring-prototype/public-shape.md",
+      "verifiedAgainst": "inputs/canonical/public-shape.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "tutorial-dsl.md",
+      "target": "native-tailoring.nix",
+      "publicationDestination": "contract/gate2/native-tailoring.nix",
+      "verifiedAgainst": "inputs/canonical/native-tailoring.nix",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "tutorial-dsl.md",
+      "target": "field-alternative.nix",
+      "publicationDestination": "contract/gate2/field-alternative.nix",
+      "verifiedAgainst": "inputs/canonical/field-alternative.nix",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "tutorial-dsl.md",
+      "target": "setup.md#what-the-evidence-establishes",
+      "publicationDestination": "contract/gate2/setup.md",
+      "verifiedAgainst": "outputs/setup.md",
+      "rootProvidesDestination": false
+    },
+    {
+      "document": "setup.md",
+      "target": "tutorial-dsl.md",
+      "publicationDestination": "contract/gate2/tutorial-dsl.md",
+      "verifiedAgainst": "outputs/tutorial-dsl.md",
+      "rootProvidesDestination": false
+    },
+    {
+      "document": "setup.md",
+      "target": "../../README.md",
+      "publicationDestination": "README.md",
+      "verifiedAgainst": "inputs/fixture/README.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "../../devenv.nix",
+      "publicationDestination": "devenv.nix",
+      "verifiedAgainst": "inputs/fixture/devenv.nix",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "../../devenv.yaml",
+      "publicationDestination": "devenv.yaml",
+      "verifiedAgainst": "inputs/fixture/devenv.yaml",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "../../strictdoc_config.py",
+      "publicationDestination": "strictdoc_config.py",
+      "verifiedAgainst": "inputs/fixture/strictdoc_config.py",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "public-toolchain.md",
+      "publicationDestination": "contract/gate2/public-toolchain.md",
+      "verifiedAgainst": "inputs/contract/gate2/public-toolchain.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "recommended.nix",
+      "publicationDestination": "contract/gate2/recommended.nix",
+      "verifiedAgainst": "inputs/canonical/recommended.nix",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "authoring-prototype/evaluate.nix",
+      "publicationDestination": "contract/gate2/authoring-prototype/evaluate.nix",
+      "verifiedAgainst": "inputs/canonical/prototype/evaluate.nix",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "authoring-prototype/public-shape.md",
+      "publicationDestination": "contract/gate2/authoring-prototype/public-shape.md",
+      "verifiedAgainst": "inputs/canonical/public-shape.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "interface.md#semantic-types-and-native-representation",
+      "publicationDestination": "contract/gate2/interface.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/interface.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "recommendation.md",
+      "publicationDestination": "contract/gate2/recommendation.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/recommendation.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "scope-reconciliation.md",
+      "publicationDestination": "contract/gate2/scope-reconciliation.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/scope-reconciliation.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "interface.md#creation-time-defaults",
+      "publicationDestination": "contract/gate2/interface.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/interface.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "findings.md#new-public-source-facts-and-limits",
+      "publicationDestination": "contract/gate2/findings.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/findings.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "closing-plan.md#review-coverage",
+      "publicationDestination": "contract/gate2/closing-plan.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/closing-plan.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "interface.md#one-prepared-candidate-validation-and-publication",
+      "publicationDestination": "contract/gate2/interface.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/interface.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "authoring-prototype/evidence.md",
+      "publicationDestination": "contract/gate2/authoring-prototype/evidence.md",
+      "verifiedAgainst": "inputs/canonical/evidence.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "authoring-prototype/review-disposition.md",
+      "publicationDestination": "contract/gate2/authoring-prototype/review-disposition.md",
+      "verifiedAgainst": "inputs/canonical/review-disposition.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "authoring-prototype/review-regressions.json",
+      "publicationDestination": "contract/gate2/authoring-prototype/review-regressions.json",
+      "verifiedAgainst": "inputs/canonical/prototype/review-regressions.json",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "interface.md",
+      "publicationDestination": "contract/gate2/interface.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/interface.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "authoring-prototype/evaluated.json",
+      "publicationDestination": "contract/gate2/authoring-prototype/evaluated.json",
+      "verifiedAgainst": "inputs/canonical/prototype/evaluated.json",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "authoring-prototype/control-results.json",
+      "publicationDestination": "contract/gate2/authoring-prototype/control-results.json",
+      "verifiedAgainst": "inputs/canonical/prototype/control-results.json",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "authoring-prototype/runtime-results.json",
+      "publicationDestination": "contract/gate2/authoring-prototype/runtime-results.json",
+      "verifiedAgainst": "inputs/canonical/prototype/runtime-results.json",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "authoring-prototype/design.md",
+      "publicationDestination": "contract/gate2/authoring-prototype/design.md",
+      "verifiedAgainst": "inputs/canonical/design.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "recommendation.md",
+      "publicationDestination": "contract/gate2/recommendation.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/recommendation.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "findings.md",
+      "publicationDestination": "contract/gate2/findings.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/findings.md",
+      "rootProvidesDestination": true
+    },
+    {
+      "document": "setup.md",
+      "target": "interface.md#c1c4-and-later-implementation-entry-conditions",
+      "publicationDestination": "contract/gate2/interface.md",
+      "verifiedAgainst": "inputs/current-contract/gate2/interface.md",
+      "rootProvidesDestination": true
+    }
+  ],
+  "rootPublicationRequirements": [
+    "README.md",
+    "contract/gate2/authoring-prototype/control-results.json",
+    "contract/gate2/authoring-prototype/design.md",
+    "contract/gate2/authoring-prototype/evaluate.nix",
+    "contract/gate2/authoring-prototype/evaluated.json",
+    "contract/gate2/authoring-prototype/evidence.md",
+    "contract/gate2/authoring-prototype/public-shape.md",
+    "contract/gate2/authoring-prototype/review-disposition.md",
+    "contract/gate2/authoring-prototype/review-regressions.json",
+    "contract/gate2/authoring-prototype/runtime-results.json",
+    "contract/gate2/closing-plan.md",
+    "contract/gate2/composition.nix",
+    "contract/gate2/field-alternative.nix",
+    "contract/gate2/findings.md",
+    "contract/gate2/interface.md",
+    "contract/gate2/native-tailoring.nix",
+    "contract/gate2/playbooks.md",
+    "contract/gate2/public-toolchain.md",
+    "contract/gate2/recommendation.md",
+    "contract/gate2/recommended.nix",
+    "contract/gate2/reviewed-requirements.md",
+    "contract/gate2/scope-reconciliation.md",
+    "contract/model.md",
+    "contract/scenarios.md",
+    "devenv.nix",
+    "devenv.yaml",
+    "strictdoc_config.py"
+  ],
+  "linkLimit": "Publication-relative links validated through the supplied-file mapping. Root must copy/link these destinations into the declared final tree. Outgoing links within other owners' source files are outside this verification.",
+  "formatting": "Required pinned treefmt; XDG_CACHE_HOME in /tmp, filesystem walk, outputs only. Final idempotence checked before freeze.",
+  "independentReplay": {
+    "pythonPassed": 13,
+    "pythonFailed": 0,
+    "suppliedForestPathOracleCombinations": 162,
+    "nixCompoundAndNativeMeaningRegressionsReject": true,
+    "evidence": "Inspected supplied corrected replay; not rerun by documentation workflow"
+  },
+  "correctedPrototypeLimits": [
+    "Compound input/dependency retention is lowering/composition evidence, not generic predicate execution",
+    "Concrete result validation covers NodeRef subjects and integer locations, not general production subjects/native coordinates",
+    "Model-qualified identity/resolution prerequisite is not a complete native snapshot validator",
+    "Known required native-DAG meaning guard is not arbitrary custom-contract compatibility checking"
+  ],
+  "recordedEvidenceSha256": {
+    "evidence.md": "0fbc48095aa2092eac6289ace3cecc00c14467f9d83dd01e7b393c85aef1653e",
+    "public-shape.md": "e2cae31e0c1c0de57f53f2c865fead834ee81287d17516b6bf9721c7793b8ddf",
+    "review-disposition.md": "13260255e06e6915a15402ce018b6919f5c550d300032d9920879b8036ab9dd6",
+    "output-hashes.json": "e5f7bc60602986e792e2ba73c855a4fb507d7f701a285d2e5576ca62385bda54",
+    "prototype/control-results.json": "4094822c6a79bec200e5e28bffc00c43e601525c63b65f85a1223b57ac060cc3",
+    "prototype/runtime-results.json": "9d22630cb8679d5d3d4c3e623ebf6d78549f9d4f05a8a355692f75afb84e14aa",
+    "prototype/review-regressions.json": "e619723ff9d7180bbd377b3b10d041868b3ce7b55112498a6421ec66e42cc482"
+  },
+  "checkTotals": {
+    "publicationLinks": 54,
+    "codeFences": 34
+  }
+}

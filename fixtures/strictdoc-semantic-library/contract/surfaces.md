@@ -1,137 +1,141 @@
 # Public authoring surfaces for review
 
-Status: **SKETCHES — not implemented APIs and not approved signatures.**
-Existing grammar generation is usable independently. Semantic
-source/derive/check primitives, helpers, provider ABI, and runtime attachment
-are proposals. The backend remains unselected.
+**Proposed semantic APIs, existing native grammar underneath.** The 2026-09-15
+handoff replaces the older upper policy-wrapper design and public transaction
+lifecycle. Exact names remain provisional; [interface](gate2/interface.md) is
+the current detailed contract. This document describes configuration surfaces,
+not installed semantic exports.
 
-## Existing public assembly
+## Existing native surface
 
-The supplied public interface finding at repository revision
-`8c6aa9bc648b00809502f765a860cbc2c79ac114` identifies the devenv module
-`devenvModules.nix-agentic-tools`, the grammar library
-`lib.ai.strictdocGrammar { inherit lib; }`, and the StrictDoc package
-`packages.${system}.strictdoc`. The retained fixture must record its actual
-filtered-input resolution and invocation separately.
+Supplied public source findings identify
+`lib.ai.strictdocGrammar { inherit lib; }`, exporting `check`, `dsl`, `emit`,
+`normalized`, `render`; the devenv module `devenvModules.nix-agentic-tools`; and
+`packages.${system}.strictdoc`. Public `g.field.str`, `g.field.one`,
+`g.field.many`, `g.field.required`, `g.el`, `g.rel.parent` and `g.rel.child`
+remain native constructors. `render` validates before emission; direct `emit`
+does not itself validate. Native fields are ordered; an empty native relations
+collection lowers to null/absence, not `[]`.
 
-The grammar library exports `check`, `dsl`, `emit`, `normalized`, and `render`.
-Its public constructors include `dsl.el`, `dsl.field.required`, `dsl.field.one`,
-`dsl.field.str`, `dsl.rel.parent`, and `dsl.rel.child`. A `faithful` attribute
-and a boolean field constructor are not public exports. SDoc FLAG is therefore
-authored with explicit string choices; the semantic interpretation remains D01.
+No schema/constraint/default/semantic transport is an existing export. Native
+`singleChoice` has `choices`, not semantic Boolean/default keys. Native grammar
+Booleans configure requiredness/compositeness. The new semantic layer must lower
+to accepted native options without adding unknown keys. Preserve plain native
+authoring and explicit UID declarations. Generated grammar, daemon startup and
+observed readiness are separate steps, documented in setup alongside the
+canonical examples.
+
+## Proposed readable surface
+
+`g = grammar.dsl` is existing native authoring; `s = schema` is a new semantic
+schema/type layer; `c = constraint` is a new typed constraint-description DSL.
+Functions below are proposal spelling synchronized to the public DSL vocabulary,
+not installed APIs:
 
 ```nix
-# Existing grammar constructor shape; the chosen model remains a draft.
-dsl.el "FOO" {} {
-  fields = [
-    (dsl.field.required (dsl.field.one "FLAG" ["false" "true"]))
-    (dsl.field.required (dsl.field.str "UID"))
-  ];
-  relations = [
-    (dsl.rel.parent "H" "H_back")
-    (dsl.rel.parent "R" "R_back")
-  ];
-}
+{ grammar, schema, constraint }:
+let
+  g = grammar.dsl;
+  s = schema;
+  c = constraint;
+in
+s.grammar "reference" ({ elements, views, ... }: {
+  elements.FOO = self: {
+    fields = [
+      (g.field.required (g.field.str "UID"))
+      (s.field.boolean "FLAG" {
+        required = true;
+        default = s.default.literal false;
+      })
+    ];
+    relations.H.parent.reverseRole = "H_back";
+    relations.R.parent = {
+      reverseRole = "R_back";
+      constraints.targetType = rel: c.isNodeType rel.target self;
+    };
+  };
+  views.H = c.forest {
+    nodes = elements.FOO;
+    edges = [ elements.FOO.relations.H.parent ];
+  };
+  views.visibility = c.boundaryVisibility {
+    hierarchy = views.H;
+    closed = node: c.fieldValue node elements.FOO.fields.FLAG;
+  };
+})
 ```
 
-This short shape omits the actual fixture's runtime bookkeeping fields. The
-explicit UID declaration is necessary for addressable nodes and grammar-derived
-`--uid`; it was established by consumer probing. `ai.strictdoc.grammars.fixture`
-can render the real elements to `grammar.sgra`. Installed Scribe is enabled via
-the public devenv module, with `scribeSource = "installed"`; the fixture
-configuration must supply grammar alias `repo` for existing Scribe-created
-document skeletons. Generation remains separate from daemon startup.
+This is a surface fragment, not the complete canonical reference policy: it
+deliberately omits BAR, baseline, other constraints and the required all-role
+native DAG declaration. Use the companion complete source for the assembled
+example. A field has ordered native lowering plus separately identified semantic
+metadata. Constraint callbacks return tagged descriptions; raw Nix
+`true`/`false` where a predicate is expected must fail. Defaults accept actual
+typed values, not predicate expressions.
 
-## Opinionated helpers: readable proposals
+Named relation constraints quantify over existing occurrences.
+`cardinality = c.exactly 1` checks all owner collections, including empty ones.
+BAR's P/Q counts precede its record-level path predicate;
+`c.only record.relations.P.parent` requires the explicit singleton guarantee,
+and visibility `canDescend` checks the upper/lower targets. Preserve native
+upper → BAR → lower connectivity. A common hierarchy is optional policy for
+other native tailoring consumers.
 
-The following notation is pseudocode. It is deliberately not a loadable Nix
-module, so a reader cannot mistake these names for already exposed options.
+External `c.on elements.FOO.relations.R.parent { targetType = rel: ...; }` uses
+the same mechanism and contextual identity as adjacent constraints. Independent
+contributions are lists, so keyed authoring cannot erase duplicate/conflict
+evidence before composition. No initial fluent/functor sugar is required. Type
+references and runtime node references remain distinct; owner/target names
+describe authored relations, parent/child describe normalized direction.
 
-```text
-targetIs(selector = fooParentR, targetModel = foo)
-forest(selector = fooParentH)
-visibleVia(relation = fooParentR, hierarchy = fooParentH,
-           origins = insideMayExit, roots = sameRoot)
-bridge(parent = barParentP, child = barChildQ,
-       hierarchy = fooParentH, endpoints = exactlyOneEach,
-       closedStart = inside)
-preserveBaseline(source = baseline, projection = modeledAuthoredRecord)
-```
+## Common configuration and extension
 
-`fooParentR` is a model/role reference including grammar, element, native type,
-and role, not a raw display-name interpolation. A consumer should be able to
-write these helpers through public lower layers. A built-in helper requiring
-private evaluator privileges would expose an interface defect.
+The common layer is fully Nix-configurable. Schema assembly returns
+`{ elements; views; normalized; rendered; }`; handles are not serialized.
+`normalized` contains checked native `grammar`, `semanticTypes` and `bundle`
+declaration/rule/view lists. Common configuration adds inputs, implementation
+registrations and explicit bindings. Metadata fields use
+`{ field; native; semantic; default; }`; schema `/v1` identifies the version,
+with a digest over schema and ordered fields. Defaults lower to
+`{literal = value;}` or `{script = {argv; timeoutMs;};}`. Consumer DSLs may emit
+their own versioned contract/config and implement it in Python, Rego, Rust, Bun
+or another enabled tool through the same JSON invocation route. Shipped helpers
+have no private evaluator privileges. The generic host need not know a forest or
+predicate algorithm; selected implementations honor the named contract or reject
+unsupported capabilities.
 
-Initially keeping helpers/provider with the consumer makes the extension
-boundary visible; adopting useful pieces into the library is a separate
-ownership decision. Representative equivalent definitions should reuse the same
-approved scenario suite, rather than maintaining four copies of each document.
+| Surface                            | Responsibility                                                                                                                             |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Semantic schema/types              | Validate declarations, retain field/type/default identity, emit native grammar and semantic metadata.                                      |
+| Constraint DSL                     | Bind finite contextual declarations and symbolic subjects; lower predicates, counts, views and explicit dependencies.                      |
+| Direct normalized rule/view        | Declare versioned meaning, config, scope, inputs, prerequisites and required capabilities.                                                 |
+| Checked composition                | Deduplicate equivalent definitions with provenance; explicit digest-guarded replacement/disable; reject conflicts and broken dependencies. |
+| Implementation/source registration | Identify artifact, schema, runner and capability; capture inputs or evaluate through common JSON.                                          |
+| Capture integration                | Select one Scribe atomic batch, a standalone fixed snapshot or a Git staged tree; no public multi-call transaction framework.              |
+| Structured result helpers          | Build satisfied/violated/blocked/error results with contextual findings, causes and useful evidence.                                       |
 
-## Shared compositional contract: proposal
+Model/document/change rules retain before, candidate, baseline and captured
+facts as distinct inputs. Model-wide dependencies are not reduced to the edited
+element because authoring is adjacent. Preservation explicitly compares
+existence, element/type, selected field presence/values and owned relations;
+alternate projections remain consumer policy. Independent field/custom endpoint
+representations must state their resolution, traversal and any virtual union-DAG
+policy without claiming native export parity.
 
-| Primitive | Author declares                                             | Evaluated result                                                                          |
-| --------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `source`  | Identity, schema/fact contract, provider and capture inputs | Facts with namespace, completeness, provenance and snapshot identity                      |
-| `derive`  | Identity, named input contracts, output contract, evaluator | Derived facts with declared ownership                                                     |
-| `check`   | Identity, named input contracts, evaluator                  | Zero/more structured violations after successful execution, or a distinct execution error |
+## Defaults and runtime boundary
 
-```text
-baseline = source(identity, baselineRecordContract, provider)
-hierarchy = derive(identity, [candidate.authoredRelations], hierarchyContract,
-                   selectedHierarchyComputation)
-visibility = check(identity, [candidate.nodes, hierarchy, candidate.relations],
-                   reviewedOriginSensitiveTraversal)
-preservation = check(identity, [before, candidate, baseline],
-                     reviewedPreservationProjection)
-```
+A semantic field may declare a typed literal or runtime script default. Apply
+only to newly created records still absent after ordered explicit operations;
+never backfill existing records. Preserve false/empty, treat invalid supplied
+data as error and distinguish successful empty script value from failure.
+Resolve once before validation, never during Nix evaluation or again at
+publication. Identity defaults author data, not authentication.
 
-Inputs must distinguish before, candidate, and external baseline. Required
-comparison inputs are not optional simply because evaluation starts from a saved
-workspace. Declaring an opaque executable does not promise selective
-invalidation, determinism, bounded execution, or native incremental maintenance.
-Conservative reevaluation is acceptable; silently omitting a rule is not.
-
-Attachment at field, relation, element, grammar, or module scope may supply
-defaults and local bindings. It must not restrict a declared dependency to the
-edited element. T04/T05/E03/X06 expose nonlocal invalidation requirements.
-Proposed D14 makes extension, replacement, disabling, and conflict explicit and
-exposes the effective rule and its origin through diagnostics or generated
-artifacts.
-
-## Backend-specific layers remain unfilled
-
-The selected evaluator should have a public normalized surface for its
-capabilities and a faithful/native surface for its own configuration. Those
-surfaces are backend-specific siblings, not a universal `sem.native`. Their
-exact examples cannot be honestly written before backend selection and
-capability experiments at Gate 2.
-
-The shared layer need not translate arbitrary native programs between backends.
-Unsupported traversal/lowering produces a capability error or an explicitly
-supported equivalent path. Filtering the final visited set after crossing a
-forbidden boundary is not evidence of equivalent expansion semantics.
-
-## Provider and result review points
-
-A candidate executable-provider convention is structured request on stdin,
-complete identified facts on stdout, operational diagnostics on stderr, and
-process status for acquisition success/failure. Schema/version, required
-environment, resources, and legal inputs still need review. No provider ABI is
-implemented in Gate 1. Acquisition happens at runtime, not during Nix
-evaluation. Providers acquire facts; they do not mutate StrictDoc, commit
-repairs, or choose preservation policy.
-
-Results should distinguish native validation, custom violations, and execution
-errors. Candidate structured fields are rule identity, producer/category, code,
-subjects, source location, and witness containing the relevant path/boundary or
-external snapshot. Exact envelope and code spelling remain open. Tests should
-assert these meaningful facts instead of brittle prose.
-
-## Gate boundary
-
-Review these shared/helper sketches with the behavior tables first. Then
-evaluate backend alternatives and review their two lower surfaces. A functioning
-grammar fixture proves the existing public assembly; it does not demonstrate any
-semantic authoring layer. Missing APIs remain explicit interface gaps until
-exposed and exercised through real Scribe candidate operations.
+A Scribe invocation prepares one private candidate from a stable base, defaults,
+freezes final bytes/paths/membership and effective inputs, completes
+native/semantic validation, then reports dry-run or publishes exactly it.
+Validators read fixed authority and may write identified derived caches.
+Ordinary refusal discards private state; actual publication failure restores or
+blocks. A Git refusal preserves the edited index/worktree. C1–C4 in
+[interface](gate2/interface.md) and [closing plan](gate2/closing-plan.md) retain
+qualification requirements.

@@ -1,176 +1,190 @@
 # Delivery obligations across the remaining gates
 
-This is the coordinator's sequencing and completeness record, not an interface
-design or implementation authority. Gate 2 is authorized. Each later gate still
-requires human review. The final comparison must preserve these obligations
-without presenting unimplemented examples as working APIs.
+Gate 2 revisions are authorized; production implementation and each later
+transition await user review. The
+[reviewed requirements](reviewed-requirements.md), [interface](interface.md) and
+[scope reconciliation](scope-reconciliation.md) replace conflicting
+lifecycle/Boolean-gap requirements. Historical independent designs, measurements
+and correction records remain evidence, not a mandate to restart research.
 
-The complete [reviewed requirements](reviewed-requirements.md) remain governing
-input at every gate. This plan incorporates them by reference; its grouped
-checklist does not replace their detailed truth tables, projections, failure
-distinctions, or work boundaries. Earlier requirements remain in force unless
-the user explicitly changes them. Report unresolved semantic ambiguities in the
-review package.
+## Current review packet
 
-Workers use fresh contexts and explicit read boundaries, not a claimed
-filesystem sandbox. Their only semantic inputs are the approved packet, neutral
-reference cases, and filtered public toolchain; no prior grammar, semantic
-module, spec/plan corpus, or coordinator scratchpad. Ideal and tool-informed
-paths cannot exchange prompts, drafts, research, or outputs before comparison.
-Use Astra with explicit effort, save milestones, format edited files, and
-coordinate serial Nix builds. No broad builds, JVM, SSH key management, approval
-UI implementation, or private-key reads. SQLite remains strongly disfavored
-rather than prohibited; Python, Node with Bun preferred, and Rust remain
-eligible. Workers do not publish externally; the coordinator handles the already
-authorized review branch.
+Deliver a readable new constraint DSL with explicit `g`/`s`/`c` roles, complete
+canonical examples and honest bounded lowering evidence. Separate tutorial,
+setup and protocol reference. Preserve normalized native grammar underneath a
+distinct validated semantic-type layer; show Boolean native lowering plus
+identified metadata, raw predicate Boolean rejection, contextual finite
+references, quantification and explicit checked composition. Keep defaults
+simple: literal or runtime script, creation-only, final absence, once per
+candidate. Consumer DSLs and shipped helpers register contracts/implementations
+through the same fully Nix-configurable JSON route.
 
-## Additional user requirements for design review
+Current evidence must distinguish source inspection, native grammar acceptance,
+evaluated prototype output and actual runtime enforcement. Full source findings
+at `6f529c7eef3650a14b6f8d56ff1bc3ceaa914d7f` establish concrete runtime seams;
+they do not execute Scribe or prove the new candidate path. Preserve the old
+[recommendation](recommendation.md) as clearly historical; do not rewrite its
+measurements or archived alternatives.
 
-- Make the review README self-contained with inline examples that explain the
-  recommended declaration and its behavior; linked supporting files do not
-  substitute for that walkthrough.
-- Preserve the existing normalized upper DSL as the authoring surface. Resolve
-  the Boolean document-field declaration, encode/decode and metadata contract at
-  design review, including the proposed all-String snapshot representation.
-  Grammar booleans for `required` and `isComposite` do not satisfy that
-  requirement. Do not invent an API while recording the gap; use the
-  [public-surface evidence](normalized-authoring/README.md).
-- Include runtime dependencies only for enabled backends, and verify the
-  resulting dependency closures during implementation and qualification.
-- Retain the Cozo experiments for consideration as an optional adapter. The user
-  is open to additional backends; this does not adopt Cozo or change the current
-  backend recommendation.
+## Dependency-ordered implementation after review
 
-## Current review package
+These slices are not implementation authorization. C1–C4 retain their original
+intent with revised requirements; close only the portions needed for each claim
+and track the rest explicitly.
 
-- Preserve the ideal interface proposal before comparing it with tooling
-  research. Preserve the tool-informed proposal with evidence that its worker
-  did not receive the ideal proposal.
-- Provide a concrete recommended consumer declaration and public extension
-  contract, with the alternative proposals available for comparison.
-- Explain the backend recommendation using measured experiments, exact versions,
-  primary sources, positive and negative controls, and unresolved limits.
-  Separate upstream guarantees from installed Scribe integration behavior.
-- Show how every packaged adapter uses the same public extension mechanism
-  available to a consumer. Identify any proposed privileged path or missing
-  equivalent lower-layer route explicitly.
-- Map all reviewed behavior families to interface examples and later executable
-  evidence. A missing behavior cannot disappear because a candidate tool does
-  not support it.
-- Prepare human-readable recipes and steering-ready content for every family.
-  Mark proposed syntax and unimplemented behavior clearly. Final runnable
-  recipes are a later delivery obligation.
-- Save experiment commands and small inputs/results needed for reproduction.
-  Exclude downloaded dependency trees, build outputs, private environment
-  details, and unrelated source from any tracked review package.
-- End with the next human review. Do not implement Gate 3 based on a successful
-  prototype.
+1. **Freeze types, identity and payload (C1).** Validate the distinct
+   semantic-type options and lower to native grammar plus metadata. Fix
+   canonical digest encoding, field/grammar identity, model-wide UID resolution,
+   ordered fields, optional/required scalar presence and Boolean codec/error
+   rules. Freeze native string-list extraction, source coordinates, unsupported
+   forms and partial-input diagnostics. Reuse bounded DSL prototype evidence
+   without presenting it as an installed API.
+2. **Creation defaults and construction seams (C1/C3).** Implement typed
+   literals and small runtime-script response contract; collect explicit
+   operations first and default only surviving newly created final absence.
+   Preserve false/empty, distinguish success-empty from failure, capture once
+   and avoid Nix acquisition. Audit early CLI required-field checks, add-node
+   missing/empty rejection and per-field native validation so construction can
+   reach the intended complete state. Do not create a general default
+   expression/dependency engine.
+3. **Shared private candidate preparation (C3).** Capture stable base, apply
+   ordered operation list privately, support create-then-edge and endpoint
+   replacement, then default/freeze. Audit all six write verbs and read/export
+   paths; move destination and membership join the same publication boundary.
+   Reconcile walk/object state with derived indexes before final checks; moving
+   a stale precheck to the end is insufficient. Preserve incremental mutation
+   where correct; complete validation is not mandatory rebuilding after every
+   operation.
+4. **Generic runner and result validation (C2).** Implement common Nix
+   registration/configuration, identified inputs, bindings/capability checks and
+   JSON invocation. Preserve RuleResult/Finding/errors/evidence, complete
+   accounting and aggregate/admission distinction. Prove shipped and independent
+   target entries use the same route. Keep fact capture distinct from default
+   materialization and validators read-only for authority, writable for
+   identified derived state.
+5. **Minimal constraint DSL and first vertical slice (C1–C3).** Implement the
+   finite schema/reference/callback lowering already reviewed: scoped targets
+   first, then counts/forest/Boolean visibility/bridge/projection operations
+   needed by this user. Preserve direct contracts and consumer-defined
+   vocabularies. Deliver real public Nix → generated native+semantic artifacts →
+   Scribe wrong-type refusal, with valid/same-role-other-element controls,
+   unchanged files/held state and reload. A JSON-only runner or private function
+   call does not close integration. Earlier runner and DSL work may be
+   interleaved for this vertical test; no infrastructure-only gate closure.
+6. **Native/backend and publication qualification (C3/C4).** Validate complete
+   native all-role DAG plus configured rules over the frozen final candidate.
+   Dry-run reports that candidate; publication consumes exact prepared
+   bytes/paths without mutation/default replay, checks stale base and
+   acknowledges only file/model agreement. Fault tests restore or block writes
+   and state crash/external-reader limits. Qualify actual parser/backend pairing
+   and enabled-only dependency closures on supported platforms, separately from
+   old import/synthetic graph evidence.
 
-## Gate 3: first complete slice
+Gate 3's first publishing slice includes the applicable candidate guarantees
+above; it cannot ship a bypass and defer ordinary refusal correctness. Hard
+semantic families and specialized Git/trust boundaries can follow in Gate 4. No
+public begin/stage/seal/abort, participant/readiness system or generic lifecycle
+framework is a dependency of any slice.
 
-Implement through a fresh-context workflow after approval: declare a target-type
-restriction through public Nix configuration, generate the necessary artifacts,
-exercise a real Scribe mutation, observe rejection with a useful diagnostic,
-prove unchanged authored and held state on refusal, and verify reload. A
-JSON-only validator or private function call is insufficient integration
-evidence.
+## Gate 4: semantic and consumer boundaries
 
-Reconcile the recommended API with the reviewed declaration before
-implementation. An implementation constraint can produce a proposed interface
-change; it cannot silently redefine the approved behavior.
+Cover selected forest with contextual roles and multiple roots, original-origin
+visibility and nested boundaries, unchanged-edge invalidation on
+closure/ancestry changes, native Parent/Child tailoring and field/custom
+alternatives. Counts and complete graph invariants evaluate final state.
+Exercise create plus endpoint operations, endpoint replacement, coordinated
+boundary/reference repair and related deletions. Full native DAG remains
+mandatory across all roles independently of selected projections.
 
-## Gate 4: hard semantic and boundary slices
+Retain before, candidate, captured baseline/external facts,
+model/document/change checks and explicit trust. Source failure differs from
+complete empty facts. Reference preservation freezes specified owned projection
+with no implicit supersession exception. Identity, main protection and human
+approval remain consumer policy, not generic defaults or authentication inferred
+from authored labels. No SSH key management, private-key reads or approval UI
+work is authorized now.
 
-Track the selected forest and contextual roles, origin-sensitive visibility,
-unchanged-edge revalidation after moves/closures, native Parent/Child tailoring,
-alternative field/custom logic, grouped final-candidate validation, external
-snapshots, and provider failures. Native full-graph acyclicity remains an
-integration obligation even if upstream already supplies the check.
+Qualify Git staged-tree capture independently: exact index tree, explicit
+merge-before interpretation, main distinct from before, edited index/worktree
+preserved on refusal and actual validated-tree binding where claimed. Scribe
+followed by Git commit is two invocations; commit refusal does not undo
+published Scribe state. No live transaction lifecycle is required. Captured
+facts are not latest-at-publication leases.
 
-Retain authored owner, target, type, role, and model context separately from
-normalized connectivity. Reverse display names create no authored facts.
-Document packaging creates no implicit ancestry. Preserve multiple selected
-roots, nonselected native parents, and traversal without an arbitrary depth
-bound. No fixture names or consumer policies may become core dispatch keys.
-
-Validate consumer-selected daemon transactions, staged Git-tree hooks, and their
-composition as distinct invocation boundaries. Preserve complete candidate
-validity, explicit errors, before/baseline distinction, conflict handling for
-parallel contributors, and honest rollback/recovery behavior. A database
-transaction or serialized request list alone cannot satisfy the Scribe
-publication contract.
-
-Scheduling changes candidate capture and invocation, not rule meaning. Private
-staging may be incomplete. Invalid inputs remain inspectable; the reference
-requires complete valid repair, while alternative repair admission remains an
-explicit consumer choice. Publication failure restores prior state or blocks
-writes pending recovery, never reports false success. Per-evaluation snapshots
-do not imply latest-at-publication freshness.
-
-Identity, main-baseline protection, supersession, and human approval are
-consumer policies. Required trusted facts must have an explicit
-acquisition/trust contract. Do not treat an authored field, ordinary Git author
-string, or request label as authenticated identity. SSH identity and a future
-approval UI must fit the public extension design without becoming mandatory
-engine policy.
+Invalid input remains inspectable; reference repair requires complete valid
+final candidate. Other admission policy is explicit and cannot erase
+invalidity/errors. Every read and export path must honor candidate isolation; a
+frozen Generation wrapper and lock release do not freeze already returned graph
+objects.
 
 ## Gate 5: independent consumer challenge
 
-Use a fresh worker with public interfaces and approved contracts only. Exercise
-equivalent helper/direct/native authoring where equivalence is claimed, an
-independently supplied backend/tool, and a consumer-owned helper. Record when a
-representation deliberately changes native connectivity instead of claiming
-false equivalence.
-
-The older D15/X07 numeric descendant/external-limit challenge remains a separate
-later review item. Keep it out of tonight's user-facing recap; do not silently
-add fields to the retained core fixture.
+Use an independently supplied implementation and consumer helper through public
+configuration after approval. Compare adjacent/external/direct forms and any
+claimed native-backend equivalence on identical identified inputs and meaningful
+witnesses. Demonstrate custom DSL contract registration, source capture and
+field endpoint/custom logic. No neutral names may become core dispatch keys. The
+D15/X07 numeric descendant/external-limit challenge remains a separate later
+approval item, outside the core fixture and front review recap.
 
 ## Gate 6: qualification
 
-Run differential full/incremental mutation sequences with identical captured
-inputs, reload/rebuild and cache deletion controls, provider/policy invalidation
-without document edits, publication failure injection, and representative scale
-measurements. Record cold and warm work separately. Performance is evidence, not
-permission to weaken validity or omit rules.
+Compare full/incremental evaluation on identical
+before/candidate/policy/type/fact inputs across
+insert/delete/role/endpoint/boundary/subtree/batch changes. Include
+source/policy/metadata-only changes, negative lookups, collection membership,
+rejected-candidate caches, corruption/rebuild, moves with refreshed locations,
+reload and cold restart. Full evaluation remains the correctness oracle; no
+cache is authoritative and no commit/rollback callback is required just to
+manage caches.
 
-Complete the acceptance matrix with results and honest gaps. Verify recipes
-against actual exported APIs and normal consumer commands. Keep experimental
-backend capability evidence distinct from production acceptance.
+Inject provider failures, stale base, move/delete publication failure,
+restoration failure, process cancellation and supported crash windows. Document
+qualified Scribe reader/locking scope and limits for arbitrary filesystem
+readers. Do not infer crash-atomic multi-file publication from per-file rename
+or recovery code. Measure representative 1,000/10,000-node shallow/wide and
+deep/narrow workloads with cold/warm costs, parsing, providers, serialization,
+invalidation, rebuild and publication; no synthetic historical cell becomes an
+all-rule SLA.
 
-## Closure after the final gate, before folding back into trial
+Retain Python/rustworkx and optional OPA direction, Cozo as optional
+consideration. Only enabled backend/provider dependencies belong in runtime
+closure. No JVM; SQLite remains strongly disfavored and would need compelling
+evidence. Existing runtime-pairing imports/synthetic controls do not close
+production packaging, platforms or native integration.
 
-- Remove mandatory repository-specific field policy from generic Scribe.
-  Exercise the intended repository policies through the public consumer
-  extension interface.
-- Remove every `AUTHORED_BY` and `PARENT_FP` declaration and content occurrence
-  from the neutral fixtures. Do not substitute renamed equivalents of the same
-  repository policy. Move historical evidence outside neutral fixture scope when
-  necessary; preserve provenance elsewhere.
-- Prove a neutral consumer works with neither field and no hidden repository
-  grammar, semantic module, or spec/plan dependency.
-- Deliver verified human Markdown playbooks and corresponding steering-ready
-  content for every reviewed behavior family, including both native tailoring
-  and a field/custom-logic example. Do not wire steering placement now.
-- Keep the lightweight clean toolchain/fixture pattern suitable for future
-  semantic examples and tests. Recheck its refresh and exclusion controls after
-  changing its public implementation inputs.
-- Do not migrate these documents into the SDoc canon yet. A later session can
-  adopt repository semantics once the machinery exists.
-- Provide a reviewable web diff of the completed branch chain. No merge occurs
-  in this session.
+## Closure after final qualification
 
-## Review completeness matrix
+Remove mandatory repository-specific field policy from generic Scribe and
+express repository policy through public consumer extensions. Final neutral
+fixtures must contain no `AUTHORED_BY`/`PARENT_FP` declarations or content and
+no renamed substitute policy. Move historical accommodations outside final
+neutral fixture scope while retaining provenance. Demonstrate a neutral consumer
+without either field or hidden repository grammar/semantics/spec dependencies.
 
-| Behavior family                                | Gate 2 content                                                            | Later evidence                                                 |
-| ---------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Target types and contextual relation selection | Concrete helper and direct declaration                                    | Real Nix-to-Scribe rejection and reload                        |
-| Native graph and selected forest               | Distinguish native guarantees from selected constraints                   | Native/mixed-link controls and selected-parent counterexamples |
-| Origin-sensitive visibility                    | Closed endpoint, inside-origin, nested boundary and move/closure examples | Nonlocal revalidation and full/incremental parity              |
-| Intermediate tailoring record                  | Native Parent/Child ownership and downward-path example                   | Preserved authored ownership and graph witnesses               |
-| Alternative field/custom logic                 | Explicit extension and limited equivalence claim                          | Consumer program through public registration                   |
-| External facts and identity                    | Complete snapshot, failure, trust and baseline examples                   | Missing/empty/error controls and captured-input parity         |
-| Consumer protection and approval               | Main baseline, human-protected documents, supersession extension points   | Repository policy outside generic runtime                      |
-| Transactions, hooks and recovery               | Candidate acquisition and publication responsibilities                    | Grouping, conflicts, refusal, reload and failure injection     |
-| Composition and replaceable backends           | Explicit replacement, capabilities, diagnostics and public registration   | Independent adapter/helper challenge                           |
-| Documentation and neutral fixture              | Draft human/steering recipes and closure plan                             | Verified recipes and absence of repository-specific fields     |
+Verify every human Markdown playbook and corresponding steering-ready content
+against actual exported APIs and commands, including native tailoring and
+field/custom logic, errors and controls. Steering module placement stays
+deferred. Keep lightweight public fixture/toolchain refresh/exclusion controls.
+No WORK/MECH/DEC nodes or migration into SDoc truth yet. Provide a reviewable
+change diff for the next human decision. Completion of the Gate 2 packet does
+not authorize implementation or advancement to a later gate.
+
+## Review coverage
+
+Retain all 44 original scenario IDs and all 15 visibility truth rows.
+DFT01–DFT07 and A01–A11 add 18 future contract controls; these counts describe
+planned coverage, not executed integration tests.
+
+| Family                          | Current contract evidence                                                       | Later qualification                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Types/defaults                  | Canonical Boolean metadata, absence/multiplicity, typed script/literal contract | Native extraction/serialization, false/empty, creation-only and once-per-candidate controls |
+| Scoped targets/composition      | Contextual named predicates, direct contract, checked contributions             | Nix-to-Scribe G01/G02/G03, independent result/witness parity                                |
+| Native graph/forest             | All-role DAG distinct from selected forest                                      | Named Parent/Child/mixed cycles, multiple roots, selected-parent witness                    |
+| Visibility/bridge               | Original origin, nested boundaries, explicit counts/downward path               | T01–T11 including unchanged-link invalidation and all 15 truth rows                         |
+| Field/custom representation     | Explicit resolver/virtual union and limited parity                              | Independent tool, field evidence, no false native export equivalence                        |
+| Before/baseline/document/change | Captured identity, projection and trust                                         | Missing/empty/failure, source-only invalidation, explicit consumer lifecycle                |
+| Atomic candidate/dry-run/move   | One ordered invocation and exact frozen artifacts                               | B/DFT/A controls, private readers, stale base, restore-or-block                             |
+| Git staged tree                 | Separate selected invocation, preserve edited state                             | Index race/merge-before/receipt binding under qualified enforcement                         |
+| Caches/results/adapters         | Precise dependencies and full structured accounting                             | Cold/warm/full parity, missing/duplicate/error controls, enabled-only closures              |
+| Neutral delivery                | Cleanup and verified recipe obligations retained                                | Public repository policy, zero required repository fields, human/steering verification      |

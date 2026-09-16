@@ -1,0 +1,27 @@
+{
+  "algorithm": "sha256",
+  "files": {
+    "composition.nix": "8d36bcce6f6732302d9349829bd9c65e1f2bc0a2c95e355edda967ba46df9e78",
+    "design.md": "da85d4653f6c7389b0e228fe4134c6a0f2dc460d76338d9f041b0ce874ab473e",
+    "evidence.md": "0fbc48095aa2092eac6289ace3cecc00c14467f9d83dd01e7b393c85aef1653e",
+    "field-alternative.nix": "7bf3c2d77c88005e9b51e4dadf689f9deeb2c0894d3928f47e23b60d973aa1b2",
+    "input-hashes.json": "d5b72a9f2e2c163c8138a5be6f1c184b1bd0dd87ab479d4023523404a366d736",
+    "native-tailoring.nix": "d3984e2c8c982d2daa750b5f2bedfa7ad2f234d6f2f50ca79df2611f311f7e85",
+    "prototype/compose.nix": "f1c91c399f25a4cca351846a032878ea7b40b722163ac9fe68eaa4f961b811c4",
+    "prototype/control-results.json": "4094822c6a79bec200e5e28bffc00c43e601525c63b65f85a1223b57ac060cc3",
+    "prototype/controls.nix": "f415aa2970e9cbefc6ac70fd16e2aecbb8798743df89927f5a0f005c1131e882",
+    "prototype/dsl.nix": "cc833f76f4a52ce90d5c3b67305954c6664aaead186fd2ca1d465ca0e10d6a8e",
+    "prototype/evaluate.nix": "d55bbb0144ebe907ed5e83c3b0a9c200f11dd723d883b4e5b22c64851290dc61",
+    "prototype/evaluated.json": "073eb5ec20465a7a28cb3d165b2bffb5ac02d42a8a56922a46ef2102c9c698a5",
+    "prototype/probe.py": "fec5f611893978dd6cd4b93b614e8552444ada6349b7b07faafac4ae3ad32a5d",
+    "prototype/rendered.sgra": "8845114bc965a539a2c2130b2b6968aa55287fe6a9cb92bcd05f1600e1e36d98",
+    "prototype/review-regressions.json": "e619723ff9d7180bbd377b3b10d041868b3ce7b55112498a6421ec66e42cc482",
+    "prototype/runtime-results.json": "9d22630cb8679d5d3d4c3e623ebf6d78549f9d4f05a8a355692f75afb84e14aa",
+    "prototype/runtime.py": "85fd9e7621c0f1dcde8709dc7d1811e1a9caa6629af0ea9e5e41eae2ac1f5c07",
+    "public-shape.md": "e2cae31e0c1c0de57f53f2c865fead834ee81287d17516b6bf9721c7793b8ddf",
+    "recommended.nix": "63919d39704dac21e9ed672d606ea83dad25778e13dcf709ebae0ddfab75bb78",
+    "review-disposition.md": "13260255e06e6915a15402ce018b6919f5c550d300032d9920879b8036ab9dd6",
+    "source-regions.json": "114d5b1e59aba0cdcb0025e82257522fb082c35370dc90f6a438fb3c32957bbe",
+    "status.json": "24a2049f774258fb7170d48d584c03c46d9d07786d689d2f7dd54607913eb20a"
+  }
+}

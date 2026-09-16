@@ -1,3 +1,19 @@
+# Historical Gate 2 recommendation
+
+**Historical comparison and measurements, retained without reinterpretation.**
+The text below predates the 2026-09-15 handoff. Its `p` spelling, universal
+stage/seal/readiness proposal, old Boolean-gap posture and next-choice list do
+not govern the current revision. Read [current interface](interface.md),
+[reviewed requirements](reviewed-requirements.md),
+[current findings](findings.md) and
+[scope reconciliation](scope-reconciliation.md) first. The Python/rustworkx
+direction and optional adapters remain retained evidence; no benchmark was rerun
+or reattributed. Archived alternatives remain unchanged. References below use
+the original packet layout and are not all supplied in this isolated output
+directory.
+
+---
+
 **Recommend a policy library beside the existing grammar DSL, backed first by
 Python with rustworkx and StrictDoc's own parsing/native checks.** Offer OPA as
 an optional public adapter for consumers who want Rego. Do not require a

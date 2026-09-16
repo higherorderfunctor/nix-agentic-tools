@@ -1,0 +1,99 @@
+{
+  "checks": [
+    {
+      "document": "tutorial-dsl.md",
+      "expressionFirstLine": "{ grammar, schema, constraint }:",
+      "ok": true,
+      "type": "complete Nix expression forced"
+    },
+    {
+      "document": "tutorial-dsl.md",
+      "expressionFirstLine": "{ lib, grammar, schema, constraint }:",
+      "ok": true,
+      "type": "complete Nix expression forced"
+    },
+    {
+      "document": "tutorial-dsl.md",
+      "expressionFirstLine": "{\n  grammar,",
+      "ok": true,
+      "type": "complete Nix expression forced"
+    },
+    {
+      "document": "setup.md",
+      "expressionFirstLine": "{ lib, grammar }:",
+      "ok": true,
+      "type": "complete Nix expression forced"
+    },
+    {
+      "document": "setup.md",
+      "expressionFirstLine": "{ grammar, schema, pythonExecutable,",
+      "ok": true,
+      "type": "complete Nix expression forced"
+    },
+    {
+      "document": "setup.md",
+      "fence": 2,
+      "ok": true,
+      "type": "Python syntax"
+    },
+    {
+      "document": "setup.md",
+      "fence": 16,
+      "ok": true,
+      "type": "Python syntax"
+    },
+    {
+      "document": "setup.md",
+      "fence": 17,
+      "ok": true,
+      "type": "JSON parse"
+    },
+    {
+      "document": "setup.md",
+      "fence": 18,
+      "ok": true,
+      "type": "JSON parse"
+    },
+    {
+      "inputValue": "",
+      "ok": true,
+      "result": {
+        "protocol": "sdoc-default/v1",
+        "requestId": "example-1",
+        "status": "ok",
+        "value": ""
+      },
+      "type": "isolated standalone default script"
+    },
+    {
+      "inputValue": " Ada ",
+      "ok": true,
+      "result": {
+        "protocol": "sdoc-default/v1",
+        "requestId": "example-1",
+        "status": "ok",
+        "value": " Ada "
+      },
+      "type": "isolated standalone default script"
+    },
+    {
+      "inputValue": null,
+      "ok": true,
+      "result": {
+        "error": {
+          "code": "git-identity",
+          "message": "Command '['/home/caubut/.nix-profile/bin/git', 'config', '--null', '--get', 'user.name']' returned non-zero exit status 1."
+        },
+        "protocol": "sdoc-default/v1",
+        "requestId": "example-1",
+        "status": "error"
+      },
+      "type": "isolated standalone default script"
+    }
+  ],
+  "limits": [
+    "Snippet expressions only; no installed exports",
+    "Standalone script only, no default runner/Scribe integration",
+    "Relative imports rewired to exact publication sources in isolated extraction"
+  ]
+}

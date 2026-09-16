@@ -1,10 +1,43 @@
 # Review artifact provenance
 
+## September 15 DSL and contract revision
+
+The user rejected the previous Gate 2 authoring presentation. The current
+[review landing page](../README.md) links the rewritten, self-contained
+[tutorial](../tutorial-dsl.md), separate [setup](../setup.md), synchronized
+[interface](../interface.md) and
+[scope reconciliation](../scope-reconciliation.md). The new `s` and `c`
+namespaces remain proposed. The
+[authoring prototype](../authoring-prototype/evidence.md) provides bounded
+lowering and helper evidence; it does not install semantic APIs or change
+Scribe.
+
+Separate Astra/high workers revised the DSL, contracts and documentation using
+allowlisted inputs. An independent Astra/high review replayed the evidence and
+added counterexamples; the corrected prototype retains the review controls. The
+coordinator's public-source reconnaissance used Astra/medium. The same context
+boundaries described below apply. No worker received the coordinator's
+scratchpad or repository-specific grammar, semantics or spec/plan corpus.
+
+The earlier freezes below continue to describe their historical inputs. They do
+not prove current contracts, semantic types, default providers or atomic
+batches. Production implementation and gate progression still require the user's
+review.
+
+The [independent final review](dsl-review.md) resolves six findings and retains
+its exact reviewed input hashes. The [publication map](dsl-publication.json)
+records producer and delivered bytes, including link relocation and subsequent
+Nix lint substitutions. [Publication replay](dsl-publication-checks.json) proves
+identical evaluated values after those substitutions; the separate
+[snippet checks](dsl-snippet-checks.json) cover five complete Nix expressions
+and the standalone identity script. None establishes Scribe integration.
+
 ## Consumer walkthrough revision
 
 The 2026-09-14 review revision replaces the entry README with a self-contained
-consumer walkthrough. The original README from commit `46d20688` is preserved
-byte for byte as [recommendation.md](../recommendation.md). The freeze and
+consumer walkthrough. The original README from commit `46d20688` is retained as
+historical [recommendation.md](../recommendation.md); the September 15 revision
+adds an explicit supersession notice above its original content. The freeze and
 publication records below describe that original review, not unchanged bytes for
 subsequently revised files. The [revision map](consumer-readme-publication.json)
 records these changes separately.
@@ -52,8 +85,8 @@ published checksums. Publication edits relocate links, apply repository
 formatting and Nix style fixes, and repair whitespace in the public-toolchain
 brief. Frozen originals remain in the private session backup. Audit line
 references refer to their frozen inputs, before publication formatting.
-Alternative proposals remain historical inputs; the recommendation is the review
-candidate.
+Alternative proposals and the original recommendation remain historical inputs.
+The current [review landing page](../README.md) identifies the active proposal.
 
 All interfaces and playbooks in this Gate 2 package remain proposals. Syntax
 parsing and experimental capability results are separate from production Scribe

@@ -1,10 +1,12 @@
 # Neutral fixture model
 
-Status: **PROPOSED — pending user review.** This is a Gate 1 behavior draft, not
-an approved semantic specification or implemented engine.
-[Decisions](decisions.md) records the choices requiring approval;
-[scenarios](scenarios.md) supplies their examples. No scenario outcome becomes
-an approved test expectation merely because this document or a test is written.
+Status: **Retained reviewed behavior with revised proposed contracts.** Gate 2
+was authorized after the 2026-09-13 behavior review; the 2026-09-15 handoff
+governs the scope delta. Older blanket pending labels do not override it. Exact
+interface spelling and later implementation gates remain review items.
+[Decisions](decisions.md), [scenarios](scenarios.md) and
+[current requirements](gate2/reviewed-requirements.md) distinguish behavior from
+evidence. These are not executed integration tests.
 
 ## Established constraints
 
@@ -20,15 +22,17 @@ entire plan, the semantic engine must handle the repository-specific policies
 behind these fields so generic Scribe and neutral consumers do not need either
 field name. Completion requires exercising the repository policy through the
 semantic engine and demonstrating a neutral Scribe consumer without either
-field. This requirement does not approve decisions D01–D15 or select an API or
-backend.
+field. The later Gate 2 behavior review and handoff govern current authority;
+this cleanup requirement does not itself select an API or approve production
+implementation.
 
 This retained consumer fixture lives inside the repository and uses native
 devenv, a filtered public toolchain dependency, and the normal shared host and
 Nix store. It has no fixture flake or private-store/offline harness. The
-semantic backend remains unknown; no JVM is permitted, and SQLite is not the
-default. The fixture author uses public exports and diagnostics, without
-inspecting library implementation.
+retained Gate 2 direction is Python/rustworkx with optional OPA; production
+adoption remains unapproved; no JVM is permitted, and SQLite is not the default.
+The fixture author uses public exports and diagnostics, without inspecting
+library implementation.
 
 ## Vocabulary and small corpus
 
@@ -38,11 +42,15 @@ inspecting library implementation.
 | `BAZ`  | Parent `R`, Child `Q`                   | Resolvable wrong target, reused role contexts, unrestricted connectivity |
 | `FOO`  | Required `FLAG`; Parent `H`, Parent `R` | Hierarchy and visibility examples                                        |
 
-`FLAG` has literal SDoc values `false` and `true`. The existing public grammar
-API can express these as required single-choice strings. Interpreting them as
-open and closed is a proposed semantic decision, not an existing boolean
-constructor. Missing or different values are input errors, never implicit open
-values.
+`FLAG` is a required semantic Boolean in the proposed new validated type layer.
+False means open and true means closed. It lowers to native single-choice
+strings `false`/`true` plus versioned/digested grammar/element/field metadata;
+this is not an existing native Boolean constructor. A reference creation default
+may be typed `false`. Creation defaulting fills final absence only; existing
+missing fields, multiple values, unknown values and invalid supplied values are
+errors, never implicit open. Explicit false is retained. The native string-list
+snapshot can remain with canonical encode/decode metadata. See
+[type/default contract](gate2/interface.md).
 
 Every element explicitly declares required string `UID`; without that
 declaration, a native `new` can write a node that cannot be addressed even when
@@ -123,10 +131,10 @@ downward `H` path, using the same origin-sensitive expansion rule. A closed
 start may expand; a closed endpoint reached externally may be visited without
 expanding. An open node behind an intervening closed ancestor stays hidden.
 
-These are concrete proposals, not settled meanings of closure. A global
-adjacency relation with every closed node's outgoing edges removed would change
-the proposed closed-origin behavior. Implementations must preserve approved
-visit/expand and origin rules, or report an unsupported capability.
+These are the retained reviewed visibility meanings for this reference profile.
+A global adjacency relation with every closed node's outgoing edges removed
+would change the proposed closed-origin behavior. Implementations must preserve
+approved visit/expand and origin rules, or report an unsupported capability.
 
 ## Native constraints can mask semantic questions
 
@@ -151,8 +159,9 @@ bookkeeping fields. UIDs must continue to exist. Incoming relations owned
 elsewhere are not implicitly frozen. Changing a protected FOO's `FLAG` or owned
 `H` relation and deleting a protected UID therefore violate the proposed policy.
 
-This ownership-based projection is deliberately explicit and pending review. A
-protected node can gain incoming connectivity unless another rule forbids it. A
-superseding relation grants no deletion or revision exception. The fake provider
-proves external acquisition and comparison only; it does not establish Git
-baselines, merge bases, cross-revision identity, or hashing semantics.
+This ownership-based projection is the explicit retained reference policy, not a
+universal consumer lifecycle. A protected node can gain incoming connectivity
+unless another rule forbids it. A superseding relation grants no deletion or
+revision exception. The fake provider proves external acquisition and comparison
+only; it does not establish Git baselines, merge bases, cross-revision identity,
+or hashing semantics.

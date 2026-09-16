@@ -30,11 +30,18 @@
       "filename": ["**/*.md", "**/*.mjs", "**/*.nix", "**/*.py", "**/*.sh"]
     },
     {
-      "filename": "fixtures/strictdoc-semantic-library/contract/gate2/**",
+      "filename": [
+        "fixtures/strictdoc-semantic-library/contract/gate2/**",
+        "fixtures/strictdoc-semantic-library/contract/surfaces.md"
+      ],
       "ignoreRegExpList": ["/\\/nix\\/store\\/[a-z0-9]{32}-/g"],
       "words": [
         "acyclicity",
+        "argparse",
+        "bypassability",
+        "combinators",
         "cozo",
+        "dataclass",
         "datalog",
         "disambiguator",
         "functors",
@@ -43,8 +50,13 @@
         "multigraph",
         "networkx",
         "nonblocking",
+        "nondeleted",
+        "nonmultiline",
         "nonselected",
+        "nonstring",
         "petgraph",
+        "precheck",
+        "prechecks",
         "pyproject",
         "pythondontwritebytecode",
         "qiskit",
@@ -52,6 +64,8 @@
         "recomputations",
         "rego",
         "reparenting",
+        "reparses",
+        "reparsing",
         "reserialization",
         "revisioned",
         "rustworkx",
