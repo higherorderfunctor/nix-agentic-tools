@@ -221,7 +221,6 @@
       .beads/.gitignore
       .beads/README.md
       .beads/config.yaml
-      .beads/interactions.jsonl
       .beads/metadata.json
       .gitignore
       FILES
@@ -235,7 +234,6 @@
       f .local_version
       f README.md
       f config.yaml
-      f interactions.jsonl
       f metadata.json
       FILES
       find "$source_init/repo/.beads" -mindepth 1 -maxdepth 1 -printf '%y %f\n' \
@@ -245,6 +243,7 @@
       cat > "$source_init/root.expected" <<'FILES'
       d .beads
       d .git
+      f .beads.gate.lock
       f .gitignore
       FILES
       find "$source_init/repo" -mindepth 1 -maxdepth 1 -printf '%y %f\n' \
@@ -308,6 +307,7 @@
       cat > "$stealth/root.expected" <<'FILES'
       d .beads
       d .git
+      f .beads.gate.lock
       FILES
       find "$stealth/repo" -mindepth 1 -maxdepth 1 -printf '%y %f\n' \
         | sort > "$stealth/root.actual"
@@ -326,6 +326,7 @@
       *.db
       .beads-credential-key
       .beads/proxieddb/
+      *.gate.lock*
       EXCLUDES
       diff -u "$stealth/exclude.expected" "$stealth/repo/.git/info/exclude" \
         || fail "stealth exclude mutation changed"
@@ -640,14 +641,10 @@
         fail "metrics.disabled=true still created Dolt event payloads"
       fi
 
-      # Migration inspection on a database this same client created. There is no
-      # second bd client to compare against: nixpkgs' `beads` tracked 1.0.3 when
-      # this file was written and has since caught up to the packaged version, so
-      # a cross-version pair can no longer be sourced from any tracked input.
-      # What survives the loss of that pair is asserted here rather than deleted:
-      # the recorded schema label and the migration state a fresh database
-      # reports. Both were re-measured against a new-client database before this
-      # block replaced the cross-version one.
+      # Migration inspection on a database this same client created. The old
+      # 1.0.3/1.2.2 comparison was removed when nixpkgs caught up to 1.2.2.
+      # This fresh-database contract does not qualify upgrades or rollbacks
+      # between the current nixpkgs and repository pins.
       migrate="$probe/migrate"
       make_home "$migrate"
       make_state "$migrate/state"
@@ -656,7 +653,7 @@
         > "$migrate/init.out" 2>&1
       # NO `--json` on either `migrate` call below, deliberately, and the grep
       # assertions are therefore correct rather than lazy. Measured against the
-      # packaged 1.2.2 client: `migrate --inspect --json` and `migrate schema
+      # packaged 1.3.0 client: `migrate --inspect --json` and `migrate schema
       # --json` emit output byte-identical to the flagless form, and neither is
       # valid JSON — `jq .` rejects both. The flag is accepted and silently
       # ignored by these two subcommands; it is not loose parsing, since
@@ -674,7 +671,7 @@
       fi
       run_bd "$migrate" "$migrate/cwd" "$migrate/state" migrate schema \
         > "$migrate/schema.out" 2>&1
-      grep -Fq "Schema already at v53" "$migrate/schema.out" \
+      grep -Fq "Schema already at v66" "$migrate/schema.out" \
         || fail "explicit schema migration result changed"
 
       touch "$out"

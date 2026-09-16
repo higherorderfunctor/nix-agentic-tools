@@ -2,17 +2,19 @@
 
 # Dolt remotes, git-backed sync, and encrypted-remote options
 
-> **Last verified:** 2026-08-18 against packaged Beads 1.2.2 and Dolt 2.3.0,
-> plus the upstream sources listed at the end. The disposable black-box contract
-> is `packages/beads/checks/beads-contracts.nix`; the lifecycle and recovery
-> probes are `packages/beads/checks/beads-server-contracts.sh` and
+> **Last verified:** 2026-09-15 for the disposable black-box contracts against
+> packaged Beads 1.3.0 and Dolt 2.3.4. Historical server, recovery, session, and
+> upstream-source claims retain their version tags below. The disposable
+> black-box contract is `packages/beads/checks/beads-contracts.nix`; the
+> lifecycle and recovery probes are
+> `packages/beads/checks/beads-server-contracts.sh` and
 > `packages/beads/checks/beads-recovery-contracts.sh`. #991 carries the
 > timestamped investigation record. Companions: `bd-reference.md` (the tool
 > itself) and `ecosystem.md` (integrations). Remote-provider and encryption
 > qualification remains #997. Claim-local 2.2.3 tags preserve the first
-> measurement; the durable contract, server, and recovery surfaces were
-> requalified against 2.3.0. Session and transaction spike evidence remains
-> scoped to 2.2.3.
+> measurement; server and recovery surfaces were last requalified against Beads
+> 1.2.2 / Dolt 2.3.0. Session and transaction spike evidence remains scoped to
+> 2.2.3.
 
 ## Problem framing — threat model before tooling
 
