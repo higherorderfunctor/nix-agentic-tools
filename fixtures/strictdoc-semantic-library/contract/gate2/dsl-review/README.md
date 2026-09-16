@@ -148,7 +148,9 @@ subject a future evaluator will inspect. This relation binder has exactly two
 author-facing properties: `origin`, the owner, and `target`, the declared
 endpoint. For M's Parent P targeting F0, `edge.origin` is M and `edge.target` is
 F0. Native connectivity still runs from F0 to M because this is a Parent
-relation.
+relation. Native connectivity means the underlying Parent and Child edges
+themselves, across every role and element kind, before any semantic rule
+applies.
 
 FOO uses the same inline pattern for its own H and R roles (fragment of
 examples.nix, lines 19–20):
@@ -212,8 +214,9 @@ Parent R, require its target to be visible from its owner through `sight`.”
 named `node`. That binder exposes exactly `parents ROLE` and `children ROLE`.
 Each returns a symbolic collection of matching relations owned by the record.
 `node.parents "H"` includes F1a's H targeting F1, but excludes its R and other
-records' incoming declarations. The role string is a reference key for an
-already declared role.
+records' incoming declarations. The role string is a reference key: a string
+that must name something already declared elsewhere in the model. The stub does
+not check it today, so a typo is accepted silently.
 
 `record` includes records with zero relations, so the root F0 still gets its
 count check. By contrast, `on` checks each occurrence of the selected relation;
@@ -669,9 +672,10 @@ Finally, this is chapter 4's proof that the inline FOO and its alternative
 ```
 
 `sameNormalized` is true under this lowering logic because both forms register
-the same subject, check name, and expression. These equalities compare emitted
-data; they do not evaluate graph predicates. The conclusions here come from
-reading the stub, without following its external grammar import.
+the same subject, check name, and expression. Evaluating it returns `true`; the
+recorded run is in `transcript.txt` beside this file. These equalities compare
+emitted data; they do not evaluate graph predicates. The conclusions here come
+from reading the stub, without following its external grammar import.
 
 | Constructor  | Signature                        | Arguments                                                                                                         | Checks over                                                        | Real today                                                                                                  |
 | ------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
