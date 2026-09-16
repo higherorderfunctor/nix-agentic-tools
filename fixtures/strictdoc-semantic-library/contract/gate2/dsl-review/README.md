@@ -113,7 +113,7 @@ column says what the stub actually does.
 A **relation occurrence** is one declaration owned by a record and pointing at
 another record. `parent` and `child` declare which kinds of relation an element
 may own. BAR declares these two kinds inside its element frame. Read the
-`relations` list first; chapters 4–6 explain its constraints and the visibility
+`relations` list first; chapters 4–7 explain its constraints and the visibility
 view `sight`. (fragment of examples.nix, lines 30–44):
 
 ```nix
@@ -190,7 +190,7 @@ while its placement supplies the scope. Check names are unique per subject
 identity (relation, element, or model), not global: the stub merges equal
 definitions for that subject and name, and throws when they differ. FOO's list
 contains a count rule and a rule attached to R. sight is the visibility view
-built in the next chapter. (fragment of examples.nix, lines 16–27):
+built in chapter 6. (fragment of examples.nix, lines 16–27):
 
 ```nix
   foo = el "FOO" {} {
@@ -258,7 +258,7 @@ Its alternative FOO declaration puts that same check in the constraints list
 ```
 
 These are alternative declarations of the same element name, not two elements to
-register together. The two forms lower identically, and chapter 9 shows the
+register together. The two forms lower identically, and chapter 10 shows the
 proof. Both use the same subject and check name, `"target-type"`. A bare inline
 callback gets the name `"predicate"`, so it would not match a differently named
 check. Either form rejects F1a's R targeting Z0, and neither adds that rule to
@@ -268,11 +268,51 @@ Z0's own R.
 | ----------- | ------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `check`     | `check NAME EXPRESSION`   | Name you choose; symbolic predicate, `record` expression, or callback receiving an edge binder. | each relation occurrence / each record / whole model, by placement | Names and lowers the predicate; rejects raw Boolean predicates.                      |
 | `record`    | `record BIND`             | Predicate-building function receiving a binder with `parents ROLE` and `children ROLE`.         | each record                                                        | Calls the function symbolically; rejects use outside record scope.                   |
-| `atMost`    | `atMost COUNT COLLECTION` | Integer bound; collection from the record binder's `parents` or `children`.                     | each record                                                        | Emits a count predicate; does not validate the bound or count records.               |
+| `atMost`    | `atMost COUNT COLLECTION` | Integer bound; collection from the record binder's `parents` or `children`.                     | each record                                                        | sugar; see Counting.                                                                 |
 | `on`        | `on SUBJECT CHECK`        | Relation reference from `parentOf` or `childOf`; named predicate from `check`.                  | each relation occurrence                                           | Attaches the check to the selected relation.                                         |
 | `parentOf`  | `parentOf ELEMENT ROLE`   | Element reference from `el`; reference key naming its declared Parent role.                     | none                                                               | Builds a reference qualified by owner and direction; normalization checks it exists. |
 
-## 5. Hierarchy and visibility
+## 5. Counting: the lowest form and its sugar
+
+A collection has a count. Compare it with a number to build a predicate. This
+rule allows at most one link parent (fragment of counting.nix, lines 6–14; sugar
+lines 10–12 omitted):
+
+```nix
+  item = el "Item" {} {
+    relations = [(parent "link" "link_back")];
+    constraints = [
+      (check "link-count" (record (node: lte (count (node.parents "link")) 1)))
+    ];
+  };
+```
+
+The three spellings you will actually write are `atMost`, `atLeast`, and
+`exactly`. Each takes the number first and the collection second (fragment of
+counting.nix, lines 10–12):
+
+```nix
+      (check "at-most-one-link" (record (node: atMost 1 (node.parents "link"))))
+      (check "at-least-one-link" (record (node: atLeast 1 (node.parents "link"))))
+      (check "exactly-one-link" (record (node: exactly 1 (node.parents "link"))))
+```
+
+The sugar lowers to count plus comparison, and counting.nix proves the `atMost`
+pair identical with `==` on the lowered output.
+
+| Constructor | Signature              | Arguments in words                                                                | Lowers to                  | Real today                                            |
+| ----------- | ---------------------- | --------------------------------------------------------------------------------- | -------------------------- | ----------------------------------------------------- |
+| `count`     | `count COLLECTION`     | A collection from `parents` or `children`.                                        | Primitive `count`.         | Emits a count expression; does not count occurrences. |
+| `lt`        | `lt A B`               | Two count expressions or numbers; is the left less than the right?                | Primitive `lt`.            | Emits the comparison; does not evaluate it.           |
+| `lte`       | `lte A B`              | Two count expressions or numbers; is the left less than or equal to the right?    | Primitive `lte`.           | Emits the comparison; does not evaluate it.           |
+| `gt`        | `gt A B`               | Two count expressions or numbers; is the left greater than the right?             | Primitive `gt`.            | Emits the comparison; does not evaluate it.           |
+| `gte`       | `gte A B`              | Two count expressions or numbers; is the left greater than or equal to the right? | Primitive `gte`.           | Emits the comparison; does not evaluate it.           |
+| `eq`        | `eq A B`               | Two count expressions or numbers; are they equal?                                 | Primitive `eq`.            | Emits the comparison; does not evaluate it.           |
+| `atMost`    | `atMost N COLLECTION`  | An integer upper bound, then a collection.                                        | `lte (count COLLECTION) N` | Expands to primitives; does not check records.        |
+| `atLeast`   | `atLeast N COLLECTION` | An integer lower bound, then a collection.                                        | `gte (count COLLECTION) N` | Expands to primitives; does not check records.        |
+| `exactly`   | `exactly N COLLECTION` | An integer count, then a collection.                                              | `eq (count COLLECTION) N`  | Expands to primitives; does not check records.        |
+
+## 6. Hierarchy and visibility
 
 The hierarchy uses only FOO's Parent H relations. Other roles cannot supply
 shortcuts between its nodes. `fieldOf foo flag` selects the field declaration
@@ -368,9 +408,9 @@ handling and traversal remain specified behavior.
 | `isForest`   | `isForest VIEW`                    | View reference from `forest`.                                                                                         | whole model                   | Emits the structural predicate described above; runs no graph check.                                     |
 | `fieldOf`    | `fieldOf ELEMENT FIELD`            | Element from `el`; field declaration from `str` or `boolean` and its wrappers.                                        | none                          | Builds a declared field reference, not a record's field value.                                           |
 | `visibility` | `visibility NAME HIERARCHY POLICY` | Name you choose; view from `forest`; field reference and fixed keywords listed above.                                 | none                          | Emits policy and path settings; does not validate policy keywords.                                       |
-| `visible`    | `visible VIEW ORIGIN TARGET`       | View from `visibility`; the example supplies node expressions from the edge binder (see chapter 10 for scope limits). | each relation occurrence here | Emits the path question; runtime behavior follows the algorithm above.                                   |
+| `visible`    | `visible VIEW ORIGIN TARGET`       | View from `visibility`; the example supplies node expressions from the edge binder (see chapter 11 for scope limits). | each relation occurrence here | Emits the path question; runtime behavior follows the algorithm above.                                   |
 
-## 6. Bridges
+## 7. Bridges
 
 A BAR record owns both of its endpoints. `exactly 1` requires one relation in
 each endpoint collection. Then `only` selects that sole relation, and `.target`
@@ -433,11 +473,11 @@ boundary.
 
 | Constructor  | Signature                       | Arguments                                                                                   | Checks over | Real today                                                                         |
 | ------------ | ------------------------------- | ------------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------- |
-| `exactly`    | `exactly COUNT COLLECTION`      | Integer count; collection from a record binder's `parents` or `children`.                   | each record | Emits the comparison without validating the number or counting occurrences.        |
+| `exactly`    | `exactly COUNT COLLECTION`      | Integer count; collection from a record binder's `parents` or `children`.                   | each record | sugar; see Counting.                                                               |
 | `only`       | `only COLLECTION`               | Collection from the record binder; `.target` selects the sole relation's declared endpoint. | each record | Emits singleton selection and endpoint access; runtime blocking is specified only. |
 | `canDescend` | `canDescend VIEW ORIGIN TARGET` | View from `visibility`; node references from the two singleton `.target` expressions.       | each record | Emits the downward-path predicate; does not traverse the graph.                    |
 
-## 7. Model-wide rules and inputs
+## 8. Model-wide rules and inputs
 
 Some rules need facts beyond one record. An **input** declares data that runtime
 must supply for an evaluation. Here it supplies the external baseline introduced
@@ -558,7 +598,7 @@ must leave the complete candidate valid.
 | `preserve`   | `preserve BASELINE PROJECTION` | Input reference from `input`; comparison reference from `projection`.                                                                           | whole model | Emits preservation and its input dependency; compares no snapshots.                 |
 | `childOf`    | `childOf ELEMENT ROLE`         | Element reference from `el`; reference key naming its declared Child role.                                                                      | none        | Builds a qualified Child reference whose existence is checked during normalization. |
 
-## 8. Assemble and lower
+## 9. Assemble and lower
 
 `model` gathers the declarations and rules under one chosen name. A Nix variable
 holding a view does not register it; the model's `views` list does. The other
@@ -603,7 +643,7 @@ review directory; that import was not followed or reevaluated here.
 | `model`     | `model NAME BODY` | Name you choose; lists `elements`, `views`, `inputs`, `projections`, `constraints`, `contributions`, each defaulting to empty. | none                           | Supplies the model namespace and list defaults; does not reject unknown body keys.       |
 | `normalize` | `normalize MODEL` | Declaration obtained from `model`, optionally updated with Nix attributes.                                                     | whole model (authoring checks) | Produces grammar, metadata, and rule data; authoring errors throw during Nix evaluation. |
 
-## 9. Contributing rules from outside
+## 10. Contributing rules from outside
 
 `contribute` adds named checks to a relation already declared by an element. It
 takes a contribution name, a relation reference, and a list of checks. The
@@ -682,7 +722,7 @@ from reading the stub, without following its external grammar import.
 | `contribute` | `contribute NAME SUBJECT CHECKS` | Name you choose; declared relation reference from `parentOf` or `childOf`; list of named predicates from `check`. | each relation occurrence                                           | Merges identical lowered checks and their origins; throws on conflicting meanings under one check identity. |
 | `const`      | `const VALUE`                    | Boolean literal: complete accepted set `false`, `true`.                                                           | each relation occurrence / each record / whole model, by placement | Emits a constant predicate and rejects non-Booleans; it has no operand that can block.                      |
 
-## 10. Write one yourself
+## 11. Write one yourself
 
 `inherit` brings constructor names into local scope from `dsl`, `field`, or
 `rel`. Adding a rule that uses a constructor not already on the `inherit` lines
@@ -707,7 +747,14 @@ shape and binder placement, but does not enforce the operators' intended scopes.
 | Constructor  | Legal in relation scope   | Legal in record scope               | Legal in model scope      | Where its operands come from                                                                                                                               |
 | ------------ | ------------------------- | ----------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `isNodeType` | Stub accepts; specified.  | Stub accepts; unattested.           | Stub accepts; unattested. | Node: `edge.origin` or `edge.target` in the example; stub also accepts a singleton's `.target`; element: declaration from `el`.                            |
+| `count`      | Stub accepts; unattested. | Stub accepts; specified as a value. | Stub accepts; unattested. | Collection: a record binder's `parents ROLE` or `children ROLE`; returns a symbolic count.                                                                 |
+| `lt`         | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
+| `lte`        | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
+| `gt`         | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
+| `gte`        | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
+| `eq`         | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
 | `atMost`     | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Count: integer literal by contract; collection: `parents ROLE` or `children ROLE` supplied by `record`.                                                    |
+| `atLeast`    | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Count: integer literal by contract; collection: a record binder's `parents ROLE` or `children ROLE`.                                                       |
 | `exactly`    | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Count: integer literal by contract; collection: the same record binder methods.                                                                            |
 | `only`       | Stub accepts; unattested. | Stub accepts; specified as a value. | Stub accepts; unattested. | Collection: a record binder's `parents ROLE` or `children ROLE`; returns the sole relation, whose `.target` supplies a node.                               |
 | `visible`    | Stub accepts; specified.  | Stub accepts; unattested.           | Stub accepts; unattested. | View: registered `visibility` declaration; nodes: `edge.origin` and `edge.target` in the example, or singleton `.target` expressions accepted by the stub. |
@@ -774,7 +821,6 @@ missing operation.
 >
 > These gaps are for the reviewer's judgement.
 >
-> - There is no `atLeast`, so “at least one R parent” cannot be written.
 > - `visible` in record scope is unattested by any example.
 > - `el` grammar properties are never shown non-empty.
 > - Counting duplicate identical relation occurrences is unspecified.
@@ -895,8 +941,9 @@ in
 
 A **free name** is chosen by the author. A **reference key** repeats a declared
 name or selects a named input field. A **fixed keyword** has a specified meaning
-for its configuration slot. The table covers every literal occurrence in both
-accepted files; repeated uses with the same meaning share a row.
+for its configuration slot. The table covers every literal occurrence in
+examples.nix, composition.nix, and counting.nix; repeated uses with the same
+meaning share a row.
 
 The full specified keyword sets are shown below, but the stub does not enforce
 any of these string policy enums. It retains even unrecognized strings without
@@ -950,6 +997,12 @@ accesses a symbolic endpoint.
 | `"composition"`                              | Free name                                   | Names the separate model used to demonstrate rule composition.                                                                                                                       |
 | `"extra-target-check"`                       | Free name                                   | Names the contribution that repeats the equivalent target check.                                                                                                                     |
 | `"incompatible-target-check"`                | Free name                                   | Names the contribution that conflicts with the existing target check.                                                                                                                |
+| `"counting"`                                 | Free name                                   | Names the model shared by the counting examples.                                                                                                                                     |
+| `"Item"`                                     | Free name                                   | Names the counting model's single element kind.                                                                                                                                      |
+| `"link"`                                     | Free name                                   | Names the Parent relation role on Item.                                                                                                                                              |
+| `"link_back"`                                | Free name                                   | Names the reverse display label for Parent link.                                                                                                                                     |
+| `"link-count"`                               | Free name                                   | Names the same check in each counting example so their lowered forms can be compared.                                                                                                |
+| `"link"`                                     | Reference key                               | Selects Item's Parent link through the record binder; the stub does not validate this string today.                                                                                  |
 
 The reference profile uses all three `relationProjection` components together.
 Arbitrary subsets and extra components have no specified meaning here. The
@@ -984,7 +1037,14 @@ executes.
 | `childOf`                                              | Lowered by stub + semantics specified | Builds the corresponding qualified Child reference.                                                               |
 | `fieldOf`                                              | Lowered by stub + semantics specified | Builds a field identity from the owner tag and the field title.                                                   |
 | `isNodeType`                                           | Lowered by stub, semantics prose only | Emits a type-test expression without inspecting any target record.                                                |
+| `count`                                                | Lowered by stub, semantics prose only | Emits a count expression without collecting or counting occurrences.                                              |
+| `lt`                                                   | Lowered by stub, semantics prose only | Emits the `lt` comparison over count expressions or numbers without evaluating it.                                |
+| `lte`                                                  | Lowered by stub, semantics prose only | Emits the `lte` comparison over count expressions or numbers without evaluating it.                               |
+| `gt`                                                   | Lowered by stub, semantics prose only | Emits the `gt` comparison over count expressions or numbers without evaluating it.                                |
+| `gte`                                                  | Lowered by stub, semantics prose only | Emits the `gte` comparison over count expressions or numbers without evaluating it.                               |
+| `eq`                                                   | Lowered by stub, semantics prose only | Emits the `eq` comparison over count expressions or numbers without evaluating it.                                |
 | `atMost`                                               | Lowered by stub, semantics prose only | Emits a count comparison without collecting or counting occurrences.                                              |
+| `atLeast`                                              | Lowered by stub, semantics prose only | Expands to `gte (count COLLECTION) N` without computing a count.                                                  |
 | `exactly`                                              | Lowered by stub, semantics prose only | Emits an exact-count expression without computing a count.                                                        |
 | `only`                                                 | Lowered by stub, semantics prose only | Emits singleton selection and endpoint access; blocked runtime results are not implemented.                       |
 | `forest`                                               | Lowered by stub, semantics prose only | Emits selected edges, owner-kind vertices, parent-to-child orientation, and permission for disconnected roots.    |
