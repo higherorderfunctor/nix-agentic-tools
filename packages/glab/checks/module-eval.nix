@@ -85,9 +85,10 @@ in {
         # Non-secret setting exports under its real env var. Asserting the
         # assignment and the export, NOT the quoting: nixpkgs'
         # `escapeShellArg` elides quotes for shell-safe values, so
-        # "GIT_PROTOCOL='ssh'" would be an assertion about lib internals.
-        && lib.hasInfix "GIT_PROTOCOL=" script
-        && lib.hasInfix "export GIT_PROTOCOL" script
+        # "GLAB_GIT_PROTOCOL='ssh'" would be an assertion about lib internals.
+        # glab 1.118.0 prefers the GLAB_ name over the legacy alias.
+        && lib.hasInfix "GLAB_GIT_PROTOCOL=" script
+        && lib.hasInfix "export GLAB_GIT_PROTOCOL" script
         # extraSettings uses glab's uppercase fallback.
         && lib.hasInfix "BRAND_NEW_KEY=" script
         # Absolute store path for cat — the wrapper may run without PATH.
