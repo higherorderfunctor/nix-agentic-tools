@@ -2,11 +2,11 @@
 
 # bd (beads) — tool reference
 
-> **Last verified:** 2026-09-08 against the repository package pin at stable
-> Beads v1.2.2 and Dolt 2.3.2. nixpkgs' own `beads` has caught up to 1.2.2, so
-> the cross-version pair this document used to cite no longer exists — see
-> **Version-skew boundary** below. Plus the upstream and
-> `numtide/llm-agents.nix` derivations. Companion documents:
+> **Last verified:** 2026-09-15 for the repository package and disposable
+> contracts at stable Beads v1.3.0 and Dolt 2.3.4. Historical session, server,
+> recovery, and external-packager observations retain their version tags; they
+> were not all repeated for this update. See **Version-skew boundary** for the
+> limits of the fresh-database migration check. Companion documents:
 > `dolt-git-remotes.md` (remote/sync mechanics) and `ecosystem.md` (integrations
 > and prior art). GitHub issue
 > [#986](https://github.com/higherorderfunctor/nix-agentic-tools/issues/986) and
@@ -33,8 +33,9 @@
 > binary; quarantine until probed. Claims can go stale in either direction;
 > re-verify against the pinned version before building on a load-bearing one.
 > Claim-local durable-probe tags naming 2.2.3 preserve the first measurement;
-> the current contract, server, and recovery probes requalified those surfaces
-> against 2.3.0. Session and transaction-spike tags remain 2.2.3-only evidence.
+> the current contract was requalified against Beads 1.3.0 / Dolt 2.3.4. Server
+> and recovery probes were last requalified against Beads 1.2.2 / Dolt 2.3.0.
+> Session and transaction-spike tags remain 2.2.3-only evidence.
 
 ## What beads is
 
@@ -62,39 +63,41 @@ reasoning, not just task titles. Treat its confidentiality closer to a
 design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
 `[upstream]`
 
-## Versions and packaging state (2026-08-16)
+## Versions and packaging state
 
-- **Upstream**: latest stable release **v1.2.2** (2026-08-15). The immediately
-  preceding **v1.2.1** release remains marked prerelease. `[upstream]`
-- **nixpkgs**: `beads` **1.2.2** on nixos-unstable (`pkgs/by-name/be/beads/`),
-  absent from the 25.11 release. It carried 1.0.3 until 2026-09, which is why
-  older revisions of this document describe a version skew against the
-  repository pin; nixpkgs now matches it exactly, same `src` hash and
-  `vendorHash`. `buildGoModule`, `subPackages = ["cmd/bd"]`,
-  `buildInputs = [icu]`, MIT, `mainProgram = "bd"`, and a `postInstall` that
-  wraps `dolt` onto `bd`'s PATH. One test is skipped everywhere
-  (`TestCheckMetadataVersionTracking`), a second on Darwin
+- **Upstream**: the pinned stable release is **v1.3.0**, published 2026-09-15.
+  `[upstream release @1.3.0]`
+- **nixpkgs**: `beads` **1.2.2** at the repository's nixpkgs pin
+  (`pkgs/by-name/be/beads/`). It carried 1.0.3 until 2026-09, then temporarily
+  matched the repository pin before this update to 1.3.0. `buildGoModule`,
+  `subPackages = ["cmd/bd"]`, `buildInputs = [icu]`, MIT, `mainProgram = "bd"`,
+  and a `postInstall` that wraps `dolt` onto `bd`'s PATH. Two tests are skipped
+  everywhere (`TestCheckMetadataVersionTracking` and
+  `TestInstallHooksBeads_WorktreeAccess`), a third on Darwin
   (`TestCleanupMergeArtifacts_CommandInjectionPrevention`), and the recipe sets
   `__darwinAllowLocalNetworking`. `[upstream]`
-- **This repository**: `pkgs.ai.devTools.beads` pins stable **v1.2.2** from a
+- **This repository**: `pkgs.ai.devTools.beads` pins stable **v1.3.0** from a
   source sidecar and thinly overrides the nixpkgs recipe through the
   repository's `ourPkgs` and derived-Go-floor machinery. The sidecar owns the
-  source hash, vendor hash, and `go.mod` floor (**1.26.2**); the stable-release
+  source hash, vendor hash, and `go.mod` floor (**1.26.7**); the stable-release
   update script follows GitHub's `releases/latest` redirect and excludes
   prereleases. A sibling sidecar pins the exact Dolt exposed as `passthru.dolt`;
   two independent child updaters run behind the one Beads update target, so
-  either release moves on the same branch and PR. `[measured package @1.2.2]`
-- **Upstream flake**: pins `nixos-25.11`, requires `buildGo126Module`, exposes
-  `beads-unwrapped` via `overlays.default` with a documented `vendorHash`
-  override recipe. Its wrapper adds shell completions and sets
-  `BD_DISABLE_METRICS=1` / `BD_DISABLE_EVENT_FLUSH=1` (install-phase scope, so
-  completion generation touches no DB), but does **not** wrap dolt. `[upstream]`
-- **`numtide/llm-agents.nix`**: its own derivation pinning **v1.2.1** (the
-  prerelease), `buildGoModule.override { go = go-bin; }`, `CGO_ENABLED=1` with
-  explicit ICU flags (the `go-icu-regex` cgo directives carry no
-  `#cgo pkg-config:` line), `doCheck = false`, and a dolt PATH wrap. It also
-  ships `beads-rust` (an unrelated single-maintainer Rust reimplementation) and
-  `beads-viewer`. `[upstream]`
+  either release moves on the same branch and PR. Darwin check inputs include
+  `ps` and `lsof` for upstream's orphan-server cleanup test.
+  `[measured package @1.3.0]`
+- **Upstream flake (1.2.2 observation)**: pins `nixos-25.11`, requires
+  `buildGo126Module`, exposes `beads-unwrapped` via `overlays.default` with a
+  documented `vendorHash` override recipe. Its wrapper adds shell completions
+  and sets `BD_DISABLE_METRICS=1` / `BD_DISABLE_EVENT_FLUSH=1` (install-phase
+  scope, so completion generation touches no DB), but does **not** wrap dolt.
+  `[upstream]`
+- **`numtide/llm-agents.nix` (2026-08 observation)**: its own derivation pinning
+  **v1.2.1** (the prerelease), `buildGoModule.override { go = go-bin; }`,
+  `CGO_ENABLED=1` with explicit ICU flags (the `go-icu-regex` cgo directives
+  carry no `#cgo pkg-config:` line), `doCheck = false`, and a dolt PATH wrap. It
+  also ships `beads-rust` (an unrelated single-maintainer Rust reimplementation)
+  and `beads-viewer`. `[upstream]`
 - **dolt**: a separate binary, required for the server modes.
   `bd dolt push/pull` may use the CLI or Dolt SQL procedures; an external server
   whose data directory is not visible to Beads uses `CALL DOLT_PUSH` /
@@ -186,18 +189,20 @@ version-label mismatch while `bd migrate schema --json` reported schema v53
 already current, so that pair exercised no destructive migration or
 post-migration bootstrap.
 
-nixpkgs has since moved its `beads` to 1.2.2, which is the same version the
-repository pins, so no tracked input supplies a second `bd` client and nothing
-re-measures any of the above. Treat it as a dated observation about the
-1.0.3/1.2.2 pair, not a standing contract. What the check still asserts on a
-database the packaged client created itself is the recorded schema label and the
-`Schema already at v53` migration state.
+The cross-version assertions were removed when both pins converged on 1.2.2. The
+repository now pins 1.3.0 while nixpkgs remains at 1.2.2, but the check does not
+exercise that pair. The older results remain dated observations about
+1.0.3/1.2.2. What the check asserts on a database the packaged client created
+itself is the recorded schema label and the `Schema already at v66` migration
+state. Both `migrate --inspect --json` and `migrate schema --json` still emit
+plain text in the packaged 1.3.0 binary, so those assertions use the flagless
+forms.
 
 The operational conclusion is unchanged and does not depend on the skew: one
 pinned `bd` package is authoritative, and rollback requires a pre-upgrade
 `bd backup` or recoverable remote ref plus the previous binary. Supporting an
 unattended upgrade or rollback remains gated by #995.
-`[measured contract @1.2.2/2.3.2]` for the self-created assertions;
+`[measured contract @1.3.0/2.3.4]` for the self-created assertions;
 `[historical @1.0.3/1.2.2]` for the skew observations.
 
 ## Config surface
@@ -268,15 +273,19 @@ does not stop the `beads.role` mutation when cwd is a Git checkout.
 
 The ordinary skip-flags fixture's complete top-level residue is `.beads/` with
 the `embeddeddolt/` directory and `.gitignore`, `.local_version`, `README.md`,
-`config.yaml`, `interactions.jsonl`, and `metadata.json`, plus root
-`.gitignore`. Its init commit tracks all except `.local_version`; its exact
-subject is `bd init: initialize beads issue tracking`. The only local Git-config
-delta is `beads.role=maintainer`, and the pre-existing hook set is unchanged.
-Standalone `--stealth` creates the same Beads top-level files, keeps the
-worktree clean and HEAD fixed, leaves hooks/AGENTS.md absent, adds only
-`beads.role`, writes exactly `no-git-ops: true`, and makes the Beads-labeled
-stealth block the only `.git/info/exclude` change.
-`[measured contract @1.2.2/2.2.3]`
+`config.yaml`, and `metadata.json`, plus root `.gitignore` and
+`.beads.gate.lock`. The audit sidecar `interactions.jsonl` is opt-in through
+`audit.enabled`. The persistent gate lock lives beside `.beads`, so replacing
+the workspace cannot replace the inode used for locking. The init commit tracks
+the Beads text files except `.local_version`, plus root `.gitignore`; it leaves
+the embedded database and gate lock untracked and ignored. Its exact subject is
+`bd init: initialize beads issue tracking`. The only local Git-config delta is
+`beads.role=maintainer`, and the pre-existing hook set is unchanged. Standalone
+`--stealth` creates the same Beads top-level files, keeps the worktree clean and
+HEAD fixed, leaves hooks/AGENTS.md absent, adds only `beads.role`, writes
+exactly `no-git-ops: true`, and makes the Beads-labeled stealth and local-Dolt
+blocks the only `.git/info/exclude` changes, including the `*.gate.lock*`
+pattern. `[measured contract @1.3.0/2.3.4]`
 
 The minimal contained initialization is module-owned: run from a neutral,
 non-Git cwd with an explicit out-of-tree `BEADS_DIR`; create its mode-0700
@@ -294,11 +303,9 @@ The remaining disable surface is:
   `--stealth` = all three plus `no-git-ops: true`. `[upstream]`
 - `bd onboard` **prints** the agent-instructions snippet instead of writing it,
   which is what makes declarative placement possible. `[upstream]`
-- `bd setup` at the pinned **v1.2.2** stable line has no Kiro target. The v1.2.1
-  prerelease briefly included Kiro, but v1.2.2 is a recovery release based on
-  the tested 1.1 line and omits that 1.2.x-only recipe. The exact packaged
-  binary's `bd setup --list` output is the contract; version-scope any claim
-  about setup targets. `[measured package session @1.2.2/2.3.0]`
+- `bd setup --list` at the pinned **v1.3.0** includes a built-in `kiro`
+  steering-file recipe. The earlier 1.2.2 package omitted it; setup-target
+  claims must stay version-scoped. `[measured package session @1.3.0/2.3.4]`
 - Git hooks, when wanted at all, are thin shims calling `bd hooks run <name>`; a
   declarative hook manager can invoke that directly and skip bd's installer.
   `[upstream]`
