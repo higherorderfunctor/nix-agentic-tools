@@ -1,4 +1,4 @@
-# field and rel only group constructor imports; all authoring calls are bare.
+# Field and rel only group constructor imports; all authoring calls are bare.
 # No semantic prefix: checks read alongside the fields and relations they govern.
 let
   dsl = import ./dsl.nix;
@@ -12,7 +12,7 @@ let
   uid = required (str "UID");
   flag = creationDefault false (required (boolean "FLAG"));
 
-  # D01–D04: the element is the model; constraints are its Meta.
+  # The element is the model; constraints are its Meta.
   foo = el "FOO" {} {
     fields = [uid flag];
     relations = [
@@ -26,7 +26,7 @@ let
     ];
   };
 
-  # D03, D05, D06: both endpoints belong to this bridge record.
+  # Both endpoints belong to this bridge record.
   bar = el "BAR" {} {
     fields = [uid];
     relations = [
@@ -43,7 +43,7 @@ let
     ];
   };
 
-  # D02: the same role spellings carry no FOO/BAR restrictions here.
+  # The same role spellings carry no FOO/BAR restrictions here.
   baz = el "BAZ" {} {
     fields = [uid];
     relations = [
@@ -53,7 +53,7 @@ let
     constraints = [];
   };
 
-  # D04–D06: only FOO Parent H supplies ancestry; multiple roots are valid.
+  # Only FOO Parent H supplies ancestry; multiple roots are valid.
   h = forest "H" (parentOf foo "H");
   sight = visibility "H-visibility" h {
     closedWhenTrue = fieldOf foo flag;
@@ -62,7 +62,7 @@ let
     expand = "open-or-origin-in-subtree-including-self";
   };
 
-  # D07–D10: declare the input; acquisition and capture belong to runtime.
+  # Declare the input; acquisition and capture belong to runtime.
   baseline = input "baseline" {
     kind = "external-snapshot";
     required = true;

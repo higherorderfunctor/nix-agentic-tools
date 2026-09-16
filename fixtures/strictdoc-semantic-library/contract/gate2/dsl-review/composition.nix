@@ -24,7 +24,7 @@ let
   };
   declaration = model "composition" {elements = [foo];};
 
-  # D14: contribute to the relation that was already declared above.
+  # Contribute to the relation that was already declared above.
   equivalent = normalize (declaration
     // {
       contributions = [
