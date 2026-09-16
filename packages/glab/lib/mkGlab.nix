@@ -17,10 +17,10 @@
 # Environment variables have neither problem, and they are not a partial
 # substitute: `GetFromEnvWithSource` resolves EVERY config key through
 # `EnvKeyEquivalence`, which returns the key's explicit `EnvVars` or falls
-# back to `strings.ToUpper(name)`. Measured against 1.110.0 with a
-# populated config.yml: `GITLAB_HOST`, `GITLAB_URI` and a bare
-# `GIT_PROTOCOL` (a key with NO explicit override, so it exercises the
-# uppercase fallback) each won over the file.
+# back to `strings.ToUpper(name)`. Environment values win over the file.
+# Since 1.118.0, `git_protocol` explicitly prefers `GLAB_GIT_PROTOCOL`
+# while retaining `GIT_PROTOCOL` as a legacy alias. The committed schema
+# carries that order, so the wrapper exports the preferred spelling.
 #
 # ── Why symlinkJoin and not wrapProgram ─────────────────────────────
 # `wrapProgram --set` bakes the value into the store, which is exactly

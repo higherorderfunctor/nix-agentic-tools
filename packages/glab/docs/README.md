@@ -238,8 +238,10 @@ Two independent blockers, both measured against glab 1.110.0:
 
 Environment variables have neither problem and cover the whole key set:
 `GetFromEnvWithSource` resolves every key through `EnvKeyEquivalence`, and an
-env value beats the config file. Verified including `GIT_PROTOCOL`, a key with
-no explicit override, which exercises the uppercase fallback.
+env value beats the config file. Since 1.118.0, `git_protocol` explicitly
+prefers `GLAB_GIT_PROTOCOL` over the legacy `GIT_PROTOCOL` alias. The wrapper
+follows the committed schema's resolution order and exports the preferred
+spelling. Keys without explicit environment names use the uppercase fallback.
 
 The wrapper is a `symlinkJoin` that replaces `bin/glab` only, so upstream's
 manpages and shell completions are preserved.
