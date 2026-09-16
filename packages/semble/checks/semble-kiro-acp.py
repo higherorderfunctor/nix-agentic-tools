@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import signal
 import subprocess
 import sys
 import threading
@@ -14,8 +15,24 @@ import time
 COMMANDS_AVAILABLE = "_kiro.dev/commands/available"
 
 # How long the child gets to exit after stdin EOF. Overrunning it is a HARNESS
-# action, not a product failure -- see the shutdown_kill branch in run().
+# action, not a product failure -- see the harness_kill branch in run().
 SHUTDOWN_BUDGET_SECONDS = 8
+
+# Cap on the child stderr replayed into the teardown notice. On the kill path
+# those lines are the only diagnostic left, so dropping them wastes the one
+# signal available; replaying all of them would bury it.
+STDERR_TAIL_LINES = 8
+
+
+def exit_description(returncode):
+    """A POSIX wait status in words.
+
+    `Popen.returncode` overloads one integer: negative means the child was
+    SIGNALLED with its absolute value, non-negative means it chose that exit
+    status. Rendering a signal as "status -9" states something that cannot
+    happen and reads like a product exit code.
+    """
+    return f"killed by signal {-returncode}" if returncode < 0 else f"exited with status {returncode}"
 
 
 def command_statuses(
@@ -126,6 +143,7 @@ def run(kiro: str, agent: str, workspace: str) -> dict[str, object]:
             )
         return result
 
+    harness_kill = False
     shutdown_kill = False
     shutdown_seconds = 0.0
 
@@ -158,6 +176,26 @@ def run(kiro: str, agent: str, workspace: str) -> dict[str, object]:
         shutdown_seconds = time.monotonic() - closed_at
         stdout_thread.join(timeout=2)
         stderr_thread.join(timeout=2)
+        # `shutdown_kill` alone does not prove the status is ours. CPython's
+        # send_signal() polls first and returns without signalling if the child
+        # already died, so a child that exits between the wait loop's last poll
+        # and os.kill() keeps its OWN status here. Requiring SIGKILL as well
+        # leaves that race on the autonomous-exit path, where it belongs.
+        harness_kill = shutdown_kill and proc.returncode == -signal.SIGKILL
+        if harness_kill:
+            # Reported from the `finally` so it still appears when the protocol
+            # phase itself failed. A child wedged at shutdown is usually wedged
+            # earlier too, and that correlation is evidence a bare protocol
+            # timeout does not carry. Emitted after the pump joins so `errors`
+            # is complete.
+            tail = "; ".join(errors[-STDERR_TAIL_LINES:])
+            print(
+                f"{agent}: harness SIGKILLed ACP after {shutdown_seconds:.2f}s waiting "
+                f"for it to exit after stdin EOF (budget {SHUTDOWN_BUDGET_SECONDS}s); "
+                f"the signal is this harness's doing, not the product's"
+                + (f"; stderr={tail}" if tail else ""),
+                file=sys.stderr,
+            )
 
     if stdout_thread.is_alive() or stderr_thread.is_alive():
         raise RuntimeError(f"{agent}: ACP output pumps did not stop after process exit")
@@ -170,29 +208,25 @@ def run(kiro: str, agent: str, workspace: str) -> dict[str, object]:
             break
         handle(json.loads(line), reply_to_requests=False)
 
-    # `proc.returncode` is only the PRODUCT's exit status when the harness sent
+    # `proc.returncode` is the PRODUCT's exit status only when this harness sent
     # no signal. On the kill path above it is our own SIGKILL, and reporting
-    # that as the product's status is what made four CI runs unreadable
-    # (2026-09-02, 09-08, 09-14, 09-16 -- all "ACP exited with status -9" with
-    # an empty stderr, on three branches and two derivation hashes, while every
-    # assertion this check exists to make had already passed).
+    # that as the product's status is what made the pre-fix reds unreadable --
+    # `git log -S harness_kill` reaches the commit with the measurements.
     #
     # Reaching here means the try block returned: initialize, session/new and
-    # commands/available all succeeded. So a slow exit afterwards costs the
-    # check nothing. An AUTONOMOUS non-zero exit still fails, which keeps the
-    # one real regression this assertion was buying -- an ACP server that
-    # panics on stdin EOF -- and now says so in words that name the source.
-    if shutdown_kill:
-        print(
-            f"{agent}: harness SIGKILLed ACP after {shutdown_seconds:.2f}s "
-            f"waiting for it to exit after stdin EOF (budget "
-            f"{SHUTDOWN_BUDGET_SECONDS}s); returncode {proc.returncode} is the "
-            f"harness's, not the product's",
-            file=sys.stderr,
-        )
-    elif proc.returncode != 0:
+    # commands/available all succeeded, so a slow exit afterwards costs this
+    # check nothing it asserts. An AUTONOMOUS non-zero exit still fails.
+    #
+    # DELIBERATELY GIVEN UP: a child that never exits AT ALL is now a pass
+    # rather than a red. That class was only ever caught by accident, and no
+    # budget between 8s and infinity can be chosen from evidence anyone has --
+    # a killed child never reveals whether it would have exited at 8.1s or
+    # never. Guessing one reinstates the same wall-clock flake further out.
+    # `teardown` below records the measurement instead, so a cap can later be
+    # set from data rather than from a number someone liked.
+    if not harness_kill and proc.returncode != 0:
         raise RuntimeError(
-            f"{agent}: ACP exited on its own with status {proc.returncode} "
+            f"{agent}: ACP {exit_description(proc.returncode)} on its own, "
             f"{shutdown_seconds:.2f}s after stdin EOF, harness sent no signal: "
             f"{'; '.join(errors)}"
         )
@@ -202,6 +236,7 @@ def run(kiro: str, agent: str, workspace: str) -> dict[str, object]:
         "notifications": notifications,
         "session": session,
         "stderr": errors,
+        "teardown": {"harness_kill": harness_kill, "seconds": round(shutdown_seconds, 3)},
     }
 
 
