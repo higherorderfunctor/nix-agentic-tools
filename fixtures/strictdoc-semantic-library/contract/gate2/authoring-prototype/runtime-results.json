@@ -1,0 +1,1912 @@
+{
+  "controls": {
+    "B01-counts": true,
+    "B01-path": true,
+    "B01-resultContract": true,
+    "B02-counts": true,
+    "B02-path": true,
+    "B02-resultContract": true,
+    "G01": true,
+    "G01-entryParity": true,
+    "G02": true,
+    "G02-entryParity": true,
+    "G03": true,
+    "G03-entryParity": true,
+    "T01": true,
+    "T02": true,
+    "T03": true,
+    "T04": true,
+    "T06": true,
+    "T07": true,
+    "T08": true,
+    "booleanRoundTrip:False": true,
+    "booleanRoundTrip:True": true,
+    "bridgeHidden-counts": true,
+    "bridgeHidden-path": true,
+    "bridgeHidden-resultContract": true,
+    "closedOrigin": true,
+    "duplicateInvocation": true,
+    "duplicateNodeRef": true,
+    "duplicateNodeRef-parity": true,
+    "duplicateRelationId": true,
+    "duplicateRelationId-parity": true,
+    "duplicateResult": true,
+    "duplicateUidAcrossGrammar": true,
+    "duplicateUidAcrossGrammar-parity": true,
+    "emptyCause": true,
+    "emptyFindingsNotSuccess": true,
+    "exitClosed": true,
+    "explicitEvaluationId": true,
+    "findingBooleanCoordinate": true,
+    "findingInfiniteEvidence": true,
+    "findingMalformedSubject": true,
+    "findingMissingKey": true,
+    "findingNonJsonEvidence": true,
+    "findingNullEvidence": true,
+    "findingNullLocations": true,
+    "findingNullSubjects": true,
+    "findingNumericMessage": true,
+    "findingNumericPath": true,
+    "findingNumericProducer": true,
+    "findingNumericSubject": true,
+    "findingReversedLocation": true,
+    "findingStringLocation": true,
+    "findingWrongRule": true,
+    "internalSibling": true,
+    "invalidBoolean:None": true,
+    "invalidBoolean:['']": true,
+    "invalidBoolean:['FALSE']": true,
+    "invalidBoolean:['TBC']": true,
+    "invalidBoolean:['TBD']": true,
+    "invalidBoolean:['true', 'false']": true,
+    "invalidBoolean:[False]": true,
+    "invalidBoolean:[]": true,
+    "invalidResultStatus": true,
+    "missingCandidateModel": true,
+    "missingCandidateModel-parity": true,
+    "missingOwner": true,
+    "missingOwner-parity": true,
+    "missingResult": true,
+    "missingTarget": true,
+    "missingTarget-entryParity": true,
+    "nestedOriginalOrigin": true,
+    "nodeOutsideCandidateModel": true,
+    "nodeOutsideCandidateModel-parity": true,
+    "nonListResults": true,
+    "nonObjectResult": true,
+    "nullResultLists": true,
+    "numericCause": true,
+    "numericEvaluationId": true,
+    "numericOwner": true,
+    "numericOwner-parity": true,
+    "numericResultId": true,
+    "numericStatus": true,
+    "numericTarget": true,
+    "numericTarget-parity": true,
+    "otherGrammarOwnerIsUnselected": true,
+    "otherGrammarOwnerIsUnselected-parity": true,
+    "otherGrammarTargetViolates": true,
+    "otherGrammarTargetViolates-parity": true,
+    "relationEmptyCollectionVacuous": true,
+    "retainedFindingThenDuplicateRelation": true,
+    "retainedFindingThenDuplicateRelation-parity": true,
+    "retainedFindingThenMissingOwner": true,
+    "retainedFindingThenMissingOwner-parity": true,
+    "retainedFindingThenMissingTarget": true,
+    "retainedFindingThenMissingTarget-parity": true,
+    "sameRoleChildControl": true,
+    "sameRoleChildControl-entryParity": true,
+    "siblingBridge": true,
+    "stringCauseList": true,
+    "stringIsNotSemanticBoolean": true,
+    "structuredViolationAccepted": true,
+    "twoQ-counts": true,
+    "twoQ-path": true,
+    "twoQ-resultContract": true,
+    "unknownResult": true,
+    "unstructuredFinding": true,
+    "wrongEvaluationId": true,
+    "wrongOwnerModel": true,
+    "wrongOwnerModel-parity": true,
+    "wrongTargetModel": true,
+    "wrongTargetModel-parity": true
+  },
+  "count": 110,
+  "evidence": {
+    "B01": {
+      "forestPrerequisite": "supplied-valid-contract-fixture",
+      "input": {
+        "appendNodes": [
+          {
+            "element": {
+              "element": "BAR",
+              "grammar": "reference"
+            },
+            "fields": {},
+            "locations": [
+              {
+                "document": "synthetic",
+                "end": 1,
+                "path": "model.sdoc",
+                "start": 1
+              }
+            ],
+            "ref": {
+              "model": "reference-model",
+              "uid": "M"
+            }
+          }
+        ],
+        "appendRelations": [
+          {
+            "id": "M-Parent-P-F0",
+            "location": {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            },
+            "nativeType": "Parent",
+            "owner": {
+              "model": "reference-model",
+              "uid": "M"
+            },
+            "role": "P",
+            "target": {
+              "model": "reference-model",
+              "uid": "F0"
+            }
+          },
+          {
+            "id": "M-Child-Q-F2",
+            "location": {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            },
+            "nativeType": "Child",
+            "owner": {
+              "model": "reference-model",
+              "uid": "M"
+            },
+            "role": "Q",
+            "target": {
+              "model": "reference-model",
+              "uid": "F2"
+            }
+          }
+        ],
+        "base": "Base"
+      },
+      "results": [
+        {
+          "causes": [],
+          "evaluationId": "probe",
+          "findings": [],
+          "id": "reference/element/BAR/relation/Parent/P/cardinality",
+          "status": "satisfied"
+        },
+        {
+          "causes": [],
+          "evaluationId": "probe",
+          "findings": [],
+          "id": "reference/element/BAR/relation/Child/Q/cardinality",
+          "status": "satisfied"
+        },
+        {
+          "causes": [],
+          "evaluationId": "probe",
+          "findings": [],
+          "id": "reference/element/BAR/constraint/endpointPath",
+          "status": "satisfied"
+        }
+      ]
+    },
+    "B02": {
+      "forestPrerequisite": "supplied-valid-contract-fixture",
+      "input": {
+        "appendNodes": [
+          {
+            "element": {
+              "element": "BAR",
+              "grammar": "reference"
+            },
+            "fields": {},
+            "locations": [
+              {
+                "document": "synthetic",
+                "end": 1,
+                "path": "model.sdoc",
+                "start": 1
+              }
+            ],
+            "ref": {
+              "model": "reference-model",
+              "uid": "M"
+            }
+          }
+        ],
+        "appendRelations": [
+          {
+            "id": "M-Parent-P-F0",
+            "location": {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            },
+            "nativeType": "Parent",
+            "owner": {
+              "model": "reference-model",
+              "uid": "M"
+            },
+            "role": "P",
+            "target": {
+              "model": "reference-model",
+              "uid": "F0"
+            }
+          }
+        ],
+        "base": "Base"
+      },
+      "results": [
+        {
+          "causes": [],
+          "evaluationId": "probe",
+          "findings": [],
+          "id": "reference/element/BAR/relation/Parent/P/cardinality",
+          "status": "satisfied"
+        },
+        {
+          "causes": [],
+          "evaluationId": "probe",
+          "findings": [
+            {
+              "code": "cardinality",
+              "evidence": {
+                "declarations": [],
+                "max": 1,
+                "min": 1,
+                "observed": 0,
+                "selector": {
+                  "grammar": "reference",
+                  "nativeType": "Child",
+                  "ownerElement": "BAR",
+                  "role": "Q"
+                }
+              },
+              "locations": [
+                {
+                  "document": "synthetic",
+                  "end": 1,
+                  "path": "model.sdoc",
+                  "start": 1
+                }
+              ],
+              "message": "Owned relation cardinality is invalid",
+              "producer": "prototype/count",
+              "rule": "reference/element/BAR/relation/Child/Q/cardinality",
+              "subjects": [
+                {
+                  "model": "reference-model",
+                  "uid": "M"
+                }
+              ]
+            }
+          ],
+          "id": "reference/element/BAR/relation/Child/Q/cardinality",
+          "status": "violated"
+        },
+        {
+          "causes": ["reference/element/BAR/relation/Child/Q/cardinality"],
+          "evaluationId": "probe",
+          "findings": [],
+          "id": "reference/element/BAR/constraint/endpointPath",
+          "status": "blocked"
+        }
+      ]
+    },
+    "G01": {
+      "independent": {
+        "causes": [],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "satisfied"
+      },
+      "input": {
+        "appendRelations": [
+          {
+            "id": "F1a-Parent-R-F2",
+            "location": {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            },
+            "nativeType": "Parent",
+            "owner": {
+              "model": "reference-model",
+              "uid": "F1a"
+            },
+            "role": "R",
+            "target": {
+              "model": "reference-model",
+              "uid": "F2"
+            }
+          }
+        ],
+        "base": "Base"
+      },
+      "shippedStyle": {
+        "causes": [],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "satisfied"
+      }
+    },
+    "G02": {
+      "independent": {
+        "causes": [],
+        "evaluationId": "probe",
+        "findings": [
+          {
+            "code": "target-type",
+            "evidence": {
+              "actual": {
+                "element": "BAZ",
+                "grammar": "reference"
+              },
+              "expected": [
+                {
+                  "element": "FOO",
+                  "grammar": "reference"
+                }
+              ],
+              "owner": {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              "selector": {
+                "grammar": "reference",
+                "nativeType": "Parent",
+                "ownerElement": "FOO",
+                "role": "R"
+              },
+              "target": {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            },
+            "locations": [
+              {
+                "document": "synthetic",
+                "end": 1,
+                "path": "model.sdoc",
+                "start": 1
+              }
+            ],
+            "message": "Resolved target has a disallowed element type",
+            "producer": "prototype/independent",
+            "rule": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+            "subjects": [
+              {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            ]
+          }
+        ],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "violated"
+      },
+      "input": {
+        "appendRelations": [
+          {
+            "id": "F1a-Parent-R-Z0",
+            "location": {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            },
+            "nativeType": "Parent",
+            "owner": {
+              "model": "reference-model",
+              "uid": "F1a"
+            },
+            "role": "R",
+            "target": {
+              "model": "reference-model",
+              "uid": "Z0"
+            }
+          }
+        ],
+        "base": "Base"
+      },
+      "shippedStyle": {
+        "causes": [],
+        "evaluationId": "probe",
+        "findings": [
+          {
+            "code": "target-type",
+            "evidence": {
+              "actual": {
+                "element": "BAZ",
+                "grammar": "reference"
+              },
+              "expected": [
+                {
+                  "element": "FOO",
+                  "grammar": "reference"
+                }
+              ],
+              "owner": {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              "selector": {
+                "grammar": "reference",
+                "nativeType": "Parent",
+                "ownerElement": "FOO",
+                "role": "R"
+              },
+              "target": {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            },
+            "locations": [
+              {
+                "document": "synthetic",
+                "end": 1,
+                "path": "model.sdoc",
+                "start": 1
+              }
+            ],
+            "message": "Resolved target has a disallowed element type",
+            "producer": "prototype/shipped-style",
+            "rule": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+            "subjects": [
+              {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            ]
+          }
+        ],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "violated"
+      }
+    },
+    "G03": {
+      "independent": {
+        "causes": [],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "satisfied"
+      },
+      "input": {
+        "appendRelations": [
+          {
+            "id": "Z0-Parent-R-I0",
+            "location": {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            },
+            "nativeType": "Parent",
+            "owner": {
+              "model": "reference-model",
+              "uid": "Z0"
+            },
+            "role": "R",
+            "target": {
+              "model": "reference-model",
+              "uid": "I0"
+            }
+          }
+        ],
+        "base": "Base"
+      },
+      "shippedStyle": {
+        "causes": [],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "satisfied"
+      }
+    },
+    "T01-path": null,
+    "T02-path": {
+      "boundary": "F2",
+      "code": "blocked-boundary",
+      "origin": "F1a",
+      "path": ["F1a", "F1", "F0", "F2", "F2a"],
+      "target": "F2a"
+    },
+    "T06-path": null,
+    "T07-path": {
+      "boundary": "F2",
+      "code": "blocked-boundary",
+      "origin": "F0",
+      "path": ["F0", "F2", "F2a"],
+      "target": "F2a"
+    },
+    "T08-path": {
+      "code": "different-roots",
+      "origin": "F0",
+      "roots": ["F0", "G0"],
+      "target": "G1"
+    },
+    "bridgeHidden": {
+      "forestPrerequisite": "supplied-valid-contract-fixture",
+      "input": {
+        "appendNodes": [
+          {
+            "element": {
+              "element": "BAR",
+              "grammar": "reference"
+            },
+            "fields": {},
+            "locations": [
+              {
+                "document": "synthetic",
+                "end": 1,
+                "path": "model.sdoc",
+                "start": 1
+              }
+            ],
+            "ref": {
+              "model": "reference-model",
+              "uid": "M"
+            }
+          }
+        ],
+        "appendRelations": [
+          {
+            "id": "M-Parent-P-F0",
+            "location": {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            },
+            "nativeType": "Parent",
+            "owner": {
+              "model": "reference-model",
+              "uid": "M"
+            },
+            "role": "P",
+            "target": {
+              "model": "reference-model",
+              "uid": "F0"
+            }
+          },
+          {
+            "id": "M-Child-Q-F2a",
+            "location": {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            },
+            "nativeType": "Child",
+            "owner": {
+              "model": "reference-model",
+              "uid": "M"
+            },
+            "role": "Q",
+            "target": {
+              "model": "reference-model",
+              "uid": "F2a"
+            }
+          }
+        ],
+        "base": "Base"
+      },
+      "results": [
+        {
+          "causes": [],
+          "evaluationId": "probe",
+          "findings": [],
+          "id": "reference/element/BAR/relation/Parent/P/cardinality",
+          "status": "satisfied"
+        },
+        {
+          "causes": [],
+          "evaluationId": "probe",
+          "findings": [],
+          "id": "reference/element/BAR/relation/Child/Q/cardinality",
+          "status": "satisfied"
+        },
+        {
+          "causes": [],
+          "evaluationId": "probe",
+          "findings": [
+            {
+              "code": "blocked-boundary",
+              "evidence": {
+                "boundary": "F2",
+                "code": "blocked-boundary",
+                "origin": "F0",
+                "path": ["F0", "F2", "F2a"],
+                "target": "F2a"
+              },
+              "locations": [
+                {
+                  "document": "synthetic",
+                  "end": 1,
+                  "path": "model.sdoc",
+                  "start": 1
+                }
+              ],
+              "message": "Endpoint path is not permitted",
+              "producer": "prototype/endpoint-path",
+              "rule": "reference/element/BAR/constraint/endpointPath",
+              "subjects": [
+                {
+                  "model": "reference-model",
+                  "uid": "M"
+                }
+              ]
+            }
+          ],
+          "id": "reference/element/BAR/constraint/endpointPath",
+          "status": "violated"
+        }
+      ]
+    },
+    "closedOrigin-path": null,
+    "duplicateNodeRef": {
+      "independent": {
+        "causes": ["duplicate NodeRef"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      },
+      "shippedStyle": {
+        "causes": ["duplicate NodeRef"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      }
+    },
+    "duplicateRelationId": {
+      "independent": {
+        "causes": ["duplicate relation occurrence identity"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      },
+      "shippedStyle": {
+        "causes": ["duplicate relation occurrence identity"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      }
+    },
+    "duplicateUidAcrossGrammar": {
+      "independent": {
+        "causes": ["duplicate NodeRef"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      },
+      "shippedStyle": {
+        "causes": ["duplicate NodeRef"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      }
+    },
+    "exitClosed-path": null,
+    "internalSibling-path": null,
+    "missingCandidateModel": {
+      "independent": {
+        "causes": ["missing candidate model identity"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      },
+      "shippedStyle": {
+        "causes": ["missing candidate model identity"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      }
+    },
+    "missingOwner": {
+      "independent": {
+        "causes": ["missing relation owner"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      },
+      "shippedStyle": {
+        "causes": ["missing relation owner"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      }
+    },
+    "missingTarget": {
+      "independent": {
+        "causes": ["unresolved selected target"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      },
+      "input": {
+        "appendRelations": [
+          {
+            "id": "F1a-Parent-R-MISSING",
+            "location": {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            },
+            "nativeType": "Parent",
+            "owner": {
+              "model": "reference-model",
+              "uid": "F1a"
+            },
+            "role": "R",
+            "target": {
+              "model": "reference-model",
+              "uid": "MISSING"
+            }
+          }
+        ],
+        "base": "Base"
+      },
+      "shippedStyle": {
+        "causes": ["unresolved selected target"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      }
+    },
+    "nodeOutsideCandidateModel": {
+      "independent": {
+        "causes": ["node outside candidate model"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      },
+      "shippedStyle": {
+        "causes": ["node outside candidate model"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      }
+    },
+    "numericOwner": {
+      "independent": {
+        "causes": ["invalid NodeRef identity"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      },
+      "shippedStyle": {
+        "causes": ["invalid NodeRef identity"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      }
+    },
+    "numericTarget": {
+      "independent": {
+        "causes": ["invalid NodeRef identity"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      },
+      "shippedStyle": {
+        "causes": ["invalid NodeRef identity"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      }
+    },
+    "otherGrammarOwnerIsUnselected": {
+      "independent": {
+        "causes": [],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "satisfied"
+      },
+      "shippedStyle": {
+        "causes": [],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "satisfied"
+      }
+    },
+    "otherGrammarTargetViolates": {
+      "independent": {
+        "causes": [],
+        "evaluationId": "probe",
+        "findings": [
+          {
+            "code": "target-type",
+            "evidence": {
+              "actual": {
+                "element": "FOO",
+                "grammar": "other-grammar"
+              },
+              "expected": [
+                {
+                  "element": "FOO",
+                  "grammar": "reference"
+                }
+              ],
+              "owner": {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              "selector": {
+                "grammar": "reference",
+                "nativeType": "Parent",
+                "ownerElement": "FOO",
+                "role": "R"
+              },
+              "target": {
+                "model": "reference-model",
+                "uid": "X"
+              }
+            },
+            "locations": [
+              {
+                "document": "synthetic",
+                "end": 1,
+                "path": "model.sdoc",
+                "start": 1
+              }
+            ],
+            "message": "Resolved target has a disallowed element type",
+            "producer": "prototype/independent",
+            "rule": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+            "subjects": [
+              {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              {
+                "model": "reference-model",
+                "uid": "X"
+              }
+            ]
+          }
+        ],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "violated"
+      },
+      "shippedStyle": {
+        "causes": [],
+        "evaluationId": "probe",
+        "findings": [
+          {
+            "code": "target-type",
+            "evidence": {
+              "actual": {
+                "element": "FOO",
+                "grammar": "other-grammar"
+              },
+              "expected": [
+                {
+                  "element": "FOO",
+                  "grammar": "reference"
+                }
+              ],
+              "owner": {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              "selector": {
+                "grammar": "reference",
+                "nativeType": "Parent",
+                "ownerElement": "FOO",
+                "role": "R"
+              },
+              "target": {
+                "model": "reference-model",
+                "uid": "X"
+              }
+            },
+            "locations": [
+              {
+                "document": "synthetic",
+                "end": 1,
+                "path": "model.sdoc",
+                "start": 1
+              }
+            ],
+            "message": "Resolved target has a disallowed element type",
+            "producer": "prototype/shipped-style",
+            "rule": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+            "subjects": [
+              {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              {
+                "model": "reference-model",
+                "uid": "X"
+              }
+            ]
+          }
+        ],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "violated"
+      }
+    },
+    "retainedFindingThenDuplicateRelation": {
+      "independent": {
+        "causes": ["duplicate relation occurrence identity"],
+        "evaluationId": "probe",
+        "findings": [
+          {
+            "code": "target-type",
+            "evidence": {
+              "actual": {
+                "element": "BAZ",
+                "grammar": "reference"
+              },
+              "expected": [
+                {
+                  "element": "FOO",
+                  "grammar": "reference"
+                }
+              ],
+              "owner": {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              "selector": {
+                "grammar": "reference",
+                "nativeType": "Parent",
+                "ownerElement": "FOO",
+                "role": "R"
+              },
+              "target": {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            },
+            "locations": [
+              {
+                "document": "synthetic",
+                "end": 1,
+                "path": "model.sdoc",
+                "start": 1
+              }
+            ],
+            "message": "Resolved target has a disallowed element type",
+            "producer": "prototype/independent",
+            "rule": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+            "subjects": [
+              {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            ]
+          }
+        ],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      },
+      "shippedStyle": {
+        "causes": ["duplicate relation occurrence identity"],
+        "evaluationId": "probe",
+        "findings": [
+          {
+            "code": "target-type",
+            "evidence": {
+              "actual": {
+                "element": "BAZ",
+                "grammar": "reference"
+              },
+              "expected": [
+                {
+                  "element": "FOO",
+                  "grammar": "reference"
+                }
+              ],
+              "owner": {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              "selector": {
+                "grammar": "reference",
+                "nativeType": "Parent",
+                "ownerElement": "FOO",
+                "role": "R"
+              },
+              "target": {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            },
+            "locations": [
+              {
+                "document": "synthetic",
+                "end": 1,
+                "path": "model.sdoc",
+                "start": 1
+              }
+            ],
+            "message": "Resolved target has a disallowed element type",
+            "producer": "prototype/shipped-style",
+            "rule": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+            "subjects": [
+              {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            ]
+          }
+        ],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      }
+    },
+    "retainedFindingThenMissingOwner": {
+      "independent": {
+        "causes": ["missing relation owner"],
+        "evaluationId": "probe",
+        "findings": [
+          {
+            "code": "target-type",
+            "evidence": {
+              "actual": {
+                "element": "BAZ",
+                "grammar": "reference"
+              },
+              "expected": [
+                {
+                  "element": "FOO",
+                  "grammar": "reference"
+                }
+              ],
+              "owner": {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              "selector": {
+                "grammar": "reference",
+                "nativeType": "Parent",
+                "ownerElement": "FOO",
+                "role": "R"
+              },
+              "target": {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            },
+            "locations": [
+              {
+                "document": "synthetic",
+                "end": 1,
+                "path": "model.sdoc",
+                "start": 1
+              }
+            ],
+            "message": "Resolved target has a disallowed element type",
+            "producer": "prototype/independent",
+            "rule": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+            "subjects": [
+              {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            ]
+          }
+        ],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      },
+      "shippedStyle": {
+        "causes": ["missing relation owner"],
+        "evaluationId": "probe",
+        "findings": [
+          {
+            "code": "target-type",
+            "evidence": {
+              "actual": {
+                "element": "BAZ",
+                "grammar": "reference"
+              },
+              "expected": [
+                {
+                  "element": "FOO",
+                  "grammar": "reference"
+                }
+              ],
+              "owner": {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              "selector": {
+                "grammar": "reference",
+                "nativeType": "Parent",
+                "ownerElement": "FOO",
+                "role": "R"
+              },
+              "target": {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            },
+            "locations": [
+              {
+                "document": "synthetic",
+                "end": 1,
+                "path": "model.sdoc",
+                "start": 1
+              }
+            ],
+            "message": "Resolved target has a disallowed element type",
+            "producer": "prototype/shipped-style",
+            "rule": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+            "subjects": [
+              {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            ]
+          }
+        ],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      }
+    },
+    "retainedFindingThenMissingTarget": {
+      "independent": {
+        "causes": ["unresolved selected target"],
+        "evaluationId": "probe",
+        "findings": [
+          {
+            "code": "target-type",
+            "evidence": {
+              "actual": {
+                "element": "BAZ",
+                "grammar": "reference"
+              },
+              "expected": [
+                {
+                  "element": "FOO",
+                  "grammar": "reference"
+                }
+              ],
+              "owner": {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              "selector": {
+                "grammar": "reference",
+                "nativeType": "Parent",
+                "ownerElement": "FOO",
+                "role": "R"
+              },
+              "target": {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            },
+            "locations": [
+              {
+                "document": "synthetic",
+                "end": 1,
+                "path": "model.sdoc",
+                "start": 1
+              }
+            ],
+            "message": "Resolved target has a disallowed element type",
+            "producer": "prototype/independent",
+            "rule": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+            "subjects": [
+              {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            ]
+          }
+        ],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      },
+      "shippedStyle": {
+        "causes": ["unresolved selected target"],
+        "evaluationId": "probe",
+        "findings": [
+          {
+            "code": "target-type",
+            "evidence": {
+              "actual": {
+                "element": "BAZ",
+                "grammar": "reference"
+              },
+              "expected": [
+                {
+                  "element": "FOO",
+                  "grammar": "reference"
+                }
+              ],
+              "owner": {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              "selector": {
+                "grammar": "reference",
+                "nativeType": "Parent",
+                "ownerElement": "FOO",
+                "role": "R"
+              },
+              "target": {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            },
+            "locations": [
+              {
+                "document": "synthetic",
+                "end": 1,
+                "path": "model.sdoc",
+                "start": 1
+              }
+            ],
+            "message": "Resolved target has a disallowed element type",
+            "producer": "prototype/shipped-style",
+            "rule": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+            "subjects": [
+              {
+                "model": "reference-model",
+                "uid": "F1a"
+              },
+              {
+                "model": "reference-model",
+                "uid": "Z0"
+              }
+            ]
+          }
+        ],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      }
+    },
+    "sameRoleChildControl": {
+      "independent": {
+        "causes": [],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "satisfied"
+      },
+      "input": {
+        "appendRelations": [
+          {
+            "id": "F1a-Child-R-Z0",
+            "location": {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            },
+            "nativeType": "Child",
+            "owner": {
+              "model": "reference-model",
+              "uid": "F1a"
+            },
+            "role": "R",
+            "target": {
+              "model": "reference-model",
+              "uid": "Z0"
+            }
+          }
+        ],
+        "base": "Base"
+      },
+      "shippedStyle": {
+        "causes": [],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "satisfied"
+      }
+    },
+    "siblingBridge-path": {
+      "code": "not-downward",
+      "origin": "F1",
+      "path": ["F1", "F0", "F2"],
+      "target": "F2"
+    },
+    "twoQ": {
+      "forestPrerequisite": "supplied-valid-contract-fixture",
+      "input": {
+        "appendNodes": [
+          {
+            "element": {
+              "element": "BAR",
+              "grammar": "reference"
+            },
+            "fields": {},
+            "locations": [
+              {
+                "document": "synthetic",
+                "end": 1,
+                "path": "model.sdoc",
+                "start": 1
+              }
+            ],
+            "ref": {
+              "model": "reference-model",
+              "uid": "M"
+            }
+          }
+        ],
+        "appendRelations": [
+          {
+            "id": "M-Parent-P-F0",
+            "location": {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            },
+            "nativeType": "Parent",
+            "owner": {
+              "model": "reference-model",
+              "uid": "M"
+            },
+            "role": "P",
+            "target": {
+              "model": "reference-model",
+              "uid": "F0"
+            }
+          },
+          {
+            "id": "M-Child-Q-F2",
+            "location": {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            },
+            "nativeType": "Child",
+            "owner": {
+              "model": "reference-model",
+              "uid": "M"
+            },
+            "role": "Q",
+            "target": {
+              "model": "reference-model",
+              "uid": "F2"
+            }
+          },
+          {
+            "id": "M-Child-Q-F1",
+            "location": {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            },
+            "nativeType": "Child",
+            "owner": {
+              "model": "reference-model",
+              "uid": "M"
+            },
+            "role": "Q",
+            "target": {
+              "model": "reference-model",
+              "uid": "F1"
+            }
+          }
+        ],
+        "base": "Base"
+      },
+      "results": [
+        {
+          "causes": [],
+          "evaluationId": "probe",
+          "findings": [],
+          "id": "reference/element/BAR/relation/Parent/P/cardinality",
+          "status": "satisfied"
+        },
+        {
+          "causes": [],
+          "evaluationId": "probe",
+          "findings": [
+            {
+              "code": "cardinality",
+              "evidence": {
+                "declarations": ["M-Child-Q-F2", "M-Child-Q-F1"],
+                "max": 1,
+                "min": 1,
+                "observed": 2,
+                "selector": {
+                  "grammar": "reference",
+                  "nativeType": "Child",
+                  "ownerElement": "BAR",
+                  "role": "Q"
+                }
+              },
+              "locations": [
+                {
+                  "document": "synthetic",
+                  "end": 1,
+                  "path": "model.sdoc",
+                  "start": 1
+                }
+              ],
+              "message": "Owned relation cardinality is invalid",
+              "producer": "prototype/count",
+              "rule": "reference/element/BAR/relation/Child/Q/cardinality",
+              "subjects": [
+                {
+                  "model": "reference-model",
+                  "uid": "M"
+                }
+              ]
+            }
+          ],
+          "id": "reference/element/BAR/relation/Child/Q/cardinality",
+          "status": "violated"
+        },
+        {
+          "causes": ["reference/element/BAR/relation/Child/Q/cardinality"],
+          "evaluationId": "probe",
+          "findings": [],
+          "id": "reference/element/BAR/constraint/endpointPath",
+          "status": "blocked"
+        }
+      ]
+    },
+    "wrongOwnerModel": {
+      "independent": {
+        "causes": ["missing relation owner"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      },
+      "shippedStyle": {
+        "causes": ["missing relation owner"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      }
+    },
+    "wrongTargetModel": {
+      "independent": {
+        "causes": ["unresolved selected target"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      },
+      "shippedStyle": {
+        "causes": ["unresolved selected target"],
+        "evaluationId": "probe",
+        "findings": [],
+        "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+        "status": "error"
+      }
+    }
+  },
+  "inputs": {
+    "Base": {
+      "authoredRelations": [
+        {
+          "id": "F1-Parent-H-F0",
+          "location": {
+            "document": "synthetic",
+            "end": 1,
+            "path": "model.sdoc",
+            "start": 1
+          },
+          "nativeType": "Parent",
+          "owner": {
+            "model": "reference-model",
+            "uid": "F1"
+          },
+          "role": "H",
+          "target": {
+            "model": "reference-model",
+            "uid": "F0"
+          }
+        },
+        {
+          "id": "F1a-Parent-H-F1",
+          "location": {
+            "document": "synthetic",
+            "end": 1,
+            "path": "model.sdoc",
+            "start": 1
+          },
+          "nativeType": "Parent",
+          "owner": {
+            "model": "reference-model",
+            "uid": "F1a"
+          },
+          "role": "H",
+          "target": {
+            "model": "reference-model",
+            "uid": "F1"
+          }
+        },
+        {
+          "id": "F2-Parent-H-F0",
+          "location": {
+            "document": "synthetic",
+            "end": 1,
+            "path": "model.sdoc",
+            "start": 1
+          },
+          "nativeType": "Parent",
+          "owner": {
+            "model": "reference-model",
+            "uid": "F2"
+          },
+          "role": "H",
+          "target": {
+            "model": "reference-model",
+            "uid": "F0"
+          }
+        },
+        {
+          "id": "F2a-Parent-H-F2",
+          "location": {
+            "document": "synthetic",
+            "end": 1,
+            "path": "model.sdoc",
+            "start": 1
+          },
+          "nativeType": "Parent",
+          "owner": {
+            "model": "reference-model",
+            "uid": "F2a"
+          },
+          "role": "H",
+          "target": {
+            "model": "reference-model",
+            "uid": "F2"
+          }
+        },
+        {
+          "id": "F2b-Parent-H-F2",
+          "location": {
+            "document": "synthetic",
+            "end": 1,
+            "path": "model.sdoc",
+            "start": 1
+          },
+          "nativeType": "Parent",
+          "owner": {
+            "model": "reference-model",
+            "uid": "F2b"
+          },
+          "role": "H",
+          "target": {
+            "model": "reference-model",
+            "uid": "F2"
+          }
+        },
+        {
+          "id": "G1-Parent-H-G0",
+          "location": {
+            "document": "synthetic",
+            "end": 1,
+            "path": "model.sdoc",
+            "start": 1
+          },
+          "nativeType": "Parent",
+          "owner": {
+            "model": "reference-model",
+            "uid": "G1"
+          },
+          "role": "H",
+          "target": {
+            "model": "reference-model",
+            "uid": "G0"
+          }
+        }
+      ],
+      "model": "reference-model",
+      "nodes": [
+        {
+          "element": {
+            "element": "FOO",
+            "grammar": "reference"
+          },
+          "fields": {
+            "FLAG": ["false"]
+          },
+          "locations": [
+            {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            }
+          ],
+          "ref": {
+            "model": "reference-model",
+            "uid": "F0"
+          }
+        },
+        {
+          "element": {
+            "element": "FOO",
+            "grammar": "reference"
+          },
+          "fields": {
+            "FLAG": ["false"]
+          },
+          "locations": [
+            {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            }
+          ],
+          "ref": {
+            "model": "reference-model",
+            "uid": "F1"
+          }
+        },
+        {
+          "element": {
+            "element": "FOO",
+            "grammar": "reference"
+          },
+          "fields": {
+            "FLAG": ["false"]
+          },
+          "locations": [
+            {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            }
+          ],
+          "ref": {
+            "model": "reference-model",
+            "uid": "F1a"
+          }
+        },
+        {
+          "element": {
+            "element": "FOO",
+            "grammar": "reference"
+          },
+          "fields": {
+            "FLAG": ["true"]
+          },
+          "locations": [
+            {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            }
+          ],
+          "ref": {
+            "model": "reference-model",
+            "uid": "F2"
+          }
+        },
+        {
+          "element": {
+            "element": "FOO",
+            "grammar": "reference"
+          },
+          "fields": {
+            "FLAG": ["false"]
+          },
+          "locations": [
+            {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            }
+          ],
+          "ref": {
+            "model": "reference-model",
+            "uid": "F2a"
+          }
+        },
+        {
+          "element": {
+            "element": "FOO",
+            "grammar": "reference"
+          },
+          "fields": {
+            "FLAG": ["false"]
+          },
+          "locations": [
+            {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            }
+          ],
+          "ref": {
+            "model": "reference-model",
+            "uid": "F2b"
+          }
+        },
+        {
+          "element": {
+            "element": "FOO",
+            "grammar": "reference"
+          },
+          "fields": {
+            "FLAG": ["false"]
+          },
+          "locations": [
+            {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            }
+          ],
+          "ref": {
+            "model": "reference-model",
+            "uid": "G0"
+          }
+        },
+        {
+          "element": {
+            "element": "FOO",
+            "grammar": "reference"
+          },
+          "fields": {
+            "FLAG": ["false"]
+          },
+          "locations": [
+            {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            }
+          ],
+          "ref": {
+            "model": "reference-model",
+            "uid": "G1"
+          }
+        },
+        {
+          "element": {
+            "element": "FOO",
+            "grammar": "reference"
+          },
+          "fields": {
+            "FLAG": ["false"]
+          },
+          "locations": [
+            {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            }
+          ],
+          "ref": {
+            "model": "reference-model",
+            "uid": "I0"
+          }
+        },
+        {
+          "element": {
+            "element": "BAZ",
+            "grammar": "reference"
+          },
+          "fields": {},
+          "locations": [
+            {
+              "document": "synthetic",
+              "end": 1,
+              "path": "model.sdoc",
+              "start": 1
+            }
+          ],
+          "ref": {
+            "model": "reference-model",
+            "uid": "Z0"
+          }
+        }
+      ]
+    },
+    "forest": {
+      "closed": {
+        "F0": false,
+        "F1": false,
+        "F1a": false,
+        "F2": true,
+        "F2a": false,
+        "F2b": false,
+        "G0": false,
+        "G1": false,
+        "I0": false
+      },
+      "parents": {
+        "F1": "F0",
+        "F1a": "F1",
+        "F2": "F0",
+        "F2a": "F2",
+        "F2b": "F2",
+        "G1": "G0"
+      },
+      "validity": "supplied-contract-fixture"
+    }
+  },
+  "limits": [
+    "synthetic model inputs",
+    "supplied valid forest",
+    "no native/Scribe enforcement",
+    "no process transport",
+    "no default provider or atomic batch execution"
+  ]
+}

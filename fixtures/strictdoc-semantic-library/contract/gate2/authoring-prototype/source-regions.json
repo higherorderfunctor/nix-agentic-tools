@@ -1,0 +1,25 @@
+{
+  "regions": [
+    {
+      "label": "explicit bridge cardinalities and record path.",
+      "line": 17
+    },
+    {
+      "label": "another owner with the same role spelling.",
+      "line": 34
+    },
+    {
+      "label": "ordered typed fields and scoped relation predicates.",
+      "line": 40
+    },
+    {
+      "label": "selected forest and original-origin Boolean visibility.",
+      "line": 62
+    },
+    {
+      "label": "captured baseline plus an explicit projection.",
+      "line": 76
+    }
+  ],
+  "source": "recommended.nix"
+}

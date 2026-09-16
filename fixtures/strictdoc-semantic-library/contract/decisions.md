@@ -1,32 +1,35 @@
-# Decisions awaiting review
+# Retained decisions and remaining review items
 
-Status: **PROPOSED — no behavior approval recorded.** The DAG, multiple-root,
-Child-authoring, clean-context, and native-devenv constraints are established.
-The following choices are proposals. Current implementation behavior, a passing
-native smoke test, or a convenient backend cannot approve them.
+Status: **Retained decision identities, reconciled to the Gate 2 behavior review
+and 2026-09-15 handoff.** Earlier blanket PENDING labels are superseded by
+[reviewed requirements](gate2/reviewed-requirements.md). D01/D09–D14 below
+incorporate the authorized scope; exact APIs remain proposed, D15 remains a
+separately reviewed future extension, and later implementation is not
+authorized.
 
 ## Concrete choices
 
-| ID  | Proposed ruling                                                                                                                                   | Consequence requiring review                                                                                                        |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| D01 | Required `FLAG` strings `false`/`true` mean open/closed                                                                                           | Absent or malformed fields are input errors, never open defaults                                                                    |
-| D02 | FOO `H`/`R` and BAR `P`/`Q` target FOO; selectors include full model/type context                                                                 | BAZ's Parent `R`/Child `Q` are unrestricted context controls, outside FOO/BAR rules                                                 |
-| D03 | FOO has at most one `H` parent; completed BAR has exactly one `P` and one `Q`                                                                     | Cardinality is checked on final candidate state                                                                                     |
-| D04 | `R` stays in one hierarchy root; ascending is unrestricted; descent uses origin-sensitive closed expansion                                        | An internal origin may leave its closed compartment or reach an internal sibling                                                    |
-| D05 | A closed origin is inside its own boundary                                                                                                        | A BAR may descend from closed `F2` to `F2a`                                                                                         |
-| D06 | BAR requires a downward `H` path; conceptual reachability includes zero length                                                                    | Equal endpoints are nevertheless always inadmissible native cycles; conceptual zero length has no independent Scribe pass case      |
-| D07 | Baseline-listed UIDs and their modeled authored records are preserved exactly                                                                     | Deletion and modeled revision reject; incoming relations, layout, and bookkeeping are not automatically frozen                      |
-| D08 | Supersession supplies no implicit exception to preservation                                                                                       | No supersession lifecycle or cleanup helper is part of this first fixture                                                           |
-| D09 | Capture one identified complete immutable external snapshot per evaluation; use it throughout the candidate and comparison runs                   | A concurrent external change applies to the next evaluation; do not silently mix observations or claim latest-at-commit consistency |
-| D10 | Provider nonzero exit, timeout, malformed output, or incomplete output is an execution error                                                      | Complete empty output is valid input; error is never absence of protected records                                                   |
-| D11 | A batch evaluates its complete final state, with private incomplete staging                                                                       | Current individual writes or an RPC request array cannot substitute for the proposed transaction                                    |
-| D12 | Existing invalid input is inspectable and diagnosable; accept repairs only when the complete final candidate is valid                             | Partial repairs that leave unrelated violations need a separate future decision; missing baseline/before inputs cannot be evaluated |
-| D13 | Rejection restores authored files and observable graph; publication failure reports error and restores or blocks writes pending explicit recovery | Exact crash guarantees need integration evidence; never report a committed success for divergent state                              |
-| D14 | Distinct rules extend; replacing/disabling a rule requires explicit identity-targeted action; conflicting duplicate identities error              | Module merge order never silently selects semantic meaning; effective rule origins remain inspectable                               |
-| D15 | A proposed numeric descendant aggregate and external limit become a later independent extension challenge only after approval                     | X07 cannot quietly add fields or domain requirements to the retained core corpus                                                    |
+| ID  | Proposed ruling                                                                                                                                        | Consequence requiring review                                                                                                             |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| D01 | Required semantic Boolean `FLAG` lowers canonically to native `false`/`true` plus identified metadata; optional typed creation default false           | Only newly created final absence can default; existing absence, bad multiplicity and unknown values error                                |
+| D02 | FOO `H`/`R` and BAR `P`/`Q` target FOO; selectors include full model/type context                                                                      | BAZ's Parent `R`/Child `Q` are unrestricted context controls, outside FOO/BAR rules                                                      |
+| D03 | FOO has at most one `H` parent; completed BAR has exactly one `P` and one `Q`                                                                          | Cardinality is checked on final candidate state                                                                                          |
+| D04 | `R` stays in one hierarchy root; ascending is unrestricted; descent uses origin-sensitive closed expansion                                             | An internal origin may leave its closed compartment or reach an internal sibling                                                         |
+| D05 | A closed origin is inside its own boundary                                                                                                             | A BAR may descend from closed `F2` to `F2a`                                                                                              |
+| D06 | BAR requires a downward `H` path; conceptual reachability includes zero length                                                                         | Equal endpoints are nevertheless always inadmissible native cycles; conceptual zero length has no independent Scribe pass case           |
+| D07 | Baseline-listed UIDs and their modeled authored records are preserved exactly                                                                          | Deletion and modeled revision reject; incoming relations, layout, and bookkeeping are not automatically frozen                           |
+| D08 | Supersession supplies no implicit exception to preservation                                                                                            | No supersession lifecycle or cleanup helper is part of this first fixture                                                                |
+| D09 | Capture one identified complete immutable external snapshot per evaluation; use it throughout the candidate and comparison runs                        | A concurrent external change applies to the next evaluation; do not silently mix observations or claim latest-at-commit consistency      |
+| D10 | Provider nonzero exit, timeout, malformed output, or incomplete output is an execution error                                                           | A successful complete empty fact set is valid input; error is never absence of protected records                                         |
+| D11 | A batch evaluates its complete final state, with private incomplete intermediate state                                                                 | One ordered invocation prepares an atomic candidate; individual writes or RPC arrays do not substitute; no public lifecycle/participants |
+| D12 | Existing invalid input is inspectable and diagnosable; accept repairs only when the complete final candidate is valid                                  | Partial repairs that leave unrelated violations need a separate future decision; missing baseline/before inputs cannot be evaluated      |
+| D13 | Ordinary rejection discards private candidate without document rollback; publication failure restores or blocks with explicit recovery-required result | Exact crash guarantees need integration evidence; never report a committed success for divergent state                                   |
+| D14 | Distinct rules extend; replacing/disabling a rule requires explicit identity-targeted action; conflicting duplicate identities error                   | Module merge order never silently selects semantic meaning; effective rule origins remain inspectable                                    |
+| D15 | A proposed numeric descendant aggregate and external limit become a later independent extension challenge only after approval                          | X07 cannot quietly add fields or domain requirements to the retained core corpus                                                         |
 
-Every row above is **PENDING**. The shared and opinionated signatures in
-[surfaces](surfaces.md) are additional API review items, not exported options.
+D01–D14 are interpreted under the reviewed behavioral requirements and latest
+handoff; D15 remains pending separate approval. The signatures in
+[surfaces](surfaces.md) remain API proposals, not exported options.
 
 ## Visibility truth table
 
@@ -56,23 +59,24 @@ are not reported as current runtime enforcement.
 
 The supplied public interface brief identifies no semantic declaration API or
 implemented semantic engine. Current `scribe.apply` is one operation, and RPC
-request arrays do not establish a candidate transaction. Its reported cycle
+request arrays do not establish an atomic candidate batch. Its reported cycle
 coverage and save recovery must be qualified through native consumer probes.
 These are integration findings to investigate, not reasons to weaken D11/D13 or
 the global DAG constraint.
 
-Backend, query language, graph/index storage, provider ABI, process arrangement,
-and exact public API remain open. No backend selection or production engine
-belongs to Gate 1. Initial provider/helper ownership is proposed as
-consumer-side; promotion to the library is separately reviewed. Performance
-workloads are not latency promises.
+The retained backend direction is Python/rustworkx with native StrictDoc reuse
+and optional OPA, not production adoption. Common JSON invocation and
+type/default/candidate contracts are proposed in
+[interface](gate2/interface.md). Exact DSL spelling, digest/coordinate schema
+and later trust/publication qualification remain review items. No production
+engine belongs to Gate 2. Performance workloads are not latency promises.
 
 ## Approval and subsequent changes
 
 Record a user decision by decision ID, exact ruling, date, and affected
 scenarios. Do not change this status based on worker interpretation. Approval
-can accept, reject, or replace a proposal; only then may executable semantic
-tests consume those expected outcomes.
+can accept, reject, or replace a proposal; later authorized implementation tests
+must use the recorded ruling and never infer authority from a passing probe.
 
 After behavior approval, each change request records finding and evidence,
 classification (implementation bug, interface gap, contradictory fixture, or new

@@ -1,9 +1,11 @@
 # StrictDoc semantic-library fixture
 
 **Gate 2 interface review.** Start with the
-[consumer walkthrough](contract/gate2/README.md) for inline grammar, policy,
-backend, and validation examples. The semantic interface remains proposed. This
-page describes the retained native-devenv fixture and its existing commands.
+[DSL review](contract/gate2/README.md), then the self-contained
+[seven lessons](contract/gate2/tutorial-dsl.md) for semantic declarations and
+worked models. [Setup](contract/gate2/setup.md) covers imports, defaults and
+proposed runtime integration. The semantic interface remains proposed. This page
+describes the retained native-devenv fixture and its existing commands.
 
 From this directory, refresh the public toolchain and generate the grammar:
 
@@ -100,9 +102,10 @@ bash tests/devenv.sh shell -- scribe --root "$PWD" delete M
 bash tests/devenv.sh down
 ```
 
-These are separate native writes. They are not the proposed complete candidate
-transaction, and incomplete BAR staging must not become an approved semantic
-state merely because it is currently writable.
+These are separate native writes. The proposed atomic batch applies ordered
+operations within one invocation and validates the final candidate. An
+incomplete BAR must not become an approved semantic state merely because it is
+currently writable.
 
 ## Refresh and evidence
 

@@ -1,0 +1,12 @@
+{
+  "algorithm": "sha256",
+  "scope": "Owned deliverables after corrected-evidence synchronization and final formatting; this manifest and process logs excluded",
+  "files": {
+    "README.md": "258ad07c304faedcc5f94a6f56684239afca5bc33e6b7df515993cd53ac8605d",
+    "tutorial-dsl.md": "c1d46dff6d652c9b10bbea92cfcca1bc94358231f706f6b4efab20894a8c523a",
+    "setup.md": "5097b3e6a3e2035d2759b89894a09e309fa06fe4160f63381f4e494169a3a4e9",
+    "snippet-map.json": "c4cc093d82b0ce520d7d09181ca6f1079b0e3cd561b86749aedb2f6bd6d1be9b",
+    "verification.json": "bc942761c9cecbcb89e31dce985bcd8043d2ca6eb894ff839f50f1a61ee6ebe3",
+    "status.json": "385fa7731cdbfd93aec53a3e2ff96669fe9c53cc07f8d7cc69dda2eead8c7111"
+  }
+}

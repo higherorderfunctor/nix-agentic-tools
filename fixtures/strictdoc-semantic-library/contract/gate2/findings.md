@@ -1,34 +1,133 @@
-**Gate 2 adjudication findings and dispositions.** Recommendation: public policy
-contracts beside grammar, Python/rustworkx first with native StrictDoc reuse,
-optional OPA, and explicit consumer-selected invocation boundaries. No finding
-requires another broad tooling survey. The unresolved contract/integration items
-below are entry conditions for later implementation, not claims that this
-recommendation is already deployable.
+# Current Gate 2 revision findings
 
-Priorities: P1 blocks the corresponding correctness/authority/publication claim;
-P2 affects public compatibility or qualification; P3 concerns reviewability or
-scope. “Resolved in proposal” means a documented design decision, never an
-implemented fix. The governing authority is the
-[reviewed packet](reviewed-requirements.md), including its override of old
-reference pending labels.
+Status: **Proposed contract reconciliation, no production implementation or new
+runtime execution.** The 2026-09-15 handoff authorizes the changed scope.
+[Interface](interface.md), [requirements](reviewed-requirements.md),
+[closing plan](closing-plan.md) and
+[scope reconciliation](scope-reconciliation.md) govern current reading; the old
+[recommendation](recommendation.md) is historical. P1 blocks the corresponding
+correctness claim, P2 concerns compatibility/qualification, P3 concerns
+reviewability. “Resolved in proposal” is not an implemented fix.
 
-| Priority / finding                                        | Evidence and exact concern                                                                                                                                                                                                                     | Disposition / smallest follow-up                                                                                                                                                                                                              |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| P1 F01 — Native role-cycle gap                            | Pinned CLI accepts three named-cycle controls and rejects corresponding unroled graphs. It is not missing Parent/Child support.                                                                                                                | Open integration defect. Require complete all-role DAG rule; prefer native detector reuse. Qualify Parent-only, Child-only and mixed refusals through the actual candidate/Scribe path.                                                       |
-| P1 F02 — Snapshot identity disagreement                   | Ideal keys records by model/UID; tool-informed uses grammar/UID within model and omits model from its projection key. Probes use flat UID maps and do not arbitrate cross-grammar semantics.                                                   | Resolved in proposal: `(model, UID)`, grammar retained as metadata/type/selector context. C1 must fix extraction/resolver/schema and duplicate-UID behavior before Gate 3 implementation.                                                     |
-| P1 F03 — Public ABI still absent                          | Both designs name model/protocol schemas but provide no complete interoperable implementation. The health bridge reports only `health`, backend unconfigured.                                                                                  | C1/C2 entry conditions. Freeze one complete target snapshot, descriptor, runner request/result and witness, then consume it through shipped and independent implementations. No fabricated API evaluation.                                    |
-| P1 F04 — No Scribe transaction or recovery proof          | Native exports leave their input bytes unchanged, but no proposed mutation occurred there. Current Scribe arrays can partially persist. Cozo commits cover database state only.                                                                | C3: specify capture/refusal/publication before the first publishing slice. Real G02 unchanged files/held model/reload first; grouped candidates and failure injection later.                                                                  |
-| P1 F05 — Identity and policy-loading authority            | Provider probe checks process output shape; it authenticates no actor. Mutable candidate config could otherwise disable its own protection.                                                                                                    | Keep authority/verifier and trusted policy loading explicit. Before identity slice: define authority→session→principal binding and approval verification request/result; test forged labels, wrong authority and stale bindings.              |
-| P1 F06 — Git check/use boundary                           | A captured index and later identity check do not themselves bind the actual commit tree; local hooks can be bypassed.                                                                                                                          | Require `commit.bind-validated-tree/v1` only from a qualified enforcing adapter. Smallest integration control: change index after validation and prove receipt refusal or exact validated-tree commit. No Git atomicity claim now.            |
-| P2 F07 — Helpers coupled to default adapter               | Tool-informed raw target embeds `graph-library/targets`; ideal separates contract identity from assignment. Both promise public replacement.                                                                                                   | Adopt public contract-to-entry bindings and explicit per-rule bindings. N3's independent target entry implements the same contract without a shipped ID.                                                                                      |
-| P2 F08 — Lifecycle hardening by example                   | Tool-informed example requires all participants ready; ideal allows readiness as group policy. Ideal tailoring example always selects a hierarchy; tool-informed correctly separates it from familiar tailoring.                               | Core revisioned private stage/seal; optional all-ready. Tailoring counts/targets work without selected path. These are consumer choices, not accidental engine policy.                                                                        |
-| P2 F09 — Field/native equivalence                         | Fields create no authored native links. Even a virtual union graph does not make exports or owned-link preservation identical.                                                                                                                 | N6/P05 specify endpoint/path parity and optional union-DAG; native exports and protection need separate mappings/evidence.                                                                                                                    |
-| P2 F10 — Runtime pairing; remaining qualification         | Original Python 3.13.15/rustworkx 0.18.1 benchmarks remain unchanged. Separate later [raw pairing evidence](runtime-pairing/outputs/host-probe-result.json) passes with CPython 3.14.6, StrictDoc 0.28.3 and rustworkx 0.17.1 on x86_64-linux. | Initial compatibility check resolved; C4 remains open for production packaging, supported platforms and native parser/validator integration. Temporary combined-closure PYTHONPATH and synthetic graph controls establish no Scribe behavior. |
-| P2 F11 — Prototype coverage narrower than labels          | Thirty graph comparisons are three backends on ten variants, not 30 independent reference cases. Forest validity is asserted by the oracle; full target/count/projection/publication APIs are not tested.                                      | Report capability only. P01–P13 map all 44 cases plus additions to actual later delivery; T11 retains all 15 reference rows.                                                                                                                  |
-| P2 F12 — Incrementality/cost not qualified                | Every query probe reconstructs complete inputs; loaded Wasm receives full input. Cost cells have one query, not all policies over realistic mixed documents.                                                                                   | Full evaluation first. Gate 6 differential mutation/source/policy tests and representative costs remain required. Do not mandate depth limits, persistence or an incremental backend.                                                         |
-| P2 F13 — Strong execution restrictions                    | Read-only input objects do not stop a callback/executable from writing published files. Neither design's proposed guarantees establish runtime isolation.                                                                                      | Publish profile must declare trusted-extension versus isolated-execution threat model and qualify write restriction for every adapter. Until then, no strong publication capability advertisement.                                            |
-| P3 F14 — Frozen links assume producer layout              | Tool-informed links refer to absent `../inputs/research-v2` and toolchain paths; shared closing plan references `../shared`. These are copied artifact context, not evidence removal.                                                          | Frozen artifacts left untouched. New outputs link to available `../inputs/research`, shared files and primary source URLs; new links checked locally.                                                                                         |
-| P3 F15 — Closure obligations can vanish behind prototypes | Current reference grammar retains generic-runtime accommodations; clean proposed examples alone do not remove coupling.                                                                                                                        | Track P13 and closing obligations: generic field-policy removal, zero forbidden fields anywhere in final neutral scope, public repository policies, verified recipes, no SDoc migration.                                                      |
+## Current dispositions
+
+| Finding                                         | Current disposition and smallest later evidence                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| P1 F01 — Native named-role DAG gap              | Retain historical evidence below. Required complete all-role native rule remains independent of selected forest; qualify Parent-only/Child-only/mixed refusals on the actual candidate path.                                                                                                                                                                                   |
+| P1 F02 — Record identity                        | Retain `(model, UID)` with grammar/element/field context and duplicate-UID error. C1 fixes exact extraction/coordinates/digests and metadata binding.                                                                                                                                                                                                                          |
+| P1 F03 — Public invocation absent               | Resolved design direction: fully Nix-configured backend-agnostic JSON contract, registered implementations and consumer DSL contracts through the same route. C1/C2 still require compatible schemas and independent structured target witnesses.                                                                                                                              |
+| P1 F04 — Candidate publication/isolation absent | Single-invocation ordered batch replaces cross-call transaction obligations. Current source does not provide shared atomic candidates, fixed readers, full validation, frozen bytes or restore-or-block. C3 retains real refusal/held-state/reload/fault evidence.                                                                                                             |
+| P1 F05 — Authority                              | Authored/default identity is not principal evidence. Policy loading and fact verification remain trusted consumer bindings. No SSH keys, UI or generic approval system is added.                                                                                                                                                                                               |
+| P1 F06 — Git check/use                          | Staged-tree checks retained as a separate consumer boundary. Qualify exact committed-tree binding and stale receipt refusal; local hook alone supplies no non-bypassability or authentication.                                                                                                                                                                                 |
+| P2 F07 — Adapter coupling                       | Common registration/bindings separate contract meaning from implementation. Consumer DSL/native program and shipped helpers have the same route; unsupported contract/schema errors explicitly.                                                                                                                                                                                |
+| P2 F08 — Lifecycle overreach                    | Superseded: public begin/stage/seal/abort, participant/readiness/membership/seal-authority mechanics are removed from initial scope. Preserve private candidate isolation, final-state validity and publication recovery.                                                                                                                                                      |
+| P2 F09 — Field/native parity                    | Explicit field resolution, path and optional virtual union-DAG remain. No native link ownership/export equivalence is implied.                                                                                                                                                                                                                                                 |
+| P2 F10 — Runtime pairing                        | Historical CPython 3.14.6/StrictDoc 0.28.3/rustworkx 0.17.1 import/synthetic controls remain unchanged, as do older benchmark versions. C4 still needs packaging/platform/native integration qualification.                                                                                                                                                                    |
+| P2 F11 — Evidence labels                        | Original comparisons are capability evidence, not 44 integrated cases. New DFT/A contract cases are future controls. Prototype lowering or source inspection never establishes Scribe enforcement.                                                                                                                                                                             |
+| P2 F12 — Incrementality/cache identity          | Full evaluation remains oracle. Validators may write derived caches; keys track each computation's actual metadata/config/version/snapshot dependencies. Rejected caches may survive but cannot become accepted state.                                                                                                                                                         |
+| P2 F13 — Authority/read isolation               | Read-only authoritative snapshots, writable derived state. Fixed input identity and trusted-extension/isolation assumptions must be qualified; read-only JSON or a frozen wrapper does not protect arbitrary host state.                                                                                                                                                       |
+| P3 F14 — Historical links                       | Original packet references below retain their historical layout and provenance. Current contracts distinguish retained evidence from proposed behavior; no historical evidence was re-created.                                                                                                                                                                                 |
+| P3 F15 — Final delivery                         | Neutral cleanup, public repository-policy extension and verified human/steering recipes remain after qualification. No scope drift into docs/spec/plans or production now.                                                                                                                                                                                                     |
+| P1 F16 — Semantic Boolean metadata              | Gap resolved in design by distinct validated type layer yielding native singleChoice plus identified metadata. Fix canonical codec/presence/multiplicity and version/digest; native placeholder acceptance must not bypass Boolean decoding.                                                                                                                                   |
+| P1 F17 — Defaults and construction              | Typed literal/runtime script, newly created final absence only, preserve false/empty, once per candidate, no backfill/eval acquisition. Existing early required/empty checks need adaptation; native empty serialization remains untested.                                                                                                                                     |
+| P1 F18 — Mutator/precheck/index coherence       | Per-field/node validation and current indexed reference checks can reject transient state or consult stale data. Audit construction and final-state validation over coherent candidate/indexes, without mandating rebuild per operation.                                                                                                                                       |
+| P2 F19 — Readable DSL finite lowering           | Public proposed `s.grammar`, typed fields, new `c` callbacks, named constraints/views, explicit counts/singletons and contribution lists align with this contract. Final public shape synchronization incorporates normalized grammar/bundle/types, semantic field/default nesting, finite predicate IR and keyed identities; generic predicate runtime remains unimplemented. |
+
+## New public source facts and limits
+
+The independent public source report identifies revision
+`6f529c7eef3650a14b6f8d56ff1bc3ceaa914d7f` and matches all five handoff blob
+IDs. The report is source inspection, not runtime execution; no concurrency,
+fault, empty serialization or new semantic enforcement test follows from it.
+
+- Native public grammar exports only check/dsl/emit/normalized/render. Fields
+  are ordered; `singleChoice` uses `choices`; semantic/default keys are absent.
+  Empty relations lower to null/absence. Native emission alone supplies no
+  semantic metadata transport.
+- `scribe_ops.py:155–160,414–420` accepts initial relations and passes them to
+  `g.add_node`. Each normal mutation calls `Workspace.write` once. JSON-RPC max
+  batch eight dispatches independent `apply` calls; CLI constructs one
+  subcommand, not one atomic ordered batch.
+- `scribe_cmd.py:78–88,105` demands required fields before RPC.
+  `sdoc_model.py:908–950` rejects missing required creation fields and every
+  explicit empty string. Per-field set and relation add/remove validate the
+  entire node immediately. Required construction and successful-empty defaults
+  therefore need explicit integration work, not just a descriptor.
+- Inspected installed `SDocValidator.validate_node` accepts `TBD`/`TBC` for
+  choice fields, beyond declared choices. The semantic Boolean codec must reject
+  them. That node validator does not check DAG, selected forest,
+  target/cardinality/visibility or preservation; full reader/index-builder
+  behavior was not exhaustively audited.
+- `Workspace.current` returns held graph objects after releasing its lock.
+  `write` mutates that same held graph; a frozen Generation dataclass does not
+  freeze it. Clearing the workspace reference on discard cannot retract
+  references readers already hold. Reads/show/list/check/export use mutable
+  state; no snapshot isolation is established.
+- Graph mutators update object lists while some incoming/reference lookups use
+  graph_database indexes. Source shows a disagreement risk between walk-based
+  and indexed state after mutation. Moving a reference precheck to the end
+  without updating/rebuilding its inputs is insufficient. This is not a
+  reproduced runtime case.
+- `_move` previews the old document with `dry_run=True` then renames separately.
+  Final path/membership is outside that candidate validation. `_prove_renders`
+  reparses touched files, not the whole candidate graph. `Graph.save` computes
+  pending/rendered content again, so inspected bytes are not one frozen
+  publication artifact.
+- Writes use `_held` without a final disk/base freshness check.
+  Source/config/metadata identity must join the proposed base/receipt contract.
+  Save captures old text and attempts restoration, but restoration can fail and
+  no recovery-required latch is present. Per-file replace and deletion are not
+  crash-atomic multi-file publication.
+- Textual native `check` return code is dropped by the RPC rendering route; a
+  successful CLI/RPC response is not the proposed RuleResult/admission contract.
+  Existing external-file extractor caches use path/mtime/size, not complete
+  candidate/content/config identity. File relation validation reads live disk
+  and needs an explicit captured-file contract when relevant.
+- The audited installed CLI has no alternate document-write route outside
+  Workspace, but direct low-level Graph.save and external filesystem/upstream
+  commands remain outside the Scribe boundary. The report did not globally audit
+  repository-specific clients, private semantics, full native builder/export
+  internals or trust rules.
+
+These findings refine C1–C4 and the dependency-ordered plan. They do not mandate
+a general filesystem transaction service, blanket full graph rebuilding per
+operation or a new security subsystem. No historical number, version or archived
+alternative has been changed.
+
+## DSL synchronization
+
+The supplied public DSL vocabulary names `g = grammar.dsl`, proposed
+`s = schema` and new `c = constraint`; ordered fields;
+`s.field.boolean "FLAG" { required = true; default = s.default.literal false; }`;
+keyed `relations.<role>.parent/child`; `c.isNodeType`, `c.forest`,
+`c.boundaryVisibility`, `c.fieldValue`, `c.exactly`, `c.only`, `canDescend`,
+external `c.on` and contribution lists. This contract adopts that vocabulary. No
+initial fluent/functor surface is required.
+
+The public DSL shape specifies: schema returns
+`{elements; views; normalized; rendered;}`, only normalized/rendered serialize;
+types use `{schema; digest; fields = [{field; native; semantic; default;}];}`;
+defaults use literal/script variants; keyed IDs and `{op; args;}` predicate IR
+are recorded in the interface. The prototype supports adjacent/external/direct
+target specialization and rejects unsupported reversed visibility/endpoint
+patterns. Its generic predicate interpreter, script execution and arbitrary
+custom dependency compatibility remain unimplemented; bounded lowering evidence
+does not establish those runtime capabilities.
+
+Remaining C1/C2 choices are cross-language digest canonicalization, source
+coordinates, reserved-ID escaping, exact generic operator/operand schemas and
+the small default runtime ABI, not accepted behavior. Exact spellings remain
+proposals, with bounded prototype evidence distinct from production
+qualification.
+
+## Historical evidence record (unchanged)
+
+The record below is retained verbatim from the supplied findings, including
+historical first-person verification statements and original links. Those
+describe the original comparison worker, not work performed in this revision.
+Old lifecycle/readiness/next-review references in this historical record are
+superseded by the current dispositions above. Measurements and evidence
+boundaries remain intact.
 
 **Native evidence supporting F01/F04.**
 [Actual source documents](research/experiments/native/combined_role_cycle/input.sdoc)

@@ -1,0 +1,319 @@
+{
+  "canonicalNormalizedAndRenderedUnchanged": true,
+  "deadnix": "1.3.2 --fail outputs passed",
+  "independentSources": {
+    "adversarial.nix": "b5e9478b4ddc671de39eebeafbfa24853f88ca5b20843b6f6db93a0229b9407a",
+    "adversarial.py": "84ccc8ff5856b0a4f6f81882853d46e9241925a950048f37cd732f4ca8a433d5"
+  },
+  "nix": {
+    "compoundDependencies": ["reference/view/H/valid"],
+    "compoundInputs": {
+      "candidate": {
+        "from": "candidate",
+        "schema": "sdoc-policy.model/v1"
+      },
+      "view:reference/view/H": {
+        "from": "view:reference/view/H",
+        "schema": "sdoc-policy.forest/v1"
+      }
+    },
+    "compoundWithoutForestRejected": true,
+    "genericSingletonWithoutCountRejected": true,
+    "requiredNativeReplacementRejected": true,
+    "singletonDifferentSelectorRejected": true
+  },
+  "producerNixControls": 57,
+  "producerRuntimeControls": 110,
+  "python": {
+    "controls": [
+      {
+        "actual": "schema-error",
+        "expected": "schema-error",
+        "name": "result-null-lists",
+        "pass": true,
+        "result": {
+          "causes": null,
+          "evaluationId": "probe",
+          "findings": null,
+          "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+          "status": "satisfied"
+        }
+      },
+      {
+        "actual": "schema-error",
+        "expected": "schema-error",
+        "name": "result-nonstring-evaluation-id",
+        "pass": true,
+        "result": {
+          "causes": [],
+          "evaluationId": 7,
+          "findings": [],
+          "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+          "status": "satisfied"
+        }
+      },
+      {
+        "actual": "schema-error",
+        "expected": "schema-error",
+        "name": "result-unstructured-witness",
+        "pass": true,
+        "result": {
+          "causes": [],
+          "evaluationId": "probe",
+          "findings": ["wrong"],
+          "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+          "status": "violated"
+        }
+      },
+      {
+        "actual": "schema-error",
+        "expected": "schema-error",
+        "name": "result-string-blocked-cause",
+        "pass": true,
+        "result": {
+          "causes": "missing",
+          "evaluationId": "probe",
+          "findings": [],
+          "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+          "status": "blocked"
+        }
+      },
+      {
+        "actual": ["error", "error"],
+        "appendRelation": {
+          "id": "wrong-target-model",
+          "location": {
+            "path": "synthetic.sdoc",
+            "start": 1
+          },
+          "nativeType": "Parent",
+          "owner": {
+            "model": "reference-model",
+            "uid": "F1a"
+          },
+          "role": "R",
+          "target": {
+            "model": "other-model",
+            "uid": "F2"
+          }
+        },
+        "expected": ["error", "error"],
+        "name": "wrong-target-model",
+        "pass": true,
+        "results": [
+          {
+            "causes": ["unresolved selected target"],
+            "evaluationId": "probe",
+            "findings": [],
+            "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+            "status": "error"
+          },
+          {
+            "causes": ["unresolved selected target"],
+            "evaluationId": "probe",
+            "findings": [],
+            "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+            "status": "error"
+          }
+        ]
+      },
+      {
+        "actual": ["error", "error"],
+        "appendRelation": {
+          "id": "missing-owner",
+          "location": {
+            "path": "synthetic.sdoc",
+            "start": 1
+          },
+          "nativeType": "Parent",
+          "owner": {
+            "model": "reference-model",
+            "uid": "absent"
+          },
+          "role": "R",
+          "target": {
+            "model": "reference-model",
+            "uid": "F2"
+          }
+        },
+        "expected": ["error", "error"],
+        "name": "missing-owner",
+        "pass": true,
+        "results": [
+          {
+            "causes": ["missing relation owner"],
+            "evaluationId": "probe",
+            "findings": [],
+            "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+            "status": "error"
+          },
+          {
+            "causes": ["missing relation owner"],
+            "evaluationId": "probe",
+            "findings": [],
+            "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+            "status": "error"
+          }
+        ]
+      },
+      {
+        "actual": ["error", 1],
+        "expected": ["error", 1],
+        "name": "preserve-known-finding-shipped_style_targets",
+        "pass": true,
+        "result": {
+          "causes": ["unresolved selected target"],
+          "evaluationId": "probe",
+          "findings": [
+            {
+              "code": "target-type",
+              "evidence": {
+                "actual": {
+                  "element": "BAZ",
+                  "grammar": "reference"
+                },
+                "expected": [
+                  {
+                    "element": "FOO",
+                    "grammar": "reference"
+                  }
+                ],
+                "owner": {
+                  "model": "reference-model",
+                  "uid": "F1a"
+                },
+                "selector": {
+                  "grammar": "reference",
+                  "nativeType": "Parent",
+                  "ownerElement": "FOO",
+                  "role": "R"
+                },
+                "target": {
+                  "model": "reference-model",
+                  "uid": "Z0"
+                }
+              },
+              "locations": [
+                {
+                  "path": "synthetic.sdoc",
+                  "start": 1
+                }
+              ],
+              "message": "Resolved target has a disallowed element type",
+              "producer": "prototype/shipped-style",
+              "rule": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+              "subjects": [
+                {
+                  "model": "reference-model",
+                  "uid": "F1a"
+                },
+                {
+                  "model": "reference-model",
+                  "uid": "Z0"
+                }
+              ]
+            }
+          ],
+          "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+          "status": "error"
+        }
+      },
+      {
+        "actual": ["error", 1],
+        "expected": ["error", 1],
+        "name": "preserve-known-finding-independent_targets",
+        "pass": true,
+        "result": {
+          "causes": ["unresolved selected target"],
+          "evaluationId": "probe",
+          "findings": [
+            {
+              "code": "target-type",
+              "evidence": {
+                "actual": {
+                  "element": "BAZ",
+                  "grammar": "reference"
+                },
+                "expected": [
+                  {
+                    "element": "FOO",
+                    "grammar": "reference"
+                  }
+                ],
+                "owner": {
+                  "model": "reference-model",
+                  "uid": "F1a"
+                },
+                "selector": {
+                  "grammar": "reference",
+                  "nativeType": "Parent",
+                  "ownerElement": "FOO",
+                  "role": "R"
+                },
+                "target": {
+                  "model": "reference-model",
+                  "uid": "Z0"
+                }
+              },
+              "locations": [
+                {
+                  "path": "synthetic.sdoc",
+                  "start": 1
+                }
+              ],
+              "message": "Resolved target has a disallowed element type",
+              "producer": "prototype/independent",
+              "rule": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+              "subjects": [
+                {
+                  "model": "reference-model",
+                  "uid": "F1a"
+                },
+                {
+                  "model": "reference-model",
+                  "uid": "Z0"
+                }
+              ]
+            }
+          ],
+          "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+          "status": "error"
+        }
+      },
+      {
+        "actual": [],
+        "cases": 162,
+        "expected": [],
+        "name": "independent-original-origin-path-oracle",
+        "pass": true,
+        "scope": "synthetic valid Base forest; includes mathematical zero-length cases, no native acceptance claim"
+      },
+      {
+        "actual": "input-error",
+        "expected": "input-error",
+        "name": "typed-boolean-encoding-0",
+        "pass": true
+      },
+      {
+        "actual": "input-error",
+        "expected": "input-error",
+        "name": "typed-boolean-encoding-1",
+        "pass": true
+      },
+      {
+        "actual": "input-error",
+        "expected": "input-error",
+        "name": "typed-boolean-encoding-'true'",
+        "pass": true
+      },
+      {
+        "actual": "input-error",
+        "expected": "input-error",
+        "name": "typed-boolean-encoding-None",
+        "pass": true
+      }
+    ],
+    "failureCount": 0,
+    "passCount": 13
+  }
+}
