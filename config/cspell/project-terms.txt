@@ -1,4 +1,5 @@
 aclose
+addopts
 addy
 adoc
 affordances
@@ -146,6 +147,8 @@ getconf
 getdents
 getkimchi
 getpid
+ggml
+gguf
 gitbook
 gitdir
 gitfile
@@ -209,6 +212,7 @@ kasid
 keyspace
 kiro
 kirocli
+kirocrew
 kirodotdev
 landable
 ldflags
@@ -216,7 +220,10 @@ libc
 libdl
 libexec
 libgcc
+libggml
 libgit
+libgomp
+libllama
 libm
 libpthread
 librt
@@ -317,6 +324,7 @@ pasteable
 Patchelf
 pathlib
 pathspec
+pdfplumber
 pdsolve
 peaceiris
 pgvector
@@ -334,8 +342,10 @@ psql
 pthread
 purpleclay
 pycache
+pysqlite
 pythonnousersite
 pythonpath
+pywinpty
 qdm
 qfdx
 qiiiiii
@@ -439,6 +449,7 @@ toplevel
 tostring
 trailcomma
 treefmt
+truststore
 tryeval
 tsgo
 tsgolint
