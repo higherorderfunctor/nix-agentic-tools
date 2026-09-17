@@ -14,12 +14,12 @@
   ourPkgs = pkgs;
   vu = packageLib;
 
-  rev = "4416fb855b8f752be735e34f943b5d0762701aad";
+  rev = "dedb03d589e6e03e8fb5a2b858bd3c853ac6893e";
   src = ourPkgs.fetchFromGitHub {
     owner = "upstash";
     repo = "context7";
     inherit rev;
-    hash = "sha256-QMcPMbV7PK1vFFPbMIp31rvyZ3Deo3gKlv9yTKoRj/U=";
+    hash = "sha256-JN1BTqybsu1QvlofoMgaGOZIZdk+OAQKHlmx9Eu0Wng=";
   };
 in
   ourPkgs.context7-mcp.overrideAttrs (finalAttrs: _prev: let
