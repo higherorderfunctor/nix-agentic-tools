@@ -18,6 +18,41 @@ let
     removeAttrs
     ;
   native = import ../../../../../packages/strictdoc-grammar/lib/dsl.nix {lib = {inherit mapAttrs;};};
+  ruleKinds = ["target-type" "count" "visible-target" "endpoint-path" "native-dag" "forest-validity" "preserve" "expression"];
+  declarationKinds = ["model" "element" "field" "relation" "view" "input" "projection"];
+  keywordSpaces = {
+    ascent = ["unrestricted"];
+    visit = ["always"];
+    expand = ["open-or-origin-in-subtree-including-self"];
+    orientation = ["parent-to-child"];
+    connected = [false];
+    relationOrder = ["set"];
+    requireSingleton = [true];
+    from = ["owner"];
+    to = ["target"];
+    compare = ["lt" "lte" "gt" "gte" "eq"];
+    direction = ["parent" "child"];
+    scope = ["relation" "record" "model"];
+    kind = ruleKinds ++ declarationKinds ++ ["external-snapshot"];
+    status = ["satisfied" "violated" "blocked" "error"];
+    contract = ["selected-forest/v1" "origin-sensitive-visibility/v1"];
+  };
+  keyword = field: values: value:
+    if elem value values
+    then value
+    else throw "invalid keyword ${field}: ${builtins.toJSON value}";
+  validateKeyword = field: value: keyword field keywordSpaces.${field} value;
+  validateKeywords = value:
+    if isList value
+    then map validateKeywords value
+    else if isAttrs value
+    then
+      mapAttrs (name: child:
+        if builtins.hasAttr name keywordSpaces
+        then validateKeyword name child
+        else validateKeywords child)
+      value
+    else value;
   unique = xs:
     foldl' (acc: x:
       if elem x acc
@@ -341,7 +376,7 @@ let
       g.constraints
       ++ concatLists (map (k: map (lowerCheck "relation" k.subject "contribution:${k.name}") k.checks) g.contributions);
     # Compare complete flat meanings; origins do not affect check identity.
-    rules = map (id: let
+    mergedRules = map (id: let
       group = filter (r: r.id == id) lowered;
       first = head group;
       meanings = unique (map (r: removeAttrs r ["origins"]) group);
@@ -350,6 +385,42 @@ let
       then first // {origins = unique (concatLists (map (r: r.origins) group));}
       else throw "conflicting definitions for check \"${first.name}\" at ${id}")
     (unique (map (r: r.id) lowered));
+    requireOne = field: matches:
+      if length matches == 1
+      then (head matches).id
+      else throw "requires: ${field}: expected one prerequisite, found ${toString (length matches)}";
+    views = map lowerDecl g.views;
+    hierarchyFor = rule: let
+      view = head (filter (v: v.id == rule.view) views);
+    in
+      if view.config.contract == "origin-sensitive-visibility/v1"
+      then view.config.hierarchy
+      else throw "requires: ${rule.id}: expected a visibility view";
+    forestFor = rule:
+      requireOne "${rule.id} forest-validity"
+      (filter (r: r.kind == "forest-validity" && r.view == hierarchyFor rule) mergedRules);
+    countFor = rule: relation:
+      requireOne "${rule.id} count ${relation.direction} ${relation.role}"
+      (filter (r:
+        r.kind
+        == "count"
+        && r.subject == rule.subject
+        && r.relation == relation
+        && r.compare == "eq"
+        && r.value == 1)
+      mergedRules);
+    rules = map (rule:
+      rule
+      // {
+        kind = keyword "rule.kind" ruleKinds rule.kind;
+        requires =
+          if rule.kind == "endpoint-path"
+          then unique [(countFor rule rule.upper) (countFor rule rule.lower) (forestFor rule)]
+          else if rule.kind == "visible-target"
+          then [(forestFor rule)]
+          else [];
+      })
+    mergedRules;
     lowerNative = e:
       (removeAttrs e ["_kind" "constraints" "fields" "relations"])
       // {
@@ -374,56 +445,86 @@ let
       digest = builtins.hashString "sha256" (builtins.toJSON {inherit schema fields;});
       defaultsApply = "surviving-new-record-final-absence-only";
     };
-    lowerDecl = d: {
-      id = declId d;
-      kind = d._kind;
-      inherit (d) name;
+    lowerDecl = d: let
       config =
         lowerValue {
           inherit (d) name;
           id = declId d;
         }
         d.config;
+      checkedConfig =
+        if d._kind == "input"
+        then
+          config
+          // {
+            kind = keyword "input.config.kind" ["external-snapshot"] config.kind;
+            required = keyword "input.config.required" [true] config.required;
+            complete = keyword "input.config.complete" [true] config.complete;
+          }
+        else if d._kind == "projection"
+        then
+          config
+          // {
+            relationProjection = keyword "relationProjection" [["nativeType" "role" "target"]] config.relationProjection;
+            existence = keyword "projection.existence" [true] config.existence;
+            element = keyword "projection.element" [true] config.element;
+            fieldPresence = keyword "projection.fieldPresence" [true] config.fieldPresence;
+          }
+        else config;
+    in {
+      id = declId d;
+      kind = keyword "declaration.kind" ["view" "input" "projection"] d._kind;
+      inherit (d) name;
+      config = checkedConfig;
     };
-    declarations = concatLists (map (e:
+    declarations =
       [
         {
-          id = elementId e.tag;
-          kind = "element";
-          name = e.tag;
+          id = root;
+          kind = "model";
+          inherit (g) name;
         }
       ]
-      ++ map (r: {
-        id = refId (relationRef (direction r) e (role r));
-        kind = "relation";
-        owner = elementId e.tag;
-        direction = direction r;
-        name = role r;
-      }) (e.relations or [])
-      ++ map (f: {
-        id = refId (fieldOf e f);
-        kind = "field";
-        owner = elementId e.tag;
-        name = (fieldBody f).title;
-      }) (e.fields or []))
-    g.elements);
-  in
-    if length allIds != length (unique allIds)
-    then throw "duplicate declaration identity"
-    else {
+      ++ concatLists (map (e:
+        [
+          {
+            id = elementId e.tag;
+            kind = "element";
+            name = e.tag;
+          }
+        ]
+        ++ map (r: {
+          id = refId (relationRef (direction r) e (role r));
+          kind = "relation";
+          owner = elementId e.tag;
+          direction = direction r;
+          name = role r;
+        }) (e.relations or [])
+        ++ map (f: {
+          id = refId (fieldOf e f);
+          kind = "field";
+          owner = elementId e.tag;
+          name = (fieldBody f).title;
+        }) (e.fields or []))
+      g.elements);
+    output = {
       grammar = map lowerNative g.elements;
       semanticTypes = map metadata g.elements;
       bundle = {
         schema = "semantic-constraints/v2";
         id = root;
         inherit declarations rules;
-        views = map lowerDecl g.views;
+        inherit views;
         inputs = map lowerDecl g.inputs;
         projections = map lowerDecl g.projections;
       };
     };
+  in
+    if length allIds != length (unique allIds)
+    then throw "duplicate declaration identity"
+    else builtins.deepSeq (validateKeywords output) output;
 in {
-  inherit el field rel model normalize check on parentOf childOf fieldOf count lt lte gt gte eq;
+  inherit el field rel model normalize check on parentOf childOf fieldOf count lt lte gt gte eq validateKeyword;
   contribute = name: subject: checks: {inherit name subject checks;};
   record = bind: sym "record" {inherit bind;};
   isNodeType = node: element: sym "isNodeType" {inherit node element;};
