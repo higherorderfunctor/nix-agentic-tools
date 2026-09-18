@@ -23,7 +23,7 @@
         tools = lib.mkOption {
           type = lib.types.nullOr (lib.types.listOf lib.types.str);
           default = null;
-          description = "Optional Claude/Copilot tool allowlist; Codex has no equivalent agent field.";
+          description = "Optional Claude/Copilot tool allowlist; Codex has no equivalent agent field and warns when this is non-empty.";
         };
       };
     };
