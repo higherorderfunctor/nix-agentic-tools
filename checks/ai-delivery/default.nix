@@ -22,7 +22,7 @@ in {
     ai-delivery-fixtures = assert fixtures.passed;
       pkgs.runCommandLocal "ai-delivery-fixtures-check" {} ''
         echo ${lib.escapeShellArg (lib.concatStringsSep "\n" fixtures.broken.errors)}
-        echo 'PASS: unconditional control accepted; gated writer and invalid policy fixtures rejected' > "$out"
+        echo 'PASS: unconditional control and recorded exemption accepted; gated writer, stale exemption, and invalid policy fixtures rejected' > "$out"
       '';
   };
 }
