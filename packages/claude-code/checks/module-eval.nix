@@ -694,17 +694,20 @@ in {
         (unpinDocument result).value.unpinOpus48LaunchEffort == false
     );
 
-    # One runtime corpus covers the shared helper plus actual Claude and Kiro
-    # module output. Every empty generation is evaluated and executed, so a
-    # missing writer or a log-only activation cannot satisfy the N-to-0 check.
+    # One runtime corpus covers the document codec directly plus actual Claude
+    # and Kiro module output. Every empty generation is evaluated and executed,
+    # so a missing writer cannot satisfy the N-to-0 check.
+    #
+    # `harness.hmLib` rather than `lib`: `own` places its entry with
+    # `lib.hm.dag`, which only the harness stubs.
     module-json-settings-reconciliation = let
-      helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+      helpers = import ../../../lib/ai/hm-helpers.nix {lib = harness.hmLib;};
       mkCase = name: configFile: first: second: native: render: {
         inherit configFile first name native second;
         scripts = map render [first second {}];
       };
       cases = [
-        (mkCase "helper" ".settings with spaces/config.json" {
+        (mkCase "document" ".settings with spaces/config.json" {
             array = [{enabled = true;}];
             "dot.key" = true;
             nested.managed = true;
@@ -718,13 +721,24 @@ in {
             nested.native = "survives";
             oauthAccount.token = "native-test-token";
           } (settings:
-            helpers.mkSettingsActivationScript {
-              configFile = ".settings with spaces/config.json";
-              python = pkgs.python3;
-              reconciler = ../../../lib/ai/reconcile-toml.py;
-              settingsJson = builtins.toJSON settings;
-              stateName = "helper-test";
-            }))
+            # The codec, not a caller: a space in the path, a dotted key, a
+            # null leaf, an array and a scalar/table transition, none of which
+            # any real caller declares all at once. `runtime` only decides
+            # where the eval-visible record lands, and this case reads the
+            # writer alone.
+              (helpers.mkOwnedDocument {
+                entry = "documentCodecTest";
+                ledger = "json-settings/document-codec-test.json";
+                path = ".settings with spaces/config.json";
+                python = pkgs.python3;
+                runtime = "claude";
+                value = settings;
+                inherit pkgs;
+              })
+            .home
+            .activation
+            .documentCodecTest
+            .text))
         (mkCase "claude" ".claude.json" {
             unpinFirstLaunchEffort = true;
             unpinSecondLaunchEffort = true;
@@ -767,6 +781,11 @@ in {
         touch "$out"
       '';
 
+    # Still live, and still the only guard on it: kiro's `mcp.json` reconciler
+    # is the one remaining caller of `mkSettingsActivationScript`, whose
+    # `stateName` becomes a ledger FILENAME with no traversal check of its own.
+    # `own` replaces that charset rule with a traversal rule on a full relative
+    # ledger path, so this check retires with that caller, not with this one.
     module-json-settings-state-name-validation = mkTest "json-settings-state-name-validation" (
       let
         helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
