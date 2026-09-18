@@ -133,7 +133,7 @@
   };
   sandboxSafeSshCommand = lib.getExe sandboxSafeSsh;
 in {
-  imports = [./app/sharedAgentsMd.nix];
+  imports = [./app/sharedAgentsMd.nix ./file-warnings.nix];
 
   options.ai = {
     context = lib.mkOption {
@@ -182,7 +182,10 @@ in {
         github.com's reviewer consumes only the committed project tree). Codex
         instead appends rules in key order
         to its single AGENTS.md, translating `matcher` to a prose scope note.
-        Kimchi has no rules pool, so root rules silently degrade for it.
+        Kimchi has no rules pool, so root rules degrade to nothing for it.
+        That exclusion is documented here and in the delivery matrix rather
+        than warned about at activation: `ai.kimchi.rules` does not exist, so
+        a warning would have no per-runtime declaration to be silenced by.
         Per-app entries replace root entries at the same key; null suppresses
         an inherited rule for that runtime. Set exactly one of `text` or
         `source` for each non-null rule. Kiro's native `inclusion` override

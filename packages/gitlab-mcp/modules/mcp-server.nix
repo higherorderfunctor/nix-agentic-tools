@@ -320,10 +320,14 @@ in {
     };
   };
 
-  # `evalSettings` discards `eval.assertions` (lib/mcp.nix:27-37),
-  # so a module-level `assertions` block silently no-ops here.
-  # Encode the instanceUrl ⊕ apiUrl mutex as an `if/throw` at the
-  # top — it fires every time `renderServer` evaluates the config.
+  # `evalSettings` DOES force `assertions` now (lib/mcp.nix:26-52) and throws
+  # on a failing one — but only for assertions a CALLER passed in `settings`.
+  # A server definition contributes `settingsOptions` and nothing else: the
+  # eval it builds has no `config` seam through which this file could produce
+  # an assertion, so a module-level `assertions` block here still reaches
+  # nothing. Building that seam is separate work.
+  # Until it exists, encode the instanceUrl ⊕ apiUrl mutex as an `if/throw`
+  # at the top — it fires every time `renderServer` evaluates the config.
   #
   # UNVERIFIED — REVISIT. `nix flake check` only exercises this with
   # valid inputs (one side set, not both). The throw path is shipped

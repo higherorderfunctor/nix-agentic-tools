@@ -258,7 +258,7 @@ in {
       extensions = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [];
-        description = "File extensions this server handles (without leading dots). Used by Copilot/Claude to build ext→language mappings; ignored by Kiro.";
+        description = "File extensions this server handles (without leading dots). Used by Copilot/Claude to build ext→language mappings; Kiro has no equivalent and warns when this is non-empty.";
         example = ["nix"];
       };
       initializationOptions = lib.mkOption {

@@ -1,7 +1,8 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-12 — package modules own consumer checks; the
-> shared harness discovers backend imports and owner activation probes.
+> **Last verified:** 2026-09-18 — the delivery diagnostics are silent for a root
+> pool an incapable runtime excludes, and report per-runtime requests a backend
+> cannot deliver.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -369,6 +370,15 @@ Kimchi is the sharp example: it supports `context`, `environmentVariables`,
 `ai.kimchi.rulesDir` do not exist. Capability tests pair every eval-failure
 assertion with a supported-runtime positive control so harness failure cannot
 masquerade as correct exclusion.
+
+A non-empty ROOT request for an excluded pool is SILENT — no assertion, and no
+activation warning either. The remedy a warning would ask for does not exist:
+`ai.kimchi.rules` is an unknown option by design, so nothing the consumer can
+write would silence it and it would repeat on every activation forever. The
+exclusion is recorded in the pool's option description and in the delivery
+matrix instead. A PER-RUNTIME request a backend cannot deliver does warn
+(`lib/ai/delivery-warnings.nix`), because that one the consumer wrote directly
+and can delete.
 
 ### Assertion semantics
 

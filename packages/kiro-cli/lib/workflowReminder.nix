@@ -93,6 +93,11 @@ in {
       text = ''
         shopt -s inherit_errexit 2>/dev/null || :
 
+        skip_reminder() {
+          printf 'WARNING: ai.kiro.workflowReminder.includeVendorSteering: %s; vendor reminder was not delivered\n' "$1" >&2
+          exit 0
+        }
+
         # Absolute store paths: a hook subprocess inherits whatever environment
         # the engine hands it, which is not guaranteed to carry a usable PATH
         # (nix-standards).
@@ -124,29 +129,39 @@ in {
         if not candidates:
             sys.exit(1)
         sys.stdout.write(max(candidates)[1] + "/")
-        ' "$data_dir/kas" ${lib.escapeShellArg cliVersion} 2>/dev/null)" || exit 0
+        ' "$data_dir/kas" ${lib.escapeShellArg cliVersion} 2>/dev/null)" || skip_reminder "no compatible engine bundle"
 
         # A hook that fails must not break the turn, so every failure path here
-        # exits 0 with no output. An absent reminder degrades elicitation; a
-        # failing UserPromptSubmit hook degrades the session.
+        # exits 0 with an option-named stderr warning. An absent reminder must
+        # be visible without making UserPromptSubmit fail the session.
         bundle="''${kas}node_modules/@kiro/agent/dist/server/acp-server.js"
-        [ -f "$bundle" ] || exit 0
+        [ -f "$bundle" ] || skip_reminder "engine script is missing"
 
         cache="$cache_root/$("$coreutils"/bin/basename "''${kas%/}").md"
         if [ ! -s "$cache" ]; then
-          "$coreutils"/bin/mkdir -p "$cache_root"
-          tmp="$("$coreutils"/bin/mktemp "$cache_root/.extract.XXXXXX")"
+          "$coreutils"/bin/mkdir -p "$cache_root" 2>/dev/null || skip_reminder "cannot create reminder cache"
+          tmp="$("$coreutils"/bin/mktemp "$cache_root/.extract.XXXXXX" 2>/dev/null)" || skip_reminder "cannot create reminder temporary file"
           if "$python" "$extract" "$bundle" > "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
-            "$coreutils"/bin/mv "$tmp" "$cache"
+            "$coreutils"/bin/mv "$tmp" "$cache" 2>/dev/null || skip_reminder "cannot publish reminder cache"
           else
-            "$coreutils"/bin/rm -f "$tmp"
-            exit 0
+            # Best effort, and deliberately so: cleanup failing must not turn
+            # this hook into a non-zero exit under errexit.
+            "$coreutils"/bin/rm -f "$tmp" 2>/dev/null || :
+            skip_reminder "vendor steering extraction failed"
           fi
         fi
 
-        printf '%s\n' "<workflow_orchestration_reminder>"
-        "$coreutils"/bin/cat "$cache"
-        printf '%s\n' "</workflow_orchestration_reminder>"
+        # Read FIRST, print second. Printing the opening tag before the read
+        # meant a failed read exited 0 having already emitted
+        # `<workflow_orchestration_reminder>` with no body and no closing tag,
+        # injecting a malformed block into the prompt instead of nothing.
+        if ! body="$("$coreutils"/bin/cat "$cache" 2>/dev/null)"; then
+          skip_reminder "cannot read reminder cache"
+        fi
+        printf '%s\n%s\n%s\n' \
+          "<workflow_orchestration_reminder>" \
+          "$body" \
+          "</workflow_orchestration_reminder>"
       '';
     };
 }
