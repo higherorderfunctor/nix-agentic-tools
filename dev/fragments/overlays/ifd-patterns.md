@@ -1,7 +1,8 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-09-13 — native package shards warm their own platform
-> before evaluation; source ownership follows native package assembly.
+> **Last verified:** 2026-09-17 — `fix_sidecar_hashes` also repairs
+> `pnpmDepsHash`; native package shards warm their own platform before
+> evaluation; source ownership follows native package assembly.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -222,9 +223,10 @@ spliced into `mkUpdateScript`'s `commitCandidate`, immediately after the sidecar
   hand-regeneration case — the command is in each check's failure message.
 - Do not confuse this with the OTHER self-heal in this repo.
   `fix_sidecar_hashes` (`dev/scripts/update-common.sh`) re-derives a
-  `vendorHash` / `npmDepsHash` invalidated by a nixpkgs or toolchain bump at an
-  unchanged version, through `passthru.fixVendorHash` and friends. Hashes have
-  that standalone escape hatch; extracts deliberately do not, because a changed
+  `vendorHash`, `npmDepsHash` or `pnpmDepsHash` invalidated by a nixpkgs or
+  toolchain bump at an unchanged version, through `passthru.fixVendorHash`,
+  `passthru.fixNpmDepsHash` and `passthru.fixPnpmDepsHash`. Hashes have that
+  standalone escape hatch; extracts deliberately do not, because a changed
   extract means someone edited the extractor and should look at the diff.
 
 Debugging entry points when a bump PR still goes red:
