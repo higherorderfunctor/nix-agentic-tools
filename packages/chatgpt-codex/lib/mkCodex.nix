@@ -51,7 +51,6 @@
   }:
     codexPackageFor cfg moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell;
   jsonFormat = pkgs.formats.json {};
-  tomlReconciler = ../../../lib/ai/reconcile-toml.py;
   tomlFormat = pkgs.formats.toml {};
   # tomlkit is intentional rather than stdlib tomllib: tomllib cannot write,
   # while round-tripping through a plain dict would discard native comments and
@@ -1075,7 +1074,19 @@ in
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
         });
-      settingsStateName = "codex-config-${builtins.hashString "sha256" configFile}";
+      # The TOML ledger directory and name are a live migration contract: every
+      # ownership record written since this file stopped being a store symlink
+      # hangs off exactly this path. Never derive a different one.
+      ownedSettings = helpers.mkOwnedDocument {
+        codec = "toml";
+        entry = "codexSettingsReconcile";
+        ledger = "toml-settings/codex-config-${builtins.hashString "sha256" configFile}.json";
+        path = configFile;
+        python = tomlPython;
+        runtime = "codex";
+        value = settings;
+        inherit pkgs;
+      };
       codexSkillNames = builtins.attrNames mergedSkills;
       codexSkills = normalizeCodexSkills mergedSkills;
       skillBackupRoot = "\${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/codex-skill-layout-b";
@@ -1084,6 +1095,7 @@ in
       # composed first and the resulting AGENTS.md enters the runtime file map
       # as one replaceable default.
       ai.codex = {
+        inherit (ownedSettings.ai.codex) _reconciledDocuments;
         files = lib.mkIf hasAgentsMdContent {
           ${agentsMdTarget} = lib.mkDefault (
             if agentsMd == ""
@@ -1146,13 +1158,12 @@ in
         # Its prior-generation leaf manifest is what lets an empty/new
         # generation retract settings Nix used to own without deleting native
         # state. On a first empty generation the reconciler is a strict no-op.
-        activation.codexSettingsReconcile = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkTomlSettingsActivationScript {
-          inherit configFile;
-          python = tomlPython;
-          reconciler = tomlReconciler;
-          settingsJson = builtins.toJSON settings;
-          stateName = settingsStateName;
-        });
+        #
+        # Spliced by attribute rather than merged: `ownedSettings` is a module
+        # fragment holding this entry and the `_reconciledDocuments` record
+        # below, and naming the entry here keeps the surrounding `home` block
+        # readable. A name that stops matching the helper's is an eval error.
+        activation.codexSettingsReconcile = ownedSettings.home.activation.codexSettingsReconcile;
         file = lib.mkMerge [
           (helpers.mkSkillDirectoryEntries ".agents" codexSkills)
           (mkAgentEntries cfg.configDir mergedAgents)
