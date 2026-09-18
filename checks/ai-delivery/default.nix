@@ -17,7 +17,7 @@ in {
   checks = {
     ai-delivery = assert gate.passed;
       pkgs.runCommandLocal "ai-delivery-check" {} ''
-        echo 'PASS: ${toString (builtins.length policy.rows)} delivery rows; ${toString gate.checked} imperative writers survive populated and empty declarations' > "$out"
+        echo 'PASS: ${toString (builtins.length policy.rows)} delivery rows; ${toString gate.checked} imperative writers survive populated and empty declarations and differ between them' > "$out"
       '';
     ai-delivery-fixtures = assert fixtures.passed;
       pkgs.runCommandLocal "ai-delivery-fixtures-check" {} ''

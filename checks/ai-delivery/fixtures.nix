@@ -18,11 +18,24 @@
         reason = "Fixture exemption: the gate must record this failure rather than fail on it.";
       };
     };
-  evaluatorsFor = gated:
+  independent =
+    writer
+    // {
+      declarationIndependent = "Fixture claim: this writer's body cannot vary with the declaration.";
+    };
+  # `constant` freezes the body so it cannot vary with the declaration: the
+  # positive control for the third arm. The default body embeds the pool, as a
+  # real writer's does, so the unconditional control still passes all three.
+  evaluatorsFor = {
+    constant,
+    gated,
+  }:
     lib.genAttrs policy.modes (_: declaration:
       (lib.evalModules {
         modules = [
-          ({config, ...}: {
+          ({config, ...}: let
+            pool = lib.attrByPath writer.probe.option {} config;
+          in {
             options = {
               ai = lib.mkOption {type = lib.types.attrsOf lib.types.anything;};
               home = lib.mkOption {
@@ -35,22 +48,40 @@
               };
             };
             config =
-              lib.mkIf (!gated || lib.attrByPath writer.probe.option {} config != {})
-              (lib.setAttrByPath writer.writerAttr {text = "fixture writer";});
+              lib.mkIf (!gated || pool != {})
+              (lib.setAttrByPath writer.writerAttr {
+                text = "fixture writer" + lib.optionalString (!constant) (builtins.toJSON pool);
+              });
           })
           {config = declaration;}
         ];
       }).config);
-  gateOf = writers: gated:
+  gateOf = {
+    constant ? false,
+    gated ? false,
+    writers ? [writer],
+  }:
     import ./gate.nix {inherit lib;} {
-      policy = policy // {inherit (writers) imperativeWriters;};
-      evaluators = evaluatorsFor gated;
+      policy = policy // {imperativeWriters = writers;};
+      evaluators = evaluatorsFor {inherit constant gated;};
     };
-  gate = gateOf {imperativeWriters = [writer];};
+  gate = gated: gateOf {inherit gated;};
+  # A writer that emits the same body whether or not the pool is populated.
+  constant = gateOf {constant = true;};
   # An exempted writer that still fails records; one that has started passing
-  # both arms is itself the error, which is what forces the exemption's removal.
-  recorded = gateOf {imperativeWriters = [exempted];} true;
-  stale = gateOf {imperativeWriters = [exempted];} false;
+  # every arm is itself the error, which is what forces the exemption's removal.
+  recorded = gateOf {
+    gated = true;
+    writers = [exempted];
+  };
+  stale = gateOf {writers = [exempted];};
+  # The declaration-independent claim is checked in both directions: a constant
+  # body upholds it, a varying body refutes it.
+  independentConstant = gateOf {
+    constant = true;
+    writers = [independent];
+  };
+  independentVarying = gateOf {writers = [independent];};
   rejects = rows: !(builtins.tryEval (builtins.deepSeq (policy.validateRows rows) true)).success;
   first = builtins.head policy.rows;
   rest = builtins.tail policy.rows;
@@ -61,6 +92,12 @@ in {
   passed = assert lib.assertMsg (gate false).passed "ai-delivery fixture: unconditional writer rejected";
   assert lib.assertMsg (!(builtins.tryEval (gate true).passed).success) "ai-delivery fixture: gated writer accepted";
   assert lib.assertMsg (builtins.length (gate true).errors == 1 && lib.hasInfix "EMPTY declaration" (builtins.head (gate true).errors)) "ai-delivery fixture: rejection must be the empty writer, not an unrelated error";
+  assert lib.assertMsg (!(builtins.tryEval constant.passed).success) "ai-delivery fixture: constant-bodied writer accepted";
+  assert lib.assertMsg (builtins.length constant.errors == 1 && lib.hasInfix "IDENTICAL" (builtins.head constant.errors)) "ai-delivery fixture: rejection must name the identical-body arm, not an unrelated error";
+  assert lib.assertMsg independentConstant.passed "ai-delivery fixture: declaration-independent writer with a constant body rejected";
+  assert lib.assertMsg (!(builtins.tryEval independentVarying.passed).success) "ai-delivery fixture: declaration-independent claim accepted for a body that varies";
+  assert lib.assertMsg (builtins.length independentVarying.errors == 1 && lib.hasInfix "declared declaration-independent" (builtins.head independentVarying.errors)) "ai-delivery fixture: rejection must name the refuted declaration-independent claim";
+  assert lib.assertMsg (rejects (replaceFirst {declarationIndependent = "";})) "ai-delivery fixture: blank declaration-independent reason accepted";
   assert lib.assertMsg (recorded.passed
     && recorded.errors == []
     && builtins.length (builtins.head recorded.results).exempted == 1) "ai-delivery fixture: an exempted failure must be recorded, not fatal";
