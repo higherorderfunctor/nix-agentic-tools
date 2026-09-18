@@ -860,6 +860,13 @@ def rejections(fixture):
         ("absolute path", {"targets": [dir_target({"unit": {"text": "x"}}, path="/etc")]}),
         ("unknown codec", {"targets": [doc_target({}, codec="yaml")]}),
         ("duplicate ledger", {"targets": [dir_target({}), doc_target({}, ledger="materialize/settings.manifest")]}),
+        # Both declarations resolve to a real SCALAR leaf, so both targets are
+        # live. Declaring `{}` here would make each resolve to zero leaves and
+        # the case would pass without ever reaching the rule it is about.
+        ("two live targets on one path", {"targets": [
+            doc_target({"text": json.dumps({"ours": 1})}, ledger="json-settings/first.json"),
+            doc_target({"text": json.dumps({"ours": 2})}, ledger="json-settings/second.json"),
+        ]}),
         ("two content tags", {"targets": [dir_target({"unit": {"store": "/dev/null", "text": "x"}})]}),
         ("missing field", {"targets": [{"codec": "dir", "path": "settings", "units": {}}]}),
     ):
@@ -867,7 +874,7 @@ def rejections(fixture):
         assert result.stderr.startswith("own: "), (arguments, result.stderr)
         assert list(fixture.root.iterdir()) == [], (arguments, "a rejected plan touched the root")
         assert not fixture.state.exists(), (arguments, "a rejected plan created state")
-    print("PASS rejections: eight malformed plans refused before any container opened")
+    print("PASS rejections: nine malformed plans refused before any container opened")
 
 
 CASES = {
