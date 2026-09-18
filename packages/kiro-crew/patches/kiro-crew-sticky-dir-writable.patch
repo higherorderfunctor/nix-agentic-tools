@@ -1,8 +1,8 @@
 diff --git a/src/kiro_crew/dashboard/terminal_commands.py b/src/kiro_crew/dashboard/terminal_commands.py
-index 120012f..34d8e59 100644
+index 120012f..5bffb37 100644
 --- a/src/kiro_crew/dashboard/terminal_commands.py
 +++ b/src/kiro_crew/dashboard/terminal_commands.py
-@@ -392,14 +392,20 @@ def _trusted_owner(st: os.stat_result, own_uid: int | None) -> bool:
+@@ -392,14 +392,28 @@ def _trusted_owner(st: os.stat_result, own_uid: int | None) -> bool:
        already exposes. A tool this user installed is inside the same trust
        boundary as the shell that is about to run it.
  
@@ -11,14 +11,22 @@ index 120012f..34d8e59 100644
 -    (``_ADMIN_WRITE_GIDS``) when this gateway is NOT root.
 +    Write access held by anyone ELSE disqualifies a non-sticky node whoever
 +    owns it, except for an administrator group (``_ADMIN_WRITE_GIDS``) when
-+    this gateway is NOT root. Sticky directories protect the child entries
-+    whose ownership the same walk checks.
++    this gateway is NOT root. A sticky DIRECTORY keeps its trust despite those
++    write bits, because sticky narrows who may replace an entry to that entry's
++    owner, the directory's owner, and root — and the ownership check below has
++    to accept the directory itself, which is what keeps a third party's sticky
++    directory out.
      """
      mode = st.st_mode
 -    if mode & stat.S_IWOTH:
 +    # A sticky directory (for example /tmp or /nix/store) lets other accounts
-+    # create entries, not replace entries owned by root or this user. The walk
-+    # checks each child owner too, so this does not admit an attacker's binary.
++    # create entries; POSIX then lets only an entry's owner, the DIRECTORY's
++    # owner and root rename or remove one. So a directory owner CAN replace a
++    # child it does not own, and what bounds this exemption is the ownership
++    # check below — which the walk reaches for the sticky directory itself, not
++    # only for its children. Never short-circuit that check for sticky, or a
++    # third party's 1777 directory becomes trusted along with every root-owned
++    # entry they could swap inside it.
 +    # Sticky on a regular file offers no protection against writes.
 +    sticky_dir = stat.S_ISDIR(mode) and bool(mode & stat.S_ISVTX)
 +    if not sticky_dir and mode & stat.S_IWOTH:
@@ -29,7 +37,7 @@ index 120012f..34d8e59 100644
          # ordinary user, where an admin-group member can already sudo and so
          # gains nothing from the write bit. A ROOT gateway is the opposite case:
 diff --git a/test/test_terminal_commands.py b/test/test_terminal_commands.py
-index f2b92a7..825b400 100644
+index f2b92a7..38636fb 100644
 --- a/test/test_terminal_commands.py
 +++ b/test/test_terminal_commands.py
 @@ -398,7 +398,7 @@ class TestSanitizedPath:
@@ -41,19 +49,43 @@ index f2b92a7..825b400 100644
          assert tc._trusted_owner(_fake_st(own, 0, 0o40757), own) is False
  
      @pytest.mark.skipif(sys.platform == "win32", reason="uid 0 has no meaning on Windows")
-@@ -429,6 +429,16 @@ class TestSanitizedPath:
+@@ -429,6 +429,40 @@ class TestSanitizedPath:
          assert tc._trusted_owner(_fake_st(0, 80, 0o40775), 0) is False
          assert tc._trusted_owner(_fake_st(0, 80, 0o40755), 0) is True
  
 +    @pytest.mark.parametrize("mode", [0o41775, 0o41777])
 +    def test_sticky_directory_keeps_child_ownership_boundary(self, mode):
-+        # Even a root gateway may traverse the store: sticky prevents another
-+        # account from replacing its root-owned children. Files stay protected.
++        # Even a root gateway may traverse the store: in a root-owned sticky
++        # directory, only root may replace a root-owned child. A THIRD PARTY's
++        # sticky directory is refused (uid 2000) precisely because a directory
++        # owner may replace entries it does not own. Files stay protected.
 +        assert tc._trusted_owner(_fake_st(0, 0, mode), 1000) is True
 +        assert tc._trusted_owner(_fake_st(0, 0, mode), 0) is True
 +        assert tc._trusted_owner(_fake_st(1000, 0, mode), 1000) is True
 +        assert tc._trusted_owner(_fake_st(2000, 0, mode), 1000) is False
 +        assert tc._trusted_owner(_fake_st(0, 0, 0o101777), 1000) is False
++
++    @pytest.mark.skipif(sys.platform == "win32", reason="uid 0 has no meaning on Windows")
++    @pytest.mark.parametrize("mode", [0o1775, 0o1777])
++    def test_an_attacker_owned_sticky_parent_is_refused_by_the_walk(
++        self, mode, tmp_path, monkeypatch,
++    ):
++        # The predicate above is only half the answer: the sticky exemption
++        # skips the write bits, so a third party's sticky directory is kept out
++        # by the ownership check alone. Assert that at the WALK, because the
++        # child being root-owned does NOT make it safe — the directory's owner
++        # may replace an entry it does not own — and a sticky short-circuit
++        # would admit this tree while the unit assertions above still passed.
++        parent = tmp_path / "parent"
++        leaf = parent / "bin"
++        leaf.mkdir(parents=True)
++        own = os.geteuid()
++        monkeypatch.setattr(
++            tc.os, "stat", _stat_chain(
++                own, {str(parent): (own + 4242, 0, mode), str(leaf): (0, 0, 0o755)},
++            ),
++        )
++        assert tc._is_trusted_dir(str(leaf)) is False
 +
      def test_ownership_on_a_host_without_uids_keeps_the_administrator_branch(self):
          # `own_uid=None` is Windows, where every st_uid reads 0.
