@@ -1,4 +1,4 @@
-# Evaluation-only lowering, adapted from the supplied stub. No graph evaluator.
+# Evaluation-only lowering. Flat rule records; no graph evaluator.
 let
   inherit
     (builtins)
@@ -29,16 +29,14 @@ let
   cleanRel = r: removeAttrs r ["__functor" "_inline"];
   direction = r: head (attrNames (cleanRel r));
   role = r: (cleanRel r).${direction r}.role or "@file";
-  sym = op: args: {
-    _op = op;
-    inherit args;
-  };
-  count = collection: sym "count" [collection];
-  lt = left: right: sym "lt" [left right];
-  lte = left: right: sym "lte" [left right];
-  gt = left: right: sym "gt" [left right];
-  gte = left: right: sym "gte" [left right];
-  eq = left: right: sym "eq" [left right];
+  sym = op: fields: {_op = op;} // fields;
+  count = collection: sym "count" {inherit collection;};
+  compare = op: left: right: sym op {inherit left right;};
+  lt = compare "lt";
+  lte = compare "lte";
+  gt = compare "gt";
+  gte = compare "gte";
+  eq = compare "eq";
   check = name: expr: {inherit name expr;};
   on = subject: rule: {
     _on = true;
@@ -70,7 +68,7 @@ let
           _inline = [
             (
               if isFunction predicate
-              then check "predicate" predicate
+              then {expr = predicate;}
               else predicate
             )
           ];
@@ -137,29 +135,35 @@ let
     declId = d:
       if d._kind == "element"
       then elementId d.tag
+      else if d._kind == "model"
+      then root
       else "${root}/${d._kind}:${escape d.name}";
-    relationIds = concatLists (map (e:
-      map
-      (r: refId (relationRef (direction r) e (role r))) (e.relations or []))
-    g.elements);
     allIds =
-      (map declId (g.elements ++ g.views ++ g.inputs ++ g.projections))
-      ++ relationIds
-      ++ concatLists (map (e: map (f: refId (fieldOf e f)) (e.fields or [])) g.elements);
+      [root]
+      ++ map declId (g.elements ++ g.views ++ g.inputs ++ g.projections)
+      ++ concatLists (map (e:
+        map (r: refId (relationRef (direction r) e (role r))) (e.relations or [])
+        ++ map (f: refId (fieldOf e f)) (e.fields or []))
+      g.elements);
     reference = value: let
       id =
         if value ? _ref
         then refId value
         else declId value;
-      kind =
-        value._ref or value._kind;
     in
       if elem id allIds
+      then id
+      else throw "undeclared reference: ${id}";
+    subjectOf = s:
+      if (s._ref or null) == "relation"
       then {
-        ref = kind;
-        inherit id;
+        inherit (s) element;
+        role = s.name;
+        direction = s.nativeType;
       }
-      else throw "undeclared ${kind} reference: ${id}";
+      else if s._kind == "element"
+      then {element = s.tag;}
+      else {model = g.name;};
     bad = ctx: value: throw "check \"${ctx.name}\" at ${ctx.id}: expected symbolic predicate, got ${builtins.typeOf value}";
     lowerValue = ctx: value:
       if isAttrs value && (value ? _ref || value ? _kind)
@@ -173,6 +177,12 @@ let
       else if isFunction value
       then bad ctx value
       else value;
+    lowerOperand = ctx: value:
+      if isBool value
+      then bad ctx value
+      else if isList value
+      then map (lowerOperand ctx) value
+      else lowerValue ctx value;
     lowerExpr = ctx: expr:
       if isFunction expr
       then
@@ -180,8 +190,8 @@ let
         then throw "check \"${ctx.name}\": relation predicate at ${ctx.scope} scope"
         else
           lowerExpr ctx (expr {
-            origin = sym "origin" [ctx.subject];
-            target = sym "target" [ctx.subject];
+            origin = "owner";
+            target = "target";
           })
       else if !(isAttrs expr && expr ? _op)
       then bad ctx expr
@@ -190,95 +200,154 @@ let
         if ctx.scope != "record"
         then throw "check \"${ctx.name}\": record binder at ${ctx.scope} scope"
         else let
-          binder = "${ctx.id}#record";
-          collection = nativeType: name: sym "relationCollection" [(sym "binderRef" [binder]) nativeType name];
-        in {
-          op = "record";
-          inherit binder;
-          body = lowerExpr ctx (expr.bind {
+          collection = direction: role:
+            sym "relations" {
+              record = "record";
+              inherit direction role;
+            };
+        in
+          lowerExpr ctx (expr.bind {
             parents = collection "parent";
             children = collection "child";
-          });
-        }
-      else if expr._op == "const"
+          })
+      else
+        {op = expr._op;}
+        // mapAttrs (_: value:
+          if expr._op == "const"
+          then lowerValue ctx value
+          else lowerOperand ctx value)
+        (removeAttrs expr (["_op"]
+          ++ (
+            if expr._op == "only"
+            then ["target"]
+            else []
+          )));
+    isOp = op: e: isAttrs e && (e.op or null) == op;
+    isCollection = e: isOp "relations" e && e.record == "record";
+    selector = e: {inherit (e) role direction;};
+    isEndpoint = e:
+      isOp "endpointTarget" e
+      && isOp "only" e.relation
+      && isCollection e.relation.collection;
+    flatten = scope: e:
+      if scope == "relation" && isOp "isNodeType" e && e.node == "target"
       then {
-        op = "const";
-        value = head expr.args;
+        kind = "target-type";
+        targetElement = e.element;
+      }
+      else if
+        scope
+        == "record"
+        && elem e.op ["lt" "lte" "gt" "gte" "eq"]
+        && isOp "count" e.left
+        && isCollection e.left.collection
+        && builtins.isInt e.right
+      then {
+        kind = "count";
+        relation = selector e.left.collection;
+        compare = e.op;
+        value = e.right;
+      }
+      else if scope == "relation" && isOp "visible" e && e.origin == "owner" && e.target == "target"
+      then {
+        kind = "visible-target";
+        inherit (e) view;
+        from = "owner";
+        to = "target";
+      }
+      else if scope == "record" && isOp "canDescend" e && isEndpoint e.origin && isEndpoint e.target
+      then {
+        kind = "endpoint-path";
+        inherit (e) view;
+        upper = selector e.origin.relation.collection;
+        lower = selector e.target.relation.collection;
+        requireSingleton = true;
+      }
+      else if scope == "model" && isOp "nativeDag" e
+      then {kind = "native-dag";}
+      else if scope == "model" && isOp "isForest" e
+      then {
+        kind = "forest-validity";
+        inherit (e) view;
+      }
+      else if scope == "model" && isOp "preserve" e
+      then {
+        kind = "preserve";
+        inherit (e) baseline projection;
       }
       else {
-        op = expr._op;
-        args =
-          map
-          (arg:
-            if isBool arg
-            then bad ctx arg
-            else lowerValue ctx arg)
-          expr.args;
+        kind = "expression";
+        expression = e;
       };
+    inputIds = map declId g.inputs;
     inputRefs = value:
-      if isList value
+      if builtins.isString value
+      then
+        (
+          if elem value inputIds
+          then [value]
+          else []
+        )
+      else if isList value
       then concatLists (map inputRefs value)
-      else if isAttrs value && (value.ref or null) == "input"
-      then [value.id]
       else if isAttrs value
       then concatLists (map inputRefs (builtins.attrValues value))
       else [];
-    lowerCheck = scope: subject: source: ck:
+    lowerCheck = scope: sub: source: ck:
       if ck ? _on
-      then lowerCheck "relation" (reference ck.subject) source ck.rule
+      then lowerCheck "relation" ck.subject source ck.rule
       else let
-        id = "${subject.id}/check:${escape ck.name}";
+        subjectId = reference sub;
         ctx = {
-          inherit id scope subject;
-          inherit (ck) name;
+          inherit scope;
+          id = subjectId;
+          name = ck.name or "${sub.name}.inline";
         };
-        expr = lowerExpr ctx ck.expr;
+        expression = lowerExpr ctx ck.expr;
+        flat = flatten scope expression;
+        name =
+          ck.name or "${sub.name}.${
+            if flat.kind == "expression"
+            then expression.op
+            else flat.kind
+          }";
       in
-        ctx
-        // {
-          inherit expr;
-          inputs = unique (["candidate"] ++ inputRefs expr);
+        {
+          id = "${subjectId}/check:${escape name}";
+          inherit name scope;
+          subject = subjectOf sub;
+          inputs = unique (["candidate"] ++ inputRefs flat);
           origins = [
             (
               if source == null
-              then "declaration:${subject.id}"
+              then "declaration:${subjectId}"
               else source
             )
           ];
-        };
-    elementChecks = e: let
-      subject = reference e;
-      inline = concatLists (map (r:
-        map
-        (lowerCheck "relation" (reference (relationRef (direction r) e (role r))) null)
-        (r._inline or [])) (e.relations or []));
-    in
-      inline ++ map (lowerCheck "record" subject null) (e.constraints or []);
+        }
+        // flat;
+    elementChecks = e:
+      concatLists (map (r:
+        map (lowerCheck "relation" (relationRef (direction r) e (role r)) null)
+        (r._inline or [])) (e.relations or []))
+      ++ map (lowerCheck "record" e null) (e.constraints or []);
     lowered =
       concatLists (map elementChecks g.elements)
       ++ map (lowerCheck "model" {
-          ref = "model";
-          id = root;
+          _kind = "model";
+          inherit (g) name;
         }
         null)
       g.constraints
-      ++ concatLists (map (k:
-        map (lowerCheck "relation" (reference k.subject)
-          "contribution:${k.name}")
-        k.checks)
-      g.contributions);
-    # Compare only lowered records. Authoring values can be recursive or callable.
+      ++ concatLists (map (k: map (lowerCheck "relation" k.subject "contribution:${k.name}") k.checks) g.contributions);
+    # Compare complete flat meanings; origins do not affect check identity.
     rules = map (id: let
       group = filter (r: r.id == id) lowered;
       first = head group;
       meanings = unique (map (r: removeAttrs r ["origins"]) group);
     in
       if length meanings == 1
-      then
-        first
-        // {
-          origins = unique (concatLists (map (r: r.origins) group));
-        }
+      then first // {origins = unique (concatLists (map (r: r.origins) group));}
       else throw "conflicting definitions for check \"${first.name}\" at ${id}")
     (unique (map (r: r.id) lowered));
     lowerNative = e:
@@ -328,9 +397,15 @@ let
         id = refId (relationRef (direction r) e (role r));
         kind = "relation";
         owner = elementId e.tag;
-        nativeType = direction r;
+        direction = direction r;
         name = role r;
-      }) (e.relations or []))
+      }) (e.relations or [])
+      ++ map (f: {
+        id = refId (fieldOf e f);
+        kind = "field";
+        owner = elementId e.tag;
+        name = (fieldBody f).title;
+      }) (e.fields or []))
     g.elements);
   in
     if length allIds != length (unique allIds)
@@ -339,7 +414,7 @@ let
       grammar = map lowerNative g.elements;
       semanticTypes = map metadata g.elements;
       bundle = {
-        schema = "semantic-constraints/v1";
+        schema = "semantic-constraints/v2";
         id = root;
         inherit declarations rules;
         views = map lowerDecl g.views;
@@ -348,25 +423,21 @@ let
       };
     };
 in {
-  inherit el field rel model normalize check on parentOf childOf fieldOf;
-  inherit count lt lte gt gte eq;
+  inherit el field rel model normalize check on parentOf childOf fieldOf count lt lte gt gte eq;
   contribute = name: subject: checks: {inherit name subject checks;};
-  record = bind: {
-    _op = "record";
-    inherit bind;
-  };
-  isNodeType = node: element: sym "isNodeType" [node element];
+  record = bind: sym "record" {inherit bind;};
+  isNodeType = node: element: sym "isNodeType" {inherit node element;};
   atMost = n: c: lte (count c) n;
   atLeast = n: c: gte (count c) n;
   exactly = n: c: eq (count c) n;
   only = collection: let
-    singleton = sym "only" [collection];
+    singleton = sym "only" {inherit collection;};
   in
-    singleton // {target = sym "endpointTarget" [singleton];};
-  allOf = expressions: sym "allOf" expressions;
+    singleton // {target = sym "endpointTarget" {relation = singleton;};};
+  allOf = terms: sym "allOf" {inherit terms;};
   const = value:
     if isBool value
-    then sym "const" [value]
+    then sym "const" {inherit value;}
     else throw "const expects a Boolean";
   forest = name: edges:
     declaration "view" name {
@@ -379,19 +450,16 @@ in {
       orientation = "parent-to-child";
       connected = false;
     };
-  isForest = view: sym "isForest" [view];
+  isForest = view: sym "isForest" {inherit view;};
   visibility = name: hierarchy: policy:
     declaration "view" name {
       contract = "origin-sensitive-visibility/v1";
       inherit hierarchy policy;
-      sameRoot = true;
-      path = "unique-hierarchy-path";
-      zeroLength = true;
     };
-  visible = view: origin: target: sym "visible" [view origin target];
-  canDescend = view: origin: target: sym "canDescend" [view origin target];
-  nativeDag = sym "nativeDag" ["all-native-parent-child-roles" "parent-to-child"];
+  visible = view: origin: target: sym "visible" {inherit view origin target;};
+  canDescend = view: origin: target: sym "canDescend" {inherit view origin target;};
+  nativeDag = sym "nativeDag" {};
   input = declaration "input";
   projection = declaration "projection";
-  preserve = baseline: projection: sym "preserveListedRecords" [baseline projection];
+  preserve = baseline: projection: sym "preserve" {inherit baseline projection;};
 }

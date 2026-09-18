@@ -176,11 +176,11 @@ Reusing a role name does not copy another element's rules. BAZ still has to
 satisfy endpoint resolution and the model's other rules. An unresolved target is
 a prerequisite problem, not a finding that a resolved record has the wrong kind.
 
-| Constructor  | Signature                              | Arguments                                                                                              | Checks over                   | Real today                                                                                        |
-| ------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------- |
-| `parent`     | `parent ROLE REVERSE_ROLE [PREDICATE]` | Two names you choose; optional callback receiving `edge.origin` and `edge.target`, or a named `check`. | each relation occurrence      | Declares Parent grammar and retains an inline check; a bare callback gets the name `"predicate"`. |
-| `child`      | `child ROLE REVERSE_ROLE [PREDICATE]`  | Two names you choose; optional callback receiving the same edge binder, or a named `check`.            | each relation occurrence      | Declares Child grammar and retains an inline check.                                               |
-| `isNodeType` | `isNodeType NODE ELEMENT`              | Node from `edge.origin` or `edge.target`; element reference from `el`.                                 | each relation occurrence here | Emits the type question; inspecting a record remains specified behavior.                          |
+| Constructor  | Signature                              | Arguments                                                                                              | Checks over                   | Real today                                                                                                          |
+| ------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `parent`     | `parent ROLE REVERSE_ROLE [PREDICATE]` | Two names you choose; optional callback receiving `edge.origin` and `edge.target`, or a named `check`. | each relation occurrence      | Declares Parent grammar and retains an inline check; a bare callback gets a derived name such as `"H.target-type"`. |
+| `child`      | `child ROLE REVERSE_ROLE [PREDICATE]`  | Two names you choose; optional callback receiving the same edge binder, or a named `check`.            | each relation occurrence      | Declares Child grammar and retains an inline check.                                                                 |
+| `isNodeType` | `isNodeType NODE ELEMENT`              | Node from `edge.origin` or `edge.target`; element reference from `el`.                                 | each relation occurrence here | Emits the type question; inspecting a record remains specified behavior.                                            |
 
 ## 4. Rules that live on the element
 
@@ -260,9 +260,9 @@ Its alternative FOO declaration puts that same check in the constraints list
 These are alternative declarations of the same element name, not two elements to
 register together. The two forms lower identically, and chapter 10 shows the
 proof. Both use the same subject and check name, `"target-type"`. A bare inline
-callback gets the name `"predicate"`, so it would not match a differently named
-check. Either form rejects F1a's R targeting Z0, and neither adds that rule to
-Z0's own R.
+callback gets a derived name such as `"R.target-type"`, so it would not match a
+differently named check. Either form rejects F1a's R targeting Z0, and neither
+adds that rule to Z0's own R.
 
 | Constructor | Signature               | Arguments                                                                                       | Checks over                                                        | Real today                                                                           |
 | ----------- | ----------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
@@ -410,7 +410,7 @@ handling and traversal remain specified behavior.
 | `forest`     | `forest NAME EDGES`                | Name you choose; Parent relation reference from `parentOf`.                                                           | none                          | Emits owner-kind vertices and selected edges in parent-to-child orientation; permits disconnected roots. |
 | `isForest`   | `isForest VIEW`                    | View reference from `forest`.                                                                                         | whole model                   | Emits the structural predicate described above; runs no graph check.                                     |
 | `fieldOf`    | `fieldOf ELEMENT FIELD`            | Element from `el`; field declaration from `str` or `boolean` and its wrappers.                                        | none                          | Builds a declared field reference, not a record's field value.                                           |
-| `visibility` | `visibility NAME HIERARCHY POLICY` | Name you choose; view from `forest`; field reference and fixed keywords listed above.                                 | none                          | Emits policy and path settings; does not validate policy keywords.                                       |
+| `visibility` | `visibility NAME HIERARCHY POLICY` | Name you choose; view from `forest`; field reference and fixed keywords listed above.                                 | none                          | Emits policy; fixed path semantics belong to the view contract; keywords remain unchecked.               |
 | `visible`    | `visible VIEW ORIGIN TARGET`       | View from `visibility`; the example supplies node expressions from the edge binder (see chapter 11 for scope limits). | each relation occurrence here | Emits the path question; runtime behavior follows the algorithm above.                                   |
 
 ## 7. Bridges
@@ -622,9 +622,13 @@ in
 **Lowered** means converted from Nix authoring values into ordinary data a later
 system could read. `normalize` calls callbacks with symbolic binders, never
 loaded records such as F1a. It returns native declarations in `grammar`, field
-types and default metadata in `semanticTypes`, and declarations and symbolic
-rules in `bundle`. The bundle also records references, configurations, input
-dependencies, and rule origins.
+types and default metadata in `semanticTypes`, and declarations and flat, named
+rule records in `bundle` under schema `semantic-constraints/v2`. Each rule has
+`id`, `name`, `scope`, `subject`, `kind`, named kind fields, `inputs`, and
+`origins`; only an uncovered rule keeps a named-operand tree in `expression`.
+References are declaration IDs, and fallback binders use `record`, `owner`, and
+`target` tokens. The bundle also records named configurations and field
+declarations; `bundle.json` and `contract.md` show the lowered contract.
 
 Today normalization checks declaration identities, declared references it
 encounters, predicate shape, binder scope, and conflicting definitions of a
@@ -639,7 +643,8 @@ discarding rejected candidates and restoring prior state after publication
 failure where possible. If restoration fails, it requires reporting recovery and
 blocking further writes. Those operations and their crash guarantees need
 integration evidence. The accepted stub imports native grammar code outside this
-review directory; that import was not followed or reevaluated here.
+review directory; evaluation used a temporary copy pointing at the supplied
+native grammar path, while the delivered relative import remains unchanged.
 
 | Constructor | Signature         | Arguments                                                                                                                      | Checks over                    | Real today                                                                               |
 | ----------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ | ---------------------------------------------------------------------------------------- |
@@ -718,7 +723,8 @@ Finally, this is chapter 4's proof that the inline FOO and its alternative
 the same subject, check name, and expression. Evaluating it returns `true`; the
 recorded run is in `transcript.txt` beside this file. These equalities compare
 emitted data; they do not evaluate graph predicates. The conclusions here come
-from reading the stub, without following its external grammar import.
+from reevaluating the lowering with the supplied native grammar path; see the
+commands and all four proof results in `transcript.txt`.
 
 | Constructor  | Signature                        | Arguments                                                                                                         | Checks over                                                        | Real today                                                                                                  |
 | ------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
@@ -1026,44 +1032,44 @@ executes.
 | ------------------------------------------------------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `el`                                                   | Lowered by stub + semantics specified | Wraps the native element declaration and retains constraints for later lowering.                                  |
 | `model`                                                | Lowered by stub + semantics specified | Supplies declaration-list defaults and the model identity.                                                        |
-| `normalize`                                            | Lowered by stub + semantics specified | Builds grammar, metadata, and rule data with the authoring checks described below.                                |
-| `check`                                                | Lowered by stub + semantics specified | Retains the check name and lowers its symbolic expression in the supplied scope.                                  |
+| `normalize`                                            | Lowered by stub + semantics specified | Builds grammar, metadata, and flat rule records with the authoring checks described above.                        |
+| `check`                                                | Lowered by stub + semantics specified | Retains the name and lowers to a flat kind, or an expression fallback when no kind covers it.                     |
 | `on`                                                   | Lowered by stub + semantics specified | Changes the check subject and scope to the selected relation.                                                     |
-| `record`                                               | Lowered by stub + semantics specified | Creates a named symbolic record binder and lowers the callback body.                                              |
+| `record`                                               | Lowered by stub + semantics specified | Calls the callback with symbolic collections; emits no record wrapper or binder ID.                               |
 | `required`                                             | Lowered by stub + semantics specified | Sets native requiredness and preserves semantic metadata; this stub does not validate records.                    |
 | `str`                                                  | Lowered by stub + semantics specified | Delegates native string-field construction; no record values are read.                                            |
 | `boolean`                                              | Lowered by stub + semantics specified | Emits the two native choices and their Boolean codec metadata; no runtime decoding occurs.                        |
 | `creationDefault`                                      | Lowered by stub + semantics specified | Checks Boolean literal compatibility and records the default; applying it at final absence remains unimplemented. |
-| `parent`                                               | Lowered by stub + semantics specified | Retains native Parent grammar and moves optional inline checks into the bundle.                                   |
-| `child`                                                | Lowered by stub + semantics specified | Retains native Child grammar and moves optional inline checks into the bundle.                                    |
+| `parent`                                               | Lowered by stub + semantics specified | Retains Parent grammar and lowers inline checks, deriving readable names for anonymous callbacks.                 |
+| `child`                                                | Lowered by stub + semantics specified | Retains Child grammar and lowers inline checks, deriving readable names for anonymous callbacks.                  |
 | `parentOf`                                             | Lowered by stub + semantics specified | Builds a qualified Parent relation reference whose declared identity is checked during lowering.                  |
 | `childOf`                                              | Lowered by stub + semantics specified | Builds the corresponding qualified Child reference.                                                               |
 | `fieldOf`                                              | Lowered by stub + semantics specified | Builds a field identity from the owner tag and the field title.                                                   |
-| `isNodeType`                                           | Lowered by stub, semantics prose only | Emits a type-test expression without inspecting any target record.                                                |
-| `count`                                                | Lowered by stub, semantics prose only | Emits a count expression without collecting or counting occurrences.                                              |
-| `lt`                                                   | Lowered by stub, semantics prose only | Emits the `lt` comparison over count expressions or numbers without evaluating it.                                |
-| `lte`                                                  | Lowered by stub, semantics prose only | Emits the `lte` comparison over count expressions or numbers without evaluating it.                               |
-| `gt`                                                   | Lowered by stub, semantics prose only | Emits the `gt` comparison over count expressions or numbers without evaluating it.                                |
-| `gte`                                                  | Lowered by stub, semantics prose only | Emits the `gte` comparison over count expressions or numbers without evaluating it.                               |
-| `eq`                                                   | Lowered by stub, semantics prose only | Emits the `eq` comparison over count expressions or numbers without evaluating it.                                |
-| `atMost`                                               | Lowered by stub, semantics prose only | Expands to `lte (count COLLECTION) N` without computing a count.                                                  |
-| `atLeast`                                              | Lowered by stub, semantics prose only | Expands to `gte (count COLLECTION) N` without computing a count.                                                  |
-| `exactly`                                              | Lowered by stub, semantics prose only | Expands to `eq (count COLLECTION) N` without computing a count.                                                   |
-| `only`                                                 | Lowered by stub, semantics prose only | Emits singleton selection and endpoint access; blocked runtime results are not implemented.                       |
+| `isNodeType`                                           | Lowered by stub, semantics prose only | Lowers a relation target test to target-type with targetElement; other forms use expression.                      |
+| `count`                                                | Lowered by stub, semantics prose only | Combines an owned-relation count and comparison into a flat count rule without counting records.                  |
+| `lt`                                                   | Lowered by stub, semantics prose only | Lowers count < integer to count with compare = lt; other forms use expression.                                    |
+| `lte`                                                  | Lowered by stub, semantics prose only | Lowers count <= integer to count with compare = lte; other forms use expression.                                  |
+| `gt`                                                   | Lowered by stub, semantics prose only | Lowers count > integer to count with compare = gt; other forms use expression.                                    |
+| `gte`                                                  | Lowered by stub, semantics prose only | Lowers count >= integer to count with compare = gte; other forms use expression.                                  |
+| `eq`                                                   | Lowered by stub, semantics prose only | Lowers count == integer to count with compare = eq; other forms use expression.                                   |
+| `atMost`                                               | Lowered by stub, semantics prose only | Lowers to the same count record as lte (count COLLECTION) N; no count is computed.                                |
+| `atLeast`                                              | Lowered by stub, semantics prose only | Lowers to count with compare = gte; no count is computed.                                                         |
+| `exactly`                                              | Lowered by stub, semantics prose only | Lowers to count with compare = eq; no count is computed.                                                          |
+| `only`                                                 | Lowered by stub, semantics prose only | Becomes requireSingleton in endpoint-path; other forms retain named expression operands.                          |
 | `forest`                                               | Lowered by stub, semantics prose only | Emits selected edges, owner-kind vertices, parent-to-child orientation, and permission for disconnected roots.    |
-| `isForest`                                             | Lowered by stub, semantics prose only | Emits the structural predicate without finding cycles or counting hierarchy parents.                              |
-| `visibility`                                           | Lowered by stub, semantics prose only | Emits policy values and fixed path settings without validating keyword choices or executing traversal.            |
-| `visible`                                              | Lowered by stub, semantics prose only | Emits the view and two endpoints without computing visibility.                                                    |
-| `canDescend`                                           | Lowered by stub, semantics prose only | Emits the downward-path question without evaluating a bridge.                                                     |
-| `nativeDag`                                            | Lowered by stub, semantics prose only | Emits an all-role native-graph cycle predicate without running a cycle detector.                                  |
+| `isForest`                                             | Lowered by stub, semantics prose only | Lowers to forest-validity with a view reference; finds no cycles or hierarchy-parent counts.                      |
+| `visibility`                                           | Lowered by stub, semantics prose only | Emits hierarchy and policy; fixed shared-root, unique-path, and zero-length semantics are in contract.md.         |
+| `visible`                                              | Lowered by stub, semantics prose only | Lowers relation owner-to-target visibility to visible-target with view, from, and to.                             |
+| `canDescend`                                           | Lowered by stub, semantics prose only | Lowers two singleton endpoints to endpoint-path with view, upper, lower, and requireSingleton.                    |
+| `nativeDag`                                            | Lowered by stub, semantics prose only | Lowers to native-dag; the kind fixes all native Parent/Child roles and parent-to-child orientation.               |
 | `input`                                                | Lowered by stub, semantics prose only | Emits the input declaration without provider registration, acquisition, or completeness checking.                 |
 | `projection`                                           | Lowered by stub, semantics prose only | Emits selected comparison facts without extracting them from records.                                             |
-| `preserve`                                             | Lowered by stub, semantics prose only | Emits preservation and records the referenced input dependency without comparing snapshots.                       |
+| `preserve`                                             | Lowered by stub, semantics prose only | Lowers to preserve with baseline and projection references and the input dependency; compares no snapshots.       |
 | `contribute`                                           | Lowered by stub + semantics specified | Adds relation-scoped checks and retains a contribution origin for composition.                                    |
-| `const`                                                | Lowered by stub + semantics specified | Accepts exactly Boolean literals and emits their constant predicate representation.                               |
-| Relation `edge` binder                                 | Lowered by stub + semantics specified | Exposes symbolic origin and target expressions during normalization.                                              |
+| `const`                                                | Lowered by stub + semantics specified | Accepts Boolean literals and emits expression with named op and value fields.                                     |
+| Relation `edge` binder                                 | Lowered by stub + semantics specified | Exposes owner and target tokens through the author-facing origin and target properties.                           |
 | Record `node` or `bridge` binder                       | Lowered by stub + semantics specified | Exposes symbolic Parent and Child collection functions during normalization.                                      |
-| Singleton `.target`                                    | Lowered by stub, semantics prose only | Emits endpoint extraction without resolving a runtime relation.                                                   |
+| Singleton `.target`                                    | Lowered by stub, semantics prose only | Selects the declared target of each singleton endpoint relation; runtime resolution is not implemented.           |
 | Runtime graph evaluator                                | Not implemented                       | No backend in this stub consumes the predicates to produce graph verdicts.                                        |
 | Runtime field-value accessor                           | Not implemented                       | No constructor here reads FLAG from an arbitrary bound node for a new predicate.                                  |
 | Runtime default materialization                        | Not implemented                       | No literal is applied to a candidate, and no script default constructor or execution is provided here.            |
