@@ -16,6 +16,9 @@
       enable = true;
       lspServers.probe.command = "probe";
     };
+    # Consumer-declared, inside a runtime's own config directory. The delivery
+    # manifest must not claim it.
+    files.".custom-kiro/consumer-owned.md".text = "consumer";
   };
   stubBin = pkgs.writeShellScript "kiro-warning-stub" ''
     set -euETo pipefail
