@@ -202,6 +202,25 @@
         units = {};
       }
     ];
+    # Two LIVE targets on one path, which the ledger rule above does NOT catch:
+    # distinct ledgers, one file. Each publishes over the other and the second
+    # backs the first one's bytes up as an unmanaged hand edit, once per
+    # generation. Two targets on one path where at most one is live is the
+    # legal shape — that is the handover `kiroMcp` above is built from.
+    duplicatePath.targets = [
+      {
+        codec = "json";
+        ledger = "json-settings/first.json";
+        path = "settings/cli.json";
+        units.text = "{}";
+      }
+      {
+        codec = "json";
+        ledger = "json-settings/second.json";
+        path = "settings/cli.json";
+        units.text = "{}";
+      }
+    ];
     missingPruneName = {
       entryNames.write = "only-a-write";
       targets = [

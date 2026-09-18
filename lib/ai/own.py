@@ -598,6 +598,7 @@ def load_plan(path: Path) -> Mapping[str, Any]:
     if not isinstance(bash, str) or not bash.startswith("/"):
         raise ValueError(f"plan must name an absolute bash for renderers at {path}")
     ledgers: set[str] = set()
+    claimed: set[str] = set()
     for target in targets:
         missing = [field for field in ("codec", "ledger", "path", "units") if field not in target]
         if missing:
@@ -607,6 +608,16 @@ def load_plan(path: Path) -> Mapping[str, Any]:
                 f"unknown codec '{target['codec']}' for {target['path']}"
             )
         check_relative("target path", target["path"])
+        # LIVE targets only: a target declaring nothing RELEASES its path
+        # rather than claiming it, which is what the retraction rule below
+        # turns the overwrite/merge handover into. Two live targets on one path
+        # each publish over the other and back the other's file up as a hand
+        # edit, once per generation.
+        if target["units"]:
+            path = str(PurePosixPath(target["path"]))
+            if path in claimed:
+                raise ValueError(f"two live targets claim the path '{path}'")
+            claimed.add(path)
         check_relative("ledger", target["ledger"])
         if target["ledger"] in ledgers:
             raise ValueError(f"two targets share the ledger '{target['ledger']}'")
