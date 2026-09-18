@@ -106,9 +106,6 @@
   # declaration dropped is removed, a file edited since it was written is
   # backed up first, and a path this generation never wrote is never touched.
   ownFiles = at: "On ${at}, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone.";
-  # The bash materializer, still the writer for the surfaces `own` has not
-  # taken over. Same shape, read out of a TSV manifest.
-  materializerFiles = at: "lib/ai/materialize.nix manifest prune at ${at}; only previously owned paths are retired.";
   # HM reconciles on activation, devenv on shell entry. Both retraction
   # mechanisms name the moment, and nothing else in a row varies with it.
   retractionMoment = mode:
@@ -231,13 +228,9 @@
           else "AGENTS.md"
         ))
         // {
-          additionalWriters = [
-            ((kiroManaged (materializerFiles (retractionMoment mode)) mode
-                (
-                  if mode == "hm"
-                  then "retire-materialize-kiro-steering"
-                  else "ai:kiro:retire-steering-copies"
-                )
+          additionalWriters = let
+            retirement = name: role:
+              (kiroManaged (ownFiles (retractionMoment mode)) mode name
                 "${
                   if mode == "hm"
                   then "$HOME"
@@ -245,13 +238,25 @@
                 }/.kiro/steering/<legacy-owned-file>"
                 (probe ["ai" "kiro" "context"] {text = "probe";} {}))
               // {
+                inherit role;
                 # NOT an exemption: the gate verifies this claim in BOTH
                 # directions, so a body that DOES vary with the declaration is
                 # an error here, exactly as a passing exempted writer is.
-                declarationIndependent = "This writer deletes what a PRIOR generation's manifest recorded. mkRetirementScript takes no files argument (lib/ai/materialize.nix:448 for HM, :506-524 for devenv), so its body cannot vary with the current declaration by construction.";
-                role = "Enable-independent legacy-copy retirement; current context and rules use declarative paths.";
-              })
-          ];
+                declarationIndependent = "This writer removes what a PRIOR generation's ledger recorded. Its `own` target declares NO units, so its plan — and therefore the whole body, which is one command over two store paths — is the same under every declaration by construction.";
+              };
+          in
+            if mode == "hm"
+            then [
+              # Home Manager needs the pair: deleting a real file must happen
+              # before checkLinkTargets (`.kiro/steering` is exactly a
+              # copy→symlink flip), and the write phase then unlinks the
+              # ledger. Both are enable-independent, so both are rows.
+              (retirement "retire-materialize-kiro-steering" "Enable-independent legacy-copy retirement, prune phase: remove the files a prior generation's ledger recorded, before link generation.")
+              (retirement "retire-materialize-kiro-steering-ledger" "Enable-independent legacy-copy retirement, write phase: unlink the drained ledger so later generations are inert.")
+            ]
+            else [
+              (retirement "ai:kiro:retire-steering-copies" "Enable-independent legacy-copy retirement; current context and rules use declarative paths.")
+            ];
         });
     };
     environmentVariables = {
