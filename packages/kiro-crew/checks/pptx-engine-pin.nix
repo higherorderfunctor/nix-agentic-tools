@@ -44,10 +44,18 @@
         # Upstream writes each of these as a module-level assignment to a
         # double-quoted literal. Tolerate either quote style and surrounding
         # whitespace; do NOT tolerate a missing match.
+        #
+        # `|| :` is not sloppiness, it is what keeps the emptiness test below
+        # REACHABLE. A no-match grep exits 1, stdenv's setup.sh arms errexit
+        # and pipefail, so a bare assignment would abort the builder on the
+        # very input that test exists to report — and the failure would
+        # surface as a bare non-zero builder with no message at all. Absence
+        # is still NOT tolerated; the `-n` test below rejects it, by name.
         upstream="$(
           ${pkgs.gnugrep}/bin/grep -oE "^$constant[[:space:]]*=[[:space:]]*[\"'][^\"']*[\"']" "$engineSource" \
             | ${pkgs.coreutils}/bin/head -n1 \
-            | ${pkgs.gnused}/bin/sed -E "s/^$constant[[:space:]]*=[[:space:]]*[\"'](.*)[\"']$/\1/"
+            | ${pkgs.gnused}/bin/sed -E "s/^$constant[[:space:]]*=[[:space:]]*[\"'](.*)[\"']$/\1/" \
+            || :
         )"
 
         # A check that silently compares nothing to nothing is worse than no

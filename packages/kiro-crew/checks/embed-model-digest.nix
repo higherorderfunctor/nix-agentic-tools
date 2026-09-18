@@ -28,10 +28,18 @@
 
       # Extract the 64-hex value assigned to _GGUF_SHA256, tolerating either
       # quote style and surrounding whitespace.
+      #
+      # `|| :` is not sloppiness, it is what keeps the diagnostic below
+      # REACHABLE. A no-match grep exits 1, stdenv's setup.sh arms errexit and
+      # pipefail, so a bare assignment would abort the builder on the very
+      # input the shape check exists to report — and the failure would surface
+      # as a bare non-zero builder with no message at all. Absence is handled
+      # by the `case` below, loudly; it must not be handled here, silently.
       upstream="$(
         ${pkgs.gnugrep}/bin/grep -oE '_GGUF_SHA256[[:space:]]*=[[:space:]]*["'"'"'][0-9a-f]{64}["'"'"']' "$embeddings" \
           | ${pkgs.gnugrep}/bin/grep -oE '[0-9a-f]{64}' \
-          | ${pkgs.coreutils}/bin/head -n1
+          | ${pkgs.coreutils}/bin/head -n1 \
+          || :
       )"
 
       # A check that silently compares nothing to nothing is worse than no
@@ -39,7 +47,7 @@
       # this fails LOUDLY rather than passing on two empty strings.
       case "$upstream" in
         ????????????????????????????????????????????????????????????????) : ;;
-        *) fail "could not extract a 64-hex _GGUF_SHA256 from embeddings.py (got: '"'"'$upstream'"'"'). Upstream renamed or reformatted it; re-read the constant and update the recipe." ;;
+        *) fail "could not extract a 64-hex _GGUF_SHA256 from embeddings.py (got: '$upstream'). Upstream renamed or reformatted it; re-read the constant and update the recipe." ;;
       esac
 
       ours="${model.sha256Hex}"
