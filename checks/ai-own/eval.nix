@@ -117,12 +117,32 @@
   # Every rejection below is also a runtime rejection in own.py; this is the
   # half that fails before a single byte is written.
   refusals = {
+    absoluteLedger.targets = [
+      {
+        codec = "json";
+        ledger = "/var/lib/x.json";
+        path = "settings.json";
+        units.text = "{}";
+      }
+    ];
     absolutePath.targets = [
       {
         codec = "dir";
         ledger = "materialize/x.manifest";
         path = "/etc";
         units."unit.txt".text = "x";
+      }
+    ];
+    # A ledger name is a RELATIVE PATH, not a path segment: the retired
+    # `stateName` charset rule policed a single filename, and `own` takes the
+    # whole `<dir>/<name>` the caller states. So `json-settings/x.json` is
+    # legal and these three are not.
+    emptyLedger.targets = [
+      {
+        codec = "json";
+        ledger = "";
+        path = "settings.json";
+        units.text = "{}";
       }
     ];
     documentMode.targets = [

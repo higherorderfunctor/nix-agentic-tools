@@ -781,27 +781,6 @@ in {
         touch "$out"
       '';
 
-    # Still live, and still the only guard on it: kiro's `mcp.json` reconciler
-    # is the one remaining caller of `mkSettingsActivationScript`, whose
-    # `stateName` becomes a ledger FILENAME with no traversal check of its own.
-    # `own` replaces that charset rule with a traversal rule on a full relative
-    # ledger path, so this check retires with that caller, not with this one.
-    module-json-settings-state-name-validation = mkTest "json-settings-state-name-validation" (
-      let
-        helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-        accepts = stateName:
-          (builtins.tryEval (helpers.mkSettingsActivationScript {
-            configFile = ".claude.json";
-            python = pkgs.python3;
-            reconciler = ../../../lib/ai/reconcile-toml.py;
-            settingsJson = "{}";
-            inherit stateName;
-          })).success;
-      in
-        accepts "claude-settings_1.json"
-        && builtins.all (name: !accepts name) ["" "../escape" "a/b" "has space"]
-    );
-
     # ── Attrs-shape ai.rules / ai.<cli>.rules (unified transformer) ───
 
     # Claude HM: top-level ai.rules → .claude/rules/<name>.md with paths frontmatter.

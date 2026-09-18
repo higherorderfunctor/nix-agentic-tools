@@ -71,6 +71,16 @@
   hookTargetOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/hooks" (ownPlan "kiro" entry ev);
   hmHookTarget = hookTargetOf "materialize-kiro-hooks-write";
   dvHookTarget = hookTargetOf "ai:kiro:materialize-hooks";
+  # mcp.json's two targets by ROLE: the directory that owns the whole file
+  # under `overwrite`, and the document whose leaves it owns under `merge`.
+  # Both live in ONE bundle, so both come out of one plan and a check can read
+  # the mode, the render command and the ledger of either.
+  mcpDirOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/settings" (ownPlan "kiro" entry ev);
+  mcpDocOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/settings/mcp.json" (ownPlan "kiro" entry ev);
+  hmMcpDirTarget = mcpDirOf "kiroMcpJson";
+  hmMcpDocTarget = mcpDocOf "kiroMcpJson";
+  dvMcpDirTarget = mcpDirOf "ai:kiro:materialize-mcp";
+  dvMcpDocTarget = mcpDocOf "ai:kiro:materialize-mcp";
   # The `--plan` argument out of an emitted body. `own` passes exactly one, so
   # this is the IDENTITY of the plan a phase applies: two entries that resolve
   # to the same store path cannot disagree about what is owned, which is what
@@ -90,7 +100,6 @@
   hmHookPruneScript = requireBody ["home" "activation" "materialize-kiro-hooks-prune" "text"];
   hmHookWriteScript = requireBody ["home" "activation" "materialize-kiro-hooks-write" "text"];
   hmMcpPruneScript = requireBody ["home" "activation" "materialize-kiro-settings-prune" "text"];
-  hmMcpRetirementScript = requireBody ["home" "activation" "retire-materialize-kiro-settings" "text"];
   hmMcpWriteScript = requireBody ["home" "activation" "kiroMcpJson" "text"];
   hmRetirementScript = requireBody ["home" "activation" "retire-materialize-kiro-steering" "text"];
   # Extract the heredoc body a copy writer embeds for <name> — the
@@ -112,5 +121,5 @@
     in
       builtins.head (lib.splitString "\n${marker}\n" body);
 in {
-  inherit dvHookTarget dvHookTaskExec dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpPruneScript hmMcpRetirementScript hmMcpWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame;
+  inherit dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame;
 }

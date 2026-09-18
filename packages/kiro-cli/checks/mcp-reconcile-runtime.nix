@@ -4,7 +4,7 @@
   harness,
 }: let
   inherit (harness) evalDevenv evalHm;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvMcpTaskExec hmMcpPruneScript hmMcpRetirementScript hmMcpWriteScript renderedMcpJson;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvMcpTaskExec hmMcpPruneScript hmMcpWriteScript renderedMcpJson;
   servers = {
     alpha = {
       type = "http";
@@ -16,6 +16,12 @@
     };
   };
   reduced = removeAttrs servers ["beta"];
+  # Home Manager delivers BOTH modes as the same pair of entries now — the
+  # prune phase before checkLinkTargets, the write phase after linkGeneration —
+  # so replaying a generation is that pair in order, whatever the mode. There
+  # used to be a third entry (`retire-materialize-kiro-settings`) that merge
+  # mode substituted for the prune; `own` expresses that release as the prune
+  # phase of one two-target plan.
   script = backend: mode: pool: let
     cfg.ai.kiro = {
       enable = true;
@@ -25,13 +31,7 @@
     hm = evalHm cfg;
   in
     if backend == "hm"
-    then
-      (
-        if mode == "merge"
-        then hmMcpRetirementScript hm
-        else hmMcpPruneScript hm
-      )
-      + hmMcpWriteScript hm
+    then hmMcpPruneScript hm + hmMcpWriteScript hm
     else dvMcpTaskExec (evalDevenv cfg);
   first = builtins.fromJSON (renderedMcpJson servers);
   second = builtins.fromJSON (renderedMcpJson reduced);
@@ -51,9 +51,10 @@
         lib.optionalString (backend == "devenv") ''
           export DEVENV_ROOT="$HOME"
           export DEVENV_STATE="''${XDG_STATE_HOME:-$HOME/.local/state}"
-          # The shared HM corpus starts without HOME; a devenv project must
-          # exist before tasks can cd to it. Remove only this empty fixture
-          # directory afterward so the corpus can still assert no side effects.
+          # The shared HM corpus starts without HOME; the devenv renderer
+          # anchors on the project root, which has to exist before it can cd
+          # there. Remove only this empty fixture directory afterward so the
+          # corpus can still assert no side effects.
           ${pkgs.coreutils}/bin/mkdir -p "$DEVENV_ROOT"
         ''
         + script backend "merge" pool

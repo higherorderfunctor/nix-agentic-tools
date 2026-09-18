@@ -522,7 +522,7 @@
       (builtins.attrNames cfg.hooks ++ builtins.attrNames cfg.hooksJson);
   in {
     assertion = bad == [];
-    message = "ai.kiro: hook names must match ${materializeLib.nameRegex} (no path separators, whitespace, or quotes); offending: ${lib.concatStringsSep ", " bad}";
+    message = "ai.kiro: hook names must match ${hookNameRegex} (no path separators, whitespace, or quotes); offending: ${lib.concatStringsSep ", " bad}";
   };
 
   # Shared assertion set for both backends: mutually exclusive inline/dir
@@ -951,14 +951,22 @@
   # supplies NAT_MAT_TARGET_DIR; merge passes its target expression explicitly.
   # Real-file delivery (never a store
   # symlink) is what lets a secret url land and dodges the
-  # symlink<->real-file toggle + the devenv files.* silent skip. NOTE:
+  # symlink<->real-file toggle + the devenv files.* silent skip.
+  #
+  # `anchorRoot` reproduces, for the ONE backend that had it, the
+  # `cd "$DEVENV_ROOT"` the devenv materialize task used to run: a relative
+  # credential `file`/`helper` path resolved against the PROJECT root there,
+  # while under Home Manager it has always resolved against the activation's
+  # cwd. `own` never `cd`s, so the anchor moves to the renderer that needs it
+  # and the two backends keep the behavior each one had. NOTE:
   # a credential url reads its secret at ACTIVATION, so a consumer wiring
   # sops-nix/agenix must order this after the secret provider (P2). That
   # ordering is still the consumer's to get right, but getting it WRONG is no
   # longer silent: an unreadable or empty secret now fails activation loudly
   # instead of writing `"url": ""` and leaving the server to fail at runtime.
   mkMcpJsonScript = {
-    targetExpr ? "$NAT_MAT_TARGET_DIR/mcp.json",
+    anchorRoot ? false,
+    targetExpr,
     templateFile,
     urlSecretEnv,
   }: let
@@ -1029,80 +1037,70 @@
     aiCommon.scopedActivation ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      TARGET="${targetExpr}"
+      ${lib.optionalString anchorRoot ''
+        cd "$NAT_OWN_ROOT"
+      ''}TARGET="${targetExpr}"
       ${assemble}
     '';
 
-  # One per-file ownership contract for both backends. An empty pool retracts
-  # only a previously recorded mcp.json; an unmanaged file is left alone.
-  # Non-empty pools adopt collisions through the materializer's backup guard.
-  mkMcpMaterialization = cfg: kiroSecrets: let
-    targetDir = "${cfg.configDir}/settings";
-    hasUrlSecret = kiroSecrets.urlSecretEnv != {};
-  in {
-    inherit targetDir;
-    inherit (pkgs) coreutils diffutils flock gnugrep;
-    stateSlug = materializeLib.mkStateSlug targetDir;
-    files = lib.optionalAttrs (kiroSecrets.servers != {}) {
-      "mcp.json" = {
-        mode =
-          if hasUrlSecret
-          then "0400"
-          else "0444";
-        renderCommand = mkMcpJsonScript {
-          templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
-          inherit (kiroSecrets) urlSecretEnv;
-        };
-        source = null;
-        strategy = "copy";
-        text = null;
-      };
+  # BOTH mcp.json ownership modes as ONE bundle's targets, in a FIXED order:
+  # the directory that owns the whole file under `overwrite`, then the document
+  # whose leaves it owns under `merge`. The order is load-bearing, and it is
+  # what used to be hand-spliced as "retirement then write" in one mode and
+  # the reverse in the other: `own` retracts every target before asserting
+  # any, and flushes a target that declares nothing first.
+  #
+  # Every cell of the handover then follows from one rule — a stale whole-file
+  # unit whose path a live target in this plan still claims is FORGOTTEN, not
+  # removed — with no flag and no second builder:
+  #
+  #   overwrite -> merge          release the file, adopt its leaves
+  #   merge -> overwrite          retract the leaves, then adopt the file
+  #   overwrite -> empty merge    RELEASE: declaring the producer is the claim,
+  #                               even when it resolves to zero servers
+  #   overwrite -> empty overwrite  DELETE: nothing claims the path
+  #
+  # `merge` therefore declares `{run = …}` whenever the mode is merge, empty
+  # pool or not, while the dir unit exists only for a non-empty overwrite.
+  # `module-kiro-mcp-reconcile-runtime` is the acceptance gate for all four.
+  mkMcpTargets = backend: cfg: kiroSecrets: let
+    settingsDir = "${cfg.configDir}/settings";
+    render = mkMcpJsonScript {
+      # Only devenv's writer ever anchored on the project root.
+      anchorRoot = backend == "devenv";
+      targetExpr = "$NAT_OWN_ROOT/${settingsDir}/mcp.json";
+      templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
+      inherit (kiroSecrets) urlSecretEnv;
     };
-  };
-
-  # One ledger per backend/destination; the generic helper supplies leaf
-  # ownership and stdin reconciliation. Passing {} retires merge ownership
-  # before overwrite takes over, including an empty overwrite generation.
-  mkMcpReconciliation = backend: cfg: kiroSecrets: let
-    helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-    configRoot =
-      if backend == "hm"
-      then "$HOME"
-      else "$DEVENV_ROOT";
-    stateRoot =
-      if backend == "hm"
-      then "\${XDG_STATE_HOME:-$HOME/.local/state}"
-      else "$DEVENV_STATE";
-  in
-    helpers.mkSettingsActivationScript ({
-        inherit configRoot stateRoot;
-        configFile = "${cfg.configDir}/settings/mcp.json";
-        python = pkgs.python3;
-        reconciler = ../../../lib/ai/reconcile-toml.py;
-        stateName = "kiro-mcp-${builtins.hashString "sha256" cfg.configDir}";
-      }
-      // (
-        if cfg.mcpWriteMode == "merge"
-        then {
-          renderCommand = mkMcpJsonScript {
-            targetExpr = "${configRoot}/${cfg.configDir}/settings/mcp.json";
-            templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
-            inherit (kiroSecrets) urlSecretEnv;
-          };
-        }
-        else {settingsJson = "{}";}
-      ));
-
-  # A whole-file hash cannot recover the old declaration's leaves. Preserve
-  # the document when handing it to merge: only the NEW declaration becomes
-  # leaf-owned. Pre-existing undeclared fields become unowned, including old
-  # Nix servers; deleting them would risk deleting indistinguishable hand edits.
-  mkMcpRetirement = cfg: {
-    targetDir = "${cfg.configDir}/settings";
-    stateSlug = materializeLib.mkStateSlug "${cfg.configDir}/settings";
-    preserveFiles = true;
-    inherit (pkgs) coreutils flock;
-  };
+  in [
+    {
+      codec = "dir";
+      # LITERALS, both of them: every ownership record either mode has ever
+      # written hangs off exactly these two paths, and Home Manager ROLLBACK
+      # runs an older generation's writer against today's ledgers.
+      ledger = "materialize/kiro-settings.manifest";
+      path = settingsDir;
+      units = lib.optionalAttrs (cfg.mcpWriteMode == "overwrite" && kiroSecrets.servers != {}) {
+        "mcp.json" = {
+          # A url credential is substituted in HERE, so the file holds a
+          # secret and nothing else may read it. The 0444 arm is the
+          # no-secret case, and the widening it implies when a secret is
+          # REMOVED is pinned by an assertion in checks/ai-own/runtime.py.
+          mode =
+            if kiroSecrets.urlSecretEnv != {}
+            then "0400"
+            else "0444";
+          run = render;
+        };
+      };
+    }
+    {
+      codec = "json";
+      ledger = "json-settings/kiro-mcp-${builtins.hashString "sha256" cfg.configDir}.json";
+      path = "${settingsDir}/mcp.json";
+      units = lib.optionalAttrs (cfg.mcpWriteMode == "merge") {run = render;};
+    }
+  ];
 
   # `ai.shell` / `ai.kiro.shell` → `SHELL` in Kiro's own process
   # environment. Kiro's v3 engine selects its command shell with
@@ -1817,39 +1815,24 @@ in
             # unknown entry, so this stays secret-manager agnostic and is
             # simply inert when sops-nix is not in use (same trick as
             # `mcpRestartOnSecretRotation` in the mcp-services module).
-            # Unconditional while enabled: N→0 must still run the manifest
+            # Unconditional while enabled: N→0 must still run the ledger
             # prune. Keep kiroMcpJson as the write entry name so consumer
             # secret-provider ordering continues to address the same entry.
-            (let
-              materialization = mkMcpMaterialization cfg kiroSecrets;
-              activation = materializeLib.mkHmActivation materialization;
-              pruneKey = "materialize-${materialization.stateSlug}-prune";
-              writeKey = "materialize-${materialization.stateSlug}-write";
-              reconcile = mkMcpReconciliation "hm" cfg kiroSecrets;
-            in {
-              home.activation =
-                if cfg.mcpWriteMode == "merge"
-                then
-                  materializeLib.mkHmRetirement (mkMcpRetirement cfg)
-                  // {
-                    kiroMcpJson = lib.hm.dag.entryAfter ["linkGeneration" "sops-nix"] reconcile;
-                  }
-                else
-                  builtins.removeAttrs activation [writeKey]
-                  // {
-                    # Retire leaf ownership BEFORE either materializer phase.
-                    ${pruneKey} =
-                      activation.${pruneKey}
-                      // {
-                        text = aiCommon.scopedActivation ''
-                          set -euETo pipefail
-                          shopt -s inherit_errexit 2>/dev/null || :
-                          ${reconcile}
-                          ${activation.${pruneKey}.text}
-                        '';
-                      };
-                    kiroMcpJson = activation.${writeKey} // {after = ["linkGeneration" "sops-nix"];};
-                  };
+            # Both modes emit the SAME pair of entries against the same
+            # two-target plan, so there is no mode switch left to splice: the
+            # declaration decides which target owns the path, and the ordering
+            # the old code spliced by hand is `own`'s retract-then-assert.
+            (helpers.mkOwnBundle {
+              after = ["sops-nix"];
+              backend = "hm";
+              entryNames = {
+                prune = "materialize-kiro-settings-prune";
+                write = "kiroMcpJson";
+              };
+              python = pkgs.python3;
+              runtime = "kiro";
+              targets = mkMcpTargets "hm" cfg kiroSecrets;
+              inherit pkgs;
             })
             # Inline agent JSON files.
             (lib.mkIf (cfg.agents != {}) {
@@ -2011,42 +1994,17 @@ in
               files."${cfg.configDir}/settings/lsp.json".text =
                 builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
             })
-            # Exactly one MCP writer per mode, rooted at the project. Keep
-            # retirement and writing in ONE task so devenv cannot race them.
-            (let
-              materialization = mkMcpMaterialization cfg kiroSecrets;
-              task =
-                if cfg.mcpWriteMode == "merge"
-                then
-                  materializeLib.mkDevenvRetirementTask ((mkMcpRetirement cfg)
-                    // {
-                      hasFiles = config.files != {};
-                    })
-                else
-                  materializeLib.mkDevenvTask (materialization
-                    // {
-                      hasFiles = config.files != {};
-                    });
-              reconcile = mkMcpReconciliation "devenv" cfg kiroSecrets;
-            in {
-              tasks."ai:kiro:materialize-mcp" =
-                task
-                // {
-                  exec = aiCommon.scopedActivation ''
-                    set -euETo pipefail
-                    shopt -s inherit_errexit 2>/dev/null || :
-                    cd "$DEVENV_ROOT"
-                    ${
-                      if cfg.mcpWriteMode == "merge"
-                      then task.exec + reconcile
-                      else reconcile + task.exec
-                    }
-                  '';
-                };
-              enterTest = materializeLib.mkEnterTest {
-                app = "kiro";
-                inherit (materialization) files targetDir;
-              };
+            # ONE MCP writer for both modes, rooted at the project: the same
+            # two-target plan as Home Manager, applied in one process so
+            # devenv cannot race the retraction against the write.
+            (helpers.mkOwnBundle {
+              backend = "devenv";
+              entryNames.write = "ai:kiro:materialize-mcp";
+              hasFiles = config.files != {};
+              python = pkgs.python3;
+              runtime = "kiro";
+              targets = mkMcpTargets "devenv" cfg kiroSecrets;
+              inherit pkgs;
             })
             # Inline agent JSON files.
             (lib.mkIf (cfg.agents != {}) {
