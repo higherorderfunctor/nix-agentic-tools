@@ -138,16 +138,16 @@
 
       # Internal channels must remain absent from both consumer-facing
       # references even though they are declared symmetrically. That covers the
-      # integration inputs AND `_reconciledDocuments`, which exists so module
-      # evaluation can read what a reconciler's store plan will assert — it is
-      # a check seam, never an ownership surface a consumer may declare.
+      # integration inputs AND `_ownPlans`, which exists so module evaluation
+      # can read what a reconciler's store plan will assert — it is a check
+      # seam, never an ownership surface a consumer may declare.
       ${lib.concatMapStringsSep "\n" (name: ''
           ! "$grep" -Fq '${name}' "${hmJson}"
           ! "$grep" -Fq '${name}' "${devenvJson}"
           ! "$grep" -Fq '${name}' "${docs.hmOptionsDoc.optionsCommonMark}"
           ! "$grep" -Fq '${name}' "${docs.devenvOptionsDoc.optionsCommonMark}"
         '')
-        ["_integration_writable_roots" "_reconciledDocuments"]}
+        ["_integration_writable_roots" "_ownPlans"]}
 
       # Devenv-only service APIs still belong in the consumer reference. This
       # positive control prevents an omitted transform prefix from silently

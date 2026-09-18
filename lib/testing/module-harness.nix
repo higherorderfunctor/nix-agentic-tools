@@ -297,18 +297,47 @@
   # escapes its separator, so this is a true literal search. Use it whenever
   # the needle is shell syntax rather than prose.
   hasLiteral = needle: hay: builtins.length (lib.splitString needle hay) > 1;
-  # What a reconciler's store plan will assert into one runtime-writable
-  # document, as recorded by `helpers.mkOwnedDocument`. The plan itself is a
-  # derivation, so reading it back would be import-from-derivation; this is the
-  # eval-visible record, and the writer is built from the same declaration.
+  # The `own` plan ONE writer applies, as recorded by `helpers.mkOwnBundle`:
+  # `bash` plus the ordered targets, with each target's codec, path, ledger and
+  # units. The plan FILE is a derivation, so reading it back would be
+  # import-from-derivation; this is the same value, eval-visible, and the
+  # writer is built from it rather than from a mirror of it. Read a render
+  # command as `(ownPlan …).targets` → the target's `units.<name>.run`, and a
+  # dir unit's mode as that unit's `mode`.
   #
-  # It THROWS on an absent document rather than defaulting to `{}`: a renamed
-  # or dropped writer must fail a check, never satisfy one with an empty value.
-  ownedDocument = runtime: path: evaluated:
-    lib.attrByPath ["ai" runtime "_reconciledDocuments" path]
-    (throw "module-test: config.ai.${runtime}._reconciledDocuments.\"${path}\" is missing")
-    evaluated.config;
+  # It THROWS on an absent entry rather than defaulting to `{}`: a renamed or
+  # dropped writer must fail a check, never satisfy one with an empty plan.
+  ownPlan = runtime: entry: evaluated:
+    (lib.attrByPath ["ai" runtime "_ownPlans" entry]
+      (throw "module-test: config.ai.${runtime}._ownPlans.\"${entry}\" is missing")
+      evaluated.config)
+    .plan;
+  # What one writer's plan will assert into one runtime-writable document:
+  # `{ledger, value}`, found by the document PATH rather than by the writer's
+  # entry name, because that is the identity a settings check cares about.
+  #
+  # `value` cannot come out of the plan itself — a document target's content is
+  # `builtins.toJSON value`, and `builtins.fromJSON` refuses a string that
+  # refers to a store path — so it is read from the same record's `declared`
+  # map, which `mkOwnedDocument` fills from the value it serialized.
+  ownedDocument = runtime: path: evaluated: let
+    plans =
+      lib.attrByPath ["ai" runtime "_ownPlans"]
+      (throw "module-test: config.ai.${runtime}._ownPlans is missing")
+      evaluated.config;
+    hits = lib.concatMap (record:
+      map (target: {
+        inherit (target) ledger;
+        value =
+          record.declared.${path}
+          or (throw "module-test: ai.${runtime} owns \"${path}\" through a plan that declared no value for it");
+      })
+      (lib.filter (target: target.codec != "dir" && target.path == path) record.plan.targets)) (lib.attrValues plans);
+  in
+    if lib.length hits == 1
+    then lib.head hits
+    else throw "module-test: expected exactly one ai.${runtime} document plan for \"${path}\", found ${toString (lib.length hits)}";
 in {
-  inherit aiBase aiStubs devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm harnessNames hasLiteral hmLib hmStubs mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument tomlFormat;
+  inherit aiBase aiStubs devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm harnessNames hasLiteral hmLib hmStubs mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
   inherit testing;
 }

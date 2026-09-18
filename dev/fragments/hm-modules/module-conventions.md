@@ -216,12 +216,16 @@ preserves native siblings within the same table, and atomically leaves mode-0600
 regular files. The manifest is necessary because `existing * desired` cannot
 tell a native key from a Nix key deleted in the next generation.
 
-The declared value travels as DATA in a store-resident plan, so no byte of it is
-interpolated into generated shell — and nothing about what a writer will assert
-is visible in its activation body. `mkOwnedDocument` therefore also records the
-declaration on the internal `ai.<runtime>._reconciledDocuments` option, which is
-what module-eval checks read; reading the plan back would be
-import-from-derivation.
+Every target, unit, mode, ledger name and byte of content travels as DATA in a
+store-resident plan, so none of it is interpolated into generated shell — and
+nothing about what a writer will assert is visible in its activation body.
+`helpers.mkOwnBundle` therefore records the whole plan on the internal
+`ai.<runtime>._ownPlans.<write entry>` option, which is what module-eval checks
+read (`harness.ownPlan` for the plan, `harness.ownedDocument` for one document's
+ledger and value). Reading the plan FILE back would be import-from-derivation,
+and `builtins.fromJSON` refuses a string that refers to a store path, so the
+value a document declares is recorded beside the plan rather than recovered from
+it.
 
 Do not generalize this to every TOML file or every runtime. Static ownership is
 still preferred when no required native writer shares the artifact. That is why
