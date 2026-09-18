@@ -144,14 +144,24 @@ in {
           if "$python" "$extract" "$bundle" > "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
             "$coreutils"/bin/mv "$tmp" "$cache" 2>/dev/null || skip_reminder "cannot publish reminder cache"
           else
-            "$coreutils"/bin/rm -f "$tmp"
+            # Best effort, and deliberately so: cleanup failing must not turn
+            # this hook into a non-zero exit under errexit.
+            "$coreutils"/bin/rm -f "$tmp" 2>/dev/null || :
             skip_reminder "vendor steering extraction failed"
           fi
         fi
 
-        printf '%s\n' "<workflow_orchestration_reminder>"
-        "$coreutils"/bin/cat "$cache" || skip_reminder "cannot read reminder cache"
-        printf '%s\n' "</workflow_orchestration_reminder>"
+        # Read FIRST, print second. Printing the opening tag before the read
+        # meant a failed read exited 0 having already emitted
+        # `<workflow_orchestration_reminder>` with no body and no closing tag,
+        # injecting a malformed block into the prompt instead of nothing.
+        if ! body="$("$coreutils"/bin/cat "$cache" 2>/dev/null)"; then
+          skip_reminder "cannot read reminder cache"
+        fi
+        printf '%s\n%s\n%s\n' \
+          "<workflow_orchestration_reminder>" \
+          "$body" \
+          "</workflow_orchestration_reminder>"
       '';
     };
 }
