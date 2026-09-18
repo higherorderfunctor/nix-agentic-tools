@@ -106,6 +106,10 @@
           ++ contentErrors "${label} declaration" (builtins.removeAttrs target.units ["mode"])
       );
 
+  # The values that occur more than once, which is the only thing either
+  # uniqueness rule below has to say.
+  repeated = values: lib.unique (builtins.filter (value: builtins.length (builtins.filter (other: other == value) values) > 1) values);
+
   bundleErrors = {
     backend,
     entryNames,
@@ -113,12 +117,23 @@
     targets,
   }: let
     ledgers = map (target: target.ledger or "") targets;
+    # LIVE targets only. A target declaring nothing does not claim its path —
+    # it RELEASES it, which is what makes the overwrite/merge handover one
+    # ordinary reconcile. Two live targets on one path is the opposite: each
+    # publishes over the other's bytes, and the second one to run adopts the
+    # first one's file as an unmanaged hand edit, backing it up once per
+    # generation forever.
+    livePaths = map (target: target.path) (builtins.filter (target: target ? path && (target.units or {}) != {}) targets);
+    sharedLedgers = repeated ledgers;
+    sharedPaths = repeated livePaths;
   in
     lib.optional (!builtins.elem backend (builtins.attrNames backends))
     "unknown backend '${toString backend}' (expected ${lib.concatStringsSep "/" (builtins.attrNames backends)})"
     ++ lib.optional (targets == []) "a bundle must declare at least one target"
-    ++ lib.optional (lib.unique ledgers != ledgers)
-    "two targets share a ledger: ${lib.concatStringsSep ", " (lib.unique (builtins.filter (name: builtins.length (builtins.filter (other: other == name) ledgers) > 1) ledgers))}"
+    ++ lib.optional (sharedLedgers != [])
+    "two targets share a ledger: ${lib.concatStringsSep ", " sharedLedgers}"
+    ++ lib.optional (sharedPaths != [])
+    "two live targets claim the path: ${lib.concatStringsSep ", " sharedPaths}"
     ++ lib.optional (!(entryNames ? write)) "entryNames.write is required"
     ++ lib.optional (backend == "hm" && hasDirectory && !(entryNames ? prune))
     "entryNames.prune is required: a directory target needs the prune entry that runs before checkLinkTargets";
