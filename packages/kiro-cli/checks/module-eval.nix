@@ -328,7 +328,7 @@ in {
             mcpServers = serversCfg;
           };
         };
-        hmScript = (evalHm cfg).config.home.activation.kiroMcpJson.text or "";
+        hmScript = hmMcpWriteScript (evalHm cfg);
         dvScript = dvMcpTaskExec (evalDevenv cfg);
         # Same content -> same store path on both backends. Strip the
         # string context: `lib.hasInfix` compiles the needle into a
@@ -359,7 +359,7 @@ in {
             };
           };
         };
-        script = result.config.home.activation.kiroMcpJson.text or "";
+        script = hmMcpWriteScript result;
       in
         !(result.config.home.file ? ".kiro/settings/mcp.json")
         && lib.hasInfix ''NAT_MAT_TARGET_DIR="$HOME/.kiro/settings"'' script
@@ -398,7 +398,7 @@ in {
             };
           };
         };
-        script = result.config.home.activation.kiroMcpJson.text or "";
+        script = hmMcpWriteScript result;
       in
         hasLiteral ''nat_mat_write mcp.json "$nat_mat_prev" 0444'' script
         && !(lib.hasInfix "envsubst" script)
@@ -418,7 +418,7 @@ in {
             };
           };
         };
-        script = result.config.home.activation.kiroMcpJson.text or "";
+        script = hmMcpWriteScript result;
       in
         lib.hasInfix "--format json" script
         && lib.hasInfix "NAT_SETTINGS_JSON" script
@@ -474,10 +474,10 @@ in {
         && !(lib.hasInfix "kiro-mcp.json" (dvMcpTaskExec dvEmpty))
         && lib.elem "sops-nix" hmFull.config.home.activation.kiroMcpJson.after
         && lib.elem "checkLinkTargets" hmEmpty.config.home.activation."materialize-kiro-settings-prune".before
-        && lib.elem "devenv:enterShell" (task.before or [])
-        && lib.elem "devenv:files:cleanup" (task.after or [])
-        && hmMcpWriteScript (evalHm {ai.kiro.enable = false;}) == ""
-        && dvMcpTaskExec (evalDevenv {ai.kiro.enable = false;}) == "")
+        && lib.elem "devenv:enterShell" task.before
+        && lib.elem "devenv:files:cleanup" task.after
+        && !((evalHm {ai.kiro.enable = false;}).config.home.activation ? kiroMcpJson)
+        && !((evalDevenv {ai.kiro.enable = false;}).config.tasks ? "ai:kiro:materialize-mcp"))
       ["overwrite"]
     );
 
@@ -688,7 +688,7 @@ in {
         result = evalHm {
           ai.kiro.enable = true;
         };
-        packages = result.config.home.packages or [];
+        packages = result.config.home.packages;
       in
         builtins.length packages >= 1
     );
@@ -759,9 +759,9 @@ in {
             v3 = true;
           };
         };
-        packages = result.config.home.packages or [];
+        packages = result.config.home.packages;
       in
-        lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages
+        lib.any (p: p.name == "kiro-cli-wrapped") packages
     );
 
     # The `tui` option is GONE. It injected `--tui` and implied `--v3`; `--tui`
@@ -851,7 +851,7 @@ in {
     # consumer, including those who never asked for a dark-shipped feature.
     module-kiro-rollout-default-is-stock = mkTest "kiro-rollout-default-is-stock" (
       let
-        packages = (evalHm {ai.kiro.enable = true;}).config.home.packages or [];
+        packages = (evalHm {ai.kiro.enable = true;}).config.home.packages;
       in
         lib.any (p: (p.drvPath or null) == pkgs.ai.kiro-cli.drvPath) packages
     );
@@ -899,7 +899,7 @@ in {
         };
         asserts =
           builtins.filter (a: lib.hasInfix "withRolloutFeatures" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         asserts != [] && (builtins.head asserts).assertion == false
     );
@@ -916,7 +916,7 @@ in {
         };
         asserts =
           builtins.filter (a: lib.hasInfix "withRolloutFeatures" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         asserts != [] && (builtins.head asserts).assertion == true
     );
@@ -932,7 +932,7 @@ in {
             useFhsSandbox = false;
           };
         };
-        packages = result.config.home.packages or [];
+        packages = result.config.home.packages;
       in
         builtins.length packages
         == 1
@@ -949,7 +949,7 @@ in {
             useFhsSandbox = false;
           };
         };
-        packages = result.config.packages or [];
+        packages = result.config.packages;
       in
         builtins.length packages
         == 1
@@ -987,14 +987,14 @@ in {
             trustedMcpTools = ["fs_read"];
           };
         };
-        packages = result.config.packages or [];
+        packages = result.config.packages;
         configured = builtins.head packages;
       in
         builtins.length packages
         == 1
         && configured ? fhsenv
         && configured.fhsenv.drvPath != pkgs.ai.kiro-cli.fhsenv.drvPath
-        && (configured.name or "") != "kiro-cli-wrapped"
+        && configured.name != "kiro-cli-wrapped"
     );
 
     # A custom package without a supported unwrapped route must fail by the
@@ -1010,7 +1010,7 @@ in {
         };
         asserts =
           builtins.filter (a: lib.hasInfix "passthru.unwrapped" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         asserts != [] && (builtins.head asserts).assertion == false
     );
@@ -1027,7 +1027,7 @@ in {
         };
         asserts =
           builtins.filter (a: lib.hasInfix "passthru.unwrapped" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         asserts != [] && (builtins.head asserts).assertion == true
     );
@@ -1054,7 +1054,7 @@ in {
         };
         asserts =
           builtins.filter (a: lib.hasInfix "passthru.unwrapped" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         asserts != [] && (builtins.head asserts).assertion == true
     );
@@ -1078,7 +1078,7 @@ in {
         };
         asserts =
           builtins.filter (a: lib.hasInfix "passthru.withFhsPayload" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         asserts != [] && (builtins.head asserts).assertion == false
     );
@@ -1111,7 +1111,7 @@ in {
         };
         asserts =
           builtins.filter (a: lib.hasInfix "passthru.withFhsPayload" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         asserts != [] && (builtins.head asserts).assertion == false
     );
@@ -1130,7 +1130,7 @@ in {
         };
         asserts =
           builtins.filter (a: lib.hasInfix "requires `v3 = true`" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         asserts != [] && (builtins.head asserts).assertion == false
     );
@@ -1148,7 +1148,7 @@ in {
         };
         asserts =
           builtins.filter (a: lib.hasInfix "requires `v3 = true`" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         asserts != [] && (builtins.head asserts).assertion == true
     );
@@ -1182,7 +1182,7 @@ in {
           };
         };
       in
-        (ev.config.ai.kiro.nativeSettings.chat.enableWorkflows or null) == true
+        ev.config.ai.kiro.nativeSettings.chat.enableWorkflows == true
     );
 
     # The implication is a DEFAULT, not a mandate. Without `mkDefault` this would
@@ -1199,7 +1199,7 @@ in {
           };
         };
       in
-        (ev.config.ai.kiro.nativeSettings.chat.enableWorkflows or null) == false
+        ev.config.ai.kiro.nativeSettings.chat.enableWorkflows == false
     );
 
     # Positive control for the two above: without the unlock nothing writes the
@@ -1213,7 +1213,7 @@ in {
           };
         };
       in
-        (ev.config.ai.kiro.nativeSettings.chat.enableWorkflows or null) == null
+        ev.config.ai.kiro.nativeSettings.chat.enableWorkflows == null
     );
 
     # devenv must NOT inherit the implication: it writes the project-local
@@ -1230,7 +1230,7 @@ in {
           };
         };
       in
-        (ev.config.ai.kiro.nativeSettings.chat.enableWorkflows or null)
+        ev.config.ai.kiro.nativeSettings.chat.enableWorkflows
         == null
         && builtins.all (a: a.assertion) ev.config.assertions
     );
@@ -1305,7 +1305,7 @@ in {
         };
         asserts =
           builtins.filter (a: lib.hasInfix "silently discarded at runtime" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         asserts != [] && (builtins.head asserts).assertion == false
     );
@@ -1323,7 +1323,7 @@ in {
         };
         asserts =
           builtins.filter (a: lib.hasInfix "silently discarded at runtime" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         asserts == [] && builtins.all (a: a.assertion) ev.config.assertions
     );
@@ -1523,7 +1523,7 @@ in {
         };
         asserts =
           builtins.filter (a: lib.hasInfix "must end with sentence punctuation" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         asserts != [] && (builtins.head asserts).assertion == false
     );
@@ -1544,7 +1544,7 @@ in {
         in
           builtins.filter
           (a: lib.hasInfix "must end with sentence punctuation" a.message && !a.assertion)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         failing "You are Atlas, a senior systems engineer."
         == []
@@ -1681,9 +1681,9 @@ in {
             v3 = true;
           };
         };
-        packages = result.config.packages or [];
+        packages = result.config.packages;
       in
-        lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages
+        lib.any (p: p.name == "kiro-cli-wrapped") packages
     );
 
     # devenv parity for the removal: the option must be absent on both backends.
@@ -1710,9 +1710,12 @@ in {
           ai.kiro.enable = true;
           ai.gitSshConfigWorkaround = false;
         };
-        packages = result.config.packages or [];
+        packages = result.config.packages;
       in
-        !(lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages)
+        builtins.length packages
+        == 1
+        && (builtins.head packages).drvPath == result.config.ai.kiro.package.drvPath
+        && !(lib.any (p: p.name == "kiro-cli-wrapped") packages)
     );
 
     # HM: mcp.json — mergedServers deliver via a real-file activation write
@@ -1728,7 +1731,7 @@ in {
             command = "hello";
           };
         };
-        script = result.config.home.activation.kiroMcpJson.text or "";
+        script = hmMcpWriteScript result;
       in
         script
         != ""
@@ -1802,7 +1805,7 @@ in {
           };
         };
       in
-        (result.config.home.file.".kiro/settings/permissions.yaml" or null) == null
+        !(result.config.home.file ? ".kiro/settings/permissions.yaml")
     );
 
     # HM: keyed rule steering entries with Kiro transformer frontmatter.
@@ -2005,12 +2008,12 @@ in {
             environmentVariables.KIRO_LOG_LEVEL = "debug";
           };
         };
-        packages = result.config.home.packages or [];
+        packages = result.config.home.packages;
         first = builtins.head packages;
       in
         builtins.length packages
         == 1
-        && (first.name or "") == "kiro-cli-wrapped"
+        && first.name == "kiro-cli-wrapped"
     );
 
     # HM: extraPackages creates a wrapper carrying the store-backed PATH prefix.
@@ -2051,12 +2054,13 @@ in {
         result = evalHm {
           ai.kiro.enable = true;
         };
-        packages = result.config.home.packages or [];
+        packages = result.config.home.packages;
         first = builtins.head packages;
       in
         builtins.length packages
         == 1
-        && (first.name or "") != "kiro-cli-wrapped"
+        && first.drvPath == result.config.ai.kiro.package.drvPath
+        && first.name != "kiro-cli-wrapped"
     );
 
     # HM: agent JSON files written under configDir/agents/.
@@ -2315,7 +2319,7 @@ in {
         # in the caller's cwd).
         && lib.hasInfix ''cd "$DEVENV_ROOT"'' dvT
         # NOT a devenv `files.*` symlink
-        && !((dv.config.files or {}) ? ".kiro/hooks/lint.json")
+        && !(dv.config.files ? ".kiro/hooks/lint.json")
         # the enterTest backstop asserts it landed as a real file
         && lib.hasInfix ".kiro/hooks/lint.json" (dv.config.enterTest or "")
     );
@@ -2415,7 +2419,7 @@ in {
         };
         nameAsserts =
           builtins.filter (a: lib.hasInfix "hook names must match" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         nameAsserts != [] && (builtins.head nameAsserts).assertion == false
     );
@@ -2434,7 +2438,7 @@ in {
         };
         nameAsserts =
           builtins.filter (a: lib.hasInfix "hook names must match" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         nameAsserts != [] && (builtins.head nameAsserts).assertion == true
     );
@@ -2477,7 +2481,7 @@ in {
         prune = hmHookPruneScript hm;
         write = hmHookWriteScript hm;
         dv = evalDevenv {ai.kiro.enable = true;};
-        task = (dv.config.tasks or {})."ai:kiro:materialize-hooks" or null;
+        task = dv.config.tasks."ai:kiro:materialize-hooks" or null;
       in
         # no hooks declared at all…
         hm.config.ai.kiro.hooks
@@ -2858,10 +2862,10 @@ in {
         # in the caller's cwd — direnv activates in subdirectories).
         && lib.hasInfix ''cd "$DEVENV_ROOT"'' task
         # not a devenv `files.*` symlink
-        && !((result.config.files or {}) ? ".kiro/hooks/pre-commit.json")
+        && !(result.config.files ? ".kiro/hooks/pre-commit.json")
         # the write is ordered before shell entry, and after devenv's own
         # files cleanup (same edge contract as the steering task)
-        && ((result.config.tasks or {})."ai:kiro:materialize-hooks".after or [])
+        && result.config.tasks."ai:kiro:materialize-hooks".after
         == ["devenv:files:cleanup"]
     );
 
@@ -2901,7 +2905,7 @@ in {
         && !(lib.hasInfix "nested" hmWrite)
         && !(lib.hasInfix "ignore-me.txt" hmWrite)
         # real files, not devenv `files.*` symlinks
-        && !(lib.any (n: lib.hasPrefix ".kiro/hooks/" n) (lib.attrNames (result.config.files or {})))
+        && !(lib.any (n: lib.hasPrefix ".kiro/hooks/" n) (lib.attrNames result.config.files))
         # the enterTest backstop covers the dir surface too
         && lib.hasInfix ".kiro/hooks/sample.json" (result.config.enterTest or "")
     );
@@ -2946,7 +2950,7 @@ in {
         };
         nameAsserts =
           builtins.filter (a: lib.hasInfix "copy-strategy hook file names must match" a.message)
-          (ev.config.assertions or []);
+          ev.config.assertions;
       in
         nameAsserts != [] && (builtins.head nameAsserts).assertion == false
     );
@@ -2982,7 +2986,7 @@ in {
         hm = evalHm {ai.kiro.enable = false;};
         retirement = hmRetirementScript hm;
         dv = evalDevenv {ai.kiro.enable = false;};
-        task = (dv.config.tasks or {})."ai:kiro:retire-steering-copies" or null;
+        task = dv.config.tasks."ai:kiro:retire-steering-copies" or null;
       in
         hm.config.ai.kiro.files
         == {}
@@ -3072,18 +3076,18 @@ in {
     module-kiro-steering-retire-task-edges = mkTest "kiro-steering-retire-task-edges" (
       let
         bare = evalDevenv {ai.kiro.enable = true;};
-        bareTask = (bare.config.tasks or {})."ai:kiro:retire-steering-copies" or {};
+        bareTask = bare.config.tasks."ai:kiro:retire-steering-copies" or {};
         withFiles = evalDevenv {
           ai.kiro.enable = true;
           files."probe.txt".text = "probe";
         };
-        filesTask = (withFiles.config.tasks or {})."ai:kiro:retire-steering-copies" or {};
+        filesTask = withFiles.config.tasks."ai:kiro:retire-steering-copies" or {};
       in
-        (bareTask.after or [])
+        bareTask.after
         == ["devenv:files:cleanup"]
-        && lib.elem "devenv:enterShell" (bareTask.before or [])
-        && !(lib.elem "devenv:files" (bareTask.before or []))
-        && lib.elem "devenv:files" (filesTask.before or [])
+        && lib.elem "devenv:enterShell" bareTask.before
+        && !(lib.elem "devenv:files" bareTask.before)
+        && lib.elem "devenv:files" filesTask.before
     );
 
     # Consumer definitions replace generated defaults as whole entries; null is

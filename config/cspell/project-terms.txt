@@ -209,6 +209,7 @@ kanagawa
 kasdirs
 kasid
 keyspace
+killpg
 kiro
 kirocli
 kirodotdev
@@ -254,6 +255,7 @@ metacharacter
 misattributes
 miscited
 misordered
+mkfifo
 mlen
 modelcontextprotocol
 modfmt
