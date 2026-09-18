@@ -1900,15 +1900,18 @@ in
             # `unlockedRolloutFeatures = ["workflows"]` implies a setting via
             # workflowsSettingImplication; that leaf is owned and retracted by
             # the same manifest without claiming other externally managed keys.
-            {
-              home.activation.kiroSettingsMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
-                configFile = "${cfg.configDir}/settings/cli.json";
-                python = pkgs.python3;
-                reconciler = ../../../lib/ai/reconcile-toml.py;
-                settingsJson = builtins.toJSON flatSettings;
-                stateName = "kiro-settings-${builtins.hashString "sha256" cfg.configDir}";
-              });
-            }
+            (helpers.mkOwnedDocument {
+              entry = "kiroSettingsMerge";
+              ledger = "json-settings/kiro-settings-${builtins.hashString "sha256" cfg.configDir}.json";
+              path = "${cfg.configDir}/settings/cli.json";
+              python = pkgs.python3;
+              runtime = "kiro";
+              # Already flattened: Kiro reads dotted keys, and the flattener's
+              # boundary stops AT a known key, so an object-valued setting
+              # stays nested under its dotted parent.
+              value = flatSettings;
+              inherit pkgs;
+            })
           ]
           ++ steeringEmitters);
     };
