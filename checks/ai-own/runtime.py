@@ -568,10 +568,27 @@ def renderer(fixture):
         )
     ] == before, "an unusable interpreter moved bytes"
 
+    # The prune phase resolves NO content, which is why a renderer that cannot
+    # succeed does not stop a retraction: a prune needs the declared ADDRESSES,
+    # never their bytes. It is also a secret-lifetime rule -- the HM prune entry
+    # runs BEFORE checkLinkTargets, earlier than any secret provider's own
+    # activation entry, so resolving there would abort the first switch of a
+    # writer whose content comes from a credential that does not exist yet.
+    both = json.loads(json.dumps(good))
+    both["targets"][0]["units"]["other.txt"] = {"mode": "0444", "text": "other\n"}
+    fixture.own(both)
+    other = fixture.root / "settings/other.txt"
+    assert other.is_file()
+    pruning = json.loads(json.dumps(good))
+    pruning["targets"][0]["units"]["unit.txt"]["run"] = "printf 'partial'; exit 3"
+    fixture.own(pruning, "--phase", "prune")
+    assert not other.exists(), "the prune phase did not retract a stale unit"
+    assert unit.read_text() == "rendered\n", "the prune phase rewrote a live unit"
+
     assert not list((fixture.root / "settings").glob(".*.nat-tmp.*"))
     print(
         "PASS renderer: three failure shapes and an unusable interpreter, "
-        "every byte and both ledgers identical"
+        "every byte and both ledgers identical; the prune phase resolved none"
     )
 
 
@@ -602,20 +619,21 @@ def legacy(fixture):
     assert not fixture.backups(), "a witness from the TSV manifest was misread as an edit"
     print("PASS legacy: TSV manifest from materialize.nix read, pruned, unlinked")
 
+    # reconcile-toml.py is deleted, so the ledger it wrote is FROZEN as bytes,
+    # captured from the program itself for the declaration below. Reading those
+    # bytes is half the rollback contract; writing them back byte-identically
+    # is the other half, because Home Manager ROLLBACK runs an OLDER
+    # generation's program against a ledger this one wrote.
     document = fixture.root / "config.json"
     v1 = fixture.ledger("json-settings/own-legacy.json")
     declared = {"owned": {"leaf": 1}, "other": 2}
-    reconciled = subprocess.run(
-        [TOOLS["python"], TOOLS["legacyDoc"], "--format", "json",
-         "--config", str(document), "--manifest", str(v1)],
-        input=json.dumps(declared), env=fixture.environment,
-        capture_output=True, text=True, timeout=60,
-    )
-    assert reconciled.returncode == 0, reconciled.stderr
-    assert json.loads(v1.read_text())["version"] == 1
-    native = json.loads(document.read_text())
-    native["native"] = {"kept": True}
-    document.write_text(json.dumps(native, indent=2) + "\n")
+    frozen = Path(TOOLS["legacyDocLedger"]).read_bytes()
+    v1.parent.mkdir(parents=True, exist_ok=True)
+    v1.write_bytes(frozen)
+    document.write_text(json.dumps(dict(declared, native={"kept": True}), indent=2) + "\n")
+
+    # own.py READS it: both recorded leaves are retracted and the native
+    # sibling the ledger never claimed survives.
     fixture.own(
         {
             "targets": [
@@ -625,7 +643,21 @@ def legacy(fixture):
     )
     assert json.loads(document.read_text()) == {"native": {"kept": True}}, document.read_text()
     assert not v1.exists()
-    print("PASS legacy: v1 JSON manifest from reconcile-toml.py read, pruned, unlinked")
+
+    # own.py WRITES it: the same ownership set, byte for byte.
+    fixture.own(
+        {
+            "targets": [
+                doc_target(
+                    {"text": json.dumps(declared)},
+                    path="config.json",
+                    ledger="json-settings/own-legacy.json",
+                )
+            ]
+        }
+    )
+    assert v1.read_bytes() == frozen, v1.read_text()
+    print("PASS legacy: frozen v1 JSON manifest read, pruned, and rewritten byte-identically")
 
 
 def lock(fixture):
