@@ -33,6 +33,20 @@ def exercise(case, bash, mode, use_xdg):
     environment.pop("XDG_STATE_HOME", None)
     if use_xdg:
         environment["XDG_STATE_HOME"] = str(state)
+    # A case whose writer STATES the mode its file must carry (kiro's merge
+    # mcp.json, the one document a sibling target also writes) asserts
+    # imposition instead of preservation: the stated mode on a new file, on a
+    # rewrite, and on an activation that moves no bytes. Every other case
+    # states none and keeps preserving whatever the file already had.
+    imposed = int(case["mode"], 8) if "mode" in case else None
+
+    def settled(fallback):
+        """The mode the file must carry after a successful activation."""
+        return fallback if imposed is None else imposed
+
+    def frozen(before):
+        """`before`, allowing for the mode a stated-mode writer re-imposes."""
+        return before if imposed is None else (before[0], imposed, before[2])
 
     def activate(generation, succeeds=True):
         # A later activation entry must run, with parent-shell flags unchanged.
@@ -68,14 +82,15 @@ def exercise(case, bash, mode, use_xdg):
     config.unlink()
 
     # New files are private, regardless of umask. Existing files retain their
-    # permissions through both changed-content and unchanged-content writes.
+    # permissions through both changed-content and unchanged-content writes,
+    # unless the writer states a mode -- `settled` and `frozen` above.
     activate(0)
-    assert stat.S_IMODE(config.stat().st_mode) == 0o600
+    assert stat.S_IMODE(config.stat().st_mode) == settled(0o600)
     assert json.loads(config.read_text()) == case["first"]
     config.chmod(mode)
     before = snapshot(config)
     activate(0)
-    assert snapshot(config) == before
+    assert snapshot(config) == frozen(before)
     manifests = list((state / "nix-agentic-tools/json-settings").glob("*.json"))
     assert len(manifests) == 1
     manifest = manifests[0]
@@ -91,7 +106,7 @@ def exercise(case, bash, mode, use_xdg):
     native_file.replace(config)
     activate(1)
     assert json.loads(config.read_text()) == merge(case["second"], case["native"])
-    assert stat.S_IMODE(config.stat().st_mode) == mode
+    assert stat.S_IMODE(config.stat().st_mode) == settled(mode)
 
     os.utime(config, ns=(1000000000, 1000000000))
     os.utime(manifest, ns=(1000000000, 1000000000))
@@ -121,7 +136,7 @@ def exercise(case, bash, mode, use_xdg):
 
     activate(2)
     assert json.loads(config.read_text()) == case["native"]
-    assert stat.S_IMODE(config.stat().st_mode) == mode
+    assert stat.S_IMODE(config.stat().st_mode) == settled(mode)
     assert not manifest.exists()
     before = snapshot(config)
     activate(2)
