@@ -683,6 +683,45 @@
         "help": "Stop the local app server daemon",
         "path": ["codex", "app-server", "daemon", "stop"]
       },
+      "codex app-server daemon update": {
+        "aliases": [],
+        "flags": [
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Print help (see a summary with '-h')",
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ],
+        "help": "Update the standalone installation and restart the managed daemon (may interrupt work)",
+        "path": ["codex", "app-server", "daemon", "update"]
+      },
       "codex app-server daemon version": {
         "aliases": [],
         "flags": [
@@ -5457,6 +5496,11 @@
   "features": [
     {
       "default": false,
+      "maturity": "under development",
+      "name": "api_key_model_discovery"
+    },
+    {
+      "default": false,
       "maturity": "removed",
       "name": "apply_patch_freeform"
     },
@@ -5549,6 +5593,11 @@
       "default": false,
       "maturity": "under development",
       "name": "code_mode_prewarm"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "codex_apps_mcp_2026_07_28"
     },
     {
       "default": false,
@@ -5862,7 +5911,7 @@
     },
     {
       "default": false,
-      "maturity": "removed",
+      "maturity": "experimental",
       "name": "realtime_conversation"
     },
     {
@@ -5876,8 +5925,8 @@
       "name": "recommended_plugins"
     },
     {
-      "default": true,
-      "maturity": "stable",
+      "default": false,
+      "maturity": "removed",
       "name": "remote_compaction_v2"
     },
     {
@@ -6165,21 +6214,9 @@
     },
     {
       "defaultReasoningLevel": "medium",
-      "displayName": "GPT-5.2",
-      "reasoningLevels": ["high", "low", "medium", "xhigh"],
-      "slug": "gpt-5.2"
-    },
-    {
-      "defaultReasoningLevel": "medium",
       "displayName": "GPT-5.4",
       "reasoningLevels": ["high", "low", "medium", "xhigh"],
       "slug": "gpt-5.4"
-    },
-    {
-      "defaultReasoningLevel": "medium",
-      "displayName": "GPT-5.4-Mini",
-      "reasoningLevels": ["high", "low", "medium", "xhigh"],
-      "slug": "gpt-5.4-mini"
     },
     {
       "defaultReasoningLevel": "medium",
@@ -6225,7 +6262,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.154.0",
+    "codexVersion": "0.155.0",
     "extractorSchema": 1
   }
 }
