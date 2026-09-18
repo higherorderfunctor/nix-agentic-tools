@@ -834,6 +834,7 @@ in {
         # itself, never follow it and attempt to mutate its target.
         ${pkgs.coreutils}/bin/cat > static-config.toml <<'EOF'
         # native comment survives
+        retired_before_json_backend = true
         model = "runtime-model"
 
         [features]
@@ -844,6 +845,13 @@ in {
         EOF
         ${pkgs.coreutils}/bin/chmod 444 static-config.toml
         ${pkgs.coreutils}/bin/ln -s "$PWD/static-config.toml" "$HOME/.codex/config.toml"
+
+        # A ledger from the TOML-only helper must still be read at exactly its
+        # historical path after JSON support is added to the shared helper.
+        legacy_manifest="$XDG_STATE_HOME/nix-agentic-tools/toml-settings/codex-config-${builtins.hashString "sha256" ".codex/config.toml"}.json"
+        mkdir -p "$(dirname "$legacy_manifest")"
+        printf '%s\n' '{"managed_paths":[["retired_before_json_backend"]],"version":1}' > "$legacy_manifest"
+        chmod 600 "$legacy_manifest"
 
         ${activationV1}
 
@@ -860,6 +868,7 @@ in {
 
         assert config["future_array"] == [{"enabled": True, "name": "one"}]
         assert config["shape"] == "scalar-v1"
+        assert "retired_before_json_backend" not in config
         PY
 
         # Simulate native writers after activation. These siblings share tables
@@ -872,6 +881,7 @@ in {
 
         ${activationV2}
 
+        test "$(${pkgs.coreutils}/bin/stat -c %a "$HOME/.codex/config.toml")" = 600
         ${pkgs.python3}/bin/python - "$HOME/.codex/config.toml" <<'PY'
         import sys
         import tomllib
@@ -889,7 +899,7 @@ in {
         PY
 
         manifest="$(${pkgs.findutils}/bin/find "$XDG_STATE_HOME" -name '*.json' -type f -print)"
-        test -n "$manifest"
+        test "$manifest" = "$legacy_manifest"
         test "$(${pkgs.coreutils}/bin/stat -c %a "$manifest")" = 600
         test "$(${pkgs.coreutils}/bin/stat -c %a "$(${pkgs.coreutils}/bin/dirname "$manifest")")" = 700
 
