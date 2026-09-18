@@ -321,10 +321,17 @@ def drain(fixture):
     """N -> 0 on both codecs."""
     managed = fixture.root / "settings"
     ledger = fixture.ledger("materialize/settings.manifest")
-    units = {name: {"mode": "0444", "text": f"{name}\n"} for name in ("a.txt", "b.txt")}
+    # DECLARED in reverse, so the ledger below pins `sorted(written)` rather
+    # than agreeing with the order it was handed. A TSV whose lines moved is a
+    # different ledger: write_if_changed skips an identical one, and a rollback
+    # to an older generation compares the bytes this one left.
+    units = {name: {"mode": "0444", "text": f"{name}\n"} for name in ("b.txt", "a.txt")}
     fixture.own({"targets": [dir_target(units)]})
     assert sorted(path.name for path in managed.iterdir()) == ["a.txt", "b.txt"]
-    assert len(ledger.read_text().splitlines()) == 2
+    assert ledger.read_text() == "".join(
+        f"{name}\t{hashlib.sha256(units[name]['text'].encode()).hexdigest()}\n"
+        for name in ("a.txt", "b.txt")
+    ), ledger.read_text()
     fixture.own({"targets": [dir_target({})]})
     assert list(managed.iterdir()) == [], "drained directory still holds files"
     assert not ledger.exists(), "drained directory kept its ledger"
