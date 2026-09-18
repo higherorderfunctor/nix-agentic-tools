@@ -100,12 +100,12 @@
   # Retraction MECHANISM, one string per mechanism rather than per writer.
   # There is exactly one: every ownLeaves writer runs the same program, so the
   # jq recursive merge that could not remove a dropped key has no rows left.
-  ownRetraction = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings.";
+  ownRetraction = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
   # The same program with the other container, for a target whose units are
   # whole files. The ledger records one sha256 per file it wrote, so a file the
   # declaration dropped is removed, a file edited since it was written is
   # backed up first, and a path this generation never wrote is never touched.
-  ownFiles = at: "On ${at}, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone.";
+  ownFiles = at: "On ${at}, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
   # HM reconciles on activation, devenv on shell entry. Both retraction
   # mechanisms name the moment, and nothing else in a row varies with it.
   retractionMoment = mode:
