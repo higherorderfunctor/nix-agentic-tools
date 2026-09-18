@@ -77,6 +77,7 @@
   # the mode, the render command and the ledger of either.
   mcpDirOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/settings" (ownPlan "kiro" entry ev);
   mcpDocOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/settings/mcp.json" (ownPlan "kiro" entry ev);
+  steeringTargetOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/steering" (ownPlan "kiro" entry ev);
   hmMcpDirTarget = mcpDirOf "kiroMcpJson";
   hmMcpDocTarget = mcpDocOf "kiroMcpJson";
   dvMcpDirTarget = mcpDirOf "ai:kiro:materialize-mcp";
@@ -102,6 +103,12 @@
   hmMcpPruneScript = requireBody ["home" "activation" "materialize-kiro-settings-prune" "text"];
   hmMcpWriteScript = requireBody ["home" "activation" "kiroMcpJson" "text"];
   hmRetirementScript = requireBody ["home" "activation" "retire-materialize-kiro-steering" "text"];
+  # The retirement's WRITE phase. New name, and the only new entry name in this
+  # rework: an HM bundle holding a dir target requires the prune entry (the
+  # real file must be gone before checkLinkTargets), so the existing name keeps
+  # its prune position and the phase that unlinks the drained ledger needs one
+  # of its own.
+  hmRetirementLedgerScript = requireBody ["home" "activation" "retire-materialize-kiro-steering-ledger" "text"];
   # Extract the heredoc body a copy writer embeds for <name> — the
   # #433 heredoc-extraction idiom (see module-kiro-hooks-typed-
   # colocation). The per-script EOF marker is content-hash-derived, so
@@ -121,5 +128,5 @@
     in
       builtins.head (lib.splitString "\n${marker}\n" body);
 in {
-  inherit dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame;
+  inherit dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
 }

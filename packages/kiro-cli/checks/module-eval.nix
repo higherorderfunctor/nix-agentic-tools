@@ -9,7 +9,7 @@
   inherit (harness) evalDevenv evalHm hasLiteral mkTest mkWrapperGrepTest ownedDocument;
   cliDocument = evaluated:
     ownedDocument "kiro" "${evaluated.config.ai.kiro.configDir}/settings/cli.json" evaluated;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
 in {
   checks = {
     module-kiro-wrapper-prepend-both = mkTest "kiro-wrapper-prepend-both" (
@@ -3055,28 +3055,41 @@ in {
     );
 
     # One-shot legacy retirement sits outside the runtime enable gate so an
-    # upgrade+disable generation still drains old ownership manifests. It is a
-    # manifest-absent no-op and writes no steering content.
+    # upgrade+disable generation still drains old ownership ledgers. A
+    # retirement is not a mechanism: it is a target that declares NOTHING, so
+    # "writes no steering content" is asserted as an empty unit set rather than
+    # as the absence of a manifest-rewrite variable in generated shell. A
+    # ledger-absent run is a strict no-op, which `ai-own-runtime`'s virgin case
+    # proves and the runtime check below exercises end to end.
     module-kiro-steering-legacy-copies-still-prune = mkTest "kiro-steering-legacy-copies-still-prune" (
       let
         hm = evalHm {ai.kiro.enable = false;};
-        retirement = hmRetirementScript hm;
         dv = evalDevenv {ai.kiro.enable = false;};
-        task = dv.config.tasks."ai:kiro:retire-steering-copies" or null;
+        target = steeringTargetOf "retire-materialize-kiro-steering-ledger" hm;
       in
         hm.config.ai.kiro.files
         == {}
-        && lib.hasInfix "NAT_MAT_RETIRE_MANIFEST" retirement
-        && lib.hasInfix "rm -f -- \"$NAT_MAT_MANIFEST\"" retirement
-        && !(lib.hasInfix "NAT_MAT_NEW_MANIFEST" retirement)
-        && task != null
-        && lib.hasInfix "NAT_MAT_RETIRE_MANIFEST" (task.exec or "")
-        && lib.hasInfix "$NAT_MAT_MANIFEST" (task.exec or "")
+        && target.units == {}
+        && target.path == ".kiro/steering"
+        && target.ledger == "materialize/kiro-steering.manifest"
+        # Home Manager needs BOTH phases: the file has to be gone before
+        # checkLinkTargets, and the ledger is unlinked afterwards.
+        && lib.hasInfix "--phase prune" (hmRetirementScript hm)
+        && lib.hasInfix "--phase all" (hmRetirementLedgerScript hm)
+        && ownPlanArg (hmRetirementScript hm) == ownPlanArg (hmRetirementLedgerScript hm)
+        && lib.hasInfix "--phase all" (dvTaskExec dv)
+        && (steeringTargetOf "ai:kiro:retire-steering-copies" dv).units == {}
     );
 
     module-kiro-steering-legacy-retirement-runtime = let
+      # HM delivers as a PAIR: the prune phase deletes the recorded copies
+      # before checkLinkTargets, the write phase unlinks the drained ledger.
+      # Replay them in that order, exactly as activation would.
       hmScript = pkgs.writeShellScript "kiro-steering-hm-retirement" (
-        hmRetirementScript (evalHm {ai.kiro.enable = false;})
+        let
+          ev = evalHm {ai.kiro.enable = false;};
+        in
+          hmRetirementScript ev + "\n" + hmRetirementLedgerScript ev
       );
       devenvScript = pkgs.writeShellScript "kiro-steering-devenv-retirement" (
         dvTaskExec (evalDevenv {ai.kiro.enable = false;})
@@ -3143,8 +3156,10 @@ in {
         && dv.config.files.".kiro/steering/enter-test.md".text
         == dv.config.ai.kiro.files.".kiro/steering/enter-test.md".text
         && lib.hasInfix "CONTEXT-TOKEN." dv.config.files."AGENTS.md".text
-        && !(lib.hasInfix "enter-test.md" (hmRetirementScript hm))
-        && !(lib.hasInfix "enter-test.md" (dvTaskExec dv))
+        # The retirement declares NO units on either backend, so it cannot
+        # write a steering file whatever the current declaration says.
+        && (steeringTargetOf "retire-materialize-kiro-steering-ledger" hm).units == {}
+        && (steeringTargetOf "ai:kiro:retire-steering-copies" dv).units == {}
     );
 
     # Legacy cleanup stays ordered before native file creation only when that
