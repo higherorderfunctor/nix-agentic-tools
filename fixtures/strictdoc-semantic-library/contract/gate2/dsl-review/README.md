@@ -178,8 +178,9 @@ Nix `true` or `false`.
 | Z0 is outside the H forest and I0 is isolated. | Give Z0 Parent R targeting I0.    | Accept the relation.                     | BAZ's own R has no FOO target or visibility restriction. |
 
 Reusing a role name does not copy another element's rules. BAZ still has to
-satisfy endpoint resolution and the model's other rules. An unresolved target is
-a prerequisite problem, not a finding that a resolved record has the wrong kind.
+satisfy endpoint resolution and the model's other rules. An unresolved target
+produces a top-level input error and blocks every rule that needs that
+resolution.
 
 | Constructor  | Signature                              | Arguments                                                                                              | Checks over                   | Real today                                                                                                          |
 | ------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -188,7 +189,7 @@ a prerequisite problem, not a finding that a resolved record has the wrong kind.
 | `isNodeType` | `isNodeType NODE ELEMENT`              | Node from `edge.target`; element reference from `el`.                                                  | each relation occurrence here | Emits the type question; inspecting a record remains specified behavior.                                            |
 | `all`        | `all PREDICATES`                       | List of predicates for the same selector.                                                              | selected subjects             | Emits all; every child must hold.                                                                                   |
 | `any`        | `any PREDICATES`                       | List of predicates for the same selector.                                                              | selected subjects             | Emits any; at least one child must hold.                                                                            |
-| `not`        | `not PREDICATE`                        | One predicate for the same selector.                                                                   | selected subjects             | Emits not; reverses satisfied and violated, preserving blocked and error.                                           |
+| `not`        | `not PREDICATE`                        | One predicate for the same selector.                                                                   | selected subjects             | Emits not; reverses satisfied and violated, preserving blocked.                                                     |
 
 ## 4. Rules that live on the element
 

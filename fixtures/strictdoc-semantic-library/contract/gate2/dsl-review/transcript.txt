@@ -1,6 +1,8 @@
 Lowering evidence only; candidate and result JSON are handwritten samples.
-Commands ran in a temporary copy under out9; displayed paths are relative.
-The temporary dsl.nix used the supplied native grammar file; the delivered relative import is unchanged.
+Commands ran in a temporary copy under a temporary evaluation directory; displayed command paths are relative to it.
+Only the temporary dsl.nix grammar import was pointed at the supplied strictdoc-semantic-gate1 grammar path.
+The delivered dsl.nix keeps its original relative import. Temporary probes are removed after verification.
+Temporary import used: native = import the repository copy of packages/strictdoc-grammar/lib/dsl.nix {lib = {inherit mapAttrs;};};
 
 Temporary keyword-invalid.nix:
 let
@@ -14,6 +16,13 @@ let
   };
 in d.normalize (d.model "reference" {elements = [foo]; views = [h sight];})
 
+Temporary prerequisite probes derive from examples.nix:
+missing-count.nix removes only:
+      (check "one-P" (record (bridge: exactly 1 (bridge.parents "P"))))
+duplicate-count.nix adds a second identical count under the distinct name "another-P".
+wrapped-count.nix wraps the one-P check in all [...], which is not a standalone count leaf.
+wrong-count.nix replaces exactly 1 with atMost 1 for one-P.
+
 $ nix-instantiate --eval --strict --json -A sameNormalized composition.nix
 true
 exit = 0
@@ -22,14 +31,22 @@ $ nix-instantiate --eval --strict --json -A deduplicated composition.nix
 true
 exit = 0
 
+$ nix-instantiate --eval --strict --json --expr 'let x = import ./composition.nix; in !(builtins.tryEval x.conflict).success'
+true
+exit = 0
+
+$ nix-instantiate --eval --strict --json -A sugarEqualsLowest counting.nix
+true
+exit = 0
+
 $ nix-instantiate --eval --strict --json -A conflict composition.nix
 error:
        … while calling the 'deepSeq' builtin
-         at dsl.nix:535:10:
-          534|     then throw "duplicate declaration identity"
-          535|     else builtins.deepSeq (validateKeywords output) output;
+         at dsl.nix:584:10:
+          583|     then throw "duplicate declaration identity"
+          584|     else builtins.deepSeq (validateKeywords output) output;
              |          ^
-          536| in {
+          585| in {
 
        … while evaluating the attribute 'bundle'
 
@@ -40,18 +57,14 @@ error:
        error: conflicting definitions for check "target-type" at model:composition/element:FOO/relation:parent:R/check:target-type
 exit = 1
 
-$ nix-instantiate --eval --strict --json -A sugarEqualsLowest counting.nix
-true
-exit = 0
-
 $ nix-instantiate --eval --strict --json keyword-invalid.nix
 error:
        … while calling the 'deepSeq' builtin
-         at dsl.nix:535:10:
-          534|     then throw "duplicate declaration identity"
-          535|     else builtins.deepSeq (validateKeywords output) output;
+         at dsl.nix:584:10:
+          583|     then throw "duplicate declaration identity"
+          584|     else builtins.deepSeq (validateKeywords output) output;
              |          ^
-          536| in {
+          585| in {
 
        … while evaluating the attribute 'bundle'
 
@@ -62,26 +75,98 @@ error:
        error: invalid keyword ascent: "sideways"
 exit = 1
 
+$ nix-instantiate --eval --strict --json missing-count.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:584:10:
+          583|     then throw "duplicate declaration identity"
+          584|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          585| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: requires: model:reference/element:BAR/check:endpoint-path endpoint parent P count: expected one prerequisite, found 0
+exit = 1
+
+$ nix-instantiate --eval --strict --json duplicate-count.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:584:10:
+          583|     then throw "duplicate declaration identity"
+          584|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          585| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: requires: model:reference/element:BAR/check:endpoint-path endpoint parent P count: expected one prerequisite, found 2
+exit = 1
+
+$ nix-instantiate --eval --strict --json wrapped-count.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:584:10:
+          583|     then throw "duplicate declaration identity"
+          584|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          585| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: requires: model:reference/element:BAR/check:endpoint-path endpoint parent P count: expected one prerequisite, found 0
+exit = 1
+
+$ nix-instantiate --eval --strict --json wrong-count.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:584:10:
+          583|     then throw "duplicate declaration identity"
+          584|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          585| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: requires: model:reference/element:BAR/check:endpoint-path endpoint parent P count: expected one prerequisite, found 0
+exit = 1
+
 $ nix-instantiate --eval --strict --json --expr 'let x = import ./examples.nix; in (builtins.head (builtins.filter (r: r.name == "R.all") x.bundle.rules)).check'
 {"all":[{"kind":"target-type","targetElement":"model:reference/element:FOO"},{"from":"owner","kind":"visible-target","to":"target","view":"model:reference/view:H-visibility"}]}
 exit = 0
 
 $ nix-instantiate --eval --strict --json examples.nix > normalized.json
 exit = 0
-bundle.json: matches fresh normalized.json evaluation; 11 rules.
+bundle.json: equals fresh normalized.json evaluation; 11 rules.
 
-Additional lowering checks passed: all/any/not inside and outside relation and record callbacks; model checks; where on all three selectors; nested input and prerequisite collection; deduplicated count prerequisites; malformed and unsupported predicates rejected; nested keyword validation; non-guaranteeing prerequisite rejected.
+Four proofs returned true: sameNormalized, deduplicated, conflict rejection via tryEval, sugarEqualsLowest.
+Expected conflict, keyword, missing prerequisite, duplicate prerequisite, wrapped count, and wrong comparison throws all matched.
 
 Artifact verification:
-composition.nix: byte-identical to inputs/current9.
-counting.nix: byte-identical to inputs/current9.
-candidate.json: byte-identical to inputs/current9.
-baseline.json: byte-identical to inputs/current9.
-examples.nix: only all import, combined inline R predicate, and removal of visible-R changed.
-README.md: Appendix A equals examples.nix byte for byte; 30 other existing code blocks byte-identical; only the combined R teaching block and Appendix A changed; one selector mapping block added.
-dsl.nix: original relative grammar import unchanged.
-bundle.json: matches fresh evaluation; exactly 11 rules; unaffected rules preserve identity, fields, and dependencies; grammar, semanticTypes, and declaration/configuration lists unchanged; every check uses only named leaves and all/any/not.
-results.json: one entry per rule; each leaf finding identifies its predicatePath; combined R findings stay empty for the unchanged base candidate with no R occurrences.
-contract.md: 480 lines; all 17 JSON blocks parse; all retained sections present.
-No case or decision identifiers; transcript paths are relative.
-Longest prose run between code blocks in a touched README chapter: 266 whitespace-delimited words in chapter 9, excluding table rows. Including tables, the longest non-code run is Appendix C (1199 words).
+Unchanged byte copies: examples.nix, composition.nix, counting.nix, bundle.json, candidate.json, baseline.json.
+dsl.nix: only endpoint count prerequisite matching and its throw label changed; relative grammar import unchanged.
+README.md: only two now-false statements changed; all 33 fenced code blocks byte-identical.
+contract.md: 543 lines; all 20 JSON blocks parse; seven displayed rules are complete bundle members.
+Native grammar restatements agree; all metadata digest texts reproduce their supplied hashes; the contract includes the exact compact FOO hash input.
+invocation.json: external baseline ID binding matches the documented command and timeout schema.
+results.json: 11 entries in bundle order; 18 satisfied findings in candidate/occurrence/predicatePath order; every code belongs to the closed set.
+Every evaluated sample leaf subject has its finding; native-dag, H-forest, and preserve each have exactly one model finding with empty witness lists.
+Sample evidence checked against the candidate and baseline, including occurrence indices, counts, target types, acyclicity, forest cardinality, and unchanged protected record.
+Closed code set: closed-boundary, configuration, count, cycle, difference, endpoint-path, execution, expression, forest-validity, input, native-dag, no-shared-root, prerequisite, preserve, singleton, target-type, unresolved-target, visible-target.
+No negative JSON fixtures were generated.

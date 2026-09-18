@@ -24,7 +24,8 @@
             "expectedElement": "FOO",
             "actualElement": "FOO"
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "target-type"
         },
         {
           "uid": "F1a",
@@ -41,7 +42,8 @@
             "expectedElement": "FOO",
             "actualElement": "FOO"
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "target-type"
         },
         {
           "uid": "F2",
@@ -58,7 +60,8 @@
             "expectedElement": "FOO",
             "actualElement": "FOO"
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "target-type"
         },
         {
           "uid": "F2a",
@@ -75,7 +78,8 @@
             "expectedElement": "FOO",
             "actualElement": "FOO"
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "target-type"
         },
         {
           "uid": "F2b",
@@ -92,7 +96,8 @@
             "expectedElement": "FOO",
             "actualElement": "FOO"
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "target-type"
         },
         {
           "uid": "G1",
@@ -109,7 +114,8 @@
             "expectedElement": "FOO",
             "actualElement": "FOO"
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "target-type"
         }
       ],
       "causes": []
@@ -137,7 +143,8 @@
             "compare": "lte",
             "value": 1
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "count"
         },
         {
           "uid": "F1",
@@ -149,17 +156,18 @@
           "evidence": {
             "occurrences": [
               {
-                "index": 0,
                 "role": "H",
                 "direction": "parent",
-                "target": "F0"
+                "target": "F0",
+                "occurrenceIndex": 0
               }
             ],
             "count": 1,
             "compare": "lte",
             "value": 1
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "count"
         },
         {
           "uid": "F1a",
@@ -171,17 +179,18 @@
           "evidence": {
             "occurrences": [
               {
-                "index": 0,
                 "role": "H",
                 "direction": "parent",
-                "target": "F1"
+                "target": "F1",
+                "occurrenceIndex": 0
               }
             ],
             "count": 1,
             "compare": "lte",
             "value": 1
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "count"
         },
         {
           "uid": "F2",
@@ -193,17 +202,18 @@
           "evidence": {
             "occurrences": [
               {
-                "index": 0,
                 "role": "H",
                 "direction": "parent",
-                "target": "F0"
+                "target": "F0",
+                "occurrenceIndex": 0
               }
             ],
             "count": 1,
             "compare": "lte",
             "value": 1
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "count"
         },
         {
           "uid": "F2a",
@@ -215,17 +225,18 @@
           "evidence": {
             "occurrences": [
               {
-                "index": 0,
                 "role": "H",
                 "direction": "parent",
-                "target": "F2"
+                "target": "F2",
+                "occurrenceIndex": 0
               }
             ],
             "count": 1,
             "compare": "lte",
             "value": 1
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "count"
         },
         {
           "uid": "F2b",
@@ -237,17 +248,18 @@
           "evidence": {
             "occurrences": [
               {
-                "index": 0,
                 "role": "H",
                 "direction": "parent",
-                "target": "F2"
+                "target": "F2",
+                "occurrenceIndex": 0
               }
             ],
             "count": 1,
             "compare": "lte",
             "value": 1
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "count"
         },
         {
           "uid": "G0",
@@ -262,7 +274,8 @@
             "compare": "lte",
             "value": 1
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "count"
         },
         {
           "uid": "G1",
@@ -274,17 +287,18 @@
           "evidence": {
             "occurrences": [
               {
-                "index": 0,
                 "role": "H",
                 "direction": "parent",
-                "target": "G0"
+                "target": "G0",
+                "occurrenceIndex": 0
               }
             ],
             "count": 1,
             "compare": "lte",
             "value": 1
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "count"
         },
         {
           "uid": "I0",
@@ -299,7 +313,8 @@
             "compare": "lte",
             "value": 1
           },
-          "predicatePath": "/check"
+          "predicatePath": "/check",
+          "kind": "count"
         }
       ],
       "causes": []
@@ -337,13 +352,41 @@
     {
       "rule": "model:reference/check:native-dag",
       "status": "satisfied",
-      "findings": [],
+      "findings": [
+        {
+          "uid": null,
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "kind": "native-dag",
+          "status": "satisfied",
+          "code": "native-dag",
+          "message": "The native graph is acyclic.",
+          "evidence": {
+            "cycles": []
+          }
+        }
+      ],
       "causes": []
     },
     {
       "rule": "model:reference/check:H-forest",
       "status": "satisfied",
-      "findings": [],
+      "findings": [
+        {
+          "uid": null,
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "kind": "forest-validity",
+          "status": "satisfied",
+          "code": "forest-validity",
+          "message": "The selected hierarchy is a valid forest.",
+          "evidence": {
+            "violations": []
+          }
+        }
+      ],
       "causes": []
     },
     {
@@ -351,17 +394,18 @@
       "status": "satisfied",
       "findings": [
         {
-          "uid": "I0",
+          "uid": null,
           "occurrence": null,
           "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "kind": "preserve",
           "status": "satisfied",
           "code": "preserve",
-          "message": "The protected record is unchanged.",
+          "message": "All protected records are unchanged.",
           "evidence": {
             "baseline": "baseline-I0-open",
             "differences": []
-          },
-          "predicatePath": "/check"
+          }
         }
       ],
       "causes": []
