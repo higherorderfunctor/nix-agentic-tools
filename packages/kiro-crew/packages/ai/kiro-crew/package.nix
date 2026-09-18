@@ -28,11 +28,14 @@
   repoPath,
   # ── Optional overrides ──────────────────────────────────────────────────
   #
-  # Null by default, and with both null this derivation is byte-identical to
-  # one that never declared them (no wrapper is produced at all). Each is
-  # filled by `packages.kiro-crew.override { … }`. They are arguments rather
-  # than hardcoded paths precisely so that nothing else's source, build or
-  # patches ever has to be lumped into this recipe.
+  # Null by default. Each is filled by `packages.kiro-crew.override { … }`,
+  # and they are arguments rather than hardcoded paths precisely so that
+  # nothing else's source, build or patches ever has to be lumped into this
+  # recipe.
+  #
+  # Leaving both null no longer means "no wrapper": the beacon opt-out below
+  # is unconditional, so `bin/kirocrew` is always wrapped. What stays true is
+  # that neither argument contributes anything to the wrapper when it is null.
   #
   # `embedModel`: a SEAM for a later, separate derivation — a GGUF embedding
   #   model (upstream bundles qwen3-embedding 0.6b and DOWNLOADS it at first
@@ -79,14 +82,14 @@
   # with null defaults — when those derivations exist.
   embedModel ? null,
   llamaCppLib ? null,
-  # ── Dormant patches ─────────────────────────────────────────────────────
+  # ── Dormant patch ───────────────────────────────────────────────────────
   #
-  # Both default OFF, and both are CARRIED rather than deleted. They exist
-  # because the situation each answers is one you cannot write a patch for
-  # under time pressure — the moment you need them, upstream has already moved
-  # and the sites have to be re-found. `checks/patches-apply.nix` applies them
-  # on every CI run for exactly that reason: a dormant patch that nothing
-  # builds is retired by the first rebase that touches its context, silently.
+  # Defaults OFF, and CARRIED rather than deleted. It exists because the
+  # situation it answers is one you cannot write a patch for under time
+  # pressure — the moment you need it, upstream has already moved and the
+  # sites have to be re-found. `checks/patches-apply.nix` applies it on every
+  # CI run for exactly that reason: a dormant patch that nothing builds is
+  # retired by the first rebase that touches its context, silently.
   #
   # `delegateSandboxToKiroCli`: extends crew's delegation of sandboxing to
   #   kiro-cli onto Linux. The primary arrangement needs no patch at all —
@@ -96,16 +99,7 @@
   #   that must move together; the second is the agents-tree seal, and a
   #   half-applied version opens the hole upstream documents.
   #
-  # `disableSelfUpdate`: neutralizes the spawn that would update KiroCrew in
-  #   place. On a Nix install that update cannot succeed — the store is
-  #   read-only — so the honest states are "it fails loudly" (today) or "it
-  #   never tries" (this patch). It is a BEHAVIOR change and is off pending
-  #   the operator's decision, not because the patch is unfinished. The
-  #   `nix` distribution stamp in the applied set already routes remediation
-  #   to "update through your Nix configuration", which is the notify-only
-  #   half of the same problem and is safe on its own.
   delegateSandboxToKiroCli ? false,
-  disableSelfUpdate ? false,
   ...
 }: let
   ourPkgs = pkgs;
@@ -180,22 +174,23 @@
       ../../../patches/kiro-crew-distribution-nix.patch
       # GPU offload is unreachable at any setting without this argument.
       ../../../patches/kiro-crew-n-gpu-layers.patch
+      # Neutralize the in-place self-updater. Not a config surface: on a Nix
+      # install that update CANNOT succeed, because the store is read-only, so
+      # the only question was whether it fails loudly or never tries.
+      ../../../patches/kiro-crew-no-self-update.patch
     ];
     frontend = [
       ../../../patches/kiro-crew-self-hosted-fonts-frontend.patch
     ];
     dormant = [
       ../../../patches/kiro-crew-linux-sandbox-delegation.patch
-      ../../../patches/kiro-crew-no-self-update.patch
     ];
   };
 
   pythonPatches =
     patchManifest.python
     ++ lib.optional delegateSandboxToKiroCli
-    ../../../patches/kiro-crew-linux-sandbox-delegation.patch
-    ++ lib.optional disableSelfUpdate
-    ../../../patches/kiro-crew-no-self-update.patch;
+    ../../../patches/kiro-crew-linux-sandbox-delegation.patch;
 
   # THE DASHBOARD ASSERTION. Nothing upstream fails when the dashboard is
   # missing: `setup.py`'s `BuildWithFrontend` prints a WARNING and continues,
@@ -668,7 +663,26 @@
   };
 
   wrapperArgs =
-    lib.optionals (embedModel != null) [
+    # ── The usage beacon, pinned off ──────────────────────────────────────
+    #
+    # Upstream sends an anonymous daily heartbeat. Packaging it means deciding
+    # on the user's behalf either way, because a package is installed by
+    # someone who never saw upstream's first-run disclosure -- so this ships
+    # opted OUT.
+    #
+    # `KIROCREW_TELEMETRY_DISABLED` is upstream's own mechanism and is the
+    # RIGHT one rather than a patch: `beacon`'s send verdict tests it FIRST,
+    # ahead of the governance ceiling and the stored `telemetry.beacon_enabled`
+    # flag, and the dashboard's privacy panel reads `is_env_opted_out()` to
+    # disable its own toggle and explain why instead of accepting a config
+    # write that would have no effect. So this is a supported state upstream
+    # renders honestly, not a setting fought over at runtime.
+    #
+    # `--set-default`, not `--set`: a user who genuinely wants to opt back in
+    # exports the variable themselves and gets it, with no rebuild. Truthy
+    # values are `1`, `true`, `yes`, `on`.
+    ["--set-default" "KIROCREW_TELEMETRY_DISABLED" "1"]
+    ++ lib.optionals (embedModel != null) [
       "--set-default"
       "KIROCREW_EMBED_MODEL_PATH"
       # The FILE, not the directory. `validate_custom_model_path` tests
