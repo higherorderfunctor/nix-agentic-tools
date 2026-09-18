@@ -29,19 +29,21 @@ composed registry and ninja DAG:
   `packages/fblog/packages/ai/generic/fblog/package.nix` and
   `packages/git-branchless/packages/ai/gitTools/git-branchless/package.nix`.
 - **Go packages with a sidecar `vendorHash`** (`beads`, its paired nested
-  `dolt`, `gh`, `gluetun`, `oh-my-posh`, `otel-tui`): a Go vendor set cannot be
-  derived from a lockfile the way `importCargoLock` derives one from
-  `Cargo.lock`, so `vendorHash` has to be recorded — and it goes in the sidecar,
-  never inline, because `ghArchiveUpdateScript` would otherwise leave it stale
-  on every bump (the same transitive-hash gap as an inline `cargoHash`).
-  `mkUpdateScript` rebuilds the sidecar from scratch, destroying any key it does
-  not write itself, so each package passes `extraExtract = "${fixVendorHash}"`
-  and reads `sources.vendorHash or lib.fakeHash` to cover the window between the
-  two writes. `vu.mkGoVendorFix` builds `<attr>.goModules` through the flake's
-  own `packages` output and scrapes the `got:` hash out of a `-go-modules`
-  mismatch; it is also exposed standalone as `passthru.fixVendorHash`, because a
-  nixpkgs or toolchain bump can invalidate a vendor hash with no version bump at
-  all. `passthru` must be MERGED — `buildGoModule` hangs `goModules` and
+  `dolt`, `gh`, `gluetun`, `kimchi`, `oh-my-posh`, `otel-tui` — kimchi records
+  the hash for its nested `proxy-helper`, not for a top-level Go build): a Go
+  vendor set cannot be derived from a lockfile the way `importCargoLock` derives
+  one from `Cargo.lock`, so `vendorHash` has to be recorded — and it goes in the
+  sidecar, never inline, because `ghArchiveUpdateScript` would otherwise leave
+  it stale on every bump (the same transitive-hash gap as an inline
+  `cargoHash`). `mkUpdateScript` rebuilds the sidecar from scratch, destroying
+  any key it does not write itself, so each package passes
+  `extraExtract = "${fixVendorHash}"` and reads
+  `sources.vendorHash or lib.fakeHash` to cover the window between the two
+  writes. `vu.mkGoVendorFix` builds `<attr>.goModules` through the flake's own
+  `packages` output and scrapes the `got:` hash out of a `-go-modules` mismatch;
+  it is also exposed standalone as `passthru.fixVendorHash`, because a nixpkgs
+  or toolchain bump can invalidate a vendor hash with no version bump at all.
+  `passthru` must be MERGED — `buildGoModule` hangs `goModules` and
   `overrideModAttrs` there and warns loudly if an overlay drops them. Two traps:
   `postPatch` is an INPUT to `goModules`, so changing which test files are
   removed changes the vendor hash; and a vendorHash is NOT validated by "it
@@ -68,6 +70,17 @@ composed registry and ninja DAG:
   then `npmDepsHash`, in that order because `npmDeps` is derived from `src`. It
   is also `passthru.fixNpmDepsHash`, for a nixpkgs-side change that invalidates
   a hash with no version bump.
+- **pnpm packages with a sidecar `pnpmDepsHash`** (`kimchi`): the only owner on
+  this shape today, because it is also the only pnpm package fetched by
+  `ghArchiveUpdateScript` rather than rev-bumped by `nix-update`. `pnpmDeps`
+  reads `sources.pnpmDepsHash or lib.fakeHash` for the same reason the Go bullet
+  does, and `packageLib.mkHashFix` with `hashFixTargets.pnpmDeps` supplies the
+  repair. Order matters within the chain: the pnpm fixer is passed as
+  `extraAfter` to `mkGoUpdateExtract`, so it runs after the Go floor and vendor
+  hash rather than racing them. It is also `passthru.fixPnpmDepsHash`, which
+  `fix_sidecar_hashes` discovers — a pnpm package WITHOUT that attr still has no
+  automatic repair, which is the remaining half of the Mode D gap in
+  `docs/update-pipeline-transitive-hash-gap.md`.
 - **Go toolchain gaps** (`gluetun`, `oh-my-posh`): declare the package's go.mod
   floor and let `vu.goToolchainForFloor` DERIVE the toolchain — `ourPkgs.go`
   while our pin satisfies the floor, otherwise the lowest `go-bin`
@@ -134,7 +147,7 @@ composed registry and ninja DAG:
 | chatgpt-codex        | root       | GitHub releases         | pre-built binary (musl)   | —                     | —             | --version           |
 | claude-code          | root       | GCS manifest            | pre-built binary          | —                     | —             | binary              |
 | copilot-cli          | root       | GitHub releases         | pre-built binary          | `github-copilot-cli`  | —             | binary              |
-| kimchi               | root       | GitHub releases         | pre-built binary (bun)    | —                     | —             | --version           |
+| kimchi               | root       | GitHub archive          | bun + go (source)         | —                     | —             | --version           |
 | kiro-cli             | root       | AWS manifest            | pre-built binary          | `kiro-cli`            | —             | binary              |
 | kiro-gateway         | root       | GitHub main             | python                    | —                     | pytest (1413) | —                   |
 | semble               | root       | flake input (unchanged) | python                    | —                     | upstream      | --help              |
