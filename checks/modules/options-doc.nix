@@ -82,7 +82,7 @@
       "ai.skills"
       "ai.skillsDir"
     ];
-    copilotDescriptionsThatMustDiscussHmNoop = [
+    copilotDescriptionsThatMustDiscussHmWarning = [
       "ai.copilot.context"
       "ai.copilot.rules"
     ];
@@ -175,11 +175,11 @@
 
       ${lib.concatMapStringsSep "\n" (name: ''
           "$jq" --exit-status --arg name "${name}" \
-            '.[$name].description | contains("Home Manager") and contains("no-op")' "${hmJson}" >/dev/null
+            '.[$name].description | contains("Home Manager") and contains("warn")' "${hmJson}" >/dev/null
           "$jq" --exit-status --arg name "${name}" \
-            '.[$name].description | contains("Home Manager") and contains("no-op")' "${devenvJson}" >/dev/null
+            '.[$name].description | contains("Home Manager") and contains("warn")' "${devenvJson}" >/dev/null
         '')
-        copilotDescriptionsThatMustDiscussHmNoop}
+        copilotDescriptionsThatMustDiscussHmWarning}
 
       # The successful check output is also the requested machine-readable parity
       # report: one complete, sorted contract shared by both backends.
