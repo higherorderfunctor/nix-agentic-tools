@@ -101,6 +101,20 @@
   # There is exactly one: every ownLeaves writer runs the same program, so the
   # jq recursive merge that could not remove a dropped key has no rows left.
   ownRetraction = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings.";
+  # The same program with the other container, for a target whose units are
+  # whole files. The ledger records one sha256 per file it wrote, so a file the
+  # declaration dropped is removed, a file edited since it was written is
+  # backed up first, and a path this generation never wrote is never touched.
+  ownFiles = at: "On ${at}, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone.";
+  # The bash materializer, still the writer for the surfaces `own` has not
+  # taken over. Same shape, read out of a TSV manifest.
+  materializerFiles = at: "lib/ai/materialize.nix manifest prune at ${at}; only previously owned paths are retired.";
+  # HM reconciles on activation, devenv on shell entry. Both retraction
+  # mechanisms name the moment, and nothing else in a row varies with it.
+  retractionMoment = mode:
+    if mode == "hm"
+    then "activation"
+    else "shell entry";
   leaves = pruneTrigger: activation: target: declaration: {
     inherit pruneTrigger target;
     inputOptions = [declaration.option];
@@ -121,23 +135,18 @@
   mcpProbe = ecosystem: probe ["ai" ecosystem "mcpServers"] {probe.command = "true";} {};
   settingsProbe = ecosystem: probe ["ai" ecosystem "nativeSettings"] {model = "probe";} {};
   hookProbe = probe ["ai" "kiro" "hooksJson"] {probe = ''{"event":"pre-commit"}'';} {};
-  kiroManaged = mode: name: target: declaration: {
-    inherit target;
+  kiroManaged = pruneTrigger: mode: name: target: declaration: {
+    inherit pruneTrigger target;
     primitive = "ownPathManaged";
     writerAttr =
       if mode == "hm"
       then ["home" "activation" name]
       else ["tasks" name];
-    pruneTrigger = "lib/ai/materialize.nix manifest prune at ${
-      if mode == "hm"
-      then "activation"
-      else "shell entry"
-    }; only previously owned paths are retired.";
     probe = declaration;
   };
   kiroMcp = mode: let
     primary =
-      kiroManaged mode (
+      kiroManaged (materializerFiles (retractionMoment mode)) mode (
         if mode == "hm"
         then "kiroMcpJson"
         else "ai:kiro:materialize-mcp"
@@ -154,11 +163,7 @@
         primitive = "ownLeaves";
         condition = ''ai.kiro.mcpWriteMode = "merge"'';
         probe = (mcpProbe "kiro") // {base.ai.kiro.mcpWriteMode = "merge";};
-        pruneTrigger = "On ${
-          if mode == "hm"
-          then "activation"
-          else "shell entry"
-        }, retire whole-path ownership preserving the file, then reconcile JSON leaves. First handover cannot identify historical unowned leaves.";
+        pruneTrigger = "On ${retractionMoment mode}, retire whole-path ownership preserving the file, then reconcile JSON leaves. First handover cannot identify historical unowned leaves.";
       };
   in
     primary
@@ -174,7 +179,7 @@
     };
   kiroHooks = mode: let
     primary =
-      kiroManaged mode (
+      kiroManaged (ownFiles (retractionMoment mode)) mode (
         if mode == "hm"
         then "materialize-kiro-hooks-write"
         else "ai:kiro:materialize-hooks"
@@ -227,7 +232,7 @@
         ))
         // {
           additionalWriters = [
-            ((kiroManaged mode
+            ((kiroManaged (materializerFiles (retractionMoment mode)) mode
                 (
                   if mode == "hm"
                   then "retire-materialize-kiro-steering"
