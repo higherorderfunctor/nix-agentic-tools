@@ -6,7 +6,9 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mcpConfigKeyOf mkTest mkWrapperGrepTest;
+  inherit (harness) evalDevenv evalHm mcpConfigKeyOf mkTest mkWrapperGrepTest ownedDocument;
+  settingsDocument = evaluated:
+    ownedDocument "copilot" "${evaluated.config.ai.copilot.configDir}/settings.json" evaluated;
 in {
   checks = {
     module-copilot-default-disabled = mkTest "copilot-default-disabled" (
@@ -159,13 +161,19 @@ in {
         builtins.length packages >= 1
     );
 
+    # The declared leaves and their document are read from
+    # `_reconciledDocuments`: the reconciler carries them as data in a store
+    # plan, so the activation body names only the plan. The ledger path is
+    # asserted because it is the live migration contract every previously
+    # written ownership record hangs off.
     module-copilot-hm-empty-settings-emits-writer = mkTest "copilot-hm-empty-settings-emits-writer" (
       let
         evaluated = evalHm {ai.copilot.enable = true;};
-        script = evaluated.config.home.activation.copilotSettingsMerge.text;
+        document = settingsDocument evaluated;
       in
-        lib.hasInfix "--format json" script
-        && lib.hasInfix "json-settings" script
+        lib.hasInfix "--phase all" evaluated.config.home.activation.copilotSettingsMerge.text
+        && lib.hasPrefix "json-settings/copilot-settings-" document.ledger
+        && document.value == {}
     );
 
     module-copilot-hm-writes-settings-json-activation = mkTest "copilot-hm-writes-settings-json-activation" (
@@ -174,12 +182,9 @@ in {
           ai.copilot.enable = true;
           ai.copilot.nativeSettings.model = "gpt-4";
         };
-        activation = result.config.home.activation.copilotSettingsMerge or null;
       in
-        activation
-        != null
-        && lib.hasInfix "gpt-4" (activation.text or "")
-        && lib.hasInfix "--format json" (activation.text or "")
+        lib.hasInfix "--phase all" result.config.home.activation.copilotSettingsMerge.text
+        && (settingsDocument result).value.model == "gpt-4"
     );
 
     module-copilot-hm-writes-mcp-config-json = mkTest "copilot-hm-writes-mcp-config-json" (
