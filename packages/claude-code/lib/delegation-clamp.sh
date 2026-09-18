@@ -20,8 +20,8 @@
 #
 # Always exits 0, and that is a hard contract rather than a nicety: a non-zero
 # UserPromptSubmit hook surfaces as an error to the user on EVERY turn, so a mitigation
-# that breaks the session is worse than one that quietly lapses. Under `set -e` that
-# means every filesystem call below must be explicitly best-effort — an unguarded
+# that breaks the session is worse than a lapse reported on stderr. Under `set -e` that
+# means every filesystem call below must be explicitly guarded — an unguarded
 # `mkdir`/`touch`/`rm`/`cat` is a latent per-turn error dialog, not a nicety either.
 # cspell:ignore nosession  (the literal fallback marker key, not project vocabulary)
 set -euETo pipefail
@@ -29,14 +29,22 @@ shopt -s inherit_errexit 2>/dev/null || :
 
 mode="${1:-}"
 
+warn_clamp() {
+  printf 'WARNING: ai.claude.delegationClamp.mitigate: %s\n' "$1" >&2
+}
+
 marker_dir="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/claude-delegation-clamp"
 
 # session_id keys the marker. jq must not be able to kill the hook, so a parse failure
 # (malformed stdin, absent key, no stdin at all) degrades to a FIXED key rather than to
 # "inject every turn" — the latter would silently restore the per-turn cumulative context
-# growth that the once-per-session cadence exists to avoid.
+# growth that the once-per-session cadence exists to avoid. Warn that sessions
+# cannot be distinguished when the fallback is needed.
 session_id="$(jq -r '.session_id // empty' 2>/dev/null || :)"
-[ -n "$session_id" ] || session_id=nosession
+if [ -z "$session_id" ]; then
+  warn_clamp "hook envelope has no session id; once-per-session delivery uses a shared fallback marker"
+  session_id=nosession
+fi
 # A session_id is an opaque server-issued string, so sanitize before joining it onto a
 # path — no traversal, no surprises.
 session_id="${session_id//[^A-Za-z0-9._-]/_}"
@@ -46,11 +54,11 @@ marker="$marker_dir/$session_id"
 case "$mode" in
 inject)
   # A broken wrapper (payload path unset, or the store file unreadable) leaves nothing
-  # to inject. Lapse quietly with a stderr breadcrumb rather than aborting non-zero —
+  # to inject. Warn with the public option path rather than aborting non-zero —
   # same contract as every other failure path here.
   payload_file="${DELEGATION_CLAMP_PAYLOAD_FILE:-}"
   if [ -z "$payload_file" ] || [ ! -r "$payload_file" ]; then
-    echo "claude-delegation-clamp: payload file missing or unreadable; skipping" >&2
+    warn_clamp "payload file missing or unreadable; mitigation was not delivered"
     exit 0
   fi
   # `if`, not `[ -e ] && exit 0` — the latter evaluates to exit status 1 when the
@@ -74,12 +82,14 @@ inject)
     # Prune. XDG_RUNTIME_DIR is tmpfs and clears on logout, but the /tmp fallback can
     # accumulate one marker per session for months.
     find "$marker_dir" -maxdepth 1 -type f -mtime +7 -delete 2>/dev/null || :
-    touch "$marker" 2>/dev/null || :
+    touch "$marker" 2>/dev/null || warn_clamp "cannot write session marker; mitigation may repeat"
+  else
+    warn_clamp "cannot create marker directory; mitigation may repeat"
   fi
-  cat -- "$payload_file" 2>/dev/null || :
+  cat -- "$payload_file" 2>/dev/null || warn_clamp "cannot read payload; mitigation was not delivered"
   ;;
 clear)
-  rm -f "$marker" 2>/dev/null || :
+  rm -f "$marker" 2>/dev/null || warn_clamp "cannot clear session marker; mitigation may not return after compaction"
   ;;
 *)
   echo "claude-delegation-clamp: expected 'inject' or 'clear', got '${mode}'" >&2
