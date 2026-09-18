@@ -79,6 +79,33 @@
   # with null defaults — when those derivations exist.
   embedModel ? null,
   llamaCppLib ? null,
+  # ── Dormant patches ─────────────────────────────────────────────────────
+  #
+  # Both default OFF, and both are CARRIED rather than deleted. They exist
+  # because the situation each answers is one you cannot write a patch for
+  # under time pressure — the moment you need them, upstream has already moved
+  # and the sites have to be re-found. `checks/patches-apply.nix` applies them
+  # on every CI run for exactly that reason: a dormant patch that nothing
+  # builds is retired by the first rebase that touches its context, silently.
+  #
+  # `delegateSandboxToKiroCli`: extends crew's delegation of sandboxing to
+  #   kiro-cli onto Linux. The primary arrangement needs no patch at all —
+  #   PATH plus `KIRO_KAS_NODE_PATH`, with crew's own namespace sandbox left
+  #   on. This is the fallback for a future kiro-cli that reintroduces a bwrap
+  #   or FHS step and breaks that arrangement quietly. It touches TWO sites
+  #   that must move together; the second is the agents-tree seal, and a
+  #   half-applied version opens the hole upstream documents.
+  #
+  # `disableSelfUpdate`: neutralizes the spawn that would update KiroCrew in
+  #   place. On a Nix install that update cannot succeed — the store is
+  #   read-only — so the honest states are "it fails loudly" (today) or "it
+  #   never tries" (this patch). It is a BEHAVIOR change and is off pending
+  #   the operator's decision, not because the patch is unfinished. The
+  #   `nix` distribution stamp in the applied set already routes remediation
+  #   to "update through your Nix configuration", which is the notify-only
+  #   half of the same problem and is safe on its own.
+  delegateSandboxToKiroCli ? false,
+  disableSelfUpdate ? false,
   ...
 }: let
   ourPkgs = pkgs;
@@ -112,6 +139,57 @@
 
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
   sourcesFile = repoPath ../../../sources.json;
+
+  # ── THE PATCH MANIFEST ──────────────────────────────────────────────────
+  #
+  # Three lists, and the split is the file's whole point: the two derivations
+  # below unpack at DIFFERENT roots, so a patch is not merely "for kiro-crew"
+  # — it is for one derivation or the other and will not apply to the wrong
+  # one. `python` lands at the repo root; `frontend` lands inside `website/`,
+  # because that derivation's `sourceRoot` puts patchPhase one level down.
+  #
+  # A single pooled `patches` list is what makes a package impossible to split
+  # later, which is why this is a manifest rather than two inline lists: the
+  # membership is stated once, `checks/patches-apply.nix` reads it through
+  # `passthru`, and that check asserts the manifest and the directory listing
+  # are the same set in both directions. An orphaned patch file and a missing
+  # one both fail at EVAL, naming the file.
+  #
+  # Eight of these eleven are upstreamable on their own merits and are worth
+  # sending: upstreaming converts a recurring rebase cost into a one-time one,
+  # and against a tree moving ~100 commits a day that is the only lever that
+  # actually reduces the maintenance.
+  patchManifest = {
+    python = [
+      # Correctness on a host whose /bin holds only sh.
+      ../../../patches/kiro-crew-env-bash.patch
+      # The trusted-binary allowlist cannot see a Nix store path.
+      ../../../patches/kiro-crew-trusted-bin-nix-store.patch
+      # The group-writable floor false-positives on /nix/store (mode 1775).
+      ../../../patches/kiro-crew-sticky-dir-writable.patch
+      # copytree out of a read-only source yields an unwritable destination.
+      ../../../patches/kiro-crew-copytree-readonly-modes.patch
+      # The same defect in the PPTX Maker engine, plus the seam that lets an
+      # externally provisioned engine skip `uv sync`.
+      ../../../patches/kiro-crew-pptx-engine-provisioned.patch
+      # Teach the distribution stamp about `nix`, routed to notify-only.
+      ../../../patches/kiro-crew-distribution-nix.patch
+      # GPU offload is unreachable at any setting without this argument.
+      ../../../patches/kiro-crew-n-gpu-layers.patch
+    ];
+    frontend = [];
+    dormant = [
+      ../../../patches/kiro-crew-linux-sandbox-delegation.patch
+      ../../../patches/kiro-crew-no-self-update.patch
+    ];
+  };
+
+  pythonPatches =
+    patchManifest.python
+    ++ lib.optional delegateSandboxToKiroCli
+    ../../../patches/kiro-crew-linux-sandbox-delegation.patch
+    ++ lib.optional disableSelfUpdate
+    ../../../patches/kiro-crew-no-self-update.patch;
 
   # THE DASHBOARD ASSERTION. Nothing upstream fails when the dashboard is
   # missing: `setup.py`'s `BuildWithFrontend` prints a WARNING and continues,
@@ -544,12 +622,58 @@ in
       "websockets"
     ];
 
+    # PATCHES ROOTED AT THE REPO ROOT. See `patchManifest` above for what each
+    # one does and why the frontend's own patch is not in this list.
+    #
+    # `patches`, not `applyPatches`: a `patches` list costs ZERO extra store
+    # paths because patchPhase runs in-sandbox on the already-unpacked tree,
+    # while `applyPatches` materializes a full second copy of a 289 MB source
+    # AND sets `allowSubstitutes = false` on it, so every consumer rebuilds it
+    # locally. `applyPatches` earns that only when the patched tree is needed
+    # as a VALUE — to assert something about it at eval time, as oxlint does.
+    # Nothing here needs that.
+    patches = pythonPatches;
+
     # Vendored-libs surgery in patchPhase, dashboard staging in buildPhase —
     # two phases because they are two different clocks. This one is a source
     # rewrite that must land before autoPatchelfHook ever sees the files; the
     # other depends on the `frontend` derivation and on setup.py's staging
     # behavior. See `prepareVendoredLibs` for the ordering argument.
-    postPatch = prepareVendoredLibs;
+    postPatch =
+      prepareVendoredLibs
+      + ''
+        # STAMP THE DISTRIBUTION, or the `nix` patch above is inert.
+        #
+        # `kiro-crew-distribution-nix.patch` teaches `update_capability` that a
+        # `nix` install is externally managed — notify-only, `can_apply` false,
+        # remediation "update through your Nix configuration". But that branch
+        # is only reached when `beacon.distribution()` answers "nix", and
+        # `beacon` resolves BAKED MODULE first, then `KIROCREW_DISTRIBUTION`,
+        # then the "source" default. An unstamped build reports "source" — the
+        # git-checkout answer — and is offered an in-place git or wheel update
+        # that cannot succeed against a read-only store. The patch would apply,
+        # the build would pass, and nothing would change.
+        #
+        # Upstream's OWN writer, not a heredoc of our own. `_build_info.py`'s
+        # shape is upstream's to change, six of their packaging paths already
+        # share this script for exactly that reason, and the patch above widens
+        # its allowlist rather than bypassing it — so a future field lands here
+        # automatically instead of drifting.
+        #
+        # A baked module rather than a wrapper `--set-default`, which is also
+        # upstream's reasoning: `KIROCREW_DISTRIBUTION` is inherited by every
+        # child and settable by anyone with a shell, so an export in a profile
+        # would relabel the install. The module ships inside the artifact.
+        bash scripts/stamp-distribution.sh nix src/kiro_crew
+
+        # Positive control. The stamper prints its own success line, but a
+        # rename upstream would make `bash` fail on a missing file and the
+        # message would scroll past in a long log. Assert the artifact.
+        if ! grep -q 'DISTRIBUTION = "nix"' src/kiro_crew/_build_info.py; then
+          echo "kiro-crew: the distribution stamp did not land as nix" >&2
+          exit 1
+        fi
+      '';
 
     preBuild =
       ''
@@ -646,6 +770,10 @@ in
 
     passthru = {
       inherit fixNpmDepsHash frontend;
+      # Read by `checks/patches-apply.nix`, which applies every entry — the
+      # dormant ones included — to the pinned src at zero fuzz, and asserts
+      # this manifest and the `patches/` directory listing are the same set.
+      inherit patchManifest;
     };
 
     meta = {
