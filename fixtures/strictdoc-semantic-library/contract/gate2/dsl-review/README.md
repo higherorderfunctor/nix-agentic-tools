@@ -1091,3 +1091,31 @@ executes.
 | Prerequisite scheduling and structured blocked results | Not implemented                       | No runtime connects a cardinality finding to a blocked singleton-dependent path check.                                     |
 | Candidate batching, publication, and recovery          | Not implemented                       | No private candidate, persistence operation, stale-base refusal, or recovery mechanism is wired here.                      |
 | Explicit rule replacement or disabling                 | Not implemented                       | The contract requires explicit identity-targeted action, but the stub supplies no such authoring constructor.              |
+
+## What the backend does with it
+
+A bundle and a candidate go in; a results envelope comes out. The bundle carries
+the lowered rules, and the candidate is the complete proposed final state; the
+evaluator checks the candidate against every rule and reports one entry per
+rule.
+
+Here is one entry, copied verbatim from `results.json`:
+
+```json
+    {
+      "rule": "model:reference/element:FOO/relation:parent:R/check:R.all",
+      "status": "satisfied",
+      "findings": [],
+      "causes": []
+    },
+```
+
+`satisfied` means every checked leaf held. `violated` means a checked leaf's
+condition was evaluated and found false. `blocked` means the check could not run
+at all — a missing endpoint, a failed prerequisite, or an unresolved target — so
+a blocked result says nothing about whether the underlying condition holds.
+`error` sits above both: it means a rule's own external input failed to acquire,
+so none of its subjects were evaluated.
+
+The evaluator that produces this envelope, its package layout, and the decisions
+it made where the contract stays silent are in `backend/README.md`.

@@ -70,6 +70,7 @@
         "reserialization",
         "revisioned",
         "rustworkx",
+        "strerror",
         "stringly",
         "uids",
         "unconfigured",

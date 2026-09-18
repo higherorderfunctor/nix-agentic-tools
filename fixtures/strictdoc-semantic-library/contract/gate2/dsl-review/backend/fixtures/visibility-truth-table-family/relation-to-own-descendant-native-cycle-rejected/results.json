@@ -401,16 +401,16 @@
                   {
                     "direction": "parent",
                     "occurrenceIndex": 0,
+                    "owner": "F2a",
                     "role": "H",
-                    "target": "F2",
-                    "uid": "F2a"
+                    "target": "F2"
                   },
                   {
                     "direction": "parent",
                     "occurrenceIndex": 1,
+                    "owner": "F2",
                     "role": "R",
-                    "target": "F2a",
-                    "uid": "F2"
+                    "target": "F2a"
                   }
                 ]
               }

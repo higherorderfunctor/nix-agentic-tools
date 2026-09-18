@@ -21,8 +21,9 @@ occurrence is an edge target->owner and a child occurrence owner->target
 
 Disputed: the contract fixes the witness shape (contract.md:636, 616-618) but
 not where a cycle walk starts or the key naming the owner. This fixture starts
-each walk at the lexicographically smallest uid in the cycle and names the owner
-"uid", matching the finding-level owner field.
+each walk at the cycle vertex earliest in candidate record order, the contract's
+only stated ordering principle (contract.md:580-581), and names the owner
+"owner", as every other graph witness in the corpus does.
 
 Disputed: these fixtures supply no baseline.json or invocation.json, so they
 inherit the packet binding (contract.md:500-517) and keep envelope baseline

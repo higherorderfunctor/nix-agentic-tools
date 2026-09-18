@@ -481,16 +481,16 @@
                   {
                     "direction": "parent",
                     "occurrenceIndex": 0,
+                    "owner": "M",
                     "role": "P",
-                    "target": "F2",
-                    "uid": "M"
+                    "target": "F2"
                   },
                   {
                     "direction": "child",
                     "occurrenceIndex": 1,
+                    "owner": "M",
                     "role": "Q",
-                    "target": "F2",
-                    "uid": "M"
+                    "target": "F2"
                   }
                 ]
               }

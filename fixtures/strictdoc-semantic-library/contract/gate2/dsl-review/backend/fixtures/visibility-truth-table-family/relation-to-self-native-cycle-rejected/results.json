@@ -401,9 +401,9 @@
                   {
                     "direction": "parent",
                     "occurrenceIndex": 1,
+                    "owner": "F2",
                     "role": "R",
-                    "target": "F2",
-                    "uid": "F2"
+                    "target": "F2"
                   }
                 ]
               }
