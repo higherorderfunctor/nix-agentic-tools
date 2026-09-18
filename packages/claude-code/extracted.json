@@ -160,9 +160,21 @@
         "type": "object"
       },
       "additionalMarketplaces.*.source|3.package": {
+        "type": "anyOf"
+      },
+      "additionalMarketplaces.*.source|3.package|0": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|3.package|1": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|3.registry": {
         "type": "string"
       },
       "additionalMarketplaces.*.source|3.source": {
+        "type": "string"
+      },
+      "additionalMarketplaces.*.source|3.version": {
         "type": "string"
       },
       "additionalMarketplaces.*.source|4": {
@@ -482,9 +494,21 @@
         "type": "object"
       },
       "allowedMarketplaces[]|3.package": {
+        "type": "anyOf"
+      },
+      "allowedMarketplaces[]|3.package|0": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|3.package|1": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|3.registry": {
         "type": "string"
       },
       "allowedMarketplaces[]|3.source": {
+        "type": "string"
+      },
+      "allowedMarketplaces[]|3.version": {
         "type": "string"
       },
       "allowedMarketplaces[]|4": {
@@ -893,9 +917,21 @@
         "type": "object"
       },
       "blockedMarketplaces[]|3.package": {
+        "type": "anyOf"
+      },
+      "blockedMarketplaces[]|3.package|0": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|3.package|1": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|3.registry": {
         "type": "string"
       },
       "blockedMarketplaces[]|3.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|3.version": {
         "type": "string"
       },
       "blockedMarketplaces[]|4": {
@@ -1362,9 +1398,21 @@
         "type": "object"
       },
       "extraKnownMarketplaces.*.source|3.package": {
+        "type": "anyOf"
+      },
+      "extraKnownMarketplaces.*.source|3.package|0": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|3.package|1": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|3.registry": {
         "type": "string"
       },
       "extraKnownMarketplaces.*.source|3.source": {
+        "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|3.version": {
         "type": "string"
       },
       "extraKnownMarketplaces.*.source|4": {
@@ -2849,9 +2897,21 @@
         "type": "object"
       },
       "strictKnownMarketplaces[]|3.package": {
+        "type": "anyOf"
+      },
+      "strictKnownMarketplaces[]|3.package|0": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|3.package|1": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|3.registry": {
         "type": "string"
       },
       "strictKnownMarketplaces[]|3.source": {
+        "type": "string"
+      },
+      "strictKnownMarketplaces[]|3.version": {
         "type": "string"
       },
       "strictKnownMarketplaces[]|4": {
