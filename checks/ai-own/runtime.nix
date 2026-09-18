@@ -28,7 +28,14 @@
   tools = {
     bash = "${pkgs.bash}/bin/bash";
     legacyDir = "${legacyDir}";
-    legacyDoc = "${../../lib/ai/reconcile-toml.py}";
+    # The v1 JSON ledger reconcile-toml.py wrote, captured from that program
+    # before it was deleted. Frozen bytes rather than a live producer: the
+    # rollback contract is a byte format, and the only way to keep testing it
+    # after the writer is gone is to keep its output. The `.frozen` extension
+    # is load-bearing — treefmt formats `.json`, and a reformatted fixture
+    # would assert that own.py agrees with biome rather than with the program
+    # whose ledgers are on consumers' disks.
+    legacyDocLedger = "${./fixtures/legacy-json-v1-ledger.frozen}";
     own = "${../../lib/ai/own.py}";
     # Deliberately WITHOUT tomlkit: every dir and JSON case runs on this
     # interpreter, which is what proves the TOML import stays lazy.

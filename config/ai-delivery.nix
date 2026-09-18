@@ -146,7 +146,7 @@
   };
   kiroMcp = mode: let
     primary =
-      kiroManaged (materializerFiles (retractionMoment mode)) mode (
+      kiroManaged (ownFiles (retractionMoment mode)) mode (
         if mode == "hm"
         then "kiroMcpJson"
         else "ai:kiro:materialize-mcp"
@@ -163,7 +163,7 @@
         primitive = "ownLeaves";
         condition = ''ai.kiro.mcpWriteMode = "merge"'';
         probe = (mcpProbe "kiro") // {base.ai.kiro.mcpWriteMode = "merge";};
-        pruneTrigger = "On ${retractionMoment mode}, retire whole-path ownership preserving the file, then reconcile JSON leaves. First handover cannot identify historical unowned leaves.";
+        pruneTrigger = "On ${retractionMoment mode}, lib/ai/own.py RELEASES the whole-file claim to the co-owning document target in the same plan — the file survives and its ledger is dropped — and then reconciles the declared leaves. A first handover cannot identify historical unowned leaves.";
       };
   in
     primary
