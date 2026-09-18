@@ -1022,10 +1022,13 @@ configurations. It checks declaration identities and references, symbolic
 predicate shape, binder placement, Boolean defaults, rule conflicts,
 prerequisite selection, and keyword values. It is not a complete schema checker;
 ordinary collection role strings and many operand types remain unchecked during
-authoring. No backend evaluator, field decoder, default materializer, provider
-runner, graph validation, result generator, or candidate publication runs here.
-The JSON input and result samples specify the backend boundary; all semantic
-verdicts are handwritten expectations. `transcript.txt` records the four proofs,
-an invalid policy keyword throw, the combined R check's two lowered leaves, and
-a missing endpoint count prerequisite throw evaluated on a temporary copy. It
-supplies no runtime semantic verdicts.
+authoring. `transcript.txt` records the four proofs, an invalid policy keyword
+throw, the combined R check's two lowered leaves, and a missing endpoint count
+prerequisite throw evaluated on a temporary copy. It supplies no runtime
+semantic verdicts.
+
+The reference model and the fixture suite are now evaluated by the stub
+evaluator under `backend/`: a standard-library Python program that reads a
+bundle and a candidate, runs field decoding, default materialization, graph
+validation, provider acquisition and result generation, and writes a results
+envelope. The suite currently passes 21 of 21 tests.

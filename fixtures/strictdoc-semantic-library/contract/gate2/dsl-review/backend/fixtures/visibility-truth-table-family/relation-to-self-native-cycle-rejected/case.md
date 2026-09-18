@@ -4,7 +4,7 @@ native self-loop.
 Change: add F2 R -> F2 at occurrenceIndex 1.
 
 Expected: native-dag violated with code cycle - cycle ["F2","F2"] and one
-indexed edge, F2's R occurrence at index 1 with owner uid F2.
+indexed edge, F2's R occurrence at index 1 carrying "owner" F2.
 
 Expected: R.all SATISFIED - the target-type leaf reports FOO and the
 visible-target leaf reports code visible-target with path and walkedPath ["F2"],
@@ -17,8 +17,9 @@ table rules it "Reject native self-cycle", with "No independent traversal
 acceptance evidence" (decisions.md:55).
 
 Disputed: as in the equal-endpoint bridge row, the cycle walk start and the
-owner key are unspecified; this fixture uses the cycle's smallest uid and the
-key "uid".
+owner key are unspecified; this fixture starts the walk at the cycle vertex
+earliest in candidate record order (contract.md:580-581) and names the owner
+"owner", as every other graph witness in the corpus does.
 
 Disputed: these fixtures supply no baseline.json or invocation.json, so they
 inherit the packet binding (contract.md:500-517) and keep envelope baseline

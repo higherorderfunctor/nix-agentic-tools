@@ -19,8 +19,9 @@ native cycle F2 -> F2a -> F2" and warns "Do not use this case to test
 closed-start semantics".
 
 Disputed: the cycle walk start and the owner key are unspecified, as in the
-other two native-cycle rows; this fixture uses the cycle's smallest uid and the
-key "uid".
+other two native-cycle rows; this fixture starts the walk at the cycle vertex
+earliest in candidate record order (contract.md:580-581) and names the owner
+"owner", as every other graph witness in the corpus does.
 
 Disputed: these fixtures supply no baseline.json or invocation.json, so they
 inherit the packet binding (contract.md:500-517) and keep envelope baseline

@@ -413,15 +413,8 @@
           "evidence": {
             "cycles": [
               {
-                "cycle": ["B", "A", "Z0", "B"],
+                "cycle": ["A", "Z0", "B", "A"],
                 "edges": [
-                  {
-                    "direction": "parent",
-                    "occurrenceIndex": 0,
-                    "owner": "A",
-                    "role": "H",
-                    "target": "B"
-                  },
                   {
                     "direction": "parent",
                     "occurrenceIndex": 0,
@@ -434,6 +427,13 @@
                     "occurrenceIndex": 1,
                     "owner": "Z0",
                     "role": "Q",
+                    "target": "B"
+                  },
+                  {
+                    "direction": "parent",
+                    "occurrenceIndex": 0,
+                    "owner": "A",
+                    "role": "H",
                     "target": "B"
                   }
                 ]
