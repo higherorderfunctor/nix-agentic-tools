@@ -257,16 +257,22 @@ in rec {
   # configFile:   path relative to configRoot (e.g. ".copilot/settings.json").
   # configRoot:   trusted shell expression; defaults to $HOME.
   # python:       Python package; TOML needs tomlkit, JSON uses the stdlib.
-  # reconciler:   shared reconcile-toml.py source path (both formats).
+  # reconciler:   shared reconcile-toml.py source path.
   # renderCommand: optional runtime JSON renderer, instead of settingsJson.
-  # settingsJson: inlined JSON declaration (Kiro flattens dot-keys first).
+  # settingsJson: inlined JSON declaration.
   # stateName:    safe, stable name unique to the destination config file.
   # stateRoot:    trusted shell expression; defaults to XDG state/HOME fallback.
   #
   # New files are private (0600); existing regular-file permissions survive.
-  # Static home.file ownership remains the default for wholly declarative files.
+  #
+  # ONE caller is left: kiro's `mcp.json`, which needs a runtime renderer and
+  # the devenv roots. Everything that declares its leaves at eval time now goes
+  # through `mkOwnedDocument` above. The `toml` alias is gone with codex, which
+  # was its only caller; `mkReconcileSettingsActivationScript` keeps its
+  # `format` parameter because reconcile-toml.py still takes `--format` and
+  # Home Manager ROLLBACK runs an older generation's script, `--format toml`
+  # and all, against today's ledgers.
   mkSettingsActivationScript = mkReconcileSettingsActivationScript "json";
-  mkTomlSettingsActivationScript = mkReconcileSettingsActivationScript "toml";
 
   # NOTE: Kiro hook files used to be written here by `mkHooksActivationScript`.
   # They now ride the shared strategy-driven materializer
