@@ -277,32 +277,21 @@ in
           {
             home.file = helpers.mkSkillEntries cfg.configDir mergedSkills;
           }
-          # Settings.json activation merge. Preserves user-added runtime
-          # keys (e.g. `trusted_folders`) by merging Nix-declared values
-          # on top of the existing file via `jq -s '.[0] * .[1]'`. On
-          # first activation (no existing file) the Nix-rendered JSON is
-          # written as-is. Ported from legacy
-          # modules/copilot-cli/default.nix; the devenv side uses a plain
-          # static write instead since devenv lifecycles are project-local.
-          #
-          # The settings JSON is inlined into the activation script via
-          # `builtins.toJSON` so the rendered values (e.g. `model`,
-          # `theme`) appear literally in the script text. This keeps the
-          # activation atomic — no separate store-path read required at
-          # runtime — and lets module-eval tests assert on the content.
-          #
-          # HM-only: gated on non-empty settings so consumers who enable
-          # ai.copilot just for MCP/skills fanout don't clobber an
-          # externally-managed settings.json. Matches upstream Claude HM
-          # behavior. Devenv-side is unconditional (project-local).
-          (lib.mkIf (cfg.nativeSettings != {}) {
+          # Reconcile settings.json leaves while preserving native state such
+          # as trusted_folders. Always emit the writer so empty settings retract
+          # previously owned leaves. With no prior ownership, empty settings
+          # leave an externally managed settings.json untouched, including for
+          # consumers enabling Copilot only for MCP/skills fanout. Desired JSON
+          # stays inlined so module evaluation can inspect the declared values.
+          {
             home.activation.copilotSettingsMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
               configFile = "${cfg.configDir}/settings.json";
+              python = pkgs.python3;
+              reconciler = ../../../lib/ai/reconcile-toml.py;
               settingsJson = builtins.toJSON cfg.nativeSettings;
-              jq = "${pkgs.jq}/bin/jq";
-              inherit (pkgs) coreutils;
+              stateName = "copilot-settings-${builtins.hashString "sha256" cfg.configDir}";
             });
-          })
+          }
         ];
     };
     devenv = {
