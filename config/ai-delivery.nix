@@ -81,6 +81,14 @@
     nonEmpty = lib.setAttrByPath option nonEmpty;
     empty = lib.setAttrByPath option empty;
   };
+  # An exempted writer's failures are RECORDED, not fatal. The gate errors the
+  # moment an exempted writer survives BOTH arms ("exemption is stale"), so
+  # every exemption below is a countdown the ownership fix has to spend.
+  exempt = evidence: reason: {exemption = {inherit evidence reason;};};
+  # Three HM settings merges share one defect and one shape, so they share one
+  # reason; only the citation differs.
+  gatedSettingsMerge = evidence:
+    exempt evidence "Activation entry sits inside mkIf on a non-empty settings set, so an emptied declaration never merges the removal away.";
   leaves = activation: target: declaration: {
     inherit target;
     inputOptions = [(lib.concatStringsSep "." declaration.option)];
@@ -128,7 +136,16 @@
         then "$HOME"
         else "$DEVENV_ROOT"
       }/.kiro/settings/mcp.json"
-      ((mcpProbe "kiro") // {base.ai.kiro.mcpWriteMode = "overwrite";});
+      ((mcpProbe "kiro") // {base.ai.kiro.mcpWriteMode = "overwrite";})
+      // (
+        if mode == "hm"
+        then
+          exempt "packages/kiro-cli/lib/mkKiro.nix:1784"
+          "Writer sits inside mkIf on a non-empty merged pool, so an emptied declaration never prunes mcp.json."
+        else
+          exempt "packages/kiro-cli/lib/mkKiro.nix:1983"
+          "This task does not exist: the devenv write is an enterShell fragment gated on a non-empty merged pool, so neither declaration reaches a task."
+      );
     merge =
       primary
       // {
@@ -151,7 +168,9 @@
           // {
             writerAttr = ["home" "activation" "materialize-kiro-settings-prune"];
             role = "Retire merge leaves and prune retired whole paths before the write phase.";
-          });
+          }
+          // exempt "packages/kiro-cli/lib/mkKiro.nix:1786 (mkMcpJsonScript, where hooks use materializeLib.mkHmActivation at :1831)"
+          "mcp.json is assembled by the bespoke mkMcpJsonScript instead of the materializer, so no .kiro/settings prune entry is emitted under either declaration.");
     };
   kiroHooks = mode: let
     primary =
@@ -354,7 +373,9 @@
       };
       copilot = {
         devenv = (declarative "devenv" ".config/github-copilot/settings.json") // {deliveryGap = copilotInert;};
-        hm = leaves "copilotSettingsMerge" "$HOME/.copilot/settings.json" (settingsProbe "copilot");
+        hm =
+          leaves "copilotSettingsMerge" "$HOME/.copilot/settings.json" (settingsProbe "copilot")
+          // gatedSettingsMerge "packages/copilot-cli/lib/mkCopilot.nix:293";
       };
       kimchi = {
         hm =
@@ -366,7 +387,8 @@
           // {
             additionalWriters = [
               (leaves "kimchiHarnessSettingsMerge" "$HOME/.config/kimchi/harness/settings.json"
-                (probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {}))
+                (probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {})
+                // gatedSettingsMerge "packages/kimchi/lib/mkKimchi.nix:258")
             ];
           };
         devenv =
@@ -378,7 +400,8 @@
       kiro = {
         hm =
           leaves "kiroSettingsMerge" "$HOME/.kiro/settings/cli.json"
-          (probe ["ai" "kiro" "nativeSettings"] {chat.defaultModel = "probe";} {});
+          (probe ["ai" "kiro" "nativeSettings"] {chat.defaultModel = "probe";} {})
+          // gatedSettingsMerge "packages/kiro-cli/lib/mkKiro.nix:1864";
         devenv =
           (declarative "devenv" ".kiro/settings/cli.json")
           // {
