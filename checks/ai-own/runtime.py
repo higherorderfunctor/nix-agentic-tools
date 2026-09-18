@@ -616,6 +616,51 @@ def renderer(fixture):
     )
 
 
+def sweeps(fixture):
+    """A leaked reserved temporary is collected beside BOTH containers."""
+    document = fixture.root / "settings/cli.json"
+    unit = fixture.root / "settings/unit.txt"
+    doc_ledger = fixture.ledger("json-settings/cli.json")
+    dir_ledger = fixture.ledger("materialize/settings.manifest")
+    plan = {
+        "targets": [
+            dir_target({"unit.txt": {"mode": "0444", "text": "ours\n"}}),
+            doc_target(
+                {"text": json.dumps({"ours": 1})},
+                path="settings/cli.json",
+                ledger="json-settings/cli.json",
+            ),
+        ]
+    }
+    fixture.own(plan)
+
+    # Exactly what SIGKILL between mkstemp and os.replace leaves behind, in all
+    # four directories this plan writes into. A document's leaked copy is the
+    # one that matters most: it can hold the credential url its renderer
+    # substituted in, and nothing outside this program would ever collect it.
+    leaked = [
+        document.parent / ".cli.json.nat-tmp.ab12cd",
+        doc_ledger.parent / ".cli.json.nat-tmp.ef34gh",
+        unit.parent / ".unit.txt.nat-tmp.ij56kl",
+        dir_ledger.parent / ".settings.manifest.nat-tmp.mn78op",
+    ]
+    for path in leaked:
+        path.write_text("half a document\n")
+    # The INFIX is the proof, so a user dotfile in the same directory is not
+    # ours and must survive: a vim swapfile is the canonical near miss.
+    innocent = document.parent / ".cli.json.swp"
+    innocent.write_text("vim\n")
+
+    # The same declaration again: nothing to write, and the sweep still runs.
+    before = snapshot(document), snapshot(unit)
+    fixture.own(plan)
+    for path in leaked:
+        assert not path.exists(), f"a leaked reserved temporary survived: {path}"
+    assert innocent.read_text() == "vim\n", "the sweep ate a user dotfile"
+    assert (snapshot(document), snapshot(unit)) == before
+    print("PASS sweeps: leaked reserved temporaries collected beside both containers")
+
+
 def legacy(fixture):
     """Both legacy ledgers, FROZEN as the programs that wrote them left them.
 
@@ -886,6 +931,7 @@ CASES = {
     "rejections": rejections,
     "remove_arms": remove_arms,
     "renderer": renderer,
+    "sweeps": sweeps,
     "transitions": transitions,
     "two_phase": two_phase,
     "virgin": virgin,
