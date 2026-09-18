@@ -1,9 +1,8 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-20 — package modules own consumer checks; the
-> shared harness discovers backend imports and owner activation probes. The
-> "parity does not require identical delivery paths" worked example below is now
-> `ai.codex.execpolicyRules`, not the removed `ai.codex.profiles`.
+> **Last verified:** 2026-09-21 — mixed settings documents reconcile through
+> `lib/ai/own.{nix,py}`, and the delivery-path parity example uses
+> `ai.codex.execpolicyRules`.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -210,12 +209,19 @@ override on conflict, user-added keys pass through.
 **Mixed TOML ownership requires a leaf manifest, not a blind merge.** Codex's
 user `config.toml` contains Nix-declared settings and required native state: the
 TUI trust prompt writes ad-hoc `projects.<path>.trust_level` entries through
-`config/batchWrite`. `mkTomlSettingsActivationScript` delegates to
-`lib/ai/reconcile-toml.py`, which records exact managed leaf paths under XDG
-state, removes only retired managed leaves, overlays current leaves, preserves
-native siblings within the same table, and atomically leaves mode-0600 regular
-files. The manifest is necessary because `existing * desired` cannot tell a
-native key from a Nix key deleted in the next generation.
+`config/batchWrite`. `helpers.mkOwnedDocument` lowers it into one
+`lib/ai/own.nix` bundle, and `lib/ai/own.py` records exact managed leaf paths
+under XDG state, removes only retired managed leaves, overlays current leaves,
+preserves native siblings within the same table, and atomically leaves mode-0600
+regular files. The manifest is necessary because `existing * desired` cannot
+tell a native key from a Nix key deleted in the next generation.
+
+The declared value travels as DATA in a store-resident plan, so no byte of it is
+interpolated into generated shell — and nothing about what a writer will assert
+is visible in its activation body. `mkOwnedDocument` therefore also records the
+declaration on the internal `ai.<runtime>._reconciledDocuments` option, which is
+what module-eval checks read; reading the plan back would be
+import-from-derivation.
 
 Do not generalize this to every TOML file or every runtime. Static ownership is
 still preferred when no required native writer shares the artifact. That is why
@@ -231,19 +237,16 @@ layer as the worked example: that option and its devenv `CODEX_HOME`
 materializer were removed 2026-09-19 as unreachable dead code (see the Settled
 bullet in `dev/fragments/ai-module/ai-module-fanout.md`).
 
-**HM settings writes are conditional; devenv writes are not.** The HM activation
-merge (copilot `copilotSettingsMerge`, kiro `kiroSettingsMerge`) is gated on
-non-empty native settings — if the consumer enables the ecosystem just for
-MCP/skills fanout and doesn't set any `ai.<cli>.nativeSettings`, the activation
-script doesn't fire and an externally-managed settings file is left untouched.
-Matches upstream Claude HM behavior where `settings.json` is only written when
-`cfg.nativeSettings != {}`.
-
-Codex user settings are the deliberate exception: its activation entry is always
-present while enabled. Empty desired settings plus no prior manifest is a strict
-no-op, but empty desired settings plus a prior manifest must run so a later
-generation can retract formerly declared leaves without erasing native trust
-state.
+**Every HM settings writer is unconditional.** Copilot's `copilotSettingsMerge`,
+kiro's `kiroSettingsMerge`, kimchi's two entries, codex's
+`codexSettingsReconcile` and claude's `claudeUnpinLaunchEffort` are all emitted
+while the ecosystem is enabled, whatever the declaration says. An empty
+declaration is not "nothing to do", it is the RETRACTION path: empty settings
+plus no prior ledger is a strict no-op, while empty settings plus a prior ledger
+must run so a later generation retracts the leaves it used to own without
+erasing native state. A `mkIf (cfg.nativeSettings != {})` around one of these
+writers is the N-to-zero defect, and `checks.ai-delivery` fails at eval on it —
+it evaluates every imperative writer under a populated AND an empty declaration.
 
 Devenv-side writes are unconditional (always write the file when
 `enable = true`). This is intentional: devenv files are project-local symlinks,
