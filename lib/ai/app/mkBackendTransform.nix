@@ -222,6 +222,30 @@
 in {
   options.ai.${appRecord.name} =
     {
+      _reconciledDocuments = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.submodule {
+          options = {
+            ledger = lib.mkOption {
+              type = lib.types.str;
+              description = "Ownership ledger for this document, relative to the state root.";
+            };
+            value = lib.mkOption {
+              type = lib.types.anything;
+              description = "The leaves this generation declares ownership of.";
+            };
+          };
+        });
+        default = {};
+        internal = true;
+        visible = false;
+        # `own` carries content as DATA in a store-resident plan, so an
+        # activation body names neither the document it reconciles nor the
+        # value it will assert. This is the only eval-visible record of both,
+        # and five packages' module-eval checks read it instead of splitting a
+        # heredoc out of generated shell. `helpers.mkOwnedDocument` emits this
+        # record AND the writer from one declaration, so the two cannot drift.
+        description = "Runtime-writable documents this generation owns leaves of, keyed by a path relative to the backend root.";
+      };
       enable = lib.mkEnableOption appRecord.name;
       files = lib.mkOption {
         type = runtimeFiles.fileMapType;
