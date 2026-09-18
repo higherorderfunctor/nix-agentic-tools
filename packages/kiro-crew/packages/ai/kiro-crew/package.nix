@@ -90,13 +90,12 @@
     owner = "kirodotdev";
     repo = "KiroCrew";
     inherit rev;
-    # PLACEHOLDER — `lib.fakeHash`, spelled as a quoted literal on purpose.
-    # `dev/scripts/update-pkg.sh` Phase 0 finds this with
-    # `grep -oP 'hash = "\Ksha256-[^"]+'`; an unquoted `lib.fakeHash` is
-    # invisible to it, which skips the prefetch AND therefore the
-    # `# upstream:` version rewrite below, shipping a package that claims one
-    # version and builds another.
-    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    # A QUOTED SRI LITERAL, never `lib.fakeHash` and never an interpolation.
+    # `dev/scripts/update-pkg.sh` Phase 0 locates the value to rewrite with
+    # `grep -oP 'hash = "\Ksha256-[^"]+'`; anything that grep cannot see skips
+    # the prefetch AND therefore the `# upstream:` version rewrite below,
+    # shipping a package that claims one version and builds another.
+    hash = "sha256-BbsILZY71th0gekg5J5gk5pTYMR2X5Buj7O1KqnFfSY=";
   };
 
   # No eval-time `vu.readPyprojectVersion "${src}/pyproject.toml"`: that is
