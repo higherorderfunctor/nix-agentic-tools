@@ -309,7 +309,10 @@
       copilot = both (absent "No permissions option or translation exists; arbitrary nativeSettings keys do not establish a permissions contract.");
       kimchi = both (absent "No permissions option or translation exists.");
       kiro = {
-        devenv = absent "Parity gap: permissions/trustedMcpTools options exist, but mkKiro.devenv.config emits no permissions.yaml. Agent-local permission records remain part of agents.";
+        # NOT a parity gap, and the label used to invite "closing" it: Kiro
+        # never looks in a project .kiro/ for permissions, so a devenv writer
+        # would emit a file the runtime cannot read.
+        devenv = absent "Kiro reads permissions only from ~/.kiro/settings/ (global) or ~/.kiro/workspace-roots/<hash>/, never a project .kiro/, so a devenv-written permissions.yaml would never be read (packages/kiro-cli/lib/mkKiro.nix:1526). Agent-local permission records remain part of agents.";
         hm = declarative "hm" ".kiro/settings/permissions.yaml";
       };
     };
