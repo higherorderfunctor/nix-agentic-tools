@@ -69,6 +69,7 @@
       # command mutate that immutable output would bypass the overlay/update
       # pipeline and could not survive the next generation.
       nixOwnedPackageLifecycle = [
+        "codex app-server daemon update"
         "codex update"
       ];
 
