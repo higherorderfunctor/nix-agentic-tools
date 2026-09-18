@@ -81,22 +81,17 @@
     nonEmpty = lib.setAttrByPath option nonEmpty;
     empty = lib.setAttrByPath option empty;
   };
-  # An exempted writer's failures are RECORDED, not fatal. The gate errors the
-  # moment an exempted writer survives BOTH arms ("exemption is stale"), so
-  # every exemption below is a countdown the ownership fix has to spend.
+  # No row declares an `exemption` any more. The mechanism stays in the gate —
+  # an exempted writer's failures are RECORDED, and the gate errors the moment
+  # an exempted writer survives every arm — because it is how the NEXT defect
+  # gets documented, but every exemption this file carried has been spent.
   #
-  # `exempt` answers for a writer that EXISTS and behaves wrongly. It cannot
-  # answer for a writerAttr that resolves to nothing, because that shape is
-  # indistinguishable from a typo, and the gate must keep failing on typos.
-  # A row whose declared writer genuinely does not exist yet says so with
-  # `absentWriter`, whose countdown runs the other way: the gate errors the
+  # An exemption could never answer for a writerAttr that resolves to nothing:
+  # that shape is indistinguishable from a typo, and the gate must keep failing
+  # on typos. A row whose declared writer genuinely does not exist says so with
+  # `absentWriter`, whose countdown runs the other way — the gate errors the
   # moment the attribute starts existing, which is when the row owes an update.
-  exempt = evidence: reason: {exemption = {inherit evidence reason;};};
   absentWriter = evidence: reason: {absentWriter = {inherit evidence reason;};};
-  # Three HM settings merges share one defect and one shape, so they share one
-  # reason; only the citation differs.
-  gatedSettingsMerge = evidence:
-    exempt evidence "Activation entry sits inside mkIf on a non-empty settings set, so an emptied declaration never merges the removal away.";
   # A writer whose enabling condition can never be false. It therefore survives
   # the gate's empty arm for a reason that has nothing to do with removal, so
   # the pass is not evidence that a retired key is retired. RECORDED, not
@@ -156,15 +151,9 @@
         else "$DEVENV_ROOT"
       }/.kiro/settings/mcp.json"
       ((mcpProbe "kiro") // {base.ai.kiro.mcpWriteMode = "overwrite";})
-      // (
-        if mode == "hm"
-        then
-          exempt "packages/kiro-cli/lib/mkKiro.nix:1784"
-          "Writer sits inside mkIf on a non-empty merged pool, so an emptied declaration never prunes mcp.json."
-        else
-          absentWriter "packages/kiro-cli/lib/mkKiro.nix:1984"
-          "This task does not exist: the devenv write is an enterShell fragment gated on a non-empty merged pool, so neither declaration reaches a task."
-      );
+      // lib.optionalAttrs (mode == "devenv")
+      (absentWriter "packages/kiro-cli/lib/mkKiro.nix:1984"
+        "This task does not exist: the devenv write is an enterShell fragment gated on a non-empty merged pool, so neither declaration reaches a task.");
     merge =
       primary
       // {
@@ -183,10 +172,7 @@
       condition = ''ai.kiro.mcpWriteMode = "overwrite" (default)'';
       additionalWriters =
         [merge]
-        # The primary's exemption answers for the WRITE entry surviving an
-        # emptied pool. This entry has a different defect — it is not emitted
-        # at all — so it drops that record rather than carrying two.
-        ++ lib.optional (mode == "hm") (builtins.removeAttrs primary ["exemption"]
+        ++ lib.optional (mode == "hm") (primary
           // {
             writerAttr = ["home" "activation" "materialize-kiro-settings-prune"];
             role = "Retire merge leaves and prune retired whole paths before the write phase.";
@@ -407,9 +393,7 @@
       };
       copilot = {
         devenv = (declarative "devenv" ".config/github-copilot/settings.json") // {deliveryGap = copilotInert;};
-        hm =
-          leaves recursiveMerge "copilotSettingsMerge" "$HOME/.copilot/settings.json" (settingsProbe "copilot")
-          // gatedSettingsMerge "packages/copilot-cli/lib/mkCopilot.nix:293";
+        hm = leaves recursiveMerge "copilotSettingsMerge" "$HOME/.copilot/settings.json" (settingsProbe "copilot");
       };
       kimchi = {
         devenv =
@@ -432,8 +416,7 @@
           // {
             additionalWriters = [
               (leaves recursiveMerge "kimchiHarnessSettingsMerge" "$HOME/.config/kimchi/harness/settings.json"
-                (probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {})
-                // gatedSettingsMerge "packages/kimchi/lib/mkKimchi.nix:258")
+                (probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {}))
             ];
           };
       };
@@ -445,8 +428,7 @@
           };
         hm =
           leaves recursiveMerge "kiroSettingsMerge" "$HOME/.kiro/settings/cli.json"
-          (probe ["ai" "kiro" "nativeSettings"] {chat.defaultModel = "probe";} {})
-          // gatedSettingsMerge "packages/kiro-cli/lib/mkKiro.nix:1864";
+          (probe ["ai" "kiro" "nativeSettings"] {chat.defaultModel = "probe";} {});
       };
     };
     skills = {
