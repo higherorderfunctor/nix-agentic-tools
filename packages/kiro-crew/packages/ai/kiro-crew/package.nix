@@ -37,10 +37,22 @@
   # is unconditional, so `bin/kirocrew` is always wrapped. What stays true is
   # that neither argument contributes anything to the wrapper when it is null.
   #
-  # `embedModel`: a SEAM for a later, separate derivation — a GGUF embedding
-  #   model (upstream bundles qwen3-embedding 0.6b and DOWNLOADS it at first
-  #   use). Wired to upstream's own `KIROCREW_EMBED_MODEL_PATH`, which selects
-  #   a local GGUF instead.
+  # `embedModel`: the GGUF embedding model, WIRED BY DEFAULT to the sibling
+  #   derivation rather than left null. Upstream downloads 610 MB from a CDN
+  #   at first gateway start otherwise, and a seam nothing fills is not
+  #   packaging — it is a derivation the binary cache carries and no install
+  #   can reach. Imported directly, the way oxlint reaches tsgolint, because
+  #   recipes here are handed a bare nixpkgs with no overlays applied, so
+  #   `pkgs.ai.<sibling>` does not exist at this point.
+  #
+  #   The 610 MB lands in the default closure. That is the right trade rather
+  #   than a regrettable one: it is the SAME 610 MB the user would otherwise
+  #   fetch from CloudFront on first run, except substituted from a cache,
+  #   hash-verified, carrying its licence, and present before the gateway
+  #   needs it. Pass `embedModel = null` to override and take the download.
+  #
+  #   It is wired to upstream's own `KIROCREW_EMBED_MODEL_PATH`, which selects
+  #   a local GGUF instead of fetching.
   #
   # `llamaCppLib`: an ESCAPE HATCH, not a seam — the in-process embedding
   #   runtime is the VENDORED one (kept, relinked and asserted below), and
@@ -80,7 +92,7 @@
   # separate MIT-0 upstream) and the whisper.cpp models
   # (`KIROCREW_WHISPER_MODEL_BASE_URL`). Add them the same way — as arguments
   # with null defaults — when those derivations exist.
-  embedModel ? null,
+  embedModel ? import ../kiro-crew-embed-model/package.nix {inherit pkgs;},
   llamaCppLib ? null,
   # ── Dormant patch ───────────────────────────────────────────────────────
   #
