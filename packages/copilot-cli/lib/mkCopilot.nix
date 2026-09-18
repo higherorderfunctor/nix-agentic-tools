@@ -281,17 +281,16 @@ in
           # as trusted_folders. Always emit the writer so empty settings retract
           # previously owned leaves. With no prior ownership, empty settings
           # leave an externally managed settings.json untouched, including for
-          # consumers enabling Copilot only for MCP/skills fanout. Desired JSON
-          # stays inlined so module evaluation can inspect the declared values.
-          {
-            home.activation.copilotSettingsMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
-              configFile = "${cfg.configDir}/settings.json";
-              python = pkgs.python3;
-              reconciler = ../../../lib/ai/reconcile-toml.py;
-              settingsJson = builtins.toJSON cfg.nativeSettings;
-              stateName = "copilot-settings-${builtins.hashString "sha256" cfg.configDir}";
-            });
-          }
+          # consumers enabling Copilot only for MCP/skills fanout.
+          (helpers.mkOwnedDocument {
+            entry = "copilotSettingsMerge";
+            ledger = "json-settings/copilot-settings-${builtins.hashString "sha256" cfg.configDir}.json";
+            path = "${cfg.configDir}/settings.json";
+            python = pkgs.python3;
+            runtime = "copilot";
+            value = cfg.nativeSettings;
+            inherit pkgs;
+          })
         ];
     };
     devenv = {
