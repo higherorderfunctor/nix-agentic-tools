@@ -223,22 +223,24 @@ in rec {
     runtime,
     value,
   }:
-    lib.mkMerge [
-      {
-        ai.${runtime}._reconciledDocuments.${path} = {inherit ledger value;};
-      }
-      (own {
-        backend = "hm";
-        entryNames.write = entry;
-        targets = [
-          {
-            inherit codec ledger path;
-            units.text = builtins.toJSON value;
-          }
-        ];
-        inherit pkgs python;
-      })
-    ];
+  # A PLAIN attrset, not an `mkMerge`: `own` contributes `home` and this
+  # contributes `ai`, so the union is unambiguous, and a caller whose
+  # surrounding block is an attrset can splice one attribute out of it instead
+  # of wrapping its whole config in a merge.
+    (own {
+      backend = "hm";
+      entryNames.write = entry;
+      targets = [
+        {
+          inherit codec ledger path;
+          units.text = builtins.toJSON value;
+        }
+      ];
+      inherit pkgs python;
+    })
+    // {
+      ai.${runtime}._reconciledDocuments.${path} = {inherit ledger value;};
+    };
 
   # ── Settings activation scripts ──────────────────────────────────────
   # Reconcile only Nix-owned leaves in mixed-authority, runtime-writable files.
