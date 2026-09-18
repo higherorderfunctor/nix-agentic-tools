@@ -6,7 +6,11 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest;
+  inherit (harness) evalDevenv evalHm mkTest ownedDocument;
+  kimchiDocument = leaf: evaluated:
+    ownedDocument "kimchi" "${evaluated.config.ai.kimchi.configDir}/${leaf}" evaluated;
+  configDocument = kimchiDocument "config.json";
+  harnessDocument = kimchiDocument "harness/settings.json";
 in {
   checks = {
     # `supportedPools` now owns every normalized per-runtime option gate, not
@@ -63,13 +67,27 @@ in {
         result.config.home.activation ? kimchiConfigMerge
     );
 
+    # Both documents get their own writer, their own ledger and their own
+    # activation entry, and declaring nothing still reaches the reconciler so
+    # the prior generation's leaves are retracted. The document a writer owns
+    # comes from `_reconciledDocuments`: the reconciler carries the path and
+    # the value as data in a store plan, so the activation body names only the
+    # plan. The ledger prefixes are the live migration contract every
+    # previously written ownership record hangs off.
+    #
+    # The values are NOT asserted empty here. `nativeSettings` and
+    # `harnessSettings` are submodules with defaulted sub-options, so an
+    # undeclared Kimchi still owns `telemetry.enabled` and friends; that is
+    # pre-existing and `filterNulls` is deliberately shallow.
     module-kimchi-hm-empty-settings-emits-writers = mkTest "kimchi-hm-empty-settings-emits-writers" (
       let
         evaluated = evalHm {ai.kimchi.enable = true;};
         activation = evaluated.config.home.activation;
       in
-        lib.hasInfix "--format json" activation.kimchiConfigMerge.text
-        && lib.hasInfix "--format json" activation.kimchiHarnessSettingsMerge.text
+        lib.hasInfix "--phase all" activation.kimchiConfigMerge.text
+        && lib.hasInfix "--phase all" activation.kimchiHarnessSettingsMerge.text
+        && lib.hasPrefix "json-settings/kimchi-config-" (configDocument evaluated).ledger
+        && lib.hasPrefix "json-settings/kimchi-harness-settings-" (harnessDocument evaluated).ledger
     );
 
     # harnessSettings render to harness/settings.json (mutable-state tree).
