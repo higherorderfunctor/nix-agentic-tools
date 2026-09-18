@@ -105,7 +105,7 @@
 
   accepted = value: (builtins.tryEval (builtins.deepSeq value true)).success;
   rejected = value: !(builtins.tryEval (builtins.deepSeq value true)).success;
-  bodies = result: map (entry: entry.text) (lib.attrValues result.home.activation);
+  bodies = result: map (entry: entry.text) (lib.attrValues result.config.home.activation);
   # `exit` would truncate the whole concatenated activation script, so match
   # the WORD: `inherit_errexit` carries the substring and must not trip this.
   usesExit = line: builtins.match "(.*[^_[:alnum:]])?exit([^_[:alnum:]].*)?" line != null;
@@ -241,43 +241,57 @@
   assert lib.assertMsg (accepted (devenvHooks false) && accepted (devenvHooks true))
   "ai.own: the devenv call shape was rejected";
   assert lib.assertMsg (
-    builtins.attrNames kiroMcp.home.activation
+    builtins.attrNames kiroMcp.config.home.activation
     == ["kiroMcpJson" "materialize-kiro-settings-prune"]
-    && builtins.attrNames steeringRetirement.home.activation
+    && builtins.attrNames steeringRetirement.config.home.activation
     == ["retire-materialize-kiro-steering" "retire-materialize-kiro-steering-ledger"]
   ) "ai.own: a bundle with a dir target must emit both the prune and the write entry";
-  assert lib.assertMsg (builtins.attrNames claudeUnpin.home.activation == ["claudeUnpinLaunchEffort"])
+  assert lib.assertMsg (builtins.attrNames claudeUnpin.config.home.activation == ["claudeUnpinLaunchEffort"])
   "ai.own: a document-only bundle must emit the write entry alone";
   assert lib.assertMsg (
-    kiroMcp.home.activation.kiroMcpJson.after
+    kiroMcp.config.home.activation.kiroMcpJson.after
     == ["linkGeneration" "sops-nix"]
-    && kiroMcp.home.activation.materialize-kiro-settings-prune.before == ["checkLinkTargets"]
-    && claudeUnpin.home.activation.claudeUnpinLaunchEffort.after == ["linkGeneration"]
+    && kiroMcp.config.home.activation.materialize-kiro-settings-prune.before == ["checkLinkTargets"]
+    && claudeUnpin.config.home.activation.claudeUnpinLaunchEffort.after == ["linkGeneration"]
   ) "ai.own: an activation entry lost its DAG position";
   assert lib.assertMsg (
-    lib.hasInfix "--phase all" kiroMcp.home.activation.kiroMcpJson.text
-    && lib.hasInfix "--phase prune" kiroMcp.home.activation.materialize-kiro-settings-prune.text
-    && lib.hasInfix "--phase all" claudeUnpin.home.activation.claudeUnpinLaunchEffort.text
+    lib.hasInfix "--phase all" kiroMcp.config.home.activation.kiroMcpJson.text
+    && lib.hasInfix "--phase prune" kiroMcp.config.home.activation.materialize-kiro-settings-prune.text
+    && lib.hasInfix "--phase all" claudeUnpin.config.home.activation.claudeUnpinLaunchEffort.text
   ) "ai.own: an activation entry runs the wrong phase";
   assert lib.assertMsg (lib.all strict (
     bodies kiroMcp
     ++ bodies claudeUnpin
     ++ bodies steeringRetirement
-    ++ [(devenvHooks false).tasks."ai:kiro:materialize-hooks".exec]
+    ++ [(devenvHooks false).config.tasks."ai:kiro:materialize-hooks".exec]
   ))
   "ai.own: an activation body is not strict, or contains `exit`";
   assert lib.assertMsg (
-    lib.hasInfix "NAT_OWN_ROOT=\"$HOME\"" kiroMcp.home.activation.kiroMcpJson.text
-    && lib.hasInfix "NAT_OWN_ROOT=\"$DEVENV_ROOT\"" (devenvHooks false).tasks."ai:kiro:materialize-hooks".exec
+    lib.hasInfix "NAT_OWN_ROOT=\"$HOME\"" kiroMcp.config.home.activation.kiroMcpJson.text
+    && lib.hasInfix "NAT_OWN_ROOT=\"$DEVENV_ROOT\"" (devenvHooks false).config.tasks."ai:kiro:materialize-hooks".exec
   ) "ai.own: a backend root export is wrong";
   assert lib.assertMsg (
-    (devenvHooks false).tasks."ai:kiro:materialize-hooks".after
+    (devenvHooks false).config.tasks."ai:kiro:materialize-hooks".after
     == ["devenv:files:cleanup"]
-    && (devenvHooks false).tasks."ai:kiro:materialize-hooks".before == ["devenv:enterShell"]
-    && (devenvHooks true).tasks."ai:kiro:materialize-hooks".before == ["devenv:enterShell" "devenv:files"]
+    && (devenvHooks false).config.tasks."ai:kiro:materialize-hooks".before == ["devenv:enterShell"]
+    && (devenvHooks true).config.tasks."ai:kiro:materialize-hooks".before == ["devenv:enterShell" "devenv:files"]
   ) "ai.own: the devenv task edges are wrong, or the devenv:files edge stopped being conditional";
-  assert lib.assertMsg (lib.hasInfix "--verify" (devenvHooks false).enterTest)
+  assert lib.assertMsg (lib.hasInfix "--verify" (devenvHooks false).config.enterTest)
   "ai.own: the devenv bundle lost its enterTest verification";
+  # The plan is DATA in the result, not only bytes in the store. Module-eval
+  # checks read a render command and a unit mode out of it, so an `own` that
+  # stopped exposing the value it serializes takes every one of them with it.
+  assert lib.assertMsg (
+    lib.hasPrefix "/nix/store/" kiroMcp.plan.bash
+    && map (target: target.ledger) kiroMcp.plan.targets
+    == ["materialize/kiro-settings.manifest" "json-settings/kiro-mcp-fixture.json"]
+    && (builtins.head kiroMcp.plan.targets).units."mcp.json"
+    == {
+      mode = "0400";
+      run = "printf '{}'";
+    }
+    && (builtins.head steeringRetirement.plan.targets).units == {}
+  ) "ai.own: the plan is no longer eval-visible data";
   assert lib.assertMsg (lib.all (name: rejected (refuse refusals.${name})) (builtins.attrNames refusals))
   "ai.own: a malformed bundle was accepted: ${lib.concatStringsSep ", " (lib.filter (name: accepted (refuse refusals.${name})) (builtins.attrNames refusals))}"; true;
 in {

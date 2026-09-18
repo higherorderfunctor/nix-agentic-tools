@@ -192,17 +192,60 @@ in rec {
     message = "Cannot specify both `programs.${moduleName}.${name}` and `programs.${moduleName}.${name}Dir`.";
   };
 
-  # ── Owned documents ──────────────────────────────────────────────────
+  # ── Owned artifacts ──────────────────────────────────────────────────
+
+  # Emit one `own` bundle AND the eval-visible record of its plan, from one
+  # set of arguments. Every `own` caller in this repo goes through here.
+  #
+  # `own` ships content as data in a store-resident plan, so the emitted body
+  # names neither the document it reconciles nor the bytes it will write, and
+  # the plan file itself cannot be read back at eval: importing a derivation is
+  # forbidden here, and discarding the plan's string context to make it
+  # readable would drop the store references that keep a rendered command alive
+  # in the generation's closure. `ai.<runtime>._ownPlans.<write entry>` is
+  # therefore the ONLY eval-visible record of what a writer will do, and it
+  # carries `own`'s own plan value rather than a caller-side mirror of it.
+  #
+  # `declared` is the one thing the plan cannot carry: a document target's
+  # content is `builtins.toJSON value`, and `builtins.fromJSON` REFUSES a
+  # string that refers to a store path, so a check cannot recover the value
+  # from the plan. It is keyed by the same document path the target names.
+  #
+  # runtime: ai.<runtime> namespace that records the plan.
+  mkOwnBundle = {
+    backend,
+    declared ? {},
+    runtime,
+    ...
+  } @ args: let
+    owned = own (builtins.removeAttrs args ["declared" "runtime"]);
+    # The record is reached through a NESTED value, never merged into `owned`
+    # with `//` and never behind a `cfg`-derived attribute NAME. `own`
+    # validates its plan eagerly under `builtins.seq`, and the module system
+    # walks a fragment's key structure while it is still collecting the very
+    # definitions a `cfg.configDir`-derived `ledger` or `path` reads — forcing
+    # the validation there is an infinite recursion, which is what a caller
+    # that merged the bundle with `//` got. Only attribute VALUES may reach
+    # into `owned`.
+    record = {
+      ai.${runtime}._ownPlans.${args.entryNames.write} = {
+        inherit declared;
+        # As lazy as an assignment: the source is one shared thunk that
+        # nothing forces until an attribute is demanded.
+        inherit (owned) plan;
+      };
+    };
+  in
+    if backend == "hm"
+    then record // {home.activation = owned.config.home.activation;}
+    else
+      record
+      // {inherit (owned.config) enterTest tasks;};
 
   # Reconcile the Nix-owned leaves of ONE runtime-writable document, keeping
   # every unowned sibling. The prior generation's ledger retires leaves this
   # one no longer declares; an empty declaration is therefore a retirement and
   # NOT a reason to skip the writer.
-  #
-  # The writer and the `_reconciledDocuments` record come from the same
-  # arguments on purpose. `own` ships content as data in a store plan, so the
-  # emitted body names neither `path` nor `value`; a caller-side mirror of
-  # either could drift from what actually gets written, and this cannot.
   #
   # codec:   "json", or "toml" for a document with native comments to keep.
   # entry:   home.activation attribute name — a consumer ordering contract.
@@ -222,9 +265,10 @@ in rec {
     python,
     runtime,
     value,
-  }: let
-    owned = own {
+  }:
+    mkOwnBundle {
       backend = "hm";
+      declared.${path} = value;
       entryNames.write = entry;
       targets = [
         {
@@ -232,20 +276,8 @@ in rec {
           units.text = builtins.toJSON value;
         }
       ];
-      inherit pkgs python;
+      inherit pkgs python runtime;
     };
-  in {
-    # `owned` is reached through a NESTED value, never merged in with `//` and
-    # never behind a `cfg`-derived attribute NAME. `own` validates its plan
-    # eagerly, and the module system walks this fragment's key structure while
-    # it is still collecting the very definitions a `cfg.configDir`-derived
-    # `ledger` or `path` reads — forcing the validation there is an infinite
-    # recursion, which is what a caller that interpolated cfg into a key or
-    # merged the bundle with `//` got. Keeping both behind one more attribute
-    # defers the force until an option is actually read.
-    ai.${runtime}._reconciledDocuments.${path} = {inherit ledger value;};
-    home.activation = owned.home.activation;
-  };
 
   # ── Settings activation scripts ──────────────────────────────────────
   # Reconcile only Nix-owned leaves in mixed-authority, runtime-writable files.
