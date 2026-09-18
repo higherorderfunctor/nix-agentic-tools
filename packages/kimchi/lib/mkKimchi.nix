@@ -246,28 +246,32 @@ in
           # Reconcile config.json even when settings become empty: retract
           # recorded Nix leaves and preserve externally managed native siblings.
           # An empty first generation leaves the file untouched.
-          {
-            home.activation.kimchiConfigMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
-              configFile = "${cfg.configDir}/config.json";
-              python = pkgs.python3;
-              reconciler = ../../../lib/ai/reconcile-toml.py;
-              settingsJson = builtins.toJSON filteredSettings;
-              stateName = "kimchi-config-${builtins.hashString "sha256" cfg.configDir}";
-            });
-          }
+          #
+          # Two documents, two bundles, two activation entries — deliberately
+          # not one bundle of two targets. Nothing orders these against each
+          # other, and each entry name is a consumer-visible contract.
+          (helpers.mkOwnedDocument {
+            entry = "kimchiConfigMerge";
+            ledger = "json-settings/kimchi-config-${builtins.hashString "sha256" cfg.configDir}.json";
+            path = "${cfg.configDir}/config.json";
+            python = pkgs.python3;
+            runtime = "kimchi";
+            value = filteredSettings;
+            inherit pkgs;
+          })
 
           # Kimchi writes harness/settings.json at runtime. Keep its unowned
           # leaves and retract retired Nix settings even for an empty declaration;
           # without prior ownership, empty settings leave the file untouched.
-          {
-            home.activation.kimchiHarnessSettingsMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
-              configFile = "${cfg.configDir}/harness/settings.json";
-              python = pkgs.python3;
-              reconciler = ../../../lib/ai/reconcile-toml.py;
-              settingsJson = builtins.toJSON filteredHarnessSettings;
-              stateName = "kimchi-harness-settings-${builtins.hashString "sha256" cfg.configDir}";
-            });
-          }
+          (helpers.mkOwnedDocument {
+            entry = "kimchiHarnessSettingsMerge";
+            ledger = "json-settings/kimchi-harness-settings-${builtins.hashString "sha256" cfg.configDir}.json";
+            path = "${cfg.configDir}/harness/settings.json";
+            python = pkgs.python3;
+            runtime = "kimchi";
+            value = filteredHarnessSettings;
+            inherit pkgs;
+          })
 
           # harness/mcp.json — Claude-compatible format.
           (lib.mkIf (mergedServers != {}) {
