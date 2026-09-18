@@ -4,7 +4,7 @@
   harness,
   ...
 }: let
-  inherit (harness) mcpLib;
+  inherit (harness) mcpLib ownPlan;
 
   # Generic idempotent-flag helper shared with mkKiro's wrapper (lib/idempotentFlags.nix).
   idempotentFlags = import ../../../lib/idempotentFlags.nix {inherit lib;};
@@ -58,6 +58,33 @@
     else throw "${label}: script body is empty or not a string";
 
   dvHookTaskExec = requireBody ["tasks" "ai:kiro:materialize-hooks" "exec"];
+  # A plan is DATA, so the units, their modes, the ledger and the target
+  # directory are all readable here — an `own` body is one command and names
+  # none of them. `harness.ownPlan` throws on an absent writer, so a renamed
+  # entry fails the check rather than satisfying it with an empty plan.
+  planTarget = path: plan: let
+    hits = lib.filter (target: target.path == path) plan.targets;
+  in
+    if lib.length hits == 1
+    then lib.head hits
+    else throw "Kiro check requires exactly one own target for '${path}', found ${toString (lib.length hits)}";
+  hookTargetOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/hooks" (ownPlan "kiro" entry ev);
+  hmHookTarget = hookTargetOf "materialize-kiro-hooks-write";
+  dvHookTarget = hookTargetOf "ai:kiro:materialize-hooks";
+  # The `--plan` argument out of an emitted body. `own` passes exactly one, so
+  # this is the IDENTITY of the plan a phase applies: two entries that resolve
+  # to the same store path cannot disagree about what is owned, which is what
+  # the HM prune/write pair needs. The quotes are optional on purpose —
+  # `lib.escapeShellArg` leaves a plain store path unquoted — so strip them if
+  # they are there. The body embeds store paths, whose context the split
+  # helpers reject, so discard it; the bytes are unchanged.
+  ownPlanArg = body: let
+    parts = lib.splitString "--plan " (builtins.unsafeDiscardStringContext body);
+    unquote = token: lib.removeSuffix "'" (lib.removePrefix "'" token);
+  in
+    if lib.length parts != 2
+    then throw "Kiro check requires exactly one --plan argument in an own body"
+    else unquote (builtins.head (lib.splitString " " (builtins.elemAt parts 1)));
   dvMcpTaskExec = requireBody ["tasks" "ai:kiro:materialize-mcp" "exec"];
   dvTaskExec = requireBody ["tasks" "ai:kiro:retire-steering-copies" "exec"];
   hmHookPruneScript = requireBody ["home" "activation" "materialize-kiro-hooks-prune" "text"];
@@ -85,5 +112,5 @@
     in
       builtins.head (lib.splitString "\n${marker}\n" body);
 in {
-  inherit dvHookTaskExec dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookWriteScript hmMcpPruneScript hmMcpRetirementScript hmMcpWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody renderKiroSecrets renderedMcpJson soleFork soleSame;
+  inherit dvHookTarget dvHookTaskExec dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpPruneScript hmMcpRetirementScript hmMcpWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame;
 }
