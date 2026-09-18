@@ -26,6 +26,7 @@
     }
   '';
   tools = {
+    bash = "${pkgs.bash}/bin/bash";
     legacyDir = "${legacyDir}";
     legacyDoc = "${../../lib/ai/reconcile-toml.py}";
     own = "${../../lib/ai/own.py}";
