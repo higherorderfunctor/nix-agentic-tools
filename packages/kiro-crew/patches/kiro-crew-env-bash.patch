@@ -1,0 +1,91 @@
+diff --git a/skills/gateway-restart/do-restart.sh b/skills/gateway-restart/do-restart.sh
+index 80672f2..74d3e46 100644
+--- a/skills/gateway-restart/do-restart.sh
++++ b/skills/gateway-restart/do-restart.sh
+@@ -1,4 +1,6 @@
+-#!/bin/bash
++#!/usr/bin/env bash
++set -euETo pipefail
++shopt -s inherit_errexit 2>/dev/null || :
+ # Delayed gateway restart — run as a disowned process.
+ # The sleep gives the calling session time to finish responding.
+ #
+@@ -61,8 +63,12 @@ sleep "${KIROCREW_RESTART_DELAY:-10}"
+ # tells the resumed agent to quote this log into the conversation, so redact
+ # the bearer token on the way in. PIPESTATUS keeps the restart's own exit
+ # status — plain $? would report sed's.
+-kirocrew restart 2>&1 | sed -E 's/([?&]token=)[^[:space:]]+/\1REDACTED/g' >&3
+-status="${PIPESTATUS[0]}"
++# Keep a failed restart observable even with errexit enabled.
++if kirocrew restart 2>&1 | sed -E 's/([?&]token=)[^[:space:]]+/\1REDACTED/g' >&3; then
++  status=0
++else
++  status="${PIPESTATUS[0]}"
++fi
+ # Same open-once discipline as the log: the exclusive open is the write
+ # handle. A refused open (something re-planted at the path) drops the verdict.
+ rm -f -- "$STATUS_FILE"
+diff --git a/src/kiro_crew/apps/lifecycle_scripts.py b/src/kiro_crew/apps/lifecycle_scripts.py
+index dd1abae..24e711e 100644
+--- a/src/kiro_crew/apps/lifecycle_scripts.py
++++ b/src/kiro_crew/apps/lifecycle_scripts.py
+@@ -69,8 +69,17 @@ async def run_lifecycle_script(
+     if not app_root.is_dir():
+         return {"output": f"app directory not found: {app_root}", "failed": True}
+ 
+-    safe_script = f"set -euo pipefail\n{script}"
+-    base_cmd = ["/bin/bash", "-c", safe_script]
++    safe_script = (
++        "set -euETo pipefail\n"
++        "shopt -s inherit_errexit 2>/dev/null || :\n"
++        f"{script}"
++    )
++    # Resolve before sandboxing: the sandbox receives a single executable,
++    # and an inherited PATH must not select an agent-planted shell.
++    bash = platform_compat.trusted_system_bin("bash")
++    if bash is None:
++        return {"output": "bash is unavailable in trusted system directories", "failed": True}
++    base_cmd = [bash, "-c", safe_script]
+     sandboxed_cmd, cleanup = await wrap_argv_async(base_cmd, mode="standard", _prepare=wrap_argv)
+     sandboxed_cmd = cgroup_scope_argv(sandboxed_cmd)  # cgroup DoS ceiling
+     env = minimal_env(NONINTERACTIVE="1")
+diff --git a/src/kiro_crew/apps/registry.py b/src/kiro_crew/apps/registry.py
+index 94cc366..c8c8e9f 100644
+--- a/src/kiro_crew/apps/registry.py
++++ b/src/kiro_crew/apps/registry.py
+@@ -7098,9 +7098,18 @@ async def install_from_registry(
+             #   set -e  — exit on first error
+             #   set -u  — treat unset variables as errors (prevents rm -rf $EMPTY/)
+             #   set -o pipefail — propagate pipe failures
+-            safe_script = f"set -euo pipefail\n{install_script}"
++            safe_script = (
++                "set -euETo pipefail\n"
++                "shopt -s inherit_errexit 2>/dev/null || :\n"
++                f"{install_script}"
++            )
+ 
+-            base_cmd = ["/bin/bash", "-c", safe_script]
++            # Resolve before sandboxing: the sandbox receives a single executable,
++            # and an inherited PATH must not select an agent-planted shell.
++            bash = platform_compat.trusted_system_bin("bash")
++            if bash is None:
++                raise FileNotFoundError("bash is unavailable in trusted system directories")
++            base_cmd = [bash, "-c", safe_script]
+             sandboxed_cmd, _cleanup = await wrap_argv_async(
+                 base_cmd, mode="standard", _prepare=wrap_argv
+             )
+diff --git a/src/kiro_crew/dashboard/handlers/terminal.py b/src/kiro_crew/dashboard/handlers/terminal.py
+index dd3d9cc..8ae7a98 100644
+--- a/src/kiro_crew/dashboard/handlers/terminal.py
++++ b/src/kiro_crew/dashboard/handlers/terminal.py
+@@ -709,7 +709,9 @@ def _resolve_shell(cfg: dict) -> tuple[str, str | None]:
+         candidates = ["powershell.exe"]
+     else:
+         env_shell = os.environ.get("SHELL", "")
+-        candidates = ([env_shell] if env_shell else []) + ["/bin/bash"]
++        # This is the user's interactive shell, resolved by which below; an
++        # env argv prefix would be mistaken for the shell executable here.
++        candidates = ([env_shell] if env_shell else []) + ["bash"]
+     for cand in candidates:
+         resolved = shutil.which(cand)
+         if resolved:

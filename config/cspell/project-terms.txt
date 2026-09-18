@@ -167,6 +167,7 @@ glab
 glpat
 gluetun
 gnugrep
+gnupatch
 gnused
 gnutar
 GOARCH
@@ -403,6 +404,7 @@ rustc
 rvben
 sadjow
 sandboxed
+sandboxing
 sarif
 scriptable
 sdiehl
@@ -498,9 +500,12 @@ unstarted
 unstash
 untarring
 unwire
+unwritable
 upgrader
 upgraders
 uppercased
+upstreamable
+upstreaming
 usebruno
 userns
 valkey

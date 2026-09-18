@@ -1,0 +1,60 @@
+diff --git a/src/kiro_crew/dashboard/terminal_commands.py b/src/kiro_crew/dashboard/terminal_commands.py
+index 120012f..34d8e59 100644
+--- a/src/kiro_crew/dashboard/terminal_commands.py
++++ b/src/kiro_crew/dashboard/terminal_commands.py
+@@ -392,14 +392,20 @@ def _trusted_owner(st: os.stat_result, own_uid: int | None) -> bool:
+       already exposes. A tool this user installed is inside the same trust
+       boundary as the shell that is about to run it.
+ 
+-    Write access held by anyone ELSE disqualifies the node whoever owns it:
+-    world-writable always, and group-writable only for an administrator group
+-    (``_ADMIN_WRITE_GIDS``) when this gateway is NOT root.
++    Write access held by anyone ELSE disqualifies a non-sticky node whoever
++    owns it, except for an administrator group (``_ADMIN_WRITE_GIDS``) when
++    this gateway is NOT root. Sticky directories protect the child entries
++    whose ownership the same walk checks.
+     """
+     mode = st.st_mode
+-    if mode & stat.S_IWOTH:
++    # A sticky directory (for example /tmp or /nix/store) lets other accounts
++    # create entries, not replace entries owned by root or this user. The walk
++    # checks each child owner too, so this does not admit an attacker's binary.
++    # Sticky on a regular file offers no protection against writes.
++    sticky_dir = stat.S_ISDIR(mode) and bool(mode & stat.S_ISVTX)
++    if not sticky_dir and mode & stat.S_IWOTH:
+         return False
+-    if mode & stat.S_IWGRP:
++    if not sticky_dir and mode & stat.S_IWGRP:
+         # The administrator-group exemption is for a gateway running as an
+         # ordinary user, where an admin-group member can already sudo and so
+         # gains nothing from the write bit. A ROOT gateway is the opposite case:
+diff --git a/test/test_terminal_commands.py b/test/test_terminal_commands.py
+index f2b92a7..825b400 100644
+--- a/test/test_terminal_commands.py
++++ b/test/test_terminal_commands.py
+@@ -398,7 +398,7 @@ class TestSanitizedPath:
+     @pytest.mark.skipif(sys.platform == "win32", reason="uid 0 has no meaning on Windows")
+     def test_ownership_rejects_world_writable_whoever_owns_it(self):
+         own = os.geteuid()
+-        assert tc._trusted_owner(_fake_st(0, 0, 0o41777), own) is False
++        assert tc._trusted_owner(_fake_st(0, 0, 0o40777), own) is False
+         assert tc._trusted_owner(_fake_st(own, 0, 0o40757), own) is False
+ 
+     @pytest.mark.skipif(sys.platform == "win32", reason="uid 0 has no meaning on Windows")
+@@ -429,6 +429,16 @@ class TestSanitizedPath:
+         assert tc._trusted_owner(_fake_st(0, 80, 0o40775), 0) is False
+         assert tc._trusted_owner(_fake_st(0, 80, 0o40755), 0) is True
+ 
++    @pytest.mark.parametrize("mode", [0o41775, 0o41777])
++    def test_sticky_directory_keeps_child_ownership_boundary(self, mode):
++        # Even a root gateway may traverse the store: sticky prevents another
++        # account from replacing its root-owned children. Files stay protected.
++        assert tc._trusted_owner(_fake_st(0, 0, mode), 1000) is True
++        assert tc._trusted_owner(_fake_st(0, 0, mode), 0) is True
++        assert tc._trusted_owner(_fake_st(1000, 0, mode), 1000) is True
++        assert tc._trusted_owner(_fake_st(2000, 0, mode), 1000) is False
++        assert tc._trusted_owner(_fake_st(0, 0, 0o101777), 1000) is False
++
+     def test_ownership_on_a_host_without_uids_keeps_the_administrator_branch(self):
+         # `own_uid=None` is Windows, where every st_uid reads 0.
+         assert tc._trusted_owner(_fake_st(0, 0, 0o40755), None) is True

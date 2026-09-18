@@ -1,0 +1,301 @@
+diff --git a/src/kiro_crew/apps/manager.py b/src/kiro_crew/apps/manager.py
+index 94f40d0..eabd8dd 100644
+--- a/src/kiro_crew/apps/manager.py
++++ b/src/kiro_crew/apps/manager.py
+@@ -501,6 +501,9 @@ def _copy_app_tree(source: Path, dest: Path) -> None:
+         symlinks=True,
+         ignore=_ignore,
+     )
++    # Install hooks and dependency setup write into this copy, including files
++    # shipped read-only by a package manager. Never chmod the source or links.
++    platform_compat.ensure_owner_writable_tree(dest)
+ 
+     # Rewrite preserved ABSOLUTE in-tree symlinks to relative form: an
+     # absolute link copied verbatim still points into the *source* tree, so
+diff --git a/src/kiro_crew/cli_commands.py b/src/kiro_crew/cli_commands.py
+index d4f12e5..34e9a56 100644
+--- a/src/kiro_crew/cli_commands.py
++++ b/src/kiro_crew/cli_commands.py
+@@ -516,6 +516,8 @@ def _handle_workspace(args: argparse.Namespace) -> None:
+                         symlinks=True,
+                         ignore=_ignore_sensitive,
+                     )
++                    # A cloned workspace is editable even if its source was sealed.
++                    platform_compat.ensure_owner_writable_tree(staging)
+                 except BaseException:
+                     shutil.rmtree(staging, ignore_errors=True)
+                     raise
+diff --git a/src/kiro_crew/dashboard/handlers/files.py b/src/kiro_crew/dashboard/handlers/files.py
+index 9f2a1cb..8f1ab0e 100644
+--- a/src/kiro_crew/dashboard/handlers/files.py
++++ b/src/kiro_crew/dashboard/handlers/files.py
+@@ -2001,6 +2001,8 @@ async def api_workspaces_create(request: web.Request) -> web.Response:
+ 
+         def _copy_staged() -> None:
+             shutil.copytree(src_path, staging, symlinks=True, ignore=_ignore_sensitive)
++            # Repair the private stage before publishing it as an editable workspace.
++            platform_compat.ensure_owner_writable_tree(staging)
+ 
+         def _drop_staging() -> None:
+             shutil.rmtree(staging, ignore_errors=True)
+diff --git a/src/kiro_crew/deploy/__init__.py b/src/kiro_crew/deploy/__init__.py
+index cdf944d..baa5fe8 100644
+--- a/src/kiro_crew/deploy/__init__.py
++++ b/src/kiro_crew/deploy/__init__.py
+@@ -12,7 +12,7 @@ from pathlib import Path
+ 
+ from kiro_crew.config.paths import config_dir
+ from kiro_crew.platform_compat import (
+-    ensure_owner_rwx_dirs,
++    ensure_owner_writable_tree,
+     is_link_or_junction,
+     rmtree_force,
+     unlink_link_or_junction,
+@@ -88,8 +88,9 @@ def _register_core_skills() -> None:
+             # yields a copy whose directories reject the marker write below,
+             # which the OSError re-raise turns into a gateway abort. Add
+             # owner rwx to the copy's directories first: marker creation
+-            # needs a writable and searchable parent.
+-            ensure_owner_rwx_dirs(link)
++            # needs a writable and searchable parent. Existing files need
++            # owner read/write too so the installed skill can be edited.
++            ensure_owner_writable_tree(link)
+             # Write the managed marker so future refreshes know it's ours
+             (link / _MANAGED_MARKER).write_text("")
+             logger.debug("Copied deploy skill %s", skill_dir.name)
+diff --git a/src/kiro_crew/platform_compat.py b/src/kiro_crew/platform_compat.py
+index c82ea63..db5ee0f 100644
+--- a/src/kiro_crew/platform_compat.py
++++ b/src/kiro_crew/platform_compat.py
+@@ -7305,6 +7305,33 @@ def is_readonly_filesystem(path: Path) -> bool:
+         return False
+ 
+ 
++def ensure_owner_writable_tree(root: str | os.PathLike) -> None:
++    """Make a private working copy writable without changing source permissions.
++
++    Use only after copying into a destination the caller owns, never on an
++    archive whose modes are part of its fidelity contract. Preserve executable
++    and group/other bits. Links and Windows junctions must not carry the repair
++    outside the copy; copytree(symlinks=True) intentionally preserves them.
++    """
++    if is_link_or_junction(root):
++        return
++    ensure_owner_rwx_dirs(root)
++    for directory, dirs, files in os.walk(root):
++        dirs[:] = [
++            name for name in dirs
++            if not is_link_or_junction(os.path.join(directory, name))
++        ]
++        for name in files:
++            entry = os.path.join(directory, name)
++            if is_link_or_junction(entry):
++                continue
++            mode = os.lstat(entry).st_mode
++            if stat.S_ISREG(mode):
++                # Owner read as well as write: a hardened source may be read
++                # through its group permissions, which need not survive install.
++                os.chmod(entry, stat.S_IMODE(mode) | stat.S_IRUSR | stat.S_IWUSR)
++
++
+ def ensure_owner_rwx_dirs(root: str | os.PathLike) -> None:
+     """OR owner read/write/execute onto *root* and every directory below it.
+ 
+diff --git a/src/kiro_crew/portability.py b/src/kiro_crew/portability.py
+index a4efe6f..6a85085 100644
+--- a/src/kiro_crew/portability.py
++++ b/src/kiro_crew/portability.py
+@@ -1020,6 +1020,8 @@ def apply_import_zip(zip_path: Path, mode: str = "merge") -> dict:
+                     target = mc / "skills" / item.name
+                     if item.is_dir() and not target.exists():
+                         shutil.copytree(str(item), str(target))
++                        # Imported skills become the user's editable copies.
++                        platform_compat.ensure_owner_writable_tree(target)
+                     elif item.is_file() and not target.exists():
+                         shutil.copy2(str(item), str(target))
+                 summary["items"].append("skills (merged, auto/ skipped)")
+diff --git a/src/kiro_crew/seed.py b/src/kiro_crew/seed.py
+index a51d6aa..9d8d815 100644
+--- a/src/kiro_crew/seed.py
++++ b/src/kiro_crew/seed.py
+@@ -759,6 +759,8 @@ def seed(fixture_name: str, *, replace: bool = False) -> None:
+         dst.rmdir()
+ 
+     shutil.copytree(src, dst)
++    # A seed can be an immutable image; the resulting data home is live state.
++    platform_compat.ensure_owner_writable_tree(dst)
+ 
+ 
+ def seed_cmd(args) -> int:  # noqa: ANN001 — argparse.Namespace at call site
+diff --git a/src/kiro_crew/skills.py b/src/kiro_crew/skills.py
+index 00f157c..d1989df 100644
+--- a/src/kiro_crew/skills.py
++++ b/src/kiro_crew/skills.py
+@@ -40,7 +40,7 @@ from kiro_crew.hooks import (
+ )
+ from kiro_crew.metrics.provider import get_recorder
+ from kiro_crew.platform_compat import (
+-    ensure_owner_rwx_dirs,
++    ensure_owner_writable_tree,
+     is_link_or_junction,
+     rmtree_force,
+ )
+@@ -896,15 +896,16 @@ def _tree_entries(
+                 # sets ``assume_owner_rwx_dirs`` (used ONLY for the
+                 # PACKAGED SOURCE side of a comparison), owner rwx is OR-ed
+                 # in because the install adds those bits to the fresh
+-                # copy's directories (``ensure_owner_rwx_dirs`` -- a
++                # copy's directories (``ensure_owner_writable_tree`` -- a
+                 # read-only source such as a Nix store ships 0o555 and the
+                 # copy must accept marker writes and directory search).
+                 # A 0o455-class source needs execute added too. Hashing AS
+                 # THE COPY WILL LOOK keeps that install-owned repair from
+                 # reading as a user chmod, while the INSTALLED side is always
+                 # hashed with its real modes -- so a user chmod on the copy,
+-                # including removing an owner-rwx bit, still diverges. Files
+-                # are never normalized: the install never rewrites file modes.
++                # including removing an owner-rwx bit, still diverges. The
++                # legacy flag name also covers owner read/write on files,
++                # matching the working-copy repair below.
+                 dir_mode = stat.S_IMODE(mode)
+                 if assume_owner_rwx_dirs:
+                     dir_mode |= stat.S_IRWXU
+@@ -927,9 +928,12 @@ def _tree_entries(
+             elif stat.S_ISREG(st.st_mode):
+                 # Size AND permission bits: a mode-only customization (e.g.
+                 # chmod +x on a builtin script) is a user edit and must
+-                # diverge the tree. copytree preserves modes, so a clean
+-                # install still fingerprints equal to its package.
+-                yield rel, "file", f"{st.st_size}:{stat.S_IMODE(st.st_mode):o}"
++                # diverge the tree. Normalize only the SOURCE side to the
++                # owner-writable modes the installer gives its private copy.
++                file_mode = stat.S_IMODE(st.st_mode)
++                if assume_owner_rwx_dirs:
++                    file_mode |= stat.S_IRUSR | stat.S_IWUSR
++                yield rel, "file", f"{st.st_size}:{file_mode:o}"
+             else:
+                 yield rel, "special", ""
+     for err in walk_errors:
+@@ -954,7 +958,7 @@ def _trees_stat_equal(a: Path, b: Path) -> bool:
+     try:
+         # ``a`` is the INSTALLED tree (hashed with real modes), ``b`` is the
+         # PACKAGED SOURCE, whose directory modes are compared as the copy
+-        # will look after ``ensure_owner_rwx_dirs`` -- the same
++        # will look after ``ensure_owner_writable_tree`` -- the same
+         # asymmetry ``_tree_entries`` applies for child directories. A user
+         # chmod on the installed side (including removing owner rwx)
+         # therefore still diverges.
+@@ -1001,7 +1005,7 @@ def _skill_tree_fingerprint(root: Path, *, assume_owner_rwx_dirs: bool = False)
+     try:
+         # ``assume_owner_rwx_dirs`` (set only when hashing the PACKAGED
+         # SOURCE) ORs owner rwx in, so the recorded fingerprint describes
+-        # the copy as it will exist after ``ensure_owner_rwx_dirs``.
++        # the copy as it will exist after ``ensure_owner_writable_tree``.
+         # The installed side is always hashed with its real modes.
+         root_mode = stat.S_IMODE(os.lstat(root).st_mode)
+         if assume_owner_rwx_dirs:
+@@ -1661,14 +1665,15 @@ def _ensure_builtin_skills(base: Path) -> None:
+             # install source (0o555 -- a Nix store path, a read-only mount)
+             # yields a copy whose directories reject the provenance-marker
+             # write below. Add owner rwx: file creation needs a writable
+-            # and searchable parent (including 0o455-class sources). The
++            # and searchable parent (including 0o455-class sources). Files
++            # also need owner read/write for later edits. The
+             # recorded source fingerprint above is computed with
+             # ``assume_owner_rwx_dirs=True``, i.e. it describes the
+             # copy AS IT EXISTS AFTER this repair, so a clean install does
+             # not read as a user customization on the next sync -- while any
+             # later chmod on the installed copy (including removing
+             # any owner-rwx bit) still diverges.
+-            ensure_owner_rwx_dirs(dest_dir)
++            ensure_owner_writable_tree(dest_dir)
+             if src_fingerprint is not None:
+                 _write_provenance_marker(dest_dir, src_fingerprint)
+             else:
+diff --git a/src/kiro_crew/snapshot.py b/src/kiro_crew/snapshot.py
+index e31edd3..8a82c4e 100644
+--- a/src/kiro_crew/snapshot.py
++++ b/src/kiro_crew/snapshot.py
+@@ -1490,6 +1490,9 @@ def _copytree_safe(
+             copy_function=_copy_screened,
+             dirs_exist_ok=not must_create,
+         )
++        # Match the pinned traversal's writable directories. File modes remain
++        # archival metadata; only working-copy callers normalize those.
++        platform_compat.ensure_owner_rwx_dirs(dst)
+     except FileExistsError as exc:
+         # Same refusal type and same sentence as the pinned branch, so a caller has one
+         # thing to contain and the operator reads the same explanation on either platform.
+diff --git a/src/kiro_crew/snapshot_redact.py b/src/kiro_crew/snapshot_redact.py
+index 765ebb3..22692ab 100644
+--- a/src/kiro_crew/snapshot_redact.py
++++ b/src/kiro_crew/snapshot_redact.py
+@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
+ from pathlib import Path, PurePosixPath
+ from typing import Iterator
+ 
++from kiro_crew.platform_compat import ensure_owner_writable_tree
+ from kiro_crew.config.loader import config_dir
+ from kiro_crew.memory import INDEX_DB_FILE
+ from kiro_crew.memory_stores import MEMORY_DB_FILE, named_store_product_file
+@@ -1255,4 +1256,6 @@ def _stamp_manifest(stage: Path, report: RedactionReport) -> None:
+ def stage_redacted_copy(source_stage: Path, dest: Path) -> RedactionReport:
+     """Copy *source_stage* to *dest* and redact the copy, never the original."""
+     shutil.copytree(source_stage, dest)
++    # Redaction rewrites existing files and databases, not just directory entries.
++    ensure_owner_writable_tree(dest)
+     return redact_bundle_for_egress(dest)
+diff --git a/test/test_readonly_source_skill_install.py b/test/test_readonly_source_skill_install.py
+index 4dbd603..d77eb78 100644
+--- a/test/test_readonly_source_skill_install.py
++++ b/test/test_readonly_source_skill_install.py
+@@ -459,3 +459,49 @@ def test_source_fingerprint_predicts_the_normalized_copy(tmp_path: Path) -> None
+         assert _skill_tree_fingerprint(a) != _skill_tree_fingerprint(b)
+     finally:
+         _restore_owner_rwx(a)
++
++@_POSIX_MODES
++def test_writable_tree_preserves_exec_and_never_chmods_links(tmp_path):
++    from kiro_crew.platform_compat import ensure_owner_writable_tree
++
++    root = tmp_path / "copy"
++    root.mkdir()
++    plain, executable, outside = root / "plain", root / "exec", tmp_path / "outside"
++    for file, mode in ((plain, 0o444), (executable, 0o555), (outside, 0o444)):
++        file.write_text("data")
++        file.chmod(mode)
++    (root / "link").symlink_to(outside)
++    (root / "dir-link").symlink_to(tmp_path, target_is_directory=True)
++    root.chmod(0o555)
++    try:
++        ensure_owner_writable_tree(root)
++        assert stat.S_IMODE(plain.stat().st_mode) == 0o644
++        assert stat.S_IMODE(executable.stat().st_mode) == 0o755
++        assert stat.S_IMODE(outside.stat().st_mode) == 0o444
++        plain.write_text("edited")
++    finally:
++        root.chmod(0o755)
++        outside.chmod(0o644)
++
++
++@_POSIX_MODES
++def test_readonly_files_match_provenance_until_user_chmod(tmp_path, monkeypatch):
++    source = tmp_path / "source"
++    source.mkdir()
++    src = _make_skill_tree(source, "readonly-files")
++    (src / "SKILL.md").chmod(0o444)
++    monkeypatch.setattr(skills_mod, "_BUILTIN_SKILLS_DIR", source)
++    installed = tmp_path / "installed"
++    installed.mkdir()
++    try:
++        _ensure_builtin_skills(installed)
++        dest = installed / "readonly-files"
++        assert (dest / "SKILL.md").stat().st_mode & stat.S_IWUSR
++        assert _verified_unchanged_fingerprint(dest, src) is not None
++        (dest / "SKILL.md").chmod(0o444)
++        assert _verified_unchanged_fingerprint(dest, src) is None
++    finally:
++        (src / "SKILL.md").chmod(0o644)
++        for file in installed.rglob("*"):
++            if file.is_file():
++                file.chmod(file.stat().st_mode | stat.S_IWUSR)

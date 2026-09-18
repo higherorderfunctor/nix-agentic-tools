@@ -1,0 +1,146 @@
+diff --git a/scripts/stamp-distribution.sh b/scripts/stamp-distribution.sh
+index c594789..afcfa81 100644
+--- a/scripts/stamp-distribution.sh
++++ b/scripts/stamp-distribution.sh
+@@ -13,18 +13,19 @@
+ # and a `dist` value that disagrees with the artifact is worse than no value,
+ # because it is indistinguishable from a real population shift on the dashboard.
+ #
+-# Usage: stamp-distribution.sh <dmg|appimage|deb|rpm|wheel|source|docker> [package_dir]
+-set -euo pipefail
++# Usage: stamp-distribution.sh <dmg|appimage|deb|rpm|wheel|source|docker|nix> [package_dir]
++set -euETo pipefail
++shopt -s inherit_errexit 2>/dev/null || :
+ 
+-DIST="${1:?usage: stamp-distribution.sh <dmg|appimage|deb|rpm|wheel|source|docker> [package_dir]}"
++DIST="${1:?usage: stamp-distribution.sh <dmg|appimage|deb|rpm|wheel|source|docker|nix> [package_dir]}"
+ PKG_DIR="${2:-}"
+ 
+ # Keep in sync with beacon.KNOWN_DISTRIBUTIONS. A typo here would otherwise bake
+ # a value the clamp rejects, silently falling back to "source": the exact
+ # failure this script exists to remove.
+ case "$DIST" in
+-  dmg|appimage|deb|rpm|wheel|source|docker) ;;
+-  *) echo "ERROR: unknown distribution '$DIST' (want: dmg|appimage|deb|rpm|wheel|source|docker)" >&2
++  dmg|appimage|deb|rpm|wheel|source|docker|nix) ;;
++  *) echo "ERROR: unknown distribution '$DIST' (want: dmg|appimage|deb|rpm|wheel|source|docker|nix)" >&2
+      exit 1 ;;
+ esac
+ 
+diff --git a/src/kiro_crew/beacon.py b/src/kiro_crew/beacon.py
+index 95a1767..c9d2862 100644
+--- a/src/kiro_crew/beacon.py
++++ b/src/kiro_crew/beacon.py
+@@ -166,7 +166,7 @@ _CI_ENV_VARS = (
+ # so it is the default rather than an "unknown" bucket.
+ DIST_ENV = "KIROCREW_DISTRIBUTION"
+ KNOWN_DISTRIBUTIONS = frozenset(
+-    {"dmg", "appimage", "deb", "rpm", "wheel", "source", "docker"}
++    {"dmg", "appimage", "deb", "rpm", "wheel", "source", "docker", "nix"}
+ )
+ DEFAULT_DISTRIBUTION = "source"
+ 
+diff --git a/src/kiro_crew/platform/update_capability.py b/src/kiro_crew/platform/update_capability.py
+index d1bac0e..e6775d4 100644
+--- a/src/kiro_crew/platform/update_capability.py
++++ b/src/kiro_crew/platform/update_capability.py
+@@ -36,6 +36,7 @@ MANAGED_BY_ELECTRON = "electron"
+ MANAGED_BY_KIROCREW = "kirocrew"
+ MANAGED_BY_GIT = "git"
+ MANAGED_BY_CONTAINER = "container"
++MANAGED_BY_NIX = "nix"
+ MANAGED_BY_COMMAND = "command"
+ MANAGED_BY_NONE = "none"
+ 
+@@ -68,6 +69,7 @@ ERR_UNKNOWN = "unknown"
+ #: rendering it as an error is its own lie.
+ UNAVAILABLE_MANAGED_BY_APP = "managed_by_app"
+ UNAVAILABLE_MANAGED_BY_IMAGE = "managed_by_image"
++UNAVAILABLE_MANAGED_BY_NIX = "managed_by_nix"
+ 
+ #: Human copy for the shapes this gateway does not update, keyed by
+ #: ``unavailable_reason``. Kept here rather than beside each consumer so the two
+@@ -77,6 +79,7 @@ EXTERNALLY_MANAGED_MESSAGES = {
+         "Update via the desktop app's built-in updater (About → Check for updates)."
+     ),
+     UNAVAILABLE_MANAGED_BY_IMAGE: "Update by pulling a newer image (docker pull).",
++    UNAVAILABLE_MANAGED_BY_NIX: "Update Kiro Crew through your Nix configuration and rebuild.",
+ }
+ 
+ #: Distribution stamps whose code is replaced by something other than this
+@@ -96,7 +99,7 @@ _CONTAINER_DISTRIBUTIONS = frozenset({"docker"})
+ #: Every stamp whose updates are owned elsewhere. Public because the policy
+ #: floor has to answer the badge question before any check has produced a
+ #: capability, and the stamp is the one input available with no I/O.
+-EXTERNALLY_MANAGED_STAMPS = _ELECTRON_DISTRIBUTIONS | _CONTAINER_DISTRIBUTIONS
++EXTERNALLY_MANAGED_STAMPS = _ELECTRON_DISTRIBUTIONS | _CONTAINER_DISTRIBUTIONS | {"nix"}
+ 
+ _GIT_TIMEOUT_SECS = 5
+ 
+@@ -379,6 +382,25 @@ def derive_capability(
+     if install_root is None:
+         install_root = os.environ.get("KIROCREW_PROJECT_DIR", "")
+ 
++    if dist == "nix":
++        # The store is immutable and the active version belongs to the user's
++        # declarative configuration. Even a nearby checkout must not turn this
++        # install into a git/wheel update target or offer an in-place installer.
++        return UpdateCapability(
++            supported=True,
++            managed_by=MANAGED_BY_NIX,
++            mode=MODE_NOTIFY,
++            can_download=False,
++            can_apply=False,
++            requires_restart=True,
++            unavailable_reason=UNAVAILABLE_MANAGED_BY_NIX,
++            remediation={
++                "kind": "nix_configuration",
++                "message": EXTERNALLY_MANAGED_MESSAGES[UNAVAILABLE_MANAGED_BY_NIX],
++                "command": "",
++            },
++        )
++
+     if dist in _ELECTRON_DISTRIBUTIONS:
+         # ``can_apply`` answers for the process serving this contract, and that is
+         # the gateway, whose apply endpoint is git-only. The Electron updater does
+diff --git a/test/test_beacon.py b/test/test_beacon.py
+index 05c86d8..07b6fa8 100644
+--- a/test/test_beacon.py
++++ b/test/test_beacon.py
+@@ -268,6 +268,11 @@ class TestDistributionStamp:
+     ``-n auto`` and would corrupt sibling tests on other workers.
+     """
+ 
++    def test_known_distributions_include_nix(self):
++        assert beacon.KNOWN_DISTRIBUTIONS == {
++            "dmg", "appimage", "deb", "rpm", "wheel", "source", "docker", "nix",
++        }
++
+     def test_unstamped_checkout_reports_source(self, _isolated_home, monkeypatch):
+         monkeypatch.setattr(beacon, "_BAKED_DISTRIBUTION", "")
+         monkeypatch.delenv(beacon.DIST_ENV, raising=False)
+diff --git a/test/test_update_capability.py b/test/test_update_capability.py
+index 702d218..f43d39e 100644
+--- a/test/test_update_capability.py
++++ b/test/test_update_capability.py
+@@ -309,6 +309,20 @@ class TestRunningFromCheckout:
+ 
+ 
+ class TestDeriveCapability:
++    def test_nix_defers_to_configuration_even_next_to_a_checkout(self, monkeypatch):
++        monkeypatch.setattr(update_capability, "is_git_worktree", lambda root: True)
++        monkeypatch.setattr(update_capability, "running_from_checkout", lambda root: True)
++        capability = derive_capability(install_root="/checkout", dist="nix")
++        assert capability.supported and capability.defers
++        assert capability.managed_by == "nix"
++        assert capability.mode == "notify"
++        assert not capability.can_download
++        assert not capability.can_apply
++        assert capability.unavailable_reason == "managed_by_nix"
++        assert capability.remediation["command"] == ""
++        assert "Nix configuration" in capability.remediation["message"]
++        assert "nix" in update_capability.EXTERNALLY_MANAGED_STAMPS
++
+     @pytest.mark.parametrize("dist", ["dmg", "appimage"])
+     def test_desktop_defers_to_its_own_updater(self, dist):
+         capability = derive_capability(install_root="", dist=dist)
