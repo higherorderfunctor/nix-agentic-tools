@@ -472,12 +472,6 @@
     cfg.hooksJson
     // lib.mapAttrs (_fileKey: envelope: builtins.toJSON envelope) (kiroTypedHookFiles cfg.hooks);
 
-  # Shared strategy-driven materializer (lib/ai/materialize.nix) — the
-  # mcp.json writer, the one-shot legacy steering-copy retirement, and the
-  # single source of the name-safety regex used by copy-mode names. Hooks left
-  # it for `lib/ai/own.nix`.
-  materializeLib = import ../../../lib/ai/materialize.nix {inherit lib;};
-
   # A hook file name is a unit address in `.kiro/hooks`, and `own` already
   # refuses one that is empty, dot-prefixed or path-separated. This charset is
   # tighter on purpose and stays an ASSERTION rather than `own`'s throw: it is
@@ -529,6 +523,18 @@
       lib.mapAttrs' (name: content:
         lib.nameValuePair "${name}.json" {text = content;})
       (mkAllHookFiles cfg);
+
+  # The legacy steering copies an OLDER generation owned, as a target that
+  # declares nothing. Steering is delivered through the ordinary runtime-file
+  # symlink sink now (the pinned Kiro follows steering symlinks), so there is
+  # nothing left to write here and the only job is retracting what a manifest
+  # from before that change still records.
+  mkSteeringRetirementTarget = cfg: {
+    codec = "dir";
+    ledger = "materialize/kiro-steering.manifest";
+    path = "${cfg.configDir}/steering";
+    units = {};
+  };
 
   # The hooks directory as ONE `own` dir target, identical on both backends:
   # same ledger, same directory, same units — only the entry names differ.
@@ -1753,17 +1759,31 @@ in
       installPackage = kiroInstallPackage;
       options = {};
       migrationConfig = {cfg, ...}: let
-        steeringDir = "${cfg.configDir}/steering";
-      in {
-        # This one-shot manifest retirement intentionally lives outside the
-        # runtime enable gate: upgrade+disable must still remove only steering
-        # copies that an older generation recorded as owned.
-        home.activation = materializeLib.mkHmRetirement {
-          targetDir = steeringDir;
-          stateSlug = materializeLib.mkStateSlug steeringDir;
-          inherit (pkgs) coreutils flock;
+        helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+      in
+        # A retirement is not a mechanism: it is a target that declares
+        # NOTHING, so the ordinary retraction removes whatever the previous
+        # generation's ledger recorded and then drops the ledger. This one-shot
+        # intentionally lives outside the runtime enable gate — upgrade+disable
+        # must still remove only the steering copies an older generation
+        # recorded as owned.
+        #
+        # It needs BOTH entries, and the prune one is why: deleting a real file
+        # has to happen before `checkLinkTargets`, because `.kiro/steering` is
+        # exactly a copy→symlink flip and link generation aborts on an
+        # unexpected real file. The write phase then unlinks the ledger, which
+        # is all that is left to do — hence the name.
+        helpers.mkOwnBundle {
+          backend = "hm";
+          entryNames = {
+            prune = "retire-materialize-kiro-steering";
+            write = "retire-materialize-kiro-steering-ledger";
+          };
+          python = pkgs.python3;
+          runtime = "kiro";
+          targets = [(mkSteeringRetirementTarget cfg)];
+          inherit pkgs;
         };
-      };
       config = {
         cfg,
         mergedServers,
@@ -1951,17 +1971,20 @@ in
         config,
         ...
       }: let
-        steeringDir = "${cfg.configDir}/steering";
-      in {
-        # Same enable-independent one-shot retirement as Home Manager. The
-        # task is inert when no legacy manifest exists.
-        tasks."ai:kiro:retire-steering-copies" = materializeLib.mkDevenvRetirementTask {
-          targetDir = steeringDir;
-          stateSlug = materializeLib.mkStateSlug steeringDir;
+        helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+      in
+        # Same enable-independent one-shot retirement as Home Manager, and
+        # inert in the same way: a target with no units and no ledger on disk
+        # is a strict no-op that creates neither directory.
+        helpers.mkOwnBundle {
+          backend = "devenv";
+          entryNames.write = "ai:kiro:retire-steering-copies";
           hasFiles = config.files != {};
-          inherit (pkgs) coreutils flock;
+          python = pkgs.python3;
+          runtime = "kiro";
+          targets = [(mkSteeringRetirementTarget cfg)];
+          inherit pkgs;
         };
-      };
       config = {
         cfg,
         config,
