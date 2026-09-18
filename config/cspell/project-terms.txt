@@ -21,6 +21,7 @@ arxanas
 attrset
 attrsets
 aubut
+auditwheel
 autologin
 automemory
 autoresearch
@@ -34,9 +35,11 @@ basenames
 bashisms
 bashpid
 berberman
+betlen
 bigram
 bigrams
 bitemporality
+blas
 blockquotes
 boehm
 brocode
@@ -101,6 +104,8 @@ direntry
 direnv
 direnvrc
 disjointness
+dlopen
+dlopens
 docnix
 docsite
 dogfood
@@ -110,6 +115,8 @@ drainedness
 drvs
 dsolve
 dunder
+dylib
+dylibs
 EEXIST
 elicitations
 emnapi
@@ -143,6 +150,7 @@ formedness
 frepo
 frontloaded
 frontmatter
+gerganov
 getconf
 getdents
 getkimchi
@@ -167,6 +175,7 @@ godebug
 goflags
 gofont
 gomono
+gomp
 GOOS
 gopls
 goproxy
@@ -244,6 +253,7 @@ lockfiles
 lspservers
 ltrimstr
 manpages
+manylinux
 markdownify
 materializer
 mcpconfig
@@ -265,6 +275,7 @@ modfmt
 moff
 mojibake
 mountpoint
+msvc
 mtimes
 mystor
 napi
@@ -304,6 +315,7 @@ oneshot
 ONLN
 openat
 openclaw
+opendyslexic
 openhands
 openmemory
 operationalizes
@@ -385,6 +397,8 @@ rsbuild
 rspack
 rulesdir
 rumdl
+runpath
+runpaths
 rustc
 rvben
 sadjow
@@ -415,6 +429,7 @@ sourcepos
 sparfenyuk
 srcs
 sshsign
+ssse
 starlark
 startswith
 statix
