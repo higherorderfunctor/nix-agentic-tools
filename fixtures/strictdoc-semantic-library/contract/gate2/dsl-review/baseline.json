@@ -1,0 +1,16 @@
+{
+  "model": "reference",
+  "identity": "baseline-I0-open",
+  "complete": true,
+  "records": [
+    {
+      "uid": "I0",
+      "element": "FOO",
+      "fields": {
+        "UID": ["I0"],
+        "FLAG": ["false"]
+      },
+      "relations": []
+    }
+  ]
+}

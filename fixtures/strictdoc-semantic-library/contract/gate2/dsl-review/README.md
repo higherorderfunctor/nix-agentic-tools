@@ -410,7 +410,7 @@ handling and traversal remain specified behavior.
 | `forest`     | `forest NAME EDGES`                | Name you choose; Parent relation reference from `parentOf`.                                                           | none                          | Emits owner-kind vertices and selected edges in parent-to-child orientation; permits disconnected roots. |
 | `isForest`   | `isForest VIEW`                    | View reference from `forest`.                                                                                         | whole model                   | Emits the structural predicate described above; runs no graph check.                                     |
 | `fieldOf`    | `fieldOf ELEMENT FIELD`            | Element from `el`; field declaration from `str` or `boolean` and its wrappers.                                        | none                          | Builds a declared field reference, not a record's field value.                                           |
-| `visibility` | `visibility NAME HIERARCHY POLICY` | Name you choose; view from `forest`; field reference and fixed keywords listed above.                                 | none                          | Emits policy; fixed path semantics belong to the view contract; keywords remain unchecked.               |
+| `visibility` | `visibility NAME HIERARCHY POLICY` | Name you choose; view from `forest`; field reference and fixed keywords listed above.                                 | none                          | Emits policy and validates its keywords; fixed path semantics belong to the view contract.               |
 | `visible`    | `visible VIEW ORIGIN TARGET`       | View from `visibility`; the example supplies node expressions from the edge binder (see chapter 11 for scope limits). | each relation occurrence here | Emits the path question; runtime behavior follows the algorithm above.                                   |
 
 ## 7. Bridges
@@ -441,13 +441,14 @@ F0 → M → F2. M remains a record between those endpoints and does not become 
 edge.
 
 The count rule must establish a singleton, a collection with exactly one member,
-before `only` can provide an endpoint. With no Q, `exactly 1` is **failed**: its
-evaluable count condition is false. The path check is **blocked**: it cannot
+before `only` can provide an endpoint. With no Q, `exactly 1` is **violated**:
+its evaluable count condition is false. The path check is **blocked**: it cannot
 obtain the required sole Q endpoint. Two Q relations cause the same distinction;
-`only` never chooses an arbitrary member. This is a logical dependency, and the
-list puts the count rules first so it is readable. The stub generates neither
-scheduling nor prerequisite links between those checks. It also leaves
-storage-level treatment of duplicate identical occurrences unspecified.
+`only` never chooses an arbitrary member. The bundle records this dependency in
+`requires`, along with the hierarchy forest rule. A violated or blocked
+prerequisite blocks every occurrence of the dependent rule. The stub generates
+prerequisite links but does not run a scheduler. Duplicate identical occurrences
+are stored and counted as authored.
 
 `canDescend` uses the visibility visit and expansion rules, but every H step
 must go downward. A route from F1 to F2 would need ascent through F0 and
@@ -624,18 +625,18 @@ system could read. `normalize` calls callbacks with symbolic binders, never
 loaded records such as F1a. It returns native declarations in `grammar`, field
 types and default metadata in `semanticTypes`, and declarations and flat, named
 rule records in `bundle` under schema `semantic-constraints/v2`. Each rule has
-`id`, `name`, `scope`, `subject`, `kind`, named kind fields, `inputs`, and
-`origins`; only an uncovered rule keeps a named-operand tree in `expression`.
-References are declaration IDs, and fallback binders use `record`, `owner`, and
-`target` tokens. The bundle also records named configurations and field
-declarations; `bundle.json` and `contract.md` show the lowered contract.
+`id`, `name`, `scope`, `subject`, `kind`, named kind fields, `inputs`,
+`requires`, and `origins`; only an uncovered rule keeps a named-operand tree in
+`expression`. References are declaration IDs, and fallback binders use `record`,
+`owner`, and `target` tokens. The bundle also records named configurations and
+field declarations; `bundle.json` and `contract.md` show the lowered contract.
 
 Today normalization checks declaration identities, declared references it
 encounters, predicate shape, binder scope, and conflicting definitions of a
 check. It rejects duplicate declaration identities and undeclared selected
 references. It is not a complete schema checker: it leaves collection role
-strings and most operand types unchecked. It does not build a full runtime
-prerequisite graph.
+strings and most operand types unchecked. It builds the required count and
+forest dependency links, but does not execute a runtime scheduler.
 
 No graph evaluator, baseline acquisition, default application, candidate
 publication, or recovery runs in this stub. The runtime contract calls for
@@ -832,7 +833,7 @@ missing operation.
 >
 > - `visible` in record scope is unattested by any example.
 > - `el` grammar properties are never shown non-empty.
-> - Counting duplicate identical relation occurrences is unspecified.
+> - Duplicate identical relation occurrences are stored and counted as authored.
 
 ## Appendix A — Complete examples.nix
 
@@ -954,72 +955,71 @@ for its configuration slot. The table covers every literal occurrence in
 examples.nix, composition.nix, and counting.nix; repeated uses with the same
 meaning share a row.
 
-The full specified keyword sets are shown below, but the stub does not enforce
-any of these string policy enums. It retains even unrecognized strings without
-giving them runtime meaning. The forest name `"H"` names a view, while the role
-`"H"` names a Parent relation; their matching spelling is optional. The
-projection keyword `"target"` selects a comparison component, while `.target`
-accesses a symbolic endpoint.
+The full specified keyword sets are shown below, and the stub validates these
+policy enums during lowering. It throws with the field and rejected value. The
+forest name `"H"` names a view, while the role `"H"` names a Parent relation;
+their matching spelling is optional. The projection keyword `"target"` selects a
+comparison component, while `.target` accesses a symbolic endpoint.
 
-| String literal                               | Classification                              | Meaning or complete specified value set                                                                                                                                              |
-| -------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `"UID"`                                      | Free name                                   | Names the required string field used to address records.                                                                                                                             |
-| `"FLAG"`                                     | Free name                                   | Names the Boolean field used by the visibility policy.                                                                                                                               |
-| `"FOO"`                                      | Free name                                   | Names the element kind used for the H forest.                                                                                                                                        |
-| `"H"`                                        | Free name                                   | Names a Parent relation role on FOO.                                                                                                                                                 |
-| `"H_back"`                                   | Free name                                   | Names the reverse display label for Parent H.                                                                                                                                        |
-| `"R"`                                        | Free name                                   | Names a Parent relation role on its declaring element.                                                                                                                               |
-| `"R_back"`                                   | Free name                                   | Names the reverse display label for Parent R.                                                                                                                                        |
-| `"one-H-parent"`                             | Free name                                   | Names the check that limits each FOO to one H parent.                                                                                                                                |
-| `"H"`                                        | Reference key                               | Selects FOO's Parent H; `parentOf` references are validated, but for binder collection strings the stub does not validate these today, so a typo is silently accepted.               |
-| `"R"`                                        | Reference key                               | Selects the named Parent R on its owner; these `parentOf` references are validated when normalized.                                                                                  |
-| `"visible-R"`                                | Free name                                   | Names the check that requires visibility for FOO Parent R.                                                                                                                           |
-| `"BAR"`                                      | Free name                                   | Names the bridge element kind.                                                                                                                                                       |
-| `"P"`                                        | Free name                                   | Names a Parent relation role on BAR.                                                                                                                                                 |
-| `"P_back"`                                   | Free name                                   | Names the reverse display label for Parent P.                                                                                                                                        |
-| `"Q"`                                        | Free name                                   | Names a Child relation role on its declaring element.                                                                                                                                |
-| `"Q_back"`                                   | Free name                                   | Names the reverse display label for Child Q.                                                                                                                                         |
-| `"one-P"`                                    | Free name                                   | Names the check requiring one P on each BAR.                                                                                                                                         |
-| `"P"`                                        | Reference key                               | Selects BAR's Parent P; `parentOf` references are validated, but for binder collection strings the stub does not validate these today, so a typo is silently accepted.               |
-| `"one-Q"`                                    | Free name                                   | Names the check requiring one Q on each BAR.                                                                                                                                         |
-| `"Q"`                                        | Reference key                               | Selects the named Child Q; `childOf` references are validated, but for binder collection strings the stub does not validate these today, so a typo is silently accepted.             |
-| `"endpoint-path"`                            | Free name                                   | Names the check requiring a permitted downward path between BAR endpoints.                                                                                                           |
-| `"BAZ"`                                      | Free name                                   | Names the element kind with independently scoped R and Q roles.                                                                                                                      |
-| `"H"`                                        | Free name                                   | Names the forest view; sharing the role name H is optional.                                                                                                                          |
-| `"H-visibility"`                             | Free name                                   | Names the visibility view, which is later referenced through the variable sight.                                                                                                     |
-| `"unrestricted"`                             | Fixed keyword (contract; unchecked by stub) | Full specified set for ascent: `"unrestricted"`, permitting every upward H step.                                                                                                     |
-| `"always"`                                   | Fixed keyword (contract; unchecked by stub) | Full specified set for visit: `"always"`, permitting arrival at closed nodes.                                                                                                        |
-| `"open-or-origin-in-subtree-including-self"` | Fixed keyword (contract; unchecked by stub) | Full specified set for expand: `"open-or-origin-in-subtree-including-self"`, permitting expansion of an open node or a closed node containing the original origin, including itself. |
-| `"baseline"`                                 | Free name                                   | Names the external input, which is later referenced through the variable baseline.                                                                                                   |
-| `"external-snapshot"`                        | Fixed keyword (contract; unchecked by stub) | Full specified set for input kind: `"external-snapshot"`, an acquired complete external snapshot in this profile.                                                                    |
-| `"modeled-record"`                           | Free name                                   | Names the comparison projection.                                                                                                                                                     |
-| `"UID"`                                      | Reference key                               | Selects the record identity field for baseline matching; for plain projection keys the stub does not validate these today, so a typo is silently accepted.                           |
-| `"nativeType"`                               | Fixed keyword (contract; unchecked by stub) | Full specified relation-component set: `"nativeType"`, `"role"`, `"target"`; nativeType preserves Parent versus Child.                                                               |
-| `"role"`                                     | Fixed keyword (contract; unchecked by stub) | Full specified relation-component set: `"nativeType"`, `"role"`, `"target"`; role preserves the authored role name.                                                                  |
-| `"target"`                                   | Fixed keyword (contract; unchecked by stub) | Full specified relation-component set: `"nativeType"`, `"role"`, `"target"`; target preserves the declared endpoint identity.                                                        |
-| `"set"`                                      | Fixed keyword (contract; unchecked by stub) | Full specified set for relationOrder: `"set"`, ignoring relation declaration order during comparison.                                                                                |
-| `"native-dag"`                               | Free name                                   | Names the whole-model native cycle check.                                                                                                                                            |
-| `"H-forest"`                                 | Free name                                   | Names the whole-model selected-forest check.                                                                                                                                         |
-| `"baseline-preserved"`                       | Free name                                   | Names the whole-model preservation check.                                                                                                                                            |
-| `"reference"`                                | Free name                                   | Names the model and therefore its declaration namespace.                                                                                                                             |
-| `"target-type"`                              | Free name                                   | Names the same check identity within the selected relation; repeating it does not authorize replacement.                                                                             |
-| `"composition"`                              | Free name                                   | Names the separate model used to demonstrate rule composition.                                                                                                                       |
-| `"extra-target-check"`                       | Free name                                   | Names the contribution that repeats the equivalent target check.                                                                                                                     |
-| `"incompatible-target-check"`                | Free name                                   | Names the contribution that conflicts with the existing target check.                                                                                                                |
-| `"counting"`                                 | Free name                                   | Names the model shared by the counting examples.                                                                                                                                     |
-| `"Item"`                                     | Free name                                   | Names the counting model's single element kind.                                                                                                                                      |
-| `"link"`                                     | Free name                                   | Names the Parent relation role on Item.                                                                                                                                              |
-| `"link_back"`                                | Free name                                   | Names the reverse display label for Parent link.                                                                                                                                     |
-| `"link-count"`                               | Free name                                   | Names the same check in each counting example so their lowered forms can be compared.                                                                                                |
-| `"link"`                                     | Reference key                               | Selects Item's Parent link through the record binder; the stub does not validate this string today.                                                                                  |
+| String literal                               | Classification                    | Meaning or complete specified value set                                                                                                                                              |
+| -------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `"UID"`                                      | Free name                         | Names the required string field used to address records.                                                                                                                             |
+| `"FLAG"`                                     | Free name                         | Names the Boolean field used by the visibility policy.                                                                                                                               |
+| `"FOO"`                                      | Free name                         | Names the element kind used for the H forest.                                                                                                                                        |
+| `"H"`                                        | Free name                         | Names a Parent relation role on FOO.                                                                                                                                                 |
+| `"H_back"`                                   | Free name                         | Names the reverse display label for Parent H.                                                                                                                                        |
+| `"R"`                                        | Free name                         | Names a Parent relation role on its declaring element.                                                                                                                               |
+| `"R_back"`                                   | Free name                         | Names the reverse display label for Parent R.                                                                                                                                        |
+| `"one-H-parent"`                             | Free name                         | Names the check that limits each FOO to one H parent.                                                                                                                                |
+| `"H"`                                        | Reference key                     | Selects FOO's Parent H; `parentOf` references are validated, but for binder collection strings the stub does not validate these today, so a typo is silently accepted.               |
+| `"R"`                                        | Reference key                     | Selects the named Parent R on its owner; these `parentOf` references are validated when normalized.                                                                                  |
+| `"visible-R"`                                | Free name                         | Names the check that requires visibility for FOO Parent R.                                                                                                                           |
+| `"BAR"`                                      | Free name                         | Names the bridge element kind.                                                                                                                                                       |
+| `"P"`                                        | Free name                         | Names a Parent relation role on BAR.                                                                                                                                                 |
+| `"P_back"`                                   | Free name                         | Names the reverse display label for Parent P.                                                                                                                                        |
+| `"Q"`                                        | Free name                         | Names a Child relation role on its declaring element.                                                                                                                                |
+| `"Q_back"`                                   | Free name                         | Names the reverse display label for Child Q.                                                                                                                                         |
+| `"one-P"`                                    | Free name                         | Names the check requiring one P on each BAR.                                                                                                                                         |
+| `"P"`                                        | Reference key                     | Selects BAR's Parent P; `parentOf` references are validated, but for binder collection strings the stub does not validate these today, so a typo is silently accepted.               |
+| `"one-Q"`                                    | Free name                         | Names the check requiring one Q on each BAR.                                                                                                                                         |
+| `"Q"`                                        | Reference key                     | Selects the named Child Q; `childOf` references are validated, but for binder collection strings the stub does not validate these today, so a typo is silently accepted.             |
+| `"endpoint-path"`                            | Free name                         | Names the check requiring a permitted downward path between BAR endpoints.                                                                                                           |
+| `"BAZ"`                                      | Free name                         | Names the element kind with independently scoped R and Q roles.                                                                                                                      |
+| `"H"`                                        | Free name                         | Names the forest view; sharing the role name H is optional.                                                                                                                          |
+| `"H-visibility"`                             | Free name                         | Names the visibility view, which is later referenced through the variable sight.                                                                                                     |
+| `"unrestricted"`                             | Fixed keyword (validated by stub) | Full specified set for ascent: `"unrestricted"`, permitting every upward H step.                                                                                                     |
+| `"always"`                                   | Fixed keyword (validated by stub) | Full specified set for visit: `"always"`, permitting arrival at closed nodes.                                                                                                        |
+| `"open-or-origin-in-subtree-including-self"` | Fixed keyword (validated by stub) | Full specified set for expand: `"open-or-origin-in-subtree-including-self"`, permitting expansion of an open node or a closed node containing the original origin, including itself. |
+| `"baseline"`                                 | Free name                         | Names the external input, which is later referenced through the variable baseline.                                                                                                   |
+| `"external-snapshot"`                        | Fixed keyword (validated by stub) | Full specified set for input kind: `"external-snapshot"`, an acquired complete external snapshot in this profile.                                                                    |
+| `"modeled-record"`                           | Free name                         | Names the comparison projection.                                                                                                                                                     |
+| `"UID"`                                      | Reference key                     | Selects the record identity field for baseline matching; for plain projection keys the stub does not validate these today, so a typo is silently accepted.                           |
+| `"nativeType"`                               | Fixed keyword (validated by stub) | Full specified relation-component set: `"nativeType"`, `"role"`, `"target"`; nativeType preserves Parent versus Child.                                                               |
+| `"role"`                                     | Fixed keyword (validated by stub) | Full specified relation-component set: `"nativeType"`, `"role"`, `"target"`; role preserves the authored role name.                                                                  |
+| `"target"`                                   | Fixed keyword (validated by stub) | Full specified relation-component set: `"nativeType"`, `"role"`, `"target"`; target preserves the declared endpoint identity.                                                        |
+| `"set"`                                      | Fixed keyword (validated by stub) | Full specified set for relationOrder: `"set"`, ignoring relation declaration order during comparison.                                                                                |
+| `"native-dag"`                               | Free name                         | Names the whole-model native cycle check.                                                                                                                                            |
+| `"H-forest"`                                 | Free name                         | Names the whole-model selected-forest check.                                                                                                                                         |
+| `"baseline-preserved"`                       | Free name                         | Names the whole-model preservation check.                                                                                                                                            |
+| `"reference"`                                | Free name                         | Names the model and therefore its declaration namespace.                                                                                                                             |
+| `"target-type"`                              | Free name                         | Names the same check identity within the selected relation; repeating it does not authorize replacement.                                                                             |
+| `"composition"`                              | Free name                         | Names the separate model used to demonstrate rule composition.                                                                                                                       |
+| `"extra-target-check"`                       | Free name                         | Names the contribution that repeats the equivalent target check.                                                                                                                     |
+| `"incompatible-target-check"`                | Free name                         | Names the contribution that conflicts with the existing target check.                                                                                                                |
+| `"counting"`                                 | Free name                         | Names the model shared by the counting examples.                                                                                                                                     |
+| `"Item"`                                     | Free name                         | Names the counting model's single element kind.                                                                                                                                      |
+| `"link"`                                     | Free name                         | Names the Parent relation role on Item.                                                                                                                                              |
+| `"link_back"`                                | Free name                         | Names the reverse display label for Parent link.                                                                                                                                     |
+| `"link-count"`                               | Free name                         | Names the same check in each counting example so their lowered forms can be compared.                                                                                                |
+| `"link"`                                     | Reference key                     | Selects Item's Parent link through the record binder; the stub does not validate this string today.                                                                                  |
 
 The reference profile uses all three `relationProjection` components together.
 Arbitrary subsets and extra components have no specified meaning here. The
-example supplies true for its configuration switches; storing false does not
-establish a specified alternate profile. Unquoted `true` and `false` are Boolean
-literals, not strings. Attribute names such as `fields` and variables such as
-`foo` are not string literals either. Quoting a variable's name would not obtain
-its declaration reference.
+example supplies true for its configuration switches; the stub rejects false for
+input and projection switches. Unquoted `true` and `false` are Boolean literals,
+not strings. Attribute names such as `fields` and variables such as `foo` are
+not string literals either. Quoting a variable's name would not obtain its
+declaration reference.
 
 ## Appendix C — What is real
 
@@ -1028,52 +1028,52 @@ operation is concrete. “Lowered by stub, semantics prose only” means the
 behavior on records remains a contract. Neither status means graph validation
 executes.
 
-| Construct                                              | Status                                | Concrete boundary                                                                                                 |
-| ------------------------------------------------------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `el`                                                   | Lowered by stub + semantics specified | Wraps the native element declaration and retains constraints for later lowering.                                  |
-| `model`                                                | Lowered by stub + semantics specified | Supplies declaration-list defaults and the model identity.                                                        |
-| `normalize`                                            | Lowered by stub + semantics specified | Builds grammar, metadata, and flat rule records with the authoring checks described above.                        |
-| `check`                                                | Lowered by stub + semantics specified | Retains the name and lowers to a flat kind, or an expression fallback when no kind covers it.                     |
-| `on`                                                   | Lowered by stub + semantics specified | Changes the check subject and scope to the selected relation.                                                     |
-| `record`                                               | Lowered by stub + semantics specified | Calls the callback with symbolic collections; emits no record wrapper or binder ID.                               |
-| `required`                                             | Lowered by stub + semantics specified | Sets native requiredness and preserves semantic metadata; this stub does not validate records.                    |
-| `str`                                                  | Lowered by stub + semantics specified | Delegates native string-field construction; no record values are read.                                            |
-| `boolean`                                              | Lowered by stub + semantics specified | Emits the two native choices and their Boolean codec metadata; no runtime decoding occurs.                        |
-| `creationDefault`                                      | Lowered by stub + semantics specified | Checks Boolean literal compatibility and records the default; applying it at final absence remains unimplemented. |
-| `parent`                                               | Lowered by stub + semantics specified | Retains Parent grammar and lowers inline checks, deriving readable names for anonymous callbacks.                 |
-| `child`                                                | Lowered by stub + semantics specified | Retains Child grammar and lowers inline checks, deriving readable names for anonymous callbacks.                  |
-| `parentOf`                                             | Lowered by stub + semantics specified | Builds a qualified Parent relation reference whose declared identity is checked during lowering.                  |
-| `childOf`                                              | Lowered by stub + semantics specified | Builds the corresponding qualified Child reference.                                                               |
-| `fieldOf`                                              | Lowered by stub + semantics specified | Builds a field identity from the owner tag and the field title.                                                   |
-| `isNodeType`                                           | Lowered by stub, semantics prose only | Lowers a relation target test to target-type with targetElement; other forms use expression.                      |
-| `count`                                                | Lowered by stub, semantics prose only | Combines an owned-relation count and comparison into a flat count rule without counting records.                  |
-| `lt`                                                   | Lowered by stub, semantics prose only | Lowers count < integer to count with compare = lt; other forms use expression.                                    |
-| `lte`                                                  | Lowered by stub, semantics prose only | Lowers count <= integer to count with compare = lte; other forms use expression.                                  |
-| `gt`                                                   | Lowered by stub, semantics prose only | Lowers count > integer to count with compare = gt; other forms use expression.                                    |
-| `gte`                                                  | Lowered by stub, semantics prose only | Lowers count >= integer to count with compare = gte; other forms use expression.                                  |
-| `eq`                                                   | Lowered by stub, semantics prose only | Lowers count == integer to count with compare = eq; other forms use expression.                                   |
-| `atMost`                                               | Lowered by stub, semantics prose only | Lowers to the same count record as lte (count COLLECTION) N; no count is computed.                                |
-| `atLeast`                                              | Lowered by stub, semantics prose only | Lowers to count with compare = gte; no count is computed.                                                         |
-| `exactly`                                              | Lowered by stub, semantics prose only | Lowers to count with compare = eq; no count is computed.                                                          |
-| `only`                                                 | Lowered by stub, semantics prose only | Becomes requireSingleton in endpoint-path; other forms retain named expression operands.                          |
-| `forest`                                               | Lowered by stub, semantics prose only | Emits selected edges, owner-kind vertices, parent-to-child orientation, and permission for disconnected roots.    |
-| `isForest`                                             | Lowered by stub, semantics prose only | Lowers to forest-validity with a view reference; finds no cycles or hierarchy-parent counts.                      |
-| `visibility`                                           | Lowered by stub, semantics prose only | Emits hierarchy and policy; fixed shared-root, unique-path, and zero-length semantics are in contract.md.         |
-| `visible`                                              | Lowered by stub, semantics prose only | Lowers relation owner-to-target visibility to visible-target with view, from, and to.                             |
-| `canDescend`                                           | Lowered by stub, semantics prose only | Lowers two singleton endpoints to endpoint-path with view, upper, lower, and requireSingleton.                    |
-| `nativeDag`                                            | Lowered by stub, semantics prose only | Lowers to native-dag; the kind fixes all native Parent/Child roles and parent-to-child orientation.               |
-| `input`                                                | Lowered by stub, semantics prose only | Emits the input declaration without provider registration, acquisition, or completeness checking.                 |
-| `projection`                                           | Lowered by stub, semantics prose only | Emits selected comparison facts without extracting them from records.                                             |
-| `preserve`                                             | Lowered by stub, semantics prose only | Lowers to preserve with baseline and projection references and the input dependency; compares no snapshots.       |
-| `contribute`                                           | Lowered by stub + semantics specified | Adds relation-scoped checks and retains a contribution origin for composition.                                    |
-| `const`                                                | Lowered by stub + semantics specified | Accepts Boolean literals and emits expression with named op and value fields.                                     |
-| Relation `edge` binder                                 | Lowered by stub + semantics specified | Exposes owner and target tokens through the author-facing origin and target properties.                           |
-| Record `node` or `bridge` binder                       | Lowered by stub + semantics specified | Exposes symbolic Parent and Child collection functions during normalization.                                      |
-| Singleton `.target`                                    | Lowered by stub, semantics prose only | Selects the declared target of each singleton endpoint relation; runtime resolution is not implemented.           |
-| Runtime graph evaluator                                | Not implemented                       | No backend in this stub consumes the predicates to produce graph verdicts.                                        |
-| Runtime field-value accessor                           | Not implemented                       | No constructor here reads FLAG from an arbitrary bound node for a new predicate.                                  |
-| Runtime default materialization                        | Not implemented                       | No literal is applied to a candidate, and no script default constructor or execution is provided here.            |
-| External snapshot acquisition                          | Not implemented                       | No provider command, transport schema, timeout implementation, or snapshot capture runs.                          |
-| Prerequisite scheduling and structured blocked results | Not implemented                       | No runtime connects a cardinality finding to a blocked singleton-dependent path check.                            |
-| Candidate batching, publication, and recovery          | Not implemented                       | No private candidate, persistence operation, stale-base refusal, or recovery mechanism is wired here.             |
-| Explicit rule replacement or disabling                 | Not implemented                       | The contract requires explicit identity-targeted action, but the stub supplies no such authoring constructor.     |
+| Construct                                              | Status                                | Concrete boundary                                                                                                          |
+| ------------------------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `el`                                                   | Lowered by stub + semantics specified | Wraps the native element declaration and retains constraints for later lowering.                                           |
+| `model`                                                | Lowered by stub + semantics specified | Supplies declaration-list defaults and the model identity.                                                                 |
+| `normalize`                                            | Lowered by stub + semantics specified | Builds grammar, metadata, and flat rule records with the authoring checks described above.                                 |
+| `check`                                                | Lowered by stub + semantics specified | Retains the name and lowers to a flat kind, or an expression fallback when no kind covers it.                              |
+| `on`                                                   | Lowered by stub + semantics specified | Changes the check subject and scope to the selected relation.                                                              |
+| `record`                                               | Lowered by stub + semantics specified | Calls the callback with symbolic collections; emits no record wrapper or binder ID.                                        |
+| `required`                                             | Lowered by stub + semantics specified | Sets native requiredness and preserves semantic metadata; this stub does not validate records.                             |
+| `str`                                                  | Lowered by stub + semantics specified | Delegates native string-field construction; no record values are read.                                                     |
+| `boolean`                                              | Lowered by stub + semantics specified | Emits the two native choices and their Boolean codec metadata; no runtime decoding occurs.                                 |
+| `creationDefault`                                      | Lowered by stub + semantics specified | Checks Boolean literal compatibility and records the default; applying it at final absence remains unimplemented.          |
+| `parent`                                               | Lowered by stub + semantics specified | Retains Parent grammar and lowers inline checks, deriving readable names for anonymous callbacks.                          |
+| `child`                                                | Lowered by stub + semantics specified | Retains Child grammar and lowers inline checks, deriving readable names for anonymous callbacks.                           |
+| `parentOf`                                             | Lowered by stub + semantics specified | Builds a qualified Parent relation reference whose declared identity is checked during lowering.                           |
+| `childOf`                                              | Lowered by stub + semantics specified | Builds the corresponding qualified Child reference.                                                                        |
+| `fieldOf`                                              | Lowered by stub + semantics specified | Builds a field identity from the owner tag and the field title.                                                            |
+| `isNodeType`                                           | Lowered by stub, semantics prose only | Lowers a relation target test to target-type with targetElement; other forms use expression.                               |
+| `count`                                                | Lowered by stub, semantics prose only | Combines an owned-relation count and comparison into a flat count rule without counting records.                           |
+| `lt`                                                   | Lowered by stub, semantics prose only | Lowers count < integer to count with compare = lt; other forms use expression.                                             |
+| `lte`                                                  | Lowered by stub, semantics prose only | Lowers count <= integer to count with compare = lte; other forms use expression.                                           |
+| `gt`                                                   | Lowered by stub, semantics prose only | Lowers count > integer to count with compare = gt; other forms use expression.                                             |
+| `gte`                                                  | Lowered by stub, semantics prose only | Lowers count >= integer to count with compare = gte; other forms use expression.                                           |
+| `eq`                                                   | Lowered by stub, semantics prose only | Lowers count == integer to count with compare = eq; other forms use expression.                                            |
+| `atMost`                                               | Lowered by stub, semantics prose only | Lowers to the same count record as lte (count COLLECTION) N; no count is computed.                                         |
+| `atLeast`                                              | Lowered by stub, semantics prose only | Lowers to count with compare = gte; no count is computed.                                                                  |
+| `exactly`                                              | Lowered by stub, semantics prose only | Lowers to count with compare = eq; no count is computed.                                                                   |
+| `only`                                                 | Lowered by stub, semantics prose only | Becomes requireSingleton in endpoint-path; other forms retain named expression operands.                                   |
+| `forest`                                               | Lowered by stub, semantics prose only | Emits selected edges, owner-kind vertices, parent-to-child orientation, and permission for disconnected roots.             |
+| `isForest`                                             | Lowered by stub, semantics prose only | Lowers to forest-validity with a view reference; finds no cycles or hierarchy-parent counts.                               |
+| `visibility`                                           | Lowered by stub, semantics prose only | Emits hierarchy and policy; fixed shared-root, unique-path, and zero-length semantics are in contract.md.                  |
+| `visible`                                              | Lowered by stub, semantics prose only | Lowers relation owner-to-target visibility to visible-target with view, from, and to.                                      |
+| `canDescend`                                           | Lowered by stub, semantics prose only | Lowers two singleton endpoints to endpoint-path with view, upper, lower, and requireSingleton.                             |
+| `nativeDag`                                            | Lowered by stub, semantics prose only | Lowers to native-dag; the kind fixes all native Parent/Child roles and parent-to-child orientation.                        |
+| `input`                                                | Lowered by stub, semantics prose only | Validates input configuration keywords; provider registration, acquisition, and snapshot completeness checking do not run. |
+| `projection`                                           | Lowered by stub, semantics prose only | Emits selected comparison facts without extracting them from records.                                                      |
+| `preserve`                                             | Lowered by stub, semantics prose only | Lowers to preserve with baseline and projection references and the input dependency; compares no snapshots.                |
+| `contribute`                                           | Lowered by stub + semantics specified | Adds relation-scoped checks and retains a contribution origin for composition.                                             |
+| `const`                                                | Lowered by stub + semantics specified | Accepts Boolean literals and emits expression with named op and value fields.                                              |
+| Relation `edge` binder                                 | Lowered by stub + semantics specified | Exposes owner and target tokens through the author-facing origin and target properties.                                    |
+| Record `node` or `bridge` binder                       | Lowered by stub + semantics specified | Exposes symbolic Parent and Child collection functions during normalization.                                               |
+| Singleton `.target`                                    | Lowered by stub, semantics prose only | Selects the declared target of each singleton endpoint relation; runtime resolution is not implemented.                    |
+| Runtime graph evaluator                                | Not implemented                       | No backend in this stub consumes the predicates to produce graph verdicts.                                                 |
+| Runtime field-value accessor                           | Not implemented                       | No constructor here reads FLAG from an arbitrary bound node for a new predicate.                                           |
+| Runtime default materialization                        | Not implemented                       | No literal is applied to a candidate, and no script default constructor or execution is provided here.                     |
+| External snapshot acquisition                          | Not implemented                       | The contract specifies command stdout JSON; no provider command, timeout implementation, or snapshot capture runs.         |
+| Prerequisite scheduling and structured blocked results | Not implemented                       | No runtime connects a cardinality finding to a blocked singleton-dependent path check.                                     |
+| Candidate batching, publication, and recovery          | Not implemented                       | No private candidate, persistence operation, stale-base refusal, or recovery mechanism is wired here.                      |
+| Explicit rule replacement or disabling                 | Not implemented                       | The contract requires explicit identity-targeted action, but the stub supplies no such authoring constructor.              |

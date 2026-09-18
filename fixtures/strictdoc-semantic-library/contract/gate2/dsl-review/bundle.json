@@ -2,6 +2,11 @@
   "bundle": {
     "declarations": [
       {
+        "id": "model:reference",
+        "kind": "model",
+        "name": "reference"
+      },
+      {
         "id": "model:reference/element:FOO",
         "kind": "element",
         "name": "FOO"
@@ -129,6 +134,7 @@
         "origins": [
           "declaration:model:reference/element:FOO/relation:parent:H"
         ],
+        "requires": [],
         "scope": "relation",
         "subject": {
           "direction": "parent",
@@ -145,6 +151,7 @@
         "origins": [
           "declaration:model:reference/element:FOO/relation:parent:R"
         ],
+        "requires": [],
         "scope": "relation",
         "subject": {
           "direction": "parent",
@@ -164,6 +171,7 @@
           "direction": "parent",
           "role": "H"
         },
+        "requires": [],
         "scope": "record",
         "subject": {
           "element": "FOO"
@@ -179,6 +187,7 @@
         "origins": [
           "declaration:model:reference/element:FOO/relation:parent:R"
         ],
+        "requires": ["model:reference/check:H-forest"],
         "scope": "relation",
         "subject": {
           "direction": "parent",
@@ -196,6 +205,7 @@
         "origins": [
           "declaration:model:reference/element:BAR/relation:parent:P"
         ],
+        "requires": [],
         "scope": "relation",
         "subject": {
           "direction": "parent",
@@ -210,6 +220,7 @@
         "kind": "target-type",
         "name": "Q.target-type",
         "origins": ["declaration:model:reference/element:BAR/relation:child:Q"],
+        "requires": [],
         "scope": "relation",
         "subject": {
           "direction": "child",
@@ -229,6 +240,7 @@
           "direction": "parent",
           "role": "P"
         },
+        "requires": [],
         "scope": "record",
         "subject": {
           "element": "BAR"
@@ -246,6 +258,7 @@
           "direction": "child",
           "role": "Q"
         },
+        "requires": [],
         "scope": "record",
         "subject": {
           "element": "BAR"
@@ -263,6 +276,11 @@
         "name": "endpoint-path",
         "origins": ["declaration:model:reference/element:BAR"],
         "requireSingleton": true,
+        "requires": [
+          "model:reference/element:BAR/check:one-P",
+          "model:reference/element:BAR/check:one-Q",
+          "model:reference/check:H-forest"
+        ],
         "scope": "record",
         "subject": {
           "element": "BAR"
@@ -279,6 +297,7 @@
         "kind": "native-dag",
         "name": "native-dag",
         "origins": ["declaration:model:reference"],
+        "requires": [],
         "scope": "model",
         "subject": {
           "model": "reference"
@@ -290,6 +309,7 @@
         "kind": "forest-validity",
         "name": "H-forest",
         "origins": ["declaration:model:reference"],
+        "requires": [],
         "scope": "model",
         "subject": {
           "model": "reference"
@@ -304,6 +324,7 @@
         "name": "baseline-preserved",
         "origins": ["declaration:model:reference"],
         "projection": "model:reference/projection:modeled-record",
+        "requires": [],
         "scope": "model",
         "subject": {
           "model": "reference"
