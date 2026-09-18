@@ -9,8 +9,9 @@ into a shell word.
 
 Two containers, because a directory leaf can be a symlink, a FIFO or a file
 someone edited while a document leaf cannot, and because a container whose
-units are whole files can back one up and must state a mode, while one whose
-units are leaves of a shared byte stream structurally cannot do either:
+units are whole files can back one up and must state each unit's mode, while
+one whose units are leaves of a shared byte stream can back up nothing and
+states at most one mode, for the single file every leaf shares:
 
     DirContainer   a directory     units are filenames    witness: sha256
     DocContainer   one document    units are key tuples    witness: the address
@@ -216,15 +217,33 @@ def atomic_write(path: Path, content: bytes, mode: int) -> None:
         temporary_path.unlink(missing_ok=True)
 
 
-def write_if_changed(path: Path, content: bytes, mode: int) -> None:
-    """Preserve an existing regular file's mode; use `mode` for a new one."""
+def write_if_changed(
+    path: Path, content: bytes, mode: int, declared: int | None = None
+) -> None:
+    """Preserve an existing regular file's mode; use `mode` for a new one.
+
+    A `declared` mode overrides both halves, and a document target is the only
+    thing that may state one. It is imposed on every write -- create, adopt,
+    rewrite -- and on the run where the bytes did not move, which is the arm
+    that carries the real caller: kiro's merge target must re-narrow a file an
+    earlier overwrite generation published read-only, and the run that has to
+    do it usually has no other work. Absent a declared mode this never changes
+    a mode at all, which is what the ledger writers below rely on.
+    """
     is_symlink = path.is_symlink()
+    if declared is not None:
+        mode = declared
     if path.exists() and not is_symlink:
         if not path.is_file():
             raise ValueError(f"refusing to replace non-regular file {path}")
         current = path.read_bytes()
-        mode = stat.S_IMODE(path.stat().st_mode)
+        if declared is None:
+            mode = stat.S_IMODE(path.stat().st_mode)
         if current == content:
+            if declared is not None:
+                # Impose the mode, publish nothing, keep the mtime -- the
+                # directory codec's skip arm, for the one file a document is.
+                path.chmod(mode)
             return
     elif not path.exists() and is_symlink:
         raise ValueError(f"refusing to replace dangling symlink {path}")
@@ -353,9 +372,19 @@ class DirContainer:
 class DocContainer:
     """One JSON or TOML document whose units are its owned leaves."""
 
-    def __init__(self, path: Path, relative: PurePosixPath, codec: str) -> None:
+    def __init__(
+        self,
+        path: Path,
+        relative: PurePosixPath,
+        codec: str,
+        mode: int | None = None,
+    ) -> None:
         self.path = path
         self.relative = relative
+        # The mode the document must carry, when its target states one. A
+        # leaf cannot have a mode of its own -- every one of them lives in the
+        # same file -- but the file can, and one caller needs it.
+        self.mode = mode
         if codec == "json":
             self.parse: Callable[[str], Any] = json.loads
             self.serialize: Callable[[Any], str] = (
@@ -435,14 +464,25 @@ class DocContainer:
         idempotent deletes and sets rather than treating an owned leaf as
         unowned.
         """
-        write_if_changed(self.path, self.serialize(self.document).encode(), NEW_FILE_MODE)
+        write_if_changed(
+            self.path,
+            self.serialize(self.document).encode(),
+            NEW_FILE_MODE,
+            self.mode,
+        )
 
 
 def open_container(root: Path, target: Mapping[str, Any], ledger: Path):
     relative = PurePosixPath(target["path"])
     if target["codec"] == "dir":
         return DirContainer(root / relative, relative, ledger)
-    return DocContainer(root / relative, relative, target["codec"])
+    declared = target["units"].get("mode")
+    return DocContainer(
+        root / relative,
+        relative,
+        target["codec"],
+        None if declared is None else int(declared, 8),
+    )
 
 
 # ── Ledgers ─────────────────────────────────────────────────────────

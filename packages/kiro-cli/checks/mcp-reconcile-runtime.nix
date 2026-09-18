@@ -39,6 +39,11 @@
     name = "kiro-mcp-${backend}";
     configFile = ".kiro/settings/mcp.json";
     inherit first second;
+    # The merge target STATES this mode, so the shared corpus asserts the
+    # writer imposes it rather than preserving whatever the file had. None of
+    # these three generations carries a credential url; the 0600 arm is
+    # asserted in mcp-reconcile-runtime.py's `secret` case.
+    mode = "0644";
     native = {
       mcpServers = {
         alpha.headers."X-Hand" = "native sibling";
