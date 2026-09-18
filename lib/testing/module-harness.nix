@@ -297,7 +297,18 @@
   # escapes its separator, so this is a true literal search. Use it whenever
   # the needle is shell syntax rather than prose.
   hasLiteral = needle: hay: builtins.length (lib.splitString needle hay) > 1;
+  # What a reconciler's store plan will assert into one runtime-writable
+  # document, as recorded by `helpers.mkOwnedDocument`. The plan itself is a
+  # derivation, so reading it back would be import-from-derivation; this is the
+  # eval-visible record, and the writer is built from the same declaration.
+  #
+  # It THROWS on an absent document rather than defaulting to `{}`: a renamed
+  # or dropped writer must fail a check, never satisfy one with an empty value.
+  ownedDocument = runtime: path: evaluated:
+    lib.attrByPath ["ai" runtime "_reconciledDocuments" path]
+    (throw "module-test: config.ai.${runtime}._reconciledDocuments.\"${path}\" is missing")
+    evaluated.config;
 in {
-  inherit aiBase aiStubs devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm harnessNames hasLiteral hmLib hmStubs mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest tomlFormat;
+  inherit aiBase aiStubs devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm harnessNames hasLiteral hmLib hmStubs mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument tomlFormat;
   inherit testing;
 }
