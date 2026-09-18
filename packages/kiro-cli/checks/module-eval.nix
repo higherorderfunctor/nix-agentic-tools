@@ -707,8 +707,16 @@ in {
         builtins.length packages >= 1
     );
 
-    # HM: settings activation merge — verify activation script
-    # contains jq merge and settings content.
+    # HM: settings activation owns leaves and carries the declared content.
+    module-kiro-hm-empty-settings-emits-writer = mkTest "kiro-hm-empty-settings-emits-writer" (
+      let
+        evaluated = evalHm {ai.kiro.enable = true;};
+        script = evaluated.config.home.activation.kiroSettingsMerge.text;
+      in
+        lib.hasInfix "--format json" script
+        && lib.hasInfix "json-settings" script
+    );
+
     module-kiro-hm-writes-settings-activation = mkTest "kiro-hm-writes-settings-activation" (
       let
         result = evalHm {
@@ -722,7 +730,7 @@ in {
         activation
         != null
         && lib.hasInfix "claude-sonnet-4" (activation.text or "")
-        && lib.hasInfix "jq" (activation.text or "")
+        && lib.hasInfix "--format json" (activation.text or "")
     );
 
     # Known Kiro model id reaches the cli.json merge.
