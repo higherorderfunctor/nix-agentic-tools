@@ -96,9 +96,10 @@ def identity(path):
     return info.st_dev, info.st_ino
 
 
-def wait_for(predicate, message):
+def wait_for(predicate, message, observe=lambda: None):
     deadline = time.monotonic() + 30
     while not predicate():
+        observe()
         assert time.monotonic() < deadline, message
         time.sleep(0.005)
 
@@ -593,20 +594,30 @@ def renderer(fixture):
 
 
 def legacy(fixture):
-    """Both legacy ledgers, written by TODAY's code, read and pruned by own.py.
+    """Both legacy ledgers, FROZEN as the programs that wrote them left them.
 
-    This is the positive control for "no migration code needed": nothing here
-    constructs a ledger by hand, so a format drift in either reader fails.
+    This is the positive control for "no migration code needed", and it is a
+    byte contract in both directions: Home Manager ROLLBACK runs an OLDER
+    generation's program against a ledger this one wrote, so own.py has to read
+    what materialize.nix and reconcile-toml.py produced AND produce exactly
+    what they would have. Both writers are deleted, so their output is kept
+    instead of re-derived -- a fixture built by hand here would only prove the
+    fixture and the reader agree with each other.
     """
-    produced = subprocess.run(
-        [TOOLS["legacyDir"]], env=fixture.environment, capture_output=True, text=True, timeout=60
-    )
-    assert produced.returncode == 0, produced.stderr
+    payload = "legacy payload\n"
     unit = fixture.root / "managed/legacy.txt"
     manifest = fixture.ledger("materialize/own-legacy.manifest")
-    assert unit.read_text() == "legacy payload\n"
-    recorded = manifest.read_text()
-    assert recorded == f"legacy.txt\t{hashlib.sha256(unit.read_bytes()).hexdigest()}\n", recorded
+    frozen_tsv = Path(TOOLS["legacyDirManifest"]).read_bytes()
+    assert frozen_tsv == (
+        f"legacy.txt\t{hashlib.sha256(payload.encode()).hexdigest()}\n".encode()
+    ), "the frozen TSV no longer describes the payload below"
+    unit.parent.mkdir(parents=True, exist_ok=True)
+    unit.write_text(payload)
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_bytes(frozen_tsv)
+
+    # own.py READS it: the recorded file is removed and the witness is
+    # recognized, so nothing is mistaken for a hand edit and backed up.
     fixture.own(
         {
             "targets": [
@@ -614,10 +625,24 @@ def legacy(fixture):
             ]
         }
     )
-    assert not unit.exists(), "own.py did not prune from the generated TSV manifest"
+    assert not unit.exists(), "own.py did not prune from the frozen TSV manifest"
     assert not manifest.exists()
     assert not fixture.backups(), "a witness from the TSV manifest was misread as an edit"
-    print("PASS legacy: TSV manifest from materialize.nix read, pruned, unlinked")
+
+    # own.py WRITES it: same file, same witness, byte for byte.
+    fixture.own(
+        {
+            "targets": [
+                dir_target(
+                    {"legacy.txt": {"mode": "0444", "text": payload}},
+                    path="managed",
+                    ledger="materialize/own-legacy.manifest",
+                )
+            ]
+        }
+    )
+    assert manifest.read_bytes() == frozen_tsv, manifest.read_text()
+    print("PASS legacy: frozen TSV manifest read, pruned, and rewritten byte-identically")
 
     # reconcile-toml.py is deleted, so the ledger it wrote is FROZEN as bytes,
     # captured from the program itself for the declaration below. Reading those
@@ -684,6 +709,14 @@ def lock(fixture):
     # Two identical invocations, overlapping on purpose. Their renderers hold
     # each other at a barrier so both are in flight, and the end state must be
     # exactly one unit, one consistent ledger and no live temporaries.
+    #
+    # A concurrent READER is the other half, ported from the retired bash
+    # oracle (checks/ai-delivery/materializer-runtime.py): while both
+    # invocations are in flight, every snapshot of the unit must be the old
+    # content or the whole new payload, and the ledger must be one line naming
+    # one of those two. Renderers run OUTSIDE the lock here by design, so
+    # overlapping them is the normal case rather than a violation, and atomic
+    # publication is the only thing keeping a reader from seeing half a file.
     barrier = fixture.root / "barrier"
     barrier.mkdir()
     concurrent = {
@@ -698,6 +731,23 @@ def lock(fixture):
             )
         ]
     }
+    ledger = fixture.ledger("materialize/settings.manifest")
+    old = unit.read_bytes()
+    assert old != CONCURRENT_PAYLOAD and len(CONCURRENT_PAYLOAD) > 65536
+    digests = {
+        hashlib.sha256(content).hexdigest()
+        for content in (old, CONCURRENT_PAYLOAD)
+    }
+
+    def observe():
+        assert unit.read_bytes() in (old, CONCURRENT_PAYLOAD), \
+            "a reader observed a partial payload"
+        lines = ledger.read_text().splitlines()
+        assert len(lines) == 1, f"a reader observed a corrupt ledger: {lines!r}"
+        name, _, digest = lines[0].partition("\t")
+        assert name == "unit.txt" and digest in digests, \
+            f"a reader observed a corrupt ledger: {lines!r}"
+
     processes = [
         subprocess.Popen(
             fixture.command(concurrent), env=fixture.environment,
@@ -711,19 +761,29 @@ def lock(fixture):
             lambda: len(list(barrier.glob("*.arrived"))) == 2
             or any(process.poll() is not None for process in processes),
             "both invocations never reached the renderer",
+            observe,
         )
+        observations = 0
+        while any(process.poll() is None for process in processes):
+            observe()
+            observations += 1
+            time.sleep(0.005)
+        assert observations > 0, "both invocations finished before a single snapshot"
         for process in processes:
             stdout, stderr = process.communicate(timeout=60)
             assert process.returncode == 0, (process.returncode, stdout, stderr)
-        assert unit.read_text() == "rendered concurrently\n"
-        ledger = fixture.ledger("materialize/settings.manifest")
+        assert unit.read_bytes() == CONCURRENT_PAYLOAD
         assert ledger.read_text() == (
-            f"unit.txt\t{hashlib.sha256(unit.read_bytes()).hexdigest()}\n"
+            f"unit.txt\t{hashlib.sha256(CONCURRENT_PAYLOAD).hexdigest()}\n"
         ), ledger.read_text()
+        assert stat.S_IMODE(unit.stat().st_mode) == 0o444
         assert not list(unit.parent.glob(".*.nat-tmp.*")), "a live temporary survived"
         assert not list(ledger.parent.glob(".*.nat-tmp.*")), "a live ledger temporary survived"
         assert not fixture.backups(), "an overlapping invocation lost ownership"
-        print("PASS lock: two overlapping invocations converged on one state")
+        print(
+            "PASS lock: two overlapping invocations converged on one state; "
+            f"{observations} complete snapshots"
+        )
     finally:
         for process in processes:
             if process.poll() is None:
@@ -748,7 +808,8 @@ def lazy_toml(fixture):
     fixture.own({"targets": [doc_target({}, codec="toml", path="config.toml", ledger="toml-settings/codex.toml.json")]},
                 python=TOOLS["tomlPython"])
     # Not a byte comparison: a tomlkit set-then-delete round trip leaves the
-    # blank line its table occupied, exactly as reconcile-toml.py does today.
+    # blank line its table occupied, exactly as the program this one replaced
+    # did -- the body is inherited from it, not reimplemented.
     drained = document.read_text()
     assert "memories" not in drained and "[features]" not in drained, drained
     assert '[projects."/repo"]' in drained and 'trust_level = "trusted"' in drained, drained
@@ -802,15 +863,24 @@ CASES = {
 }
 
 
+# Large, and emitted in two halves around the barrier: a partial publication
+# would be VISIBLE to the reader in the concurrency case, so "no reader ever
+# saw half a payload" is an observation rather than a hope.
+CONCURRENT_PAYLOAD = b"complete payload line\n" * 8192
+
+
 def render(barrier, expected):
     """Hold every overlapping invocation until all of them have arrived."""
     barrier = Path(barrier)
+    midpoint = len(CONCURRENT_PAYLOAD) // 2
+    sys.stdout.buffer.write(CONCURRENT_PAYLOAD[:midpoint])
+    sys.stdout.buffer.flush()
     (barrier / f"{os.getpid()}.arrived").touch()
     wait_for(
         lambda: len(list(barrier.glob("*.arrived"))) >= int(expected),
         "the other invocation never reached the renderer",
     )
-    sys.stdout.write("rendered concurrently\n")
+    sys.stdout.buffer.write(CONCURRENT_PAYLOAD[midpoint:])
 
 
 if __name__ == "__main__":

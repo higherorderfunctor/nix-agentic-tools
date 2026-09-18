@@ -1,33 +1,12 @@
-{
-  harness,
-  pkgs,
-  ...
-}: let
-  materialize = import ../../lib/ai/materialize.nix {lib = harness.hmLib;};
-  # TODAY's rung-2 writer, driven verbatim: the TSV manifest own.py has to
-  # read is produced by the generated bash that wrote every live one, so a
-  # drift in either format shows up as a failure rather than as a matched pair
-  # of hand-written fixtures agreeing with each other.
-  legacyDir = pkgs.writeShellScript "ai-own-legacy-dir" ''
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
-    ${
-      (materialize.mkDevenvTask {
-        inherit (pkgs) coreutils diffutils flock gnugrep;
-        files."legacy.txt" = {
-          strategy = "copy";
-          text = "legacy payload\n";
-        };
-        hasFiles = false;
-        stateSlug = "own-legacy";
-        targetDir = "managed";
-      })
-      .exec
-    }
-  '';
+{pkgs, ...}: let
   tools = {
     bash = "${pkgs.bash}/bin/bash";
-    legacyDir = "${legacyDir}";
+    # The TSV manifest materialize.nix wrote, captured from that program before
+    # it was deleted, exactly as the JSON one below. Both are frozen BYTES
+    # because the rollback contract is a byte format and both writers are gone;
+    # a fixture built by hand would only prove that the fixture and the reader
+    # agree with each other. `.frozen` keeps treefmt away from them.
+    legacyDirManifest = "${./fixtures/legacy-dir-manifest.frozen}";
     # The v1 JSON ledger reconcile-toml.py wrote, captured from that program
     # before it was deleted. Frozen bytes rather than a live producer: the
     # rollback contract is a byte format, and the only way to keep testing it

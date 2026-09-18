@@ -109,24 +109,6 @@
   # its prune position and the phase that unlinks the drained ledger needs one
   # of its own.
   hmRetirementLedgerScript = requireBody ["home" "activation" "retire-materialize-kiro-steering-ledger" "text"];
-  # Extract the heredoc body a copy writer embeds for <name> — the
-  # #433 heredoc-extraction idiom (see module-kiro-hooks-typed-
-  # colocation). The per-script EOF marker is content-hash-derived, so
-  # recover it from the `nat_mat_write '<name>' …<<'MARKER'` call line;
-  # the script embeds store paths, whose context the split helpers
-  # reject, so strip it (byte content is unchanged).
-  matHeredocBody = script: name: let
-    t = builtins.unsafeDiscardStringContext script;
-    parts = lib.splitString "${lib.escapeShellArg name} \"$nat_mat_prev\" ${lib.escapeShellArg "0444"} <<'" t;
-  in
-    if builtins.length parts < 2
-    then throw "Kiro check requires materializer heredoc for ${name}: write call is missing"
-    else let
-      afterCall = builtins.elemAt parts 1;
-      marker = builtins.head (lib.splitString "'\n" afterCall);
-      body = lib.removePrefix "${marker}'\n" afterCall;
-    in
-      builtins.head (lib.splitString "\n${marker}\n" body);
 in {
-  inherit dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
+  inherit dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
 }
