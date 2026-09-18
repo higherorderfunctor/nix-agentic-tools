@@ -63,6 +63,15 @@ in {
         result.config.home.activation ? kimchiConfigMerge
     );
 
+    module-kimchi-hm-empty-settings-emits-writers = mkTest "kimchi-hm-empty-settings-emits-writers" (
+      let
+        evaluated = evalHm {ai.kimchi.enable = true;};
+        activation = evaluated.config.home.activation;
+      in
+        lib.hasInfix "--format json" activation.kimchiConfigMerge.text
+        && lib.hasInfix "--format json" activation.kimchiHarnessSettingsMerge.text
+    );
+
     # harnessSettings render to harness/settings.json (mutable-state tree).
     module-kimchi-harness-settings = mkTest "kimchi-harness-settings" (
       let
