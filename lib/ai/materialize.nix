@@ -1,9 +1,10 @@
 # Shared strategy-driven file materializer.
 #
-# Consumes a `{ <name> = { text, source, strategy }; }` attrset (see
-# `fileEntryType`) plus a target directory, and emits per-backend
-# writers. Kiro hooks are its remaining production caller (copy only; v3 drops
-# symlinked hooks). Kiro steering moved to the common `ai.kiro.files` symlink
+# Consumes a `{ <name> = { text, source, renderCommand?, mode?, strategy }; }`
+# attrset (see `fileEntryType`) plus a target directory, and emits per-backend
+# writers. Kiro hooks and MCP configuration use copies (v3 drops symlinked
+# hooks; MCP URLs can require activation-time secrets). Kiro steering moved to
+# the common `ai.kiro.files` symlink
 # sink after a 2.18.1 loader spike; one-shot retirement helpers drain and remove
 # the legacy steering-copy manifest without retaining output authority. Caller-
 # facing messages still take an explicit `surface` label.
@@ -77,16 +78,32 @@ in rec {
   # therefore always agree on strategy; collisions surface on `text`.
   fileEntryType = lib.types.submodule {
     options = {
+      mode = lib.mkOption {
+        type = lib.types.strMatching "0?[0-7]{3}";
+        default = "0444";
+        description = "Octal permissions for a managed copy, including unchanged content.";
+      };
+      renderCommand = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Shell command emitting copy content on stdout at activation time
+          (exactly one of `text`/`source`/`renderCommand`). Runs in a strict
+          subshell with NAT_MAT_TARGET_DIR available; must succeed before the
+          guarded write. Content is preserved byte-for-byte. Only valid for
+          `strategy = "copy"`.
+        '';
+      };
       text = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
-        description = "Inline file content (exactly one of `text`/`source`).";
+        description = "Inline file content (exactly one of `text`/`source`/`renderCommand`).";
       };
       source = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
         default = null;
         description = ''
-          Source path (exactly one of `text`/`source`). Only meaningful
+          Source path (exactly one of `text`/`source`/`renderCommand`). Only meaningful
           for `strategy = "symlink"`; copy-mode emitters normalize paths
           to `text` at eval. Documented pure-path (fixture/flake files),
           not derivation outputs — `builtins.readFile` on a drv output
@@ -130,7 +147,20 @@ in rec {
   }: let
     badShape =
       builtins.attrNames
-      (lib.filterAttrs (_: e: (e.text == null) == (e.source == null)) files);
+      (lib.filterAttrs (_: e:
+        builtins.length (builtins.filter (v: v != null) [
+          (e.text or null)
+          (e.source or null)
+          (e.renderCommand or null)
+        ])
+        != 1)
+      files);
+    badRender = builtins.attrNames (lib.filterAttrs (_: e:
+      (e.renderCommand or null) != null && e.strategy != "copy")
+    files);
+    badModes = builtins.attrNames (lib.filterAttrs (_: e:
+      builtins.match "0?[0-7]{3}" (e.mode or "0444") == null)
+    (copyEntries files));
     # §4: copy-mode names only — symlink entries keep the legacy
     # freedom (the regex gates only what the generated shell touches).
     badNames =
@@ -139,7 +169,15 @@ in rec {
   in [
     {
       assertion = badShape == [];
-      message = "ai.${app}: ${surface} entries must set exactly one of `text`/`source`; offending: ${lib.concatStringsSep ", " badShape}";
+      message = "ai.${app}: ${surface} entries must set exactly one of `text`/`source`/`renderCommand`; offending: ${lib.concatStringsSep ", " badShape}";
+    }
+    {
+      assertion = badRender == [];
+      message = "ai.${app}: ${surface} renderCommand requires copy strategy; offending: ${lib.concatStringsSep ", " badRender}";
+    }
+    {
+      assertion = badModes == [];
+      message = "ai.${app}: ${surface} copy modes must be octal permissions; offending: ${lib.concatStringsSep ", " badModes}";
     }
     {
       assertion = badNames == [];
@@ -295,7 +333,7 @@ in rec {
   '';
 
   # Write pass: per-file atomic mktemp+mv with the clobber guard, then
-  # one atomic manifest rewrite. Content rides quoted heredocs whose
+  # one atomic manifest rewrite. Static content rides quoted heredocs whose
   # per-script EOF marker derives from the content hash, so no embedded
   # body can terminate its own heredoc.
   mkWriteCore = {
@@ -309,7 +347,11 @@ in rec {
     marker = "NAT_MAT_${builtins.substring 0 16 (
       builtins.hashString "sha256" (
         builtins.unsafeDiscardStringContext
-        (lib.concatMapStrings (n: entryContent files.${n}) names)
+        (lib.concatMapStrings (n:
+          if (files.${n}.renderCommand or null) != null
+          then ""
+          else entryContent files.${n})
+        names)
       )
     )}_EOF";
     fnDefs = ''
@@ -317,13 +359,13 @@ in rec {
       nat_mat_write() {
         nat_mat_name="$1"
         nat_mat_prev="$2"
+        nat_mat_mode="$3"
         nat_mat_target="$NAT_MAT_TARGET_DIR/$nat_mat_name"
         nat_mat_tmp="$(${coreutils}/bin/mktemp "$NAT_MAT_TARGET_DIR/.$nat_mat_name.nat-tmp.XXXXXX")"
         ${coreutils}/bin/cat > "$nat_mat_tmp"
-        # D3 guardrail: managed copies land read-only (0444) so a casual
-        # agent edit bounces; mv-replacement ignores target-file perms,
-        # so our own updates and prunes still work.
-        ${coreutils}/bin/chmod 444 "$nat_mat_tmp"
+        # Copies default to read-only; runtime secrets can restrict access
+        # further and intentionally mutable files can opt into owner writes.
+        ${coreutils}/bin/chmod "$nat_mat_mode" "$nat_mat_tmp"
         if [ -L "$nat_mat_target" ]; then
           # -L before cmp (constraint 9): a symlink is never user
           # content; cmp-skipping an identical-content symlink would
@@ -341,6 +383,7 @@ in rec {
           if [ -n "$nat_mat_prev" ] && [ "$nat_mat_disk" = "$nat_mat_prev" ]; then
             if ${diffutils}/bin/cmp -s -- "$nat_mat_tmp" "$nat_mat_target"; then
               # ours + unchanged: skip (no mtime churn)
+              ${coreutils}/bin/chmod "$nat_mat_mode" "$nat_mat_target"
               ${coreutils}/bin/rm -f -- "$nat_mat_tmp"
               printf '%s\t%s\n' "$nat_mat_name" "$nat_mat_disk" >> "$NAT_MAT_NEW_MANIFEST"
               return 0
@@ -364,14 +407,33 @@ in rec {
     # wrapping does not disturb).
     entryBlock = name: entry: let
       regexName = lib.replaceStrings ["."] ["\\."] name;
+      writeCall = "nat_mat_write ${lib.escapeShellArg name} \"$nat_mat_prev\" ${lib.escapeShellArg (entry.mode or "0444")}";
     in
       "nat_mat_prev=\"\"\n"
       + "if [ -f \"$NAT_MAT_MANIFEST\" ]; then\n"
       + "  nat_mat_prev=\"$(${gnugrep}/bin/grep -m 1 -e \"^${regexName}$NAT_MAT_TAB\" \"$NAT_MAT_MANIFEST\" | ${coreutils}/bin/cut -f 2-)\" || :\n"
       + "fi\n"
-      + "nat_mat_write ${lib.escapeShellArg name} \"$nat_mat_prev\" <<'${marker}'\n"
-      + stripTrailingNewline (entryContent entry)
-      + "\n${marker}\n";
+      + (
+        if (entry.renderCommand or null) != null
+        then
+          # Buffer before writing: a direct pipeline could publish partial
+          # output before pipefail notices a renderer failure, and would lose
+          # nat_mat_write's conflict counter in a pipeline subshell. mktemp
+          # keeps secret output private; the reserved name permits recovery.
+          ''
+            nat_mat_rendered="$(${coreutils}/bin/mktemp "$NAT_MAT_TARGET_DIR/.${name}.render.nat-tmp.XXXXXX")"
+            (
+              trap '${coreutils}/bin/rm -f -- "$nat_mat_rendered"' ERR
+              ${entry.renderCommand}
+            ) > "$nat_mat_rendered"
+            ${writeCall} < "$nat_mat_rendered"
+            ${coreutils}/bin/rm -f -- "$nat_mat_rendered"
+          ''
+        else
+          "${writeCall} <<'${marker}'\n"
+          + stripTrailingNewline (entryContent entry)
+          + "\n${marker}\n"
+      );
   in
     fnDefs
     + lib.concatStrings (lib.mapAttrsToList entryBlock files)
