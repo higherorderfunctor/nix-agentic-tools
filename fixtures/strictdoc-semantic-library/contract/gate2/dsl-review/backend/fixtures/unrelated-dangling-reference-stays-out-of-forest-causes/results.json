@@ -1,0 +1,302 @@
+{
+  "evaluation": "unrelated-dangling-reference-stays-out-of-forest-causes",
+  "baseline": "baseline-empty-protects-nothing",
+  "expected": true,
+  "status": "error",
+  "findings": [
+    {
+      "uid": "F1",
+      "occurrence": {
+        "role": "H",
+        "direction": "parent",
+        "target": "GHOST-H"
+      },
+      "occurrenceIndex": 0,
+      "predicatePath": null,
+      "kind": null,
+      "status": "error",
+      "code": "unresolved-target",
+      "message": "GHOST-H is not a candidate record.",
+      "evidence": {
+        "input": null,
+        "reason": "The occurrence target does not resolve to a candidate record.",
+        "requires": []
+      }
+    },
+    {
+      "uid": "G1",
+      "occurrence": {
+        "role": "R",
+        "direction": "parent",
+        "target": "GHOST-R"
+      },
+      "occurrenceIndex": 1,
+      "predicatePath": null,
+      "kind": null,
+      "status": "error",
+      "code": "unresolved-target",
+      "message": "GHOST-R is not a candidate record.",
+      "evidence": {
+        "input": null,
+        "reason": "The occurrence target does not resolve to a candidate record.",
+        "requires": []
+      }
+    }
+  ],
+  "results": [
+    {
+      "rule": "model:reference/element:FOO/relation:parent:H/check:H.target-type",
+      "status": "blocked",
+      "findings": [
+        {
+          "uid": "F1",
+          "occurrence": {
+            "role": "H",
+            "direction": "parent",
+            "target": "GHOST-H"
+          },
+          "occurrenceIndex": 0,
+          "predicatePath": "/check",
+          "kind": "target-type",
+          "status": "blocked",
+          "code": "unresolved-target",
+          "message": "The occurrence target does not resolve to a candidate record.",
+          "evidence": {
+            "expectedElement": "FOO",
+            "actualElement": null,
+            "reason": "The occurrence target does not resolve to a candidate record.",
+            "input": null,
+            "requires": []
+          }
+        },
+        {
+          "uid": "G1",
+          "occurrence": {
+            "role": "H",
+            "direction": "parent",
+            "target": "G0"
+          },
+          "occurrenceIndex": 0,
+          "predicatePath": "/check",
+          "kind": "target-type",
+          "status": "satisfied",
+          "code": "target-type",
+          "message": "The target-type check is satisfied.",
+          "evidence": {
+            "expectedElement": "FOO",
+            "actualElement": "FOO"
+          }
+        }
+      ],
+      "causes": ["/findings/0"]
+    },
+    {
+      "rule": "model:reference/element:FOO/relation:parent:R/check:R.all",
+      "status": "blocked",
+      "findings": [
+        {
+          "uid": "G1",
+          "occurrence": {
+            "role": "R",
+            "direction": "parent",
+            "target": "GHOST-R"
+          },
+          "occurrenceIndex": 1,
+          "predicatePath": null,
+          "kind": null,
+          "status": "blocked",
+          "code": "prerequisite",
+          "message": "A required rule did not hold.",
+          "evidence": {
+            "reason": "A required rule did not hold.",
+            "input": null,
+            "requires": ["model:reference/check:H-forest"]
+          }
+        }
+      ],
+      "causes": ["model:reference/check:H-forest"]
+    },
+    {
+      "rule": "model:reference/element:FOO/check:one-H-parent",
+      "status": "satisfied",
+      "findings": [
+        {
+          "uid": "F0",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "kind": "count",
+          "status": "satisfied",
+          "code": "count",
+          "message": "The count check is satisfied.",
+          "evidence": {
+            "occurrences": [],
+            "count": 0,
+            "compare": "lte",
+            "value": 1
+          }
+        },
+        {
+          "uid": "F1",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "kind": "count",
+          "status": "satisfied",
+          "code": "count",
+          "message": "The count check is satisfied.",
+          "evidence": {
+            "occurrences": [
+              {
+                "occurrenceIndex": 0,
+                "role": "H",
+                "direction": "parent",
+                "target": "GHOST-H"
+              }
+            ],
+            "count": 1,
+            "compare": "lte",
+            "value": 1
+          }
+        },
+        {
+          "uid": "G0",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "kind": "count",
+          "status": "satisfied",
+          "code": "count",
+          "message": "The count check is satisfied.",
+          "evidence": {
+            "occurrences": [],
+            "count": 0,
+            "compare": "lte",
+            "value": 1
+          }
+        },
+        {
+          "uid": "G1",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "kind": "count",
+          "status": "satisfied",
+          "code": "count",
+          "message": "The count check is satisfied.",
+          "evidence": {
+            "occurrences": [
+              {
+                "occurrenceIndex": 0,
+                "role": "H",
+                "direction": "parent",
+                "target": "G0"
+              }
+            ],
+            "count": 1,
+            "compare": "lte",
+            "value": 1
+          }
+        }
+      ],
+      "causes": []
+    },
+    {
+      "rule": "model:reference/element:BAR/relation:parent:P/check:P.target-type",
+      "status": "satisfied",
+      "findings": [],
+      "causes": []
+    },
+    {
+      "rule": "model:reference/element:BAR/relation:child:Q/check:Q.target-type",
+      "status": "satisfied",
+      "findings": [],
+      "causes": []
+    },
+    {
+      "rule": "model:reference/element:BAR/check:one-P",
+      "status": "satisfied",
+      "findings": [],
+      "causes": []
+    },
+    {
+      "rule": "model:reference/element:BAR/check:one-Q",
+      "status": "satisfied",
+      "findings": [],
+      "causes": []
+    },
+    {
+      "rule": "model:reference/element:BAR/check:endpoint-path",
+      "status": "blocked",
+      "findings": [],
+      "causes": ["model:reference/check:H-forest"]
+    },
+    {
+      "rule": "model:reference/check:native-dag",
+      "status": "blocked",
+      "findings": [
+        {
+          "uid": null,
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "kind": "native-dag",
+          "status": "blocked",
+          "code": "unresolved-target",
+          "message": "The occurrence target does not resolve to a candidate record.",
+          "evidence": {
+            "cycles": [],
+            "reason": "The occurrence target does not resolve to a candidate record.",
+            "input": null,
+            "requires": []
+          }
+        }
+      ],
+      "causes": ["/findings/0", "/findings/1"]
+    },
+    {
+      "rule": "model:reference/check:H-forest",
+      "status": "blocked",
+      "findings": [
+        {
+          "uid": null,
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "kind": "forest-validity",
+          "status": "blocked",
+          "code": "unresolved-target",
+          "message": "The occurrence target does not resolve to a candidate record.",
+          "evidence": {
+            "violations": [],
+            "reason": "The occurrence target does not resolve to a candidate record.",
+            "input": null,
+            "requires": []
+          }
+        }
+      ],
+      "causes": ["/findings/0"]
+    },
+    {
+      "rule": "model:reference/check:baseline-preserved",
+      "status": "satisfied",
+      "findings": [
+        {
+          "uid": null,
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "kind": "preserve",
+          "status": "satisfied",
+          "code": "preserve",
+          "message": "The preserve check is satisfied.",
+          "evidence": {
+            "baseline": "baseline-empty-protects-nothing",
+            "differences": []
+          }
+        }
+      ],
+      "causes": []
+    }
+  ]
+}

@@ -1,0 +1,365 @@
+{
+  "files": [
+    {
+      "producer": "workflow-1-ideal/outputs/design.md",
+      "path": "alternatives/ideal/design.md",
+      "producer_sha256": "74bf691410ae4d5c6c82e875ae459be98b6c4d71c2a8ec8d21527132bd947947",
+      "link_relocations": [
+        ["../inputs/research-v2/", "../../research/"],
+        ["../inputs/research/", "../../research/"],
+        [
+          "../inputs/reviewed-requirements.md",
+          "../../reviewed-requirements.md"
+        ],
+        ["../inputs/public-toolchain.md", "../../public-toolchain.md"],
+        ["../inputs/reference/", "../../../"],
+        ["../inputs/toolchain/", "../../../../../../"]
+      ],
+      "published_sha256": "74bf691410ae4d5c6c82e875ae459be98b6c4d71c2a8ec8d21527132bd947947"
+    },
+    {
+      "producer": "workflow-1-ideal/outputs/examples.nix",
+      "path": "alternatives/ideal/examples.nix",
+      "producer_sha256": "b0558a46ce3eaa2b38c79272f08fd80d9e63066f87daf0cb6670e7d04e790ce3",
+      "link_relocations": [
+        ["../inputs/research-v2/", "../../research/"],
+        ["../inputs/research/", "../../research/"],
+        [
+          "../inputs/reviewed-requirements.md",
+          "../../reviewed-requirements.md"
+        ],
+        ["../inputs/public-toolchain.md", "../../public-toolchain.md"],
+        ["../inputs/reference/", "../../../"],
+        ["../inputs/toolchain/", "../../../../../../"]
+      ],
+      "publication_edits": "Statix style fixes: inherit shorthand and grouping repeated ai attribute paths; Alejandra formatting; proposal values unchanged",
+      "published_sha256": "0624aa1691235ee3de7b5c1b778ee5725b02fb220e252c0bd954a71262e0f584"
+    },
+    {
+      "producer": "workflow-1-ideal/outputs/coverage.md",
+      "path": "alternatives/ideal/coverage.md",
+      "producer_sha256": "4a00773f70a9c209389943f27540cfeba41d8f37ba081d295d2d0b504323d47a",
+      "link_relocations": [
+        ["../inputs/research-v2/", "../../research/"],
+        ["../inputs/research/", "../../research/"],
+        [
+          "../inputs/reviewed-requirements.md",
+          "../../reviewed-requirements.md"
+        ],
+        ["../inputs/public-toolchain.md", "../../public-toolchain.md"],
+        ["../inputs/reference/", "../../../"],
+        ["../inputs/toolchain/", "../../../../../../"]
+      ],
+      "published_sha256": "4a00773f70a9c209389943f27540cfeba41d8f37ba081d295d2d0b504323d47a"
+    },
+    {
+      "producer": "workflow-2-design/outputs/design.md",
+      "path": "alternatives/tool-informed/design.md",
+      "producer_sha256": "f620d9f279e23fb4552244460618c0ee7be90bce5fe09793e5d7050f233f7177",
+      "link_relocations": [
+        ["../inputs/research-v2/", "../../research/"],
+        ["../inputs/research/", "../../research/"],
+        [
+          "../inputs/reviewed-requirements.md",
+          "../../reviewed-requirements.md"
+        ],
+        ["../inputs/public-toolchain.md", "../../public-toolchain.md"],
+        ["../inputs/reference/", "../../../"],
+        ["../inputs/toolchain/", "../../../../../../"]
+      ],
+      "published_sha256": "a30abf129375f4b53c8308e332154dc3da782b65f0db6767b7bab18a388c2115"
+    },
+    {
+      "producer": "workflow-2-design/outputs/examples.nix",
+      "path": "alternatives/tool-informed/examples.nix",
+      "producer_sha256": "daf3b3a3075a5031ef7647ad3012341d6b7562c7122e8b70336bb02c55af00c8",
+      "link_relocations": [
+        ["../inputs/research-v2/", "../../research/"],
+        ["../inputs/research/", "../../research/"],
+        [
+          "../inputs/reviewed-requirements.md",
+          "../../reviewed-requirements.md"
+        ],
+        ["../inputs/public-toolchain.md", "../../public-toolchain.md"],
+        ["../inputs/reference/", "../../../"],
+        ["../inputs/toolchain/", "../../../../../../"]
+      ],
+      "publication_edits": "Statix style fixes: inherit shorthand and grouping repeated ai attribute paths; Alejandra formatting; proposal values unchanged",
+      "published_sha256": "2060161aff5fcea855d1d8d8ff62aa1a234dc3f74f4c281a96cb14d398048047"
+    },
+    {
+      "producer": "workflow-2-design/outputs/coverage.md",
+      "path": "alternatives/tool-informed/coverage.md",
+      "producer_sha256": "5f75744eae7b1cf4378ac3d9dd141597321c14165265fe7c8210f0419b8cc73d",
+      "link_relocations": [
+        ["../inputs/research-v2/", "../../research/"],
+        ["../inputs/research/", "../../research/"],
+        [
+          "../inputs/reviewed-requirements.md",
+          "../../reviewed-requirements.md"
+        ],
+        ["../inputs/public-toolchain.md", "../../public-toolchain.md"],
+        ["../inputs/reference/", "../../../"],
+        ["../inputs/toolchain/", "../../../../../../"]
+      ],
+      "published_sha256": "8b58afc47de555e0995d159e703dd7129f5f811b57308bed4e86a5828ca07101"
+    },
+    {
+      "producer": "workflow-2-design/outputs/recipes.md",
+      "path": "alternatives/tool-informed/recipes.md",
+      "producer_sha256": "94c110b759552a8d61e117b9ec4d9498e692e245f2bcc9245a7fcb18e9748dce",
+      "link_relocations": [
+        ["../inputs/research-v2/", "../../research/"],
+        ["../inputs/research/", "../../research/"],
+        [
+          "../inputs/reviewed-requirements.md",
+          "../../reviewed-requirements.md"
+        ],
+        ["../inputs/public-toolchain.md", "../../public-toolchain.md"],
+        ["../inputs/reference/", "../../../"],
+        ["../inputs/toolchain/", "../../../../../../"]
+      ],
+      "published_sha256": "0aae8e079b1809c0acaa0fe837c3df42b0a120518c5a2947ad775be431a4ab07"
+    },
+    {
+      "producer": "shared/reviewed-requirements.md",
+      "path": "reviewed-requirements.md",
+      "producer_sha256": "1c1662fc10da0b1174060cdbd372d4643e0e7769af296ddb38060be968d98f4d",
+      "link_relocations": [],
+      "published_sha256": "543c2324af30b3c7ab021b767694cc572b095f0186e8b91413af135ea137cdc9"
+    },
+    {
+      "producer": "shared/public-toolchain.md",
+      "path": "public-toolchain.md",
+      "producer_sha256": "a9e29940a9f6b9d2f46235dd5fb69c521a59a391be417efda6a075803a2d371c",
+      "link_relocations": [],
+      "publication_edits": "Whitespace restored around revision identifiers, counts and attribute list; claims unchanged",
+      "published_sha256": "96a72196926f68b74fb6a855de2b8efadebc4b0b55df47781595788f6055efa9"
+    },
+    {
+      "producer": "comparison/closing-plan-obligations.md",
+      "path": "closing-plan.md",
+      "producer_sha256": "5ea5a0145b62ee3efbc33edc432da8360eb2f33e67f8e61d58c8fb628e89adbf",
+      "link_relocations": [
+        ["../shared/reviewed-requirements.md", "reviewed-requirements.md"]
+      ],
+      "published_sha256": "5c465a65ef22fffa03162df13784c3114150a35442cc6c1702e039ece30a4f3c"
+    },
+    {
+      "producer": "comparison/ideal-freeze.json",
+      "path": "provenance/ideal-freeze.json",
+      "producer_sha256": "3b2bf59c965df015a8a55142fe1322c60a087d257b909d6508ad2ca058d29e1c",
+      "link_relocations": [],
+      "published_sha256": "3b2bf59c965df015a8a55142fe1322c60a087d257b909d6508ad2ca058d29e1c"
+    },
+    {
+      "producer": "comparison/tool-informed-freeze.json",
+      "path": "provenance/tool-informed-freeze.json",
+      "producer_sha256": "cc9c5272ac2a0cdfdcc83bccf924cc57f534f1b8187e555485b8663f626895bf",
+      "link_relocations": [],
+      "published_sha256": "cc9c5272ac2a0cdfdcc83bccf924cc57f534f1b8187e555485b8663f626895bf"
+    },
+    {
+      "producer": "comparison/research-freeze-v2.json",
+      "path": "provenance/research-freeze-v2.json",
+      "producer_sha256": "fb6d8eae7e79559ef9a9a45707405837bec9d64c7c7776ba811746014fee2ec0",
+      "link_relocations": [],
+      "published_sha256": "fb6d8eae7e79559ef9a9a45707405837bec9d64c7c7776ba811746014fee2ec0"
+    },
+    {
+      "producer": "comparison/evidence-v2-review.md",
+      "path": "provenance/evidence-v2-review.md",
+      "producer_sha256": "b5242e571810bb28f1083d9010ae1110a513eeb91a87d3670f8014169c7c7e34",
+      "link_relocations": [
+        ["../inputs/prior-review.md", "evidence-v1-review.md"],
+        ["../inputs/research/", "../research/"]
+      ],
+      "published_sha256": "e272a4a49d38a266d4cefbd8b392d4fe2d540025da8eff2042e28d3fa19c2eb6"
+    },
+    {
+      "producer": "comparison/evidence-review.md",
+      "path": "provenance/evidence-v1-review.md",
+      "producer_sha256": "c02c9078627a345f2e80298d3f8b292eb49810d96b0469aa04e3635d6fb8d5ac",
+      "publication_edits": "Added historical-version notice and relocated links; substantive audit unchanged",
+      "published_sha256": "807ae7ee2c65fde306498c28e978cae61ba4a1947ef9008663548875a459da9c"
+    },
+    {
+      "producer": "comparison/evidence-inspection-checks.json",
+      "path": "provenance/inspection-checks.json",
+      "producer_sha256": "0e5bbdcf873e7dfa7b4c791885f28ba7f83f8dd1a7dfa6df83e56d5452a4d248",
+      "published_sha256": "0e5bbdcf873e7dfa7b4c791885f28ba7f83f8dd1a7dfa6df83e56d5452a4d248"
+    },
+    {
+      "producer": "comparison/outputs/review.md",
+      "path": "README.md",
+      "producer_sha256": "53df6f2b3b5079a438c2cce3bb0734ead464878a7c68127bcb25e41f7c5de1a9",
+      "link_relocations": [
+        ["../inputs/ideal/", "alternatives/ideal/"],
+        ["../inputs/tool-informed/", "alternatives/tool-informed/"],
+        ["../inputs/research/", "research/"],
+        ["../inputs/reference/", "../"],
+        ["../inputs/reviewed-requirements.md", "reviewed-requirements.md"],
+        ["../inputs/public-toolchain.md", "public-toolchain.md"],
+        ["../inputs/closing-plan-obligations.md", "closing-plan.md"],
+        ["../inputs/ideal-freeze.json", "provenance/ideal-freeze.json"],
+        [
+          "../inputs/tool-informed-freeze.json",
+          "provenance/tool-informed-freeze.json"
+        ],
+        [
+          "../inputs/upstream-source-verification.json",
+          "provenance/native-source-verification.json"
+        ],
+        ["../inputs/evidence-review-v2.md", "provenance/evidence-v2-review.md"],
+        ["(review.md)", "(README.md)"],
+        ["../inputs/runtime-pairing/", "runtime-pairing/outputs/"]
+      ],
+      "published_sha256": "004dfbdf09df9c2eb8458d534f7697c50b3e5e5d19e2fe28dfbcdbca8d921cce"
+    },
+    {
+      "producer": "comparison/outputs/interface.md",
+      "path": "interface.md",
+      "producer_sha256": "fc10ea7c069932bd4e3916ed32ca8082b36ca8a865ab79ae485a0630ecfb1d9a",
+      "link_relocations": [
+        ["../inputs/ideal/", "alternatives/ideal/"],
+        ["../inputs/tool-informed/", "alternatives/tool-informed/"],
+        ["../inputs/research/", "research/"],
+        ["../inputs/reference/", "../"],
+        ["../inputs/reviewed-requirements.md", "reviewed-requirements.md"],
+        ["../inputs/public-toolchain.md", "public-toolchain.md"],
+        ["../inputs/closing-plan-obligations.md", "closing-plan.md"],
+        ["../inputs/ideal-freeze.json", "provenance/ideal-freeze.json"],
+        [
+          "../inputs/tool-informed-freeze.json",
+          "provenance/tool-informed-freeze.json"
+        ],
+        [
+          "../inputs/upstream-source-verification.json",
+          "provenance/native-source-verification.json"
+        ],
+        ["../inputs/evidence-review-v2.md", "provenance/evidence-v2-review.md"],
+        ["(review.md)", "(README.md)"],
+        ["../inputs/runtime-pairing/", "runtime-pairing/outputs/"]
+      ],
+      "published_sha256": "8ab8c5e38408b92506a26d8d276d9221eb53248960acb54184d43b9de52dc4e6"
+    },
+    {
+      "producer": "comparison/outputs-v1/recommended.nix",
+      "path": "recommended.nix",
+      "producer_sha256": "7b1f26145e06a3cdc3dc61895fae910fae8f9e358169a67f7faf7f3239334d29",
+      "link_relocations": [
+        ["../inputs/ideal/", "alternatives/ideal/"],
+        ["../inputs/tool-informed/", "alternatives/tool-informed/"],
+        ["../inputs/research/", "research/"],
+        ["../inputs/reference/", "../"],
+        ["../inputs/reviewed-requirements.md", "reviewed-requirements.md"],
+        ["../inputs/public-toolchain.md", "public-toolchain.md"],
+        ["../inputs/closing-plan-obligations.md", "closing-plan.md"],
+        ["../inputs/ideal-freeze.json", "provenance/ideal-freeze.json"],
+        [
+          "../inputs/tool-informed-freeze.json",
+          "provenance/tool-informed-freeze.json"
+        ],
+        [
+          "../inputs/upstream-source-verification.json",
+          "provenance/native-source-verification.json"
+        ],
+        ["../inputs/evidence-review-v2.md", "provenance/evidence-v2-review.md"],
+        ["(review.md)", "(README.md)"]
+      ],
+      "publication_edits": "Statix inherit shorthand and repeated ai path grouping, plus Alejandra formatting; no value/signature changes",
+      "published_sha256": "555aedfe506d7d682d1d4f4a60e2a25732b808bf2d755dc79801d034bb35cb27"
+    },
+    {
+      "producer": "comparison/outputs-v1/playbooks.md",
+      "path": "playbooks.md",
+      "producer_sha256": "e1b834747d1e1b9339ad9b480a8985f467cdf8b68935a145f8a03b307c5064a5",
+      "link_relocations": [
+        ["../inputs/ideal/", "alternatives/ideal/"],
+        ["../inputs/tool-informed/", "alternatives/tool-informed/"],
+        ["../inputs/research/", "research/"],
+        ["../inputs/reference/", "../"],
+        ["../inputs/reviewed-requirements.md", "reviewed-requirements.md"],
+        ["../inputs/public-toolchain.md", "public-toolchain.md"],
+        ["../inputs/closing-plan-obligations.md", "closing-plan.md"],
+        ["../inputs/ideal-freeze.json", "provenance/ideal-freeze.json"],
+        [
+          "../inputs/tool-informed-freeze.json",
+          "provenance/tool-informed-freeze.json"
+        ],
+        [
+          "../inputs/upstream-source-verification.json",
+          "provenance/native-source-verification.json"
+        ],
+        ["../inputs/evidence-review-v2.md", "provenance/evidence-v2-review.md"],
+        ["(review.md)", "(README.md)"]
+      ],
+      "published_sha256": "3c83a636b932b8294d57209bcbca67b3bd4812c9338ff7dd35b07d8d3158e57b"
+    },
+    {
+      "producer": "comparison/outputs/findings.md",
+      "path": "findings.md",
+      "producer_sha256": "575a94557bfcdf4e71b750c07f31dda2053061baa8d23c7cddc24649680e3b53",
+      "link_relocations": [
+        ["../inputs/ideal/", "alternatives/ideal/"],
+        ["../inputs/tool-informed/", "alternatives/tool-informed/"],
+        ["../inputs/research/", "research/"],
+        ["../inputs/reference/", "../"],
+        ["../inputs/reviewed-requirements.md", "reviewed-requirements.md"],
+        ["../inputs/public-toolchain.md", "public-toolchain.md"],
+        ["../inputs/closing-plan-obligations.md", "closing-plan.md"],
+        ["../inputs/ideal-freeze.json", "provenance/ideal-freeze.json"],
+        [
+          "../inputs/tool-informed-freeze.json",
+          "provenance/tool-informed-freeze.json"
+        ],
+        [
+          "../inputs/upstream-source-verification.json",
+          "provenance/native-source-verification.json"
+        ],
+        ["../inputs/evidence-review-v2.md", "provenance/evidence-v2-review.md"],
+        ["(review.md)", "(README.md)"],
+        ["../inputs/runtime-pairing/", "runtime-pairing/outputs/"]
+      ],
+      "published_sha256": "562952d42d18af2b6ca31d1c0cf470605ff12eeb0656c718694ceab55b442f53"
+    },
+    {
+      "producer": "comparison/contract-review.md",
+      "path": "provenance/contract-review.md",
+      "producer_sha256": "45db2adbb834ef7c7d0de16567c4e21b6d8224e7d64074d1cf7c88bc3bef59ed",
+      "published_sha256": "45db2adbb834ef7c7d0de16567c4e21b6d8224e7d64074d1cf7c88bc3bef59ed"
+    },
+    {
+      "producer": "comparison/contract-review-progress.json",
+      "path": "provenance/contract-review-progress.json",
+      "producer_sha256": "f5790be8c5da235447a98fb1f7d5aa9708cc30fe3988890c1207f0c2f5d3efb5",
+      "published_sha256": "f5790be8c5da235447a98fb1f7d5aa9708cc30fe3988890c1207f0c2f5d3efb5"
+    },
+    {
+      "producer": "comparison/comparison-freeze-v1.json",
+      "path": "provenance/comparison-freeze-v1.json",
+      "producer_sha256": "a6b0fa87e9a22d3ffee154016f0a34eba8e978afedd587a5e2a65b161b0a0b3d",
+      "published_sha256": "a6b0fa87e9a22d3ffee154016f0a34eba8e978afedd587a5e2a65b161b0a0b3d"
+    },
+    {
+      "producer": "comparison/comparison-freeze.json",
+      "path": "provenance/comparison-freeze.json",
+      "producer_sha256": "03ea56a6d072acf496dc37e34425c209b9af55b3eb85ef23d4cf51d5a622dd53",
+      "published_sha256": "03ea56a6d072acf496dc37e34425c209b9af55b3eb85ef23d4cf51d5a622dd53"
+    },
+    {
+      "producer": "comparison/runtime-pairing-freeze.json",
+      "path": "provenance/runtime-pairing-freeze.json",
+      "producer_sha256": "d34117aacd7df035a9cc57b7fef00040ff638e972a832f41e8838758c2ca9a2d",
+      "published_sha256": "d34117aacd7df035a9cc57b7fef00040ff638e972a832f41e8838758c2ca9a2d"
+    },
+    {
+      "producer": "comparison/runtime-publication-replay.json",
+      "path": "provenance/runtime-publication-replay.json",
+      "producer_sha256": "43698f872d92f0d1389fb9d1051ada4390712b6de56068c9072a54cce0c9a5fb",
+      "publication_edits": "Temporary scratch pathname replaced with a portable location description; replay results unchanged",
+      "published_sha256": "76f9b9e2837ad105c53638266b2766d7350b79beedb5b8ff68c5efd673a65c23"
+    }
+  ],
+  "scope": "Frozen independent inputs and final recommendation; disclosed link/format/style/whitespace edits only. The final comparison made consumer trust registration explicit and corrected proof wording after the independent draft audit; coordinator inspected those differences. Runtime follow-up updates factual compatibility only. All APIs remain proposed."
+}

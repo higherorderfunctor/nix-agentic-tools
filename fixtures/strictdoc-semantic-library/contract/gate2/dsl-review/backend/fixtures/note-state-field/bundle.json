@@ -1,0 +1,193 @@
+{
+  "bundle": {
+    "declarations": [
+      {
+        "id": "model:notes",
+        "kind": "model",
+        "name": "notes"
+      },
+      {
+        "id": "model:notes/element:NOTE",
+        "kind": "element",
+        "name": "NOTE"
+      },
+      {
+        "direction": "parent",
+        "id": "model:notes/element:NOTE/relation:parent:SOURCE",
+        "kind": "relation",
+        "name": "SOURCE",
+        "owner": "model:notes/element:NOTE"
+      },
+      {
+        "id": "model:notes/element:NOTE/field:UID",
+        "kind": "field",
+        "name": "UID",
+        "owner": "model:notes/element:NOTE"
+      },
+      {
+        "id": "model:notes/element:NOTE/field:STATE",
+        "kind": "field",
+        "name": "STATE",
+        "owner": "model:notes/element:NOTE"
+      }
+    ],
+    "id": "model:notes",
+    "inputs": [],
+    "projections": [],
+    "rules": [
+      {
+        "check": {
+          "absentSatisfies": true,
+          "field": "STATE",
+          "kind": "field-value",
+          "subject": "target",
+          "values": ["final", "retired"]
+        },
+        "id": "model:notes/element:NOTE/relation:parent:SOURCE/check:SOURCE.field-value",
+        "inputs": ["candidate"],
+        "name": "SOURCE.field-value",
+        "origins": [
+          "declaration:model:notes/element:NOTE/relation:parent:SOURCE"
+        ],
+        "requires": [],
+        "select": {
+          "occurrences": {
+            "direction": "parent",
+            "element": "NOTE",
+            "role": "SOURCE"
+          }
+        }
+      },
+      {
+        "check": {
+          "compare": "gte",
+          "kind": "count",
+          "relation": {
+            "direction": "parent",
+            "role": "SOURCE"
+          },
+          "value": 1
+        },
+        "id": "model:notes/element:NOTE/check:retired-notes-cite-a-source",
+        "inputs": ["candidate"],
+        "name": "retired-notes-cite-a-source",
+        "origins": ["declaration:model:notes/element:NOTE"],
+        "requires": [],
+        "select": {
+          "records": {
+            "element": "NOTE"
+          },
+          "where": {
+            "absentSatisfies": false,
+            "field": "STATE",
+            "kind": "field-value",
+            "subject": "record",
+            "values": ["retired"]
+          }
+        }
+      },
+      {
+        "check": {
+          "any": [
+            {
+              "not": {
+                "absentSatisfies": false,
+                "field": "STATE",
+                "kind": "field-value",
+                "subject": "record",
+                "values": ["draft"]
+              }
+            },
+            {
+              "compare": "eq",
+              "kind": "count",
+              "relation": {
+                "direction": "parent",
+                "role": "SOURCE"
+              },
+              "value": 0
+            }
+          ]
+        },
+        "id": "model:notes/element:NOTE/check:drafts-cite-nothing",
+        "inputs": ["candidate"],
+        "name": "drafts-cite-nothing",
+        "origins": ["declaration:model:notes/element:NOTE"],
+        "requires": [],
+        "select": {
+          "records": {
+            "element": "NOTE"
+          }
+        }
+      }
+    ],
+    "schema": "semantic-constraints/v2",
+    "views": []
+  },
+  "grammar": [
+    {
+      "fields": [
+        {
+          "string": {
+            "required": true,
+            "title": "UID"
+          }
+        },
+        {
+          "singleChoice": {
+            "choices": ["draft", "final", "retired"],
+            "required": false,
+            "title": "STATE"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "parent": {
+            "reverseRole": "SOURCE_back",
+            "role": "SOURCE"
+          }
+        }
+      ],
+      "tag": "NOTE"
+    }
+  ],
+  "semanticTypes": [
+    {
+      "defaultsApply": "surviving-new-record-final-absence-only",
+      "digest": "54a5149635ce8e30a8a8795457c6d383ccea1310a048b6d5b9d58af2549bb779",
+      "element": "model:notes/element:NOTE",
+      "fields": [
+        {
+          "default": null,
+          "field": "model:notes/element:NOTE/field:UID",
+          "native": {
+            "string": {
+              "required": true,
+              "title": "UID"
+            }
+          },
+          "semantic": {
+            "type": "string"
+          }
+        },
+        {
+          "default": null,
+          "field": "model:notes/element:NOTE/field:STATE",
+          "native": {
+            "singleChoice": {
+              "choices": ["draft", "final", "retired"],
+              "required": false,
+              "title": "STATE"
+            }
+          },
+          "semantic": {
+            "type": "string"
+          }
+        }
+      ],
+      "grammar": "model:notes",
+      "schema": "semantic-types/v1"
+    }
+  ]
+}

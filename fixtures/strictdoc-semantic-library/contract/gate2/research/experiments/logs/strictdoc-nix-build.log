@@ -1,0 +1,11 @@
+warning: ignoring the client-specified setting 'auto-optimise-store', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'max-free', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'min-free', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-substituters', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'auto-optimise-store', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'max-free', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'min-free', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-substituters', because it is a restricted setting and you are not a trusted user
+/nix/store/qc5w0rnlr2pl8zvaaq5gi6jfhm7h50im-strictdoc

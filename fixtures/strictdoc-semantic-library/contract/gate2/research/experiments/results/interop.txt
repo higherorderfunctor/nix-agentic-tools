@@ -1,0 +1,4 @@
+d0d72543a79424242933ecfd557c4d5cbb27351d
+1.4.2
+{"health":{"adapter":"effect-tui-strictdoc","backend":"unconfigured","capabilities":["health"],"protocolVersion":1}}
+{"error":"Python adapter call failed: ValueError: unsupported bridge operation: 'board.query'"}

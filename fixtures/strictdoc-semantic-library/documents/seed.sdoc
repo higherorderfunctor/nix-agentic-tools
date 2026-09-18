@@ -1,0 +1,5 @@
+[DOCUMENT]
+TITLE: Neutral fixture grammar seed
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo

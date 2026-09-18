@@ -1,0 +1,119 @@
+Gate 2 revision: public source reconnaissance
+2026-09-15. Source only; no Scribe/runtime tests or production changes.
+
+IDENTITY AND INSTRUCTIONS
+Worktree: /home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1
+HEAD: 6f529c7eef3650a14b6f8d56ff1bc3ceaa914d7f (git rev-parse HEAD).
+All five handoff git blob claims match (git hash-object, no writes):
+reviewed-requirements.md 61615962f1ad8d37ccb38fe5ec89f265ca29aec2
+interface.md 02590f5f8acf60c8402b96e4d97394f53948f922
+README.md 6f366078a2fbbd6ccb9c83ad140041526cd24d23
+scribe_workspace.py 9de5435b17db104dcf3de234dbbc9963a1ade708
+scribe_ops.py e5e34cc74f9728b600e187f266ccf7ba8309cf2b
+The three markdown blobs are under fixtures/strictdoc-semantic-library/contract/gate2/.
+The Python files are regular files under dev/scripts/ (no symlink relocation).
+No peer-collaboration.md found in searches of main repo, ~/.agents, ~/.codex.
+Actual guide read: /home/caubut/Documents/projects/nix-agentic-tools/dev/fragments/monorepo/peer-communication.md; embedded in worktree AGENTS.md:1331 onward.
+No prohibited values.nix, sdoc_semantics/, docs/spec/, docs/plans/, or private coordinator scratchpad opened. References to such paths in public source comments are not content reads.
+
+PUBLIC NIX SURFACE
+All paths in this section start packages/strictdoc-grammar/.
+lib/default.nix:2 exports ai.strictdocGrammar = import ./grammar.nix, a function expecting {lib}.
+lib/grammar.nix:30-41 wires and exports check, dsl, emit, normalized, render. No schema/constraint/default/semantic interface is an existing export. render elements = emit.grammar (check.elements elements); direct emit skips check.
+lib/dsl.nix:91-133 constructors:
+field.str title; field.tag title; field.one title choices; field.many title choices; field.mk kindName title body; field.required field; field.raw x.
+rel.parent role reverseRole; rel.child role reverseRole; rel.file (bare attrset); rel.mk typeName body; rel.raw x.
+el tag props body. Constructors produce plain data; defaults required=false; no validation here.
+lib/check.nix:26-48 checks via lib.evalModules; grammar, element, field, relation, elements entry points. Force nested results to catch lazy errors.
+lib/normalized.nix:317-449 native types: BooleanChoice=bool describes grammar REQUIRED, not document value semantics; isComposite is nullOr bool (365-369). Field union is multipleChoice/singleChoice/string/tag (391-408). SingleChoice has choices, humanTitle, required, title only (430-449). No semantic metadata/default keys or document Boolean field kind. Fields are ordered nonempty lists (361-363). Relations default null and otherwise nonempty list (375-379). Optional empty relations should therefore lower to null/absence, not [].
+lib/normalized.nix:487-550 relation tagged union parent/child/file; Parent/Child role and reverseRole optional strings, File lacks reverseRole. No cardinality, target type, or constraint slots.
+lib/emit.nix:26-32 composes denormalization and string renderer. lib/grammar.nix:19-29 deliberately does not export inner denormalize/sgra/faithful names.
+modules/devenv/default.nix:118-245 exposes ai.strictdoc enable, package, scribeSource, grammars. grammars entries contain ordered elements, target, rendered. rendered is evaluation-time string through grammar.render; generate:sgra writes it (278-313). No semantic type/config transport exists here.
+modules/devenv/default.nix:149-163 defaults installed source delivery; project selects live sources. Native module launchers share mkScribe/extract (73-95), and process scribe starts only via process manager, not shell entry (258-269).
+lib/toolchainSource.nix:10-28 explicitly includes native public layers/module; 61-77 emits filtered flake exporting devenvModules.nix-agentic-tools, lib, strictdoc packages and copies source/runtime. This is exporter-source evidence, not a built artifact identity claim.
+lib/scribeSource.nix:7-27 runtime allowlist includes the four audited scripts plus cmd/client/protocol/verbs/model/extractors; excludes repository semantics. These dependencies were not opened for behavioral audit.
+
+WRITES AND PRECHECKS (dev/scripts paths)
+scribe_ops.py:188-201 enumerates check, delete, list, move, new, relate, set, show, unrelate. apply:269-362 is one operation, not list.
+new:155-160 fields dict[str,str], relations list[RelationParams], default empty. RelationParams role/target mandatory (135-139). _new:401-420 checks tag/prefix/duplicate/fields/path, assigns UID and mandatory repository AUTHORED_BY='llm', converts initial relations and passes them to g.add_node. Initial relations support is confirmed, but does not prove new batching or semantic enforcement.
+set:313-326 checks fields/unset and writes all assignments/removals through one mutate callback; refuse_dangling_links follows.
+relate/unrelate:328-348 call Graph.add_relation/remove_relation. Only relate uses refuse_dangling_links.
+delete:350-356 removes node then uses refuse_if_referenced(uid).
+new,set,relate,unrelate,delete use _written:378-385 -> Workspace.write exactly once; dry-run diff comes from returned pending data.
+move:425-449 uses a distinct path. workspace.write(touch_document,dry_run=True):437 always previews OLD document/path, discards that speculative generation, then mkdir/rename:446-447 occur outside Workspace.write's lock/save/restore boundary. Explicit dry-run returns text without rename. No candidate destination graph exists in this path.
+apply:296-310 validates held graph using repository-specific validate_guarded before write; fields guard prevents AUTHORED_BY/PARENT_FP edits (230-235). These are present source facts, not generic semantics.
+_check_fields:243-257 refuses undeclared/invalid choice values immediately. Those are operation/type checks.
+Workspace.write:229-262 mutates held graph, runs precheck, reparses touched contents, then pending/dry-run or save. _prove_renders:271-285 calls SDReader.read per nondeleted pending file only. It does not rebuild full candidate graph or invoke a configured semantic validator.
+Premature final-invariant seams for future batching: dangling links (workspace:414-429) inspect pending content against graph.has_node after EACH current operation; reference deletion refusal (384-411) inspects children/incoming links and says remove references first. _prove_renders also runs after EACH operation. Underlying Graph operations may impose additional native checks; they were outside the requested four-file runtime audit, so this report does not certify an exhaustive mutation-invariant inventory.
+
+PUBLICATION AND OBSERVABILITY LIMITS
+Workspace.write obtains RLock, but graph=self._held() returns existing Generation.graph (146-155;230). Generation's dataclass frozen flag at91 freezes its attributes, not the mutable graph object. Mutation occurs on that same graph (232). _discard:299-300 clears only Workspace's references; already returned graph references survive.
+current:129-140 acquires lock while loading/retrieving generation then returns it. show/list/check read graph AFTER that call (ops:280-294). describe similarly iterates state.graph after current returns (workspace:157-165). export_json obtains state then walks it after current returns (186-194). Hence source establishes no snapshot isolation for already-started concurrent reads/export. Rejection/dry-run clearing the held slot is not proof of zero speculative observations.
+_held checks only whether generation exists; it does NOT check _dirty or disk fingerprint (146-155). current performs freshness checks (137-139); writes go via _held instead. No final pre-publication base fingerprint check is present in write. Fingerprint covers .sdoc/.sgra/strictdoc_config.py (84-88,321-346), not semantic config/metadata/baselines that do not yet exist.
+Save failure captures prior text/absence for pending paths (247-250), invokes graph.save (252), then _restore (257), _discard (258), raises rolled-back error (259). _restore (367-373) itself can fail: no recovery-required latch or guarded restoration failure branch is present here. Capturing restore text is also outside write's try blocks. No crash-atomic multi-file guarantee follows.
+Success sets _dirty=True then replies (261-262). Whole graph loading is deferred to next current/read. Full load via open_graph (309-314) is not final-candidate validation before save. Historical docstrings about batching refer to independent consecutive writes with one deferred reload, not atomic candidate batches.
+
+RPC/DAEMON READ-DISPATCH INVENTORY
+scribe_rpc.py:168-268 registry methods: daemon.ping, rpc.discover, workspace.describe, workspace.reload, workspace.export, workspace.grammar, scribe.apply.
+ping/discover read root/registry, not graph. describe/current; reload/full graph; export/current + JSON write; grammar/current + authoring_grammar. scribe.apply routes read verbs above and six writes above.
+Wire scribe.apply:214-230 takes one op plus fields/etc; fields are dict[str,str]; no ordered operations array. Null-valued optional wire params are omitted (246-268).
+RPC MAX_BATCH_SIZE=8 (87-94); Dispatcher.dispatch (271-292) supports JSON-RPC batches. Each scribe.apply calls apply_operation independently (264-268); there is no surrounding Workspace.write/atomic publication. ThreadingUnixStreamServer is used (333 onward). Source comment claims sequential batch dispatch but no shared candidate semantics.
+scribe_daemon.py:52-61 hydrates workspace.current before building/binding server; ready message follows (66-72). Startup requested by process manager is distinct from observed ready socket/message. No daemon lifecycle changes made.
+
+OFFLINE NIX TOOLCHAIN
+Existing evaluator resolves to /nix/store/6hydpa1w2g6s2a3iqskzm0jwn2mmbms6-nix-2.34.4/bin/nix.
+Existing library directory /nix/store/j2r11kxv91yl5xqppy3vy84klwxjbz1i-source/lib; parent .version read as 26.11.
+Executed: nix hash path --offline /nix/store/j2r11kxv91yl5xqppy3vy84klwxjbz1i-source/lib
+Exit 0: sha256-0BFla09+uN4gn70TyZHTa9zWfpzvd5kGgCEWdyD+1qY=
+Matches retained normalized-authoring/README.md:60-74. Its pin is qualified local library identity, NOT a proof of original exported toolchain's full lock pairing.
+Bounded prototype use: nix eval --offline --impure --json --expr '... import /nix/store/j2r11kxv91yl5xqppy3vy84klwxjbz1i-source/lib ... import /absolute/worktree/packages/strictdoc-grammar/lib/grammar.nix { inherit lib; } ...'
+No flake evaluation, dependency fetching, lock rewriting, builds, service starts, or runtime probes were performed. Only source reads, git read-only identity commands and local Nix directory hash were run. Two attempted source reads from main checkout failed because this package exists only in worktree; retried successfully there.
+
+FOLLOW-UP: COMPLETE PUBLIC COMMAND AND GRAPH-MUTATOR PASS
+This supplement supersedes the initial limit that Graph/CLI dependencies were not inspected. Actual filename is sdoc_model.py, not scribe_model.py. Read-only source inspection only; no experiments.
+Additional current git blobs:
+sdoc_model.py 945bbc6590b681590099c1d941376cec1a25fd10
+scribe_cmd.py d902b952d4e7df3ae13498c7bfb4f0a0065964ee
+scribe_client.py ea7e82c175c6ddbca952b1b36fc8447adb2de1c0
+scribe_protocol.py 2c0a955c2d8ad7573181746d3c7fc035f8eeb3c4
+scribe_verbs.py afc9f841f0fac908cab5b0074bfca70d513bd262
+
+COMMAND ROUTES AND BYPASSES
+scribe_protocol.py:5-7 confirms three reads (show,list,check), six writes (new,set,relate,unrelate,move,delete).
+scribe_cmd.py:93-212 builds one required subcommand, not an ordered operation list. Each write leaf gets --dry-run. new --relate uses append (109), preserving initial relation order (290-295). Normal field flags use ordinary argparse storage (83-89); repeated assignments do not represent ordered operations.
+CLI new enforces required native fields before RPC (78-88,105). fields_from tests raw is not None (271-273), so empty input survives client collection; read_value trims trailing newlines from stdin/file sources (54-67).
+main always fetches workspace.grammar (346), parses one operation (375), then sends scribe.apply (383). No local Graph/open_graph/save fallback. No CLI create-then-edge batch yet.
+The semantics subcommand alone calls a separately imported optional semantics CLI (215-246,371-374). Its implementation was NOT opened, imported, or run. It is outside installed runtime allowlist; source comments claiming it works with daemon down are stale because main first fetches workspace.grammar.
+scribe_client.py:120-169 sends one JSON-RPC request per socket call. Its executable exposes ping/info/reload/export only (204-236), mapped to existing daemon methods; no alternate document mutation. call_for_root checks returned root only when supplied (195-200), after request execution. This is not a publication admission guard.
+packages/strictdoc-grammar/lib/mkScribe.nix:12-13,32-55 defaults to scribe_cmd.py and executes chosen source via common runner; no wrapper-local mutation path. Installed mode uses allowlisted source; project mode resolves source under project cwd.
+Direct Graph.save remains a callable low-level bypass of Workspace's prechecks/reparse/recovery (model:1005-1044). No additional installed CLI route uses it outside Workspace in audited files. Comments mention repository-specific fp-accept callers; those are not installed public-toolchain members and were not opened. Direct upstream StrictDoc commands/external filesystem edits remain outside Scribe's boundary.
+
+EXACT MUTATION-TIME CHECKS
+sdoc_model.py:515-532 set_field checks declared field, closing delimiter safety, changes one field, then validates the WHOLE NODE immediately. scribe_ops.set loops through this, so even one set operation with several fields has per-field validation rather than only final combined-node validation.
+add_relation:544-558 checks role/type/file slots and exact duplicates, builds reference, appends, validates whole node immediately. remove_relation:570-580 checks role/file slots, resolves exact/unique removable relation, removes it, validates whole node immediately. No rollback is inside those Graph methods; Workspace catches and discards its held reference.
+_build_reference:615-639 requires node target to exist now. Parent creates ParentReqReference, Child creates ChildReqReference (624-626). File target must be a normalized relative POSIX path and existing regular file; ID must resolve in current on-disk file. Future batch file moves and external-file candidate interpretation need explicit treatment.
+File slot guards: element/ID/range only on File (659-666); element vocabulary, required ID with element, no element+range, numeric forward line range (294-349). remove_relation intentionally does not revalidate file/ID existence, allowing stale links to be removed (637-639,575-578).
+new_document:743-766 checks existing path/graph path, root-relative destination and include/exclude/readable directory filters (769-809), parses skeleton, resolves grammar, appends document to document_list and both path maps. No disk write. This makes newly created nodes visible to walk-based lookup for later operations without rebuilding graph indexes.
+add_node:908-950 iterates ordered grammar fields, rejects missing required fields BEFORE node construction (914-916), rejects EVERY explicit empty string (923-927), checks delimiter safety, creates fields, appends node, constructs all initial relations, then validates node. This is a concrete incompatibility with passing a successful empty-string default straight through current native creation. It also prevents later operations/defaults from filling currently missing required fields unless construction sequencing changes.
+remove_node:954-977 rejects documents containing another non-TEXT SDocNode, removes node and records document deletion; no index cleanup/rebuild. One-node-per-file restriction is current tool behavior. Graph.add_node itself does not enforce duplicate UID or prefix; current RPC _new supplies those checks.
+validate:981-990 delegates to SDocValidator.validate_node, not full TraceabilityIndexBuilder.create or a semantic backend.
+
+NATIVE VALIDATOR SOURCE QUALIFICATION
+The existing worktree .devenv/profile/bin/strictdoc shebang selects /nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/bin/python3.14. Its validator resolves to /nix/store/9khac7sfda0rzk6blqd3cnlwb7q3hsvz-strictdoc/lib/python3.14/site-packages/strictdoc/backend/sdoc/validations/sdoc_validator.py. This was inspected as existing public upstream source, not executed or proved to be the immutable pairing for every supplied launcher.
+SDocValidator.validate_node:173-271 checks registered node type, composite consistency, registered fields, ordered fields and requiredness, then declared relation type/role. Its field helper:274-401 checks required fields/order, singleChoice allowed values/nonmultiline, multipleChoice comma syntax/allowed choices, tag comma syntax/nonmultiline. Single/multipleChoice explicitly accept TBD and TBC outside declared choices (346-349,374-378). Therefore Boolean metadata/backend decoding must reject unknown native values; native choice validation alone is insufficient evidence for Boolean validity.
+There is no graph DAG, selected forest, endpoint cardinality, target type, visibility, or preservation evaluation in this validate_node body. This is exact node-validator coverage, not a complete census of all validation in upstream reader/full graph builder.
+
+MUTABLE LOOKUPS, STALE INDEXES, AND READS
+Graph.documents:457-459 copies list container but returns original document objects. grammar/element:462-480 return shared native objects. node:488-492 returns index lookup object; iter_nodes:497-501 yields mutable node objects. These calls do not clone/freeze or acquire Workspace lock.
+Installed upstream traceability_index.py under the same store source: get_node_by_uid_weak:689-704 walks document_tree; get_node_by_uid_weak2:672-679 uses graph_database UID index. get_children_requirements:604-617 and get_incoming_links:716-726 use graph_database relation/inline-link indexes. Graph mutators append/remove object-list relations and nodes without updating those graph_database indexes. Thus held walk-based lookup and derived indexes can disagree after mutation. refuse_if_referenced uses the indexed routes, so relocating that precheck to batch end without rebuilding/updating its inputs does not establish final-state correctness. This is a source-derived inconsistency risk, not a reproduced runtime case.
+new_document's _resolve_grammar calls update_with_elements on shared elements (model:892); its source documents native element reparenting (863-869). Candidate construction can therefore also mutate grammar-related object identity reachable from existing readers.
+scribe_verbs.do_show:64-76 retains node, renders document, walks relations and resolves targets; do_list:80-99 iterates live nodes; do_check:103-139 validates live nodes and resolves current endpoints/file existence. None takes a read lock or snapshot. RPC apply obtains graph from current before invoking these helpers, confirming earlier reference-lifetime limitation.
+do_check returns 1 on findings (139), but scribe_ops._render ignores handler return value (264-266), returns only captured text, and CLI main returns 0 after successful RPC (392). Current textual native check results are therefore not the proposed structured rule result/admission contract. No runtime fault was induced to test this source-observed return-value loss.
+carry_document_path_into_json:1132-1142 writes _scribe_document_path onto held document objects; exporter patches are process-global (1115-1116,1170-1171). Export is derived output, but it is not an object-pure read despite comments. Full graph load changes process cwd temporarily and redirects process stdout (1199-1232); no new concurrency guarantees inferred.
+
+PERSISTENCE AND DERIVED CACHE DETAILS
+Graph.pending:995-1003 renders removed paths then dirty documents. Graph.save calls pending AGAIN (1013), so Workspace's preview/reparse/pending and eventual write do not consume one frozen exact-byte artifact. Writes use unique temp sibling, chmod0644, replace (1022-1037); deletions unlink directly (1015). No multi-file transaction/rollback exists within Graph.save. Dirty/removal tracking clears only after entire save (1042-1043).
+File ID validation delegates to public sdoc_extractors.registry.items_of (model:391). registry.py:251-296 caches extractor instances by language/root/parser and item lists by resolved path/mtime_ns/size, reads live file bytes on cache miss. This existing cache is not candidate-content-digest/config/baseline identity. Extractor algorithms were not audited exhaustively; no need to change them for this report.
+
+REMAINING LIMITS AFTER FOLLOW-UP
+All public Scribe command routes and direct Graph mutation/persistence entry points named above are inspected. No private semantics/domain sources were read. No global scan of repository-specific clients, signing tools, board, arbitrary consumer Python callers, or upstream StrictDoc CLI write subcommands was attempted. Full native reader/index-builder internals, JSONGenerator internals, node field setter internals, extraction algorithms, and socket/path trust rules were not exhaustively audited. Native per-node validation and selected indexed-versus-walk lookups were inspected only through the existing pinned store source identified above. Concurrency, fault recovery, empty native serialization, metadata transport, native all-role DAG behavior, and any proposed candidate implementation remain untested. No implementation, broad tests, package builds, services, network or lock changes occurred.

@@ -1,0 +1,170 @@
+{
+  "roots": {
+    "gate1": {
+      "path": "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/packages/strictdoc-grammar",
+      "libPresent": true,
+      "modulesPresent": true
+    },
+    "trial": {
+      "path": "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-trial/packages/strictdoc-grammar",
+      "libPresent": true,
+      "modulesPresent": true
+    },
+    "main": {
+      "path": "/home/caubut/Documents/projects/nix-agentic-tools/packages/strictdoc-grammar",
+      "libPresent": false,
+      "modulesPresent": false
+    },
+    "filtered": {
+      "path": "/nix/store/121pk8i5nzhrpm34fv97f7mywin6k1r0-strictdoc-toolchain-source/packages/strictdoc-grammar",
+      "libPresent": false,
+      "modulesPresent": false
+    }
+  },
+  "files": [
+    {
+      "path": "lib/check.nix",
+      "sha256": {
+        "gate1": "2649211ace1f0fa13ad01026e3848aad34837c6f5ffc24eee0550a963ec086e9",
+        "trial": "2649211ace1f0fa13ad01026e3848aad34837c6f5ffc24eee0550a963ec086e9",
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "lib/default.nix",
+      "sha256": {
+        "gate1": "c60a2c1b372ce20010d6c75219a4e215b122f5695b968978c7e51e7cfc176063",
+        "trial": "c60a2c1b372ce20010d6c75219a4e215b122f5695b968978c7e51e7cfc176063",
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "lib/denormalize.nix",
+      "sha256": {
+        "gate1": "2d7ab78da54049152f91a94f5bdea535fd0604de55c634c737578e8fa5706d96",
+        "trial": "2d7ab78da54049152f91a94f5bdea535fd0604de55c634c737578e8fa5706d96",
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "lib/dsl.nix",
+      "sha256": {
+        "gate1": "77f85ab6f1e67965cbd27ad1ccf3669eda4a4f5f61310dc501bd84ab992b4f4b",
+        "trial": "77f85ab6f1e67965cbd27ad1ccf3669eda4a4f5f61310dc501bd84ab992b4f4b",
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "lib/emit.nix",
+      "sha256": {
+        "gate1": "9ec6e3171f57a4947d10936d2c29fafdc97a5c580c38d584dceeba037393c898",
+        "trial": "9ec6e3171f57a4947d10936d2c29fafdc97a5c580c38d584dceeba037393c898",
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "lib/faithful.nix",
+      "sha256": {
+        "gate1": "17457cc4c9a191bec1c94fc08127e303dfc18450c556ba161e0d60295e24360e",
+        "trial": "17457cc4c9a191bec1c94fc08127e303dfc18450c556ba161e0d60295e24360e",
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "lib/grammar.nix",
+      "sha256": {
+        "gate1": "8f7cd8c2a1681ed156aaf5fb407a09c2b87e2b877b9f831766e34d36c0969395",
+        "trial": "8f7cd8c2a1681ed156aaf5fb407a09c2b87e2b877b9f831766e34d36c0969395",
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "lib/mkExtract.nix",
+      "sha256": {
+        "gate1": "98c72a763190fc535a6f793c7a80d595ad0986c1673e81a34f4ad92781f751bb",
+        "trial": "e01da283cec230046bad056512d7395b5a8e24f1c4547c90eecce37c3b15d9e7",
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "lib/mkScribe.nix",
+      "sha256": {
+        "gate1": "a19a7cbc064c7f6c84dad5e4168b7a33022a9066ea68769f523369614e544d00",
+        "trial": "8892a84d2753782e05a68ced9a969c7534f5de5e49da8c4953051892744d4d82",
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "lib/normalized.nix",
+      "sha256": {
+        "gate1": "35d7818a3217791e1e27eafa7bee2dab08a0daea412350efb5d60808f861a314",
+        "trial": "35d7818a3217791e1e27eafa7bee2dab08a0daea412350efb5d60808f861a314",
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "lib/pjrpc.nix",
+      "sha256": {
+        "gate1": "0db9be9d163e898765b0767437e3ad11ffdbd30d8cc46f860fc5343e5c21dca9",
+        "trial": "0db9be9d163e898765b0767437e3ad11ffdbd30d8cc46f860fc5343e5c21dca9",
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "lib/scribeSource.nix",
+      "sha256": {
+        "gate1": "a12b333609acdb67f428f014944c8a8156d6e1f8dbc8df0bb7733b9463b2ca70",
+        "trial": null,
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "lib/sgra.nix",
+      "sha256": {
+        "gate1": "9132d9f3eb2747fba6d607096b5cda783dc6f67c3f0d2e66c232ac5f4041d092",
+        "trial": "9132d9f3eb2747fba6d607096b5cda783dc6f67c3f0d2e66c232ac5f4041d092",
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "lib/toolchainSource.nix",
+      "sha256": {
+        "gate1": "b1406144b163d8eed2e95ff48bbfff100a7e2b3473f5c5dfb5ab89033510e013",
+        "trial": null,
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "lib/tsGrammars.nix",
+      "sha256": {
+        "gate1": "6267d7e3ec14c7a08f294f238ea7ef078fe0e8a1e1044f372fa17a90b99d4e81",
+        "trial": "6267d7e3ec14c7a08f294f238ea7ef078fe0e8a1e1044f372fa17a90b99d4e81",
+        "main": null,
+        "filtered": null
+      }
+    },
+    {
+      "path": "modules/devenv/default.nix",
+      "sha256": {
+        "gate1": "fafc72aa37fe05a9ce94237cdce75f47095ada1f2ed2455c339b59e6972066e2",
+        "trial": "4293d2375d3fceb6892abfb851cab906da0d3ed60c55f0f8f473bb9accc0500c",
+        "main": null,
+        "filtered": null
+      }
+    }
+  ]
+}

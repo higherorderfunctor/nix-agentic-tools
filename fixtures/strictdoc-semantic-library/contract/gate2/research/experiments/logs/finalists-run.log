@@ -1,0 +1,39 @@
+base rustworkx 0.136
+base cozo 3.361
+base opa 11.694
+selected_child_base rustworkx 0.073
+selected_child_base cozo 2.441
+selected_child_base opa 11.579
+selected_child_open_boundary rustworkx 0.074
+selected_child_open_boundary cozo 2.346
+selected_child_open_boundary opa 12.181
+open_boundary_rechecks_unchanged_queries rustworkx 0.08
+open_boundary_rechecks_unchanged_queries cozo 2.429
+open_boundary_rechecks_unchanged_queries opa 11.768
+nested_boundary_from_internal_origin rustworkx 0.041
+nested_boundary_from_internal_origin cozo 1.874
+nested_boundary_from_internal_origin opa 10.092
+selector_context_model rustworkx 0.072
+selector_context_model cozo 2.512
+selector_context_model opa 11.291
+selector_context_owner_type rustworkx 0.091
+selector_context_owner_type cozo 2.46
+selector_context_owner_type opa 11.583
+selector_context_kind rustworkx 0.075
+selector_context_kind cozo 2.538
+selector_context_kind opa 11.13
+selector_context_role rustworkx 0.081
+selector_context_role cozo 3.076
+selector_context_role opa 10.952
+subtree_move rustworkx 0.074
+subtree_move cozo 2.357
+subtree_move opa 11.927
+{
+  "versions": {
+    "cozo-embedded": "0.7.6",
+    "networkx": "3.6.1",
+    "rustworkx": "0.18.1"
+  },
+  "comparisons": 34,
+  "status": "pass"
+}

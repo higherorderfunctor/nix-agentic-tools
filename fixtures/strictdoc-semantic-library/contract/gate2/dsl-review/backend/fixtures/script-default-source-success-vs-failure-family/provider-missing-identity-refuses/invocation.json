@@ -1,0 +1,12 @@
+{
+  "inputs": {
+    "model:reference/input:baseline": {
+      "command": [
+        "sh",
+        "-c",
+        "printf '{\"complete\":true,\"model\":\"reference\",\"records\":[]}'"
+      ],
+      "timeoutSeconds": 10
+    }
+  }
+}

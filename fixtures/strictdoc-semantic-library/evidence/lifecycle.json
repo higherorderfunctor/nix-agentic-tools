@@ -1,0 +1,39 @@
+[
+  {
+    "argv": [
+      "scribe-client",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-module-restack/fixtures/strictdoc-semantic-library",
+      "ping"
+    ],
+    "stdout": "{\n  \"ok\": true,\n  \"root\": \"/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-module-restack/fixtures/strictdoc-semantic-library\"\n}\n"
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-module-restack/fixtures/strictdoc-semantic-library",
+      "check"
+    ],
+    "stdout": "10 nodes, 0 finding(s)\n"
+  },
+  {
+    "argv": [
+      "scribe-client",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-module-restack/fixtures/strictdoc-semantic-library",
+      "info"
+    ],
+    "stdout": "{\n  \"dirty\": false,\n  \"documents\": 11,\n  \"generation\": 1,\n  \"nodes\": 10,\n  \"root\": \"/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-module-restack/fixtures/strictdoc-semantic-library\"\n}\n"
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-module-restack/fixtures/strictdoc-semantic-library",
+      "show",
+      "F1a"
+    ],
+    "stdout": "[DOCUMENT]\nTITLE: F1a\n\n[GRAMMAR]\nIMPORT_FROM_FILE: @repo\n\n[FOO]\nAUTHORED_BY: >>>\nllm\n<<<\nUID: F1a\nFLAG: false\nRELATIONS:\n- TYPE: Parent\n  VALUE: F1\n  ROLE: H\n\n--- relations resolved ---\n  H             F1  --  None\n"
+  }
+]

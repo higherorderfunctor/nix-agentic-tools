@@ -1,0 +1,8 @@
+bun install v1.4.2 (744846f84)
+Resolving dependencies
+Resolved, downloaded and extracted [12]
+Saved lockfile
+
++ @open-policy-agent/opa-wasm@1.10.0
+
+3 packages installed [567.00ms]

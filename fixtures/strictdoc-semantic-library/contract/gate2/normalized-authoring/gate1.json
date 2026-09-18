@@ -1,0 +1,152 @@
+{
+  "checked": [
+    {
+      "fields": [
+        {
+          "string": {
+            "humanTitle": "Display flag",
+            "required": true,
+            "title": "FLAG"
+          }
+        },
+        {
+          "singleChoice": {
+            "choices": ["Draft", "Ready (reviewed)"],
+            "humanTitle": null,
+            "required": false,
+            "title": "STATUS"
+          }
+        }
+      ],
+      "isComposite": true,
+      "prefix": "P-",
+      "relations": [
+        {
+          "parent": {
+            "reverseRole": "Refined_By",
+            "role": "Refines",
+            "type": "Parent"
+          }
+        }
+      ],
+      "tag": "PROBE",
+      "viewStyle": "Table"
+    }
+  ],
+  "controls": {
+    "booleanChoiceRejected": true,
+    "compositeBoolAccepted": true,
+    "compositeStringRejected": true,
+    "defaultOptional": true,
+    "extraFieldMetadataRejected": true,
+    "inventedBoolKindRejected": true,
+    "inventedBooleanKindRejected": true,
+    "normalizedBooleanChoice": true,
+    "rawDoesNotBypassValidation": true,
+    "rawIdentity": true,
+    "renderEqualsCheckThenEmit": true,
+    "requiredBoolAccepted": true,
+    "requiredStringRejected": true,
+    "stringChoiceAccepted": true
+  },
+  "element": {
+    "fields": [
+      {
+        "string": {
+          "humanTitle": "Display flag",
+          "required": true,
+          "title": "FLAG"
+        }
+      },
+      {
+        "singleChoice": {
+          "choices": ["Draft", "Ready (reviewed)"],
+          "required": false,
+          "title": "STATUS"
+        }
+      }
+    ],
+    "isComposite": true,
+    "prefix": "P-",
+    "relations": [
+      { "parent": { "reverseRole": "Refined_By", "role": "Refines" } }
+    ],
+    "tag": "PROBE",
+    "viewStyle": "Table"
+  },
+  "field": {
+    "string": {
+      "humanTitle": "Display flag",
+      "required": true,
+      "title": "FLAG"
+    }
+  },
+  "hypotheticalBoolConstructors": {},
+  "inventory": {
+    "barrel": ["check", "dsl", "emit", "normalized", "render"],
+    "booleanNames": [],
+    "dsl": ["el", "field", "rel"],
+    "field": ["many", "mk", "one", "raw", "required", "str", "tag"],
+    "fieldAlternatives": ["string", "singleChoice", "multipleChoice", "tag"],
+    "functors": {
+      "barrel": false,
+      "dsl": false,
+      "field": false,
+      "normalized": false
+    },
+    "normalized": ["converters", "encoders", "meta", "productions", "types"],
+    "relation": ["child", "file", "mk", "parent", "raw"]
+  },
+  "metadata": {
+    "boolEncoded": ["False", "True"],
+    "booleanConverter": {
+      "description": "A two-value True/False alternation, in either shape the grammar spells it in: the named OrderedChoice rule BooleanChoice, and the inline regex /(True|False)/ that IS_COMPOSITE carries. The only converter that changes a value's REPRESENTATION rather than narrowing its type, which is why it is the one whose encoder does real work.",
+      "encoder": "bool",
+      "kind": "pair",
+      "rewrite": "lib.types.bool"
+    },
+    "converterSections": ["applied", "detail", "registry"],
+    "faithful": {
+      "generated": true,
+      "grammarSha256": "4adcdb056ac4a51fb5d058699614291a7692b730b60627573e202dffd118d211",
+      "metamodelRuleCount": 43,
+      "rootRule": "DocumentGrammarWrapper",
+      "ruleCount": 19,
+      "strictdocVersion": "0.28.3"
+    },
+    "humanTitleChecked": "Display flag",
+    "normalized": {
+      "converterCounts": {
+        "alias": 1,
+        "attrTag": 2,
+        "boolean": 2,
+        "commaList": 2,
+        "decodedOption": 1,
+        "literalAlternation": 1,
+        "namedChoice": 4,
+        "oneOrMore": 3,
+        "optionalGroup": 15,
+        "regexPreserved": 3,
+        "ruleReference": 26,
+        "submodule": 10,
+        "unconstrained": 7
+      },
+      "generated": true,
+      "generator": "packages/strictdoc-grammar/extract/normalize.py",
+      "grammarSha256": "4adcdb056ac4a51fb5d058699614291a7692b730b60627573e202dffd118d211",
+      "layer": "normalized",
+      "metamodelRuleCount": 43,
+      "nodeCount": 77,
+      "rootRule": "DocumentGrammarWrapper",
+      "ruleCount": 19,
+      "strictdocVersion": "0.28.3"
+    },
+    "productionsPreserved": true,
+    "sourcePreserved": true
+  },
+  "rendered": "[GRAMMAR]\nELEMENTS:\n- TAG: PROBE\n  PROPERTIES:\n    IS_COMPOSITE: True\n    PREFIX: P-\n    VIEW_STYLE: Table\n  FIELDS:\n  - TITLE: FLAG\n    HUMAN_TITLE: Display flag\n    TYPE: String\n    REQUIRED: True\n  - TITLE: STATUS\n    TYPE: SingleChoice(Draft, \"Ready (reviewed)\")\n    REQUIRED: False\n  RELATIONS:\n  - TYPE: Parent\n    ROLE: Refines\n    REVERSE_ROLE: Refined_By\n",
+  "source": {
+    "grammar": "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/packages/strictdoc-grammar/lib",
+    "nixpkgsLib": "/nix/store/j2r11kxv91yl5xqppy3vy84klwxjbz1i-source/lib"
+  }
+}

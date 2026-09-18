@@ -1,0 +1,355 @@
+{
+  "created": [
+    "K0",
+    "KS",
+    "KD1",
+    "KD2",
+    "KD3",
+    "KD4",
+    "KD5",
+    "KD6",
+    "KD7",
+    "KD8",
+    "KD9",
+    "KD10",
+    "KD11",
+    "KD12"
+  ],
+  "model": "reference",
+  "records": [
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["F0"]
+      },
+      "relations": [],
+      "uid": "F0"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["F1"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "F0"
+        }
+      ],
+      "uid": "F1"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["F1a"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "F1"
+        }
+      ],
+      "uid": "F1a"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["true"],
+        "UID": ["F2"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "F0"
+        }
+      ],
+      "uid": "F2"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["F2a"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "F2"
+        }
+      ],
+      "uid": "F2a"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["F2b"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "F2"
+        }
+      ],
+      "uid": "F2b"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["G0"]
+      },
+      "relations": [],
+      "uid": "G0"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["G1"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "G0"
+        }
+      ],
+      "uid": "G1"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["I0"]
+      },
+      "relations": [],
+      "uid": "I0"
+    },
+    {
+      "element": "BAZ",
+      "fields": {
+        "UID": ["Z0"]
+      },
+      "relations": [],
+      "uid": "Z0"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["K0"]
+      },
+      "relations": [],
+      "uid": "K0"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["KS"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "K0"
+        },
+        {
+          "direction": "parent",
+          "role": "R",
+          "target": "KD12"
+        }
+      ],
+      "uid": "KS"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["KD1"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "K0"
+        }
+      ],
+      "uid": "KD1"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["KD2"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "KD1"
+        }
+      ],
+      "uid": "KD2"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["KD3"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "KD2"
+        }
+      ],
+      "uid": "KD3"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["KD4"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "KD3"
+        }
+      ],
+      "uid": "KD4"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["KD5"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "KD4"
+        }
+      ],
+      "uid": "KD5"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["KD6"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "KD5"
+        }
+      ],
+      "uid": "KD6"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["KD7"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "KD6"
+        }
+      ],
+      "uid": "KD7"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["KD8"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "KD7"
+        }
+      ],
+      "uid": "KD8"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["KD9"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "KD8"
+        }
+      ],
+      "uid": "KD9"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["KD10"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "KD9"
+        }
+      ],
+      "uid": "KD10"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["KD11"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "KD10"
+        }
+      ],
+      "uid": "KD11"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["KD12"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "KD11"
+        }
+      ],
+      "uid": "KD12"
+    }
+  ]
+}

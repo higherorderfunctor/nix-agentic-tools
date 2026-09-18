@@ -285,7 +285,7 @@ def create_config() -> ProjectConfig:
     return ProjectConfig(
         project_title="nix-agentic-tools design graph",
         grammars={"@repo": "docs/sdoc/grammar.sgra"},
-        exclude_doc_paths=["*.md", "**/*.md"],
+        exclude_doc_paths=["*.md", "**/*.md", "fixtures/strictdoc-semantic-library/**"],
         formats=[SDocFormat(), JSONFormat()],
         dir_for_sdoc_cache="$TMPDIR",
         project_features=["REQUIREMENT_TO_SOURCE_TRACEABILITY"],

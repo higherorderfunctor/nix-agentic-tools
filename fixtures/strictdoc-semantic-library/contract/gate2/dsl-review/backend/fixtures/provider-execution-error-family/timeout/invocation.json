@@ -1,0 +1,8 @@
+{
+  "inputs": {
+    "model:reference/input:baseline": {
+      "command": ["sleep", "5"],
+      "timeoutSeconds": 1
+    }
+  }
+}

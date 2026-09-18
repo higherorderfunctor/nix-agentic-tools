@@ -1,0 +1,18 @@
+[DOCUMENT]
+TITLE: M
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[BAR]
+AUTHORED_BY: >>>
+llm
+<<<
+UID: M
+RELATIONS:
+- TYPE: Parent
+  VALUE: F0
+  ROLE: P
+- TYPE: Child
+  VALUE: F2
+  ROLE: Q

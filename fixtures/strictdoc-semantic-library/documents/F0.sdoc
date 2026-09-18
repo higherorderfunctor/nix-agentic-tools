@@ -1,0 +1,12 @@
+[DOCUMENT]
+TITLE: F0
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[FOO]
+AUTHORED_BY: >>>
+llm
+<<<
+UID: F0
+FLAG: false

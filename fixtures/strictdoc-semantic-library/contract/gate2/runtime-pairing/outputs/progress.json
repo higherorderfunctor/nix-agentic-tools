@@ -1,0 +1,22 @@
+{
+  "state": "completed_qualified_bounded_pairing",
+  "updated_at": "2026-09-13T09:26:19.131028+00:00",
+  "milestones": [
+    "supplied_lock_read",
+    "locked_sources_resolved_offline",
+    "exact_derivation_paths_resolved_readonly",
+    "single_build_failed_daemon_access",
+    "installed_strictdoc_import_control_passed",
+    "combined_probe_not_run",
+    "host_build_and_probe_evidence_read_success",
+    "read_only_existing_closure_probe_passed_matches_host",
+    "source_syntax_format_and_publication_allowlist_verified"
+  ],
+  "pairing": {
+    "python": "3.14.6",
+    "strictdoc": "0.28.3",
+    "rustworkx": "0.17.1"
+  },
+  "reason": "Authorized host acquired the unchanged exact closure and passed every probe assertion; subsequent worker read-only confirmation matched the host result.",
+  "scope": "x86_64-linux CPython 3.14.6 / StrictDoc 0.28.3 / rustworkx 0.17.1 with the installed StrictDoc interpreter and temporary closure site-packages PYTHONPATH"
+}

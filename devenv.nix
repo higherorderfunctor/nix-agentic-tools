@@ -238,7 +238,8 @@ in {
     ./packages/kimchi/modules/devenv
     ./packages/kiro-cli/modules/devenv
     ./packages/semble/modules/devenv
-    # The same project-only backend discovered by the public consumer module.
+    # Native owner discovery publishes this same backend. Keep workspace
+    # imports selective so stacked-workflows remains excluded below.
     ./packages/strictdoc-grammar/modules/devenv
     # NOTE: the stacked-workflows devenv module is NOT imported here. Enabling
     # it would fan its skills into `ai.skills` UNPREFIXED (stack-*), which, once
@@ -550,6 +551,8 @@ in {
     # type-checks values against a grammar nothing runs.
     strictdoc = {
       enable = !isCI;
+      # Live development sources retain this repo's semantics and board.
+      scribeSource = "project";
 
       # docs/sdoc/grammar.sgra is GENERATED, by the operator's 2026-08-27
       # ruling on MECH-GRAMMAR-SGRA-NOT-GENERATED: every `.sgra` in this

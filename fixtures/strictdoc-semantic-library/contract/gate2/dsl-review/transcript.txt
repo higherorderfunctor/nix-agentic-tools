@@ -1,0 +1,429 @@
+Lowering evidence only; candidate and result JSON are handwritten samples.
+Commands ran in a temporary copy under a temporary evaluation directory; displayed command paths are relative to it.
+Only the temporary dsl.nix grammar import was pointed at the supplied strictdoc-semantic-gate1 grammar path.
+The delivered dsl.nix keeps its original relative import. Temporary probes are removed after verification.
+Temporary import used: native = import the repository copy of packages/strictdoc-grammar/lib/dsl.nix {lib = {inherit mapAttrs;};};
+
+Temporary keyword-invalid.nix:
+let
+  d = import ./dsl.nix;
+  foo = d.el "FOO" {} {relations = [(d.rel.parent "H" "H_back")];};
+  h = d.forest "H" (d.parentOf foo "H");
+  sight = d.visibility "H-visibility" h {
+    ascent = "sideways";
+    visit = "always";
+    expand = "open-or-origin-in-subtree-including-self";
+  };
+in d.normalize (d.model "reference" {elements = [foo]; views = [h sight];})
+
+Temporary prerequisite probes derive from examples.nix:
+missing-count.nix removes only:
+      (check "one-P" (record (bridge: exactly 1 (bridge.parents "P"))))
+duplicate-count.nix adds a second identical count under the distinct name "another-P".
+wrapped-count.nix wraps the one-P check in all [...], which is not a standalone count leaf.
+wrong-count.nix replaces exactly 1 with atMost 1 for one-P.
+
+$ nix-instantiate --eval --strict --json -A sameNormalized composition.nix
+true
+exit = 0
+
+$ nix-instantiate --eval --strict --json -A deduplicated composition.nix
+true
+exit = 0
+
+$ nix-instantiate --eval --strict --json --expr 'let x = import ./composition.nix; in !(builtins.tryEval x.conflict).success'
+true
+exit = 0
+
+$ nix-instantiate --eval --strict --json -A sugarEqualsLowest counting.nix
+true
+exit = 0
+
+$ nix-instantiate --eval --strict --json -A conflict composition.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:584:10:
+          583|     then throw "duplicate declaration identity"
+          584|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          585| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: conflicting definitions for check "target-type" at model:composition/element:FOO/relation:parent:R/check:target-type
+exit = 1
+
+$ nix-instantiate --eval --strict --json keyword-invalid.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:584:10:
+          583|     then throw "duplicate declaration identity"
+          584|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          585| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'views'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: invalid keyword ascent: "sideways"
+exit = 1
+
+$ nix-instantiate --eval --strict --json missing-count.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:584:10:
+          583|     then throw "duplicate declaration identity"
+          584|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          585| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: requires: model:reference/element:BAR/check:endpoint-path endpoint parent P count: expected one prerequisite, found 0
+exit = 1
+
+$ nix-instantiate --eval --strict --json duplicate-count.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:584:10:
+          583|     then throw "duplicate declaration identity"
+          584|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          585| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: requires: model:reference/element:BAR/check:endpoint-path endpoint parent P count: expected one prerequisite, found 2
+exit = 1
+
+$ nix-instantiate --eval --strict --json wrapped-count.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:584:10:
+          583|     then throw "duplicate declaration identity"
+          584|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          585| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: requires: model:reference/element:BAR/check:endpoint-path endpoint parent P count: expected one prerequisite, found 0
+exit = 1
+
+$ nix-instantiate --eval --strict --json wrong-count.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:584:10:
+          583|     then throw "duplicate declaration identity"
+          584|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          585| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: requires: model:reference/element:BAR/check:endpoint-path endpoint parent P count: expected one prerequisite, found 0
+exit = 1
+
+$ nix-instantiate --eval --strict --json --expr 'let x = import ./examples.nix; in (builtins.head (builtins.filter (r: r.name == "R.all") x.bundle.rules)).check'
+{"all":[{"kind":"target-type","targetElement":"model:reference/element:FOO"},{"from":"owner","kind":"visible-target","to":"target","view":"model:reference/view:H-visibility"}]}
+exit = 0
+
+$ nix-instantiate --eval --strict --json examples.nix > normalized.json
+exit = 0
+bundle.json: equals fresh normalized.json evaluation; 11 rules.
+
+Four proofs returned true: sameNormalized, deduplicated, conflict rejection via tryEval, sugarEqualsLowest.
+Expected conflict, keyword, missing prerequisite, duplicate prerequisite, wrapped count, and wrong comparison throws all matched.
+
+Artifact verification:
+Unchanged byte copies: examples.nix, composition.nix, counting.nix, bundle.json, candidate.json, baseline.json.
+dsl.nix: only endpoint count prerequisite matching and its throw label changed; relative grammar import unchanged.
+README.md: only two now-false statements changed; all 33 fenced code blocks byte-identical.
+contract.md: 543 lines; all 20 JSON blocks parse; seven displayed rules are complete bundle members.
+Native grammar restatements agree; all metadata digest texts reproduce their supplied hashes; the contract includes the exact compact FOO hash input.
+invocation.json: external baseline ID binding matches the documented command and timeout schema.
+results.json: 11 entries in bundle order; 18 satisfied findings in candidate/occurrence/predicatePath order; every code belongs to the closed set.
+Every evaluated sample leaf subject has its finding; native-dag, H-forest, and preserve each have exactly one model finding with empty witness lists.
+Sample evidence checked against the candidate and baseline, including occurrence indices, counts, target types, acyclicity, forest cardinality, and unchanged protected record.
+Closed code set: closed-boundary, configuration, count, cycle, difference, endpoint-path, execution, expression, forest-validity, input, native-dag, no-shared-root, prerequisite, preserve, singleton, target-type, unresolved-target, visible-target.
+No negative JSON fixtures were generated.
+
+Field-value leaf verification. Commands ran in a second temporary copy under a temporary evaluation directory; displayed command paths are relative to it.
+Only the temporary dsl.nix grammar import was pointed at the supplied strictdoc-semantic-gate1 grammar path.
+The delivered dsl.nix keeps its original relative import. Temporary probes are removed after verification.
+
+Temporary model.nix is the variant family's authoring source, identical to backend/fixtures/note-state-field/model.nix apart from its dsl.nix import path.
+Temporary sugar.nix builds one model twice, differing only in fieldIs state "retired" versus fieldIn state ["retired"].
+Temporary owner-subject.nix filters an occurrences selector with at edge.origin, to measure the owner subject.
+Temporary str-field-any-value.nix reads a plain string field, which declares no choices.
+Temporary field-value guard probes:
+undeclared-choice.nix names a value outside the declared choices.
+empty-values.nix passes fieldIn an empty list.
+at-in-record-scope.nix uses at inside a record check.
+bare-in-relation-scope.nix uses a bare fieldIs inside a relation callback.
+at-model-scope.nix puts a field value in a model constraint.
+at-wrapping-count.nix wraps a non-field predicate in at.
+
+$ nix-instantiate --eval --strict --json -A sameNormalized composition.nix
+true
+exit = 0
+
+$ nix-instantiate --eval --strict --json -A deduplicated composition.nix
+true
+exit = 0
+
+$ nix-instantiate --eval --strict --json --expr 'let x = import ./composition.nix; in !(builtins.tryEval x.conflict).success'
+true
+exit = 0
+
+$ nix-instantiate --eval --strict --json -A sugarEqualsLowest counting.nix
+true
+exit = 0
+
+$ nix-instantiate --eval --strict --json -A sugarEqualsLowest sugar.nix
+true
+exit = 0
+
+$ nix-instantiate --eval --strict --json --expr 'let x = import ./model.nix; in map (r: r.id) x.bundle.rules'
+["model:notes/element:NOTE/relation:parent:SOURCE/check:SOURCE.field-value","model:notes/element:NOTE/check:retired-notes-cite-a-source","model:notes/element:NOTE/check:drafts-cite-nothing"]
+exit = 0
+
+$ nix-instantiate --eval --strict --json --expr 'let x = import ./model.nix; in (builtins.head x.bundle.rules).check'
+{"absentSatisfies":true,"field":"STATE","kind":"field-value","subject":"target","values":["final","retired"]}
+exit = 0
+
+$ nix-instantiate --eval --strict --json --expr 'let x = import ./model.nix; in (builtins.elemAt x.bundle.rules 1).select'
+{"records":{"element":"NOTE"},"where":{"absentSatisfies":false,"field":"STATE","kind":"field-value","subject":"record","values":["retired"]}}
+exit = 0
+
+$ nix-instantiate --eval --strict --json --expr 'let x = import ./model.nix; in (builtins.elemAt x.bundle.rules 2).check'
+{"any":[{"not":{"absentSatisfies":false,"field":"STATE","kind":"field-value","subject":"record","values":["draft"]}},{"compare":"eq","kind":"count","relation":{"direction":"parent","role":"SOURCE"},"value":0}]}
+exit = 0
+
+$ nix-instantiate --eval --strict --json --expr 'let x = import ./model.nix; in map (r: {inherit (r) requires inputs;}) x.bundle.rules'
+[{"inputs":["candidate"],"requires":[]},{"inputs":["candidate"],"requires":[]},{"inputs":["candidate"],"requires":[]}]
+exit = 0
+
+$ nix-instantiate --eval --strict --json --expr 'let x = import ./owner-subject.nix; in (builtins.head x.bundle.rules).select.where'
+{"absentSatisfies":false,"field":"STATE","kind":"field-value","subject":"owner","values":["retired"]}
+exit = 0
+
+$ nix-instantiate --eval --strict --json --expr 'let x = import ./str-field-any-value.nix; in (builtins.head (builtins.filter (r: r.name == "uid-is-anything") x)).check'
+{"absentSatisfies":false,"field":"UID","kind":"field-value","subject":"record","values":["anything"]}
+exit = 0
+
+$ nix-instantiate --eval --strict --json undeclared-choice.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:636:10:
+          635|     then throw "duplicate declaration identity"
+          636|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          637| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: field value: withdrawn is not a declared choice of STATE
+exit = 1
+
+$ nix-instantiate --eval --strict --json empty-values.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:636:10:
+          635|     then throw "duplicate declaration identity"
+          636|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          637| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: field value: STATE needs at least one value
+exit = 1
+
+$ nix-instantiate --eval --strict --json at-in-record-scope.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:636:10:
+          635|     then throw "duplicate declaration identity"
+          636|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          637| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: check "bad" at model:notes/element:NOTE: field value at target subject in record scope
+exit = 1
+
+$ nix-instantiate --eval --strict --json bare-in-relation-scope.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:636:10:
+          635|     then throw "duplicate declaration identity"
+          636|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          637| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: check "SOURCE.inline" at model:notes/element:NOTE/relation:parent:SOURCE: field value at record subject in relation scope
+exit = 1
+
+$ nix-instantiate --eval --strict --json at-model-scope.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:636:10:
+          635|     then throw "duplicate declaration identity"
+          636|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          637| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: check "bad" at model:notes: field value at record subject in model scope
+exit = 1
+
+$ nix-instantiate --eval --strict --json at-wrapping-count.nix
+error:
+       … while calling the 'deepSeq' builtin
+         at dsl.nix:636:10:
+          635|     then throw "duplicate declaration identity"
+          636|     else builtins.deepSeq (validateKeywords output) output;
+             |          ^
+          637| in {
+
+       … while evaluating the attribute 'bundle'
+
+       … while evaluating the attribute 'rules'
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: check "SOURCE.inline" at model:notes/element:NOTE/relation:parent:SOURCE: at and ifPresent take one field value predicate
+exit = 1
+
+$ nix-instantiate --eval --strict --json examples.nix > normalized.json
+exit = 0
+
+Five proofs returned true: sameNormalized, deduplicated, conflict rejection via tryEval, sugarEqualsLowest in counting.nix, and sugarEqualsLowest in sugar.nix.
+The variant model lowers to three rules, each with requires [] and inputs ["candidate"]: a relation check with subject target and absentSatisfies true, a records filter with subject record, and an any of not over a field value and a count.
+edge.origin lowers to subject owner; a plain string field accepts any value with no choice check.
+Every field-value guard threw with its own message: undeclared choice, empty value list, at in record scope, bare field value in relation scope, field value at model scope, and at over a non-field predicate.
+bundle.json: equals a fresh examples.nix evaluation; 11 rules; byte-identical after the packet's JSON formatting, so the delivered file was not rewritten.
+examples.nix, composition.nix, counting.nix, candidate.json, baseline.json, invocation.json, and results.json are unchanged byte copies.
+dsl.nix: added the field-value leaf, its choice field constructor, the at and ifPresent combinators, and two keyword spaces; the relative grammar import is unchanged.
+
+Gate 2 DSL review findings, applied. Commands ran in place, in the delivered packet, with the delivered relative grammar import.
+The probe models are delivered files now, under backend/fixtures/lowering-guards, so nothing here ran on a temporary copy.
+These runs supersede three recorded throws above: the undeclared-choice guard moved from the field constructor to normalize, so its message names the check and the element; the dsl.nix line numbers in every trace above predate this change.
+
+$ nix-instantiate --eval --strict --json -A sameNormalized composition.nix
+true
+exit = 0
+
+$ nix-instantiate --eval --strict --json -A deduplicated composition.nix
+true
+exit = 0
+
+$ nix-instantiate --eval --strict --json --expr 'let x = import ./composition.nix; in !(builtins.tryEval x.conflict).success'
+true
+exit = 0
+
+$ nix-instantiate --eval --strict --json -A sugarEqualsLowest counting.nix
+true
+exit = 0
+
+$ nix-instantiate --eval --strict --json backend/fixtures/lowering-guards/field-value-names-another-elements-field.nix
+       error: check "notes-are-open" at model:guard/element:NOTE: ["open"] is not a declared choice of STATE on NOTE
+exit = 1
+
+$ nix-instantiate --eval --strict --json backend/fixtures/lowering-guards/field-value-owner-subject-field-the-owner-lacks.nix
+       error: check "H.inline" at model:guard/element:NOTE/relation:parent:H: the field STATE is not declared on NOTE
+exit = 1
+
+$ nix-instantiate --eval --strict --json backend/fixtures/lowering-guards/field-value-integer-value.nix
+       error: field value: TITLE admits native strings only; one value is a int
+exit = 1
+
+$ nix-instantiate --eval --strict --json backend/fixtures/lowering-guards/field-value-boolean-value.nix
+       error: field value: FLAG admits native strings only; one value is a bool
+exit = 1
+
+$ nix-instantiate --eval --strict --json backend/fixtures/lowering-guards/native-single-choice-field.nix
+       error: field STATE on NOTE: a singleChoice field has no semantic type; declare it with str, choice, or boolean
+exit = 1
+
+$ nix-instantiate --eval --strict --json backend/fixtures/lowering-guards/native-tag-field.nix
+       error: field LABELS on NOTE: a tag field has no semantic type; declare it with str, choice, or boolean
+exit = 1
+
+$ nix-instantiate --eval --strict --json backend/fixtures/lowering-guards/native-relation-of-an-unknown-kind.nix
+       error: invalid keyword direction: "sibling"
+exit = 1
+
+$ nix-instantiate --eval --strict --json backend/fixtures/lowering-guards/field-value-target-subject-another-elements-field.nix
+{"absentSatisfies": false, "field": "STATE", "kind": "field-value", "subject": "target", "values": ["open"]}
+exit = 0
+
+$ nix-instantiate --eval --strict --json backend/fixtures/lowering-guards/file-relation-declaration.nix
+{"grammar relations": [{"parent": {"reverseRole": "H_back", "role": "H"}}, {"file": {}}], "relation declarations": ["H"]}
+exit = 0
+
+$ cd <fixture root> && devenv shell -- contract/gate2/dsl-review/backend/export-candidate.sh --out /tmp/exported-candidate.json
+exit = 0
+exported candidate equals the delivered candidate.json as a decoded object; 10 records, created [], model reference.
+
+$ cd <fixture root> && devenv shell -- contract/gate2/dsl-review/backend/run-fixtures.sh
+Ran 60 tests
+OK
+exit = 0
+
+Four proofs returned true: sameNormalized, deduplicated, conflict rejection via tryEval, sugarEqualsLowest.
+Seven lowering guards threw with their own messages: another element's field constructor, an owner subject naming a field the owner lacks, an integer value, a raw Boolean value, a native single-choice field, a native tag field, and a native relation key that is neither parent, child nor file.
+Two lowering guards lowered: a target subject reading a field its own element lacks, and a File relation that reaches the native grammar and declares no owned occurrence.
+bundle.json equals a fresh examples.nix evaluation; backend/fixtures/note-state-field/bundle.json equals a fresh model.nix evaluation. Neither was rewritten.
+examples.nix, composition.nix, counting.nix, candidate.json, baseline.json, invocation.json, and results.json are unchanged byte copies.
+dsl.nix: the field-value choice check moved to normalize and is resolved against the subject's element; a field value must be a native string; only a native string field derives a semantic type; a File relation alone declares no owned occurrence, role no longer falls back to "@file", and every other native relation key still reaches the direction keyword space.
+Each guard was measured against its own negative control: the fix was disabled in place, the pinning test failed, and the fix was restored.
+Python invalidates bytecode by whole-second source mtime and source size, so a restore of the same size in the same second keeps the injected bytecode. One control read as green that way before __pycache__ was purged; every result above was measured after a purge.

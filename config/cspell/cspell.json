@@ -28,6 +28,59 @@
     {
       "dictionaries": ["python", "node", "npm", "rust"],
       "filename": ["**/*.md", "**/*.mjs", "**/*.nix", "**/*.py", "**/*.sh"]
+    },
+    {
+      "filename": [
+        "fixtures/strictdoc-semantic-library/contract/gate2/**",
+        "fixtures/strictdoc-semantic-library/contract/surfaces.md"
+      ],
+      "ignoreRegExpList": ["/\\/nix\\/store\\/[a-z0-9]{32}-/g"],
+      "words": [
+        "acyclicity",
+        "argparse",
+        "bypassability",
+        "combinators",
+        "cozo",
+        "dataclass",
+        "datalog",
+        "disambiguator",
+        "functors",
+        "incrementality",
+        "microbenchmark",
+        "mmin",
+        "multigraph",
+        "networkx",
+        "nonblocking",
+        "nondeleted",
+        "nonmultiline",
+        "nonselected",
+        "nonstring",
+        "petgraph",
+        "precheck",
+        "prechecks",
+        "pyproject",
+        "pythondontwritebytecode",
+        "qiskit",
+        "reattributed",
+        "recomputations",
+        "rego",
+        "reparenting",
+        "reparses",
+        "reparsing",
+        "reserialization",
+        "revisioned",
+        "rustworkx",
+        "strerror",
+        "stringly",
+        "uids",
+        "unconfigured",
+        "unevaluable",
+        "unroled"
+      ]
+    },
+    {
+      "filename": "fixtures/strictdoc-semantic-library/evidence/*.json",
+      "ignoreRegExpList": ["/[\\s\\S]+/g"]
     }
   ],
   "version": "0.2"

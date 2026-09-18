@@ -1,0 +1,43 @@
+{
+  "bun": "1.4.2",
+  "evidence_version": 2,
+  "sdk": "1.10.0",
+  "status": "pass",
+  "loadMs": 2.529705,
+  "twentyRunMedianMs": 0.24120450000000027,
+  "twentyRunSamplesMs": [
+    1.0613580000000002, 0.4159569999999988, 0.2950689999999998,
+    0.2863369999999996, 0.26143099999999997, 0.2661499999999979,
+    0.28034900000000107, 0.25175399999999826, 0.23988500000000101,
+    0.24252399999999952, 0.2351290000000006, 0.22234399999999965,
+    0.20631500000000003, 0.2511589999999977, 0.2067959999999971,
+    0.1988449999999986, 0.21581199999999967, 0.20161500000000032,
+    0.23693400000000153, 0.1965219999999981
+  ],
+  "selectedChildAnswers": {
+    "reverse_downward": false,
+    "closed_endpoint": true,
+    "closed_start": true,
+    "internal_exit": true,
+    "internal_peer": true,
+    "sibling_downward": false,
+    "external_blocked": false,
+    "blocked_interior": false,
+    "open_downward": true,
+    "unselected_parent_shortcut": false
+  },
+  "sameSnapshotProtection": {
+    "snapshot": "protected-1",
+    "unchanged": [],
+    "changed": ["I0"]
+  },
+  "controls": [
+    "same Rego compiled to Wasm",
+    "ten base truth rows",
+    "boundary open and close",
+    "ten explicitly Child-authored hierarchy truth rows",
+    "Child hierarchy boundary open and close",
+    "unchanged and changed protection under same nonempty snapshot"
+  ],
+  "limitations": "warm in-process evaluation, full input each time; no Scribe integration, no incremental algorithm"
+}

@@ -1,0 +1,131 @@
+{
+  "model": "reference",
+  "records": [
+    {
+      "uid": "F0",
+      "element": "FOO",
+      "fields": {
+        "UID": ["F0"],
+        "FLAG": ["false"]
+      },
+      "relations": []
+    },
+    {
+      "uid": "F1",
+      "element": "FOO",
+      "fields": {
+        "UID": ["F1"],
+        "FLAG": ["false"]
+      },
+      "relations": [
+        {
+          "role": "H",
+          "direction": "parent",
+          "target": "F0"
+        }
+      ]
+    },
+    {
+      "uid": "F1a",
+      "element": "FOO",
+      "fields": {
+        "UID": ["F1a"],
+        "FLAG": ["false"]
+      },
+      "relations": [
+        {
+          "role": "H",
+          "direction": "parent",
+          "target": "F1"
+        }
+      ]
+    },
+    {
+      "uid": "F2",
+      "element": "FOO",
+      "fields": {
+        "UID": ["F2"],
+        "FLAG": ["true"]
+      },
+      "relations": [
+        {
+          "role": "H",
+          "direction": "parent",
+          "target": "F0"
+        }
+      ]
+    },
+    {
+      "uid": "F2a",
+      "element": "FOO",
+      "fields": {
+        "UID": ["F2a"],
+        "FLAG": ["false"]
+      },
+      "relations": [
+        {
+          "role": "H",
+          "direction": "parent",
+          "target": "F2"
+        }
+      ]
+    },
+    {
+      "uid": "F2b",
+      "element": "FOO",
+      "fields": {
+        "UID": ["F2b"],
+        "FLAG": ["false"]
+      },
+      "relations": [
+        {
+          "role": "H",
+          "direction": "parent",
+          "target": "F2"
+        }
+      ]
+    },
+    {
+      "uid": "G0",
+      "element": "FOO",
+      "fields": {
+        "UID": ["G0"],
+        "FLAG": ["false"]
+      },
+      "relations": []
+    },
+    {
+      "uid": "G1",
+      "element": "FOO",
+      "fields": {
+        "UID": ["G1"],
+        "FLAG": ["false"]
+      },
+      "relations": [
+        {
+          "role": "H",
+          "direction": "parent",
+          "target": "G0"
+        }
+      ]
+    },
+    {
+      "uid": "I0",
+      "element": "FOO",
+      "fields": {
+        "UID": ["I0"],
+        "FLAG": ["false"]
+      },
+      "relations": []
+    },
+    {
+      "uid": "Z0",
+      "element": "BAZ",
+      "fields": {
+        "UID": ["Z0"]
+      },
+      "relations": []
+    }
+  ],
+  "created": []
+}

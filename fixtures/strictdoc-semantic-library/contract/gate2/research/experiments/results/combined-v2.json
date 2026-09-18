@@ -1,0 +1,14 @@
+{
+  "evidence_version": 2,
+  "command": "bash outputs/experiments/scripts/run.sh --all",
+  "cwd": "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-2026-09-13/workflow-2-research",
+  "exit_code": 0,
+  "setup_network_builds": "none; existing private dependencies",
+  "log": "experiments/logs/combined-v2.log",
+  "runner_sha256": "760eec630c5b9319e5d4664eb1f8a8cdb43a17d2f352c846e81d88011843b254",
+  "finalist_records": 34,
+  "graph_comparisons": 30,
+  "wasm_status": "pass",
+  "native_controls": 11,
+  "expected_process_timeouts": "Cozo lock reproducer and bounded cost cells report expected budgets; runner itself succeeds"
+}

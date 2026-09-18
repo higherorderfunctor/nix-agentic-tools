@@ -1,0 +1,5 @@
+Gate1: 14/14 controls true. Trial: 14/14 controls true. All results except source paths are equal.
+Local nixpkgs lib: /nix/store/j2r11kxv91yl5xqppy3vy84klwxjbz1i-source/lib
+Local nixpkgs .version: 26.11
+Local lib NAR hash: sha256-0BFla09+uN4gn70TyZHTa9zWfpzvd5kGgCEWdyD+1qY=
+Original pinned filtered store artifact absent in this process filesystem; no fetch or build attempted.

@@ -1,0 +1,13 @@
+node[n, closed] <- $nodes
+edge[parent, child] <- $edges
+query[id, origin, target, mode] <- $queries
+
+# The original query identity travels through recursion. No depth bound.
+inside[id, origin] := query[id, origin, _, _]
+inside[id, p] := inside[id, c], edge[p, c]
+expand[id, n] := query[id, _, _, _], node[n, false]
+expand[id, n] := inside[id, n]
+reach[id, origin] := query[id, origin, _, _]
+reach[id, p] := reach[id, c], query[id, _, _, 'visible'], edge[p, c]
+reach[id, c] := reach[id, p], edge[p, c], expand[id, p]
+?[id] := query[id, _, target, _], reach[id, target]

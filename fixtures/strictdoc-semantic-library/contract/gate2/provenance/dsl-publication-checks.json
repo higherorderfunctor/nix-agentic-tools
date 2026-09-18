@@ -1,0 +1,89 @@
+{
+  "base": "6f529c7eef3650a14b6f8d56ff1bc3ceaa914d7f",
+  "canonicalByteHashes": {
+    "authoring-prototype/compose.nix": "f1c91c399f25a4cca351846a032878ea7b40b722163ac9fe68eaa4f961b811c4",
+    "authoring-prototype/controls.nix": "f415aa2970e9cbefc6ac70fd16e2aecbb8798743df89927f5a0f005c1131e882",
+    "authoring-prototype/dsl.nix": "cc833f76f4a52ce90d5c3b67305954c6664aaead186fd2ca1d465ca0e10d6a8e",
+    "authoring-prototype/evaluate.nix": "d55bbb0144ebe907ed5e83c3b0a9c200f11dd723d883b4e5b22c64851290dc61",
+    "authoring-prototype/probe.py": "fec5f611893978dd6cd4b93b614e8552444ada6349b7b07faafac4ae3ad32a5d",
+    "authoring-prototype/runtime.py": "85fd9e7621c0f1dcde8709dc7d1811e1a9caa6629af0ea9e5e41eae2ac1f5c07",
+    "composition.nix": "8d36bcce6f6732302d9349829bd9c65e1f2bc0a2c95e355edda967ba46df9e78",
+    "field-alternative.nix": "7bf3c2d77c88005e9b51e4dadf689f9deeb2c0894d3928f47e23b60d973aa1b2",
+    "native-tailoring.nix": "d3984e2c8c982d2daa750b5f2bedfa7ad2f234d6f2f50ca79df2611f311f7e85",
+    "recommended.nix": "63919d39704dac21e9ed672d606ea83dad25778e13dcf709ebae0ddfab75bb78"
+  },
+  "checks": {
+    "deadnix": true,
+    "nixOutputEqualsProducer": true,
+    "runtimeOutputEqualsProducer": true
+  },
+  "commands": [
+    {
+      "argv": [
+        "nix-instantiate",
+        "--eval",
+        "--strict",
+        "--json",
+        "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library/contract/gate2/authoring-prototype/evaluate.nix",
+        "--arg",
+        "libPath",
+        "/nix/store/j2r11kxv91yl5xqppy3vy84klwxjbz1i-source/lib"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "nix-instantiate",
+        "--eval",
+        "--strict",
+        "--json",
+        "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library/contract/gate2/authoring-prototype/controls.nix",
+        "--arg",
+        "libPath",
+        "/nix/store/j2r11kxv91yl5xqppy3vy84klwxjbz1i-source/lib"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "python3",
+        "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/private/strictdoc-semantic-library/gate2-revision-2026-09-15/corrected-publication-replay/probe.py"
+      ],
+      "exit": 0,
+      "stderr": "",
+      "stdout": "110 bounded runtime controls passed\n"
+    },
+    {
+      "argv": [
+        "/nix/store/rfw9ylnssdaz8fnw1ld0zyzh24cih2hd-deadnix-1.3.2/bin/deadnix",
+        "--fail",
+        "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library/contract/gate2/authoring-prototype",
+        "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library/contract/gate2/recommended.nix",
+        "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library/contract/gate2/composition.nix",
+        "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library/contract/gate2/native-tailoring.nix",
+        "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library/contract/gate2/field-alternative.nix"
+      ],
+      "exit": 0,
+      "stderr": "",
+      "stdout": ""
+    }
+  ],
+  "limits": [
+    "No Scribe/native parser integration",
+    "No generic interpreter or default execution",
+    "Supplied forest helper inputs",
+    "No batch/cache/publication execution"
+  ],
+  "publicationStyle": {
+    "change": "14 statix inherit substitutions across four Nix files, previewed then formatted",
+    "deadnix": true,
+    "evaluatedAndControlJsonEqualToProducer": true,
+    "sha256": {
+      "../recommended.nix": "6db360e7d40fd60d328b6d8c2e124c516e635abe4d2874e84192d1b577dad5af",
+      "compose.nix": "fe16ca10c658716df3cdfae86e78d1bafd3f0d010d5a68de08ba3c54e41faf8e",
+      "controls.nix": "01dc9b47fde0dd1821ec19adacab5a542a33821baa2e1f7ab9dfe30d82df7b93",
+      "dsl.nix": "6787eebd65a3cdd4687e44791f461ab825672f6ee41879f18b0891f23fa1f5eb"
+    },
+    "statix": true
+  }
+}
