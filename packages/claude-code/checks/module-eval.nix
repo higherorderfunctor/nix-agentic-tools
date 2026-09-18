@@ -648,7 +648,7 @@ in {
 
     # ── Task 5 (A4b): Claude launch-effort unpin reconciler ────────
 
-    # Default reconciler: flags from the committed sidecar are merged into
+    # Default reconciler: flags from the committed sidecar are reconciled into
     # ~/.claude.json through the shared helper.
     module-claude-hm-reconciles-unpin-launch-effort = mkTest "claude-hm-reconciles-unpin-launch-effort" (
       let
@@ -659,10 +659,10 @@ in {
         != null
         && lib.hasInfix "unpinOpus48LaunchEffort" (activation.text or "")
         && lib.hasInfix ".claude.json" (activation.text or "")
-        && lib.hasInfix "jq" (activation.text or "")
+        && lib.hasInfix "--format json" (activation.text or "")
     );
 
-    # Emptied flag map: merge body omitted, but the applied-0 log still fires.
+    # Emptied flag map: the writer still runs to retire flags and logs zero.
     module-claude-hm-unpin-empty-logs-zero = mkTest "claude-hm-unpin-empty-logs-zero" (
       let
         result = evalHm {
@@ -674,6 +674,7 @@ in {
         activation
         != null
         && lib.hasInfix "reconciling 0" (activation.text or "")
+        && lib.hasInfix "--format json" (activation.text or "")
         && !(lib.hasInfix "unpinOpus48LaunchEffort" (activation.text or ""))
     );
 
@@ -687,6 +688,95 @@ in {
         activation = result.config.home.activation.claudeUnpinLaunchEffort or null;
       in
         activation != null && lib.hasInfix "false" (activation.text or "")
+    );
+
+    # One runtime corpus covers the shared helper plus actual Claude and Kiro
+    # module output. Every empty generation is evaluated and executed, so a
+    # missing writer or a log-only activation cannot satisfy the N-to-0 check.
+    module-json-settings-reconciliation = let
+      helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+      mkCase = name: configFile: first: second: native: render: {
+        inherit configFile first name native second;
+        scripts = map render [first second {}];
+      };
+      cases = [
+        (mkCase "helper" ".settings with spaces/config.json" {
+            array = [{enabled = true;}];
+            "dot.key" = true;
+            nested.managed = true;
+            nullable = null;
+            retained = 1;
+            shape = "scalar";
+          } {
+            retained = 2;
+            shape.child = true;
+          } {
+            nested.native = "survives";
+            oauthAccount.token = "native-test-token";
+          } (settings:
+            helpers.mkSettingsActivationScript {
+              configFile = ".settings with spaces/config.json";
+              python = pkgs.python3;
+              reconciler = ../../../lib/ai/reconcile-toml.py;
+              settingsJson = builtins.toJSON settings;
+              stateName = "helper-test";
+            }))
+        (mkCase "claude" ".claude.json" {
+            unpinFirstLaunchEffort = true;
+            unpinSecondLaunchEffort = true;
+          } {
+            unpinSecondLaunchEffort = false;
+          } {
+            oauthAccount.token = "native-test-token";
+            unpinNativeLaunchEffort = true;
+          } (settings:
+            (evalHm {
+              ai.claude = {
+                enable = true;
+                unpinLaunchEffort = lib.mkForce settings;
+              };
+            }).config.home.activation.claudeUnpinLaunchEffort.text))
+        (mkCase "kiro" ".kiro/settings/cli.json" {
+            "chat.defaultModel" = "claude-sonnet-4";
+            "chat.modelDefaults"."claude-opus-4.8".effort = "high";
+          } {
+            "chat.defaultModel" = "claude-opus-4.8";
+          } {
+            "chat.modelDefaults".native.effort = "low";
+            "native.setting" = "survives";
+          } (settings:
+            (evalHm {
+              ai.kiro = {
+                enable = true;
+                nativeSettings = {
+                  chat.defaultModel = settings."chat.defaultModel" or null;
+                  chat.modelDefaults = settings."chat.modelDefaults" or {};
+                };
+              };
+            }).config.home.activation.kiroSettingsMerge.text))
+      ];
+    in
+      pkgs.runCommand "module-test-json-settings-reconciliation" {} ''
+        ${pkgs.python3}/bin/python ${./json-settings-runtime.py} \
+          ${pkgs.writeText "json-settings-cases.json" (builtins.toJSON cases)} \
+          ${pkgs.bash}/bin/bash
+        touch "$out"
+      '';
+
+    module-json-settings-state-name-validation = mkTest "json-settings-state-name-validation" (
+      let
+        helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+        accepts = stateName:
+          (builtins.tryEval (helpers.mkSettingsActivationScript {
+            configFile = ".claude.json";
+            python = pkgs.python3;
+            reconciler = ../../../lib/ai/reconcile-toml.py;
+            settingsJson = "{}";
+            inherit stateName;
+          })).success;
+      in
+        accepts "claude-settings_1.json"
+        && builtins.all (name: !accepts name) ["" "../escape" "a/b" "has space"]
     );
 
     # ── Attrs-shape ai.rules / ai.<cli>.rules (unified transformer) ───
