@@ -1139,7 +1139,8 @@ in
         # via config/batchWrite into this exact config.toml. A home.file symlink
         # makes that required native write target a read-only Nix store path.
         # Reconcile only Nix-owned leaves instead, preserving Codex-owned
-        # trust/MCP/feature siblings and leaving a writable 0600 regular file.
+        # trust/MCP/feature siblings. New files are writable 0600 regular files;
+        # existing regular files retain their permissions.
         #
         # This activation is deliberately present even for `settings = {}`.
         # Its prior-generation leaf manifest is what lets an empty/new
