@@ -2,8 +2,9 @@
 
 > **Last verified:** 2026-09-18 — everything a generation owns reconciles
 > through `lib/ai/own.{nix,py}`: documents by their leaves, directories by their
-> files. The generated-bash materializer and the per-format activation helper
-> are both deleted.
+> files. A document target may state the mode its file must carry. The
+> generated-bash materializer and the per-format activation helper are both
+> deleted.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -205,20 +206,32 @@ fi
 Reserve `exit 1` for cases where you actually want to abort the whole activation
 on an error. Never `exit 0` for a cache-hit fast path.
 
-**Settings merge pattern** (copilot-cli, kiro-cli): runtime config.json files
-are merged with Nix-declared values using `jq -s '.[0] * .[1]'` so user runtime
-edits (e.g., `trusted_folders`) are preserved across rebuilds. The Nix settings
-override on conflict, user-added keys pass through.
+**Owned leaves, not a merge** (copilot-cli, kiro-cli): copilot's `settings.json`
+and kiro's `settings/cli.json` are not merged onto whatever is on disk. Each
+reconciles the leaves it owns through `helpers.mkOwnedDocument` →
+`lib/ai/own.nix` → `lib/ai/own.py`. Declared leaves are asserted, a leaf the
+previous generation declared and this one DROPPED is retracted, and every
+unowned sibling — a runtime-written `trusted_folders`, an oauth token — is left
+alone. A blind `jq -s '.[0] * .[1]'` cannot do the middle one: it has no way to
+tell a native key from a Nix key that was deleted.
 
 **Mixed TOML ownership requires a leaf manifest, not a blind merge.** Codex's
 user `config.toml` contains Nix-declared settings and required native state: the
 TUI trust prompt writes ad-hoc `projects.<path>.trust_level` entries through
-`config/batchWrite`. `helpers.mkOwnedDocument` lowers it into one
+`config/batchWrite`. `helpers.mkOwnedDocument` lowers it into the same
 `lib/ai/own.nix` bundle, and `lib/ai/own.py` records exact managed leaf paths
 under XDG state, removes only retired managed leaves, overlays current leaves,
-preserves native siblings within the same table, and atomically leaves mode-0600
-regular files. The manifest is necessary because `existing * desired` cannot
-tell a native key from a Nix key deleted in the next generation.
+preserves native siblings within the same table, and publishes the whole
+document with one atomic replacement. The manifest is necessary because
+`existing * desired` cannot tell a native key from a Nix key deleted in the next
+generation.
+
+Modes on a document are the reconciler's, not the caller's: a NEW file is
+created 0600, and an existing regular file keeps the mode it has — unless its
+target states a `mode`, which is then imposed on every write and on the run that
+moves no bytes. Exactly one target states one (kiro's merge-mode
+`settings/mcp.json`, whose file a sibling target in the same bundle also
+writes); everything else leaves the field out.
 
 Every target, unit, mode, ledger name and byte of content travels as DATA in a
 store-resident plan, so none of it is interpolated into generated shell — and
