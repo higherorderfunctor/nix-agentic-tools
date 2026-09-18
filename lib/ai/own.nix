@@ -141,7 +141,14 @@ in
       if errors == []
       then targets
       else throw "ai.own: ${lib.concatStringsSep "; " errors}";
-    plan = pkgs.writeText "nat-own-plan.json" (builtins.toJSON {targets = checked;});
+    # `bash` is in the plan rather than in the environment for the same reason
+    # everything else is: the runtime interface stays two env vars, and a
+    # renderer runs the interpreter this closure pins instead of whatever an
+    # activation's PATH happens to resolve.
+    plan = pkgs.writeText "nat-own-plan.json" (builtins.toJSON {
+      bash = "${pkgs.bash}/bin/bash";
+      targets = checked;
+    });
     invoke = body {inherit backend plan python;};
   in
     # Force the validation before anything else in the result. Without this an

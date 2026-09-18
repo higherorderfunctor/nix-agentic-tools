@@ -119,7 +119,7 @@ def witness_state(disk: str, previous: str | None) -> str:
 # ── Content resolution ──────────────────────────────────────────────
 
 
-def resolve(content: Mapping[str, Any]) -> bytes:
+def resolve(content: Mapping[str, Any], bash: str) -> bytes:
     """Resolve one content record to bytes.
 
     Renderers run HERE, before any container is opened and before the lock is
@@ -129,6 +129,11 @@ def resolve(content: Mapping[str, Any]) -> bytes:
     shell's environment and never land in a temporary file a concurrent sweep
     could delete, which is why the old on-disk render buffer and its ERR trap
     have no counterpart here.
+
+    `bash` is the STORE PATH from the plan, never a PATH lookup: an activation
+    or shell-entry environment can arrive with a hostile or empty PATH, and a
+    renderer is the one place this program runs code that a plan's closure is
+    supposed to pin.
     """
     fields = [field for field in CONTENT_FIELDS if field in content]
     if len(fields) != 1:
@@ -139,7 +144,7 @@ def resolve(content: Mapping[str, Any]) -> bytes:
         return Path(content["store"]).read_bytes()
     try:
         finished = subprocess.run(
-            ["bash", "-c", content["run"]], check=True, capture_output=True
+            [bash, "-c", content["run"]], check=True, capture_output=True
         )
     except subprocess.CalledProcessError as failure:
         detail = failure.stderr.decode("utf-8", "replace").strip()
@@ -166,14 +171,14 @@ def desired_leaves(value: Mapping[str, Any]) -> list[tuple[tuple[str, ...], Any]
     return leaves
 
 
-def units_of(target: Mapping[str, Any]) -> list[tuple[Any, Any]]:
+def units_of(target: Mapping[str, Any], bash: str) -> list[tuple[Any, Any]]:
     """Resolved `(address, unit)` pairs for one target."""
     if target["codec"] == "dir":
         return [
             (
                 address,
                 {
-                    "content": resolve(record),
+                    "content": resolve(record, bash),
                     "mode": record.get("mode", DEFAULT_DIR_MODE),
                 },
             )
@@ -181,7 +186,7 @@ def units_of(target: Mapping[str, Any]) -> list[tuple[Any, Any]]:
         ]
     if not target["units"]:
         return []
-    declared = json.loads(resolve(target["units"]).decode("utf-8"))
+    declared = json.loads(resolve(target["units"], bash).decode("utf-8"))
     if not isinstance(declared, Mapping):
         raise ValueError(f"declared settings must be an object for {target['path']}")
     return desired_leaves(declared)
@@ -546,6 +551,9 @@ def load_plan(path: Path) -> Mapping[str, Any]:
     targets = plan.get("targets")
     if not isinstance(targets, list):
         raise ValueError(f"plan must declare a list of targets at {path}")
+    bash = plan.get("bash")
+    if not isinstance(bash, str) or not bash.startswith("/"):
+        raise ValueError(f"plan must name an absolute bash for renderers at {path}")
     ledgers: set[str] = set()
     for target in targets:
         missing = [field for field in ("codec", "ledger", "path", "units") if field not in target]
@@ -588,7 +596,7 @@ def run(plan: Mapping[str, Any], root: Path, state: Path, phase: str) -> None:
     considered = [
         target for target in targets if phase != "prune" or target["codec"] == "dir"
     ]
-    resolved = [units_of(target) for target in considered]
+    resolved = [units_of(target, plan["bash"]) for target in considered]
 
     # Virgin and empty is a strict no-op: no lock, no state directory, no
     # target directory, nothing. Resolution above has already run, so a
