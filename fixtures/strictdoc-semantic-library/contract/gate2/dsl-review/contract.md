@@ -234,15 +234,16 @@ is satisfied once inputs and prerequisites are usable.
 
 ## Named leaves
 
-| Leaf kind         | Selector    | Fields besides kind                                                                   | Algorithm                                                                                                                           |
-| ----------------- | ----------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `target-type`     | occurrences | `targetElement`: element ID                                                           | Resolve target uid and compare its element; wrong element is violated, unresolved uid blocked.                                      |
-| `count`           | records     | `relation`: direction and role; `compare`: comparison keyword; `value`: integer       | Count all matching owned occurrences, including duplicates and zero, then compare.                                                  |
-| `visible-target`  | occurrences | `view`: visibility ID; `from`: owner; `to`: target                                    | Walk the unique hierarchy path from owner to target, keeping the original origin fixed.                                             |
-| `endpoint-path`   | records     | `view`: visibility ID; `upper`, `lower`: direction and role; `requireSingleton`: true | Select each sole endpoint occurrence and walk downward from the upper target to the lower target.                                   |
-| `native-dag`      | model       | None                                                                                  | Build all authored Parent/Child edges across every role and element; any directed cycle, including a self-loop, violates.           |
-| `forest-validity` | model       | `view`: forest ID                                                                     | Include all view vertices; require resolved in-view endpoints, acyclicity, and at most one incoming selected occurrence per vertex. |
-| `preserve`        | model       | `baseline`: input ID; `projection`: projection ID                                     | Compare every baseline-listed uid with the final candidate; missing records and changed projected facts violate.                    |
+| Leaf kind         | Selector               | Fields besides kind                                                                                                     | Algorithm                                                                                                                                                                                                             |
+| ----------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `target-type`     | occurrences            | `targetElement`: element ID                                                                                             | Resolve target uid and compare its element; wrong element is violated, unresolved uid blocked.                                                                                                                        |
+| `count`           | records                | `relation`: direction and role; `compare`: comparison keyword; `value`: integer                                         | Count all matching owned occurrences, including duplicates and zero, then compare.                                                                                                                                    |
+| `field-value`     | records or occurrences | `field`: field name; `subject`: record, owner, or target; `values`: nonempty native strings; `absentSatisfies`: Boolean | Read the subject record's named field; a present listed string is satisfied, another present value violated, absence satisfied only when absentSatisfies, and an unresolved subject or unusable native value blocked. |
+| `visible-target`  | occurrences            | `view`: visibility ID; `from`: owner; `to`: target                                                                      | Walk the unique hierarchy path from owner to target, keeping the original origin fixed.                                                                                                                               |
+| `endpoint-path`   | records                | `view`: visibility ID; `upper`, `lower`: direction and role; `requireSingleton`: true                                   | Select each sole endpoint occurrence and walk downward from the upper target to the lower target.                                                                                                                     |
+| `native-dag`      | model                  | None                                                                                                                    | Build all authored Parent/Child edges across every role and element; any directed cycle, including a self-loop, violates.                                                                                             |
+| `forest-validity` | model                  | `view`: forest ID                                                                                                       | Include all view vertices; require resolved in-view endpoints, acyclicity, and at most one incoming selected occurrence per vertex.                                                                                   |
+| `preserve`        | model                  | `baseline`: input ID; `projection`: projection ID                                                                       | Compare every baseline-listed uid with the final candidate; missing records and changed projected facts violate.                                                                                                      |
 
 Only these leaves are supported. Each leaf in a check or filter must be valid
 for its selector. Unsupported authoring forms throw during lowering; a backend
@@ -258,6 +259,60 @@ error and blocks `native-dag` or `forest-validity`, rather than violating it. A
 resolved forest endpoint outside the selected vertex element violates
 `forest-validity`. Count checks need occurrence lists but do not need resolved
 endpoints. A BAR remains a record between its endpoints in the native graph.
+
+```json
+[
+  {
+    "absentSatisfies": true,
+    "field": "STATE",
+    "kind": "field-value",
+    "subject": "target",
+    "values": ["final", "retired"]
+  },
+  {
+    "absentSatisfies": false,
+    "field": "STATE",
+    "kind": "field-value",
+    "subject": "record",
+    "values": ["retired"]
+  }
+]
+```
+
+Both field-value leaves above come from the variant model, one in a relation
+check and one in a records filter; its whole lowering is in
+`backend/fixtures/note-state-field/bundle.json`. `field` is a field NAME,
+resolved against the subject record's element, and not a declaration ID.
+`subject` names the record to read: `record` in a records selector, `owner` or
+`target` in an occurrences selector. A model selector admits no field-value
+leaf, and a subject its selector does not bind is a configuration error. A
+records selector fixes the record's element, an occurrences selector the
+owner's, so a field that element does not declare is a configuration error too.
+A target subject fixes no element, so its name only has to be declared
+somewhere, and only it blocks below. `values` is a nonempty list of native
+strings in authored order. `absentSatisfies` decides an absent optional field.
+
+Read the subject record, then decide in this order. An unresolved subject uid,
+which only a target subject can have, is blocked with code unresolved-target. A
+subject whose element does not declare `field` is blocked with code input. An
+unusable native value is blocked with code input: present with no value, present
+with more than one value, a value outside a singleChoice field's `choices`, or a
+required field absent. Each of those is already a candidate input error, so this
+leaf reports blocked and cites that envelope finding instead of deciding it
+again. An absent optional field is satisfied when `absentSatisfies` is true and
+violated otherwise; no envelope finding covers that case, which is why the flag
+belongs to the leaf. A present single native string is satisfied when `values`
+contains it and violated otherwise. A present unlisted value is violated, never
+blocked.
+
+The comparison is native-string equality and never reads a semantic codec. A
+Boolean-codec field and a plain choice field therefore behave identically here,
+matching preserve's comparison of native strings. Lowering rejects a raw Nix
+Boolean operand, so a Boolean-codec field is named by its native spelling
+"false" or "true". Creation defaults are applied before any validation, so a
+defaulted field reads as a present value. Every declared field in this profile
+is scalar, so a present list of more than one string is an unusable value rather
+than a set comparison.
 
 ```json
 [
@@ -631,6 +686,7 @@ structural failure prevents indexing. A policy violation alone has no causes.
 | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | target-type                           | `expectedElement` and `actualElement` names; actualElement is null for unresolved targets.                                                                                                                                             |
 | count                                 | `occurrences` as indexed objects, `count`, `compare`, and integer `value`.                                                                                                                                                             |
+| field-value                           | `field` and `record`, `present` and the read `values`, plus `expected` and `absentSatisfies`; record is null for an unresolved subject.                                                                                                |
 | visible-target                        | `origin`, `target`, `path`, `walkedPath`, and `boundary`.                                                                                                                                                                              |
 | endpoint-path                         | Indexed `upper` and `lower` lists plus origin, target, path, walkedPath, boundary; unusable selections use null endpoints.                                                                                                             |
 | native-dag                            | `cycles`, an array of objects with `cycle` (closed uid walk) and indexed `edges` with owner uid.                                                                                                                                       |
@@ -773,6 +829,8 @@ dependency cycles are configuration errors.
   "requireSingleton": [true],
   "from": ["owner"],
   "to": ["target"],
+  "subject": ["record", "owner", "target"],
+  "absentSatisfies": [false, true],
   "compare": ["lt", "lte", "gt", "gte", "eq"],
   "direction": ["parent", "child"],
   "status": ["satisfied", "violated", "blocked", "error"]
@@ -782,10 +840,10 @@ dependency cycles are configuration errors.
 Each array above is the complete allowed value space for its field in this
 profile. Booleans are JSON booleans, not quoted strings. `compare` means <,
 <=, >, >=, and == in the displayed order. Leaf `kind` is one of target-type,
-count, visible-target, endpoint-path, native-dag, forest-validity, preserve. The
-closed operator keys are all, any, and not; they are not kinds. Declaration
-`kind` in bundle.declarations is model, element, relation, or field. Views,
-inputs, and projections have their own bundle.views, bundle.inputs, and
+count, field-value, visible-target, endpoint-path, native-dag, forest-validity,
+preserve. The closed operator keys are all, any, and not; they are not kinds.
+Declaration `kind` in bundle.declarations is model, element, relation, or field.
+Views, inputs, and projections have their own bundle.views, bundle.inputs, and
 bundle.projections arrays with kind view, input, and projection respectively.
 Input `config.kind` has only external-snapshot. View `config.contract` has only
 selected-forest/v1 or origin-sensitive-visibility/v1. Input required and
@@ -805,13 +863,14 @@ blocked-leaf codes below may accompany any leaf that needs the unusable data.
 | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | target-type                                                           | `target-type`: satisfied or wrong resolved element.                                                                                                                          |
 | count                                                                 | `count`: satisfied or violated comparison.                                                                                                                                   |
+| field-value                                                           | `field-value`: satisfied, or violated for a present unlisted value or for an absent optional field without absentSatisfies.                                                  |
 | visible-target                                                        | `visible-target`: satisfied; `closed-boundary`: forbidden departure; `no-shared-root`: different roots.                                                                      |
 | endpoint-path                                                         | `endpoint-path`: satisfied or route requires ascent; `closed-boundary`: forbidden departure; `no-shared-root`: different roots; `singleton`: blocked non-singleton endpoint. |
 | native-dag                                                            | `native-dag`: satisfied; `cycle`: violated, with nonempty cycles.                                                                                                            |
 | forest-validity                                                       | `forest-validity`: satisfied or violated, with violations in evidence.                                                                                                       |
 | preserve                                                              | `preserve`: satisfied; `difference`: violated, with nonempty differences.                                                                                                    |
 | Unresolved target (envelope error, rule blocking, or blocked leaf)    | `unresolved-target`.                                                                                                                                                         |
-| Unusable input/value (envelope error, rule blocking, or blocked leaf) | `input`; includes invalid needed FLAG and resolved non-view path endpoints.                                                                                                  |
+| Unusable input/value (envelope error, rule blocking, or blocked leaf) | `input`; includes an invalid needed FLAG, an undeclared or unusable needed field value, and resolved non-view path endpoints.                                                |
 | Whole-rule prerequisite blocking                                      | `prerequisite`; original failures remain on their prerequisite rules.                                                                                                        |
 | Configuration/protocol failure at rule or envelope level              | `configuration`.                                                                                                                                                             |
 | Acquisition/execution failure at rule or envelope level               | `execution`.                                                                                                                                                                 |
@@ -850,17 +909,18 @@ projection `key` are names. `select.model: true` refers to the bundle's model.
 The declarations index is the name→id map; every declaration has a name. Look up
 model and element names by kind and name. Look up a field by owner element ID
 and name; look up a relation by owner element ID, direction, and name.
-Projection key UID resolves separately on each record's element. Other
-references such as targetElement, view, hierarchy, fields, and ownedRelations
-are declaration IDs. View, input, and projection IDs resolve in their
-corresponding named lists. Treat IDs as opaque after indexing; no parsing is
-needed to recover a name or configuration. The producer constructs deterministic
-paths, escaping percent and slash in names as %25 and %2F. An explicit check
-name keeps its identity; anonymous inline names derive from role and leaf kind
-or outer operator, as in R.all. Identical rule definitions with one ID merge
-origins; conflicting duplicate identities throw. Distinct rule IDs extend the
-rule set; replacement or disabling requires an explicit identity-targeted
-operation, which this stub does not supply.
+Projection key UID resolves separately on each record's element. A field-value
+leaf's `field` is a name as well, and resolves on each subject record's element.
+Other references such as targetElement, view, hierarchy, fields, and
+ownedRelations are declaration IDs. View, input, and projection IDs resolve in
+their corresponding named lists. Treat IDs as opaque after indexing; no parsing
+is needed to recover a name or configuration. The producer constructs
+deterministic paths, escaping percent and slash in names as %25 and %2F. An
+explicit check name keeps its identity; anonymous inline names derive from role
+and leaf kind or outer operator, as in R.all. Identical rule definitions with
+one ID merge origins; conflicting duplicate identities throw. Distinct rule IDs
+extend the rule set; replacement or disabling requires an explicit
+identity-targeted operation, which this stub does not supply.
 
 ## Defaults
 
@@ -968,11 +1028,13 @@ schema semantic-types/v1, grammar equal to the bundle model ID, and an element
 ID. Its fields list maps field IDs to native definitions, semantic descriptions,
 and defaults. `semantic.type` is string or boolean here; other types are
 unsupported by this profile. A string uses its single native string directly. A
-Boolean codec entry maps one `native` string to one `semantic` Boolean; only
-"false" and "true" decode. `default: null` means no default, and
-`{ "literal": false }` wraps a typed Boolean default that encodes through that
-codec. `defaultsApply: surviving-new-record-final-absence-only` names the
-lifecycle defined above.
+singleChoice body carries semantic type string when its native choice string is
+that semantic value, which is what a choice field declares. A Boolean codec
+entry maps one `native` string to one `semantic` Boolean; only "false" and
+"true" decode. `default: null` means no default, and `{ "literal": false }`
+wraps a typed Boolean default that encodes through that codec.
+`defaultsApply: surviving-new-record-final-absence-only` names the lifecycle
+defined above.
 
 ```json
 {
@@ -1020,15 +1082,28 @@ The stub evaluates Nix declarations into native grammar, semantic metadata,
 selectors and Boolean checks over named leaves, dependencies, and
 configurations. It checks declaration identities and references, symbolic
 predicate shape, binder placement, Boolean defaults, rule conflicts,
-prerequisite selection, and keyword values. It is not a complete schema checker;
-ordinary collection role strings and many operand types remain unchecked during
-authoring. `transcript.txt` records the four proofs, an invalid policy keyword
-throw, the combined R check's two lowered leaves, and a missing endpoint count
-prerequisite throw evaluated on a temporary copy. It supplies no runtime
-semantic verdicts.
+prerequisite selection, field-value subject legality, and keyword values. A
+field value is checked against the choices the subject's own element declares,
+and against being a native string at all. A field constructor names a field and
+does not say which element declares it, so the selector is what resolves it. A
+native field type with no semantic type in this profile is refused rather than
+restated under its native tag, and a File relation stays in the native grammar
+and declares no owned occurrence. It is not a complete schema checker; ordinary
+collection role strings and the operand types of the other leaves remain
+unchecked during authoring.
+
+`transcript.txt` records the four proofs, the field-value sugar proof, an
+invalid policy keyword throw, the combined R check's two lowered leaves, a
+missing endpoint count prerequisite throw, the variant model's three lowered
+rules, and every field-value guard throw, all evaluated on a temporary copy.
+`backend/fixtures/lowering-guards` holds the refused and the accepted models as
+files the suite lowers on every run, so a guard that stops guarding fails a test
+rather than aging out of a transcript. The stub supplies no runtime semantic
+verdicts.
 
 The reference model and the fixture suite are now evaluated by the stub
 evaluator under `backend/`: a standard-library Python program that reads a
 bundle and a candidate, runs field decoding, default materialization, graph
 validation, provider acquisition and result generation, and writes a results
-envelope. The suite currently passes 21 of 21 tests.
+envelope. The suite passes in full; `backend/README.md` records its test count
+from an actual run.

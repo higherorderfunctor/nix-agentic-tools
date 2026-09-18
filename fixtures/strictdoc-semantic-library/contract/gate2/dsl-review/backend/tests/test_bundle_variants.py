@@ -1,19 +1,18 @@
 """Bundle-level and provider-level conformance the fixture corpus cannot hold.
 
-Every fixture under ``backend/fixtures`` is evaluated against the one packet
-``bundle.json``, and the packet files are read only, so a fixture can vary the
-candidate, the invocation bindings and the baseline snapshot and nothing else.
-The contract also constrains the bundle itself — duplicate rule identities
+A fixture holds a candidate, invocation bindings and a baseline snapshot, and
+the bundle it is evaluated against is authored once per model family, so a
+fixture can vary the inputs to one settled bundle and nothing else. The
+contract also constrains the bundle itself — duplicate rule identities
 (contract.md:860-861), the external input list (contract.md:496-531), the
 declaration ids a view's policy names (contract.md:853-856), and the
 prerequisite set a leaf earns (contract.md:733-748) — and it constrains what a
 provider may return (contract.md:494-495).
 
-Each test here copies the packet bundle into a temporary directory, applies one
-mutation, and evaluates. ``test_the_unchanged_copy_still_conforms`` is the
-positive control: it proves the copying and the temporary provider bindings are
-sound, so a configuration error raised by a mutated copy is the mutation and
-not the plumbing.
+Each test here copies the packet configuration into a temporary directory,
+applies one mutation, and evaluates. Every class carries its own positive
+control, which proves the copying and the temporary provider bindings are
+sound, so a refusal from a mutated copy is the mutation and not the plumbing.
 """
 
 import copy
@@ -40,7 +39,20 @@ TARGET_TYPE_RULE = "model:reference/element:FOO/relation:parent:H/check:H.target
 REFERENCE_RULE = "model:reference/element:FOO/relation:parent:R/check:R.all"
 ENDPOINT_PATH_RULE = "model:reference/element:BAR/check:endpoint-path"
 LOWER_COUNT_RULE = "model:reference/element:BAR/check:one-Q"
+
+# An occurrences rule whose owner element is BAR, which declares UID alone. It
+# is the only way to name a field the owner of an occurrence does not declare.
+LOWER_ENDPOINT_RULE = (
+    "model:reference/element:BAR/relation:parent:P/check:P.target-type"
+)
 FOREST_RULE = "model:reference/check:H-forest"
+
+# A records rule on FOO that nothing lists as a prerequisite, so its check may
+# be replaced with a field-value leaf without disturbing the dependency graph.
+RECORD_RULE = "model:reference/element:FOO/check:one-H-parent"
+
+# The one FOO record carrying FLAG true; every other carries false.
+CLOSED_RECORD = "F2"
 
 # The packet baseline identity, which the packet binding's snapshot carries.
 PACKET_IDENTITY = "baseline-I0-open"
@@ -58,6 +70,13 @@ SECOND_SNAPSHOT = {
 def read_json(path):
     """Decode one JSON file."""
     return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+
+
+def write_json(directory, name, value):
+    """Write one JSON file into a temporary directory and return its path."""
+    path = pathlib.Path(directory) / name
+    path.write_text(json.dumps(value, indent=2), encoding="utf-8")
+    return path
 
 
 def rule_named(bundle, rule_id):
@@ -97,9 +116,7 @@ class BundleVariants(unittest.TestCase):
 
     def write(self, name, value):
         """Write one JSON file into the temporary directory."""
-        path = self.directory / name
-        path.write_text(json.dumps(value, indent=2), encoding="utf-8")
-        return path
+        return write_json(self.directory, name, value)
 
     def run_bundle(self, evaluation):
         """Evaluate the current mutated bundle against the packet candidate."""
@@ -330,6 +347,301 @@ class BundleVariants(unittest.TestCase):
         message = self.refuse_bundle("forest-prerequisite-under-any")
         self.assertIn("forest validity", message)
         self.assertIn("0 rules match", message)
+
+    # -- the field-value leaf (contract.md:237-252, contract.md:826-846) ----
+
+    def field_value_leaf(self, **overrides):
+        """A field-value leaf over the packet's FLAG field."""
+        leaf = {
+            "absentSatisfies": False,
+            "field": "FLAG",
+            "kind": "field-value",
+            "subject": "record",
+            "values": ["false"],
+        }
+        leaf.update(overrides)
+        return leaf
+
+    def replace_check(self, rule_id, **overrides):
+        """Put a field-value leaf in place of one rule's whole check."""
+        rule_named(self.bundle, rule_id)["check"] = self.field_value_leaf(**overrides)
+
+    def test_a_field_value_leaf_reads_the_selected_record_s_field(self):
+        """The positive control for every refusal below.
+
+        The packet corpus never carries a field-value leaf, so a bundle that
+        merely refuses one proves nothing about the refusal being the mutation.
+        This admits FLAG false alone over the FOO records, and F2 is the one
+        FOO carrying true, so the leaf must violate on F2 and on no other
+        record.
+        """
+        self.replace_check(RECORD_RULE)
+        envelope = self.run_bundle("field-value-reads-a-record-field")
+        entry = entry_named(envelope, RECORD_RULE)
+        self.assertEqual(entry["status"], "violated")
+        self.assertEqual(
+            [
+                finding["uid"]
+                for finding in entry["findings"]
+                if finding["status"] == "violated"
+            ],
+            [CLOSED_RECORD],
+        )
+        offending = next(
+            finding for finding in entry["findings"] if finding["uid"] == CLOSED_RECORD
+        )
+        self.assertEqual(offending["kind"], "field-value")
+        self.assertEqual(offending["code"], "field-value")
+        self.assertEqual(
+            offending["evidence"],
+            {
+                "absentSatisfies": False,
+                "expected": ["false"],
+                "field": "FLAG",
+                "present": True,
+                "record": CLOSED_RECORD,
+                "values": ["true"],
+            },
+        )
+
+    def test_a_field_value_leaf_under_a_model_selector_is_refused(self):
+        """Only a records or an occurrences selector binds a record."""
+        self.replace_check(FOREST_RULE)
+        message = self.refuse_bundle("field-value-under-a-model-selector")
+        self.assertIn("not valid under a model selector", message)
+
+    def test_a_record_subject_under_an_occurrences_selector_is_refused(self):
+        """An occurrences selector binds the owner and the target, not record."""
+        self.replace_check(TARGET_TYPE_RULE, subject="record")
+        message = self.refuse_bundle("field-value-record-subject-in-occurrences")
+        self.assertIn("names the subject record", message)
+        self.assertIn("occurrences selector does not bind", message)
+
+    def test_a_target_subject_under_a_records_selector_is_refused(self):
+        """A records selector binds one record and no occurrence endpoint."""
+        self.replace_check(RECORD_RULE, subject="target")
+        message = self.refuse_bundle("field-value-target-subject-in-records")
+        self.assertIn("names the subject target", message)
+        self.assertIn("records selector does not bind", message)
+
+    def test_a_field_the_selected_element_does_not_declare_is_refused(self):
+        """A records selector fixes the element, so the name resolves at load.
+
+        The packet declares FLAG on FOO alone, so naming it under the BAR
+        records rule is a configuration failure rather than a leaf that blocks
+        on every BAR at evaluation.
+        """
+        self.replace_check(LOWER_COUNT_RULE)
+        message = self.refuse_bundle("field-value-field-not-on-the-element")
+        self.assertIn("names the field FLAG", message)
+        self.assertIn("BAR does not declare", message)
+
+    def test_an_owner_subject_field_the_owner_does_not_declare_is_refused(self):
+        """An occurrences selector fixes the owner, so the owner resolves too.
+
+        The refusal is the point. Before it, this bundle loaded and then
+        blocked every P occurrence at evaluation, reporting a model
+        configuration fault as an unevaluable candidate: envelope status
+        blocked, no envelope finding, empty causes. BAR owns P and declares
+        UID alone, so FLAG on the owner is refused at load exactly as it is
+        under a records selector.
+        """
+        self.replace_check(LOWER_ENDPOINT_RULE, subject="owner")
+        message = self.refuse_bundle("field-value-owner-field-not-on-the-owner")
+        self.assertIn("names the field FLAG", message)
+        self.assertIn("BAR does not declare", message)
+
+    def test_a_field_no_element_declares_is_refused(self):
+        """An occurrences selector still requires the name to exist."""
+        self.replace_check(TARGET_TYPE_RULE, field="NOPE", subject="target")
+        message = self.refuse_bundle("field-value-undeclared-field-name")
+        self.assertIn("names the undeclared field NOPE", message)
+
+    def test_an_empty_value_list_is_refused(self):
+        """A leaf admitting nothing would violate unconditionally."""
+        self.replace_check(RECORD_RULE, values=[])
+        message = self.refuse_bundle("field-value-with-no-values")
+        self.assertIn("needs at least one value", message)
+
+    def test_a_quoted_absent_satisfies_is_refused(self):
+        """absentSatisfies is a JSON boolean, not a quoted string."""
+        self.replace_check(RECORD_RULE, absentSatisfies="false")
+        message = self.refuse_bundle("field-value-with-a-quoted-flag")
+        self.assertIn("absentSatisfies keyword rejects", message)
+
+
+class FieldValueBlocking(unittest.TestCase):
+    """The three ways a field-value leaf blocks, which no fixture reaches.
+
+    The note-state-field family exercises the leaf's satisfied and violated
+    arms and by design cannot reach the blocked ones: its one element declares
+    the field for every subject, its field is optional so no absence is an
+    input error, and every occurrence target resolves. Each test here puts a
+    field-value leaf over the packet's H occurrences, reading the target's
+    FLAG, and mutates the one candidate record that target names.
+
+    The assertions are as much about ``causes`` as about the leaf. A blocked
+    leaf earns its cause from ``evidence.record`` and ``evidence.field``, or
+    from the finding's own occurrence, so a leaf that reuses those two evidence
+    names is cited correctly with no engine change at all.
+    """
+
+    TARGET_FLAG_LEAF = {
+        "absentSatisfies": False,
+        "field": "FLAG",
+        "kind": "field-value",
+        "subject": "target",
+        "values": ["false"],
+    }
+
+    # The first H occurrence of F1, whose target the tests below change.
+    OWNER = "F1"
+    OCCURRENCE_INDEX = 0
+
+    def setUp(self):
+        self.workspace = tempfile.TemporaryDirectory()
+        self.addCleanup(self.workspace.cleanup)
+        self.directory = pathlib.Path(self.workspace.name)
+        self.bundle = read_json(PACKET_DIRECTORY / "bundle.json")
+        rule_named(self.bundle, TARGET_TYPE_RULE)["check"] = copy.deepcopy(
+            self.TARGET_FLAG_LEAF
+        )
+        self.candidate = read_json(PACKET_DIRECTORY / "candidate.json")
+        write_json(
+            self.directory, "baseline.json", read_json(PACKET_DIRECTORY / "baseline.json")
+        )
+        write_json(
+            self.directory,
+            "invocation.json",
+            read_json(PACKET_DIRECTORY / "invocation.json"),
+        )
+
+    def record_named(self, uid):
+        """The one candidate record carrying a uid."""
+        for record in self.candidate["records"]:
+            if record["uid"] == uid:
+                return record
+        raise AssertionError("the packet candidate holds no record " + uid)
+
+    def point_at(self, uid):
+        """Point F1's first H occurrence at another uid."""
+        self.record_named(self.OWNER)["relations"][self.OCCURRENCE_INDEX][
+            "target"
+        ] = uid
+
+    def run_candidate(self, evaluation):
+        """Evaluate the field-value bundle against the mutated candidate."""
+        return evaluate(
+            bundle_path=str(write_json(self.directory, "bundle.json", self.bundle)),
+            candidate_path=str(
+                write_json(self.directory, "candidate.json", self.candidate)
+            ),
+            invocation_path=str(self.directory / "invocation.json"),
+            evaluation=evaluation,
+        )
+
+    def blocked_findings(self, envelope, owners):
+        """The field-value entry and its blocked findings, owners asserted.
+
+        ``owners`` is every occurrence owner whose target the mutation made
+        unreadable, so a mutation that reaches more than one occurrence has to
+        name them all rather than pass on the first.
+        """
+        entry = entry_named(envelope, TARGET_TYPE_RULE)
+        self.assertEqual(entry["status"], "blocked")
+        blocked = [
+            finding
+            for finding in entry["findings"]
+            if finding["status"] == "blocked"
+        ]
+        self.assertEqual([finding["uid"] for finding in blocked], owners)
+        for finding in blocked:
+            self.assertEqual(finding["kind"], "field-value")
+            self.assertEqual(finding["occurrenceIndex"], self.OCCURRENCE_INDEX)
+        return entry, blocked
+
+    def test_the_leaf_reads_the_target_record_s_field(self):
+        """The positive control: with no mutation, the leaf reads each H target.
+
+        F2 is the one FOO carrying FLAG true, so the two occurrences naming it
+        violate and every other satisfies. Nothing blocks.
+        """
+        envelope = self.run_candidate("field-value-target-control")
+        entry = entry_named(envelope, TARGET_TYPE_RULE)
+        self.assertEqual(entry["status"], "violated")
+        self.assertEqual(entry["causes"], [])
+        self.assertEqual(
+            [
+                (finding["uid"], finding["status"])
+                for finding in entry["findings"]
+                if finding["status"] != "satisfied"
+            ],
+            [("F2a", "violated"), ("F2b", "violated")],
+        )
+
+    def test_an_unresolved_target_blocks_and_cites_its_occurrence(self):
+        """An unresolved subject uid blocks with code unresolved-target."""
+        self.point_at("GONE")
+        envelope = self.run_candidate("field-value-unresolved-target")
+        entry, (blocked,) = self.blocked_findings(envelope, [self.OWNER])
+        self.assertEqual(blocked["code"], "unresolved-target")
+        self.assertIsNone(blocked["evidence"]["record"])
+        self.assertEqual(blocked["evidence"]["present"], False)
+        self.assertEqual(blocked["evidence"]["values"], [])
+        self.assertEqual(len(entry["causes"]), 1)
+        cited = self.finding_at(envelope, entry["causes"][0])
+        self.assertEqual(cited["code"], "unresolved-target")
+        self.assertEqual(cited["uid"], self.OWNER)
+        self.assertEqual(cited["occurrenceIndex"], self.OCCURRENCE_INDEX)
+
+    def test_a_target_element_without_the_field_blocks_with_no_cause(self):
+        """No envelope finding describes a field an element never declares.
+
+        BAZ declares UID alone, so native field validation never reports FLAG
+        on Z0 and there is nothing for the entry to cite. contract.md:680-683
+        allows exactly that: a subject-local block with no envelope finding
+        behind it leaves the entry blocked with empty causes.
+        """
+        self.point_at("Z0")
+        envelope = self.run_candidate("field-value-target-without-the-field")
+        entry, (blocked,) = self.blocked_findings(envelope, [self.OWNER])
+        self.assertEqual(blocked["code"], "input")
+        self.assertEqual(blocked["evidence"]["record"], "Z0")
+        self.assertEqual(
+            blocked["evidence"]["reason"], "The BAZ record Z0 has no FLAG field."
+        )
+        self.assertEqual(entry["causes"], [])
+
+    def test_an_unusable_target_value_blocks_and_repeats_its_reason(self):
+        """A refused native value blocks with the envelope finding's own words.
+
+        The leaf never decides what is unusable: a scalar field carrying two
+        values is already an envelope input error (contract.md:298-302), so the
+        leaf reports blocked, repeats that finding's reason and cites it. F1
+        and F2 both name F0 as their H parent, so two leaves block on one
+        refused value and the entry cites that one finding once.
+        """
+        self.record_named("F0")["fields"]["FLAG"] = ["true", "false"]
+        envelope = self.run_candidate("field-value-unusable-target-value")
+        entry, blocked = self.blocked_findings(envelope, ["F1", "F2"])
+        for finding in blocked:
+            self.assertEqual(finding["code"], "input")
+            self.assertEqual(finding["evidence"]["record"], "F0")
+            self.assertEqual(finding["evidence"]["values"], ["true", "false"])
+        self.assertEqual(len(entry["causes"]), 1)
+        cited = self.finding_at(envelope, entry["causes"][0])
+        self.assertEqual(cited["code"], "input")
+        self.assertEqual(cited["uid"], "F0")
+        self.assertEqual(cited["evidence"]["field"], "FLAG")
+        self.assertEqual(
+            cited["evidence"]["reason"], blocked[0]["evidence"]["reason"]
+        )
+
+    def finding_at(self, envelope, pointer):
+        """The envelope finding one /findings/N cause names."""
+        prefix = "/findings/"
+        self.assertTrue(pointer.startswith(prefix), pointer)
+        return envelope["findings"][int(pointer[len(prefix) :])]
 
 
 class BaselineDeclarationNames(unittest.TestCase):
