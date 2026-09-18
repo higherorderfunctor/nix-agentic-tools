@@ -1294,10 +1294,9 @@ in
         description = "Config directory relative to HOME / devenv root.";
       };
       # Kiro-specific freeform settings with typed subkeys for known
-      # knobs. Consumed by the settings/cli.json activation merge in
-      # `hm.config` (runtime-merge via `jq -s '.[0] * .[1]'` to
-      # preserve user runtime settings across rebuilds) and by the
-      # static write in `devenv.config`.
+      # knobs. Consumed by the settings/cli.json leaf reconciler in
+      # `hm.config` (retire Nix leaves and preserve native siblings) and by
+      # the static write in `devenv.config`.
       nativeSettings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
@@ -1839,34 +1838,22 @@ in
             {
               home.file = helpers.mkSkillEntries cfg.configDir mergedSkills;
             }
-            # settings/cli.json activation merge. Preserves user-added
-            # runtime keys (e.g. model selection, toggles) by merging
-            # Nix-declared values on top of the existing file via
-            # `jq -s '.[0] * .[1]'`. On first activation (no existing
-            # file) the Nix-rendered JSON is written as-is. Ported from
-            # legacy modules/kiro-cli/default.nix.
-            #
-            # HM-only: gated on non-empty settings so consumers who enable
-            # ai.kiro just for MCP fanout don't clobber an externally-
-            # managed cli.json. Matches upstream Claude HM behavior
-            # (settings.json only written when cfg.nativeSettings != {}).
-            #
-            # `unlockedRolloutFeatures = ["workflows"]` now puts a key in that
-            # set (see `workflowsSettingImplication`), so a consumer who
-            # declared no settings at all but did unlock workflows crosses this
-            # gate and starts merging. That is intended and bounded: the point
-            # of the implication is that the setting REACHES the file, and this
-            # is a `jq` merge of one key rather than a clobber, so an
-            # externally-managed cli.json keeps everything else it had.
-            # Devenv-side is unconditional (project-local, harmless).
-            (lib.mkIf (filteredSettings != {}) {
+            # Reconcile settings/cli.json leaves, including retirement when
+            # settings become empty. An empty first generation leaves externally
+            # managed cli.json untouched; later ones remove only recorded Nix
+            # leaves and preserve native model selections and toggles.
+            # `unlockedRolloutFeatures = ["workflows"]` implies a setting via
+            # workflowsSettingImplication; that leaf is owned and retracted by
+            # the same manifest without claiming other externally managed keys.
+            {
               home.activation.kiroSettingsMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
                 configFile = "${cfg.configDir}/settings/cli.json";
+                python = pkgs.python3;
+                reconciler = ../../../lib/ai/reconcile-toml.py;
                 settingsJson = builtins.toJSON flatSettings;
-                jq = "${pkgs.jq}/bin/jq";
-                inherit (pkgs) coreutils;
+                stateName = "kiro-settings-${builtins.hashString "sha256" cfg.configDir}";
               });
-            })
+            }
           ]
           ++ steeringEmitters);
     };
