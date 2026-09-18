@@ -4,6 +4,7 @@
 # utilities, and file generation helpers.
 {lib}: let
   aiCommon = import ./ai-common.nix {inherit lib;};
+  own = import ./own.nix {inherit lib;};
 
   mkReconcileSettingsActivationScript = format: {
     configFile,
@@ -190,6 +191,54 @@ in rec {
     assertion = !(cfg.${name} != {} && cfg.${name + "Dir"} != null);
     message = "Cannot specify both `programs.${moduleName}.${name}` and `programs.${moduleName}.${name}Dir`.";
   };
+
+  # ── Owned documents ──────────────────────────────────────────────────
+
+  # Reconcile the Nix-owned leaves of ONE runtime-writable document, keeping
+  # every unowned sibling. The prior generation's ledger retires leaves this
+  # one no longer declares; an empty declaration is therefore a retirement and
+  # NOT a reason to skip the writer.
+  #
+  # The writer and the `_reconciledDocuments` record come from the same
+  # arguments on purpose. `own` ships content as data in a store plan, so the
+  # emitted body names neither `path` nor `value`; a caller-side mirror of
+  # either could drift from what actually gets written, and this cannot.
+  #
+  # codec:   "json", or "toml" for a document with native comments to keep.
+  # entry:   home.activation attribute name — a consumer ordering contract.
+  # ledger:  "{json,toml}-settings/<name>.json" relative to the state root; a
+  #          LITERAL at the call site, because a derived one silently orphans
+  #          every ownership record the previous name wrote.
+  # path:    document path relative to $HOME.
+  # python:  pkgs.python3, or one carrying tomlkit for codec = "toml".
+  # runtime: ai.<runtime> namespace that records the declaration.
+  # value:   the leaves this generation owns (Kiro flattens dot-keys first).
+  mkOwnedDocument = {
+    codec ? "json",
+    entry,
+    ledger,
+    path,
+    pkgs,
+    python,
+    runtime,
+    value,
+  }:
+    lib.mkMerge [
+      {
+        ai.${runtime}._reconciledDocuments.${path} = {inherit ledger value;};
+      }
+      (own {
+        backend = "hm";
+        entryNames.write = entry;
+        targets = [
+          {
+            inherit codec ledger path;
+            units.text = builtins.toJSON value;
+          }
+        ];
+        inherit pkgs python;
+      })
+    ];
 
   # ── Settings activation scripts ──────────────────────────────────────
   # Reconcile only Nix-owned leaves in mixed-authority, runtime-writable files.
