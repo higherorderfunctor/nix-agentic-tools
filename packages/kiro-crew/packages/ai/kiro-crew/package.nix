@@ -440,7 +440,15 @@
   };
 
   wrapperArgs =
-    lib.optionals (embedModel != null) ["--set-default" "KIROCREW_EMBED_MODEL_PATH" "${embedModel}"]
+    lib.optionals (embedModel != null) [
+      "--set-default"
+      "KIROCREW_EMBED_MODEL_PATH"
+      # The FILE, not the directory. `validate_custom_model_path` tests
+      # `is_file()` plus a size floor, so a directory is rejected. The
+      # filename comes from the model recipe's `passthru` so it is not
+      # spelled a second time here.
+      "${embedModel}/${embedModel.modelFile}"
+    ]
     ++ lib.optionals (llamaCppLib != null) ["--set-default" "LLAMA_CPP_LIB_PATH" "${llamaCppLib}/lib"];
 in
   python313Packages.buildPythonApplication {
