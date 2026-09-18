@@ -61,7 +61,7 @@ LOCK = ("materialize", "lock")
 # The clobber guard, transcribed arm by arm from the shell it replaced so the
 # two can be diffed side by side. The citations are line numbers in that file,
 # which is deleted -- read it with
-# `git show c1be1e58:lib/ai/materialize.nix` (`nat_mat_write` inside
+# `git show 7b9adc2d:lib/ai/materialize.nix` (`nat_mat_write` inside
 # mkWriteCore, and the loop body of mkPruneCore).
 # The ORDER of the tests is part of the guard: `-L` is answered before any
 # content comparison, because cmp-skipping an identical-content symlink would
@@ -260,7 +260,11 @@ def sweep(directory: Path) -> None:
     dot-prefixed address) and essentially no user file does either.
     `tempfile` plus `finally` already covers every normal and exceptional
     exit, so this only collects what SIGKILL leaked -- and in `.kiro/hooks/` a
-    leaked dotfile is a file Kiro's scan may load.
+    leaked dotfile is a file Kiro's scan may load. Both containers sweep, and
+    both sweep their ledger's directory too: a leaked sibling of `.claude.json`
+    or of `settings/mcp.json` is a half-written copy of that document, which
+    can hold a decrypted credential url, and nothing else would ever collect
+    it.
     """
     for leftover in directory.glob(".*.nat-tmp.*"):
         if leftover.is_file() and not leftover.is_symlink():
@@ -377,10 +381,14 @@ class DocContainer:
         path: Path,
         relative: PurePosixPath,
         codec: str,
+        ledger: Path,
         mode: int | None = None,
     ) -> None:
         self.path = path
         self.relative = relative
+        # Kept only to sweep its directory at commit; a document's ledger is
+        # read and written by the driver, never by the container.
+        self.ledger = ledger
         # The mode the document must carry, when its target states one. A
         # leaf cannot have a mode of its own -- every one of them lives in the
         # same file -- but the file can, and one caller needs it.
@@ -464,6 +472,14 @@ class DocContainer:
         idempotent deletes and sets rather than treating an owned leaf as
         unowned.
         """
+        # The reserved sweep, for the two directories this container writes
+        # into. HERE rather than in the constructor, which DirContainer can use
+        # because only its constructor runs under the lock: a document is also
+        # opened by the pre-lock parse, and sweeping there could delete a
+        # concurrent run's LIVE temporary -- the hazard the single lock path
+        # exists to prevent.
+        sweep(self.path.parent)
+        sweep(self.ledger.parent)
         write_if_changed(
             self.path,
             self.serialize(self.document).encode(),
@@ -481,6 +497,7 @@ def open_container(root: Path, target: Mapping[str, Any], ledger: Path):
         root / relative,
         relative,
         target["codec"],
+        ledger,
         None if declared is None else int(declared, 8),
     )
 
@@ -498,7 +515,7 @@ def read_dir_ledger(path: Path) -> dict[str, str] | None:
         if not name:
             continue
         # The bash reader REFUSED such an entry too rather than deleting it
-        # (c1be1e58:lib/ai/materialize.nix:312-317), which is why own.nix bars a
+        # (7b9adc2d:lib/ai/materialize.nix:312-317), which is why own.nix bars a
         # traversing or dot-prefixed unit address: one this reader skips could
         # be written and never retracted.
         if "/" in name or name.startswith("."):
