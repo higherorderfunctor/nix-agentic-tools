@@ -599,6 +599,29 @@ def run(plan: Mapping[str, Any], root: Path, state: Path, phase: str) -> None:
     ):
         return
 
+    # Parse every document once BEFORE the lock, and throw away the result.
+    # A malformed native edit already fails closed under the lock, but the
+    # lock file's own directory is the first thing this run would create, so
+    # without this pre-flight a document that cannot be parsed leaves a state
+    # tree behind. "A malformed config changes neither the file nor ownership"
+    # is asserted as the absence of the whole state directory
+    # (packages/chatgpt-codex/checks/module-eval.nix, malformed-TOML case), and
+    # that is the honest property: a run that refused to do anything should not
+    # be distinguishable from one that never started.
+    #
+    # Documents only. DocContainer's constructor reads, while DirContainer's
+    # creates the target directory and sweeps reserved temporaries, and those
+    # side effects belong under the lock. The skip below mirrors the locked
+    # phase exactly, so a target the locked phase would not open is not opened
+    # here either.
+    for target, units in zip(considered, resolved):
+        ledger = ledger_path(state, target)
+        if target["codec"] == "dir" or (
+            not units and not ledger_format(target["codec"])[0](ledger)
+        ):
+            continue
+        open_container(root, target, ledger)
+
     lock = state.joinpath(*LOCK)
     lock.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     with lock.open("a") as handle:
