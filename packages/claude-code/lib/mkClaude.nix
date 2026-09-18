@@ -819,27 +819,18 @@ in
           # Reconcile per-model launch-effort unpin flags into ~/.claude.json
           # so settings.effortLevel is honored instead of a newly-shipped
           # model's launch-default pin. HM-only — devenv never touches $HOME
-          # (documented category exception). Always log and reconcile, including
-          # an emptied flag map: retire only Nix-owned flags while preserving
+          # (documented category exception). Always reconcile, including an
+          # emptied flag map: retire only Nix-owned flags while preserving
           # native state (including OAuth tokens) and existing file permissions.
           # An empty first generation leaves externally managed state untouched.
-          # The shared helper scopes shell flags in a subshell and never exits
-          # the concatenated Home Manager activation script.
-          (let
-            n = builtins.length (builtins.attrNames cfg.unpinLaunchEffort);
-          in {
-            home.activation.claudeUnpinLaunchEffort = lib.hm.dag.entryAfter ["linkGeneration"] (
-              ''
-                echo "ai.claude: reconciling ${toString n} launch-effort unpin flag(s) into ~/.claude.json"
-              ''
-              + (helpers.mkSettingsActivationScript {
-                configFile = ".claude.json";
-                python = pkgs.python3;
-                reconciler = ../../../lib/ai/reconcile-toml.py;
-                settingsJson = builtins.toJSON cfg.unpinLaunchEffort;
-                stateName = "claude-unpin-launch-effort";
-              })
-            );
+          (helpers.mkOwnedDocument {
+            entry = "claudeUnpinLaunchEffort";
+            ledger = "json-settings/claude-unpin-launch-effort.json";
+            path = ".claude.json";
+            python = pkgs.python3;
+            runtime = "claude";
+            value = cfg.unpinLaunchEffort;
+            inherit pkgs;
           })
           # Final always-on context enters the runtime file registry before the
           # generic backend sink. This replaces upstream's direct CLAUDE.md

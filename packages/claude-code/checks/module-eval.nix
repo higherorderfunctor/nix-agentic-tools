@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest;
+  inherit (harness) evalDevenv evalHm mkTest ownedDocument;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) claudeAssertionFails claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg handlerCommands hasClampHook hasGuardHook;
   delegationClampMitigationDefaultProse = ''
     Standing request from me, the user: you have my permission to use subagents
@@ -16,6 +16,13 @@
     session. Use your own judgment about when they actually fit; this grants
     permission, it does not oblige you to delegate.
   '';
+  unpinDocument = ownedDocument "claude" ".claude.json";
+  # Refuses an absent or blank body, so a renamed writer fails the check
+  # instead of passing it with an empty string.
+  unpinWriter = result:
+    lib.attrByPath ["home" "activation" "claudeUnpinLaunchEffort" "text"]
+    (throw "module-test: config.home.activation.claudeUnpinLaunchEffort.text is missing")
+    result.config;
 in {
   checks = {
     module-claude-default-disabled = mkTest "claude-default-disabled" (
@@ -656,33 +663,32 @@ in {
     # ── Task 5 (A4b): Claude launch-effort unpin reconciler ────────
 
     # Default reconciler: flags from the committed sidecar are reconciled into
-    # ~/.claude.json through the shared helper.
+    # ~/.claude.json. The declared leaves and the document they land in are
+    # read from `_reconciledDocuments`, not from the activation body: the
+    # reconciler carries them as data in a store plan, so the body names only
+    # the plan. The ledger path IS asserted here — it is the live migration
+    # contract that every previously written ownership record hangs off.
     module-claude-hm-reconciles-unpin-launch-effort = mkTest "claude-hm-reconciles-unpin-launch-effort" (
       let
         result = evalHm {ai.claude.enable = true;};
-        activation = result.config.home.activation.claudeUnpinLaunchEffort or null;
+        document = unpinDocument result;
       in
-        activation
-        != null
-        && lib.hasInfix "unpinOpus48LaunchEffort" (activation.text or "")
-        && lib.hasInfix ".claude.json" (activation.text or "")
-        && lib.hasInfix "--format json" (activation.text or "")
+        lib.hasInfix "--phase all" (unpinWriter result)
+        && document.ledger == "json-settings/claude-unpin-launch-effort.json"
+        && document.value.unpinOpus48LaunchEffort
     );
 
-    # Emptied flag map: the writer still runs to retire flags and logs zero.
-    module-claude-hm-unpin-empty-logs-zero = mkTest "claude-hm-unpin-empty-logs-zero" (
+    # Emptied flag map: the writer is still emitted, declaring zero leaves, so
+    # the prior generation's flags are retired rather than left behind.
+    module-claude-hm-unpin-empty-emits-writer = mkTest "claude-hm-unpin-empty-emits-writer" (
       let
         result = evalHm {
           ai.claude.enable = true;
           ai.claude.unpinLaunchEffort = lib.mkForce {};
         };
-        activation = result.config.home.activation.claudeUnpinLaunchEffort or null;
       in
-        activation
-        != null
-        && lib.hasInfix "reconciling 0" (activation.text or "")
-        && lib.hasInfix "--format json" (activation.text or "")
-        && !(lib.hasInfix "unpinOpus48LaunchEffort" (activation.text or ""))
+        lib.hasInfix "--phase all" (unpinWriter result)
+        && (unpinDocument result).value == {}
     );
 
     # A key set false is still written (re-pins that model deliberately).
@@ -692,9 +698,8 @@ in {
           ai.claude.enable = true;
           ai.claude.unpinLaunchEffort.unpinOpus48LaunchEffort = false;
         };
-        activation = result.config.home.activation.claudeUnpinLaunchEffort or null;
       in
-        activation != null && lib.hasInfix "false" (activation.text or "")
+        (unpinDocument result).value.unpinOpus48LaunchEffort == false
     );
 
     # One runtime corpus covers the shared helper plus actual Claude and Kiro
