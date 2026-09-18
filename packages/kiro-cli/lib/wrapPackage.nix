@@ -117,6 +117,10 @@
     # credential would silently end up empty. Check the assignment before
     # exporting: export itself masks a failed credential reader's exit code.
     # Keep launching, but warn with the consumer option rather than the token.
+    #
+    # The reader's own stderr passes THROUGH. An interactive helper prompts for
+    # a passphrase there, and swallowing it turns a launch that is waiting for
+    # input into one that looks hung. Only the value is captured.
     secretExports =
       lib.concatStringsSep "\n"
       (lib.mapAttrsToList
@@ -127,7 +131,7 @@
             else lib.escapeShellArg cred.helper;
           optionPath = secretOptionPaths.${var} or "ai.kiro.mcpServers";
         in ''
-          if ! nat_mcp_secret="$(${reader} 2>/dev/null)"; then
+          if ! nat_mcp_secret="$(${reader})"; then
             printf '%s\n' ${lib.escapeShellArg "WARNING: ${optionPath}: credential reader failed; launching without this MCP credential"} >&2
             nat_mcp_secret=""
           elif [ -z "$nat_mcp_secret" ]; then
