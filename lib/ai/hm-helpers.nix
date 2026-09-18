@@ -4,27 +4,12 @@
 # utilities, and file generation helpers.
 {lib}: let
   aiCommon = import ./ai-common.nix {inherit lib;};
+  own = import ./own.nix {inherit lib;};
 in rec {
   # ── Settings utilities ──────────────────────────────────────────────
 
   # Delegated to lib/ai-common.nix (single source of truth).
   inherit (aiCommon) filterNulls;
-
-  # ── Option builders ──────────────────────────────────────────────────
-
-  mkContentOption = description:
-    lib.mkOption {
-      type = lib.types.attrsOf (lib.types.either lib.types.lines lib.types.path);
-      default = {};
-      inherit description;
-    };
-
-  mkDirOption = description:
-    lib.mkOption {
-      type = lib.types.nullOr lib.types.path;
-      default = null;
-      inherit description;
-    };
 
   # ── File entry builders ──────────────────────────────────────────────
 
@@ -136,107 +121,98 @@ in rec {
     // (lib.optionalAttrs (server ? command) {type = "stdio";})
     // {enabled = !(server.disabled or false);};
 
-  # ── Assertion builder ────────────────────────────────────────────────
+  # ── Owned artifacts ──────────────────────────────────────────────────
 
-  # moduleName: e.g. "copilot-cli" or "kiro-cli"
-  mkExclusiveAssertion = moduleName: cfg: name: {
-    assertion = !(cfg.${name} != {} && cfg.${name + "Dir"} != null);
-    message = "Cannot specify both `programs.${moduleName}.${name}` and `programs.${moduleName}.${name}Dir`.";
-  };
-
-  # ── Settings activation script ───────────────────────────────────────
-  # Shell snippet that merges Nix-declared JSON settings into an existing
-  # mutable JSON config file at HM activation time. The settings JSON is
-  # INLINED via a quoted heredoc (not a store-path read) so module-eval
-  # tests can assert on rendered content and the merge stays atomic.
-  # `jq -s '.[0] * .[1]'` makes Nix-declared values win on key conflict
-  # while preserving runtime-added keys (oauth tokens in ~/.claude.json,
-  # trusted_folders in copilot settings.json, etc.).
+  # Emit one `own` bundle AND the eval-visible record of its plan, from one
+  # set of arguments. Every `own` caller in this repo goes through here.
   #
-  # configFile:   path relative to $HOME (".copilot/settings.json",
-  #               ".kiro/settings/cli.json", ".claude.json").
-  # settingsJson: JSON string to merge (caller `builtins.toJSON`'s it;
-  #               Kiro flattens dot-keys first).
-  # jq:           absolute jq binary path ("${pkgs.jq}/bin/jq").
-  # coreutils:    coreutils package (absolute paths for every command).
-  mkSettingsActivationScript = {
-    configFile,
-    settingsJson,
-    jq,
-    coreutils,
-  }: let
-    parentDir = builtins.dirOf configFile;
+  # `own` ships content as data in a store-resident plan, so the emitted body
+  # names neither the document it reconciles nor the bytes it will write, and
+  # the plan file itself cannot be read back at eval: importing a derivation is
+  # forbidden here, and discarding the plan's string context to make it
+  # readable would drop the store references that keep a rendered command alive
+  # in the generation's closure. `ai.<runtime>._ownPlans.<write entry>` is
+  # therefore the ONLY eval-visible record of what a writer will do, and it
+  # carries `own`'s own plan value rather than a caller-side mirror of it.
+  #
+  # `declared` is the one thing the plan cannot carry: a document target's
+  # content is `builtins.toJSON value`, and `builtins.fromJSON` REFUSES a
+  # string that refers to a store path, so a check cannot recover the value
+  # from the plan. It is keyed by the same document path the target names.
+  #
+  # runtime: ai.<runtime> namespace that records the plan.
+  mkOwnBundle = {
+    backend,
+    declared ? {},
+    runtime,
+    ...
+  } @ args: let
+    owned = own (builtins.removeAttrs args ["declared" "runtime"]);
+    # The record is reached through a NESTED value, never merged into `owned`
+    # with `//` and never behind a `cfg`-derived attribute NAME. `own`
+    # validates its plan eagerly under `builtins.seq`, and the module system
+    # walks a fragment's key structure while it is still collecting the very
+    # definitions a `cfg.configDir`-derived `ledger` or `path` reads — forcing
+    # the validation there is an infinite recursion, which is what a caller
+    # that merged the bundle with `//` got. Only attribute VALUES may reach
+    # into `owned`.
+    record = {
+      ai.${runtime}._ownPlans.${args.entryNames.write} = {
+        inherit declared;
+        # As lazy as an assignment: the source is one shared thunk that
+        # nothing forces until an attribute is demanded.
+        inherit (owned) plan;
+      };
+    };
   in
-    # scopedActivation: `set -eu` here happens to match what home-manager
-    # already sets, so today the leak is benign — but it is a leak, and the
-    # rule is structural, not a bet on the current flag set staying identical.
-    aiCommon.scopedActivation ''
-      set -eu
-      TARGET_DIR="$HOME/${parentDir}"
-      CONFIG_FILE="$HOME/${configFile}"
-      ${coreutils}/bin/mkdir -p "$TARGET_DIR"
-      NIX_SETTINGS=$(${coreutils}/bin/mktemp)
-      ${coreutils}/bin/cat > "$NIX_SETTINGS" <<'NAT_SETTINGS_EOF'
-      ${settingsJson}
-      NAT_SETTINGS_EOF
-      if [ ! -f "$CONFIG_FILE" ]; then
-        ${coreutils}/bin/cp "$NIX_SETTINGS" "$CONFIG_FILE"
-      else
-        TMP=$(${coreutils}/bin/mktemp)
-        ${jq} -s '.[0] * .[1]' "$CONFIG_FILE" "$NIX_SETTINGS" > "$TMP"
-        ${coreutils}/bin/mv "$TMP" "$CONFIG_FILE"
-      fi
-      ${coreutils}/bin/rm -f "$NIX_SETTINGS"
-      ${coreutils}/bin/chmod 644 "$CONFIG_FILE"
-    '';
+    if backend == "hm"
+    then record // {home.activation = owned.config.home.activation;}
+    else
+      record
+      // {inherit (owned.config) enterTest tasks;};
 
-  # Reconcile Nix-declared TOML leaves into a runtime-writable file without
-  # claiming the whole file. This is intentionally stronger than the JSON
-  # merge helper above: a plain recursive merge cannot remove a setting after
-  # the consumer deletes it from Nix, so stale Nix policy would survive
-  # forever. The reconciler records the exact leaves from the prior generation,
-  # removes only retired leaves, reasserts current leaves, and preserves every
-  # unowned sibling (including siblings in the same TOML table).
+  # Reconcile the Nix-owned leaves of ONE runtime-writable document, keeping
+  # every unowned sibling. The prior generation's ledger retires leaves this
+  # one no longer declares; an empty declaration is therefore a retirement and
+  # NOT a reason to skip the writer.
   #
-  # This helper exists for mixed-authority files only. Do not use it merely to
-  # make a declarative file writable: static home.file ownership remains the
-  # simpler and more honest default when the native application does not write
-  # required state into the same artifact.
-  mkTomlSettingsActivationScript = {
-    configFile,
+  # codec:   "json", or "toml" for a document with native comments to keep.
+  # entry:   home.activation attribute name — a consumer ordering contract.
+  # ledger:  "{json,toml}-settings/<name>.json" relative to the state root; a
+  #          LITERAL at the call site, because a derived one silently orphans
+  #          every ownership record the previous name wrote.
+  # path:    document path relative to $HOME.
+  # python:  pkgs.python3, or one carrying tomlkit for codec = "toml".
+  # runtime: ai.<runtime> namespace that records the declaration.
+  # value:   the leaves this generation owns (Kiro flattens dot-keys first).
+  mkOwnedDocument = {
+    codec ? "json",
+    entry,
+    ledger,
+    path,
+    pkgs,
     python,
-    reconciler,
-    settingsJson,
-    stateName,
+    runtime,
+    value,
   }:
-    assert lib.assertMsg (builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" stateName != null)
-    "mkTomlSettingsActivationScript: stateName must contain only alphanumeric, dot, underscore, or hyphen characters: '${stateName}'";
-      aiCommon.scopedActivation ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
+    mkOwnBundle {
+      backend = "hm";
+      declared.${path} = value;
+      entryNames.write = entry;
+      targets = [
+        {
+          inherit codec ledger path;
+          units.text = builtins.toJSON value;
+        }
+      ];
+      inherit pkgs python runtime;
+    };
 
-        # The manifest lives outside the application config tree. Codex may
-        # freely inspect or rewrite config.toml, while this private ledger lets
-        # a later HM generation distinguish retired Nix leaves from native
-        # state that must survive activation.
-        NAT_TOML_CONFIG="$HOME"/${lib.escapeShellArg configFile}
-        NAT_TOML_STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/toml-settings"
-        NAT_TOML_MANIFEST="$NAT_TOML_STATE_DIR/${stateName}.json"
-
-        ${python}/bin/python ${lib.escapeShellArg "${reconciler}"} \
-          --config "$NAT_TOML_CONFIG" \
-          --manifest "$NAT_TOML_MANIFEST" <<'NAT_TOML_SETTINGS_EOF'
-        ${settingsJson}
-        NAT_TOML_SETTINGS_EOF
-      '';
-
-  # NOTE: Kiro hook files used to be written here by `mkHooksActivationScript`.
-  # They now ride the shared strategy-driven materializer
-  # (`lib/ai/materialize.nix`) because that helper's prune
-  # (`rm -f "$HOOKS_DIR"/*.json`) lived INSIDE the caller's
+  # NOTE: Kiro hook files used to be written here by `mkHooksActivationScript`,
+  # whose prune (`rm -f "$HOOKS_DIR"/*.json`) lived INSIDE the caller's
   # `mkIf (hooks != {})` gate: taking the hook surface from N to zero never
   # emitted the entry, so the prune never ran and every previously written hook
-  # kept firing forever. The hook materializer's per-file manifest prunes
-  # unconditionally and claims only the files it wrote. Kiro steering now uses
-  # the ordinary runtime-files symlink sink.
+  # kept firing forever. They ride `own` now, whose ledger prunes
+  # unconditionally and claims only the files it wrote. Kiro steering uses the
+  # ordinary runtime-files symlink sink.
 }

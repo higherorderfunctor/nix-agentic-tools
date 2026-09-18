@@ -81,34 +81,37 @@
     nonEmpty = lib.setAttrByPath option nonEmpty;
     empty = lib.setAttrByPath option empty;
   };
-  # An exempted writer's failures are RECORDED, not fatal. The gate errors the
-  # moment an exempted writer survives BOTH arms ("exemption is stale"), so
-  # every exemption below is a countdown the ownership fix has to spend.
+  # NO row declares a defect record any more — not an `exemption`, not an
+  # `absentWriter`, not a `constantGate`. All three mechanisms stay in the gate
+  # and in its schema, because they are how the NEXT defect gets documented,
+  # and each is verified in both directions: a record the gate can no longer
+  # reproduce is itself an error. What retired them:
   #
-  # `exempt` answers for a writer that EXISTS and behaves wrongly. It cannot
-  # answer for a writerAttr that resolves to nothing, because that shape is
-  # indistinguishable from a typo, and the gate must keep failing on typos.
-  # A row whose declared writer genuinely does not exist yet says so with
-  # `absentWriter`, whose countdown runs the other way: the gate errors the
-  # moment the attribute starts existing, which is when the row owes an update.
-  exempt = evidence: reason: {exemption = {inherit evidence reason;};};
-  absentWriter = evidence: reason: {absentWriter = {inherit evidence reason;};};
-  # Three HM settings merges share one defect and one shape, so they share one
-  # reason; only the citation differs.
-  gatedSettingsMerge = evidence:
-    exempt evidence "Activation entry sits inside mkIf on a non-empty settings set, so an emptied declaration never merges the removal away.";
-  # A writer whose enabling condition can never be false. It therefore survives
-  # the gate's empty arm for a reason that has nothing to do with removal, so
-  # the pass is not evidence that a retired key is retired. RECORDED, not
-  # exempted: the failures list is empty, so an exemption would fire the
-  # stale-exemption rule instead of documenting anything.
-  constantGate = evidence: {constantGate = evidence;};
+  # - `exemption` (a writer that exists and behaves wrongly) — every writer it
+  #   answered for now reaches its removal path under an emptied declaration.
+  # - `absentWriter` (a writerAttr that resolves to nothing, which an exemption
+  #   must never excuse because that shape is indistinguishable from a typo) —
+  #   kiro's devenv mcp task and its HM settings-prune entry are both emitted
+  #   now, so the gate reports the records themselves as stale.
+  # - `constantGate` (survives the empty arm for a reason unrelated to
+  #   removal) — claude's unpin flags and kimchi's config.json reconcile
+  #   through `own`, so the empty-arm pass IS evidence of removal.
+  #
   # Retraction MECHANISM, one string per mechanism rather than per writer.
-  # These are the only two the ownLeaves writers use, and they differ in the
-  # one property the gate cannot observe: whether a key dropped from the
-  # declaration is removed from the file.
-  reconcilerRetraction = "On activation, lib/ai/hm-helpers.nix's mkTomlSettingsActivationScript runs lib/ai/reconcile-toml.py, which records the prior generation's leaves, removes the retired ones, reasserts the current ones, and preserves unowned siblings.";
-  recursiveMerge = "On activation, lib/ai/hm-helpers.nix's mkSettingsActivationScript reasserts the declared leaves with `jq -s '.[0] * .[1]'` (lib/ai/hm-helpers.nix:186). A recursive merge CANNOT remove a key the declaration dropped (lib/ai/hm-helpers.nix:193-199), so a retired leaf survives in the file until the consumer deletes it by hand.";
+  # There is exactly one: every ownLeaves writer runs the same program, so the
+  # jq recursive merge that could not remove a dropped key has no rows left.
+  ownRetraction = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+  # The same program with the other container, for a target whose units are
+  # whole files. The ledger records one sha256 per file it wrote, so a file the
+  # declaration dropped is removed, a file edited since it was written is
+  # backed up first, and a path this generation never wrote is never touched.
+  ownFiles = at: "On ${at}, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+  # HM reconciles on activation, devenv on shell entry. Both retraction
+  # mechanisms name the moment, and nothing else in a row varies with it.
+  retractionMoment = mode:
+    if mode == "hm"
+    then "activation"
+    else "shell entry";
   leaves = pruneTrigger: activation: target: declaration: {
     inherit pruneTrigger target;
     inputOptions = [declaration.option];
@@ -129,23 +132,18 @@
   mcpProbe = ecosystem: probe ["ai" ecosystem "mcpServers"] {probe.command = "true";} {};
   settingsProbe = ecosystem: probe ["ai" ecosystem "nativeSettings"] {model = "probe";} {};
   hookProbe = probe ["ai" "kiro" "hooksJson"] {probe = ''{"event":"pre-commit"}'';} {};
-  kiroManaged = mode: name: target: declaration: {
-    inherit target;
+  kiroManaged = pruneTrigger: mode: name: target: declaration: {
+    inherit pruneTrigger target;
     primitive = "ownPathManaged";
     writerAttr =
       if mode == "hm"
       then ["home" "activation" name]
       else ["tasks" name];
-    pruneTrigger = "lib/ai/materialize.nix manifest prune at ${
-      if mode == "hm"
-      then "activation"
-      else "shell entry"
-    }; only previously owned paths are retired.";
     probe = declaration;
   };
   kiroMcp = mode: let
     primary =
-      kiroManaged mode (
+      kiroManaged (ownFiles (retractionMoment mode)) mode (
         if mode == "hm"
         then "kiroMcpJson"
         else "ai:kiro:materialize-mcp"
@@ -155,27 +153,14 @@
         then "$HOME"
         else "$DEVENV_ROOT"
       }/.kiro/settings/mcp.json"
-      ((mcpProbe "kiro") // {base.ai.kiro.mcpWriteMode = "overwrite";})
-      // (
-        if mode == "hm"
-        then
-          exempt "packages/kiro-cli/lib/mkKiro.nix:1784"
-          "Writer sits inside mkIf on a non-empty merged pool, so an emptied declaration never prunes mcp.json."
-        else
-          absentWriter "packages/kiro-cli/lib/mkKiro.nix:1984"
-          "This task does not exist: the devenv write is an enterShell fragment gated on a non-empty merged pool, so neither declaration reaches a task."
-      );
+      ((mcpProbe "kiro") // {base.ai.kiro.mcpWriteMode = "overwrite";});
     merge =
       primary
       // {
         primitive = "ownLeaves";
         condition = ''ai.kiro.mcpWriteMode = "merge"'';
         probe = (mcpProbe "kiro") // {base.ai.kiro.mcpWriteMode = "merge";};
-        pruneTrigger = "On ${
-          if mode == "hm"
-          then "activation"
-          else "shell entry"
-        }, retire whole-path ownership preserving the file, then reconcile JSON leaves. First handover cannot identify historical unowned leaves.";
+        pruneTrigger = "On ${retractionMoment mode}, lib/ai/own.py RELEASES the whole-file claim to the co-owning document target in the same plan — the file survives and its ledger is dropped — and then reconciles the declared leaves. A first handover cannot identify historical unowned leaves.";
       };
   in
     primary
@@ -183,20 +168,15 @@
       condition = ''ai.kiro.mcpWriteMode = "overwrite" (default)'';
       additionalWriters =
         [merge]
-        # The primary's exemption answers for the WRITE entry surviving an
-        # emptied pool. This entry has a different defect — it is not emitted
-        # at all — so it drops that record rather than carrying two.
-        ++ lib.optional (mode == "hm") (builtins.removeAttrs primary ["exemption"]
+        ++ lib.optional (mode == "hm") (primary
           // {
             writerAttr = ["home" "activation" "materialize-kiro-settings-prune"];
             role = "Retire merge leaves and prune retired whole paths before the write phase.";
-          }
-          // absentWriter "packages/kiro-cli/lib/mkKiro.nix:1786 (mkMcpJsonScript, where hooks use materializeLib.mkHmActivation at :1831)"
-          "mcp.json is assembled by the bespoke mkMcpJsonScript instead of the materializer, so no .kiro/settings prune entry is emitted under either declaration.");
+          });
     };
   kiroHooks = mode: let
     primary =
-      kiroManaged mode (
+      kiroManaged (ownFiles (retractionMoment mode)) mode (
         if mode == "hm"
         then "materialize-kiro-hooks-write"
         else "ai:kiro:materialize-hooks"
@@ -216,7 +196,7 @@
           role = "Prune phase must survive an empty declaration as well as the write phase.";
         });
     };
-  codexConfig = leaves reconcilerRetraction "codexSettingsReconcile" "$HOME/.codex/config.toml" (settingsProbe "codex");
+  codexConfig = leaves ownRetraction "codexSettingsReconcile" "$HOME/.codex/config.toml" (settingsProbe "codex");
   copilotInert = "Factory documents this project file as undelivered: Copilot offers no flag or discovery for it. Presence is not proof of application consumption.";
 
   # A row's primary writer and additionalWriters use the same schema. Keeping
@@ -248,13 +228,9 @@
           else "AGENTS.md"
         ))
         // {
-          additionalWriters = [
-            ((kiroManaged mode
-                (
-                  if mode == "hm"
-                  then "retire-materialize-kiro-steering"
-                  else "ai:kiro:retire-steering-copies"
-                )
+          additionalWriters = let
+            retirement = name: role:
+              (kiroManaged (ownFiles (retractionMoment mode)) mode name
                 "${
                   if mode == "hm"
                   then "$HOME"
@@ -262,13 +238,25 @@
                 }/.kiro/steering/<legacy-owned-file>"
                 (probe ["ai" "kiro" "context"] {text = "probe";} {}))
               // {
+                inherit role;
                 # NOT an exemption: the gate verifies this claim in BOTH
                 # directions, so a body that DOES vary with the declaration is
                 # an error here, exactly as a passing exempted writer is.
-                declarationIndependent = "This writer deletes what a PRIOR generation's manifest recorded. mkRetirementScript takes no files argument (lib/ai/materialize.nix:448 for HM, :506-524 for devenv), so its body cannot vary with the current declaration by construction.";
-                role = "Enable-independent legacy-copy retirement; current context and rules use declarative paths.";
-              })
-          ];
+                declarationIndependent = "This writer removes what a PRIOR generation's ledger recorded. Its `own` target declares NO units, so its plan — and therefore the whole body, which is one command over two store paths — is the same under every declaration by construction.";
+              };
+          in
+            if mode == "hm"
+            then [
+              # Home Manager needs the pair: deleting a real file must happen
+              # before checkLinkTargets (`.kiro/steering` is exactly a
+              # copy→symlink flip), and the write phase then unlinks the
+              # ledger. Both are enable-independent, so both are rows.
+              (retirement "retire-materialize-kiro-steering" "Enable-independent legacy-copy retirement, prune phase: remove the files a prior generation's ledger recorded, before link generation.")
+              (retirement "retire-materialize-kiro-steering-ledger" "Enable-independent legacy-copy retirement, write phase: unlink the drained ledger so later generations are inert.")
+            ]
+            else [
+              (retirement "ai:kiro:retire-steering-copies" "Enable-independent legacy-copy retirement; current context and rules use declarative paths.")
+            ];
         });
     };
     environmentVariables = {
@@ -391,13 +379,8 @@
           (delegated "hm" "settings" "$HOME/.claude/settings.json")
           // {
             additionalWriters = [
-              (leaves recursiveMerge "claudeUnpinLaunchEffort" "$HOME/.claude.json"
-                (probe ["ai" "claude" "unpinLaunchEffort"] {probe = true;} {})
-                # The log line is unconditional and the merge body is appended
-                # only for a non-empty map, so this writer passes all three arms
-                # on the strength of that log line. The merge itself cannot
-                # retract an unpin flag the declaration dropped.
-                // constantGate "packages/claude-code/lib/mkClaude.nix:834-847 (the echo is emitted outside the n > 0 guard)")
+              (leaves ownRetraction "claudeUnpinLaunchEffort" "$HOME/.claude.json"
+                (probe ["ai" "claude" "unpinLaunchEffort"] {probe = true;} {}))
             ];
           };
       };
@@ -407,9 +390,7 @@
       };
       copilot = {
         devenv = (declarative "devenv" ".config/github-copilot/settings.json") // {deliveryGap = copilotInert;};
-        hm =
-          leaves recursiveMerge "copilotSettingsMerge" "$HOME/.copilot/settings.json" (settingsProbe "copilot")
-          // gatedSettingsMerge "packages/copilot-cli/lib/mkCopilot.nix:293";
+        hm = leaves ownRetraction "copilotSettingsMerge" "$HOME/.copilot/settings.json" (settingsProbe "copilot");
       };
       kimchi = {
         devenv =
@@ -418,22 +399,15 @@
             additionalWriters = [(declarative "devenv" ".config/kimchi/harness/settings.json")];
           };
         hm =
-          (leaves recursiveMerge "kimchiConfigMerge" "$HOME/.config/kimchi/config.json"
+          (leaves ownRetraction "kimchiConfigMerge" "$HOME/.config/kimchi/config.json"
             (probe ["ai" "kimchi" "nativeSettings"] {
               llmEndpoint = "https://example.invalid";
               skillPaths = ["probe"];
-            } {})
-            # `skillPaths` defaults to `[]` rather than null, so filterNulls of
-            # the default nativeSettings is `{skillPaths = [];}` — never `{}`.
-            # The mkIf gate is therefore constant-true (measured: the HM
-            # activation set carries kimchiConfigMerge with no declaration at
-            # all), so surviving the empty arm says nothing about removal.
-            // constantGate "packages/kimchi/lib/mkKimchi.nix:143-146 with the mkIf at :247")
+            } {}))
           // {
             additionalWriters = [
-              (leaves recursiveMerge "kimchiHarnessSettingsMerge" "$HOME/.config/kimchi/harness/settings.json"
-                (probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {})
-                // gatedSettingsMerge "packages/kimchi/lib/mkKimchi.nix:258")
+              (leaves ownRetraction "kimchiHarnessSettingsMerge" "$HOME/.config/kimchi/harness/settings.json"
+                (probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {}))
             ];
           };
       };
@@ -444,9 +418,8 @@
             deliveryConstraint = "Only the pinned workspace-allowlisted setting keys are accepted; global-only settings fail module assertions.";
           };
         hm =
-          leaves recursiveMerge "kiroSettingsMerge" "$HOME/.kiro/settings/cli.json"
-          (probe ["ai" "kiro" "nativeSettings"] {chat.defaultModel = "probe";} {})
-          // gatedSettingsMerge "packages/kiro-cli/lib/mkKiro.nix:1864";
+          leaves ownRetraction "kiroSettingsMerge" "$HOME/.kiro/settings/cli.json"
+          (probe ["ai" "kiro" "nativeSettings"] {chat.defaultModel = "probe";} {});
       };
     };
     skills = {

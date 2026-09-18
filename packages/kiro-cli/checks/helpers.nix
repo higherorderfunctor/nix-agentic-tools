@@ -4,12 +4,12 @@
   harness,
   ...
 }: let
-  inherit (harness) mcpLib;
+  inherit (harness) mcpLib ownPlan;
 
   # Generic idempotent-flag helper shared with mkKiro's wrapper (lib/idempotentFlags.nix).
   idempotentFlags = import ../../../lib/idempotentFlags.nix {inherit lib;};
   # Kiro mcp-secret preprocessor + the rendered mcp.json body the module
-  # feeds into its activation/enterShell writer (mkMcpJsonScript). Tests
+  # feeds into its materializer renderer (mkMcpJsonScript). Tests
   # assert placeholder content via `renderedMcpJson` and template-store-
   # path parity between the two backends.
   inherit (import ../lib/mcpSecrets.nix {inherit lib;}) renderKiroSecrets;
@@ -25,7 +25,7 @@
   # two silently-wrong singletons can pass VACUOUSLY. Asserting the match count
   # as part of the returned boolean fixes both.
   kiroWrappedDrvs = packages:
-    map (p: p.drvPath) (lib.filter (p: (p.name or "") == "kiro-cli-wrapped") packages);
+    map (p: p.drvPath) (lib.filter (p: p.name == "kiro-cli-wrapped") packages);
 
   # Exactly one wrapper on each side, and they must DIFFER (the unlock forked).
   soleFork = a: b:
@@ -49,31 +49,66 @@
     lib.mapAttrs' (target: entry:
       lib.nameValuePair (lib.removePrefix prefix target) entry)
     (lib.filterAttrs (target: _entry: lib.hasPrefix prefix target) evaluated.config.ai.kiro.files);
-  hmRetirementScript = ev: (ev.config.home.activation."retire-materialize-kiro-steering" or {}).text or "";
-  dvTaskExec = ev: ((ev.config.tasks or {})."ai:kiro:retire-steering-copies" or {}).exec or "";
-  # Kiro HOOKS ride the same materializer (copy-only; v3 drops symlinked
-  # hooks), so they get the same accessor trio against the hooks slug.
-  hmHookPruneScript = ev: (ev.config.home.activation."materialize-kiro-hooks-prune" or {}).text or "";
-  hmHookWriteScript = ev: (ev.config.home.activation."materialize-kiro-hooks-write" or {}).text or "";
-  dvHookTaskExec = ev: ((ev.config.tasks or {})."ai:kiro:materialize-hooks" or {}).exec or "";
-  # Extract the heredoc body a copy writer embeds for <name> — the
-  # #433 heredoc-extraction idiom (see module-kiro-hooks-typed-
-  # colocation). The per-script EOF marker is content-hash-derived, so
-  # recover it from the `nat_mat_write '<name>' …<<'MARKER'` call line;
-  # the script embeds store paths, whose context the split helpers
-  # reject, so strip it (byte content is unchanged).
-  matHeredocBody = script: name: let
-    t = builtins.unsafeDiscardStringContext script;
-    parts = lib.splitString "${lib.escapeShellArg name} \"$nat_mat_prev\" <<'" t;
+  requireBody = path: ev: let
+    label = "Kiro check requires config.${lib.showOption path}";
+    body = lib.attrByPath path (throw "${label}: attribute is missing") ev.config;
   in
-    if builtins.length parts < 2
-    then null
-    else let
-      afterCall = builtins.elemAt parts 1;
-      marker = builtins.head (lib.splitString "'\n" afterCall);
-      body = lib.removePrefix "${marker}'\n" afterCall;
-    in
-      builtins.head (lib.splitString "\n${marker}\n" body);
+    if builtins.isString body && builtins.match "[[:space:]]*" body == null
+    then body
+    else throw "${label}: script body is empty or not a string";
+
+  dvHookTaskExec = requireBody ["tasks" "ai:kiro:materialize-hooks" "exec"];
+  # A plan is DATA, so the units, their modes, the ledger and the target
+  # directory are all readable here — an `own` body is one command and names
+  # none of them. `harness.ownPlan` throws on an absent writer, so a renamed
+  # entry fails the check rather than satisfying it with an empty plan.
+  planTarget = path: plan: let
+    hits = lib.filter (target: target.path == path) plan.targets;
+  in
+    if lib.length hits == 1
+    then lib.head hits
+    else throw "Kiro check requires exactly one own target for '${path}', found ${toString (lib.length hits)}";
+  hookTargetOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/hooks" (ownPlan "kiro" entry ev);
+  hmHookTarget = hookTargetOf "materialize-kiro-hooks-write";
+  dvHookTarget = hookTargetOf "ai:kiro:materialize-hooks";
+  # mcp.json's two targets by ROLE: the directory that owns the whole file
+  # under `overwrite`, and the document whose leaves it owns under `merge`.
+  # Both live in ONE bundle, so both come out of one plan and a check can read
+  # the mode, the render command and the ledger of either.
+  mcpDirOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/settings" (ownPlan "kiro" entry ev);
+  mcpDocOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/settings/mcp.json" (ownPlan "kiro" entry ev);
+  steeringTargetOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/steering" (ownPlan "kiro" entry ev);
+  hmMcpDirTarget = mcpDirOf "kiroMcpJson";
+  hmMcpDocTarget = mcpDocOf "kiroMcpJson";
+  dvMcpDirTarget = mcpDirOf "ai:kiro:materialize-mcp";
+  dvMcpDocTarget = mcpDocOf "ai:kiro:materialize-mcp";
+  # The `--plan` argument out of an emitted body. `own` passes exactly one, so
+  # this is the IDENTITY of the plan a phase applies: two entries that resolve
+  # to the same store path cannot disagree about what is owned, which is what
+  # the HM prune/write pair needs. The quotes are optional on purpose —
+  # `lib.escapeShellArg` leaves a plain store path unquoted — so strip them if
+  # they are there. The body embeds store paths, whose context the split
+  # helpers reject, so discard it; the bytes are unchanged.
+  ownPlanArg = body: let
+    parts = lib.splitString "--plan " (builtins.unsafeDiscardStringContext body);
+    unquote = token: lib.removeSuffix "'" (lib.removePrefix "'" token);
+  in
+    if lib.length parts != 2
+    then throw "Kiro check requires exactly one --plan argument in an own body"
+    else unquote (builtins.head (lib.splitString " " (builtins.elemAt parts 1)));
+  dvMcpTaskExec = requireBody ["tasks" "ai:kiro:materialize-mcp" "exec"];
+  dvTaskExec = requireBody ["tasks" "ai:kiro:retire-steering-copies" "exec"];
+  hmHookPruneScript = requireBody ["home" "activation" "materialize-kiro-hooks-prune" "text"];
+  hmHookWriteScript = requireBody ["home" "activation" "materialize-kiro-hooks-write" "text"];
+  hmMcpPruneScript = requireBody ["home" "activation" "materialize-kiro-settings-prune" "text"];
+  hmMcpWriteScript = requireBody ["home" "activation" "kiroMcpJson" "text"];
+  hmRetirementScript = requireBody ["home" "activation" "retire-materialize-kiro-steering" "text"];
+  # The retirement's WRITE phase. New name, and the only new entry name in this
+  # rework: an HM bundle holding a dir target requires the prune entry (the
+  # real file must be gone before checkLinkTargets), so the existing name keeps
+  # its prune position and the phase that unlinks the drained ledger needs one
+  # of its own.
+  hmRetirementLedgerScript = requireBody ["home" "activation" "retire-materialize-kiro-steering-ledger" "text"];
 in {
-  inherit dvHookTaskExec dvTaskExec hmHookPruneScript hmHookWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody renderKiroSecrets renderedMcpJson soleFork soleSame;
+  inherit dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
 }

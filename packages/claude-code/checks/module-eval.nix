@@ -6,8 +6,15 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest;
+  inherit (harness) evalDevenv evalHm mkTest ownedDocument;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) claudeAssertionFails claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg handlerCommands hasClampHook hasGuardHook;
+  unpinDocument = ownedDocument "claude" ".claude.json";
+  # Refuses an absent or blank body, so a renamed writer fails the check
+  # instead of passing it with an empty string.
+  unpinWriter = result:
+    lib.attrByPath ["home" "activation" "claudeUnpinLaunchEffort" "text"]
+    (throw "module-test: config.home.activation.claudeUnpinLaunchEffort.text is missing")
+    result.config;
 in {
   checks = {
     module-claude-default-disabled = mkTest "claude-default-disabled" (
@@ -177,7 +184,7 @@ in {
             };
           };
         };
-        upstreamSettings = result.config.programs.claude-code.settings or {};
+        upstreamSettings = result.config.programs.claude-code.settings;
       in
         (upstreamSettings.effortLevel or null)
         == "medium"
@@ -285,7 +292,7 @@ in {
             nativeSettings.attribution.commit = true;
           };
         };
-        s = result.config.programs.claude-code.settings or {};
+        s = result.config.programs.claude-code.settings;
       in
         !(s ? attribution)
     );
@@ -296,7 +303,7 @@ in {
     module-claude-hm-null-settings-filtered = mkTest "claude-hm-null-settings-filtered" (
       let
         result = evalHm {ai.claude.enable = true;};
-        s = result.config.programs.claude-code.settings or {};
+        s = result.config.programs.claude-code.settings;
       in
         !(s ? attribution)
         && !(s ? effortLevel)
@@ -330,7 +337,7 @@ in {
             nativeSettings.workflowKeywordTriggerEnabled = false;
           };
         };
-        s = result.config.programs.claude-code.settings or {};
+        s = result.config.programs.claude-code.settings;
       in
         (s ? workflowKeywordTriggerEnabled)
         && s.workflowKeywordTriggerEnabled == false
@@ -346,7 +353,7 @@ in {
             ultracodeOnLaunch = true;
           };
         };
-        s = result.config.programs.claude-code.settings or {};
+        s = result.config.programs.claude-code.settings;
       in
         (s.ultracode or null) == true && (s.enableWorkflows or null) == true
     );
@@ -362,7 +369,7 @@ in {
             nativeSettings.ultracode = false;
           };
         };
-        s = result.config.programs.claude-code.settings or {};
+        s = result.config.programs.claude-code.settings;
       in
         (s ? ultracode) && s.ultracode == false
     );
@@ -379,7 +386,7 @@ in {
             ultracodeOnLaunch = true;
           };
         };
-        s = result.config.programs.claude-code.settings or {};
+        s = result.config.programs.claude-code.settings;
       in
         !(s ? effortLevel) && !(s ? workflowKeywordTriggerEnabled)
     );
@@ -552,11 +559,10 @@ in {
           };
         };
         settingsHooks = ((result.config.files.".claude/settings.json" or {}).json or {}).hooks or {};
-        upstreamHooks = result.config.claude.code.hooks or {};
       in
         ((builtins.head (settingsHooks.PreToolUse or [])).matcher or null)
         == "Bash"
-        && !(upstreamHooks ? PreToolUse)
+        && !(result.config.claude.code ? hooks)
     );
 
     # Devenv: empty ai.claude.nativeSettings produces no gap file (lib.mkIf
@@ -648,33 +654,33 @@ in {
 
     # ── Task 5 (A4b): Claude launch-effort unpin reconciler ────────
 
-    # Default reconciler: flags from the committed sidecar are merged into
-    # ~/.claude.json through the shared helper.
+    # Default reconciler: flags from the committed sidecar are reconciled into
+    # ~/.claude.json. The declared leaves and the document they land in are
+    # read from `_reconciledDocuments`, not from the activation body: the
+    # reconciler carries them as data in a store plan, so the body names only
+    # the plan. The ledger path IS asserted here — it is the live migration
+    # contract that every previously written ownership record hangs off.
     module-claude-hm-reconciles-unpin-launch-effort = mkTest "claude-hm-reconciles-unpin-launch-effort" (
       let
         result = evalHm {ai.claude.enable = true;};
-        activation = result.config.home.activation.claudeUnpinLaunchEffort or null;
+        document = unpinDocument result;
       in
-        activation
-        != null
-        && lib.hasInfix "unpinOpus48LaunchEffort" (activation.text or "")
-        && lib.hasInfix ".claude.json" (activation.text or "")
-        && lib.hasInfix "jq" (activation.text or "")
+        lib.hasInfix "--phase all" (unpinWriter result)
+        && document.ledger == "json-settings/claude-unpin-launch-effort.json"
+        && document.value.unpinOpus48LaunchEffort
     );
 
-    # Emptied flag map: merge body omitted, but the applied-0 log still fires.
-    module-claude-hm-unpin-empty-logs-zero = mkTest "claude-hm-unpin-empty-logs-zero" (
+    # Emptied flag map: the writer is still emitted, declaring zero leaves, so
+    # the prior generation's flags are retired rather than left behind.
+    module-claude-hm-unpin-empty-emits-writer = mkTest "claude-hm-unpin-empty-emits-writer" (
       let
         result = evalHm {
           ai.claude.enable = true;
           ai.claude.unpinLaunchEffort = lib.mkForce {};
         };
-        activation = result.config.home.activation.claudeUnpinLaunchEffort or null;
       in
-        activation
-        != null
-        && lib.hasInfix "reconciling 0" (activation.text or "")
-        && !(lib.hasInfix "unpinOpus48LaunchEffort" (activation.text or ""))
+        lib.hasInfix "--phase all" (unpinWriter result)
+        && (unpinDocument result).value == {}
     );
 
     # A key set false is still written (re-pins that model deliberately).
@@ -684,10 +690,96 @@ in {
           ai.claude.enable = true;
           ai.claude.unpinLaunchEffort.unpinOpus48LaunchEffort = false;
         };
-        activation = result.config.home.activation.claudeUnpinLaunchEffort or null;
       in
-        activation != null && lib.hasInfix "false" (activation.text or "")
+        (unpinDocument result).value.unpinOpus48LaunchEffort == false
     );
+
+    # One runtime corpus covers the document codec directly plus actual Claude
+    # and Kiro module output. Every empty generation is evaluated and executed,
+    # so a missing writer cannot satisfy the N-to-0 check.
+    #
+    # `harness.hmLib` rather than `lib`: `own` places its entry with
+    # `lib.hm.dag`, which only the harness stubs.
+    module-json-settings-reconciliation = let
+      helpers = import ../../../lib/ai/hm-helpers.nix {lib = harness.hmLib;};
+      mkCase = name: configFile: first: second: native: render: {
+        inherit configFile first name native second;
+        scripts = map render [first second {}];
+      };
+      cases = [
+        (mkCase "document" ".settings with spaces/config.json" {
+            array = [{enabled = true;}];
+            "dot.key" = true;
+            nested.managed = true;
+            nullable = null;
+            retained = 1;
+            shape = "scalar";
+          } {
+            retained = 2;
+            shape.child = true;
+          } {
+            nested.native = "survives";
+            oauthAccount.token = "native-test-token";
+          } (settings:
+            # The codec, not a caller: a space in the path, a dotted key, a
+            # null leaf, an array and a scalar/table transition, none of which
+            # any real caller declares all at once. `runtime` only decides
+            # where the eval-visible record lands, and this case reads the
+            # writer alone.
+              (helpers.mkOwnedDocument {
+                entry = "documentCodecTest";
+                ledger = "json-settings/document-codec-test.json";
+                path = ".settings with spaces/config.json";
+                python = pkgs.python3;
+                runtime = "claude";
+                value = settings;
+                inherit pkgs;
+              })
+            .home
+            .activation
+            .documentCodecTest
+            .text))
+        (mkCase "claude" ".claude.json" {
+            unpinFirstLaunchEffort = true;
+            unpinSecondLaunchEffort = true;
+          } {
+            unpinSecondLaunchEffort = false;
+          } {
+            oauthAccount.token = "native-test-token";
+            unpinNativeLaunchEffort = true;
+          } (settings:
+            (evalHm {
+              ai.claude = {
+                enable = true;
+                unpinLaunchEffort = lib.mkForce settings;
+              };
+            }).config.home.activation.claudeUnpinLaunchEffort.text))
+        (mkCase "kiro" ".kiro/settings/cli.json" {
+            "chat.defaultModel" = "claude-sonnet-4";
+            "chat.modelDefaults"."claude-opus-4.8".effort = "high";
+          } {
+            "chat.defaultModel" = "claude-opus-4.8";
+          } {
+            "chat.modelDefaults".native.effort = "low";
+            "native.setting" = "survives";
+          } (settings:
+            (evalHm {
+              ai.kiro = {
+                enable = true;
+                nativeSettings = {
+                  chat.defaultModel = settings."chat.defaultModel" or null;
+                  chat.modelDefaults = settings."chat.modelDefaults" or {};
+                };
+              };
+            }).config.home.activation.kiroSettingsMerge.text))
+      ];
+    in
+      pkgs.runCommand "module-test-json-settings-reconciliation" {} ''
+        ${pkgs.python3}/bin/python ${./json-settings-runtime.py} \
+          ${pkgs.writeText "json-settings-cases.json" (builtins.toJSON cases)} \
+          ${pkgs.bash}/bin/bash
+        touch "$out"
+      '';
 
     # ── Attrs-shape ai.rules / ai.<cli>.rules (unified transformer) ───
 
@@ -719,7 +811,10 @@ in {
         };
         ruleFile = result.config.home.file.".claude/rules/always-on.md" or null;
       in
-        ruleFile != null && !(lib.hasInfix "paths:" (ruleFile.text or ""))
+        ruleFile
+        != null
+        && lib.hasInfix "Loaded unconditionally." ruleFile.text
+        && !(lib.hasInfix "paths:" ruleFile.text)
     );
 
     # HM: ai.claude.plugins routes to programs.claude-code.plugins as an
@@ -939,7 +1034,7 @@ in {
             ];
           };
         };
-        settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
+        settingsHooks = result.config.programs.claude-code.settings.hooks;
         block = builtins.head (settingsHooks.PreToolUse or []);
         handler = builtins.head (block.hooks or []);
       in
@@ -954,12 +1049,19 @@ in {
     # be modified.
     module-claude-hm-delegation-clamp-default-off = mkTest "claude-hm-delegation-clamp-default-off" (
       let
-        result = evalHm {ai.claude.enable = true;};
-        settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
+        bareSettings = (evalHm {ai.claude.enable = true;}).config.programs.claude-code.settings;
+        result = evalHm {
+          ai.claude = {
+            enable = true;
+            hooks.PreToolUse = [{hooks = [{command = "consumer-control";}];}];
+          };
+        };
+        settingsHooks = result.config.programs.claude-code.settings.hooks;
       in
-        (settingsHooks.UserPromptSubmit or [])
-        == []
-        && (settingsHooks.PreCompact or []) == []
+        !(bareSettings ? hooks)
+        && builtins.elem "consumer-control" (handlerCommands settingsHooks.PreToolUse)
+        && !(settingsHooks ? UserPromptSubmit)
+        && !(settingsHooks ? PreCompact)
     );
 
     # Opting in must produce BOTH hooks: the injector and the PreCompact re-arm.
@@ -973,7 +1075,7 @@ in {
             delegationClamp.mitigate = true;
           };
         };
-        settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
+        settingsHooks = result.config.programs.claude-code.settings.hooks;
       in
         hasClampHook (settingsHooks.UserPromptSubmit or [])
         && hasClampHook (settingsHooks.PreCompact or [])
@@ -1008,7 +1110,7 @@ in {
             hooks.UserPromptSubmit = [{hooks = [{command = "consumer-hook";}];}];
           };
         };
-        blocks = ((result.config.programs.claude-code.settings or {}).hooks or {}).UserPromptSubmit or [];
+        blocks = result.config.programs.claude-code.settings.hooks.UserPromptSubmit or [];
         cmds = handlerCommands blocks;
       in
         builtins.elem "consumer-hook" cmds
@@ -1021,10 +1123,18 @@ in {
     # default would block writes for every consumer who never asked for it.
     module-claude-hm-memory-collision-guard-default-off = mkTest "claude-hm-memory-collision-guard-default-off" (
       let
-        result = evalHm {ai.claude.enable = true;};
-        settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
+        bareSettings = (evalHm {ai.claude.enable = true;}).config.programs.claude-code.settings;
+        result = evalHm {
+          ai.claude = {
+            enable = true;
+            hooks.PreToolUse = [{hooks = [{command = "consumer-control";}];}];
+          };
+        };
+        settingsHooks = result.config.programs.claude-code.settings.hooks;
       in
-        hasGuardHook (settingsHooks.PreToolUse or []) == false
+        !(bareSettings ? hooks)
+        && builtins.elem "consumer-control" (handlerCommands settingsHooks.PreToolUse)
+        && hasGuardHook settingsHooks.PreToolUse == false
     );
 
     # Opting in must produce a PreToolUse entry matching the write-shaped tools. The
@@ -1038,7 +1148,7 @@ in {
             memoryCollisionGuard.enable = true;
           };
         };
-        blocks = ((result.config.programs.claude-code.settings or {}).hooks or {}).PreToolUse or [];
+        blocks = result.config.programs.claude-code.settings.hooks.PreToolUse or [];
         guardBlocks = builtins.filter (b: hasGuardHook [b]) blocks;
       in
         builtins.length guardBlocks
@@ -1056,11 +1166,19 @@ in {
           };
         };
         settingsJson = (result.config.files.".claude/settings.json" or {}).json or {};
-        offResult = evalDevenv {ai.claude.enable = true;};
-        offJson = (offResult.config.files.".claude/settings.json" or {}).json or {};
+        offResult = evalDevenv {
+          ai.claude = {
+            enable = true;
+            hooks.PreToolUse = [{hooks = [{command = "consumer-control";}];}];
+          };
+        };
+        bareSettings = (evalDevenv {ai.claude.enable = true;}).config.files.".claude/settings.json".json;
+        offJson = offResult.config.files.".claude/settings.json".json;
       in
         hasGuardHook (settingsJson.hooks.PreToolUse or [])
-        && hasGuardHook (offJson.hooks.PreToolUse or []) == false
+        && !(bareSettings ? hooks)
+        && builtins.elem "consumer-control" (handlerCommands offJson.hooks.PreToolUse)
+        && hasGuardHook offJson.hooks.PreToolUse == false
     );
 
     # Compose-not-clobber, same reasoning as the clamp's: emitted as a DEFINITION of
@@ -1080,7 +1198,7 @@ in {
             ];
           };
         };
-        blocks = ((result.config.programs.claude-code.settings or {}).hooks or {}).PreToolUse or [];
+        blocks = result.config.programs.claude-code.settings.hooks.PreToolUse or [];
         cmds = handlerCommands blocks;
       in
         builtins.elem "consumer-hook" cmds
@@ -1123,13 +1241,12 @@ in {
         };
         settingsHooks = ((result.config.files.".claude/settings.json" or {}).json or {}).hooks or {};
         scriptFile = result.config.files.".claude/hooks/from-top" or null;
-        upstream = result.config.claude.code.hooks or {};
       in
         (settingsHooks.from-settings or null)
         != null
         && scriptFile != null
         && (scriptFile.text or null) == "#!/usr/bin/env bash\necho from-top\n"
-        && !(upstream ? from-top)
+        && !(result.config.claude.code ? hooks)
     );
 
     # Typed ai.claude.hooks event map: accepts the settings.json-shaped

@@ -88,13 +88,14 @@ _: {
         "lib/ai/app/**"
         "lib/ai/default.nix"
         "lib/ai/hooks.nix"
-        # Lifecycle helper behind the manifest-guarded, enable-independent
-        # migration exception documented by the fanout fragments.
-        "lib/ai/materialize.nix"
         # The one factory that contributes to the pools from inside this repo,
         # so it is exactly where collision-semantics' "where a MODULE may
         # contribute" rule has to be read before editing. Previously unscoped.
         "lib/ai/mkSkillPackageModule.nix"
+        # The reconciler behind the ledger-guarded, enable-independent
+        # migration exception documented by the fanout fragments.
+        "lib/ai/own.nix"
+        "lib/ai/own.py"
         # Portable program option-tree factory. Like `mkAiApp`, it declares
         # capability-gated runtime paths and resolves root/runtime values.
         "lib/ai/program.nix"
