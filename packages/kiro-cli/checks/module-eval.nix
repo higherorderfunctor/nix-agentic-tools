@@ -6,7 +6,9 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm hasLiteral mkTest mkWrapperGrepTest;
+  inherit (harness) evalDevenv evalHm hasLiteral mkTest mkWrapperGrepTest ownedDocument;
+  cliDocument = evaluated:
+    ownedDocument "kiro" "${evaluated.config.ai.kiro.configDir}/settings/cli.json" evaluated;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvHookTaskExec dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookWriteScript hmMcpPruneScript hmMcpWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody renderKiroSecrets renderedMcpJson soleFork soleSame;
 in {
   checks = {
@@ -694,13 +696,17 @@ in {
     );
 
     # HM: settings activation owns leaves and carries the declared content.
+    # The content is read from `_reconciledDocuments`, not from the activation
+    # body: the reconciler carries it as data in a store plan. The ledger path
+    # is asserted because it is the live migration contract every previously
+    # written ownership record hangs off.
     module-kiro-hm-empty-settings-emits-writer = mkTest "kiro-hm-empty-settings-emits-writer" (
       let
         evaluated = evalHm {ai.kiro.enable = true;};
-        script = evaluated.config.home.activation.kiroSettingsMerge.text;
       in
-        lib.hasInfix "--format json" script
-        && lib.hasInfix "json-settings" script
+        lib.hasInfix "--phase all" evaluated.config.home.activation.kiroSettingsMerge.text
+        && lib.hasPrefix "json-settings/kiro-settings-" (cliDocument evaluated).ledger
+        && (cliDocument evaluated).value == {}
     );
 
     module-kiro-hm-writes-settings-activation = mkTest "kiro-hm-writes-settings-activation" (
@@ -711,12 +717,9 @@ in {
             nativeSettings.chat.defaultModel = "claude-sonnet-4";
           };
         };
-        activation = result.config.home.activation.kiroSettingsMerge or null;
       in
-        activation
-        != null
-        && lib.hasInfix "claude-sonnet-4" (activation.text or "")
-        && lib.hasInfix "--format json" (activation.text or "")
+        lib.hasInfix "--phase all" result.config.home.activation.kiroSettingsMerge.text
+        && (cliDocument result).value."chat.defaultModel" == "claude-sonnet-4"
     );
 
     # Known Kiro model id reaches the cli.json merge.
@@ -728,9 +731,8 @@ in {
             nativeSettings.chat.defaultModel = "claude-opus-4.8";
           };
         };
-        activation = result.config.home.activation.kiroSettingsMerge or null;
       in
-        activation != null && lib.hasInfix "claude-opus-4.8" (activation.text or "")
+        (cliDocument result).value."chat.defaultModel" == "claude-opus-4.8"
     );
 
     # Arbitrary (unknown) id is accepted (str branch of the soft enum).
@@ -742,9 +744,8 @@ in {
             nativeSettings.chat.defaultModel = "some-future-model";
           };
         };
-        activation = result.config.home.activation.kiroSettingsMerge or null;
       in
-        activation != null && lib.hasInfix "some-future-model" (activation.text or "")
+        (cliDocument result).value."chat.defaultModel" == "some-future-model"
     );
 
     # v3 = true triggers the HM wrapper (appends --v3 to the launcher).
@@ -1267,10 +1268,12 @@ in {
             nativeSettings.chat.modelDefaults."claude-opus-5".effort = "high";
           };
         };
-        text = (result.config.home.activation.kiroSettingsMerge or {}).text or "";
+        declared = (cliDocument result).value;
       in
-        lib.hasInfix ''"chat.modelDefaults":{"claude-opus-5":{"effort":"high"}}'' text
-        && !lib.hasInfix "chat.modelDefaults.claude-opus-5" text
+        declared."chat.modelDefaults"."claude-opus-5".effort
+        == "high"
+        && !(declared ? "chat.modelDefaults.claude-opus-5")
+        && !(declared ? chat)
     );
 
     # Control: the boundary must stop the walk only AT a known key, never before
