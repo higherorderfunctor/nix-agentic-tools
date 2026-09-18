@@ -177,7 +177,7 @@ in {
             };
           };
         };
-        upstreamSettings = result.config.programs.claude-code.settings or {};
+        upstreamSettings = result.config.programs.claude-code.settings;
       in
         (upstreamSettings.effortLevel or null)
         == "medium"
@@ -285,7 +285,7 @@ in {
             nativeSettings.attribution.commit = true;
           };
         };
-        s = result.config.programs.claude-code.settings or {};
+        s = result.config.programs.claude-code.settings;
       in
         !(s ? attribution)
     );
@@ -296,7 +296,7 @@ in {
     module-claude-hm-null-settings-filtered = mkTest "claude-hm-null-settings-filtered" (
       let
         result = evalHm {ai.claude.enable = true;};
-        s = result.config.programs.claude-code.settings or {};
+        s = result.config.programs.claude-code.settings;
       in
         !(s ? attribution)
         && !(s ? effortLevel)
@@ -330,7 +330,7 @@ in {
             nativeSettings.workflowKeywordTriggerEnabled = false;
           };
         };
-        s = result.config.programs.claude-code.settings or {};
+        s = result.config.programs.claude-code.settings;
       in
         (s ? workflowKeywordTriggerEnabled)
         && s.workflowKeywordTriggerEnabled == false
@@ -346,7 +346,7 @@ in {
             ultracodeOnLaunch = true;
           };
         };
-        s = result.config.programs.claude-code.settings or {};
+        s = result.config.programs.claude-code.settings;
       in
         (s.ultracode or null) == true && (s.enableWorkflows or null) == true
     );
@@ -362,7 +362,7 @@ in {
             nativeSettings.ultracode = false;
           };
         };
-        s = result.config.programs.claude-code.settings or {};
+        s = result.config.programs.claude-code.settings;
       in
         (s ? ultracode) && s.ultracode == false
     );
@@ -379,7 +379,7 @@ in {
             ultracodeOnLaunch = true;
           };
         };
-        s = result.config.programs.claude-code.settings or {};
+        s = result.config.programs.claude-code.settings;
       in
         !(s ? effortLevel) && !(s ? workflowKeywordTriggerEnabled)
     );
@@ -552,11 +552,10 @@ in {
           };
         };
         settingsHooks = ((result.config.files.".claude/settings.json" or {}).json or {}).hooks or {};
-        upstreamHooks = result.config.claude.code.hooks or {};
       in
         ((builtins.head (settingsHooks.PreToolUse or [])).matcher or null)
         == "Bash"
-        && !(upstreamHooks ? PreToolUse)
+        && !(result.config.claude.code ? hooks)
     );
 
     # Devenv: empty ai.claude.nativeSettings produces no gap file (lib.mkIf
@@ -809,7 +808,10 @@ in {
         };
         ruleFile = result.config.home.file.".claude/rules/always-on.md" or null;
       in
-        ruleFile != null && !(lib.hasInfix "paths:" (ruleFile.text or ""))
+        ruleFile
+        != null
+        && lib.hasInfix "Loaded unconditionally." ruleFile.text
+        && !(lib.hasInfix "paths:" ruleFile.text)
     );
 
     # HM: ai.claude.plugins routes to programs.claude-code.plugins as an
@@ -1029,7 +1031,7 @@ in {
             ];
           };
         };
-        settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
+        settingsHooks = result.config.programs.claude-code.settings.hooks;
         block = builtins.head (settingsHooks.PreToolUse or []);
         handler = builtins.head (block.hooks or []);
       in
@@ -1044,12 +1046,19 @@ in {
     # be modified.
     module-claude-hm-delegation-clamp-default-off = mkTest "claude-hm-delegation-clamp-default-off" (
       let
-        result = evalHm {ai.claude.enable = true;};
-        settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
+        bareSettings = (evalHm {ai.claude.enable = true;}).config.programs.claude-code.settings;
+        result = evalHm {
+          ai.claude = {
+            enable = true;
+            hooks.PreToolUse = [{hooks = [{command = "consumer-control";}];}];
+          };
+        };
+        settingsHooks = result.config.programs.claude-code.settings.hooks;
       in
-        (settingsHooks.UserPromptSubmit or [])
-        == []
-        && (settingsHooks.PreCompact or []) == []
+        !(bareSettings ? hooks)
+        && builtins.elem "consumer-control" (handlerCommands settingsHooks.PreToolUse)
+        && !(settingsHooks ? UserPromptSubmit)
+        && !(settingsHooks ? PreCompact)
     );
 
     # Opting in must produce BOTH hooks: the injector and the PreCompact re-arm.
@@ -1063,7 +1072,7 @@ in {
             delegationClamp.mitigate = true;
           };
         };
-        settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
+        settingsHooks = result.config.programs.claude-code.settings.hooks;
       in
         hasClampHook (settingsHooks.UserPromptSubmit or [])
         && hasClampHook (settingsHooks.PreCompact or [])
@@ -1098,7 +1107,7 @@ in {
             hooks.UserPromptSubmit = [{hooks = [{command = "consumer-hook";}];}];
           };
         };
-        blocks = ((result.config.programs.claude-code.settings or {}).hooks or {}).UserPromptSubmit or [];
+        blocks = result.config.programs.claude-code.settings.hooks.UserPromptSubmit or [];
         cmds = handlerCommands blocks;
       in
         builtins.elem "consumer-hook" cmds
@@ -1111,10 +1120,18 @@ in {
     # default would block writes for every consumer who never asked for it.
     module-claude-hm-memory-collision-guard-default-off = mkTest "claude-hm-memory-collision-guard-default-off" (
       let
-        result = evalHm {ai.claude.enable = true;};
-        settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
+        bareSettings = (evalHm {ai.claude.enable = true;}).config.programs.claude-code.settings;
+        result = evalHm {
+          ai.claude = {
+            enable = true;
+            hooks.PreToolUse = [{hooks = [{command = "consumer-control";}];}];
+          };
+        };
+        settingsHooks = result.config.programs.claude-code.settings.hooks;
       in
-        hasGuardHook (settingsHooks.PreToolUse or []) == false
+        !(bareSettings ? hooks)
+        && builtins.elem "consumer-control" (handlerCommands settingsHooks.PreToolUse)
+        && hasGuardHook settingsHooks.PreToolUse == false
     );
 
     # Opting in must produce a PreToolUse entry matching the write-shaped tools. The
@@ -1128,7 +1145,7 @@ in {
             memoryCollisionGuard.enable = true;
           };
         };
-        blocks = ((result.config.programs.claude-code.settings or {}).hooks or {}).PreToolUse or [];
+        blocks = result.config.programs.claude-code.settings.hooks.PreToolUse or [];
         guardBlocks = builtins.filter (b: hasGuardHook [b]) blocks;
       in
         builtins.length guardBlocks
@@ -1146,11 +1163,19 @@ in {
           };
         };
         settingsJson = (result.config.files.".claude/settings.json" or {}).json or {};
-        offResult = evalDevenv {ai.claude.enable = true;};
-        offJson = (offResult.config.files.".claude/settings.json" or {}).json or {};
+        offResult = evalDevenv {
+          ai.claude = {
+            enable = true;
+            hooks.PreToolUse = [{hooks = [{command = "consumer-control";}];}];
+          };
+        };
+        bareSettings = (evalDevenv {ai.claude.enable = true;}).config.files.".claude/settings.json".json;
+        offJson = offResult.config.files.".claude/settings.json".json;
       in
         hasGuardHook (settingsJson.hooks.PreToolUse or [])
-        && hasGuardHook (offJson.hooks.PreToolUse or []) == false
+        && !(bareSettings ? hooks)
+        && builtins.elem "consumer-control" (handlerCommands offJson.hooks.PreToolUse)
+        && hasGuardHook offJson.hooks.PreToolUse == false
     );
 
     # Compose-not-clobber, same reasoning as the clamp's: emitted as a DEFINITION of
@@ -1170,7 +1195,7 @@ in {
             ];
           };
         };
-        blocks = ((result.config.programs.claude-code.settings or {}).hooks or {}).PreToolUse or [];
+        blocks = result.config.programs.claude-code.settings.hooks.PreToolUse or [];
         cmds = handlerCommands blocks;
       in
         builtins.elem "consumer-hook" cmds
@@ -1213,13 +1238,12 @@ in {
         };
         settingsHooks = ((result.config.files.".claude/settings.json" or {}).json or {}).hooks or {};
         scriptFile = result.config.files.".claude/hooks/from-top" or null;
-        upstream = result.config.claude.code.hooks or {};
       in
         (settingsHooks.from-settings or null)
         != null
         && scriptFile != null
         && (scriptFile.text or null) == "#!/usr/bin/env bash\necho from-top\n"
-        && !(upstream ? from-top)
+        && !(result.config.claude.code ? hooks)
     );
 
     # Typed ai.claude.hooks event map: accepts the settings.json-shaped
