@@ -7,10 +7,9 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/agent.nix,
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-20 — `ai.codex.profiles` and its HM/devenv
-> materializer were removed as unreachable dead code; the delivery-path and
-> config-parity passages below that used it as their worked example now use
-> `ai.codex.execpolicyRules` instead.
+> **Last verified:** 2026-09-21 — `ai.codex.profiles` is removed, and delivery
+> diagnostics stay silent for excluded root pools while reporting unsupported
+> per-runtime requests.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -378,6 +377,15 @@ Kimchi is the sharp example: it supports `context`, `environmentVariables`,
 `ai.kimchi.rulesDir` do not exist. Capability tests pair every eval-failure
 assertion with a supported-runtime positive control so harness failure cannot
 masquerade as correct exclusion.
+
+A non-empty ROOT request for an excluded pool is SILENT — no assertion, and no
+activation warning either. The remedy a warning would ask for does not exist:
+`ai.kimchi.rules` is an unknown option by design, so nothing the consumer can
+write would silence it and it would repeat on every activation forever. The
+exclusion is recorded in the pool's option description and in the delivery
+matrix instead. A PER-RUNTIME request a backend cannot deliver does warn
+(`lib/ai/delivery-warnings.nix`), because that one the consumer wrote directly
+and can delete.
 
 ### Assertion semantics
 
