@@ -6,17 +6,23 @@ from pathlib import Path
 import sys
 
 
-def snapshot(state, roots):
-    """Remember old upstream declarations before cleanup replaces its ledger."""
+def snapshot(state, owned):
+    """Bootstrap the ledger from upstream's old one, for AI-managed paths only.
+
+    `owned` is the module's EXACT path -> option map, never a directory
+    prefix: `.codex/` and `.github/` also hold consumer-declared files, and
+    claiming those produced retention warnings naming an ai.* option that
+    never wrote them.
+    """
     upstream = state / "files.json"
     if not upstream.exists():
         return
     ledger = state / "ai-delivery-observed.json"
     previous = json.loads(ledger.read_text()) if ledger.exists() else {}
     for name in json.loads(upstream.read_text()).get("managedFiles", []):
-        for prefix, option in roots.items():
-            if name == prefix or name.startswith(prefix + "/"):
-                previous.setdefault(name, {"mode": "symlink", "option": option})
+        option = owned.get(name)
+        if option is not None:
+            previous.setdefault(name, {"mode": "symlink", "option": option})
     if previous:
         save(ledger, previous)
 
