@@ -84,7 +84,15 @@
   # An exempted writer's failures are RECORDED, not fatal. The gate errors the
   # moment an exempted writer survives BOTH arms ("exemption is stale"), so
   # every exemption below is a countdown the ownership fix has to spend.
+  #
+  # `exempt` answers for a writer that EXISTS and behaves wrongly. It cannot
+  # answer for a writerAttr that resolves to nothing, because that shape is
+  # indistinguishable from a typo, and the gate must keep failing on typos.
+  # A row whose declared writer genuinely does not exist yet says so with
+  # `absentWriter`, whose countdown runs the other way: the gate errors the
+  # moment the attribute starts existing, which is when the row owes an update.
   exempt = evidence: reason: {exemption = {inherit evidence reason;};};
+  absentWriter = evidence: reason: {absentWriter = {inherit evidence reason;};};
   # Three HM settings merges share one defect and one shape, so they share one
   # reason; only the citation differs.
   gatedSettingsMerge = evidence:
@@ -154,7 +162,7 @@
           exempt "packages/kiro-cli/lib/mkKiro.nix:1784"
           "Writer sits inside mkIf on a non-empty merged pool, so an emptied declaration never prunes mcp.json."
         else
-          exempt "packages/kiro-cli/lib/mkKiro.nix:1983"
+          absentWriter "packages/kiro-cli/lib/mkKiro.nix:1984"
           "This task does not exist: the devenv write is an enterShell fragment gated on a non-empty merged pool, so neither declaration reaches a task."
       );
     merge =
@@ -175,12 +183,15 @@
       condition = ''ai.kiro.mcpWriteMode = "overwrite" (default)'';
       additionalWriters =
         [merge]
-        ++ lib.optional (mode == "hm") (primary
+        # The primary's exemption answers for the WRITE entry surviving an
+        # emptied pool. This entry has a different defect — it is not emitted
+        # at all — so it drops that record rather than carrying two.
+        ++ lib.optional (mode == "hm") (builtins.removeAttrs primary ["exemption"]
           // {
             writerAttr = ["home" "activation" "materialize-kiro-settings-prune"];
             role = "Retire merge leaves and prune retired whole paths before the write phase.";
           }
-          // exempt "packages/kiro-cli/lib/mkKiro.nix:1786 (mkMcpJsonScript, where hooks use materializeLib.mkHmActivation at :1831)"
+          // absentWriter "packages/kiro-cli/lib/mkKiro.nix:1786 (mkMcpJsonScript, where hooks use materializeLib.mkHmActivation at :1831)"
           "mcp.json is assembled by the bespoke mkMcpJsonScript instead of the materializer, so no .kiro/settings prune entry is emitted under either declaration.");
     };
   kiroHooks = mode: let
@@ -521,13 +532,15 @@
         && writer.probe.nonEmpty != writer.probe.empty
       ))
     && lib.all (path: builtins.isList path && path != [] && lib.all nonBlank path) (writer.inputOptions or [])
+    && (!(writer ? absentWriter) || (nonBlank (writer.absentWriter.reason or "") && nonBlank (writer.absentWriter.evidence or "")))
+    && !(writer ? absentWriter && writer ? exemption)
     && (!(writer ? constantGate) || nonBlank writer.constantGate)
     && (!(writer ? declarationIndependent) || nonBlank writer.declarationIndependent)
     && (!(writer ? exemption) || (nonBlank (writer.exemption.reason or "") && nonBlank (writer.exemption.evidence or "")));
   expectedKeys = lib.concatMap (surface: lib.concatMap (ecosystem: map (mode: "${surface}/${ecosystem}/${mode}") modes) ecosystems) surfaces;
   validateRows = rows:
     assert lib.assertMsg (lib.all (row: lib.all (field: builtins.hasAttr field row) ["ecosystem" "mode" "surface"]) rows) "ai-delivery: every row must declare surface, ecosystem, and mode";
-    assert lib.assertMsg (lib.all (row: lib.all validWriter (writersOf row)) rows) "ai-delivery: incomplete or invalid writer (required fields, primitive, reason, reverifyCommand, probe, inputOptions as key lists, constantGate, declarationIndependent, or exemption)";
+    assert lib.assertMsg (lib.all (row: lib.all validWriter (writersOf row)) rows) "ai-delivery: incomplete or invalid writer (required fields, primitive, reason, reverifyCommand, probe, inputOptions as key lists, absentWriter, constantGate, declarationIndependent, or exemption)";
     assert lib.assertMsg (lib.sort builtins.lessThan (map key rows) == lib.sort builtins.lessThan expectedKeys) "ai-delivery: expected exactly one row for every surface/ecosystem in BOTH hm and devenv (use notApplicable with a reason for gaps)"; rows;
   rows = validateRows (flatten definitions);
 in
