@@ -446,33 +446,24 @@
     cfg.hooksJson
     // lib.mapAttrs (_fileKey: envelope: builtins.toJSON envelope) (kiroTypedHookFiles cfg.hooks);
 
-  # Shared strategy-driven materializer (lib/ai/materialize.nix) — the hook
-  # writer for both backends, the one-shot legacy steering-copy retirement,
-  # and the single source of the name-safety regex used by copy-mode names.
+  # Shared strategy-driven materializer (lib/ai/materialize.nix) — the
+  # mcp.json writer, the one-shot legacy steering-copy retirement, and the
+  # single source of the name-safety regex used by copy-mode names. Hooks left
+  # it for `lib/ai/own.nix`.
   materializeLib = import ../../../lib/ai/materialize.nix {inherit lib;};
 
-  # Hook names are attrset keys interpolated straight into the generated
-  # writer's shell words, target paths, grep patterns and temp-sweep glob, so
-  # a `/`, `..`, whitespace, or quote would write outside the hooks dir or
-  # break the emitted script. Require a leading alphanumeric then
-  # `[A-Za-z0-9._-]` (covers kiro-memory, pre-commit, lint) — the same
-  # charset used by materializeLib.nameSafe.
-  # Shared assertion for both backends.
-  hookNameSafe = materializeLib.nameSafe;
+  # A hook file name is a unit address in `.kiro/hooks`, and `own` already
+  # refuses one that is empty, dot-prefixed or path-separated. This charset is
+  # tighter on purpose and stays an ASSERTION rather than `own`'s throw: it is
+  # the diagnostic a consumer gets for a `hooksDir` full of files Kiro's own
+  # loader would choke on, and a named assertion names the option while a
+  # throw from inside a plan does not. Require a leading alphanumeric then
+  # `[A-Za-z0-9._-]` (covers kiro-memory, pre-commit, lint).
+  hookNameRegex = "[A-Za-z0-9][A-Za-z0-9._-]*";
+  hookNameSafe = name: builtins.match hookNameRegex name != null;
 
   # Where Kiro reads hooks from. BOTH hook surfaces land here.
   hookTargetDir = cfg: "${cfg.configDir}/hooks";
-
-  # Hook entries are plain factory-internal values, so they must carry BOTH
-  # fields explicitly — the materializer reads whichever is null to decide
-  # shape, and a missing attribute is an eval error rather than a default.
-  mkHookEntry = attrs:
-    {
-      text = null;
-      source = null;
-      strategy = "copy";
-    }
-    // attrs;
 
   # `hooksDir` contributes the source directory's TOP-LEVEL `*.json` files,
   # enumerated at eval (same idiom as the devenv `agentsDir` walker below;
@@ -490,29 +481,40 @@
     lib.concatMapAttrs (
       name: kind:
         if (kind == "regular" || kind == "symlink") && lib.hasSuffix ".json" name
-        then {${name} = mkHookEntry {source = dir + "/${name}";};}
+        then {${name} = {store = dir + "/${name}";};}
         else {}
     )
     (builtins.readDir dir);
 
   # Lower whichever hook surface is set — inline (`hooks`/`hooksJson`) or the
-  # external `hooksDir` — into ONE materializer entry set, so the two share a
-  # manifest and a consumer flipping between them prunes the previous
-  # surface's files instead of orphaning them. The two are mutually exclusive
-  # (see `mkAssertions`), so the branch never has to merge them.
+  # external `hooksDir` — into ONE unit set, so the two share a ledger and a
+  # consumer flipping between them prunes the previous surface's files instead
+  # of orphaning them. The two are mutually exclusive (see `mkAssertions`), so
+  # the branch never has to merge them.
   #
-  # `strategy` is always "copy" and there is deliberately NO symlink escape
-  # hatch here: the v3 engine's hook scan keeps
-  # only `entry.isFile()` entries, so a symlinked hook silently never loads
-  # (kirodotdev/Kiro#9787). A strategy option would only offer a way to break
-  # hooks.
-  mkHookEntries = cfg:
+  # These are REAL files at the module's declared mode, never symlinks, and
+  # there is deliberately no escape hatch: the v3 engine's hook scan keeps only
+  # `entry.isFile()` entries, so a symlinked hook silently never loads
+  # (kirodotdev/Kiro#9787).
+  mkHookUnits = cfg:
     if cfg.hooksDir != null
     then hooksDirEntries cfg.hooksDir
     else
       lib.mapAttrs' (name: content:
-        lib.nameValuePair "${name}.json" (mkHookEntry {text = content;}))
+        lib.nameValuePair "${name}.json" {text = content;})
       (mkAllHookFiles cfg);
+
+  # The hooks directory as ONE `own` dir target, identical on both backends:
+  # same ledger, same directory, same units — only the entry names differ.
+  mkHookTarget = cfg: {
+    codec = "dir";
+    # A LITERAL, as every ledger name is: every ownership record the previous
+    # generation wrote hangs off exactly this path, and a derived one would
+    # orphan all of them.
+    ledger = "materialize/kiro-hooks.manifest";
+    path = hookTargetDir cfg;
+    units = mkHookUnits cfg;
+  };
 
   hookNameAssertion = cfg: let
     bad =
@@ -640,15 +642,21 @@
         '';
       }
     ]
-    # Hook entries ride the real-file materializer, so they need its guards.
     # `hookNameAssertion` above covers only the INLINE surfaces' attr keys;
-    # this is what catches a `hooksDir` whose filenames are unsafe to
-    # interpolate into the generated shell.
-    ++ materializeLib.mkEntryAssertions {
-      app = "kiro";
-      surface = "hook";
-      files = mkHookEntries cfg;
-    };
+    # this is what catches a `hooksDir` whose filenames are unsafe. The other
+    # three guards the materializer's entry assertions carried — exactly one
+    # content field, a render command only for a copy, an octal mode — are
+    # structural in `own` and refused there, so only the names need saying.
+    ++ [
+      (
+        let
+          bad = builtins.filter (name: !hookNameSafe name) (builtins.attrNames (mkHookUnits cfg));
+        in {
+          assertion = bad == [];
+          message = "ai.kiro: hook file names must match ${hookNameRegex} (they are unit addresses in ${hookTargetDir cfg}); offending: ${lib.concatStringsSep ", " bad}";
+        }
+      )
+    ];
 
   # Steering emitters route first, render second, and contribute the final
   # native files to `ai.kiro.files` at default priority. The current pinned
@@ -1696,8 +1704,8 @@ in
       # External hooks directory. NOT symlinked — the directory's
       # top-level `*.json` files are enumerated at eval and materialized
       # as REAL files under `<configDir>/hooks` (kiro v3 drops symlinked
-      # hooks), through the same manifest as the inline surfaces. See
-      # `mkHookEntries` for what is and is not carried over.
+      # hooks), through the same ledger as the inline surfaces. See
+      # `mkHookUnits` for what is and is not carried over.
       hooksDir = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
         default = null;
@@ -1741,9 +1749,6 @@ in
           inherit cfg mergedContext hasMergedContext mergedRules;
           sharedAgentsMd = false;
         };
-
-        hooksTargetDir = hookTargetDir cfg;
-        hookEntries = mkHookEntries cfg;
 
         filteredSettings = aiCommon.filterNulls cfg.nativeSettings;
         # Kiro cli.json uses flat dot-notation keys ("chat.enableTangentMode")
@@ -1858,13 +1863,14 @@ in
                 recursive = true;
               };
             })
-            # Hook delivery — REAL files via the shared strategy-driven
-            # materializer (lib/ai/materialize.nix), NOT home.file (which
-            # symlinks into /nix/store). Kiro v3 scans the hooks dir but does
-            # NOT follow store symlinks (verified live on 2.13.0: global scan
-            # fires real files, skips symlinks), so a symlinked hook never
-            # loads. Covers BOTH hook surfaces (inline `hooks`/`hooksJson`
-            # and the external `hooksDir`) through one manifest.
+            # Hook delivery — REAL files via `lib/ai/own.nix`, NOT home.file
+            # (which symlinks into /nix/store). Kiro v3 scans the hooks dir
+            # but does NOT follow store symlinks (verified live on 2.13.0:
+            # global scan fires real files, skips symlinks), so a symlinked
+            # hook never loads. THAT consumer fact is why this is a `dir`
+            # target and not `ai.kiro.files`. Covers BOTH hook surfaces
+            # (inline `hooks`/`hooksJson` and the external `hooksDir`)
+            # through one ledger.
             #
             # Emitted whenever the module is enabled — NOT gated on a
             # non-empty hook set — so emptying the surface still prunes
@@ -1876,20 +1882,23 @@ in
             # matters most.
             #
             # OWNERSHIP — the explicit decision: this claims only the files
-            # it WROTE (tracked per-file in the manifest), not the whole
+            # it WROTE (tracked per-file in the ledger), not the whole
             # directory. A hand-placed `~/.kiro/hooks/<name>.json` that this
             # module never wrote survives activation untouched, where the old
             # `rm -f "$HOOKS_DIR"/*.json` deleted it on every generation. An
             # unmanaged file colliding with a declared name is backed up
-            # before being adopted (materializer clobber guard).
-            {
-              home.activation = materializeLib.mkHmActivation {
-                files = hookEntries;
-                targetDir = hooksTargetDir;
-                stateSlug = materializeLib.mkStateSlug hooksTargetDir;
-                inherit (pkgs) coreutils diffutils flock gnugrep;
+            # before being adopted (own.py's clobber guard).
+            (helpers.mkOwnBundle {
+              backend = "hm";
+              entryNames = {
+                prune = "materialize-kiro-hooks-prune";
+                write = "materialize-kiro-hooks-write";
               };
-            }
+              python = pkgs.python3;
+              runtime = "kiro";
+              targets = [(mkHookTarget cfg)];
+              inherit pkgs;
+            })
             # Skills fanout via mkSkillEntries, which uses
             # `recursive = true` to produce Layout B (a real directory with
             # per-file symlinks) and is path-type-agnostic.
@@ -1960,9 +1969,6 @@ in
           == null
           && ((rule.inclusion or null) == null || rule.inclusion == "always"))
         mergedRules;
-
-        hooksTargetDir = hookTargetDir cfg;
-        hookEntries = mkHookEntries cfg;
 
         filteredSettings = aiCommon.filterNulls cfg.nativeSettings;
         flatSettings = flattenKiroSettings filteredSettings;
@@ -2069,7 +2075,7 @@ in
             # Hook JSON files — written as REAL files, NOT devenv `files.*`
             # (which symlinks into /nix/store). The 2.18.1 spike changed only
             # steering evidence; hooks retain their measured real-file
-            # lifecycle and ownership-safe materializer.
+            # lifecycle and ownership-safe reconciliation.
             #
             # Emitted whenever the module is enabled — NOT gated on a
             # non-empty hook set — so emptying the surface still prunes
@@ -2081,29 +2087,24 @@ in
             # written hook file stayed in `.kiro/hooks/` and kept firing.
             #
             # OWNERSHIP — the explicit decision, matching HM: this claims
-            # only the files it WROTE (tracked per-file in the manifest under
+            # only the files it WROTE (tracked per-file in the ledger under
             # $DEVENV_STATE), not the whole directory. A hand-placed
             # `.kiro/hooks/<name>.json` survives; the old
             # `rm -f <dir>/*.json` deleted it on every shell entry.
             #
-            # The task `cd`s to $DEVENV_ROOT itself (materialize.nix), which
-            # is the same anchoring the retired enterShell fragments needed:
-            # shell entry runs in the CALLER's cwd because direnv activates
-            # in subdirectories.
-            {
-              tasks."ai:kiro:materialize-hooks" = materializeLib.mkDevenvTask {
-                files = hookEntries;
-                targetDir = hooksTargetDir;
-                stateSlug = materializeLib.mkStateSlug hooksTargetDir;
-                hasFiles = config.files != {};
-                inherit (pkgs) coreutils diffutils flock gnugrep;
-              };
-              enterTest = materializeLib.mkEnterTest {
-                app = "kiro";
-                files = hookEntries;
-                targetDir = hooksTargetDir;
-              };
-            }
+            # Nothing here depends on the shell's cwd, which matters because
+            # devenv runs a task in the CALLER's directory (direnv activates
+            # in subdirectories) and `own` does not `cd`: the target is
+            # $DEVENV_ROOT plus the target path, both from the plan.
+            (helpers.mkOwnBundle {
+              backend = "devenv";
+              entryNames.write = "ai:kiro:materialize-hooks";
+              hasFiles = config.files != {};
+              python = pkgs.python3;
+              runtime = "kiro";
+              targets = [(mkHookTarget cfg)];
+              inherit pkgs;
+            })
             # Skills via the user-space walker. devenv's `files.*.source`
             # cannot walk a directory recursively, so we enumerate leaves
             # at eval time via `mkDevenvSkillEntries`.
