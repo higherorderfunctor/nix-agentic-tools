@@ -1,0 +1,99 @@
+diff --git a/src/kiro_crew/platform_compat.py b/src/kiro_crew/platform_compat.py
+index c82ea63..33a0ed3 100644
+--- a/src/kiro_crew/platform_compat.py
++++ b/src/kiro_crew/platform_compat.py
+@@ -2299,7 +2299,7 @@ def trusted_git_bin() -> str | None:
+ 
+ 
+ def trusted_system_bin(name: str) -> str | None:
+-    """Resolve *name* from fixed system directories, ignoring ``PATH``.
++    """Resolve *name* from system directories or immutable Nix store objects.
+ 
+     A gateway's ``PATH`` can legitimately lead with agent-writable directories
+     (a worktree venv's ``bin``, ``~/.local/bin``), so a bare argv name lets a
+@@ -2327,6 +2327,33 @@ def trusted_system_bin(name: str) -> str | None:
+             candidate = os.path.join(directory, name + suffix)
+             if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                 return candidate
++    if not IS_WINDOWS and name == os.path.basename(name):
++        # Nix tools need not have an FHS alias. Admit only store paths or the
++        # conventional profile namespaces, never arbitrary PATH directories.
++        # Content-addressed store objects are read-only and cannot be rewritten
++        # in place: a stronger immutability guarantee than an ordinary /usr/bin
++        # entry. Profiles themselves are mutable symlinks, so pin the resolved
++        # store object, not the alias an agent could subsequently retarget.
++        prefixes = (
++            "/nix/store/",
++            "/run/current-system/sw/",
++            "/etc/profiles/per-user/",
++            os.path.expanduser("~/.nix-profile/"),
++            "/nix/var/nix/profiles/",
++        )
++        for directory in os.environ.get("PATH", "").split(os.pathsep):
++            if not os.path.isabs(directory):
++                continue
++            candidate = os.path.normpath(os.path.join(directory, name))
++            if not candidate.startswith(prefixes):
++                continue
++            resolved = os.path.realpath(candidate)
++            if (
++                resolved.startswith("/nix/store/")
++                and os.path.isfile(resolved)
++                and os.access(resolved, os.X_OK)
++            ):
++                return resolved
+     _log_tool_outside_trusted_dirs(name, directories)
+     return None
+ 
+diff --git a/test/test_platform_compat.py b/test/test_platform_compat.py
+index 117a62d..a81d562 100644
+--- a/test/test_platform_compat.py
++++ b/test/test_platform_compat.py
+@@ -4082,6 +4082,47 @@ def test_trusted_system_bin_rejects_a_name_not_in_system_dirs(tmp_path, monkeypa
+     assert platform_compat.trusted_system_bin("ps") is not None
+ 
+ 
++@pytest.mark.parametrize("directory", [
++    "/nix/store/hash-bash/bin",
++    "/run/current-system/sw/bin",
++    "/etc/profiles/per-user/alice/bin",
++    "/home/alice/.nix-profile/bin",
++    "/nix/var/nix/profiles/default/bin",
++])
++def test_trusted_system_bin_pins_nix_profile_targets(directory, monkeypatch):
++    from kiro_crew import platform_compat as pc
++
++    monkeypatch.setattr(pc, "IS_WINDOWS", False)
++    monkeypatch.setattr(pc, "_TRUSTED_SYSTEM_BIN_DIRS", ())
++    monkeypatch.setenv("HOME", "/home/alice")
++    monkeypatch.setenv("PATH", directory)
++    target = "/nix/store/hash-bash/bin/bash"
++    monkeypatch.setattr(pc.os.path, "realpath", lambda path: target)
++    monkeypatch.setattr(pc.os.path, "isfile", lambda path: path == target)
++    monkeypatch.setattr(pc.os, "access", lambda path, mode: path == target)
++    assert pc.trusted_system_bin("bash") == target
++
++
++@pytest.mark.parametrize("directory,target", [
++    ("/tmp/bin", "/nix/store/hash-bash/bin/bash"),
++    ("/nix/store-lookalike/bin", "/nix/store/hash-bash/bin/bash"),
++    ("/nix/store/../../tmp/bin", "/nix/store/hash-bash/bin/bash"),
++    ("/home/alice/.nix-profile/bin", "/tmp/planted-bash"),
++])
++def test_trusted_system_bin_refuses_nix_lookalikes(directory, target, monkeypatch):
++    from kiro_crew import platform_compat as pc
++
++    monkeypatch.setattr(pc, "IS_WINDOWS", False)
++    monkeypatch.setattr(pc, "_TRUSTED_SYSTEM_BIN_DIRS", ())
++    monkeypatch.setattr(pc, "_log_tool_outside_trusted_dirs", lambda *args: None)
++    monkeypatch.setenv("HOME", "/home/alice")
++    monkeypatch.setenv("PATH", directory)
++    monkeypatch.setattr(pc.os.path, "realpath", lambda path: target)
++    monkeypatch.setattr(pc.os.path, "isfile", lambda path: True)
++    monkeypatch.setattr(pc.os, "access", lambda path, mode: True)
++    assert pc.trusted_system_bin("bash") is None
++
++
+ def test_trusted_system_bin_dirs_are_not_limited_to_fhs():
+     # A distribution may keep ps/lsof/systemd-run outside /usr/{s}bin; an
+     # FHS-only pin resolves nothing at all there.
