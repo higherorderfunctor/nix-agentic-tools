@@ -1,0 +1,31 @@
+{
+  "complete": true,
+  "identity": "baseline-F1-open-I0-open",
+  "model": "reference",
+  "records": [
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["F1"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "F0"
+        }
+      ],
+      "uid": "F1"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["I0"]
+      },
+      "relations": [],
+      "uid": "I0"
+    }
+  ]
+}

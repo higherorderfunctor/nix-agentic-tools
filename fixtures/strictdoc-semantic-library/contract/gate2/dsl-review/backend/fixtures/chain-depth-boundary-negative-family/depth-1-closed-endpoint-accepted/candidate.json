@@ -1,0 +1,175 @@
+{
+  "created": ["K0", "KS", "KD1"],
+  "model": "reference",
+  "records": [
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["F0"]
+      },
+      "relations": [],
+      "uid": "F0"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["F1"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "F0"
+        }
+      ],
+      "uid": "F1"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["F1a"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "F1"
+        }
+      ],
+      "uid": "F1a"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["true"],
+        "UID": ["F2"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "F0"
+        }
+      ],
+      "uid": "F2"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["F2a"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "F2"
+        }
+      ],
+      "uid": "F2a"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["F2b"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "F2"
+        }
+      ],
+      "uid": "F2b"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["G0"]
+      },
+      "relations": [],
+      "uid": "G0"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["G1"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "G0"
+        }
+      ],
+      "uid": "G1"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["I0"]
+      },
+      "relations": [],
+      "uid": "I0"
+    },
+    {
+      "element": "BAZ",
+      "fields": {
+        "UID": ["Z0"]
+      },
+      "relations": [],
+      "uid": "Z0"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["K0"]
+      },
+      "relations": [],
+      "uid": "K0"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["KS"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "K0"
+        },
+        {
+          "direction": "parent",
+          "role": "R",
+          "target": "KD1"
+        }
+      ],
+      "uid": "KS"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["true"],
+        "UID": ["KD1"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "K0"
+        }
+      ],
+      "uid": "KD1"
+    }
+  ]
+}
