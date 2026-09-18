@@ -49,7 +49,10 @@ class Fixture:
     def plan_file(self, plan):
         self.serial += 1
         path = self.plans / f"plan-{self.serial}.json"
-        path.write_text(json.dumps(plan))
+        # own.nix puts the renderer's interpreter in the plan, so the fixture
+        # supplies the same store path rather than letting PATH decide. A case
+        # that wants to prove the field is load-bearing overrides it.
+        path.write_text(json.dumps({"bash": TOOLS["bash"], **plan}))
         return path
 
     def command(self, plan, *arguments, python=None):
@@ -546,8 +549,30 @@ def renderer(fixture):
                 fixture.ledger("json-settings/cli.json"),
             )
         ] == before, f"a failed renderer moved bytes: {failing}"
+
+    # The plan's interpreter is the one that runs. Point it at nothing and the
+    # run fails instead of falling back to whatever PATH offers -- an
+    # activation or shell-entry environment can arrive with a hostile or empty
+    # one, and a renderer is the only code this program executes.
+    hostile = json.loads(json.dumps(good))
+    hostile["bash"] = "/nonexistent/bash"
+    result = fixture.own(hostile, succeeds=False)
+    assert "/nonexistent/bash" in result.stderr, result.stderr
+    assert [
+        snapshot(path)
+        for path in (
+            unit,
+            document,
+            fixture.ledger("materialize/settings.manifest"),
+            fixture.ledger("json-settings/cli.json"),
+        )
+    ] == before, "an unusable interpreter moved bytes"
+
     assert not list((fixture.root / "settings").glob(".*.nat-tmp.*"))
-    print("PASS renderer: three failure shapes, every byte and both ledgers identical")
+    print(
+        "PASS renderer: three failure shapes and an unusable interpreter, "
+        "every byte and both ledgers identical"
+    )
 
 
 def legacy(fixture):
