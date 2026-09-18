@@ -89,12 +89,23 @@
   # reason; only the citation differs.
   gatedSettingsMerge = evidence:
     exempt evidence "Activation entry sits inside mkIf on a non-empty settings set, so an emptied declaration never merges the removal away.";
-  leaves = activation: target: declaration: {
-    inherit target;
+  # A writer whose enabling condition can never be false. It therefore survives
+  # the gate's empty arm for a reason that has nothing to do with removal, so
+  # the pass is not evidence that a retired key is retired. RECORDED, not
+  # exempted: the failures list is empty, so an exemption would fire the
+  # stale-exemption rule instead of documenting anything.
+  constantGate = evidence: {constantGate = evidence;};
+  # Retraction MECHANISM, one string per mechanism rather than per writer.
+  # These are the only two the ownLeaves writers use, and they differ in the
+  # one property the gate cannot observe: whether a key dropped from the
+  # declaration is removed from the file.
+  reconcilerRetraction = "On activation, lib/ai/hm-helpers.nix's mkTomlSettingsActivationScript runs lib/ai/reconcile-toml.py, which records the prior generation's leaves, removes the retired ones, reasserts the current ones, and preserves unowned siblings.";
+  recursiveMerge = "On activation, lib/ai/hm-helpers.nix's mkSettingsActivationScript reasserts the declared leaves with `jq -s '.[0] * .[1]'` (lib/ai/hm-helpers.nix:186). A recursive merge CANNOT remove a key the declaration dropped (lib/ai/hm-helpers.nix:193-199), so a retired leaf survives in the file until the consumer deletes it by hand.";
+  leaves = pruneTrigger: activation: target: declaration: {
+    inherit pruneTrigger target;
     inputOptions = [(lib.concatStringsSep "." declaration.option)];
     primitive = "ownLeaves";
     writerAttr = ["home" "activation" activation];
-    pruneTrigger = "On activation, hm-helpers/reconcile-toml.py retracts prior manifest-owned leaves, preserving unowned siblings.";
     probe = declaration;
   };
   wrapper = mode: executable: {
@@ -194,7 +205,7 @@
           role = "Prune phase must survive an empty declaration as well as the write phase.";
         });
     };
-  codexConfig = leaves "codexSettingsReconcile" "$HOME/.codex/config.toml" (settingsProbe "codex");
+  codexConfig = leaves reconcilerRetraction "codexSettingsReconcile" "$HOME/.codex/config.toml" (settingsProbe "codex");
   copilotInert = "Factory documents this project file as undelivered: Copilot offers no flag or discovery for it. Presence is not proof of application consumption.";
 
   # A row's primary writer and additionalWriters use the same schema. Keeping
@@ -258,15 +269,15 @@
     };
     hooks = {
       claude = {
-        hm =
-          (delegated "hm" "settings" "$HOME/.claude/settings.json (hooks)")
-          // {
-            additionalWriters = [(delegated "hm" "hooks" "$HOME/.claude/hooks/<name>")];
-          };
         devenv =
           (declarative "devenv" ".claude/settings.json")
           // {
             additionalWriters = [(declarative "devenv" ".claude/hooks/<name>")];
+          };
+        hm =
+          (delegated "hm" "settings" "$HOME/.claude/settings.json (hooks)")
+          // {
+            additionalWriters = [(delegated "hm" "hooks" "$HOME/.claude/hooks/<name>")];
           };
       };
       codex = paths ".codex/hooks.json" ".codex/hooks.json";
@@ -316,7 +327,7 @@
         # NOT a parity gap, and the label used to invite "closing" it: Kiro
         # never looks in a project .kiro/ for permissions, so a devenv writer
         # would emit a file the runtime cannot read.
-        devenv = absent "Kiro reads permissions only from ~/.kiro/settings/ (global) or ~/.kiro/workspace-roots/<hash>/, never a project .kiro/, so a devenv-written permissions.yaml would never be read (packages/kiro-cli/lib/mkKiro.nix:1526). Agent-local permission records remain part of agents.";
+        devenv = absent "Kiro reads permissions only from ~/.kiro/settings/ (global) or ~/.kiro/workspace-roots/<hash>/, never a project .kiro/, so a devenv-written permissions.yaml would never be read (packages/kiro-cli/lib/mkKiro.nix:1524-1528, the comment establishing those read paths above the permissions option). Agent-local permission records remain part of agents.";
         hm = declarative "hm" ".kiro/settings/permissions.yaml";
       };
     };
@@ -343,25 +354,17 @@
       };
       kimchi = both (absent "Kimchi's supportedPools excludes rules.");
       kiro = {
-        hm = declarative "hm" ".kiro/steering/<name>.md";
         devenv =
           (declarative "devenv" "AGENTS.md")
           // {
             condition = "Always-on unscoped rules join sharedAgentsMd; scoped/manual rules stay in steering.";
             additionalWriters = [(declarative "devenv" ".kiro/steering/<name>.md")];
           };
+        hm = declarative "hm" ".kiro/steering/<name>.md";
       };
     };
     settings = {
       claude = {
-        hm =
-          (delegated "hm" "settings" "$HOME/.claude/settings.json")
-          // {
-            additionalWriters = [
-              (leaves "claudeUnpinLaunchEffort" "$HOME/.claude.json"
-                (probe ["ai" "claude" "unpinLaunchEffort"] {probe = true;} {}))
-            ];
-          };
         devenv =
           (declarative "devenv" ".claude/settings.json")
           // {
@@ -373,6 +376,19 @@
                 })
             ];
           };
+        hm =
+          (delegated "hm" "settings" "$HOME/.claude/settings.json")
+          // {
+            additionalWriters = [
+              (leaves recursiveMerge "claudeUnpinLaunchEffort" "$HOME/.claude.json"
+                (probe ["ai" "claude" "unpinLaunchEffort"] {probe = true;} {})
+                # The log line is unconditional and the merge body is appended
+                # only for a non-empty map, so this writer passes all three arms
+                # on the strength of that log line. The merge itself cannot
+                # retract an unpin flag the declaration dropped.
+                // constantGate "packages/claude-code/lib/mkClaude.nix:834-847 (the echo is emitted outside the n > 0 guard)")
+            ];
+          };
       };
       codex = {
         devenv = declarative "devenv" ".codex/config.toml";
@@ -381,39 +397,45 @@
       copilot = {
         devenv = (declarative "devenv" ".config/github-copilot/settings.json") // {deliveryGap = copilotInert;};
         hm =
-          leaves "copilotSettingsMerge" "$HOME/.copilot/settings.json" (settingsProbe "copilot")
+          leaves recursiveMerge "copilotSettingsMerge" "$HOME/.copilot/settings.json" (settingsProbe "copilot")
           // gatedSettingsMerge "packages/copilot-cli/lib/mkCopilot.nix:293";
       };
       kimchi = {
-        hm =
-          (leaves "kimchiConfigMerge" "$HOME/.config/kimchi/config.json"
-            (probe ["ai" "kimchi" "nativeSettings"] {
-              llmEndpoint = "https://example.invalid";
-              skillPaths = ["probe"];
-            } {skillPaths = [];}))
-          // {
-            additionalWriters = [
-              (leaves "kimchiHarnessSettingsMerge" "$HOME/.config/kimchi/harness/settings.json"
-                (probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {})
-                // gatedSettingsMerge "packages/kimchi/lib/mkKimchi.nix:258")
-            ];
-          };
         devenv =
           (declarative "devenv" ".config/kimchi/config.json")
           // {
             additionalWriters = [(declarative "devenv" ".config/kimchi/harness/settings.json")];
           };
+        hm =
+          (leaves recursiveMerge "kimchiConfigMerge" "$HOME/.config/kimchi/config.json"
+            (probe ["ai" "kimchi" "nativeSettings"] {
+              llmEndpoint = "https://example.invalid";
+              skillPaths = ["probe"];
+            } {})
+            # `skillPaths` defaults to `[]` rather than null, so filterNulls of
+            # the default nativeSettings is `{skillPaths = [];}` — never `{}`.
+            # The mkIf gate is therefore constant-true (measured: the HM
+            # activation set carries kimchiConfigMerge with no declaration at
+            # all), so surviving the empty arm says nothing about removal.
+            // constantGate "packages/kimchi/lib/mkKimchi.nix:143-146 with the mkIf at :247")
+          // {
+            additionalWriters = [
+              (leaves recursiveMerge "kimchiHarnessSettingsMerge" "$HOME/.config/kimchi/harness/settings.json"
+                (probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {})
+                // gatedSettingsMerge "packages/kimchi/lib/mkKimchi.nix:258")
+            ];
+          };
       };
       kiro = {
-        hm =
-          leaves "kiroSettingsMerge" "$HOME/.kiro/settings/cli.json"
-          (probe ["ai" "kiro" "nativeSettings"] {chat.defaultModel = "probe";} {})
-          // gatedSettingsMerge "packages/kiro-cli/lib/mkKiro.nix:1864";
         devenv =
           (declarative "devenv" ".kiro/settings/cli.json")
           // {
             deliveryConstraint = "Only the pinned workspace-allowlisted setting keys are accepted; global-only settings fail module assertions.";
           };
+        hm =
+          leaves recursiveMerge "kiroSettingsMerge" "$HOME/.kiro/settings/cli.json"
+          (probe ["ai" "kiro" "nativeSettings"] {chat.defaultModel = "probe";} {})
+          // gatedSettingsMerge "packages/kiro-cli/lib/mkKiro.nix:1864";
       };
     };
     skills = {
@@ -486,12 +508,13 @@
         && writer.probe.option != []
         && writer.probe.nonEmpty != writer.probe.empty
       ))
+    && (!(writer ? constantGate) || nonBlank writer.constantGate)
     && (!(writer ? declarationIndependent) || nonBlank writer.declarationIndependent)
     && (!(writer ? exemption) || (nonBlank (writer.exemption.reason or "") && nonBlank (writer.exemption.evidence or "")));
   expectedKeys = lib.concatMap (surface: lib.concatMap (ecosystem: map (mode: "${surface}/${ecosystem}/${mode}") modes) ecosystems) surfaces;
   validateRows = rows:
     assert lib.assertMsg (lib.all (row: lib.all (field: builtins.hasAttr field row) ["ecosystem" "mode" "surface"]) rows) "ai-delivery: every row must declare surface, ecosystem, and mode";
-    assert lib.assertMsg (lib.all (row: lib.all validWriter (writersOf row)) rows) "ai-delivery: incomplete or invalid writer (required fields, primitive, reason, reverifyCommand, probe, declarationIndependent, or exemption)";
+    assert lib.assertMsg (lib.all (row: lib.all validWriter (writersOf row)) rows) "ai-delivery: incomplete or invalid writer (required fields, primitive, reason, reverifyCommand, probe, constantGate, declarationIndependent, or exemption)";
     assert lib.assertMsg (lib.sort builtins.lessThan (map key rows) == lib.sort builtins.lessThan expectedKeys) "ai-delivery: expected exactly one row for every surface/ecosystem in BOTH hm and devenv (use notApplicable with a reason for gaps)"; rows;
   rows = validateRows (flatten definitions);
 in
