@@ -9,6 +9,9 @@ in {
   # such as Kiro hooks that require ownership-safe real-file delivery.
   materialize = import ./materialize.nix {inherit lib;};
   mcpServer = import ./mcpServer {inherit lib;};
+  # One reconciler for everything a generation owns: rung-2 whole files in a
+  # directory and rung-3 owned leaves in a shared document, as one plan.
+  own = import ./own.nix {inherit lib;};
   program = import ./program.nix {inherit lib;};
   # Module function — imported unevaluated so consumers can pass it directly
   # to `lib.evalModules { modules = [ lib.ai.sharedOptions ... ]; }`.
