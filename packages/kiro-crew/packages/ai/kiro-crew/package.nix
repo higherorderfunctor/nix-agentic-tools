@@ -94,24 +94,6 @@
   # with null defaults — when those derivations exist.
   embedModel ? import ../kiro-crew-embed-model/package.nix {inherit pkgs;},
   llamaCppLib ? null,
-  # ── Dormant patch ───────────────────────────────────────────────────────
-  #
-  # Defaults OFF, and CARRIED rather than deleted. It exists because the
-  # situation it answers is one you cannot write a patch for under time
-  # pressure — the moment you need it, upstream has already moved and the
-  # sites have to be re-found. `checks/patches-apply.nix` applies it on every
-  # CI run for exactly that reason: a dormant patch that nothing builds is
-  # retired by the first rebase that touches its context, silently.
-  #
-  # `delegateSandboxToKiroCli`: extends crew's delegation of sandboxing to
-  #   kiro-cli onto Linux. The primary arrangement needs no patch at all —
-  #   PATH plus `KIRO_KAS_NODE_PATH`, with crew's own namespace sandbox left
-  #   on. This is the fallback for a future kiro-cli that reintroduces a bwrap
-  #   or FHS step and breaks that arrangement quietly. It touches TWO sites
-  #   that must move together; the second is the agents-tree seal, and a
-  #   half-applied version opens the hole upstream documents.
-  #
-  delegateSandboxToKiroCli ? false,
   ...
 }: let
   ourPkgs = pkgs;
@@ -161,7 +143,7 @@
   # are the same set in both directions. An orphaned patch file and a missing
   # one both fail at EVAL, naming the file.
   #
-  # Eight of these eleven are upstreamable on their own merits and are worth
+  # Seven of these ten are upstreamable on their own merits and are worth
   # sending: upstreaming converts a recurring rebase cost into a one-time one,
   # and against a tree moving ~100 commits a day that is the only lever that
   # actually reduces the maintenance.
@@ -194,15 +176,10 @@
     frontend = [
       ../../../patches/kiro-crew-self-hosted-fonts-frontend.patch
     ];
-    dormant = [
-      ../../../patches/kiro-crew-linux-sandbox-delegation.patch
-    ];
+    dormant = [];
   };
 
-  pythonPatches =
-    patchManifest.python
-    ++ lib.optional delegateSandboxToKiroCli
-    ../../../patches/kiro-crew-linux-sandbox-delegation.patch;
+  pythonPatches = patchManifest.python;
 
   # THE DASHBOARD ASSERTION. Nothing upstream fails when the dashboard is
   # missing: `setup.py`'s `BuildWithFrontend` prints a WARNING and continues,

@@ -1,7 +1,7 @@
 # Does the carried patch set still apply — ALL of it, including the parts no
 # default build touches?
 #
-# This repo tracks KiroCrew `main` at roughly four bumps a day, against eleven
+# This repo tracks KiroCrew `main` at roughly four bumps a day, against ten
 # patches. The applied ones are self-policing: a conflict fails the package
 # build and the bump PR goes red. The DORMANT ones are not. Nothing builds
 # them, so a rebase silently retires them, and the failure surfaces months
