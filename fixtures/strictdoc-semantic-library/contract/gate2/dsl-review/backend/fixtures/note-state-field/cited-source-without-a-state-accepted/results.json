@@ -1,0 +1,163 @@
+{
+  "baseline": null,
+  "evaluation": "cited-source-without-a-state-accepted-expected",
+  "expected": true,
+  "findings": [],
+  "results": [
+    {
+      "causes": [],
+      "findings": [
+        {
+          "code": "field-value",
+          "evidence": {
+            "absentSatisfies": true,
+            "expected": ["final", "retired"],
+            "field": "STATE",
+            "present": false,
+            "record": "outline",
+            "values": []
+          },
+          "kind": "field-value",
+          "message": "STATE is absent, which this check allows.",
+          "occurrence": {
+            "direction": "parent",
+            "role": "SOURCE",
+            "target": "outline"
+          },
+          "occurrenceIndex": 0,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "report"
+        }
+      ],
+      "rule": "model:notes/element:NOTE/relation:parent:SOURCE/check:SOURCE.field-value",
+      "status": "satisfied"
+    },
+    {
+      "causes": [],
+      "findings": [
+        {
+          "code": "field-value",
+          "evidence": {
+            "absentSatisfies": false,
+            "expected": ["retired"],
+            "field": "STATE",
+            "present": true,
+            "record": "report",
+            "values": ["final"]
+          },
+          "kind": "field-value",
+          "message": "The STATE value final is not listed.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/select/where",
+          "status": "violated",
+          "uid": "report"
+        },
+        {
+          "code": "field-value",
+          "evidence": {
+            "absentSatisfies": false,
+            "expected": ["retired"],
+            "field": "STATE",
+            "present": false,
+            "record": "outline",
+            "values": []
+          },
+          "kind": "field-value",
+          "message": "STATE is absent, which this check does not allow.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/select/where",
+          "status": "violated",
+          "uid": "outline"
+        }
+      ],
+      "rule": "model:notes/element:NOTE/check:retired-notes-cite-a-source",
+      "status": "satisfied"
+    },
+    {
+      "causes": [],
+      "findings": [
+        {
+          "code": "field-value",
+          "evidence": {
+            "absentSatisfies": false,
+            "expected": ["draft"],
+            "field": "STATE",
+            "present": true,
+            "record": "report",
+            "values": ["final"]
+          },
+          "kind": "field-value",
+          "message": "The STATE value final is not listed.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check/any/0/not",
+          "status": "violated",
+          "uid": "report"
+        },
+        {
+          "code": "count",
+          "evidence": {
+            "compare": "eq",
+            "count": 1,
+            "occurrences": [
+              {
+                "direction": "parent",
+                "occurrenceIndex": 0,
+                "role": "SOURCE",
+                "target": "outline"
+              }
+            ],
+            "value": 0
+          },
+          "kind": "count",
+          "message": "The SOURCE count is not zero.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check/any/1",
+          "status": "violated",
+          "uid": "report"
+        },
+        {
+          "code": "field-value",
+          "evidence": {
+            "absentSatisfies": false,
+            "expected": ["draft"],
+            "field": "STATE",
+            "present": false,
+            "record": "outline",
+            "values": []
+          },
+          "kind": "field-value",
+          "message": "STATE is absent, which this check does not allow.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check/any/0/not",
+          "status": "violated",
+          "uid": "outline"
+        },
+        {
+          "code": "count",
+          "evidence": {
+            "compare": "eq",
+            "count": 0,
+            "occurrences": [],
+            "value": 0
+          },
+          "kind": "count",
+          "message": "The SOURCE count is zero.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check/any/1",
+          "status": "satisfied",
+          "uid": "outline"
+        }
+      ],
+      "rule": "model:notes/element:NOTE/check:drafts-cite-nothing",
+      "status": "satisfied"
+    }
+  ],
+  "status": "satisfied"
+}

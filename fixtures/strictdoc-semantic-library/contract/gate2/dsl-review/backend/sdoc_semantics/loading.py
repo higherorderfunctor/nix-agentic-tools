@@ -40,24 +40,43 @@ KEYWORD_SPACES = {
     "requireSingleton": [True],
     "from": ["owner"],
     "to": ["target"],
+    "subject": ["record", "owner", "target"],
+    "absentSatisfies": [False, True],
     "compare": ["lt", "lte", "gt", "gte", "eq"],
     "direction": ["parent", "child"],
     "status": ["satisfied", "violated", "blocked", "error"],
 }
 
 # Leaf kind to the exact key set a check object of that kind carries, and the
-# selector the leaf is valid for (contract.md:237-250).
+# selectors the leaf is valid for (contract.md:237-252). The kinds are kept in
+# the contract table's own order rather than alphabetically, because that table
+# is what this one restates. Every kind names a tuple of selectors, and only
+# field-value has more than one: it reads a field of the selected record, of an
+# occurrence owner or of an occurrence target, so its own subject keyword is
+# what decides which selector it belongs under.
 LEAF_SHAPES = {
-    "target-type": (("kind", "targetElement"), "occurrences"),
-    "count": (("kind", "relation", "compare", "value"), "records"),
-    "visible-target": (("kind", "view", "from", "to"), "occurrences"),
+    "target-type": (("kind", "targetElement"), ("occurrences",)),
+    "count": (("kind", "relation", "compare", "value"), ("records",)),
+    "field-value": (
+        ("kind", "field", "subject", "values", "absentSatisfies"),
+        ("records", "occurrences"),
+    ),
+    "visible-target": (("kind", "view", "from", "to"), ("occurrences",)),
     "endpoint-path": (
         ("kind", "view", "upper", "lower", "requireSingleton"),
-        "records",
+        ("records",),
     ),
-    "native-dag": (("kind",), "model"),
-    "forest-validity": (("kind", "view"), "model"),
-    "preserve": (("kind", "baseline", "projection"), "model"),
+    "native-dag": (("kind",), ("model",)),
+    "forest-validity": (("kind", "view"), ("model",)),
+    "preserve": (("kind", "baseline", "projection"), ("model",)),
+}
+
+# The subject a field-value leaf may name under each selector. A records
+# selector fixes the element, so the only subject is the selected record; an
+# occurrences selector binds the two endpoints of the occurrence instead.
+FIELD_VALUE_SUBJECTS = {
+    "records": ("record",),
+    "occurrences": ("owner", "target"),
 }
 
 # The closed operator keys; they are not kinds (contract.md:786).
@@ -566,10 +585,12 @@ def validate_rules(bundle, index):
                     "the rule " + identity + " names the unknown input "
                     + str(input_id)
                 )
-        selector = validate_selector(rule["select"], index, identity)
-        validate_check(rule["check"], selector, index, identity)
+        selector, element = validate_selector(rule["select"], index, identity)
+        validate_check(rule["check"], selector, element, index, identity)
         if "where" in rule["select"]:
-            validate_check(rule["select"]["where"], selector, index, identity)
+            validate_check(
+                rule["select"]["where"], selector, element, index, identity
+            )
         earlier = index["rule_by_id"].get(identity)
         if earlier is None:
             index["rule_by_id"][identity] = rule
@@ -722,7 +743,12 @@ def merge_rule_origins(earlier, repeated, identity):
 
 
 def validate_selector(select, index, identity):
-    """Validate one selector and return its kind."""
+    """Validate one selector and return its kind and the element it fixes.
+
+    The element is None for a model selector, which names none. Every other
+    selector fixes one element for every leaf beneath it, which is what lets a
+    leaf naming a field name be resolved against a declaration at load time.
+    """
     expect_object(select, "the selector of " + identity)
     chosen = [key for key in ("records", "occurrences", "model") if key in select]
     if len(chosen) != 1:
@@ -741,7 +767,7 @@ def validate_selector(select, index, identity):
     if kind == "model":
         if body is not True:
             raise ConfigurationError("select.model has only true")
-        return kind
+        return kind, None
     if kind == "records":
         expect_keys(body, ("element",), "select.records of " + identity)
     else:
@@ -764,10 +790,10 @@ def validate_selector(select, index, identity):
                 "the selector of " + identity + " names an undeclared relation on "
                 + element
             )
-    return kind
+    return kind, element
 
 
-def validate_check(check, selector, index, identity):
+def validate_check(check, selector, element, index, identity):
     """Validate one check expression against the closed grammar."""
     expect_object(check, "a check of " + identity)
     operators = [key for key in OPERATOR_KEYS if key in check]
@@ -778,10 +804,10 @@ def validate_check(check, selector, index, identity):
             )
         operator = operators[0]
         if operator == "not":
-            validate_check(check["not"], selector, index, identity)
+            validate_check(check["not"], selector, element, index, identity)
             return
         for child in expect_list(check[operator], operator + " of " + identity):
-            validate_check(child, selector, index, identity)
+            validate_check(child, selector, element, index, identity)
         return
     if "kind" not in check:
         raise ConfigurationError(
@@ -791,17 +817,17 @@ def validate_check(check, selector, index, identity):
     shape = LEAF_SHAPES.get(kind)
     if shape is None:
         raise ConfigurationError("unknown leaf kind " + repr(kind))
-    keys, wanted_selector = shape
+    keys, wanted_selectors = shape
     expect_keys(check, keys, "the " + kind + " leaf of " + identity)
-    if selector != wanted_selector:
+    if selector not in wanted_selectors:
         raise ConfigurationError(
-            "the " + kind + " leaf of " + identity + " needs a " + wanted_selector
-            + " selector, not " + selector
+            "the " + kind + " leaf of " + identity + " is not valid under a "
+            + selector + " selector; it needs " + " or ".join(wanted_selectors)
         )
-    validate_leaf_references(check, kind, index, identity)
+    validate_leaf_references(check, kind, selector, element, index, identity)
 
 
-def validate_leaf_references(check, kind, index, identity):
+def validate_leaf_references(check, kind, selector, element, index, identity):
     """Resolve the declaration ids and keywords one leaf names."""
     if kind == "target-type":
         if check["targetElement"] not in index["element_by_id"]:
@@ -818,6 +844,27 @@ def validate_leaf_references(check, kind, index, identity):
         validate_keyword("compare", check["compare"])
         if not isinstance(check["value"], int) or isinstance(check["value"], bool):
             raise ConfigurationError("a count value must be an integer")
+    elif kind == "field-value":
+        validate_keyword("subject", check["subject"])
+        validate_keyword("absentSatisfies", check["absentSatisfies"])
+        allowed = FIELD_VALUE_SUBJECTS[selector]
+        if check["subject"] not in allowed:
+            raise ConfigurationError(
+                "the field-value leaf of " + identity + " names the subject "
+                + check["subject"] + ", which the " + selector
+                + " selector does not bind"
+            )
+        values = expect_list(check["values"], "field-value values")
+        if not values:
+            raise ConfigurationError(
+                "the field-value leaf of " + identity + " needs at least one value"
+            )
+        for value in values:
+            expect_text(value, "a field-value value of " + identity)
+        field_name = expect_text(check["field"], "a field-value field name")
+        require_field(
+            index, check["subject"], element, field_name, identity
+        )
     elif kind == "visible-target":
         validate_keyword("from", check["from"])
         validate_keyword("to", check["to"])
@@ -844,6 +891,33 @@ def validate_leaf_references(check, kind, index, identity):
                 "the preserve leaf of " + identity
                 + " names the unknown projection " + str(check["projection"])
             )
+
+
+def require_field(index, subject, element, field_name, identity):
+    """Resolve the field NAME a field-value leaf carries.
+
+    A field-value leaf names a field by name rather than by declaration id,
+    because the TARGET subject's element is not fixed at lowering time
+    (contract.md:912-913). The selector fixes the element of every other
+    subject: a records selector fixes the record, and an occurrences selector
+    fixes the owner. Naming a field that element does not declare is therefore
+    refused here, for the owner subject exactly as for the record subject. Only
+    a target subject falls back to the name existing somewhere, and a target
+    whose own element lacks it blocks that leaf at evaluation instead.
+    """
+    if subject != "target":
+        owner = index["elements"][element]["id"]
+        if field_of(index, owner, field_name) is None:
+            raise ConfigurationError(
+                "the field-value leaf of " + identity + " names the field "
+                + field_name + ", which " + element + " does not declare"
+            )
+        return
+    if not any(name == field_name for _, name in index["fields"]):
+        raise ConfigurationError(
+            "the field-value leaf of " + identity + " names the undeclared field "
+            + field_name
+        )
 
 
 def require_view(index, view_id, identity):

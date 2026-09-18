@@ -16,13 +16,16 @@ directories (`chain-depth-boundary-negative-family`,
 `s1-baseline-rejects-delete-or-flag-revision`,
 `script-default-source-success-vs-failure-family`,
 `visibility-truth-table-family`) are families: their own `case.md` states what
-the variants beneath share and carries no envelope of its own. "What it
-exercises" is derived by reading each fixture's `results.json`: the statuses
-that appear across its rule and finding entries, any leaf kind beyond the five
-that appear in nearly every fixture (`count`, `native-dag`, `forest-validity`,
-`preserve`, `target-type`), and any code beyond a leaf's own same-named
-satisfied code. No fixture in this section exercises the `all`/`any`/`not`
-composed operators — see the coverage matrix.
+the variants beneath share and carries no envelope of its own. `lowering-guards`
+is neither a fixture nor a family: it holds models that are lowered rather than
+evaluated, so it carries no envelope and no member, and
+`tests/test_lowering_guards.py` is what reads it. "What it exercises" is derived
+by reading each fixture's `results.json`: the statuses that appear across its
+rule and finding entries, any leaf kind beyond the five that appear in nearly
+every fixture (`count`, `native-dag`, `forest-validity`, `preserve`,
+`target-type`), and any code beyond a leaf's own same-named satisfied code. No
+fixture in this section exercises the `all`/`any`/`not` composed operators — see
+the coverage matrix.
 
 | Fixture                                                                               | Section                                  | What it exercises                                                   | Provenance |
 | ------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------- | ---------- |
@@ -443,9 +446,11 @@ configuration is the nearest invocation.json searching fixture directory, then
 enclosing family directories, then the packet directory; it replaces the
 packet's rather than merging, and relative paths in its command resolve from the
 directory that supplied it. Evidence: 42 fixtures ship neither file and expect
-baseline-I0-open (inheritance); 28 ship both and expect their own identity (cwd
-= fixture directory); 0 ship baseline.json without invocation.json, so no
-per-file fallback is ever exercised; and
+baseline-I0-open (inheritance); 25 ship both and expect their own identity (cwd
+= fixture directory); the six note-state-field members ship neither and inherit
+their FAMILY's `{"inputs": {}}`, which is the enclosing-directory step of the
+same search and is why envelope baseline is null there; 0 ship baseline.json
+without invocation.json, so no per-file fallback is ever exercised; and
 missing-before-or-baseline-acquisition-cannot-evaluate ships {"inputs": {}}
 expecting the missing-binding execution error of contract.md:525, which a
 merging harness could never produce. Written up in backend/fixtures/README.md.

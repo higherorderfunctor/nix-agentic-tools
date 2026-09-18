@@ -5,13 +5,19 @@ fixture. The harness evaluates it and compares the produced envelope against the
 recorded one on normative fields only (contract.md:575-583), reporting each
 fixture in its own subtest so one run names every mismatch.
 
-Two conventions the contract does not state are implemented here because the
-nested fixture tree needs them, and both are recorded as open questions:
+Three conventions the contract does not state are implemented here because the
+nested fixture tree needs them, and all three are recorded as open questions:
 
 * Inputs resolve per file by nearest ancestor, from the fixture directory up to
-  the packet directory, replacing rather than merging. contract.md:511-517
-  describes one packet and says nothing about a nested tree, yet 42 of the 81
-  fixtures ship no ``invocation.json`` and inherit the packet binding.
+  the packet directory, replacing rather than merging. contract.md:565-573
+  describes one packet and says nothing about a nested tree, yet 42 of the 88
+  fixtures ship no ``invocation.json`` of their own and inherit the packet
+  binding, and six more inherit one from their model family.
+* The bundle resolves the same way, with the packet bundle as the fallback.
+  contract.md:565-573 describes one packet and says nothing about a tree
+  carrying more than one model, so a family that authors its own model ships
+  its own bundle beside it and every fixture that does not inherits the
+  packet's.
 * The prose ``reason`` inside evidence is not compared. contract.md:575-577
   makes the whole evidence object normative while contract.md:639 calls reason
   free text, and the corpus settles the conflict: the two exit-3 provider
@@ -35,6 +41,10 @@ TESTS_DIRECTORY = pathlib.Path(__file__).resolve().parent
 BACKEND_DIRECTORY = TESTS_DIRECTORY.parent
 FIXTURES_DIRECTORY = BACKEND_DIRECTORY / "fixtures"
 PACKET_DIRECTORY = BACKEND_DIRECTORY.parent
+
+# The packet bundle, which the front-end test evaluates directly. Per-fixture
+# evaluation resolves a bundle by nearest ancestor instead, so this path is the
+# fallback every fixture outside an own-model family lands on.
 BUNDLE_PATH = PACKET_DIRECTORY / "bundle.json"
 
 if str(BACKEND_DIRECTORY) not in sys.path:
@@ -45,7 +55,14 @@ from sdoc_semantics import evaluate  # noqa: E402  (needs the path entry above)
 # Files that resolve by nearest ancestor. baseline.json is listed because the
 # packet binding reads it with a relative path, so which copy the provider sees
 # follows from which directory supplied the invocation configuration.
-RESOLVED_INPUT_NAMES = ("candidate.json", "invocation.json", "baseline.json")
+# bundle.json is listed because a family that authors its own model ships its
+# own bundle, and every fixture that does not inherits the packet's.
+RESOLVED_INPUT_NAMES = (
+    "bundle.json",
+    "candidate.json",
+    "invocation.json",
+    "baseline.json",
+)
 
 # The finding fields conformance compares (contract.md:575-577). message is
 # absent on purpose: it is free text and comparison ignores it.
@@ -333,16 +350,17 @@ def evaluate_fixture(resolved, evaluation):
     The provider working directory follows from the invocation path the
     evaluator is given, which is the directory that supplied the resolved
     invocation configuration (contract.md:515-517). That is the fixture
-    directory for the 39 fixtures shipping one and the packet directory for the
+    directory for the 40 fixtures shipping one, the family directory for the six
+    that inherit one from their model family, and the packet directory for the
     other 42, which is what makes the packet binding's relative baseline.json
-    resolve for both.
+    resolve for all three.
     """
     invocation_path = resolved["invocation.json"]
     with provider_residue_removed(
         invocation_path.parent if invocation_path is not None else None
     ):
         return evaluate(
-            bundle_path=str(BUNDLE_PATH),
+            bundle_path=str(resolved["bundle.json"]),
             candidate_path=str(resolved["candidate.json"]),
             invocation_path=str(invocation_path) if invocation_path is not None else None,
             evaluation=evaluation,
@@ -366,6 +384,10 @@ class FixtureConformance(unittest.TestCase):
                 self.assertIsNotNone(
                     resolved["candidate.json"],
                     f"{name} resolves no candidate.json from itself or any ancestor.",
+                )
+                self.assertIsNotNone(
+                    resolved["bundle.json"],
+                    f"{name} resolves no bundle.json from itself or any ancestor.",
                 )
                 produced = evaluate_fixture(resolved, recorded.get("evaluation"))
                 difference = describe_difference(

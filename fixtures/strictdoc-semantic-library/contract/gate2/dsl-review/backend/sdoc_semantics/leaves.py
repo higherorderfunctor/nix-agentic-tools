@@ -1,4 +1,4 @@
-"""The seven named leaf kinds (contract.md:237-245).
+"""The eight named leaf kinds (contract.md:237-247).
 
 One function per kind, each taking (context, leaf, subject) and returning the
 leaf result triple {"status", "code", "evidence"} and nothing else. A leaf
@@ -111,6 +111,114 @@ def _indexed(record, selected):
         findings.indexed_occurrence(record.get("uid"), position, occurrence)
         for position, occurrence in selected
     ]
+
+
+# ---------------------------------------------------------------------------
+# field-value
+# ---------------------------------------------------------------------------
+
+# The three subject tokens a field-value leaf may name. They are the tokens the
+# relation binder already produces, so a record selector says record and an
+# occurrence selector says owner or target (contract.md:286-288,
+# contract.md:830-833).
+FIELD_SUBJECTS = ("record", "owner", "target")
+
+
+def field_value(context, leaf, subject):
+    """Read one named field of the leaf's subject record and compare it.
+
+    A present single native string listed in ``values`` is satisfied and any
+    other present value violated. An absent field is satisfied only when
+    ``absentSatisfies`` is true, which is the one outcome no envelope finding
+    describes and therefore the reason the flag lives on the leaf.
+
+    Two things block instead. An unresolved subject uid blocks with code
+    unresolved-target, exactly as ``target_type`` handles the same uid. A
+    subject whose element declares no such field, or whose native value the
+    grammar already refused, blocks with code input; the refused value's reason
+    is read back from the preparation finding rather than decided again, so the
+    leaf and that finding always agree (contract.md:298-302).
+    """
+    name = leaf["field"]
+    uid = _field_subject_uid(leaf["subject"], subject)
+    record = visibility.record_of(context, uid)
+    evidence = {
+        "field": name,
+        "record": None if record is None else uid,
+        "present": False,
+        "values": [],
+        "expected": list(leaf["values"]),
+        "absentSatisfies": leaf["absentSatisfies"],
+    }
+    if record is None:
+        return _blocked_field(
+            evidence, visibility.UNRESOLVED_TARGET_REASON, "unresolved-target"
+        )
+    fields = record.get("fields") or {}
+    evidence["present"] = name in fields
+    evidence["values"] = list(fields.get(name) or [])
+    if not _declares_field(context, record, name):
+        return _blocked_field(evidence, _no_such_field_reason(record, name), "input")
+    unusable = visibility.recorded_problem(context, uid, name)
+    if unusable is not None:
+        return _blocked_field(evidence, unusable, "input")
+    if not evidence["present"]:
+        holds = evidence["absentSatisfies"] is True
+    else:
+        # Every other present shape is already an envelope input error, so one
+        # usable native string is all that reaches here (contract.md:298-300).
+        holds = evidence["values"][0] in evidence["expected"]
+    return _result("satisfied" if holds else "violated", "field-value", evidence)
+
+
+def _field_subject_uid(named, subject):
+    """The uid one subject token names, honouring the closed token space."""
+    if named not in FIELD_SUBJECTS:
+        raise ValueError("The field-value leaf carries subject %r." % (named,))
+    if named == "target":
+        return (subject.get("occurrence") or {}).get("target")
+    return subject.get("uid")
+
+
+def _declares_field(context, record, name):
+    """Whether the record's element declares a field of this name.
+
+    True is the answer whenever the declarations index cannot be read in the
+    shape this lookup needs, because the alternative would be to report a
+    configuration-shaped block from a context this module simply failed to
+    understand. A field name the element really does not declare is caught at
+    load time in a records selector, so only an occurrence target reaches here
+    with one.
+    """
+    index = visibility.context_value(context, "declarations")
+    if not isinstance(index, dict):
+        return True
+    elements = index.get("elements")
+    fields = index.get("fields")
+    if not isinstance(elements, dict) or not isinstance(fields, dict):
+        return True
+    element = elements.get(record.get("element"))
+    if not isinstance(element, dict):
+        return True
+    return (element.get("id"), name) in fields
+
+
+def _no_such_field_reason(record, name):
+    """The wording decode_flag already uses for the same absence."""
+    return "The %s record %s has no %s field." % (
+        record.get("element"),
+        record.get("uid"),
+        name,
+    )
+
+
+def _blocked_field(evidence, reason, code):
+    """A blocked field-value result, keeping its leaf evidence shape."""
+    return _result(
+        "blocked",
+        code,
+        findings.blocked_evidence(evidence, reason, NO_INPUT, list(NO_REQUIRES)),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -517,6 +625,7 @@ def _result(status, code, evidence, blocking=None):
 LEAVES = {
     "count": count,
     "endpoint-path": endpoint_path,
+    "field-value": field_value,
     "forest-validity": forest_validity,
     "native-dag": native_dag,
     "preserve": preserve,

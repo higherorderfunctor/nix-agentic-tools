@@ -18,7 +18,7 @@ let
     removeAttrs
     ;
   native = import ../../../../../packages/strictdoc-grammar/lib/dsl.nix {lib = {inherit mapAttrs;};};
-  ruleKinds = ["target-type" "count" "visible-target" "endpoint-path" "native-dag" "forest-validity" "preserve"];
+  ruleKinds = ["target-type" "count" "field-value" "visible-target" "endpoint-path" "native-dag" "forest-validity" "preserve"];
   declarationKinds = ["model" "element" "field" "relation" "view" "input" "projection"];
   keywordSpaces = {
     ascent = ["unrestricted"];
@@ -30,6 +30,8 @@ let
     requireSingleton = [true];
     from = ["owner"];
     to = ["target"];
+    subject = ["record" "owner" "target"];
+    absentSatisfies = [false true];
     compare = ["lt" "lte" "gt" "gte" "eq"];
     direction = ["parent" "child"];
     kind = ruleKinds ++ declarationKinds ++ ["external-snapshot"];
@@ -62,9 +64,31 @@ let
   fieldBody = f: let n = cleanField f; in n.${head (attrNames n)};
   cleanRel = r: removeAttrs r ["__functor" "_inline"];
   direction = r: head (attrNames (cleanRel r));
-  role = r: (cleanRel r).${direction r}.role or "@file";
+  role = r: (cleanRel r).${direction r}.role;
+  # A File relation names a path, not a record, so it declares no owned
+  # occurrence and carries no role or direction. It stays in the native grammar
+  # and reaches no identity, selector, or check. Only File is dropped: every
+  # other native key reaches the direction keyword space, which names it.
+  ownedRelations = e: filter (r: direction r != "file") (e.relations or []);
   sym = op: fields: {_op = op;} // fields;
   count = collection: sym "count" {inherit collection;};
+  # The field constructor names the field; it does not say which element
+  # declares it. Only the selector knows that, so normalize checks the values
+  # against the choices the subject's own element declares. What is local here
+  # is the value list itself.
+  fieldValue = f: values: let
+    inherit (fieldBody f) title;
+    foreign = filter (v: !(builtins.isString v)) values;
+  in
+    if values == []
+    then throw "field value: ${title} needs at least one value"
+    else if foreign != []
+    then throw "field value: ${title} admits native strings only; one value is a ${builtins.typeOf (head foreign)}"
+    else
+      sym "fieldValue" {
+        field = title;
+        inherit values;
+      };
   compare = op: left: right: sym op {inherit left right;};
   lt = compare "lt";
   lte = compare "lte";
@@ -128,6 +152,9 @@ let
             _default = null;
           }
           f);
+      choice = name: choices:
+        (native.field.one name choices)
+        // {_semantic = {type = "string";};};
       boolean = name:
         (native.field.one name ["false" "true"])
         // {
@@ -187,8 +214,14 @@ let
       [root]
       ++ map declId (g.elements ++ g.views ++ g.inputs ++ g.projections)
       ++ concatLists (map (e:
-        map (r: refId (relationRef (direction r) e (role r))) (e.relations or [])
+        map (r: refId (relationRef (direction r) e (role r))) (ownedRelations e)
         ++ map (f: refId (fieldOf e f)) (e.fields or []))
+      g.elements);
+    fieldsOf = tag:
+      concatLists (map (e:
+        if e.tag == tag
+        then map fieldBody (e.fields or [])
+        else [])
       g.elements);
     reference = value: let
       id =
@@ -199,6 +232,13 @@ let
       if elem id allIds
       then id
       else throw "undeclared reference: ${id}";
+    # The element a selected subject belongs to; a model selector names none.
+    elementOf = s:
+      if scopeOf s == "relation"
+      then s.element
+      else if scopeOf s == "record"
+      then s.tag
+      else null;
     scopeOf = s:
       if (s._ref or null) == "relation"
       then "relation"
@@ -294,6 +334,31 @@ let
       isOp "endpointTarget" e
       && isOp "only" e.relation
       && isCollection e.relation.collection;
+    # A field-value leaf reads one record's field, so its values are the
+    # choices that record's element declares. A record or owner subject fixes
+    # the element at lowering; a target subject does not, so every element
+    # declaring the name is a candidate and the wrong one blocks at evaluation.
+    fieldValueLeaf = ctx: subject: absentSatisfies: leaf: let
+      owners =
+        if subject == "target"
+        then map (each: each.tag) g.elements
+        else [ctx.element];
+      among =
+        if subject == "target"
+        then "any element"
+        else ctx.element;
+      declared = filter (b: b.title == leaf.field) (concatLists (map fieldsOf owners));
+      admits = b: (b.choices or null) == null || filter (v: !(elem v b.choices)) leaf.values == [];
+    in
+      if declared == []
+      then throw "check \"${ctx.name}\" at ${ctx.id}: the field ${leaf.field} is not declared on ${among}"
+      else if !(builtins.any admits declared)
+      then throw "check \"${ctx.name}\" at ${ctx.id}: ${builtins.toJSON leaf.values} is not a declared choice of ${leaf.field} on ${among}"
+      else {
+        kind = "field-value";
+        inherit subject absentSatisfies;
+        inherit (leaf) field values;
+      };
     lowerPredicate = ctx: e: let
       inherit (ctx) scope;
     in
@@ -319,6 +384,32 @@ let
         compare = e.op;
         value = e.right;
       }
+      else if isOp "fieldValue" e || isOp "ifPresent" e || isOp "at" e
+      then let
+        subject =
+          if isOp "at" e
+          then validateKeyword "subject" e.node
+          else "record";
+        inner =
+          if isOp "at" e
+          then e.term
+          else e;
+        absentSatisfies = isOp "ifPresent" inner;
+        leaf =
+          if absentSatisfies
+          then inner.term
+          else inner;
+        wrong = throw "check \"${ctx.name}\" at ${ctx.id}: field value at ${subject} subject in ${scope} scope";
+      in
+        if !(isOp "fieldValue" leaf)
+        then throw "check \"${ctx.name}\" at ${ctx.id}: at and ifPresent take one field value predicate"
+        else if scope == "record" && subject != "record"
+        then wrong
+        else if scope == "relation" && subject == "record"
+        then wrong
+        else if scope == "model"
+        then wrong
+        else fieldValueLeaf ctx subject absentSatisfies leaf
       else if scope == "relation" && isOp "visible" e && e.origin == "owner" && e.target == "target"
       then {
         kind = "visible-target";
@@ -369,6 +460,7 @@ let
         subjectName = sub.name or sub.tag;
         ctx = {
           inherit scope;
+          element = elementOf sub;
           id = subjectId;
           name = ck.name or "${subjectName}.inline";
         };
@@ -397,7 +489,7 @@ let
     elementChecks = e:
       concatLists (map (r:
         map (lowerCheck "relation" (relationRef (direction r) e (role r)) null)
-        (r._inline or [])) (e.relations or []))
+        (r._inline or [])) (ownedRelations e))
       ++ map (lowerCheck "record" e null) (e.constraints or []);
     lowered =
       concatLists (map elementChecks g.elements)
@@ -489,12 +581,25 @@ let
           then null
           else map cleanRel e.relations;
       };
+    # A native string field derives semantic type string. A choice or Boolean
+    # field carries its own. No other native type has a semantic type in this
+    # profile, so deriving one from the native tag would ship a bundle every
+    # backend refuses.
+    semanticOf = e: f: let
+      native = head (attrNames (cleanField f));
+    in
+      f._semantic
+      or (
+        if native == "string"
+        then {type = "string";}
+        else throw "field ${(fieldBody f).title} on ${e.tag}: a ${native} field has no semantic type; declare it with str, choice, or boolean"
+      );
     metadata = e: let
       schema = "semantic-types/v1";
       fields = map (f: {
         field = refId (fieldOf e f);
         native = cleanField f;
-        semantic = f._semantic or {type = head (attrNames (cleanField f));};
+        semantic = semanticOf e f;
         default = f._default or null;
       }) (e.fields or []);
     in {
@@ -558,7 +663,7 @@ let
           owner = elementId e.tag;
           direction = direction r;
           name = role r;
-        }) (e.relations or [])
+        }) (ownedRelations e)
         ++ map (f: {
           id = refId (fieldOf e f);
           kind = "field";
@@ -586,6 +691,10 @@ in {
   inherit el field rel model normalize check on all any not where parentOf childOf fieldOf count lt lte gt gte eq validateKeyword;
   contribute = name: subject: checks: {inherit name subject checks;};
   record = bind: sym "record" {inherit bind;};
+  fieldIs = f: value: fieldValue f [value];
+  fieldIn = fieldValue;
+  ifPresent = term: sym "ifPresent" {inherit term;};
+  at = node: term: sym "at" {inherit node term;};
   isNodeType = node: element: sym "isNodeType" {inherit node element;};
   atMost = n: c: lte (count c) n;
   atLeast = n: c: gte (count c) n;

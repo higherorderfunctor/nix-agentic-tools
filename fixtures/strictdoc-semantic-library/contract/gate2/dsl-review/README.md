@@ -100,20 +100,29 @@ specified behavior, not results executed by the stub.
 The reference tables describe the intended check scope. Their “Real today”
 column says what the stub actually does.
 
-| Constructor       | Signature                     | Arguments                                                                                       | Checks over                    | Real today                                                                             |
-| ----------------- | ----------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------- |
-| `el`              | `el NAME PROPERTIES BODY`     | Name you choose; grammar properties; body lists named `fields`, `relations`, and `constraints`. | none                           | Wraps native grammar and retains constraints; does not reject unknown body keys.       |
-| `str`             | `str NAME`                    | Field name you choose.                                                                          | each record                    | Declares an initially optional native string field; does not establish UID uniqueness. |
-| `required`        | `required FIELD`              | Field declaration from `str` or `boolean`, possibly with a default.                             | each record                    | Marks requiredness and retains metadata; does not validate records.                    |
-| `boolean`         | `boolean NAME`                | Field name you choose; native choices are exactly `"false"`, `"true"`.                          | each record                    | Emits choices and their mapping to Boolean values.                                     |
-| `creationDefault` | `creationDefault VALUE FIELD` | Boolean literal `false` or `true`; Boolean field declaration, optionally through `required`.    | each record (new records only) | Checks literal compatibility and stores the default; does not materialize it.          |
+| Constructor       | Signature                     | Arguments                                                                                       | Checks over                    | Real today                                                                                  |
+| ----------------- | ----------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------- |
+| `el`              | `el NAME PROPERTIES BODY`     | Name you choose; grammar properties; body lists named `fields`, `relations`, and `constraints`. | none                           | Wraps native grammar and retains constraints; does not reject unknown body keys.            |
+| `str`             | `str NAME`                    | Field name you choose.                                                                          | each record                    | Declares an initially optional native string field; does not establish UID uniqueness.      |
+| `required`        | `required FIELD`              | Field declaration from `str` or `boolean`, possibly with a default.                             | each record                    | Marks requiredness and retains metadata; does not validate records.                         |
+| `boolean`         | `boolean NAME`                | Field name you choose; native choices are exactly `"false"`, `"true"`.                          | each record                    | Emits choices and their mapping to Boolean values.                                          |
+| `choice`          | `choice NAME CHOICES`         | Field name you choose; the closed list of native strings it may hold.                           | each record                    | Emits the native single-choice body and describes its semantic value as that native string. |
+| `creationDefault` | `creationDefault VALUE FIELD` | Boolean literal `false` or `true`; Boolean field declaration, optionally through `required`.    | each record (new records only) | Checks literal compatibility and stores the default; does not materialize it.               |
+
+Those five are the whole field surface, and a guard closes it rather than a
+convention. `field` also carries the native constructors the grammar dsl
+provides — `one`, `many`, `tag`, `mk`, `raw` — and a native tag, multiple-choice
+or single-choice field has no semantic type in this profile. Only a native
+string field derives one. So `field.one "STATE" ["draft" "final"]` is refused
+while lowering, naming the native type; write `choice "STATE" ["draft" "final"]`
+instead, which emits the same native body and describes its semantic value.
 
 ## 3. Relations and the inline rule
 
 A **relation occurrence** is one declaration owned by a record and pointing at
 another record. `parent` and `child` declare which kinds of relation an element
 may own. BAR declares these two kinds inside its element frame. Read the
-`relations` list first; chapters 4–7 explain its constraints and the visibility
+`relations` list first; chapters 4–8 explain its constraints and the visibility
 view `sight`. (fragment of examples.nix, lines 28–42):
 
 ```nix
@@ -186,6 +195,7 @@ resolution.
 | ------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `parent`     | `parent ROLE REVERSE_ROLE [PREDICATE]` | Two names you choose; optional callback receiving `edge.origin` and `edge.target`, or a named `check`. | each relation occurrence      | Declares Parent grammar and retains an inline check; a bare callback gets a derived name such as `"H.target-type"`. |
 | `child`      | `child ROLE REVERSE_ROLE [PREDICATE]`  | Two names you choose; optional callback receiving the same edge binder, or a named `check`.            | each relation occurrence      | Declares Child grammar and retains an inline check.                                                                 |
+| `rel.file`   | `rel.file`                             | None; the File relation has no role and no reverse role.                                               | nothing                       | Reaches the native grammar and declares no owned occurrence, so no selector, reference or check can name it.        |
 | `isNodeType` | `isNodeType NODE ELEMENT`              | Node from `edge.target`; element reference from `el`.                                                  | each relation occurrence here | Emits the type question; inspecting a record remains specified behavior.                                            |
 | `all`        | `all PREDICATES`                       | List of predicates for the same selector.                                                              | selected subjects             | Emits all; every child must hold.                                                                                   |
 | `any`        | `any PREDICATES`                       | List of predicates for the same selector.                                                              | selected subjects             | Emits any; at least one child must hold.                                                                            |
@@ -209,7 +219,7 @@ on        ⇒ named selector
 
 The check can combine leaves without changing its selector. The following
 alternative spelling keeps R's target and visibility checks separate to show
-`on`; Appendix A combines them. `sight` is the visibility view from chapter 6.
+`on`; Appendix A combines them. `sight` is the visibility view from chapter 7.
 
 ```nix
   foo = el "FOO" {} {
@@ -277,7 +287,7 @@ Its alternative FOO declaration puts that same check in the constraints list
 ```
 
 These are alternative declarations of the same element name, not two elements to
-register together. The two forms lower identically, and chapter 10 shows the
+register together. The two forms lower identically, and chapter 11 shows the
 proof. Both use the same subject and check name, `"target-type"`. A bare inline
 callback gets a derived name such as `"R.target-type"`, so it would not match a
 differently named check. Either form rejects F1a's R targeting Z0, and neither
@@ -335,7 +345,107 @@ write `lt` or `gt` over `count`, as in the first example above.
 | `atLeast`   | `atLeast N COLLECTION` | An integer lower bound, then a collection.              | `gte (count COLLECTION) N`   | Expands to primitives; does not check records.        |
 | `exactly`   | `exactly N COLLECTION` | An integer count, then a collection.                    | `eq (count COLLECTION) N`    | Expands to primitives; does not check records.        |
 
-## 6. Hierarchy and visibility
+## 6. Rules about field values
+
+A field value is a list of native strings, and every field in this profile holds
+at most one. `fieldIs` names the one string a rule accepts, and `fieldIn` names
+a list of them. STATE below is a **choice** field: a native single-choice field
+whose semantic value is its own native string (fragment of
+backend/fixtures/note-state-field/model.nix, lines 10–10):
+
+```nix
+  state = choice "STATE" ["draft" "final" "retired"];
+```
+
+`choice` takes the field name and the closed list of native strings it may hold.
+The stub checks every authored value against that list while lowering, so a
+misspelled state is rejected when the model is built rather than when records
+are validated. STATE is deliberately optional — `required` does not wrap it —
+because absence is only observable on an optional field.
+
+Which list, though. A field constructor names a field; it does not say which
+element declares it, and two elements may declare the same field name with
+different choices. So the list that decides is the one the element under the
+selector declares, not the one the constructor you handed in carries. Handing a
+NOTE rule the constructor for TASK's same-named STATE is refused while lowering,
+because NOTE declares no `open`. The one subject that cannot be resolved this
+way is a relation's target, whose element the selector does not fix; there the
+name is checked against the model and a target whose own element lacks the field
+blocks that leaf at evaluation. `backend/fixtures/lowering-guards` holds both
+models.
+
+A value is also a native string and nothing else. `fieldIs flag true` names a
+Nix Boolean rather than the `"true"` a Boolean-codec field holds, and
+`fieldIs title 42` names a number; both are refused while lowering. A string
+field declares no choices, so nothing but this guard stands between it and a
+value of any type at all.
+
+The subject is the record the rule has already selected, so a records-scope rule
+needs no binder. This filter keeps the retired notes, and its check requires
+each of them to cite a source (fragment of the same file, lines 18–19):
+
+```nix
+      (on (where note (fieldIs state "retired"))
+        (check "retired-notes-cite-a-source" (record (node: atLeast 1 (node.parents "SOURCE")))))
+```
+
+**Read aloud:** “For each NOTE whose STATE is retired, require at least one
+owned SOURCE parent.”
+
+Absence has three outcomes, and only the first two belong to the rule. An absent
+optional field is violated by default, so an absent STATE is not retired and the
+filter above drops that note. `ifPresent` reverses that one decision and makes
+absence satisfy instead. An absent required field, an empty value list, two
+values, or a value outside the declared choices is not the rule's business at
+all: native validation already reports it as an input error, so the rule is
+blocked and says nothing about the condition.
+
+In a relation rule the selected subject is an occurrence, and an occurrence has
+two records. `at` names which one to read (fragment of the same file, lines
+15–15):
+
+```nix
+      (parent "SOURCE" "SOURCE_back" (edge: at edge.target (ifPresent (fieldIn state ["final" "retired"]))))
+```
+
+**Read aloud:** “For each NOTE Parent SOURCE, require its target's STATE to be
+final or retired, or absent.”
+
+`at` takes `edge.origin` or `edge.target` and one field-value predicate. It
+exists because Nix cannot overload a function's arity: a third positional
+argument on `fieldIs` would make that constructor return either a leaf or a
+function, depending on what its first argument was. Each scope accepts exactly
+one shape. A records rule reads the selected record and rejects `at`; a relation
+rule reads an edge end and rejects a bare `fieldIs`; a model rule has no record
+to read and rejects both.
+
+The scenarios below are the variant family's fixtures. Its two records are
+`report`, the citing note, and `outline`, the note it cites.
+
+| Situation                                              | Change                 | Result                          | Why                                                                                                                      |
+| ------------------------------------------------------ | ---------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| report is retired and cites outline, which is final.   | Validate both notes.   | Accept.                         | The filter keeps report, report owns one SOURCE, and the edge's target holds a listed state.                             |
+| report is retired and cites nothing.                   | Validate report alone. | Reject under the citation rule. | The filter keeps report, and zero SOURCE parents miss the lower bound of one.                                            |
+| report has no STATE.                                   | Validate report alone. | Accept.                         | Absence is not retired, so the filter drops report; the same violated leaf under `not` satisfies the drafts rule.        |
+| report is final and cites outline, which is draft.     | Validate both notes.   | Reject the citation.            | A present unlisted value on the edge's target violates; the finding's owner is report and its read record outline.       |
+| report is final and cites outline, which has no STATE. | Validate both notes.   | Accept.                         | `ifPresent` makes the target's absence satisfy.                                                                          |
+| report is draft and cites outline.                     | Validate both notes.   | Reject under the drafts rule.   | The field leaf is satisfied, so `not` is violated, and the sibling count of one is not zero, so `any` has no true child. |
+
+`fieldIs FIELD VALUE` is sugar for `fieldIn FIELD [VALUE]`, the same
+relationship `atMost` has with `lte`. Both lower to one leaf carrying two fixed
+keyword fields: `subject`, one of record, owner, or target, and
+`absentSatisfies`, false or true. Neither is written as a string — `at` supplies
+the subject through the edge binder, and `ifPresent` supplies the flag.
+`transcript.txt` records the two spellings lowering to equal models.
+
+| Constructor | Signature              | Arguments                                                                | Checks over                                | Real today                                                                                                                                           |
+| ----------- | ---------------------- | ------------------------------------------------------------------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fieldIs`   | `fieldIs FIELD VALUE`  | Field declaration from `choice`, `str`, or `boolean`; one native string. | each record, or the edge end named by `at` | Lowers to a field-value leaf whose values list holds that one string; reads no record.                                                               |
+| `fieldIn`   | `fieldIn FIELD VALUES` | The same field declaration; a nonempty list of native strings.           | each record, or the edge end named by `at` | Lowers to the same leaf; rejects an empty list, a value that is not a native string, and a value the subject's element does not declare as a choice. |
+| `ifPresent` | `ifPresent PREDICATE`  | One field-value predicate.                                               | the same subject as the predicate it wraps | Sets absentSatisfies true on that leaf; wrapping anything else throws.                                                                               |
+| `at`        | `at NODE PREDICATE`    | `edge.origin` or `edge.target`; one field-value predicate.               | each relation occurrence                   | Lowers the leaf's subject to owner or target; rejects a subject the surrounding scope forbids.                                                       |
+
+## 7. Hierarchy and visibility
 
 The hierarchy uses only FOO's Parent H relations. Other roles cannot supply
 shortcuts between its nodes. `fieldOf foo flag` selects the field declaration
@@ -431,9 +541,9 @@ handling and traversal remain specified behavior.
 | `isForest`   | `isForest VIEW`                    | View reference from `forest`.                                                                                         | whole model                   | Emits the structural predicate described above; runs no graph check.                                     |
 | `fieldOf`    | `fieldOf ELEMENT FIELD`            | Element from `el`; field declaration from `str` or `boolean` and its wrappers.                                        | none                          | Builds a declared field reference, not a record's field value.                                           |
 | `visibility` | `visibility NAME HIERARCHY POLICY` | Name you choose; view from `forest`; field reference and fixed keywords listed above.                                 | none                          | Emits policy and validates its keywords; fixed path semantics belong to the view contract.               |
-| `visible`    | `visible VIEW ORIGIN TARGET`       | View from `visibility`; the example supplies node expressions from the edge binder (see chapter 11 for scope limits). | each relation occurrence here | Emits the path question; runtime behavior follows the algorithm above.                                   |
+| `visible`    | `visible VIEW ORIGIN TARGET`       | View from `visibility`; the example supplies node expressions from the edge binder (see chapter 12 for scope limits). | each relation occurrence here | Emits the path question; runtime behavior follows the algorithm above.                                   |
 
-## 7. Bridges
+## 8. Bridges
 
 A BAR record owns both of its endpoints. `exactly 1` requires one relation in
 each endpoint collection. Then `only` selects that sole relation, and `.target`
@@ -501,7 +611,7 @@ boundary.
 | `only`       | `only COLLECTION`               | Collection from the record binder; `.target` selects the sole relation's declared endpoint. | each record | Emits singleton selection and endpoint access; runtime blocking is specified only. |
 | `canDescend` | `canDescend VIEW ORIGIN TARGET` | View from `visibility`; node references from the two singleton `.target` expressions.       | each record | Emits the downward-path predicate; does not traverse the graph.                    |
 
-## 8. Model-wide rules and inputs
+## 9. Model-wide rules and inputs
 
 Some rules need facts beyond one record. An **input** declares data that runtime
 must supply for an evaluation. Here it supplies the external baseline introduced
@@ -622,7 +732,7 @@ must leave the complete candidate valid.
 | `preserve`   | `preserve BASELINE PROJECTION` | Input reference from `input`; comparison reference from `projection`.                                                                           | whole model | Emits preservation and its input dependency; compares no snapshots.                 |
 | `childOf`    | `childOf ELEMENT ROLE`         | Element reference from `el`; reference key naming its declared Child role.                                                                      | none        | Builds a qualified Child reference whose existence is checked during normalization. |
 
-## 9. Assemble and lower
+## 10. Assemble and lower
 
 `model` gathers the declarations and rules under one chosen name. A Nix variable
 holding a view does not register it; the model's `views` list does. The other
@@ -675,7 +785,7 @@ native grammar path, while the delivered relative import remains unchanged.
 | `model`     | `model NAME BODY` | Name you choose; lists `elements`, `views`, `inputs`, `projections`, `constraints`, `contributions`, each defaulting to empty. | none                           | Supplies the model namespace and list defaults; does not reject unknown body keys.       |
 | `normalize` | `normalize MODEL` | Declaration obtained from `model`, optionally updated with Nix attributes.                                                     | whole model (authoring checks) | Produces grammar, metadata, and rule data; authoring errors throw during Nix evaluation. |
 
-## 10. Contributing rules from outside
+## 11. Contributing rules from outside
 
 `contribute` adds named checks to a relation already declared by an element. It
 takes a contribution name, a relation reference, and a list of checks. The
@@ -755,12 +865,13 @@ commands and all four proof results in `transcript.txt`.
 | `contribute` | `contribute NAME SUBJECT CHECKS` | Name you choose; declared relation reference from `parentOf` or `childOf`; list of named predicates from `check`. | each relation occurrence                                           | Merges identical lowered checks and their origins; throws on conflicting meanings under one check identity. |
 | `const`      | `const VALUE`                    | Boolean literal: complete accepted set `false`, `true`.                                                           | each relation occurrence / each record / whole model, by placement | Lowers true to empty all and false to empty any; rejects non-Booleans.                                      |
 
-## 11. Write one yourself
+## 12. Write one yourself
 
 `inherit` brings constructor names into local scope from `dsl`, `field`, or
 `rel`. Adding a rule that uses a constructor not already on the `inherit` lines
 requires adding it there. These are the imports `examples.nix` uses; add `on`,
-`any`, `not`, or `where` to the first line when a rule needs them:
+`any`, `not`, `where`, `fieldIs`, `fieldIn`, `ifPresent`, or `at` to the first
+line when a rule needs them, and `choice` to the `field` line:
 
 ```nix
   inherit (dsl) el field rel model normalize check record all;
@@ -775,21 +886,24 @@ Choose the selector before writing the check. Every leaf must be supported for
 that selector, including leaves inside `all`, `any`, `not`, and `where`. The
 stub rejects unsupported combinations during lowering.
 
-| Constructor                    | Occurrences | Records    | Model     | Operands                                                           |
-| ------------------------------ | ----------- | ---------- | --------- | ------------------------------------------------------------------ |
-| `isNodeType`                   | Supported   | Rejected   | Rejected  | `edge.target` and an element declaration.                          |
-| `count`                        | Rejected    | Value only | Rejected  | Record binder's `parents ROLE` or `children ROLE`.                 |
-| `lt`, `lte`, `gt`, `gte`, `eq` | Rejected    | Supported  | Rejected  | Owned-relation count on the left, integer on the right.            |
-| `atMost`, `atLeast`, `exactly` | Rejected    | Supported  | Rejected  | Integer bound and an owned-relation collection.                    |
-| `only`                         | Rejected    | Value only | Rejected  | Collection; `.target` feeds an endpoint-path leaf.                 |
-| `visible`                      | Supported   | Rejected   | Rejected  | Visibility view, `edge.origin`, `edge.target`.                     |
-| `canDescend`                   | Rejected    | Supported  | Rejected  | Visibility view and two singleton `.target` values.                |
-| `nativeDag`                    | Rejected    | Rejected   | Supported | No operands.                                                       |
-| `isForest`                     | Rejected    | Rejected   | Supported | Registered forest view.                                            |
-| `preserve`                     | Rejected    | Rejected   | Supported | Registered input and projection.                                   |
-| `all`, `any`, `not`            | Supported   | Supported  | Supported | Predicates valid for the same selector; no new binder.             |
-| `const`                        | Supported   | Supported  | Supported | Boolean literal; true lowers to empty `all`, false to empty `any`. |
-| `where`                        | Supported   | Supported  | Supported | Subject reference and a predicate valid for that selector.         |
+| Constructor                    | Occurrences  | Records    | Model     | Operands                                                           |
+| ------------------------------ | ------------ | ---------- | --------- | ------------------------------------------------------------------ |
+| `isNodeType`                   | Supported    | Rejected   | Rejected  | `edge.target` and an element declaration.                          |
+| `count`                        | Rejected     | Value only | Rejected  | Record binder's `parents ROLE` or `children ROLE`.                 |
+| `lt`, `lte`, `gt`, `gte`, `eq` | Rejected     | Supported  | Rejected  | Owned-relation count on the left, integer on the right.            |
+| `atMost`, `atLeast`, `exactly` | Rejected     | Supported  | Rejected  | Integer bound and an owned-relation collection.                    |
+| `only`                         | Rejected     | Value only | Rejected  | Collection; `.target` feeds an endpoint-path leaf.                 |
+| `visible`                      | Supported    | Rejected   | Rejected  | Visibility view, `edge.origin`, `edge.target`.                     |
+| `canDescend`                   | Rejected     | Supported  | Rejected  | Visibility view and two singleton `.target` values.                |
+| `nativeDag`                    | Rejected     | Rejected   | Supported | No operands.                                                       |
+| `isForest`                     | Rejected     | Rejected   | Supported | Registered forest view.                                            |
+| `preserve`                     | Rejected     | Rejected   | Supported | Registered input and projection.                                   |
+| `all`, `any`, `not`            | Supported    | Supported  | Supported | Predicates valid for the same selector; no new binder.             |
+| `fieldIs`, `fieldIn`           | Through `at` | Supported  | Rejected  | Field declaration and one or more native strings.                  |
+| `at`                           | Supported    | Rejected   | Rejected  | `edge.origin` or `edge.target` and one field-value predicate.      |
+| `ifPresent`                    | Inside `at`  | Supported  | Rejected  | One field-value predicate.                                         |
+| `const`                        | Supported    | Supported  | Supported | Boolean literal; true lowers to empty `all`, false to empty `any`. |
+| `where`                        | Supported    | Supported  | Supported | Subject reference and a predicate valid for that selector.         |
 
 A bare callback receives the edge binder only for occurrences. A `record`
 callback receives collection methods only for records. `all` and `any` can
@@ -837,9 +951,10 @@ still apply.
 
 </details>
 
-Reading an arbitrary target's FLAG would need a field-value accessor this
-interface does not expose. `fieldOf` provides a declaration reference, not that
-missing operation.
+Reading a field value has its own leaf now: chapter 6's `fieldIs` and `fieldIn`
+read the selected record, and `at` moves that read to an edge's owner or target.
+`fieldOf` still provides a declaration reference, which is what the visibility
+policy needs, and reading a field of a node reached by a walk remains unexposed.
 
 > **Interface gaps found by a cold reader**
 >
@@ -1040,57 +1155,62 @@ operation is concrete. “Lowered by stub, semantics prose only” means the
 behavior on records remains a contract. Neither status means graph validation
 executes.
 
-| Construct                                              | Status                                | Concrete boundary                                                                                                          |
-| ------------------------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `el`                                                   | Lowered by stub + semantics specified | Wraps the native element declaration and retains constraints for later lowering.                                           |
-| `model`                                                | Lowered by stub + semantics specified | Supplies declaration-list defaults and the model identity.                                                                 |
-| `normalize`                                            | Lowered by stub + semantics specified | Builds grammar, metadata, and selector-plus-check rules with the authoring checks described above.                         |
-| `check`                                                | Lowered by stub + semantics specified | Retains the name and lowers to named leaves combined with all, any, and not; unsupported predicates throw.                 |
-| `on`                                                   | Lowered by stub + semantics specified | Supplies a named selector for relation occurrences, element records, or the model.                                         |
-| `record`                                               | Lowered by stub + semantics specified | Calls the callback with symbolic collections; emits no record wrapper or binder ID.                                        |
-| `required`                                             | Lowered by stub + semantics specified | Sets native requiredness and preserves semantic metadata; this stub does not validate records.                             |
-| `str`                                                  | Lowered by stub + semantics specified | Delegates native string-field construction; no record values are read.                                                     |
-| `boolean`                                              | Lowered by stub + semantics specified | Emits the two native choices and their Boolean codec metadata; no runtime decoding occurs.                                 |
-| `creationDefault`                                      | Lowered by stub + semantics specified | Checks Boolean literal compatibility and records the default; applying it at final absence remains unimplemented.          |
-| `parent`                                               | Lowered by stub + semantics specified | Retains Parent grammar and lowers inline checks, deriving readable names for anonymous callbacks.                          |
-| `child`                                                | Lowered by stub + semantics specified | Retains Child grammar and lowers inline checks, deriving readable names for anonymous callbacks.                           |
-| `parentOf`                                             | Lowered by stub + semantics specified | Builds a qualified Parent relation reference whose declared identity is checked during lowering.                           |
-| `childOf`                                              | Lowered by stub + semantics specified | Builds the corresponding qualified Child reference.                                                                        |
-| `fieldOf`                                              | Lowered by stub + semantics specified | Builds a field identity from the owner tag and the field title.                                                            |
-| `isNodeType`                                           | Lowered by stub, semantics prose only | Lowers a relation target test to target-type with targetElement; unsupported forms throw.                                  |
-| `count`                                                | Lowered by stub, semantics prose only | Combines an owned-relation count and comparison into a count leaf without counting records.                                |
-| `lt`                                                   | Lowered by stub, semantics prose only | Lowers count < integer to count with compare = lt; unsupported forms throw.                                                |
-| `lte`                                                  | Lowered by stub, semantics prose only | Lowers count <= integer to count with compare = lte; unsupported forms throw.                                              |
-| `gt`                                                   | Lowered by stub, semantics prose only | Lowers count > integer to count with compare = gt; unsupported forms throw.                                                |
-| `gte`                                                  | Lowered by stub, semantics prose only | Lowers count >= integer to count with compare = gte; unsupported forms throw.                                              |
-| `eq`                                                   | Lowered by stub, semantics prose only | Lowers count == integer to count with compare = eq; unsupported forms throw.                                               |
-| `atMost`                                               | Lowered by stub, semantics prose only | Lowers to the same count record as lte (count COLLECTION) N; no count is computed.                                         |
-| `atLeast`                                              | Lowered by stub, semantics prose only | Lowers to count with compare = gte; no count is computed.                                                                  |
-| `exactly`                                              | Lowered by stub, semantics prose only | Lowers to count with compare = eq; no count is computed.                                                                   |
-| `only`                                                 | Lowered by stub, semantics prose only | Becomes requireSingleton in endpoint-path; standalone or unsupported forms throw.                                          |
-| `forest`                                               | Lowered by stub, semantics prose only | Emits selected edges, owner-kind vertices, parent-to-child orientation, and permission for disconnected roots.             |
-| `isForest`                                             | Lowered by stub, semantics prose only | Lowers to forest-validity with a view reference; finds no cycles or hierarchy-parent counts.                               |
-| `visibility`                                           | Lowered by stub, semantics prose only | Emits hierarchy and policy; fixed shared-root, unique-path, and zero-length semantics are in contract.md.                  |
-| `visible`                                              | Lowered by stub, semantics prose only | Lowers relation owner-to-target visibility to visible-target with view, from, and to.                                      |
-| `canDescend`                                           | Lowered by stub, semantics prose only | Lowers two singleton endpoints to endpoint-path with view, upper, lower, and requireSingleton.                             |
-| `nativeDag`                                            | Lowered by stub, semantics prose only | Lowers to native-dag; the kind fixes all native Parent/Child roles and parent-to-child orientation.                        |
-| `input`                                                | Lowered by stub, semantics prose only | Validates input configuration keywords; provider registration, acquisition, and snapshot completeness checking do not run. |
-| `projection`                                           | Lowered by stub, semantics prose only | Emits selected comparison facts without extracting them from records.                                                      |
-| `preserve`                                             | Lowered by stub, semantics prose only | Lowers to preserve with baseline and projection references and the input dependency; compares no snapshots.                |
-| `contribute`                                           | Lowered by stub + semantics specified | Adds relation-scoped checks and retains a contribution origin for composition.                                             |
-| `const`                                                | Lowered by stub + semantics specified | Accepts Boolean literals; true emits empty all and false emits empty any.                                                  |
-| `all`, `any`, `not`                                    | Lowered by stub + semantics specified | Emit only the three Boolean operators over named leaves; collect dependencies recursively.                                 |
-| `where`                                                | Lowered by stub + semantics specified | Adds a predicate filter to a named selector; the stub does not evaluate the filter.                                        |
-| Relation `edge` binder                                 | Lowered by stub + semantics specified | Exposes owner and target tokens through the author-facing origin and target properties.                                    |
-| Record `node` or `bridge` binder                       | Lowered by stub + semantics specified | Exposes symbolic Parent and Child collection functions during normalization.                                               |
-| Singleton `.target`                                    | Lowered by stub, semantics prose only | Selects the declared target of each singleton endpoint relation; runtime resolution is not implemented.                    |
-| Runtime graph evaluator                                | Not implemented                       | No backend in this stub consumes the predicates to produce graph verdicts.                                                 |
-| Runtime field-value accessor                           | Not implemented                       | No constructor here reads FLAG from an arbitrary bound node for a new predicate.                                           |
-| Runtime default materialization                        | Not implemented                       | No literal is applied to a candidate, and no script default constructor or execution is provided here.                     |
-| External snapshot acquisition                          | Not implemented                       | The contract specifies command stdout JSON; no provider command, timeout implementation, or snapshot capture runs.         |
-| Prerequisite scheduling and structured blocked results | Not implemented                       | No runtime connects a cardinality finding to a blocked singleton-dependent path check.                                     |
-| Candidate batching, publication, and recovery          | Not implemented                       | No private candidate, persistence operation, stale-base refusal, or recovery mechanism is wired here.                      |
-| Explicit rule replacement or disabling                 | Not implemented                       | The contract requires explicit identity-targeted action, but the stub supplies no such authoring constructor.              |
+| Construct                                              | Status                                | Concrete boundary                                                                                                                                                             |
+| ------------------------------------------------------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `el`                                                   | Lowered by stub + semantics specified | Wraps the native element declaration and retains constraints for later lowering.                                                                                              |
+| `model`                                                | Lowered by stub + semantics specified | Supplies declaration-list defaults and the model identity.                                                                                                                    |
+| `normalize`                                            | Lowered by stub + semantics specified | Builds grammar, metadata, and selector-plus-check rules with the authoring checks described above.                                                                            |
+| `check`                                                | Lowered by stub + semantics specified | Retains the name and lowers to named leaves combined with all, any, and not; unsupported predicates throw.                                                                    |
+| `on`                                                   | Lowered by stub + semantics specified | Supplies a named selector for relation occurrences, element records, or the model.                                                                                            |
+| `record`                                               | Lowered by stub + semantics specified | Calls the callback with symbolic collections; emits no record wrapper or binder ID.                                                                                           |
+| `required`                                             | Lowered by stub + semantics specified | Sets native requiredness and preserves semantic metadata; this stub does not validate records.                                                                                |
+| `str`                                                  | Lowered by stub + semantics specified | Delegates native string-field construction; no record values are read.                                                                                                        |
+| `boolean`                                              | Lowered by stub + semantics specified | Emits the two native choices and their Boolean codec metadata; no runtime decoding occurs.                                                                                    |
+| `choice`                                               | Lowered by stub + semantics specified | Emits the native single-choice body and describes its semantic value as that native string; authored values are validated against the choices the subject's element declares. |
+| `creationDefault`                                      | Lowered by stub + semantics specified | Checks Boolean literal compatibility and records the default; applying it at final absence remains unimplemented.                                                             |
+| `parent`                                               | Lowered by stub + semantics specified | Retains Parent grammar and lowers inline checks, deriving readable names for anonymous callbacks.                                                                             |
+| `child`                                                | Lowered by stub + semantics specified | Retains Child grammar and lowers inline checks, deriving readable names for anonymous callbacks.                                                                              |
+| `parentOf`                                             | Lowered by stub + semantics specified | Builds a qualified Parent relation reference whose declared identity is checked during lowering.                                                                              |
+| `childOf`                                              | Lowered by stub + semantics specified | Builds the corresponding qualified Child reference.                                                                                                                           |
+| `fieldOf`                                              | Lowered by stub + semantics specified | Builds a field identity from the owner tag and the field title.                                                                                                               |
+| `isNodeType`                                           | Lowered by stub, semantics prose only | Lowers a relation target test to target-type with targetElement; unsupported forms throw.                                                                                     |
+| `count`                                                | Lowered by stub, semantics prose only | Combines an owned-relation count and comparison into a count leaf without counting records.                                                                                   |
+| `lt`                                                   | Lowered by stub, semantics prose only | Lowers count < integer to count with compare = lt; unsupported forms throw.                                                                                                   |
+| `lte`                                                  | Lowered by stub, semantics prose only | Lowers count <= integer to count with compare = lte; unsupported forms throw.                                                                                                 |
+| `gt`                                                   | Lowered by stub, semantics prose only | Lowers count > integer to count with compare = gt; unsupported forms throw.                                                                                                   |
+| `gte`                                                  | Lowered by stub, semantics prose only | Lowers count >= integer to count with compare = gte; unsupported forms throw.                                                                                                 |
+| `eq`                                                   | Lowered by stub, semantics prose only | Lowers count == integer to count with compare = eq; unsupported forms throw.                                                                                                  |
+| `atMost`                                               | Lowered by stub, semantics prose only | Lowers to the same count record as lte (count COLLECTION) N; no count is computed.                                                                                            |
+| `atLeast`                                              | Lowered by stub, semantics prose only | Lowers to count with compare = gte; no count is computed.                                                                                                                     |
+| `exactly`                                              | Lowered by stub, semantics prose only | Lowers to count with compare = eq; no count is computed.                                                                                                                      |
+| `fieldIs`                                              | Lowered by stub, semantics prose only | Lowers to field-value with a one-item values list and subject record unless `at` moves it.                                                                                    |
+| `fieldIn`                                              | Lowered by stub, semantics prose only | Lowers to the same field-value leaf with the authored values list; rejects an empty list.                                                                                     |
+| `ifPresent`                                            | Lowered by stub, semantics prose only | Sets absentSatisfies true on the field-value leaf it wraps; other predicates throw.                                                                                           |
+| `at`                                                   | Lowered by stub, semantics prose only | Sets the field-value leaf's subject to an edge binder's owner or target; forbidden scopes throw.                                                                              |
+| `only`                                                 | Lowered by stub, semantics prose only | Becomes requireSingleton in endpoint-path; standalone or unsupported forms throw.                                                                                             |
+| `forest`                                               | Lowered by stub, semantics prose only | Emits selected edges, owner-kind vertices, parent-to-child orientation, and permission for disconnected roots.                                                                |
+| `isForest`                                             | Lowered by stub, semantics prose only | Lowers to forest-validity with a view reference; finds no cycles or hierarchy-parent counts.                                                                                  |
+| `visibility`                                           | Lowered by stub, semantics prose only | Emits hierarchy and policy; fixed shared-root, unique-path, and zero-length semantics are in contract.md.                                                                     |
+| `visible`                                              | Lowered by stub, semantics prose only | Lowers relation owner-to-target visibility to visible-target with view, from, and to.                                                                                         |
+| `canDescend`                                           | Lowered by stub, semantics prose only | Lowers two singleton endpoints to endpoint-path with view, upper, lower, and requireSingleton.                                                                                |
+| `nativeDag`                                            | Lowered by stub, semantics prose only | Lowers to native-dag; the kind fixes all native Parent/Child roles and parent-to-child orientation.                                                                           |
+| `input`                                                | Lowered by stub, semantics prose only | Validates input configuration keywords; provider registration, acquisition, and snapshot completeness checking do not run.                                                    |
+| `projection`                                           | Lowered by stub, semantics prose only | Emits selected comparison facts without extracting them from records.                                                                                                         |
+| `preserve`                                             | Lowered by stub, semantics prose only | Lowers to preserve with baseline and projection references and the input dependency; compares no snapshots.                                                                   |
+| `contribute`                                           | Lowered by stub + semantics specified | Adds relation-scoped checks and retains a contribution origin for composition.                                                                                                |
+| `const`                                                | Lowered by stub + semantics specified | Accepts Boolean literals; true emits empty all and false emits empty any.                                                                                                     |
+| `all`, `any`, `not`                                    | Lowered by stub + semantics specified | Emit only the three Boolean operators over named leaves; collect dependencies recursively.                                                                                    |
+| `where`                                                | Lowered by stub + semantics specified | Adds a predicate filter to a named selector; the stub does not evaluate the filter.                                                                                           |
+| Relation `edge` binder                                 | Lowered by stub + semantics specified | Exposes owner and target tokens through the author-facing origin and target properties.                                                                                       |
+| Record `node` or `bridge` binder                       | Lowered by stub + semantics specified | Exposes symbolic Parent and Child collection functions during normalization.                                                                                                  |
+| Singleton `.target`                                    | Lowered by stub, semantics prose only | Selects the declared target of each singleton endpoint relation; runtime resolution is not implemented.                                                                       |
+| Runtime graph evaluator                                | Not implemented                       | No backend in this stub consumes the predicates to produce graph verdicts.                                                                                                    |
+| Runtime field-value accessor                           | Lowered by stub, semantics prose only | `fieldIs` and `fieldIn` read the record, owner, or target subject; no constructor reads a field of a node reached by a walk.                                                  |
+| Runtime default materialization                        | Not implemented                       | No literal is applied to a candidate, and no script default constructor or execution is provided here.                                                                        |
+| External snapshot acquisition                          | Not implemented                       | The contract specifies command stdout JSON; no provider command, timeout implementation, or snapshot capture runs.                                                            |
+| Prerequisite scheduling and structured blocked results | Not implemented                       | No runtime connects a cardinality finding to a blocked singleton-dependent path check.                                                                                        |
+| Candidate batching, publication, and recovery          | Not implemented                       | No private candidate, persistence operation, stale-base refusal, or recovery mechanism is wired here.                                                                         |
+| Explicit rule replacement or disabling                 | Not implemented                       | The contract requires explicit identity-targeted action, but the stub supplies no such authoring constructor.                                                                 |
 
 ## What the backend does with it
 
