@@ -411,6 +411,7 @@ sandboxing
 sarif
 scriptable
 sdiehl
+sdpm
 segs
 semble
 sequentialthinking
