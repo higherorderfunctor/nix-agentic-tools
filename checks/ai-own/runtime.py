@@ -466,7 +466,7 @@ def virgin(fixture):
 
 
 def modes(fixture):
-    """Documents preserve the mode they have; directories impose the declared one."""
+    """Documents keep their mode unless they state one; directories impose it."""
     document = fixture.root / "settings/cli.json"
     target = doc_target(
         {"text": json.dumps({"ours": 1})},
@@ -489,6 +489,29 @@ def modes(fixture):
         assert json.loads(document.read_text())["ours"] == mode
         assert stat.S_IMODE(document.stat().st_mode) == mode, f"changed write lost {oct(mode)}"
     print("PASS modes: doc codec preserved 0400/0600/0640 and used 0600 for a new file")
+
+    # A document target MAY state the mode its file must carry. Stated, it is
+    # imposed on every write AND on the run where the bytes did not move --
+    # that second arm is the one kiro's merge target needs, because the run
+    # that has to re-narrow a file an overwrite generation left 0444 usually
+    # has no other work to do.
+    stated = doc_target(
+        {"mode": "0640", "text": json.dumps({"ours": 1})},
+        path="settings/cli.json",
+        ledger="json-settings/cli.json",
+    )
+    document.chmod(0o444)
+    fixture.own({"targets": [stated]})
+    assert stat.S_IMODE(document.stat().st_mode) == 0o640, "a stated mode was not imposed"
+    before = snapshot(document)
+    document.chmod(0o444)
+    fixture.own({"targets": [stated]})
+    # A chmod, not a republication: bytes and mtime both frozen.
+    assert snapshot(document) == before, "imposing a stated mode rewrote the document"
+    document.unlink()
+    fixture.own({"targets": [stated]})
+    assert stat.S_IMODE(document.stat().st_mode) == 0o640, "a new document ignored its stated mode"
+    print("PASS modes: doc codec imposed a stated mode on create, rewrite and no-op")
 
     unit = fixture.root / "settings/unit.txt"
     for mode in ("0400", "0444", "0640"):
