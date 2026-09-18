@@ -108,7 +108,11 @@ def exercise(case, bash):
     assert alpha["url"] == "https://secret.invalid/mcp"
     assert alpha["headers"]["Authorization"] == "Bearer ${env:KIRO_MCP_ALPHA_AUTHORIZATION}"
     manifest, = leaves()
-    assert all(path[0] == "mcpServers" for path in json.loads(manifest.read_text())["managed_paths"])
+    managed_paths = json.loads(manifest.read_text())["managed_paths"]
+    assert managed_paths, "secret reconciliation emitted an empty ownership ledger"
+    assert all(path[0] == "mcpServers" for path in managed_paths)
+    assert ["mcpServers", "alpha", "url"] in managed_paths
+    assert ["mcpServers", "alpha", "headers", "Authorization"] in managed_paths
     before = snapshot(config), snapshot(manifest)
     for value in (None, "", 'invalid " JSON'):
         if value is None:
@@ -132,5 +136,11 @@ def exercise(case, bash):
     print(f"PASS: {case['backend']} mode switches, credentials, isolation")
 
 
-for case in json.loads(Path(sys.argv[1]).read_text()):
+cases = json.loads(Path(sys.argv[1]).read_text())
+assert len(cases) == 2 and {case["backend"] for case in cases} == {"hm", "devenv"}
+for case in cases:
+    assert case["scripts"] and all(
+        isinstance(script, str) and script.strip() for script in case["scripts"].values()
+    ), f"{case['backend']}: missing activation body"
+for case in cases:
     exercise(case, sys.argv[2])
