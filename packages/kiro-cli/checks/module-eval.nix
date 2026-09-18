@@ -405,9 +405,7 @@ in {
         && !(result.config.home.file ? ".kiro/settings/mcp.json")
     );
 
-    # Kiro HM: mcpWriteMode = "merge" deep-merges Nix servers onto the
-    # on-disk file (jq '.[0] * .[1]', write-if-absent) and leaves it
-    # writeable (0644) so hand edits survive.
+    # Merge owns leaves only; no materializer write or whole-file claim.
     module-kiro-hm-mcp-json-merge-mode = mkTest "kiro-hm-mcp-json-merge-mode" (
       let
         result = evalHm {
@@ -422,12 +420,15 @@ in {
         };
         script = result.config.home.activation.kiroMcpJson.text or "";
       in
-        lib.hasInfix "'.[0] * .[1]'" script
-        && hasLiteral ''nat_mat_write mcp.json "$nat_mat_prev" 0644'' script
+        lib.hasInfix "--format json" script
+        && lib.hasInfix "NAT_SETTINGS_JSON" script
+        && !(lib.hasInfix "nat_mat_write" script)
+        && !(result.config.home.activation ? "materialize-kiro-settings-prune")
+        && result.config.home.activation ? "retire-materialize-kiro-settings"
     );
 
     # The N→0 regression: both backends keep their manifest writer and prune
-    # when the last server disappears, in either write mode. Disabled modules
+    # when the last server disappears in overwrite mode. Disabled modules
     # remain inert. Non-empty pools are positive controls for the accessors.
     module-kiro-mcp-empty-pool-still-prunes = mkTest "kiro-mcp-empty-pool-still-prunes" (
       builtins.all (mode: let
@@ -477,8 +478,12 @@ in {
         && lib.elem "devenv:files:cleanup" (task.after or [])
         && hmMcpWriteScript (evalHm {ai.kiro.enable = false;}) == ""
         && dvMcpTaskExec (evalDevenv {ai.kiro.enable = false;}) == "")
-      ["merge" "overwrite"]
+      ["overwrite"]
     );
+
+    module-kiro-mcp-reconcile-runtime = import ./mcp-reconcile-runtime.nix {
+      inherit lib pkgs harness;
+    };
 
     module-kiro-materializer-entry-shapes = mkTest "kiro-materializer-entry-shapes" (
       let
@@ -572,11 +577,8 @@ in {
       runBackend = backend: let
         script = mode: servers: mkScript backend (cfg mode servers);
         empty = script "overwrite" {};
-        emptyMerge = script "merge" {};
         plain = script "overwrite" (server plainUrl);
-        merge = script "merge" (server plainUrl);
         secret = script "overwrite" (server {file = "credential-url";});
-        secretMerge = script "merge" (server {file = "credential-url";});
         failedHelper = script "overwrite" (server {helper = "./failed-helper";});
       in ''
         export HOME="$TMPDIR/${backend}-home"
@@ -644,25 +646,9 @@ in {
         ${empty}
         cmp original "$target" || fail '${backend}: drained ownership still clobbered'
 
-        # Preserve existing deep-merge behavior, including hand-added servers.
-        ${merge}
-        ${pkgs.jq}/bin/jq -e '.mcpServers | has("hand") and has("demo")' "$target" > /dev/null
-        [ "$(stat -c %a "$target")" = 644 ] || fail '${backend}: merge mode'
-        printf '%s' '${plainUrl}' > credential-url
-        ${secretMerge}
-        [ "$(stat -c %a "$target")" = 600 ] || fail '${backend}: secret merge mode'
-        ${pkgs.jq}/bin/jq -e '.mcpServers | has("hand") and has("demo")' "$target" > /dev/null
-
-        # User edits are backed up before an owned file is pruned in merge mode.
-        printf '{"edited":true}\n' > "$target"
-        cp "$target" edited
-        ${emptyMerge}
-        [ ! -e "$target" ] || fail '${backend}: empty merge pool did not prune'
-        found_backup=0
-        for backup in "$backups"/mcp.json.*; do
-          if cmp -s edited "$backup"; then found_backup=1; fi
-        done
-        [ "$found_backup" = 1 ] || fail '${backend}: edited content was not backed up'
+        # Merge retirement and permissions have their own leaf-ownership
+        # corpus. Keep this whole-file corpus's overwrite checks unchanged.
+        rm "$target"
         [ "$(cat "$HOME/.kiro/settings/unmanaged.json")" = neighbor ] || fail '${backend}: neighbor changed'
 
         # Non-regular collisions must fail without falsely claiming ownership.
