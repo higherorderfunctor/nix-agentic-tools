@@ -57,9 +57,11 @@ NEW_FILE_MODE = 0o600
 # each other's live temporary files.
 LOCK = ("materialize", "lock")
 
-# The clobber guard, transcribed arm by arm from the shell it replaces so the
-# two can be diffed side by side. Citations are lib/ai/materialize.nix line
-# numbers: `nat_mat_write` in mkWriteCore and the loop body of mkPruneCore.
+# The clobber guard, transcribed arm by arm from the shell it replaced so the
+# two can be diffed side by side. The citations are line numbers in that file,
+# which is deleted -- read it with
+# `git show c1be1e58:lib/ai/materialize.nix` (`nat_mat_write` inside
+# mkWriteCore, and the loop body of mkPruneCore).
 # The ORDER of the tests is part of the guard: `-L` is answered before any
 # content comparison, because cmp-skipping an identical-content symlink would
 # reinstate the Kiro v3 skips-symlinks defect.
@@ -455,9 +457,10 @@ def read_dir_ledger(path: Path) -> dict[str, str] | None:
         name, _, witness = line.partition("\t")
         if not name:
             continue
-        # materialize.nix:312-317. Refused, not deleted -- which is why
-        # own.nix bars a traversing or dot-prefixed unit address: one this
-        # reader skips could be written and never retracted.
+        # The bash reader REFUSED such an entry too rather than deleting it
+        # (c1be1e58:lib/ai/materialize.nix:312-317), which is why own.nix bars a
+        # traversing or dot-prefixed unit address: one this reader skips could
+        # be written and never retracted.
         if "/" in name or name.startswith("."):
             print(
                 f"WARNING: own: ignoring suspicious ledger entry '{name}' in {path}",
