@@ -25,7 +25,7 @@
   # two silently-wrong singletons can pass VACUOUSLY. Asserting the match count
   # as part of the returned boolean fixes both.
   kiroWrappedDrvs = packages:
-    map (p: p.drvPath) (lib.filter (p: (p.name or "") == "kiro-cli-wrapped") packages);
+    map (p: p.drvPath) (lib.filter (p: p.name == "kiro-cli-wrapped") packages);
 
   # Exactly one wrapper on each side, and they must DIFFER (the unlock forked).
   soleFork = a: b:
@@ -49,16 +49,23 @@
     lib.mapAttrs' (target: entry:
       lib.nameValuePair (lib.removePrefix prefix target) entry)
     (lib.filterAttrs (target: _entry: lib.hasPrefix prefix target) evaluated.config.ai.kiro.files);
-  hmRetirementScript = ev: (ev.config.home.activation."retire-materialize-kiro-steering" or {}).text or "";
-  dvTaskExec = ev: ((ev.config.tasks or {})."ai:kiro:retire-steering-copies" or {}).exec or "";
-  # Kiro HOOKS ride the same materializer (copy-only; v3 drops symlinked
-  # hooks), so they get the same accessor trio against the hooks slug.
-  hmHookPruneScript = ev: (ev.config.home.activation."materialize-kiro-hooks-prune" or {}).text or "";
-  hmHookWriteScript = ev: (ev.config.home.activation."materialize-kiro-hooks-write" or {}).text or "";
-  dvHookTaskExec = ev: ((ev.config.tasks or {})."ai:kiro:materialize-hooks" or {}).exec or "";
-  hmMcpPruneScript = ev: (ev.config.home.activation."materialize-kiro-settings-prune" or {}).text or "";
-  hmMcpWriteScript = ev: (ev.config.home.activation.kiroMcpJson or {}).text or "";
-  dvMcpTaskExec = ev: ((ev.config.tasks or {})."ai:kiro:materialize-mcp" or {}).exec or "";
+  requireBody = path: ev: let
+    label = "Kiro check requires config.${lib.showOption path}";
+    body = lib.attrByPath path (throw "${label}: attribute is missing") ev.config;
+  in
+    if builtins.isString body && builtins.match "[[:space:]]*" body == null
+    then body
+    else throw "${label}: script body is empty or not a string";
+
+  dvHookTaskExec = requireBody ["tasks" "ai:kiro:materialize-hooks" "exec"];
+  dvMcpTaskExec = requireBody ["tasks" "ai:kiro:materialize-mcp" "exec"];
+  dvTaskExec = requireBody ["tasks" "ai:kiro:retire-steering-copies" "exec"];
+  hmHookPruneScript = requireBody ["home" "activation" "materialize-kiro-hooks-prune" "text"];
+  hmHookWriteScript = requireBody ["home" "activation" "materialize-kiro-hooks-write" "text"];
+  hmMcpPruneScript = requireBody ["home" "activation" "materialize-kiro-settings-prune" "text"];
+  hmMcpRetirementScript = requireBody ["home" "activation" "retire-materialize-kiro-settings" "text"];
+  hmMcpWriteScript = requireBody ["home" "activation" "kiroMcpJson" "text"];
+  hmRetirementScript = requireBody ["home" "activation" "retire-materialize-kiro-steering" "text"];
   # Extract the heredoc body a copy writer embeds for <name> — the
   # #433 heredoc-extraction idiom (see module-kiro-hooks-typed-
   # colocation). The per-script EOF marker is content-hash-derived, so
@@ -70,7 +77,7 @@
     parts = lib.splitString "${lib.escapeShellArg name} \"$nat_mat_prev\" ${lib.escapeShellArg "0444"} <<'" t;
   in
     if builtins.length parts < 2
-    then null
+    then throw "Kiro check requires materializer heredoc for ${name}: write call is missing"
     else let
       afterCall = builtins.elemAt parts 1;
       marker = builtins.head (lib.splitString "'\n" afterCall);
@@ -78,5 +85,5 @@
     in
       builtins.head (lib.splitString "\n${marker}\n" body);
 in {
-  inherit dvHookTaskExec dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookWriteScript hmMcpPruneScript hmMcpWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody renderKiroSecrets renderedMcpJson soleFork soleSame;
+  inherit dvHookTaskExec dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookWriteScript hmMcpPruneScript hmMcpRetirementScript hmMcpWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody renderKiroSecrets renderedMcpJson soleFork soleSame;
 }

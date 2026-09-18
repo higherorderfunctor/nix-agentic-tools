@@ -4,7 +4,7 @@
   harness,
 }: let
   inherit (harness) evalDevenv evalHm;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvMcpTaskExec hmMcpPruneScript hmMcpWriteScript renderedMcpJson;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvMcpTaskExec hmMcpPruneScript hmMcpRetirementScript hmMcpWriteScript renderedMcpJson;
   servers = {
     alpha = {
       type = "http";
@@ -26,8 +26,11 @@
   in
     if backend == "hm"
     then
-      (hm.config.home.activation."retire-materialize-kiro-settings".text or "")
-      + hmMcpPruneScript hm
+      (
+        if mode == "merge"
+        then hmMcpRetirementScript hm
+        else hmMcpPruneScript hm
+      )
       + hmMcpWriteScript hm
     else dvMcpTaskExec (evalDevenv cfg);
   first = builtins.fromJSON (renderedMcpJson servers);
