@@ -1,5 +1,6 @@
 {repoPath, ...}: {
   checks.cacheHitParity.kiro-crew = {consumerPath = ["ai" "kiro-crew"];};
+  checks.cacheHitParity.kiro-crew-embed-model = {consumerPath = ["ai" "kiro-crew-embed-model"];};
   documentation.aiCliDescriptions.kiro-crew = "Kiro Crew";
   update.targets.kiro-crew = {
     file = repoPath ./packages/ai/kiro-crew/package.nix;
