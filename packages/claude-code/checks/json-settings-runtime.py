@@ -131,6 +131,12 @@ def exercise(case, bash, mode, use_xdg):
 
 
 cases = json.loads(Path(sys.argv[1]).read_text())
+assert cases, "JSON runtime corpus is empty"
+assert len({case["name"] for case in cases}) == len(cases), "duplicate runtime case"
+for case in cases:
+    assert len(case["scripts"]) == 3, f"{case['name']}: expected three generations"
+    assert all(isinstance(script, str) and script.strip() for script in case["scripts"]), \
+        f"{case['name']}: missing activation body"
 os.umask(0)
 for case in cases:
     for mode in (0o400, 0o600, 0o640):

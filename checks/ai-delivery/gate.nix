@@ -14,20 +14,28 @@
     full = evaluate writer.probe.nonEmpty;
     empty = evaluate writer.probe.empty;
     present = config: let
-      entry = lib.attrByPath writer.writerAttr {} config;
-      body =
-        if writer.mode == "hm"
-        then entry.text or ""
-        else entry.exec or "";
+      bodyPath =
+        writer.writerAttr
+        ++ [
+          (
+            if writer.mode == "hm"
+            then "text"
+            else "exec"
+          )
+        ];
     in
-      lib.hasAttrByPath writer.writerAttr config && builtins.isString body && body != "";
+      lib.hasAttrByPath bodyPath config
+      && (let
+        body = lib.getAttrFromPath bodyPath config;
+      in
+        builtins.isString body && builtins.match "[[:space:]]*" body == null);
     label = "${policy.key writer}: ${lib.showOption writer.writerAttr}";
     failures =
       lib.optional (!(present full)) "${label}: writer absent for NON-EMPTY declaration"
       ++ lib.optional (!(present empty)) "${label}: writer absent for EMPTY declaration (removal would never run)";
     assertionFailures = lib.concatMap (config:
       map (a: "${label}: ${a.message}")
-      (lib.filter (a: !a.assertion) (config.assertions or []))) [full empty];
+      (lib.filter (a: !a.assertion) config.assertions)) [full empty];
   in {
     inherit failures label;
     errors =
