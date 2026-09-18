@@ -14,8 +14,6 @@
   };
   fixtures = import ./fixtures.nix {inherit lib;};
 in {
-  imports = [./materializer-runtime.nix];
-
   checks = {
     ai-delivery = assert gate.passed;
       pkgs.runCommandLocal "ai-delivery-check" {} ''
