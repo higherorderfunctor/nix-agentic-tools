@@ -81,29 +81,26 @@
     nonEmpty = lib.setAttrByPath option nonEmpty;
     empty = lib.setAttrByPath option empty;
   };
-  # No row declares an `exemption` any more. The mechanism stays in the gate —
-  # an exempted writer's failures are RECORDED, and the gate errors the moment
-  # an exempted writer survives every arm — because it is how the NEXT defect
-  # gets documented, but every exemption this file carried has been spent.
+  # NO row declares a defect record any more — not an `exemption`, not an
+  # `absentWriter`, not a `constantGate`. All three mechanisms stay in the gate
+  # and in its schema, because they are how the NEXT defect gets documented,
+  # and each is verified in both directions: a record the gate can no longer
+  # reproduce is itself an error. What retired them:
   #
-  # An exemption could never answer for a writerAttr that resolves to nothing:
-  # that shape is indistinguishable from a typo, and the gate must keep failing
-  # on typos. A row whose declared writer genuinely does not exist says so with
-  # `absentWriter`, whose countdown runs the other way — the gate errors the
-  # moment the attribute starts existing, which is when the row owes an update.
-  absentWriter = evidence: reason: {absentWriter = {inherit evidence reason;};};
-  # A writer whose enabling condition can never be false. It therefore survives
-  # the gate's empty arm for a reason that has nothing to do with removal, so
-  # the pass is not evidence that a retired key is retired. RECORDED, not
-  # exempted: the failures list is empty, so an exemption would fire the
-  # stale-exemption rule instead of documenting anything.
-  constantGate = evidence: {constantGate = evidence;};
+  # - `exemption` (a writer that exists and behaves wrongly) — every writer it
+  #   answered for now reaches its removal path under an emptied declaration.
+  # - `absentWriter` (a writerAttr that resolves to nothing, which an exemption
+  #   must never excuse because that shape is indistinguishable from a typo) —
+  #   kiro's devenv mcp task and its HM settings-prune entry are both emitted
+  #   now, so the gate reports the records themselves as stale.
+  # - `constantGate` (survives the empty arm for a reason unrelated to
+  #   removal) — claude's unpin flags and kimchi's config.json reconcile
+  #   through `own`, so the empty-arm pass IS evidence of removal.
+  #
   # Retraction MECHANISM, one string per mechanism rather than per writer.
-  # These are the only two the ownLeaves writers use, and they differ in the
-  # one property the gate cannot observe: whether a key dropped from the
-  # declaration is removed from the file.
-  reconcilerRetraction = "On activation, lib/ai/hm-helpers.nix's mkTomlSettingsActivationScript runs lib/ai/reconcile-toml.py, which records the prior generation's leaves, removes the retired ones, reasserts the current ones, and preserves unowned siblings.";
-  recursiveMerge = "On activation, lib/ai/hm-helpers.nix's mkSettingsActivationScript reasserts the declared leaves with `jq -s '.[0] * .[1]'` (lib/ai/hm-helpers.nix:186). A recursive merge CANNOT remove a key the declaration dropped (lib/ai/hm-helpers.nix:193-199), so a retired leaf survives in the file until the consumer deletes it by hand.";
+  # There is exactly one: every ownLeaves writer runs the same program, so the
+  # jq recursive merge that could not remove a dropped key has no rows left.
+  ownRetraction = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings.";
   leaves = pruneTrigger: activation: target: declaration: {
     inherit pruneTrigger target;
     inputOptions = [declaration.option];
@@ -150,10 +147,7 @@
         then "$HOME"
         else "$DEVENV_ROOT"
       }/.kiro/settings/mcp.json"
-      ((mcpProbe "kiro") // {base.ai.kiro.mcpWriteMode = "overwrite";})
-      // lib.optionalAttrs (mode == "devenv")
-      (absentWriter "packages/kiro-cli/lib/mkKiro.nix:1984"
-        "This task does not exist: the devenv write is an enterShell fragment gated on a non-empty merged pool, so neither declaration reaches a task.");
+      ((mcpProbe "kiro") // {base.ai.kiro.mcpWriteMode = "overwrite";});
     merge =
       primary
       // {
@@ -176,9 +170,7 @@
           // {
             writerAttr = ["home" "activation" "materialize-kiro-settings-prune"];
             role = "Retire merge leaves and prune retired whole paths before the write phase.";
-          }
-          // absentWriter "packages/kiro-cli/lib/mkKiro.nix:1786 (mkMcpJsonScript, where hooks use materializeLib.mkHmActivation at :1831)"
-          "mcp.json is assembled by the bespoke mkMcpJsonScript instead of the materializer, so no .kiro/settings prune entry is emitted under either declaration.");
+          });
     };
   kiroHooks = mode: let
     primary =
@@ -202,7 +194,7 @@
           role = "Prune phase must survive an empty declaration as well as the write phase.";
         });
     };
-  codexConfig = leaves reconcilerRetraction "codexSettingsReconcile" "$HOME/.codex/config.toml" (settingsProbe "codex");
+  codexConfig = leaves ownRetraction "codexSettingsReconcile" "$HOME/.codex/config.toml" (settingsProbe "codex");
   copilotInert = "Factory documents this project file as undelivered: Copilot offers no flag or discovery for it. Presence is not proof of application consumption.";
 
   # A row's primary writer and additionalWriters use the same schema. Keeping
@@ -377,13 +369,8 @@
           (delegated "hm" "settings" "$HOME/.claude/settings.json")
           // {
             additionalWriters = [
-              (leaves recursiveMerge "claudeUnpinLaunchEffort" "$HOME/.claude.json"
-                (probe ["ai" "claude" "unpinLaunchEffort"] {probe = true;} {})
-                # The log line is unconditional and the merge body is appended
-                # only for a non-empty map, so this writer passes all three arms
-                # on the strength of that log line. The merge itself cannot
-                # retract an unpin flag the declaration dropped.
-                // constantGate "packages/claude-code/lib/mkClaude.nix:834-847 (the echo is emitted outside the n > 0 guard)")
+              (leaves ownRetraction "claudeUnpinLaunchEffort" "$HOME/.claude.json"
+                (probe ["ai" "claude" "unpinLaunchEffort"] {probe = true;} {}))
             ];
           };
       };
@@ -393,7 +380,7 @@
       };
       copilot = {
         devenv = (declarative "devenv" ".config/github-copilot/settings.json") // {deliveryGap = copilotInert;};
-        hm = leaves recursiveMerge "copilotSettingsMerge" "$HOME/.copilot/settings.json" (settingsProbe "copilot");
+        hm = leaves ownRetraction "copilotSettingsMerge" "$HOME/.copilot/settings.json" (settingsProbe "copilot");
       };
       kimchi = {
         devenv =
@@ -402,20 +389,14 @@
             additionalWriters = [(declarative "devenv" ".config/kimchi/harness/settings.json")];
           };
         hm =
-          (leaves recursiveMerge "kimchiConfigMerge" "$HOME/.config/kimchi/config.json"
+          (leaves ownRetraction "kimchiConfigMerge" "$HOME/.config/kimchi/config.json"
             (probe ["ai" "kimchi" "nativeSettings"] {
               llmEndpoint = "https://example.invalid";
               skillPaths = ["probe"];
-            } {})
-            # `skillPaths` defaults to `[]` rather than null, so filterNulls of
-            # the default nativeSettings is `{skillPaths = [];}` — never `{}`.
-            # The mkIf gate is therefore constant-true (measured: the HM
-            # activation set carries kimchiConfigMerge with no declaration at
-            # all), so surviving the empty arm says nothing about removal.
-            // constantGate "packages/kimchi/lib/mkKimchi.nix:143-146 with the mkIf at :247")
+            } {}))
           // {
             additionalWriters = [
-              (leaves recursiveMerge "kimchiHarnessSettingsMerge" "$HOME/.config/kimchi/harness/settings.json"
+              (leaves ownRetraction "kimchiHarnessSettingsMerge" "$HOME/.config/kimchi/harness/settings.json"
                 (probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {}))
             ];
           };
@@ -427,7 +408,7 @@
             deliveryConstraint = "Only the pinned workspace-allowlisted setting keys are accepted; global-only settings fail module assertions.";
           };
         hm =
-          leaves recursiveMerge "kiroSettingsMerge" "$HOME/.kiro/settings/cli.json"
+          leaves ownRetraction "kiroSettingsMerge" "$HOME/.kiro/settings/cli.json"
           (probe ["ai" "kiro" "nativeSettings"] {chat.defaultModel = "probe";} {});
       };
     };
