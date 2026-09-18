@@ -819,11 +819,12 @@ in
           # Reconcile per-model launch-effort unpin flags into ~/.claude.json
           # so settings.effortLevel is honored instead of a newly-shipped
           # model's launch-default pin. HM-only — devenv never touches $HOME
-          # (documented category exception). The log line is unconditional so
-          # an emptied flag map is visible ("reconciling 0 …"); the merge body
-          # is included only when there are flags. Never `exit` here — the
-          # block inlines into HM's set -eu activation script. See memory
-          # project_claude_effort_pin_state + feedback_hm_activation_exit.
+          # (documented category exception). Always log and reconcile, including
+          # an emptied flag map: retire only Nix-owned flags while preserving
+          # native state (including OAuth tokens) and existing file permissions.
+          # An empty first generation leaves externally managed state untouched.
+          # The shared helper scopes shell flags in a subshell and never exits
+          # the concatenated Home Manager activation script.
           (let
             n = builtins.length (builtins.attrNames cfg.unpinLaunchEffort);
           in {
@@ -831,11 +832,12 @@ in
               ''
                 echo "ai.claude: reconciling ${toString n} launch-effort unpin flag(s) into ~/.claude.json"
               ''
-              + lib.optionalString (n > 0) (helpers.mkSettingsActivationScript {
+              + (helpers.mkSettingsActivationScript {
                 configFile = ".claude.json";
+                python = pkgs.python3;
+                reconciler = ../../../lib/ai/reconcile-toml.py;
                 settingsJson = builtins.toJSON cfg.unpinLaunchEffort;
-                jq = "${pkgs.jq}/bin/jq";
-                inherit (pkgs) coreutils;
+                stateName = "claude-unpin-launch-effort";
               })
             );
           })

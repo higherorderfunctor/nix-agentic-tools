@@ -243,26 +243,31 @@ in
         inherit (prep) contextEntry filteredSettings filteredHarnessSettings;
       in
         lib.mkMerge [
-          # config.json activation merge.
-          (lib.mkIf (filteredSettings != {}) {
+          # Reconcile config.json even when settings become empty: retract
+          # recorded Nix leaves and preserve externally managed native siblings.
+          # An empty first generation leaves the file untouched.
+          {
             home.activation.kimchiConfigMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
               configFile = "${cfg.configDir}/config.json";
+              python = pkgs.python3;
+              reconciler = ../../../lib/ai/reconcile-toml.py;
               settingsJson = builtins.toJSON filteredSettings;
-              jq = "${pkgs.jq}/bin/jq";
-              inherit (pkgs) coreutils;
+              stateName = "kimchi-config-${builtins.hashString "sha256" cfg.configDir}";
             });
-          })
+          }
 
-          # harness/settings.json activation merge (mutable-state
-          # reconciliation — Kimchi writes this at runtime).
-          (lib.mkIf (filteredHarnessSettings != {}) {
+          # Kimchi writes harness/settings.json at runtime. Keep its unowned
+          # leaves and retract retired Nix settings even for an empty declaration;
+          # without prior ownership, empty settings leave the file untouched.
+          {
             home.activation.kimchiHarnessSettingsMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
               configFile = "${cfg.configDir}/harness/settings.json";
+              python = pkgs.python3;
+              reconciler = ../../../lib/ai/reconcile-toml.py;
               settingsJson = builtins.toJSON filteredHarnessSettings;
-              jq = "${pkgs.jq}/bin/jq";
-              inherit (pkgs) coreutils;
+              stateName = "kimchi-harness-settings-${builtins.hashString "sha256" cfg.configDir}";
             });
-          })
+          }
 
           # harness/mcp.json — Claude-compatible format.
           (lib.mkIf (mergedServers != {}) {
