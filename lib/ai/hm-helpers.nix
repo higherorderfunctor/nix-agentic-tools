@@ -222,12 +222,8 @@ in rec {
     python,
     runtime,
     value,
-  }:
-  # A PLAIN attrset, not an `mkMerge`: `own` contributes `home` and this
-  # contributes `ai`, so the union is unambiguous, and a caller whose
-  # surrounding block is an attrset can splice one attribute out of it instead
-  # of wrapping its whole config in a merge.
-    (own {
+  }: let
+    owned = own {
       backend = "hm";
       entryNames.write = entry;
       targets = [
@@ -237,10 +233,19 @@ in rec {
         }
       ];
       inherit pkgs python;
-    })
-    // {
-      ai.${runtime}._reconciledDocuments.${path} = {inherit ledger value;};
     };
+  in {
+    # `owned` is reached through a NESTED value, never merged in with `//` and
+    # never behind a `cfg`-derived attribute NAME. `own` validates its plan
+    # eagerly, and the module system walks this fragment's key structure while
+    # it is still collecting the very definitions a `cfg.configDir`-derived
+    # `ledger` or `path` reads — forcing the validation there is an infinite
+    # recursion, which is what a caller that interpolated cfg into a key or
+    # merged the bundle with `//` got. Keeping both behind one more attribute
+    # defers the force until an option is actually read.
+    ai.${runtime}._reconciledDocuments.${path} = {inherit ledger value;};
+    home.activation = owned.home.activation;
+  };
 
   # ── Settings activation scripts ──────────────────────────────────────
   # Reconcile only Nix-owned leaves in mixed-authority, runtime-writable files.
