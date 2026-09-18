@@ -1,4 +1,4 @@
-"""Reconcile Nix-owned TOML leaves while preserving runtime-owned siblings.
+"""Reconcile Nix-owned TOML or JSON leaves, preserving runtime-owned siblings.
 
 This is not a general replacement for immutable Nix-managed configuration.
 It exists for files where an application must persist required runtime state in
@@ -6,8 +6,8 @@ the same document that contains declarative settings. Codex user config is such
 a file: its trust prompt calls config/batchWrite on config.toml, so pointing the
 whole file at the Nix store makes normal first-run trust persistence fail.
 
-Ownership is deliberately recorded at leaf granularity. Treating a whole TOML
-table as managed would let a Nix-declared ``features.memories`` setting erase a
+Ownership is deliberately recorded at leaf granularity. Treating a whole nested
+object as managed would let a Nix-declared ``features.memories`` setting erase a
 native sibling, or let a declared MCP server erase another server added with
 ``codex mcp add``. The external manifest also gives removal semantics that a
 plain "existing merged with desired" operation cannot provide.
@@ -23,12 +23,9 @@ import os
 import stat
 import sys
 import tempfile
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping
 from pathlib import Path
 from typing import Any
-
-import tomlkit
-
 
 MANIFEST_VERSION = 1
 
@@ -36,6 +33,7 @@ MANIFEST_VERSION = 1
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, type=Path)
+    parser.add_argument("--format", choices=("toml", "json"), default="toml")
     parser.add_argument("--manifest", required=True, type=Path)
     return parser.parse_args()
 
@@ -48,11 +46,11 @@ def desired_leaves(value: Mapping[str, Any]) -> list[tuple[tuple[str, ...], Any]
         if isinstance(item, Mapping):
             for key, child in item.items():
                 if not isinstance(key, str):
-                    raise ValueError("desired TOML object keys must be strings")
+                    raise ValueError("desired settings object keys must be strings")
                 walk((*path, key), child)
             return
         if not path:
-            raise ValueError("desired TOML settings must be an object")
+            raise ValueError("desired settings must be an object")
         leaves.append((path, item))
 
     walk((), value)
@@ -109,13 +107,18 @@ def delete_path(root: MutableMapping[str, Any], path: tuple[str, ...]) -> None:
             break
 
 
-def set_path(root: MutableMapping[str, Any], path: tuple[str, ...], value: Any) -> None:
+def set_path(
+    root: MutableMapping[str, Any],
+    path: tuple[str, ...],
+    value: Any,
+    new_table: Callable[[], MutableMapping[str, Any]],
+) -> None:
     """Set one Nix-owned leaf, replacing incompatible scalar/table shapes."""
     current = root
     for segment in path[:-1]:
         child = current.get(segment)
         if not isinstance(child, MutableMapping):
-            table = tomlkit.table()
+            table = new_table()
             current[segment] = table
             child = table
         current = child
@@ -142,16 +145,14 @@ def atomic_write(path: Path, content: bytes, mode: int) -> None:
 
 
 def write_if_changed(path: Path, content: bytes, mode: int) -> None:
-    """Avoid mtime churn, except when replacing the legacy store symlink."""
+    """Preserve existing regular-file modes; use mode only for new files/links."""
     is_symlink = path.is_symlink()
     if path.exists() and not is_symlink:
         if not path.is_file():
             raise ValueError(f"refusing to replace non-regular file {path}")
         current = path.read_bytes()
-        current_mode = stat.S_IMODE(path.stat().st_mode)
+        mode = stat.S_IMODE(path.stat().st_mode)
         if current == content:
-            if current_mode != mode:
-                path.chmod(mode)
             return
     elif not path.exists() and is_symlink:
         raise ValueError(f"refusing to replace dangling symlink {path}")
@@ -159,7 +160,12 @@ def write_if_changed(path: Path, content: bytes, mode: int) -> None:
     atomic_write(path, content, mode)
 
 
-def reconcile(config_path: Path, manifest_path: Path, desired: Mapping[str, Any]) -> None:
+def reconcile(
+    config_path: Path,
+    manifest_path: Path,
+    desired: Mapping[str, Any],
+    format_name: str = "toml",
+) -> None:
     current_leaves = desired_leaves(desired)
     current_paths = [path for path, _ in current_leaves]
     previous_paths = read_manifest(manifest_path)
@@ -173,12 +179,29 @@ def reconcile(config_path: Path, manifest_path: Path, desired: Mapping[str, Any]
         manifest_path.unlink()
         return
 
+    if format_name == "json":
+        parse = json.loads
+        serialize = lambda document: json.dumps(document, indent=2) + "\n"
+        new_document = dict
+        new_table = dict
+    else:
+        # JSON callers need only the standard library. Keep the TOML dependency
+        # lazy so their activation closure does not require tomlkit.
+        import tomlkit
+
+        parse = tomlkit.parse
+        serialize = tomlkit.dumps
+        new_document = tomlkit.document
+        new_table = tomlkit.table
+
     # Parse both documents before the first write. A malformed native edit or
     # corrupt ownership ledger must fail closed, preserving the original bytes.
     if config_path.exists() or config_path.is_symlink():
-        document = tomlkit.parse(config_path.read_text(encoding="utf-8"))
+        document = parse(config_path.read_text(encoding="utf-8"))
     else:
-        document = tomlkit.document()
+        document = new_document()
+    if not isinstance(document, MutableMapping):
+        raise ValueError(f"settings must be an object at {config_path}")
 
     # Remove deepest retired paths first so scalar/table transitions are
     # deterministic. Empty-parent pruning never reaches a table that still has
@@ -189,12 +212,12 @@ def reconcile(config_path: Path, manifest_path: Path, desired: Mapping[str, Any]
             delete_path(document, path)
 
     for path, value in current_leaves:
-        set_path(document, path, value)
+        set_path(document, path, value, new_table)
 
     # Config lands before the ledger. If activation is interrupted between the
     # two atomic replacements, the older ledger makes the next run repeat safe,
     # idempotent deletes/sets rather than treating an unrecorded leaf as owned.
-    write_if_changed(config_path, tomlkit.dumps(document).encode(), 0o600)
+    write_if_changed(config_path, serialize(document).encode(), 0o600)
 
     if current_paths:
         manifest = {
@@ -216,13 +239,13 @@ def main() -> None:
     try:
         desired = json.load(sys.stdin)
         if not isinstance(desired, dict):
-            raise ValueError("desired TOML settings must be a JSON object")
-        reconcile(args.config, args.manifest, desired)
+            raise ValueError("desired settings must be a JSON object")
+        reconcile(args.config, args.manifest, desired, args.format)
     except (OSError, ValueError) as error:
         # Activation should be loud but concise. A parser traceback obscures
         # the actionable path/error and invites users to ignore HM output as
         # implementation noise; programming errors still escape with a trace.
-        print(f"reconcile-toml: {error}", file=sys.stderr)
+        print(f"reconcile-settings ({args.format}): {error}", file=sys.stderr)
         raise SystemExit(1) from None
 
 
