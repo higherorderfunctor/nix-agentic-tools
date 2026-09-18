@@ -58,17 +58,27 @@ def files(script, root):
     current.write_text('["probe"]')
     run(argv + [str(current)])
     target.unlink()
-    # Bootstrap from upstream's old ledger and ignore unrelated files.
-    (state / "files.json").write_text(json.dumps({"managedFiles": [".kiro/old", "unrelated"]}))
-    roots = root / "roots.json"
-    roots.write_text(json.dumps({".kiro": "ai.kiro.files"}))
+    # Bootstrap from upstream's old ledger and ignore unrelated files. The map
+    # is EXACT: a consumer file that merely sits under a runtime's config
+    # directory is theirs, and claiming it reported a removal of an ai.* option
+    # that never wrote the file.
+    owned = root / "owned.json"
     (project / ".kiro").mkdir()
+    (project / ".kiro/consumer-owned").write_text("mine")
+    (state / "files.json").write_text(json.dumps({"managedFiles": [".kiro/consumer-owned"]}))
+    owned.write_text(json.dumps({".kiro": "ai.kiro.files"}))
+    run([sys.executable, script, "snapshot", str(state), str(owned)])
+    run(argv)
+    (state / "files.json").write_text(json.dumps({"managedFiles": [".kiro/old", ".kiro/consumer-owned", "unrelated"]}))
+    owned.write_text(json.dumps({".kiro/old": "ai.kiro.files"}))
     (project / ".kiro/old").write_text("retired")
-    run([sys.executable, script, "snapshot", str(state), str(roots)])
+    run([sys.executable, script, "snapshot", str(state), str(owned)])
     result = run(argv, warning="ai.kiro.files was removed but devenv retained")
     assert "unrelated" not in result.stderr
+    assert "consumer-owned" not in result.stderr
     # Explicit copy/seed mode is intentional and stays quiet.
     (project / ".kiro/old").unlink()
+    (project / ".kiro/consumer-owned").unlink()
     desired.write_text(json.dumps({"probe": spec | {"mode": "seed"}}))
     run(argv)
     for invalid in ["bad json", "[]", '{"old":{}}']:
@@ -179,6 +189,9 @@ def wiring(script):
     assert "ai.kiro.lspServers" in desired[".custom-kiro/settings/lsp.json"]["option"]
     assert "ai.codex.nativeSettings" in desired[".codex/config.toml"]["option"]
     assert 'ai.codex.files."probe"' in desired["probe"]["option"]
+    # Provenance is exact: a consumer file under a runtime config directory is
+    # not an ai.* delivery and must not be observed as one.
+    assert ".custom-kiro/consumer-owned.md" not in desired
 
 
 with tempfile.TemporaryDirectory() as directory:
