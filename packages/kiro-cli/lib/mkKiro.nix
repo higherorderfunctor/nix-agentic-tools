@@ -101,7 +101,7 @@
       timeout = lib.mkOption {
         type = lib.types.nullOr lib.types.int;
         default = null;
-        description = "Timeout in seconds (Kiro default 60; 0 disables; ignored for `agent` actions).";
+        description = "Timeout in seconds (Kiro default 60; 0 disables). Agent actions have no subprocess timeout and warn when this is set.";
       };
       enabled = lib.mkOption {
         type = lib.types.nullOr lib.types.bool;
@@ -1154,6 +1154,22 @@
       package = resolvePackage cfg;
       environmentVariables = kiroEnvironment {inherit moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell;};
       inherit ((import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers) secretEnv;
+      secretOptionPaths =
+        lib.foldl' (acc: entry:
+          acc // {${entry.name} = lib.concatStringsSep ", " (lib.unique ((lib.optional (acc ? ${entry.name}) acc.${entry.name}) ++ [entry.value]));}) {}
+        (lib.concatLists (lib.mapAttrsToList (name: server:
+          lib.mapAttrsToList (header: credential: {
+            name =
+              if (credential.var or null) != null
+              then credential.var
+              else (import ./mcpSecrets.nix {inherit lib;}).deriveEnvVar name header;
+            value = "${
+              if builtins.hasAttr name cfg.mcpServers
+              then "ai.kiro.mcpServers"
+              else "ai.mcpServers"
+            }.${name}.headers.${header}";
+          }) (lib.filterAttrs (_: builtins.isAttrs) (server.headers or {})))
+        mergedServers));
       identityMaterializer = resolveIdentityMaterializer cfg;
     };
 in

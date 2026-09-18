@@ -54,10 +54,14 @@
 # mitigation. This degrades toward ALLOWING, and the asymmetry is load-bearing: a
 # deny we failed to record repeats forever, so the model would retry into the same
 # denial with no way through. A guard that cannot write its marker MUST let the
-# write proceed. Every failure path here exits 0 silently.
+# write proceed. Failures still exit 0, with an option-named warning on stderr.
 # cspell:ignore nosession  (the literal fallback marker key, not project vocabulary)
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
+
+warn_guard() {
+  printf 'WARNING: ai.claude.memoryCollisionGuard.enable: %s; continuing without the guard\n' "$1" >&2
+}
 
 # Baked at nix eval time by memoryCollisionGuard.nix; defaults keep the script
 # runnable standalone (packages/claude-code/checks/claude-memory-collision-guard.nix drives it directly).
@@ -67,6 +71,10 @@ list_count="${MEMORY_GUARD_LIST_COUNT:-10}"
 extra_dirs="${MEMORY_GUARD_EXTRA_DIRS:-}"
 
 envelope="$(cat)"
+if ! jq -e 'type == "object"' <<<"$envelope" >/dev/null 2>&1; then
+  warn_guard "invalid hook envelope"
+  exit 0
+fi
 
 # jq must never be able to break a write. Every parse degrades to "not guarded".
 file_path="$(jq -r '.tool_input.file_path // empty' <<<"$envelope" 2>/dev/null || :)"
@@ -135,12 +143,14 @@ if mkdir -p "$marker_dir" 2>/dev/null; then
   # XDG_RUNTIME_DIR is tmpfs and clears on logout; the /tmp fallback accumulates.
   find "$marker_dir" -maxdepth 1 -type f -mtime +7 -delete 2>/dev/null || :
 else
+  warn_guard "cannot create marker directory"
   exit 0
 fi
 
 if touch "$marker" 2>/dev/null; then
   :
 else
+  warn_guard "cannot write session marker"
   exit 0
 fi
 

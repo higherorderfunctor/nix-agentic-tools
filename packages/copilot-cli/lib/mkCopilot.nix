@@ -72,15 +72,16 @@ in
     contextDescription = ''
       Copilot-specific context appended after `ai.context`. Devenv writes it
       beneath `ai.copilot.projectDir` for github.com's reviewer; Home Manager
-      declares the same option for schema parity but treats it as a no-op.
+      declares the same option for schema parity and warns when it is non-empty,
+      because Home Manager cannot deliver this project-scoped guidance.
       Set exactly one of `text` or `source`; `filename` controls the artifact name.
     '';
     rulesDescription = ''
       Copilot-specific rules replace top-level `ai.rules` entries at the same
       key; null suppresses an inherited rule.
       Devenv writes them beneath `ai.copilot.projectDir` for github.com's reviewer;
-      Home Manager declares the same option for schema parity but treats it as a
-      no-op.
+      Home Manager declares the same option for schema parity and warns about
+      non-empty rules it cannot deliver.
     '';
     supportedPools = [
       "agents"
@@ -320,9 +321,9 @@ in
         # `lsp-config.json` and `settings.json` are INERT: Copilot reads
         # neither at project scope and offers no flag to inject them
         # (measured, see dev/fragments/ai-clis/copilot-config-delivery.md).
-        # They are kept as declared-but-undelivered rather than removed, so
-        # the option surface stays at HM parity and they become live for free
-        # if upstream grows discovery. Project-scope files Copilot DOES read
+        # They remain declared for HM option parity; the shared delivery
+        # diagnostics now warn whenever a consumer supplies either surface.
+        # Project-scope files Copilot DOES read
         # live under `projectDir` (default `.github`) instead — that is also
         # the surface github.com's Copilot code review consumes, and it is a
         # different consumer from this CLI.
@@ -374,7 +375,8 @@ in
           # (verified against 1.0.78 `--help`). Written anyway for option
           # parity with HM, and deliberately NOT an assertion: `ai.lspServers`
           # is a shared pool, so failing here would break a project that
-          # legitimately targets Claude or Kiro with it.
+          # legitimately targets Claude or Kiro with it. Non-empty requests
+          # now receive the delivery policy's eval warning.
           (lib.mkIf (mergedLspServers != {}) {
             files."${cfg.configDir}/lsp-config.json".text =
               builtins.toJSON (lib.mapAttrs aiCommon.mkCopilotLspConfig mergedLspServers);
@@ -435,7 +437,8 @@ in
           #
           # INERT at project scope, same as lsp-config.json above: Copilot
           # reads its settings from `$HOME/.copilot/config.json` and never
-          # stats a project-local settings.json. Kept for option parity.
+          # stats a project-local settings.json. Kept for option parity;
+          # non-empty requests receive the delivery policy's eval warning.
           {
             files."${cfg.configDir}/settings.json".text =
               builtins.toJSON cfg.nativeSettings;

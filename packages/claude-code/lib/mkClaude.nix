@@ -406,7 +406,7 @@ in
           `programs.claude-code.lspServers`, which upstream writes into
           `~/.claude/settings.json`. Extensions list becomes
           `extensionToLanguage` mapping. Upstream devenv `claude.code`
-          has no LSP surface — devenv ignores this option.
+          has no LSP surface — devenv warns when this option is non-empty.
         '';
       };
       marketplaces = lib.mkOption {
@@ -911,7 +911,7 @@ in
         #   write below routes it to settings.json.hooks, composing with the
         #   typed event map) — so it is excluded from the generic gap write.
         # - `mcpServers` belongs in `.mcp.json`, not settings.json;
-        #   filtered out defensively in case a user mis-assigns it
+        #   filtered out with an option-named delivery warning if mis-assigned
         #   (the authoritative path is the top-level ai.mcpServers pool).
         # - Everything else (effortLevel, permissions, env, outputStyle,
         #   …) is gap-written directly to `.claude/settings.json`.
