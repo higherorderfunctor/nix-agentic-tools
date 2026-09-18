@@ -379,6 +379,7 @@ reflog
 reftable
 regen
 reimplementation
+relinks
 relitigate
 relpath
 remapper

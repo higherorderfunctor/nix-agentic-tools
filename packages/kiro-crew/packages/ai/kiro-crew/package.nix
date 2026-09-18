@@ -929,6 +929,11 @@ in
       # It is a build input of `frontend` rather than of this derivation, and
       # a nested passthru is not reachable from `nix build .#kiro-crew.<attr>`.
       inherit dashboardFonts;
+      # For `checks/smoke.nix`, which runs the built binary and compares what
+      # it REPORTS against what this recipe CLAIMS. The literal above is
+      # rewritten by `update-pkg.sh` rather than read at eval time (that would
+      # be IFD), so nothing else would notice a bump that skipped the rewrite.
+      inherit upstreamVersion;
     };
 
     meta = {
