@@ -933,19 +933,15 @@
     };
 
   # Render settings/mcp.json to stdout at activation (HM) / shell entry
-  # (devenv). The shared materializer owns writes, backups and pruning;
-  # this command only assembles content. `mode` = `ai.kiro.mcpWriteMode`:
-  #   * "overwrite" — write the rendered template and lock it read-only;
-  #     Nix is authoritative, hand edits do not survive.
-  #   * "merge" — deep-merge the Nix-managed servers onto whatever is on
-  #     disk (`jq '.[0] * .[1]'`, write-if-absent) and leave it writeable,
-  #     preserving hand-added servers/edits.
+  # (devenv). The selected writer owns persistence: the materializer for
+  # overwrite, the leaf reconciler for merge. This only assembles content.
   # A credential url is substituted in HERE: `urlSecretEnv` vars are
   # exported from their decrypted secret and `envsubst`'d into the
   # template with an EXPLICIT var list, so header `${env:...}`
   # placeholders (which Kiro expands at launch) survive untouched. Empty
-  # `urlSecretEnv` → the template is used verbatim. The materializer supplies
-  # NAT_MAT_TARGET_DIR on both backends. Real-file delivery (never a store
+  # `urlSecretEnv` → the template is used verbatim. Overwrite's materializer
+  # supplies NAT_MAT_TARGET_DIR; merge passes its target expression explicitly.
+  # Real-file delivery (never a store
   # symlink) is what lets a secret url land and dodges the
   # symlink<->real-file toggle + the devenv files.* silent skip. NOTE:
   # a credential url reads its secret at ACTIVATION, so a consumer wiring
@@ -954,7 +950,7 @@
   # longer silent: an unreadable or empty secret now fails activation loudly
   # instead of writing `"url": ""` and leaving the server to fail at runtime.
   mkMcpJsonScript = {
-    mode,
+    targetExpr ? "$NAT_MAT_TARGET_DIR/mcp.json",
     templateFile,
     urlSecretEnv,
   }: let
@@ -987,7 +983,7 @@
       in ''
         ${var}=${reader}
         if [ -z "''${${var}}" ]; then
-          echo "kiro mcp: credential for ${var} (${source}) is empty — refusing to write an mcp.json with a blank url" >&2
+          echo "kiro mcp: credential for ${var} (${source}) is empty — refusing to write $TARGET with a blank url" >&2
           false
         fi
         export ${var}
@@ -1000,23 +996,6 @@
       if hasUrlSecret
       then "${exports}${pkgs.gettext}/bin/envsubst ${lib.escapeShellArg envsubstVars} < ${templateFile}"
       else ''${pkgs.coreutils}/bin/cat ${templateFile}'';
-    # Merge only a real file, treating a symlink/absent target as fresh.
-    # Keep the existing jq deep merge: deleting individual keys is separate
-    # from the materializer's ownership of the complete file.
-    renderStep =
-      if mode == "overwrite"
-      then assemble
-      else ''
-        if [ -f "$TARGET" ] && [ ! -L "$TARGET" ]; then
-          RENDERED="$(${pkgs.coreutils}/bin/mktemp "$NAT_MAT_TARGET_DIR/.mcp.json.merge.nat-tmp.XXXXXX")"
-          trap '${pkgs.coreutils}/bin/rm -f -- "$RENDERED"' EXIT
-          {
-            ${assemble}
-          } > "$RENDERED"
-          ${pkgs.jq}/bin/jq -s '.[0] * .[1]' "$TARGET" "$RENDERED"
-        else
-          ${assemble}
-        fi'';
     # SCOPED in a subshell — required, for two independent reasons:
     #
     #   1. Home Manager concatenates every activation DAG entry into ONE script
@@ -1038,14 +1017,13 @@
     #
     # Both materializer backends also isolate render commands. Keeping this
     # body scoped makes secret lifetime a property of the renderer itself.
-  in ''
-    (
+  in
+    aiCommon.scopedActivation ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      TARGET="$NAT_MAT_TARGET_DIR/mcp.json"
-      ${renderStep}
-    )
-  '';
+      TARGET="${targetExpr}"
+      ${assemble}
+    '';
 
   # One per-file ownership contract for both backends. An empty pool retracts
   # only a previously recorded mcp.json; an unmanaged file is left alone.
@@ -1060,16 +1038,10 @@
     files = lib.optionalAttrs (kiroSecrets.servers != {}) {
       "mcp.json" = {
         mode =
-          if cfg.mcpWriteMode == "overwrite"
-          then
-            if hasUrlSecret
-            then "0400"
-            else "0444"
-          else if hasUrlSecret
-          then "0600"
-          else "0644";
+          if hasUrlSecret
+          then "0400"
+          else "0444";
         renderCommand = mkMcpJsonScript {
-          mode = cfg.mcpWriteMode;
           templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
           inherit (kiroSecrets) urlSecretEnv;
         };
@@ -1078,6 +1050,50 @@
         text = null;
       };
     };
+  };
+
+  # One ledger per backend/destination; the generic helper supplies leaf
+  # ownership and stdin reconciliation. Passing {} retires merge ownership
+  # before overwrite takes over, including an empty overwrite generation.
+  mkMcpReconciliation = backend: cfg: kiroSecrets: let
+    helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+    configRoot =
+      if backend == "hm"
+      then "$HOME"
+      else "$DEVENV_ROOT";
+    stateRoot =
+      if backend == "hm"
+      then "\${XDG_STATE_HOME:-$HOME/.local/state}"
+      else "$DEVENV_STATE";
+  in
+    helpers.mkSettingsActivationScript ({
+        inherit configRoot stateRoot;
+        configFile = "${cfg.configDir}/settings/mcp.json";
+        python = pkgs.python3;
+        reconciler = ../../../lib/ai/reconcile-toml.py;
+        stateName = "kiro-mcp-${builtins.hashString "sha256" cfg.configDir}";
+      }
+      // (
+        if cfg.mcpWriteMode == "merge"
+        then {
+          renderCommand = mkMcpJsonScript {
+            targetExpr = "${configRoot}/${cfg.configDir}/settings/mcp.json";
+            templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
+            inherit (kiroSecrets) urlSecretEnv;
+          };
+        }
+        else {settingsJson = "{}";}
+      ));
+
+  # A whole-file hash cannot recover the old declaration's leaves. Preserve
+  # the document when handing it to merge: only the NEW declaration becomes
+  # leaf-owned. Pre-existing undeclared fields become unowned, including old
+  # Nix servers; deleting them would risk deleting indistinguishable hand edits.
+  mkMcpRetirement = cfg: {
+    targetDir = "${cfg.configDir}/settings";
+    stateSlug = materializeLib.mkStateSlug "${cfg.configDir}/settings";
+    preserveFiles = true;
+    inherit (pkgs) coreutils flock;
   };
 
   # `ai.shell` / `ai.kiro.shell` → `SHELL` in Kiro's own process
@@ -1403,7 +1419,7 @@ in
         '';
       };
       # How settings/mcp.json is delivered on activation. Governs the
-      # dedicated, Nix-owned mcp.json only (cli.json always merges to
+      # dedicated mcp.json only (cli.json always reconciles leaves to
       # preserve oauth); a credential url forces a real file either way.
       mcpWriteMode = lib.mkOption {
         type = lib.types.enum ["overwrite" "merge"];
@@ -1417,10 +1433,16 @@ in
             definition every activation and locked read-only. Nix is
             authoritative; hand edits do not survive. Equivalent to the
             old symlink-into-store guarantee, as a real file.
-          - `merge`: the Nix-managed servers are deep-merged onto whatever
-            is on disk (`jq '.[0] * .[1]'`, write-if-absent) and the file
-            is left writeable, so hand-added servers and manual edits are
-            preserved across activations.
+          - `merge`: Nix owns only its declared leaves. Removed leaves are
+            retracted, including when the pool becomes empty; hand-added
+            servers and unowned fields survive. Declared values are reasserted.
+            New files are private (0600); existing file permissions survive.
+
+          Switching modes retires the inactive writer's ownership. On the
+          first switch from overwrite to merge, existing fields absent from
+          the new declaration are preserved as unowned: a whole-file hash
+          cannot distinguish old Nix declarations from hand edits. This also
+          applies to files written by the former deep-merge implementation.
 
           Both modes deliver identical content for the Nix-managed
           servers and handle secret `url`/`headers` the same way; the
@@ -1780,13 +1802,33 @@ in
             (let
               materialization = mkMcpMaterialization cfg kiroSecrets;
               activation = materializeLib.mkHmActivation materialization;
+              pruneKey = "materialize-${materialization.stateSlug}-prune";
               writeKey = "materialize-${materialization.stateSlug}-write";
+              reconcile = mkMcpReconciliation "hm" cfg kiroSecrets;
             in {
               home.activation =
-                builtins.removeAttrs activation [writeKey]
-                // {
-                  kiroMcpJson = activation.${writeKey} // {after = ["linkGeneration" "sops-nix"];};
-                };
+                if cfg.mcpWriteMode == "merge"
+                then
+                  materializeLib.mkHmRetirement (mkMcpRetirement cfg)
+                  // {
+                    kiroMcpJson = lib.hm.dag.entryAfter ["linkGeneration" "sops-nix"] reconcile;
+                  }
+                else
+                  builtins.removeAttrs activation [writeKey]
+                  // {
+                    # Retire leaf ownership BEFORE either materializer phase.
+                    ${pruneKey} =
+                      activation.${pruneKey}
+                      // {
+                        text = aiCommon.scopedActivation ''
+                          set -euETo pipefail
+                          shopt -s inherit_errexit 2>/dev/null || :
+                          ${reconcile}
+                          ${activation.${pruneKey}.text}
+                        '';
+                      };
+                    kiroMcpJson = activation.${writeKey} // {after = ["linkGeneration" "sops-nix"];};
+                  };
             })
             # Inline agent JSON files.
             (lib.mkIf (cfg.agents != {}) {
@@ -1944,17 +1986,38 @@ in
               files."${cfg.configDir}/settings/lsp.json".text =
                 builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
             })
-            # settings/mcp.json — merged MCP server pool, delivered as a
-            # REAL file by the shared materializer, anchored to $DEVENV_ROOT.
-            # Always emitted while enabled, including an empty pool, so only
-            # the previously owned file is pruned. Same ownership as HM.
+            # Exactly one MCP writer per mode, rooted at the project. Keep
+            # retirement and writing in ONE task so devenv cannot race them.
             (let
               materialization = mkMcpMaterialization cfg kiroSecrets;
+              task =
+                if cfg.mcpWriteMode == "merge"
+                then
+                  materializeLib.mkDevenvRetirementTask ((mkMcpRetirement cfg)
+                    // {
+                      hasFiles = config.files != {};
+                    })
+                else
+                  materializeLib.mkDevenvTask (materialization
+                    // {
+                      hasFiles = config.files != {};
+                    });
+              reconcile = mkMcpReconciliation "devenv" cfg kiroSecrets;
             in {
-              tasks."ai:kiro:materialize-mcp" = materializeLib.mkDevenvTask (materialization
+              tasks."ai:kiro:materialize-mcp" =
+                task
                 // {
-                  hasFiles = config.files != {};
-                });
+                  exec = aiCommon.scopedActivation ''
+                    set -euETo pipefail
+                    shopt -s inherit_errexit 2>/dev/null || :
+                    cd "$DEVENV_ROOT"
+                    ${
+                      if cfg.mcpWriteMode == "merge"
+                      then task.exec + reconcile
+                      else reconcile + task.exec
+                    }
+                  '';
+                };
               enterTest = materializeLib.mkEnterTest {
                 app = "kiro";
                 inherit (materialization) files targetDir;
