@@ -26,12 +26,31 @@
     serverDef = loadServer name;
     eval = evalModules {
       modules = [
-        {options = serverDef.settingsOptions;}
+        {
+          options =
+            {
+              assertions = lib.mkOption {
+                type = lib.types.listOf (lib.types.submodule {
+                  options = {
+                    assertion = lib.mkOption {type = lib.types.bool;};
+                    message = lib.mkOption {type = lib.types.str;};
+                  };
+                });
+                default = [];
+                internal = true;
+                description = "Settings validation, forced before any MCP renderer consumes settings.";
+              };
+            }
+            // serverDef.settingsOptions;
+        }
         {config = settings;}
       ];
     };
+    failed = builtins.filter (entry: !entry.assertion) eval.config.assertions;
   in
-    eval.config;
+    if failed == []
+    then builtins.removeAttrs eval.config ["assertions"]
+    else throw "MCP server ${name} settings assertions failed:\n${lib.concatMapStringsSep "\n" (entry: "- ${entry.message}") failed}";
 
   # ── Build a cfg-compatible attrset for server definitions ────────
   # Server settingsToEnv/settingsToArgs expect { settings; service; }
