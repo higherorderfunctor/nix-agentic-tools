@@ -99,7 +99,17 @@ in {
           ${pkgs.writeText "ai-delivery-roots.json" (builtins.toJSON roots)}
       '';
     };
-    enterShell = ''
+    # Emitted as a VALUE-level conditional, never a structural one: deciding
+    # whether to DEFINE config by reading `config.files` forces it while
+    # `_module.freeformType` is still being evaluated, which is an infinite
+    # recursion. A project with no ai.* runtime declared gets the empty string,
+    # so `enterShell == ""` still holds for a consumer that never opted in.
+    #
+    # Residual, accepted: `roots` is built from `cfg.enable`, so disabling the
+    # last runtime also stops the shell-entry REPORT. The ledger task below is
+    # unconditional and keeps recording, so nothing is lost — it is surfaced
+    # again as soon as any runtime is enabled.
+    enterShell = lib.optionalString (roots != {}) ''
       ${pkgs.python3}/bin/python ${./file-warnings.py} \
         ${lib.escapeShellArg config.devenv.root} \
         ${lib.escapeShellArg config.devenv.state} \

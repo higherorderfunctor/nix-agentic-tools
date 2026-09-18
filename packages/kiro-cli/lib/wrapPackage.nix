@@ -83,6 +83,7 @@
     environmentVariables ? {},
     extraPackages ? [],
     secretEnv ? {},
+    secretOptionPaths ? {},
     identityMaterializer ? null,
   }: let
     hasEnv = environmentVariables != {};
@@ -113,14 +114,28 @@
     #
     # Absolute coreutils path is mandatory (nix-standards): this wrapper can be
     # spawned with a replaced or empty PATH, where a bare `cat` fails and the
-    # credential would silently end up empty.
+    # credential would silently end up empty. Check the assignment before
+    # exporting: export itself masks a failed credential reader's exit code.
+    # Keep launching, but warn with the consumer option rather than the token.
     secretExports =
       lib.concatStringsSep "\n"
       (lib.mapAttrsToList
-        (var: cred:
-          if (cred.file or null) != null
-          then "export ${lib.escapeShellArg var}=\"$(${pkgs.coreutils}/bin/cat ${lib.escapeShellArg cred.file})\""
-          else "export ${lib.escapeShellArg var}=\"$(${lib.escapeShellArg cred.helper})\"")
+        (var: cred: let
+          reader =
+            if (cred.file or null) != null
+            then "${pkgs.coreutils}/bin/cat ${lib.escapeShellArg cred.file}"
+            else lib.escapeShellArg cred.helper;
+          optionPath = secretOptionPaths.${var} or "ai.kiro.mcpServers";
+        in ''
+          if ! nat_mcp_secret="$(${reader} 2>/dev/null)"; then
+            printf '%s\n' ${lib.escapeShellArg "WARNING: ${optionPath}: credential reader failed; launching without this MCP credential"} >&2
+            nat_mcp_secret=""
+          elif [ -z "$nat_mcp_secret" ]; then
+            printf '%s\n' ${lib.escapeShellArg "WARNING: ${optionPath}: credential reader returned an empty value; launching without this MCP credential"} >&2
+          fi
+          export ${lib.escapeShellArg var}="$nat_mcp_secret"
+          unset nat_mcp_secret
+        '')
         secretEnv);
 
     # The Linux buildFHSEnv wrapper preserves PATH and bind-mounts /nix, so a
@@ -310,6 +325,7 @@ in
     secretEnv ? {},
     identityMaterializer ? null,
     useFhsSandbox ? true,
+    secretOptionPaths ? {},
   }: let
     # The upstream Linux FHS root supplies its own /usr/bin/kiro-cli-chat ahead
     # of the inherited PATH. An outer chat wrapper is therefore unreachable
@@ -343,7 +359,7 @@ in
   in
     wrapDirect {
       package = selectedPackage;
-      inherit environmentVariables extraPackages identityMaterializer secretEnv v3;
+      inherit environmentVariables extraPackages identityMaterializer secretEnv secretOptionPaths v3;
       trustedMcpTools =
         if placeTrustInsideFhs
         then []
