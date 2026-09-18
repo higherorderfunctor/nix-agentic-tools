@@ -5,53 +5,6 @@
 {lib}: let
   aiCommon = import ./ai-common.nix {inherit lib;};
   own = import ./own.nix {inherit lib;};
-
-  mkReconcileSettingsActivationScript = format: {
-    configFile,
-    configRoot ? "$HOME",
-    python,
-    reconciler,
-    renderCommand ? null,
-    settingsJson ? null,
-    stateName,
-    stateRoot ? "\${XDG_STATE_HOME:-$HOME/.local/state}",
-  }:
-    assert lib.assertMsg ((settingsJson == null) != (renderCommand == null))
-    "settings activation: set exactly one of settingsJson or renderCommand";
-    assert lib.assertMsg (builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" stateName != null)
-    "settings activation: stateName must contain only alphanumeric, dot, underscore, or hyphen characters: '${stateName}'"; let
-      prefix = "NAT_${lib.toUpper format}";
-      input =
-        if renderCommand == null
-        then ''
-          <<'${prefix}_SETTINGS_EOF'
-          ${settingsJson}
-          ${prefix}_SETTINGS_EOF
-        ''
-        else ''<<< "$NAT_SETTINGS_JSON"'';
-    in
-      aiCommon.scopedActivation ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-
-        # Keep the ownership ledger outside the application's mutable config.
-        # The TOML directory is a live migration contract: never rename it.
-        NAT_SETTINGS_CONFIG="${configRoot}"/${lib.escapeShellArg configFile}
-        NAT_SETTINGS_STATE_DIR="${stateRoot}/nix-agentic-tools/${format}-settings"
-        NAT_SETTINGS_MANIFEST="$NAT_SETTINGS_STATE_DIR/${stateName}.json"
-
-        ${lib.optionalString (renderCommand != null) ''
-          # Finish rendering before starting the reconciler. A failed secret
-          # helper must not publish partial JSON or advance ownership.
-          NAT_SETTINGS_JSON="$(
-            ${renderCommand}
-          )"
-        ''}
-        ${python}/bin/python ${lib.escapeShellArg "${reconciler}"} \
-          --format ${format} \
-          --config "$NAT_SETTINGS_CONFIG" \
-          --manifest "$NAT_SETTINGS_MANIFEST" ${input}
-      '';
 in rec {
   # ── Settings utilities ──────────────────────────────────────────────
 
@@ -279,40 +232,11 @@ in rec {
       inherit pkgs python runtime;
     };
 
-  # ── Settings activation scripts ──────────────────────────────────────
-  # Reconcile only Nix-owned leaves in mixed-authority, runtime-writable files.
-  # The prior-generation manifest removes retired leaves, current declarations
-  # reassert their values, and every unowned sibling survives. Always emit the
-  # writer: empty settings retract previous ownership, while an empty first
-  # generation leaves externally managed files untouched.
-  #
-  # configFile:   path relative to configRoot (e.g. ".copilot/settings.json").
-  # configRoot:   trusted shell expression; defaults to $HOME.
-  # python:       Python package; TOML needs tomlkit, JSON uses the stdlib.
-  # reconciler:   shared reconcile-toml.py source path.
-  # renderCommand: optional runtime JSON renderer, instead of settingsJson.
-  # settingsJson: inlined JSON declaration.
-  # stateName:    safe, stable name unique to the destination config file.
-  # stateRoot:    trusted shell expression; defaults to XDG state/HOME fallback.
-  #
-  # New files are private (0600); existing regular-file permissions survive.
-  #
-  # ONE caller is left: kiro's `mcp.json`, which needs a runtime renderer and
-  # the devenv roots. Everything that declares its leaves at eval time now goes
-  # through `mkOwnedDocument` above. The `toml` alias is gone with codex, which
-  # was its only caller; `mkReconcileSettingsActivationScript` keeps its
-  # `format` parameter because reconcile-toml.py still takes `--format` and
-  # Home Manager ROLLBACK runs an older generation's script, `--format toml`
-  # and all, against today's ledgers.
-  mkSettingsActivationScript = mkReconcileSettingsActivationScript "json";
-
-  # NOTE: Kiro hook files used to be written here by `mkHooksActivationScript`.
-  # They now ride the shared strategy-driven materializer
-  # (`lib/ai/materialize.nix`) because that helper's prune
-  # (`rm -f "$HOOKS_DIR"/*.json`) lived INSIDE the caller's
+  # NOTE: Kiro hook files used to be written here by `mkHooksActivationScript`,
+  # whose prune (`rm -f "$HOOKS_DIR"/*.json`) lived INSIDE the caller's
   # `mkIf (hooks != {})` gate: taking the hook surface from N to zero never
   # emitted the entry, so the prune never ran and every previously written hook
-  # kept firing forever. The hook materializer's per-file manifest prunes
-  # unconditionally and claims only the files it wrote. Kiro steering now uses
-  # the ordinary runtime-files symlink sink.
+  # kept firing forever. They ride `own` now, whose ledger prunes
+  # unconditionally and claims only the files it wrote. Kiro steering uses the
+  # ordinary runtime-files symlink sink.
 }
