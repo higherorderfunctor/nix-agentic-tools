@@ -596,7 +596,18 @@ def run(plan: Mapping[str, Any], root: Path, state: Path, phase: str) -> None:
     considered = [
         target for target in targets if phase != "prune" or target["codec"] == "dir"
     ]
-    resolved = [units_of(target, plan["bash"]) for target in considered]
+    # The prune phase resolves NO content. A retraction needs the declared
+    # ADDRESSES, never their bytes: it removes what the ledger records and the
+    # declaration dropped. Running a renderer here would also read a SECRET in
+    # the entry that runs before checkLinkTargets -- earlier than any secret
+    # provider's own activation entry -- so kiro's mcp.json would abort the
+    # first switch on a credential url that does not exist yet.
+    resolved = [
+        [(address, None) for address in sorted(target["units"])]
+        if phase == "prune"
+        else units_of(target, plan["bash"])
+        for target in considered
+    ]
 
     # Virgin and empty is a strict no-op: no lock, no state directory, no
     # target directory, nothing. Resolution above has already run, so a
