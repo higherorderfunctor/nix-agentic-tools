@@ -929,9 +929,9 @@
       mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) kiroServers;
     };
 
-  # Shell body that (re)assembles settings/mcp.json as a REAL file at
-  # activation (HM) / shell entry (devenv), shared by both backends so
-  # they stay at parity. `mode` = `ai.kiro.mcpWriteMode`:
+  # Render settings/mcp.json to stdout at activation (HM) / shell entry
+  # (devenv). The shared materializer owns writes, backups and pruning;
+  # this command only assembles content. `mode` = `ai.kiro.mcpWriteMode`:
   #   * "overwrite" — write the rendered template and lock it read-only;
   #     Nix is authoritative, hand edits do not survive.
   #   * "merge" — deep-merge the Nix-managed servers onto whatever is on
@@ -941,9 +941,8 @@
   # exported from their decrypted secret and `envsubst`'d into the
   # template with an EXPLICIT var list, so header `${env:...}`
   # placeholders (which Kiro expands at launch) survive untouched. Empty
-  # `urlSecretEnv` → the template is used verbatim. `targetExpr` is a
-  # shell expression for the destination (absolute for HM, relative to
-  # $DEVENV_ROOT for devenv). Uniform real-file delivery (never a store
+  # `urlSecretEnv` → the template is used verbatim. The materializer supplies
+  # NAT_MAT_TARGET_DIR on both backends. Real-file delivery (never a store
   # symlink) is what lets a secret url land and dodges the
   # symlink<->real-file toggle + the devenv files.* silent skip. NOTE:
   # a credential url reads its secret at ACTIVATION, so a consumer wiring
@@ -955,22 +954,8 @@
     mode,
     templateFile,
     urlSecretEnv,
-    targetExpr,
   }: let
     hasUrlSecret = urlSecretEnv != {};
-    # r-- lock for overwrite; owner-writeable for merge; owner-only when
-    # a secret url is written into the file.
-    fileMode =
-      if mode == "overwrite"
-      then
-        (
-          if hasUrlSecret
-          then "0400"
-          else "0444"
-        )
-      else if hasUrlSecret
-      then "0600"
-      else "0644";
     # A BARE assignment, then a SEPARATE `export`. `export VAR="$(cmd)"` is a
     # silent-failure trap: the exit status of that line is `export`'s — always
     # 0 — so a failed read does NOT trip errexit, not even with
@@ -1007,29 +992,27 @@
       urlSecretEnv);
     envsubstVars =
       lib.concatMapStringsSep " " (v: "\${${v}}") (builtins.attrNames urlSecretEnv);
-    # Produce $RENDERED from the store template (envsubst only the url
-    # vars when there is a secret url; a plain copy otherwise).
+    # Emit the template (envsubst only URL vars, leaving header placeholders).
     assemble =
       if hasUrlSecret
-      then "${exports}${pkgs.gettext}/bin/envsubst ${lib.escapeShellArg envsubstVars} < ${templateFile} > \"$RENDERED\""
-      else ''${pkgs.coreutils}/bin/cp ${templateFile} "$RENDERED"'';
-    # Land $RENDERED at $TARGET per mode. `rm -f` first clears a stale
-    # store symlink from a prior generation (a bare `cp` would follow it
-    # into the read-only store and fail); merge only merges a REAL
-    # user-owned file, treating a symlink/absent target as write-fresh.
-    writeStep =
+      then "${exports}${pkgs.gettext}/bin/envsubst ${lib.escapeShellArg envsubstVars} < ${templateFile}"
+      else ''${pkgs.coreutils}/bin/cat ${templateFile}'';
+    # Merge only a real file, treating a symlink/absent target as fresh.
+    # Keep the existing jq deep merge: deleting individual keys is separate
+    # from the materializer's ownership of the complete file.
+    renderStep =
       if mode == "overwrite"
-      then ''
-        ${pkgs.coreutils}/bin/rm -f "$TARGET"
-        ${pkgs.coreutils}/bin/cp "$RENDERED" "$TARGET"''
+      then assemble
       else ''
         if [ -f "$TARGET" ] && [ ! -L "$TARGET" ]; then
-          MERGED="$(${pkgs.coreutils}/bin/mktemp)"
-          ${pkgs.jq}/bin/jq -s '.[0] * .[1]' "$TARGET" "$RENDERED" > "$MERGED"
-          ${pkgs.coreutils}/bin/mv "$MERGED" "$TARGET"
+          RENDERED="$(${pkgs.coreutils}/bin/mktemp "$NAT_MAT_TARGET_DIR/.mcp.json.merge.nat-tmp.XXXXXX")"
+          trap '${pkgs.coreutils}/bin/rm -f -- "$RENDERED"' EXIT
+          {
+            ${assemble}
+          } > "$RENDERED"
+          ${pkgs.jq}/bin/jq -s '.[0] * .[1]' "$TARGET" "$RENDERED"
         else
-          ${pkgs.coreutils}/bin/rm -f "$TARGET"
-          ${pkgs.coreutils}/bin/cp "$RENDERED" "$TARGET"
+          ${assemble}
         fi'';
     # SCOPED in a subshell — required, for two independent reasons:
     #
@@ -1050,22 +1033,49 @@
     # which is why the guards above end in `false` rather than `exit` — `exit`
     # would truncate the whole concatenated activation script.
     #
-    # devenv already wraps this body via `anchorToDevenvRoot`; the extra nesting
-    # there is harmless and keeps the invariant one property of THIS function
-    # rather than of each call site.
+    # Both materializer backends also isolate render commands. Keeping this
+    # body scoped makes secret lifetime a property of the renderer itself.
   in ''
     (
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      TARGET="${targetExpr}"
-      ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$TARGET")"
-      RENDERED="$(${pkgs.coreutils}/bin/mktemp)"
-      ${assemble}
-      ${writeStep}
-      ${pkgs.coreutils}/bin/chmod ${fileMode} "$TARGET"
-      ${pkgs.coreutils}/bin/rm -f "$RENDERED"
+      TARGET="$NAT_MAT_TARGET_DIR/mcp.json"
+      ${renderStep}
     )
   '';
+
+  # One per-file ownership contract for both backends. An empty pool retracts
+  # only a previously recorded mcp.json; an unmanaged file is left alone.
+  # Non-empty pools adopt collisions through the materializer's backup guard.
+  mkMcpMaterialization = cfg: kiroSecrets: let
+    targetDir = "${cfg.configDir}/settings";
+    hasUrlSecret = kiroSecrets.urlSecretEnv != {};
+  in {
+    inherit targetDir;
+    inherit (pkgs) coreutils diffutils flock gnugrep;
+    stateSlug = materializeLib.mkStateSlug targetDir;
+    files = lib.optionalAttrs (kiroSecrets.servers != {}) {
+      "mcp.json" = {
+        mode =
+          if cfg.mcpWriteMode == "overwrite"
+          then
+            if hasUrlSecret
+            then "0400"
+            else "0444"
+          else if hasUrlSecret
+          then "0600"
+          else "0644";
+        renderCommand = mkMcpJsonScript {
+          mode = cfg.mcpWriteMode;
+          templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
+          inherit (kiroSecrets) urlSecretEnv;
+        };
+        source = null;
+        strategy = "copy";
+        text = null;
+      };
+    };
+  };
 
   # `ai.shell` / `ai.kiro.shell` → `SHELL` in Kiro's own process
   # environment. Kiro's v3 engine selects its command shell with
@@ -1778,15 +1788,19 @@ in
             # unknown entry, so this stays secret-manager agnostic and is
             # simply inert when sops-nix is not in use (same trick as
             # `mcpRestartOnSecretRotation` in the mcp-services module).
-            (lib.mkIf (mergedServers != {}) {
-              home.activation.kiroMcpJson = lib.hm.dag.entryAfter ["linkGeneration" "sops-nix"] (
-                mkMcpJsonScript {
-                  mode = cfg.mcpWriteMode;
-                  inherit (kiroSecrets) urlSecretEnv;
-                  templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
-                  targetExpr = "$HOME/${cfg.configDir}/settings/mcp.json";
-                }
-              );
+            # Unconditional while enabled: N→0 must still run the manifest
+            # prune. Keep kiroMcpJson as the write entry name so consumer
+            # secret-provider ordering continues to address the same entry.
+            (let
+              materialization = mkMcpMaterialization cfg kiroSecrets;
+              activation = materializeLib.mkHmActivation materialization;
+              writeKey = "materialize-${materialization.stateSlug}-write";
+            in {
+              home.activation =
+                builtins.removeAttrs activation [writeKey]
+                // {
+                  kiroMcpJson = activation.${writeKey} // {after = ["linkGeneration" "sops-nix"];};
+                };
             })
             # Inline agent JSON files.
             (lib.mkIf (cfg.agents != {}) {
@@ -1921,24 +1935,6 @@ in
         # Resolve credential http headers → `${env:VAR}` placeholders in
         # mcp.json + the runtime secret-env exports (Kiro-only delivery).
         kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
-
-        # devenv's enterShell runs in the CALLER's cwd (direnv activates in
-        # subdirectories, and the hook fires on every shell entry), so the
-        # relative `${cfg.configDir}/...` writes below would land in the
-        # wrong directory when the shell is entered from a subdir. Anchor
-        # each fragment to the project root in a subshell — the user's
-        # shell cwd stays untouched. A failed cd fails the subshell,
-        # which under set -e contexts (direnv, devenv test) aborts the
-        # enterShell load: deliberate fail-fast, safer than writing hook
-        # files into whatever directory the caller happened to be in.
-        # Same anchoring precedent as the instruction sync and legacy steering
-        # retirement tasks, which both anchor themselves at `$DEVENV_ROOT`.
-        anchorToDevenvRoot = body: ''
-          (
-            cd "$DEVENV_ROOT" || exit 1
-            ${body}
-          )
-        '';
       in
         lib.mkMerge ([
             # Per-turn workflow reminder — same contribution as the HM backend
@@ -1975,15 +1971,20 @@ in
                 builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
             })
             # settings/mcp.json — merged MCP server pool, delivered as a
-            # REAL file via enterShell (anchored to $DEVENV_ROOT), matching
-            # the HM activation write. See mkMcpJsonScript / mcpWriteMode.
-            (lib.mkIf (mergedServers != {}) {
-              enterShell = anchorToDevenvRoot (mkMcpJsonScript {
-                mode = cfg.mcpWriteMode;
-                inherit (kiroSecrets) urlSecretEnv;
-                templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
-                targetExpr = "${cfg.configDir}/settings/mcp.json";
-              });
+            # REAL file by the shared materializer, anchored to $DEVENV_ROOT.
+            # Always emitted while enabled, including an empty pool, so only
+            # the previously owned file is pruned. Same ownership as HM.
+            (let
+              materialization = mkMcpMaterialization cfg kiroSecrets;
+            in {
+              tasks."ai:kiro:materialize-mcp" = materializeLib.mkDevenvTask (materialization
+                // {
+                  hasFiles = config.files != {};
+                });
+              enterTest = materializeLib.mkEnterTest {
+                app = "kiro";
+                inherit (materialization) files targetDir;
+              };
             })
             # Inline agent JSON files.
             (lib.mkIf (cfg.agents != {}) {
