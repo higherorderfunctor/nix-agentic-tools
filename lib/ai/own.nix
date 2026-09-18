@@ -16,6 +16,15 @@
 # `linkGeneration`. A document is different: its retraction and its assertion
 # are one read-modify-write that must not be split across two processes, so a
 # document-only bundle emits the write entry alone.
+#
+# The result is `{config, plan}`, not a bare module fragment. `config` is what
+# the backend gets; `plan` is the same data the store file carries, kept
+# eval-visible because the store file cannot be read back — importing a
+# derivation is forbidden here, and discarding the plan's string context to
+# make it readable would drop the store references that keep a rendered
+# command alive in the generation's closure. Module-eval checks read the
+# render script, the unit modes and the ledger names out of `plan`, which is
+# the SAME value the program executes rather than a mirror of it.
 {lib}: let
   inherit (import ./ai-common.nix {inherit lib;}) scopedActivation;
 
@@ -145,50 +154,55 @@ in
     # everything else is: the runtime interface stays two env vars, and a
     # renderer runs the interpreter this closure pins instead of whatever an
     # activation's PATH happens to resolve.
-    plan = pkgs.writeText "nat-own-plan.json" (builtins.toJSON {
+    plan = {
       bash = "${pkgs.bash}/bin/bash";
       targets = checked;
-    });
-    invoke = body {inherit backend plan python;};
+    };
+    invoke = body {
+      inherit backend python;
+      plan = pkgs.writeText "nat-own-plan.json" (builtins.toJSON plan);
+    };
   in
     # Force the validation before anything else in the result. Without this an
     # unknown backend or a missing entry name surfaces as nix's own
     # attribute-missing error, which names neither the target nor the fix.
-    builtins.seq checked (
-      if backend == "hm"
-      then {
-        home.activation =
-          {
-            ${entryNames.write} =
-              lib.hm.dag.entryAfter (["linkGeneration"] ++ after)
-              (scopedActivation (invoke "--phase all"));
-          }
-          // lib.optionalAttrs hasDirectory {
-            ${entryNames.prune} =
-              lib.hm.dag.entryBefore ["checkLinkTargets"]
-              (scopedActivation (invoke "--phase prune"));
+    builtins.seq checked {
+      inherit plan;
+      config =
+        if backend == "hm"
+        then {
+          home.activation =
+            {
+              ${entryNames.write} =
+                lib.hm.dag.entryAfter (["linkGeneration"] ++ after)
+                (scopedActivation (invoke "--phase all"));
+            }
+            // lib.optionalAttrs hasDirectory {
+              ${entryNames.prune} =
+                lib.hm.dag.entryBefore ["checkLinkTargets"]
+                (scopedActivation (invoke "--phase prune"));
+            };
+        }
+        else {
+          # A failed writer only warns at shell entry; this is what makes
+          # `devenv test` and CI fail. enterTest is a test script rather than
+          # an activation entry, so it exits explicitly — a non-zero command
+          # there does not necessarily abort the run.
+          enterTest = ''
+            if ! (
+            ${invoke "--verify"}
+            ); then
+              exit 1
+            fi
+          '';
+          tasks.${entryNames.write} = {
+            after = ["devenv:files:cleanup"] ++ after;
+            # The `devenv:files` edge MUST stay conditional:
+            # `tasks."devenv:files"` exists only when `config.files != {}` and
+            # the runner hard-errors on a dangling ref. The unconditional
+            # `devenv:enterShell` edge alone then guarantees write-before-shell.
+            before = ["devenv:enterShell"] ++ lib.optional hasFiles "devenv:files";
+            exec = scopedActivation (invoke "--phase all");
           };
-      }
-      else {
-        # A failed writer only warns at shell entry; this is what makes `devenv
-        # test` and CI fail. enterTest is a test script rather than an
-        # activation entry, so it exits explicitly — a non-zero command there
-        # does not necessarily abort the run.
-        enterTest = ''
-          if ! (
-          ${invoke "--verify"}
-          ); then
-            exit 1
-          fi
-        '';
-        tasks.${entryNames.write} = {
-          after = ["devenv:files:cleanup"] ++ after;
-          # The `devenv:files` edge MUST stay conditional: `tasks."devenv:files"`
-          # exists only when `config.files != {}` and the runner hard-errors on a
-          # dangling ref. The unconditional `devenv:enterShell` edge alone then
-          # guarantees write-before-shell.
-          before = ["devenv:enterShell"] ++ lib.optional hasFiles "devenv:files";
-          exec = scopedActivation (invoke "--phase all");
         };
-      }
-    )
+    }

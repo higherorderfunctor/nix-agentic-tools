@@ -941,7 +941,7 @@ in
       # composed first and the resulting AGENTS.md enters the runtime file map
       # as one replaceable default.
       ai.codex = {
-        inherit (ownedSettings.ai.codex) _reconciledDocuments;
+        inherit (ownedSettings.ai.codex) _ownPlans;
         files = lib.mkIf hasAgentsMdContent {
           ${agentsMdTarget} = lib.mkDefault (
             if agentsMd == ""
@@ -1005,8 +1005,8 @@ in
         # state. On a first empty generation the reconciler is a strict no-op.
         #
         # Spliced by attribute rather than merged: `ownedSettings` is a module
-        # fragment holding this entry and the `_reconciledDocuments` record
-        # below, and naming the entry here keeps the surrounding `home` block
+        # fragment holding this entry and the `_ownPlans` record above, and
+        # naming the entry here keeps the surrounding `home` block
         # readable. A name that stops matching the helper's is an eval error.
         activation.codexSettingsReconcile = ownedSettings.home.activation.codexSettingsReconcile;
         file = lib.mkMerge [
