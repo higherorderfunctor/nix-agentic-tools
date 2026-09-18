@@ -161,6 +161,15 @@ in {
         builtins.length packages >= 1
     );
 
+    module-copilot-hm-empty-settings-emits-writer = mkTest "copilot-hm-empty-settings-emits-writer" (
+      let
+        evaluated = evalHm {ai.copilot.enable = true;};
+        script = evaluated.config.home.activation.copilotSettingsMerge.text;
+      in
+        lib.hasInfix "--format json" script
+        && lib.hasInfix "json-settings" script
+    );
+
     module-copilot-hm-writes-settings-json-activation = mkTest "copilot-hm-writes-settings-json-activation" (
       let
         result = evalHm {
@@ -172,7 +181,7 @@ in {
         activation
         != null
         && lib.hasInfix "gpt-4" (activation.text or "")
-        && lib.hasInfix "jq" (activation.text or "")
+        && lib.hasInfix "--format json" (activation.text or "")
     );
 
     module-copilot-hm-writes-mcp-config-json = mkTest "copilot-hm-writes-mcp-config-json" (
