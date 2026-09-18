@@ -9,7 +9,7 @@
   inherit (harness) evalDevenv evalHm hasLiteral mkTest mkWrapperGrepTest ownedDocument;
   cliDocument = evaluated:
     ownedDocument "kiro" "${evaluated.config.ai.kiro.configDir}/settings/cli.json" evaluated;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvHookTarget dvHookTaskExec dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpPruneScript hmMcpWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame;
 in {
   checks = {
     module-kiro-wrapper-prepend-both = mkTest "kiro-wrapper-prepend-both" (
@@ -330,19 +330,28 @@ in {
             mcpServers = serversCfg;
           };
         };
-        hmScript = hmMcpWriteScript (evalHm cfg);
-        dvScript = dvMcpTaskExec (evalDevenv cfg);
+        dv = evalDevenv cfg;
+        hmRender = (hmMcpDirTarget (evalHm cfg)).units."mcp.json".run;
+        dvRender = (dvMcpDirTarget dv).units."mcp.json".run;
         # Same content -> same store path on both backends. Strip the
         # string context: `lib.hasInfix` compiles the needle into a
         # `builtins.match` regex, which rejects a store-path context.
         templatePath = builtins.unsafeDiscardStringContext "${pkgs.writeText "kiro-mcp.json" (renderedMcpJson serversCfg)}";
       in
-        hmScript
-        != ""
-        && dvScript != ""
-        && lib.hasInfix templatePath hmScript
-        && lib.hasInfix templatePath dvScript
-        && lib.hasInfix ''cd "$DEVENV_ROOT"'' dvScript
+        lib.hasInfix templatePath hmRender
+        && lib.hasInfix templatePath dvRender
+        # The two render commands differ in ONE way, and it is the anchor: the
+        # devenv task used to `cd "$DEVENV_ROOT"` before rendering, so a
+        # relative credential path resolved against the project root there
+        # while HM has always resolved against the activation's cwd. `own`
+        # never `cd`s, so the renderer carries that anchor now, on the one
+        # backend that had it.
+        && hasLiteral ''cd "$NAT_OWN_ROOT"'' dvRender
+        && !(hasLiteral "cd " hmRender)
+        # Both plans name the same destination, each against its own root.
+        && (hmMcpDirTarget (evalHm cfg)).path == (dvMcpDirTarget dv).path
+        && hasLiteral ''TARGET="$NAT_OWN_ROOT/.kiro/settings/mcp.json"'' hmRender
+        && hasLiteral ''TARGET="$NAT_OWN_ROOT/.kiro/settings/mcp.json"'' dvRender
     );
 
     # Kiro HM: a secret url makes mcp.json a REAL-file activation write (NOT
@@ -361,13 +370,18 @@ in {
             };
           };
         };
-        script = hmMcpWriteScript result;
+        target = hmMcpDirTarget result;
+        unit = target.units."mcp.json";
+        script = unit.run;
       in
         !(result.config.home.file ? ".kiro/settings/mcp.json")
-        && lib.hasInfix ''NAT_MAT_TARGET_DIR="$HOME/.kiro/settings"'' script
-        && lib.hasInfix ''TARGET="$NAT_MAT_TARGET_DIR/mcp.json"'' script
+        && target.path == ".kiro/settings"
+        && lib.hasInfix ''TARGET="$NAT_OWN_ROOT/.kiro/settings/mcp.json"'' script
         && lib.hasInfix "/bin/envsubst '\${KIRO_MCP_JIRA_URL}'" script
-        && hasLiteral ''nat_mat_write mcp.json "$nat_mat_prev" 0400'' script
+        # The mode is DECLARED in the plan now, not an argument inside a
+        # generated write call: owner-only, because this file holds the
+        # substituted url secret.
+        && unit.mode == "0400"
         # The secret read must be a BARE assignment whose status errexit can
         # see, then a separate `export`. `export VAR="$(cmd)"` returns export's
         # status (always 0), so a failed read is silent and envsubst writes
@@ -400,14 +414,25 @@ in {
             };
           };
         };
-        script = hmMcpWriteScript result;
+        unit = (hmMcpDirTarget result).units."mcp.json";
       in
-        hasLiteral ''nat_mat_write mcp.json "$nat_mat_prev" 0444'' script
-        && !(lib.hasInfix "envsubst" script)
+        unit.mode
+        == "0444"
+        && !(lib.hasInfix "envsubst" unit.run)
         && !(result.config.home.file ? ".kiro/settings/mcp.json")
     );
 
-    # Merge owns leaves only; no materializer write or whole-file claim.
+    # Merge owns leaves only: the document target declares the producer and the
+    # directory target claims nothing, so the whole-file claim a previous
+    # overwrite generation recorded is RELEASED rather than deleted.
+    #
+    # Both activation entries exist in this mode too, which is the shape change
+    # the rework makes. There used to be a separate `retire-materialize-kiro-
+    # settings` entry for exactly this release, and a prune entry only under
+    # overwrite; `own` has one bundle, so the release happens in the prune
+    # phase of the same pair. The prune entry is REQUIRED here, not optional:
+    # the file it may have to hand over is a real file, and it must be gone (or
+    # released) before checkLinkTargets.
     module-kiro-hm-mcp-json-merge-mode = mkTest "kiro-hm-mcp-json-merge-mode" (
       let
         result = evalHm {
@@ -420,18 +445,20 @@ in {
             };
           };
         };
-        script = hmMcpWriteScript result;
+        activation = result.config.home.activation;
       in
-        lib.hasInfix "--format json" script
-        && lib.hasInfix "NAT_SETTINGS_JSON" script
-        && !(lib.hasInfix "nat_mat_write" script)
-        && !(result.config.home.activation ? "materialize-kiro-settings-prune")
-        && result.config.home.activation ? "retire-materialize-kiro-settings"
+        (hmMcpDocTarget result).units
+        ? "run"
+        && (hmMcpDirTarget result).units == {}
+        && (hmMcpDocTarget result).ledger == "json-settings/kiro-mcp-${builtins.hashString "sha256" ".kiro"}.json"
+        && activation ? "materialize-kiro-settings-prune"
+        && activation ? kiroMcpJson
+        && !(activation ? "retire-materialize-kiro-settings")
     );
 
-    # The N→0 regression: both backends keep their manifest writer and prune
-    # when the last server disappears in overwrite mode. Disabled modules
-    # remain inert. Non-empty pools are positive controls for the accessors.
+    # The N→0 regression: both backends keep their writer and their prune when
+    # the last server disappears in overwrite mode. Disabled modules remain
+    # inert. Non-empty pools are positive controls for the accessors.
     module-kiro-mcp-empty-pool-still-prunes = mkTest "kiro-mcp-empty-pool-still-prunes" (
       builtins.all (mode: let
         cfg = servers: {
@@ -451,29 +478,30 @@ in {
         hmEmpty = evalHm (cfg {});
         dvFull = evalDevenv full;
         dvEmpty = evalDevenv (cfg {});
-        writes = [
-          (hmMcpWriteScript hmFull)
-          (hmMcpWriteScript hmEmpty)
-          (dvMcpTaskExec dvFull)
-          (dvMcpTaskExec dvEmpty)
-        ];
-        prunes = [
-          (hmMcpPruneScript hmEmpty)
-          (dvMcpTaskExec dvEmpty)
-        ];
         task = dvEmpty.config.tasks."ai:kiro:materialize-mcp" or {};
       in
-        builtins.all (lib.hasInfix "NAT_MAT_NEW_MANIFEST") writes
-        && builtins.all (s:
-          lib.hasInfix "$NAT_MAT_MANIFEST" s
-          && lib.hasInfix "rm -f" s
-          && !(hasLiteral "mcp.json) continue" s))
-        prunes
-        && hasLiteral "mcp.json) continue" (hmMcpPruneScript hmFull)
-        && lib.hasInfix "kiro-mcp.json" (hmMcpWriteScript hmFull)
-        && lib.hasInfix "kiro-mcp.json" (dvMcpTaskExec dvFull)
-        && !(lib.hasInfix "kiro-mcp.json" (hmMcpWriteScript hmEmpty))
-        && !(lib.hasInfix "kiro-mcp.json" (dvMcpTaskExec dvEmpty))
+        # Both phases are emitted for an empty pool, on both backends, against
+        # the ledger the previous generation wrote — that is what makes N→0 a
+        # retirement instead of a leak.
+        lib.hasInfix "--phase all" (hmMcpWriteScript hmEmpty)
+        && lib.hasInfix "--phase prune" (hmMcpPruneScript hmEmpty)
+        && lib.hasInfix "--phase all" (dvMcpTaskExec dvEmpty)
+        && ownPlanArg (hmMcpPruneScript hmEmpty) == ownPlanArg (hmMcpWriteScript hmEmpty)
+        # The whole-file unit exists only for a NON-EMPTY overwrite pool, and
+        # the ledger is the same literal in both cases.
+        && (hmMcpDirTarget hmFull).units ? "mcp.json"
+        && (dvMcpDirTarget dvFull).units ? "mcp.json"
+        && (hmMcpDirTarget hmEmpty).units == {}
+        && (dvMcpDirTarget dvEmpty).units == {}
+        && builtins.all (target: target.ledger == "materialize/kiro-settings.manifest") [
+          (hmMcpDirTarget hmFull)
+          (hmMcpDirTarget hmEmpty)
+          (dvMcpDirTarget dvFull)
+          (dvMcpDirTarget dvEmpty)
+        ]
+        # The document target declares nothing under overwrite, which is what
+        # makes an emptied overwrite DELETE the file rather than release it.
+        && (hmMcpDocTarget hmEmpty).units == {}
         && lib.elem "sops-nix" hmFull.config.home.activation.kiroMcpJson.after
         && lib.elem "checkLinkTargets" hmEmpty.config.home.activation."materialize-kiro-settings-prune".before
         && lib.elem "devenv:enterShell" task.before
@@ -654,18 +682,34 @@ in {
         [ "$(cat "$HOME/.kiro/settings/unmanaged.json")" = neighbor ] || fail '${backend}: neighbor changed'
 
         # Non-regular collisions must fail without falsely claiming ownership.
+        # The ledger was drained two steps above, and a drained ledger is now
+        # ABSENT rather than a zero-byte file, so "not claimed" is asserted as
+        # absence: a claim would write a line naming mcp.json.
         mkdir "$target"
-        cp "$manifest" before-manifest
+        [ ! -e "$manifest" ] || fail '${backend}: drained ledger still on disk'
         if ${plain}; then fail '${backend}: directory collision succeeded'; fi
         [ -d "$target" ] || fail '${backend}: directory collision was removed'
-        cmp before-manifest "$manifest" || fail '${backend}: directory was claimed'
+        [ ! -e "$manifest" ] || fail '${backend}: directory was claimed'
         rmdir "$target"
 
-        # Devenv task execution must anchor writes even from a subdirectory.
+        # Writes must be anchored from any cwd: the HM activation inherits
+        # whatever directory `home-manager switch` ran in, and devenv runs a
+        # task in the CALLER's directory because direnv activates in
+        # subdirectories. Neither writer `cd`s any more.
         cd "$HOME/subdir"
         ${plain}
         [ -f "$target" ] || fail '${backend}: root anchoring failed'
         [ ! -e .kiro ] || fail '${backend}: wrote under caller cwd'
+        ${lib.optionalString (backend == "devenv") ''
+          # A RELATIVE credential path resolved against the project root while
+          # the task still ran `cd "$DEVENV_ROOT"`; the renderer carries that
+          # anchor now, so prove it from a foreign cwd with the secret present
+          # only at the project root.
+          printf '%s' '${plainUrl}' > "$DEVENV_ROOT/credential-url"
+          ${secret}
+          [ "$(stat -c %a "$target")" = 400 ] || fail '${backend}: anchored secret mode'
+          [ ! -e credential-url ] || fail '${backend}: read a credential from the caller cwd'
+        ''}
       '';
     in
       pkgs.runCommand "module-test-kiro-mcp-materialize-runtime" {} ''
@@ -1735,12 +1779,11 @@ in {
             command = "hello";
           };
         };
-        script = hmMcpWriteScript result;
+        target = hmMcpDirTarget result;
       in
-        script
-        != ""
-        && lib.hasInfix ".kiro/settings" script
-        && lib.hasInfix "/mcp.json" script
+        lib.hasInfix "--phase all" (hmMcpWriteScript result)
+        && target.path == ".kiro/settings"
+        && target.units ? "mcp.json"
         && !(result.config.home.file ? ".kiro/settings/mcp.json")
     );
 
@@ -2354,9 +2397,11 @@ in {
         # NOT a devenv `files.*` symlink
         && !(dv.config.files ? ".kiro/hooks/lint.json")
         # the enterTest backstop still asserts it landed as a real file, and
-        # from the SAME plan (own.py --verify checks every declared dir unit)
+        # against the SAME plan the task applies (own.py --verify checks every
+        # declared dir unit). Every own bundle contributes a verify, so the
+        # assertion is that THIS plan is among them.
         && lib.hasInfix "--verify" (dv.config.enterTest or "")
-        && ownPlanArg (dv.config.enterTest or "") == ownPlanArg (dvHookTaskExec dv)
+        && hasLiteral (ownPlanArg (dvHookTaskExec dv)) (dv.config.enterTest or "")
     );
 
     # HM+devenv: records sharing a `file` co-locate into ONE envelope (N hooks in
@@ -2775,11 +2820,14 @@ in {
             command = "hello";
           };
         };
-        script = dvMcpTaskExec result;
+        target = dvMcpDirTarget result;
       in
-        lib.hasInfix ".kiro/settings" script
-        && lib.hasInfix "/mcp.json" script
-        && lib.hasInfix ''cd "$DEVENV_ROOT"'' script
+        target.path
+        == ".kiro/settings"
+        && target.units ? "mcp.json"
+        && (dvMcpDocTarget result).path == ".kiro/settings/mcp.json"
+        # anchored to the project root without a `cd` in the task body
+        && lib.hasInfix ''NAT_OWN_ROOT="$DEVENV_ROOT"'' (dvMcpTaskExec result)
         && !(result.config.files ? ".kiro/settings/mcp.json")
     );
 
@@ -2955,9 +3003,9 @@ in {
         && !(target.units ? "ignore-me.txt")
         # real files, not devenv `files.*` symlinks
         && !(lib.any (n: lib.hasPrefix ".kiro/hooks/" n) (lib.attrNames result.config.files))
-        # the enterTest backstop covers the dir surface too, from this plan
+        # the enterTest backstop covers the dir surface too, against this plan
         && lib.hasInfix "--verify" (result.config.enterTest or "")
-        && ownPlanArg (result.config.enterTest or "") == ownPlanArg (dvHookTaskExec result)
+        && hasLiteral (ownPlanArg (dvHookTaskExec result)) (result.config.enterTest or "")
     );
 
     # `hooksDir` unset again (N→0 for the DIR surface specifically): the writers

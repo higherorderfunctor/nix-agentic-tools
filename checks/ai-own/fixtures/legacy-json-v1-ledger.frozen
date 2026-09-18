@@ -1,0 +1,12 @@
+{
+  "managed_paths": [
+    [
+      "other"
+    ],
+    [
+      "owned",
+      "leaf"
+    ]
+  ],
+  "version": 1
+}

@@ -93,7 +93,11 @@ def exercise(case, bash):
     edit(native)
     activate("overwriteEmpty")
     assert read() == {"mcpServers": {"hand": native["mcpServers"]["hand"]}}
-    assert not leaves() and whole.read_bytes() == b""
+    # The ONE licensed change of this corpus: an empty dir materializer used
+    # to leave a zero-byte manifest, and own.py unlinks the ledger instead --
+    # no ledger means it owns nothing, which is the equality that lets
+    # retirement collapse into an ordinary reconcile.
+    assert not leaves() and not whole.exists()
     edit(native)
     activate("mergeEmpty")
     assert read() == native and not leaves() and not whole.exists()
