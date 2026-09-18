@@ -245,38 +245,6 @@ in rec {
     fi
   '';
 
-  # One-shot compatibility retirement. Unlike an empty normal materializer,
-  # this is safe to emit even while its runtime is disabled: it is a complete
-  # no-op when the legacy manifest does not exist, and removes that manifest
-  # after pruning so future generations remain inert.
-  # preserveFiles hands ownership to a co-authoring writer: relinquish only
-  # the ledger, without deleting, backing up, or adopting the user's file.
-  mkRetirementScript = {
-    common,
-    coreutils,
-    preserveFiles ? false,
-  }:
-    ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      NAT_MAT_RETIRE_MANIFEST="${common.stateDirExpr}/${common.stateSlug}.manifest"
-      if [ -f "$NAT_MAT_RETIRE_MANIFEST" ]; then
-    ''
-    + mkPrologue common
-    + lib.optionalString (!preserveFiles) (
-      mkSweep coreutils
-      + mkPruneCore {
-        inherit (common) stateSlug;
-        inherit coreutils;
-        currentNames = [];
-      }
-    )
-    + mkEpilogue common.stateSlug
-    + ''
-        ${coreutils}/bin/rm -f -- "$NAT_MAT_MANIFEST"
-      fi
-    '';
-
   # [B8] Stale-temp sweep — the ONE declared non-manifest deletion
   # class: dot-prefixed files carrying the RESERVED `.nat-tmp.` infix.
   # The infix, not the name shape, is the safety proof: a bare
@@ -498,26 +466,6 @@ in rec {
       );
     };
 
-  mkHmRetirement = {
-    targetDir,
-    stateSlug,
-    coreutils,
-    flock,
-    preserveFiles ? false,
-  }:
-    assert lib.assertMsg (nameSafe stateSlug)
-    "materialize: stateSlug must match ${nameRegex}: '${stateSlug}'"; let
-      common = {
-        inherit stateSlug coreutils flock;
-        targetDirExpr = "$HOME/${targetDir}";
-        stateDirExpr = "\${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/materialize";
-      };
-    in {
-      "retire-materialize-${stateSlug}" = lib.hm.dag.entryBefore ["checkLinkTargets"] (
-        scopedActivation (mkRetirementScript {inherit common coreutils preserveFiles;})
-      );
-    };
-
   # ── devenv copy writer: one prune+write task [B4] ──────────────────
   #
   # `after = ["devenv:files:cleanup"]` and the CONDITIONAL
@@ -567,27 +515,6 @@ in rec {
           files = copies;
         }
         + mkEpilogue stateSlug;
-      after = ["devenv:files:cleanup"];
-      before = ["devenv:enterShell"] ++ lib.optional hasFiles "devenv:files";
-    };
-
-  mkDevenvRetirementTask = {
-    targetDir,
-    stateSlug,
-    hasFiles,
-    coreutils,
-    flock,
-    preserveFiles ? false,
-  }:
-    assert lib.assertMsg (nameSafe stateSlug)
-    "materialize: stateSlug must match ${nameRegex}: '${stateSlug}'"; let
-      common = {
-        inherit stateSlug coreutils flock;
-        targetDirExpr = "$DEVENV_ROOT/${targetDir}";
-        stateDirExpr = "$DEVENV_STATE/nix-agentic-tools/materialize";
-      };
-    in {
-      exec = mkRetirementScript {inherit common coreutils preserveFiles;};
       after = ["devenv:files:cleanup"];
       before = ["devenv:enterShell"] ++ lib.optional hasFiles "devenv:files";
     };
