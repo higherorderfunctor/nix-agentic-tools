@@ -111,12 +111,10 @@ in {
             };
           };
         };
-        contextFile = (evaluated.config.home.file.".copilot/copilot-instructions.md" or {}).text or "";
-        ruleFile = evaluated.config.home.file.".copilot/instructions/named-rule.instructions.md" or null;
+        files = evaluated.config.home.file;
       in
-        contextFile
-        == ""
-        && ruleFile == null
+        !(files ? ".copilot/copilot-instructions.md")
+        && !(files ? ".copilot/instructions/named-rule.instructions.md")
     );
 
     # Copilot devenv writes context and each keyed rule to its project-native
@@ -156,7 +154,7 @@ in {
         result = evalHm {
           ai.copilot.enable = true;
         };
-        packages = result.config.home.packages or [];
+        packages = result.config.home.packages;
       in
         builtins.length packages >= 1
     );
@@ -210,10 +208,9 @@ in {
             text = "Be concise.";
           };
         };
-        ruleFile = result.config.home.file.".copilot/instructions/my-rule.instructions.md" or null;
+        files = result.config.home.file;
       in
-        ruleFile
-        == null
+        !(files ? ".copilot/instructions/my-rule.instructions.md")
         && !(result.config.home.file ? ".github/instructions/my-rule.instructions.md")
     );
 
@@ -265,7 +262,7 @@ in {
       mkWrapperGrepTest {
         inherit name;
         package =
-          lib.findFirst (p: (p.name or "") == "copilot-cli-wrapped")
+          lib.findFirst (p: p.name == "copilot-cli-wrapped")
           (throw "devenv produced no copilot-cli-wrapped package")
           result.config.packages;
         bin = "copilot";
@@ -286,7 +283,10 @@ in {
           ai.gitSshConfigWorkaround = false;
         };
       in
-        !(lib.any (p: (p.name or "") == "copilot-cli-wrapped") result.config.packages)
+        builtins.length result.config.packages
+        == 1
+        && (builtins.head result.config.packages).drvPath == result.config.ai.copilot.package.drvPath
+        && !(lib.any (p: p.name == "copilot-cli-wrapped") result.config.packages)
     );
 
     # ── Task 4b: Copilot feature-gap closure ───────────────────────
@@ -366,12 +366,12 @@ in {
             command = "hello";
           };
         };
-        packages = result.config.home.packages or [];
+        packages = result.config.home.packages;
         first = builtins.head packages;
       in
         builtins.length packages
         == 1
-        && (first.name or "") == "copilot-cli-wrapped"
+        && first.name == "copilot-cli-wrapped"
     );
 
     # The wiring counterpart on the HM side: the flag must point at the very
@@ -415,12 +415,12 @@ in {
             environmentVariables.COPILOT_MODEL = "claude-sonnet-4";
           };
         };
-        packages = result.config.home.packages or [];
+        packages = result.config.home.packages;
         first = builtins.head packages;
       in
         builtins.length packages
         == 1
-        && (first.name or "") == "copilot-cli-wrapped"
+        && first.name == "copilot-cli-wrapped"
     );
 
     # No wrapper when there's nothing to wrap (no env vars, no MCP
@@ -430,12 +430,13 @@ in {
         result = evalHm {
           ai.copilot.enable = true;
         };
-        packages = result.config.home.packages or [];
+        packages = result.config.home.packages;
         first = builtins.head packages;
       in
         builtins.length packages
         == 1
-        && (first.name or "") != "copilot-cli-wrapped"
+        && first.drvPath == result.config.ai.copilot.package.drvPath
+        && first.name != "copilot-cli-wrapped"
     );
 
     # agents → per-file writes under configDir.
@@ -479,10 +480,9 @@ in {
             matcher = ["**/*.ts"];
           };
         };
-        ruleFile = result.config.home.file.".copilot/instructions/security.instructions.md" or null;
+        files = result.config.home.file;
       in
-        ruleFile
-        == null
+        !(files ? ".copilot/instructions/security.instructions.md")
         && !(result.config.home.file ? ".github/instructions/security.instructions.md")
     );
 
@@ -495,10 +495,9 @@ in {
             context.text = "Copilot-specific context.";
           };
         };
-        contextFile =
-          result.config.home.file.".copilot/copilot-instructions.md" or null;
+        files = result.config.home.file;
       in
-        contextFile == null
+        !(files ? ".copilot/copilot-instructions.md")
     );
 
     # Root context likewise does not fan to the Copilot HM product.
@@ -508,10 +507,9 @@ in {
           ai.copilot.enable = true;
           ai.context.text = "Top-level context flows everywhere.";
         };
-        contextFile =
-          result.config.home.file.".copilot/copilot-instructions.md" or null;
+        files = result.config.home.file;
       in
-        contextFile == null
+        !(files ? ".copilot/copilot-instructions.md")
     );
 
     # Copilot devenv parity.
