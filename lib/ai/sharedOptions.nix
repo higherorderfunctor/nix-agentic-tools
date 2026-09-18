@@ -185,7 +185,10 @@ in {
         github.com's reviewer consumes only the committed project tree). Codex
         instead appends rules in key order
         to its single AGENTS.md, translating `matcher` to a prose scope note.
-        Kimchi has no rules pool, so non-empty root rules warn for it.
+        Kimchi has no rules pool, so root rules degrade to nothing for it.
+        That exclusion is documented here and in the delivery matrix rather
+        than warned about at activation: `ai.kimchi.rules` does not exist, so
+        a warning would have no per-runtime declaration to be silenced by.
         Per-app entries replace root entries at the same key; set
         `enable = false` to suppress an inherited rule for that runtime. For
         each rule, `text` and
