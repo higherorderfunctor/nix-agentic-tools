@@ -144,6 +144,7 @@ fhsenv
 fileset
 findutils
 fixpoint
+florian
 foldl
 footgun
 formedness
@@ -185,6 +186,7 @@ GOWORK
 gpgsign
 gradeability
 gradeable
+grotesk
 gsub
 headlessly
 heredocs
@@ -217,6 +219,7 @@ kagiapi
 kagimcp
 kagisearch
 kanagawa
+karsten
 kasdirs
 kasid
 keyspace
@@ -512,6 +515,7 @@ valkey
 vendorhash
 watchlist
 webp
+wght
 wikilink
 worktree
 worktrees

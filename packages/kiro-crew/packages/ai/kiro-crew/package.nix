@@ -172,12 +172,18 @@
       # The same defect in the PPTX Maker engine, plus the seam that lets an
       # externally provisioned engine skip `uv sync`.
       ../../../patches/kiro-crew-pptx-engine-provisioned.patch
+      # The CSP half of the self-hosted fonts change. Its other half is in
+      # `frontend` below and the two MUST move together — upstream's security
+      # header test asserts the Google Fonts grants this removes.
+      ../../../patches/kiro-crew-self-hosted-fonts-csp.patch
       # Teach the distribution stamp about `nix`, routed to notify-only.
       ../../../patches/kiro-crew-distribution-nix.patch
       # GPU offload is unreachable at any setting without this argument.
       ../../../patches/kiro-crew-n-gpu-layers.patch
     ];
-    frontend = [];
+    frontend = [
+      ../../../patches/kiro-crew-self-hosted-fonts-frontend.patch
+    ];
     dormant = [
       ../../../patches/kiro-crew-linux-sandbox-delegation.patch
       ../../../patches/kiro-crew-no-self-update.patch
@@ -420,6 +426,95 @@
     print("kiro-crew: vendored llama.cpp runtime loaded from " + platform_dir)
   '';
 
+  # ── The dashboard's two brand faces, served locally ─────────────────────
+  #
+  # Upstream's `website/index.html` pulls Space Grotesk and JetBrains Mono from
+  # `fonts.googleapis.com` on EVERY page load, and the dashboard's own CSP
+  # grants both hosts explicitly. That discloses a visit to a third party every
+  # time the operator opens a local-first tool. Two patches cut the grant and
+  # re-point the faces at these files — one on each derivation, because the
+  # `<link>` tags and the `@font-face` rules live in `website/` while the CSP
+  # and the test that asserts it live in `src/`. A partial application fails
+  # upstream's own suite, which is the loud end of that split.
+  #
+  # COPIED VERBATIM, never converted. Both faces are OFL-1.1 and this
+  # derivation redistributes them through a public binary cache. The licence
+  # permits modification, but a byte-identical copy needs no argument about
+  # what a "Modified Version" is. woff2 would be roughly 2.7x smaller and is
+  # what Google serves — it is also a re-mint, and the dashboard is served over
+  # loopback, where the difference costs nothing worth that argument.
+  #
+  # `google-fonts.override` rather than a direct fetch of Florian Karsten's own
+  # repo: it is a nixpkgs attribute that moves with the channel and adds no rev
+  # and no hash for this repo to maintain. There is no standalone
+  # `space-grotesk` attribute — checked at this pin, not assumed. The price is
+  # real and worth naming rather than rediscovering: that override's `src` is
+  # 1.19 GB to download and 2.95 GB unpacked, for one 136 KB font file, and its
+  # `postPatch` scans the whole tree. It is a BUILD input only — absent from
+  # the runtime closure, GC-able, and served from this repo's own cache after
+  # the first build — which is the trade decision 14 accepted.
+  dashboardFonts = ourPkgs.runCommandLocal "kiro-crew-dashboard-fonts" {} ''
+    fail() {
+      printf 'kiro-crew-dashboard-fonts: %s\n' "$1" >&2
+      exit 1
+    }
+
+    # Space Grotesk ships as ONE variable face carrying the whole wght axis —
+    # `min_value: 300, max_value: 700` in its METADATA.pb, read at this rev
+    # rather than recalled — so all four weights upstream requested from Google
+    # (400/500/600/700) come out of a single 136 KB file.
+    #
+    # SELECTED by the bracketed axis spelling, not by being the only match.
+    # nixpkgs' installer flattens every `SpaceGrotesk*.ttf` in the whole
+    # `google/fonts` tree into one directory, and that family's METADATA.pb
+    # already describes `static/SpaceGrotesk-Bold.ttf` and friends even though
+    # the tree does not carry them today. If they ever land, an
+    # exactly-one-match assertion would fail a bump for no reason, while
+    # picking arbitrarily would silently reduce the dashboard to whichever
+    # static weight sorted first. Requiring the variable face fails loudly only
+    # in the case that actually matters: it disappearing, which nothing else
+    # here can compensate for — no static set covers 500 and 600.
+    groteskDir=${ourPkgs.google-fonts.override {fonts = ["Space Grotesk"];}}/share/fonts/truetype
+    groteskVariable=""
+    while IFS= read -r face; do
+      case "$face" in
+        *'['*']'*.ttf) groteskVariable="$face" ;;
+      esac
+    done < <(find "$groteskDir" -maxdepth 1 -type f -name 'SpaceGrotesk*.ttf' -printf '%f\n')
+
+    if [ -z "$groteskVariable" ]; then
+      fail "no variable Space Grotesk face under $groteskDir. Upstream publishes
+      it as SpaceGrotesk[wght].ttf; without that axis the dashboard's 500 and
+      600 weights have no source and would render as synthetic bold."
+    fi
+
+    # Renaming the FILE is not renaming the FONT: the bytes are untouched and
+    # the face still identifies as Space Grotesk through its own name table.
+    # The rename exists because `[` and `]` are RFC 3986 gen-delims, and a URL
+    # path carrying them is at the mercy of whatever serves the dist.
+    install -Dm444 "$groteskDir/$groteskVariable" \
+      "$out/space-grotesk/SpaceGrotesk-Variable.ttf"
+
+    # JetBrains Mono ships static instances; upstream asked Google for 400 and
+    # 500, which are Regular and Medium. Named explicitly because they ARE
+    # names here, and missing either is a build failure rather than a face that
+    # silently falls back to synthetic weighting.
+    for face in Regular Medium; do
+      src="${ourPkgs.jetbrains-mono}/share/fonts/truetype/JetBrainsMono-$face.ttf"
+      [ -f "$src" ] || fail "JetBrains Mono $face is absent at $src"
+      install -Dm444 "$src" "$out/jetbrains-mono/JetBrainsMono-$face.ttf"
+    done
+
+    # OFL-1.1 section 4 requires the licence to travel with the fonts, and
+    # NEITHER nixpkgs package installs one — both ship bare font files, checked
+    # at this pin. So the texts are carried in this repo beside the recipe, the
+    # same way the llama.cpp notice is. They sit next to their own family,
+    # matching the convention upstream already uses for the OpenDyslexic faces
+    # it bundles (`website/public/fonts/opendyslexic/OFL.txt`).
+    install -Dm444 ${../../../licenses/OFL-1.1-SpaceGrotesk} "$out/space-grotesk/OFL.txt"
+    install -Dm444 ${../../../licenses/OFL-1.1-JetBrainsMono} "$out/jetbrains-mono/OFL.txt"
+  '';
+
   # The dashboard SPA. Its own derivation, its own toolchain, its own
   # fixed-output dependency fetch.
   frontend = buildNpmPackage {
@@ -446,6 +541,28 @@
     # naming the file, not a silent fake-hash build.
     inherit (sources) npmDepsHash;
 
+    # PATCHES ROOTED AT `website/`, not at the repo root. `sourceRoot` above
+    # means patchPhase runs with the working directory already inside
+    # `website/`, so these diffs carry no `website/` path component — and a
+    # patch written for the other derivation would not apply here at all.
+    # That asymmetry is the reason the fonts change is two files rather than
+    # one: this half edits `index.html` and `src/index.css`, and the CSP half
+    # edits `src/kiro_crew/dashboard/server.py`, which this derivation's
+    # source root cannot even see.
+    patches = patchManifest.frontend;
+
+    # The two brand faces, staged where the patched `@font-face` rules look
+    # for them. `public/` is Vite's verbatim-copy directory, so this lands in
+    # `dist/fonts/` with no bundler configuration, which is exactly the
+    # mechanism upstream already uses for the OpenDyslexic faces it ships.
+    #
+    # `--no-preserve=mode`: a store path is 0444/0555, and a read-only tree
+    # under `public/` is a needless hazard for anything in the build that
+    # wants to touch it.
+    postPatch = ''
+      cp -R --no-preserve=mode ${dashboardFonts}/. public/fonts/
+    '';
+
     # `npm run build` is `tsc -p tsconfig.app.json && node
     # --max-old-space-size=6144 vite build`. Upstream already sets its own
     # heap ceiling, so no NODE_OPTIONS here.
@@ -455,6 +572,40 @@
       runHook preInstall
       mkdir -p "$out"
       cp -R dist/. "$out"
+
+      # EVERY LOCAL FONT THE BUILT CSS NAMES MUST EXIST.
+      #
+      # The `@font-face` rules and the files that satisfy them arrive from two
+      # different places — a patch on one side, `dashboardFonts` on the other —
+      # and neither knows the other's spelling. A mismatch has no symptom in
+      # the build: Vite does not resolve a root-absolute `url(/...)`, it copies
+      # `public/` verbatim, and the browser simply falls back to another family
+      # at runtime. That is the same silent degradation self-hosting the fonts
+      # was meant to remove, reintroduced by a rename.
+      #
+      # Upstream's own suite gained a check for this in the fonts patch, but it
+      # never runs here (`doCheck = false`, and this derivation runs no tests at
+      # all), so the assertion has to exist on this side too.
+      #
+      # Matched loosely on purpose — the minifier chooses its own quoting, so
+      # accept `'`, `"` and bare — and the references are read out of the BUILT
+      # output rather than the source, which is what the browser will fetch.
+      missingFonts=()
+      while IFS= read -r ref; do
+        [ -f "$out/''${ref#/}" ] || missingFonts+=("$ref")
+      done < <(
+        grep -rhoE "url\(['\"]?(/fonts/[^)'\"]+)['\"]?\)" "$out" \
+          | grep -oE '/fonts/[^)'"'"'"]+' | sort -u
+      )
+
+      if [ "''${#missingFonts[@]}" -ne 0 ]; then
+        echo "kiro-crew-dashboard: the built CSS references fonts that are not in the output:" >&2
+        printf '           %s\n' "''${missingFonts[@]}" >&2
+        echo "           Either the @font-face patch or dashboardFonts changed a name." >&2
+        exit 1
+      fi
+      echo "kiro-crew-dashboard: every referenced local font resolves in the output"
+
       runHook postInstall
     '';
 
@@ -774,6 +925,10 @@ in
       # dormant ones included — to the pinned src at zero fuzz, and asserts
       # this manifest and the `patches/` directory listing are the same set.
       inherit patchManifest;
+      # Exposed so the staged font set can be inspected and built on its own.
+      # It is a build input of `frontend` rather than of this derivation, and
+      # a nested passthru is not reachable from `nix build .#kiro-crew.<attr>`.
+      inherit dashboardFonts;
     };
 
     meta = {

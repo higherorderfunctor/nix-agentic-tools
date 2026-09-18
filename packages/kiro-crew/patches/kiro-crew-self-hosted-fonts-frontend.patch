@@ -1,0 +1,61 @@
+diff --git a/index.html b/index.html
+index 364bb73..12b09df 100644
+--- a/index.html
++++ b/index.html
+@@ -30,10 +30,8 @@
+   <link rel="manifest" href="/manifest.json" />
+   <meta name="theme-color" content="#0d0f12" />
+   <link rel="apple-touch-icon" href="/icon-192.png" />
+-  <link rel="preconnect" href="https://fonts.googleapis.com" />
+-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+-  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" onload="this.rel='stylesheet'" />
+-  <noscript><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" /></noscript>
++  <!-- Brand fonts are served locally via src/index.css so opening the
++       dashboard does not disclose a visit to a third-party font host. -->
+   <title>Kiro Crew</title>
+   <script>
+     // The entry module (the module tag Vite appends to the document head on
+diff --git a/src/index.css b/src/index.css
+index e4c1f76..278b2ea 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -232,6 +232,39 @@
+   unicode-range: U+0022, U+0027;
+ }
+ 
++/* Keep dashboard visits private: the two brand faces use the same
++   public/fonts delivery as the bundled OpenDyslexic ones, so opening the
++   dashboard no longer discloses the visit to a third-party font host.
++
++   TTF rather than woff2, and one Space Grotesk face rather than four. These
++   are the files as their upstreams publish them: Space Grotesk ships a single
++   variable face whose wght axis spans 300-700, which covers every weight used
++   here and is smaller than the four static instances it replaces. Both
++   families are SIL-OFL-1.1, and copying them byte-for-byte keeps them
++   unmodified -- re-compressing to woff2 would make them Modified Versions for
++   a saving that does not matter over a loopback connection. */
++@font-face {
++  font-family: 'Space Grotesk';
++  font-style: normal;
++  font-weight: 300 700;
++  font-display: swap;
++  src: url('/fonts/space-grotesk/SpaceGrotesk-Variable.ttf') format('truetype');
++}
++@font-face {
++  font-family: 'JetBrains Mono';
++  font-style: normal;
++  font-weight: 400;
++  font-display: swap;
++  src: url('/fonts/jetbrains-mono/JetBrainsMono-Regular.ttf') format('truetype');
++}
++@font-face {
++  font-family: 'JetBrains Mono';
++  font-style: normal;
++  font-weight: 500;
++  font-display: swap;
++  src: url('/fonts/jetbrains-mono/JetBrainsMono-Medium.ttf') format('truetype');
++}
++
+ /* ─── OpenDyslexic (SIL-OFL) ── accessibility built-in ───
+    Registered as its own font-family so the a11y font never leaks into
+    var(--mono) consumers: proportional variants live under 'OpenDyslexic',
