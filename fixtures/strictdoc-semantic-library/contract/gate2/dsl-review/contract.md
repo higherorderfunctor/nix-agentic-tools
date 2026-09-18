@@ -3,98 +3,112 @@
 ```json
 [
   {
+    "check": {
+      "kind": "target-type",
+      "targetElement": "model:reference/element:FOO"
+    },
     "id": "model:reference/element:FOO/relation:parent:H/check:H.target-type",
+    "inputs": ["candidate"],
     "name": "H.target-type",
-    "kind": "target-type",
-    "scope": "relation",
-    "subject": { "direction": "parent", "element": "FOO", "role": "H" },
-    "targetElement": "model:reference/element:FOO",
-    "inputs": ["candidate"],
+    "origins": ["declaration:model:reference/element:FOO/relation:parent:H"],
     "requires": [],
-    "origins": ["declaration:model:reference/element:FOO/relation:parent:H"]
+    "select": {
+      "occurrences": { "direction": "parent", "element": "FOO", "role": "H" }
+    }
   },
   {
-    "id": "model:reference/element:FOO/check:one-H-parent",
-    "name": "one-H-parent",
-    "kind": "count",
-    "scope": "record",
-    "subject": { "element": "FOO" },
-    "compare": "lte",
-    "relation": { "direction": "parent", "role": "H" },
-    "value": 1,
+    "check": {
+      "all": [
+        {
+          "kind": "target-type",
+          "targetElement": "model:reference/element:FOO"
+        },
+        {
+          "from": "owner",
+          "kind": "visible-target",
+          "to": "target",
+          "view": "model:reference/view:H-visibility"
+        }
+      ]
+    },
+    "id": "model:reference/element:FOO/relation:parent:R/check:R.all",
     "inputs": ["candidate"],
-    "requires": [],
-    "origins": ["declaration:model:reference/element:FOO"]
-  },
-  {
-    "id": "model:reference/element:FOO/relation:parent:R/check:visible-R",
-    "name": "visible-R",
-    "kind": "visible-target",
-    "scope": "relation",
-    "subject": { "direction": "parent", "element": "FOO", "role": "R" },
-    "from": "owner",
-    "to": "target",
-    "view": "model:reference/view:H-visibility",
-    "inputs": ["candidate"],
+    "name": "R.all",
+    "origins": ["declaration:model:reference/element:FOO/relation:parent:R"],
     "requires": ["model:reference/check:H-forest"],
-    "origins": ["declaration:model:reference/element:FOO/relation:parent:R"]
+    "select": {
+      "occurrences": { "direction": "parent", "element": "FOO", "role": "R" }
+    }
   },
   {
-    "id": "model:reference/element:BAR/check:endpoint-path",
-    "name": "endpoint-path",
-    "kind": "endpoint-path",
-    "scope": "record",
-    "subject": { "element": "BAR" },
-    "lower": { "direction": "child", "role": "Q" },
-    "requireSingleton": true,
-    "upper": { "direction": "parent", "role": "P" },
-    "view": "model:reference/view:H-visibility",
+    "check": {
+      "compare": "lte",
+      "kind": "count",
+      "relation": { "direction": "parent", "role": "H" },
+      "value": 1
+    },
+    "id": "model:reference/element:FOO/check:one-H-parent",
     "inputs": ["candidate"],
+    "name": "one-H-parent",
+    "origins": ["declaration:model:reference/element:FOO"],
+    "requires": [],
+    "select": { "records": { "element": "FOO" } }
+  },
+  {
+    "check": {
+      "kind": "endpoint-path",
+      "lower": { "direction": "child", "role": "Q" },
+      "requireSingleton": true,
+      "upper": { "direction": "parent", "role": "P" },
+      "view": "model:reference/view:H-visibility"
+    },
+    "id": "model:reference/element:BAR/check:endpoint-path",
+    "inputs": ["candidate"],
+    "name": "endpoint-path",
+    "origins": ["declaration:model:reference/element:BAR"],
     "requires": [
       "model:reference/element:BAR/check:one-P",
       "model:reference/element:BAR/check:one-Q",
       "model:reference/check:H-forest"
     ],
-    "origins": ["declaration:model:reference/element:BAR"]
+    "select": { "records": { "element": "BAR" } }
   },
   {
+    "check": { "kind": "native-dag" },
     "id": "model:reference/check:native-dag",
+    "inputs": ["candidate"],
     "name": "native-dag",
-    "kind": "native-dag",
-    "scope": "model",
-    "subject": { "model": "reference" },
-    "inputs": ["candidate"],
+    "origins": ["declaration:model:reference"],
     "requires": [],
-    "origins": ["declaration:model:reference"]
+    "select": { "model": true }
   },
   {
+    "check": { "kind": "forest-validity", "view": "model:reference/view:H" },
     "id": "model:reference/check:H-forest",
-    "name": "H-forest",
-    "kind": "forest-validity",
-    "scope": "model",
-    "subject": { "model": "reference" },
-    "view": "model:reference/view:H",
     "inputs": ["candidate"],
+    "name": "H-forest",
+    "origins": ["declaration:model:reference"],
     "requires": [],
-    "origins": ["declaration:model:reference"]
+    "select": { "model": true }
   },
   {
+    "check": {
+      "baseline": "model:reference/input:baseline",
+      "kind": "preserve",
+      "projection": "model:reference/projection:modeled-record"
+    },
     "id": "model:reference/check:baseline-preserved",
-    "name": "baseline-preserved",
-    "kind": "preserve",
-    "scope": "model",
-    "subject": { "model": "reference" },
-    "baseline": "model:reference/input:baseline",
-    "projection": "model:reference/projection:modeled-record",
     "inputs": ["candidate", "model:reference/input:baseline"],
+    "name": "baseline-preserved",
+    "origins": ["declaration:model:reference"],
     "requires": [],
-    "origins": ["declaration:model:reference"]
+    "select": { "model": true }
   }
 ]
 ```
 
-The array above contains one complete rule per kind from `bundle.json`. The file
-is one JSON object containing `grammar`, `semanticTypes`, and `bundle`.
+The array above shows complete selector-plus-check rules from `bundle.json`. The
+file is one JSON object containing `grammar`, `semanticTypes`, and `bundle`.
 `bundle.schema` is `semantic-constraints/v2`. `bundle.id` identifies the model
 namespace, here `model:reference`. `bundle.declarations` indexes the model,
 elements, fields, and relations. `bundle.views`, `bundle.inputs`, and
@@ -105,27 +119,134 @@ have no target-type, count, or path constraints. They still participate in
 explicitly declared model rules such as the native DAG rule. Native field
 validation is required independently of these opt-in semantic rules.
 
-Every rule has `id`, `name`, `kind`, `scope`, `subject`, `inputs`, `requires`,
-and `origins`. `id` identifies the rule; `name` is its authored or derived
-display name. `kind` selects the algorithm below. `scope: relation` selects
-every owned occurrence matching the subject's element, direction, and role.
-`scope: record` selects every record of the subject's element, including records
-with no relations. `scope: model` selects the entire named candidate model.
-`inputs` lists the complete final `candidate` and any external input declaration
-IDs. `requires` lists prerequisite rule IDs; it is distinct from data inputs.
-`origins` records authoring provenance and does not affect validity. A
-`declaration:` prefix is followed by the subject declaration ID. A
+Every rule has `id`, `name`, `select`, `check`, `inputs`, `requires`, and
+`origins`. `id` identifies the rule; `name` is its authored or derived display
+name. `inputs` lists the complete final `candidate` and any external input
+declaration IDs. `requires` lists prerequisite rule IDs, distinct from data
+inputs. `origins` records authoring provenance and does not affect validity. A
+`declaration:` prefix is followed by the selected declaration ID; a
 `contribution:` prefix is followed by the contribution's free name.
 
-| Kind              | Algorithm                                                                                                                                                     |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `target-type`     | Resolve the occurrence's target uid and compare its element with `targetElement`; a resolved wrong element is violated and an unresolved uid is blocked.      |
-| `count`           | Count all owned occurrences matching `relation`, including duplicates and zero; compare with integer `value` using `compare`.                                 |
-| `visible-target`  | Walk the unique hierarchy path from owner to target using `view`; keep the owner fixed as the original origin.                                                |
-| `endpoint-path`   | Select the sole owned `upper` and sole owned `lower` occurrence; walk downward from the upper target to the lower target using `view`.                        |
-| `native-dag`      | Build a directed graph from every authored parent and child occurrence across all roles and elements; any directed cycle, including a self-loop, is violated. |
-| `forest-validity` | Include all vertices selected by `view`; require resolved in-view endpoints, acyclicity, and at most one incoming selected occurrence per vertex.             |
-| `preserve`        | Compare every baseline-listed uid with the final candidate using `projection`; missing records and changed projected facts are violated.                      |
+## Selectors and Boolean checks
+
+```json
+[
+  { "records": { "element": "FOO" } },
+  { "occurrences": { "element": "FOO", "role": "R", "direction": "parent" } },
+  { "model": true }
+]
+```
+
+`select` has exactly one of `records`, `occurrences`, or `model`, plus optional
+`where`. Records selects every record of the named element, including those with
+no relations. Occurrences selects each owned occurrence matching element, role,
+and direction, preserving duplicates. Model selects the whole candidate model
+once. An element's Meta list supplies records; an inline relation check supplies
+occurrences; `on SUBJECT CHECK` names the selector explicitly. A model
+constraint supplies model. Each existing named-kind rule lowers to one leaf
+under `check`, with no authoring spelling change.
+
+```json
+{
+  "all": [
+    { "kind": "target-type", "targetElement": "model:reference/element:FOO" },
+    {
+      "kind": "visible-target",
+      "view": "model:reference/view:H-visibility",
+      "from": "owner",
+      "to": "target"
+    }
+  ]
+}
+```
+
+`all` takes a list of checks and requires every child to hold. This is FOO R's
+combined check: both leaves inspect the same selected occurrence. `all []` is
+true. Children may themselves be `all`, `any`, or `not`.
+
+```json
+{
+  "any": [
+    {
+      "kind": "count",
+      "relation": { "direction": "parent", "role": "H" },
+      "compare": "eq",
+      "value": 0
+    },
+    {
+      "kind": "count",
+      "relation": { "direction": "parent", "role": "H" },
+      "compare": "eq",
+      "value": 1
+    }
+  ]
+}
+```
+
+`any` takes a list of checks and requires at least one child to hold; `any []`
+is false. This check accepts a selected record with either zero or one H parent.
+
+```json
+{
+  "not": {
+    "kind": "count",
+    "relation": { "direction": "parent", "role": "H" },
+    "compare": "gt",
+    "value": 1
+  }
+}
+```
+
+`not` takes one check and reverses its Boolean result. All three operators are
+authoring combinators wherever predicates occur, including inside relation and
+record callbacks or a named `check`. `const true` lowers to `all []`,
+`const false` to `any []`; the retained `allOf` alias lowers to `all`. Each
+check object is exactly one named leaf or one operator key. There is no
+expression fallback, no positional argument tree, and no implicit rebinding
+within a check.
+
+```json
+{
+  "occurrences": { "element": "FOO", "role": "R", "direction": "parent" },
+  "where": {
+    "kind": "target-type",
+    "targetElement": "model:reference/element:FOO"
+  }
+}
+```
+
+`where` uses the same check grammar on each initially selected subject. True
+includes it; false excludes it without a check finding. A blocked or error
+filter produces that status for the subject, never silent exclusion. Nix
+`where SUBJECT PREDICATE` adds the filter to a subject used by `on`; the same
+binders and allowed leaf kinds apply as in its check. Omitting where selects all
+subjects. Input and prerequisite collection also includes every filter leaf.
+
+After input and whole-rule prerequisite checks, evaluate all children without
+short-circuiting: an error child makes the expression error; otherwise a blocked
+child makes it blocked; otherwise apply the Boolean operator to satisfied/true
+and violated/false children. `not` preserves blocked and error. Leaf findings
+retain their own status; expression truth determines each selected subject's
+status. Thus a violated child can belong to a satisfied `any` or `not`. An empty
+selected set is satisfied once inputs and prerequisites are usable.
+
+## Named leaves
+
+| Leaf kind         | Selector    | Fields besides kind                                                                   | Algorithm                                                                                                                           |
+| ----------------- | ----------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `target-type`     | occurrences | `targetElement`: element ID                                                           | Resolve target uid and compare its element; wrong element is violated, unresolved uid blocked.                                      |
+| `count`           | records     | `relation`: direction and role; `compare`: comparison keyword; `value`: integer       | Count all matching owned occurrences, including duplicates and zero, then compare.                                                  |
+| `visible-target`  | occurrences | `view`: visibility ID; `from`: owner; `to`: target                                    | Walk the unique hierarchy path from owner to target, keeping the original origin fixed.                                             |
+| `endpoint-path`   | records     | `view`: visibility ID; `upper`, `lower`: direction and role; `requireSingleton`: true | Select each sole endpoint occurrence and walk downward from the upper target to the lower target.                                   |
+| `native-dag`      | model       | None                                                                                  | Build all authored Parent/Child edges across every role and element; any directed cycle, including a self-loop, violates.           |
+| `forest-validity` | model       | `view`: forest ID                                                                     | Include all view vertices; require resolved in-view endpoints, acyclicity, and at most one incoming selected occurrence per vertex. |
+| `preserve`        | model       | `baseline`: input ID; `projection`: projection ID                                     | Compare every baseline-listed uid with the final candidate; missing records and changed projected facts violate.                    |
+
+Only these leaves are supported. Each leaf in a check or filter must be valid
+for its selector. Unsupported authoring forms throw during lowering; a backend
+rejects unknown leaf kinds, operators, extra check keys, or invalid shapes as
+configuration errors. Relation constructors accept a predicate or named check;
+record predicates use `record` to obtain owned-relation collections.
 
 `direction` names the authored native type; the graph-building rule is: a parent
 occurrence is an edge target→owner, a child occurrence owner→target. Parallel
@@ -399,267 +520,8 @@ requires a complete protected set, not a nonempty set.
           "status": "satisfied",
           "code": "target-type",
           "message": "The target is FOO.",
-          "evidence": { "expectedElement": "FOO", "actualElement": "FOO" }
-        },
-        {
-          "uid": "F1a",
-          "occurrence": { "role": "H", "direction": "parent", "target": "F1" },
-          "occurrenceIndex": 0,
-          "status": "satisfied",
-          "code": "target-type",
-          "message": "The target is FOO.",
-          "evidence": { "expectedElement": "FOO", "actualElement": "FOO" }
-        },
-        {
-          "uid": "F2",
-          "occurrence": { "role": "H", "direction": "parent", "target": "F0" },
-          "occurrenceIndex": 0,
-          "status": "satisfied",
-          "code": "target-type",
-          "message": "The target is FOO.",
-          "evidence": { "expectedElement": "FOO", "actualElement": "FOO" }
-        },
-        {
-          "uid": "F2a",
-          "occurrence": { "role": "H", "direction": "parent", "target": "F2" },
-          "occurrenceIndex": 0,
-          "status": "satisfied",
-          "code": "target-type",
-          "message": "The target is FOO.",
-          "evidence": { "expectedElement": "FOO", "actualElement": "FOO" }
-        },
-        {
-          "uid": "F2b",
-          "occurrence": { "role": "H", "direction": "parent", "target": "F2" },
-          "occurrenceIndex": 0,
-          "status": "satisfied",
-          "code": "target-type",
-          "message": "The target is FOO.",
-          "evidence": { "expectedElement": "FOO", "actualElement": "FOO" }
-        },
-        {
-          "uid": "G1",
-          "occurrence": { "role": "H", "direction": "parent", "target": "G0" },
-          "occurrenceIndex": 0,
-          "status": "satisfied",
-          "code": "target-type",
-          "message": "The target is FOO.",
-          "evidence": { "expectedElement": "FOO", "actualElement": "FOO" }
-        }
-      ],
-      "causes": []
-    },
-    {
-      "rule": "model:reference/element:FOO/relation:parent:R/check:R.target-type",
-      "status": "satisfied",
-      "findings": [],
-      "causes": []
-    },
-    {
-      "rule": "model:reference/element:FOO/check:one-H-parent",
-      "status": "satisfied",
-      "findings": [
-        {
-          "uid": "F0",
-          "occurrence": null,
-          "occurrenceIndex": null,
-          "status": "satisfied",
-          "code": "count",
-          "message": "The H count is at most one.",
-          "evidence": {
-            "occurrences": [],
-            "count": 0,
-            "compare": "lte",
-            "value": 1
-          }
-        },
-        {
-          "uid": "F1",
-          "occurrence": null,
-          "occurrenceIndex": null,
-          "status": "satisfied",
-          "code": "count",
-          "message": "The H count is at most one.",
-          "evidence": {
-            "occurrences": [
-              { "index": 0, "role": "H", "direction": "parent", "target": "F0" }
-            ],
-            "count": 1,
-            "compare": "lte",
-            "value": 1
-          }
-        },
-        {
-          "uid": "F1a",
-          "occurrence": null,
-          "occurrenceIndex": null,
-          "status": "satisfied",
-          "code": "count",
-          "message": "The H count is at most one.",
-          "evidence": {
-            "occurrences": [
-              { "index": 0, "role": "H", "direction": "parent", "target": "F1" }
-            ],
-            "count": 1,
-            "compare": "lte",
-            "value": 1
-          }
-        },
-        {
-          "uid": "F2",
-          "occurrence": null,
-          "occurrenceIndex": null,
-          "status": "satisfied",
-          "code": "count",
-          "message": "The H count is at most one.",
-          "evidence": {
-            "occurrences": [
-              { "index": 0, "role": "H", "direction": "parent", "target": "F0" }
-            ],
-            "count": 1,
-            "compare": "lte",
-            "value": 1
-          }
-        },
-        {
-          "uid": "F2a",
-          "occurrence": null,
-          "occurrenceIndex": null,
-          "status": "satisfied",
-          "code": "count",
-          "message": "The H count is at most one.",
-          "evidence": {
-            "occurrences": [
-              { "index": 0, "role": "H", "direction": "parent", "target": "F2" }
-            ],
-            "count": 1,
-            "compare": "lte",
-            "value": 1
-          }
-        },
-        {
-          "uid": "F2b",
-          "occurrence": null,
-          "occurrenceIndex": null,
-          "status": "satisfied",
-          "code": "count",
-          "message": "The H count is at most one.",
-          "evidence": {
-            "occurrences": [
-              { "index": 0, "role": "H", "direction": "parent", "target": "F2" }
-            ],
-            "count": 1,
-            "compare": "lte",
-            "value": 1
-          }
-        },
-        {
-          "uid": "G0",
-          "occurrence": null,
-          "occurrenceIndex": null,
-          "status": "satisfied",
-          "code": "count",
-          "message": "The H count is at most one.",
-          "evidence": {
-            "occurrences": [],
-            "count": 0,
-            "compare": "lte",
-            "value": 1
-          }
-        },
-        {
-          "uid": "G1",
-          "occurrence": null,
-          "occurrenceIndex": null,
-          "status": "satisfied",
-          "code": "count",
-          "message": "The H count is at most one.",
-          "evidence": {
-            "occurrences": [
-              { "index": 0, "role": "H", "direction": "parent", "target": "G0" }
-            ],
-            "count": 1,
-            "compare": "lte",
-            "value": 1
-          }
-        },
-        {
-          "uid": "I0",
-          "occurrence": null,
-          "occurrenceIndex": null,
-          "status": "satisfied",
-          "code": "count",
-          "message": "The H count is at most one.",
-          "evidence": {
-            "occurrences": [],
-            "count": 0,
-            "compare": "lte",
-            "value": 1
-          }
-        }
-      ],
-      "causes": []
-    },
-    {
-      "rule": "model:reference/element:FOO/relation:parent:R/check:visible-R",
-      "status": "satisfied",
-      "findings": [],
-      "causes": []
-    },
-    {
-      "rule": "model:reference/element:BAR/relation:parent:P/check:P.target-type",
-      "status": "satisfied",
-      "findings": [],
-      "causes": []
-    },
-    {
-      "rule": "model:reference/element:BAR/relation:child:Q/check:Q.target-type",
-      "status": "satisfied",
-      "findings": [],
-      "causes": []
-    },
-    {
-      "rule": "model:reference/element:BAR/check:one-P",
-      "status": "satisfied",
-      "findings": [],
-      "causes": []
-    },
-    {
-      "rule": "model:reference/element:BAR/check:one-Q",
-      "status": "satisfied",
-      "findings": [],
-      "causes": []
-    },
-    {
-      "rule": "model:reference/element:BAR/check:endpoint-path",
-      "status": "satisfied",
-      "findings": [],
-      "causes": []
-    },
-    {
-      "rule": "model:reference/check:native-dag",
-      "status": "satisfied",
-      "findings": [],
-      "causes": []
-    },
-    {
-      "rule": "model:reference/check:H-forest",
-      "status": "satisfied",
-      "findings": [],
-      "causes": []
-    },
-    {
-      "rule": "model:reference/check:baseline-preserved",
-      "status": "satisfied",
-      "findings": [
-        {
-          "uid": "I0",
-          "occurrence": null,
-          "occurrenceIndex": null,
-          "status": "satisfied",
-          "code": "preserve",
-          "message": "The protected record is unchanged.",
-          "evidence": { "baseline": "baseline-I0-open", "differences": [] }
+          "evidence": { "expectedElement": "FOO", "actualElement": "FOO" },
+          "predicatePath": "/check"
         }
       ],
       "causes": []
@@ -668,41 +530,47 @@ requires a complete protected set, not a nonempty set.
 }
 ```
 
-`results.json` and the envelope above are handwritten expected results, not
-executed evaluator output. `expected` is true for illustrative expectations and
-false for an actual evaluator response. `evaluation` is a nonempty invocation ID
-chosen by the caller and echoed unchanged. `baseline` is the captured baseline
-identity, or null if capture failed or no baseline input exists. The envelope's
-`results` contains exactly one entry per bundle rule, identified by `rule`.
-Missing, duplicate, or unknown rule entries are result protocol errors. Each
-entry has `rule`, `status`, `findings`, and `causes`. `satisfied` means the
-check evaluated and holds, including defined vacuous satisfaction. `violated`
-means the check evaluated and its condition is false. `blocked` means the check
-cannot evaluate because a required input or prerequisite is unusable. `error`
-means configuration, input acquisition, or evaluator execution failed. A rule's
-status is the worst of its occurrence statuses: error > blocked > violated >
-satisfied. Whole-rule input and prerequisite failures take precedence over
-occurrence evaluation. With usable inputs and prerequisites, a rule over zero
-records or zero selected occurrences returns satisfied with `findings: []`. All
-BAR rules and FOO R rules are vacuously satisfied in the base sample. A
+`results.json` contains the complete handwritten expectations; the envelope
+above is an excerpt with one entry and one finding. Neither is executed
+evaluator output. `expected` is true for illustrative expectations and false for
+an actual evaluator response. `evaluation` is a nonempty invocation ID chosen by
+the caller and echoed unchanged. `baseline` is the captured baseline identity,
+or null if capture failed or no baseline input exists. The envelope's `results`
+contains exactly one entry per bundle rule, identified by `rule`. Missing,
+duplicate, or unknown rule entries are result protocol errors. Each entry has
+`rule`, `status`, `findings`, and `causes`. `satisfied` means the check
+evaluated and holds, including defined vacuous satisfaction. `violated` means
+the check evaluated and its condition is false. `blocked` means the check cannot
+evaluate because a required input or prerequisite is unusable. `error` means
+configuration, input acquisition, or evaluator execution failed. A rule's status
+is the worst of its occurrence statuses: error > blocked > violated > satisfied.
+Whole-rule input and prerequisite failures take precedence over occurrence
+evaluation. With usable inputs and prerequisites, a rule over zero records or
+zero selected occurrences returns satisfied with `findings: []`. All BAR rules
+and the combined FOO R rule are vacuously satisfied in the base sample. A
 satisfied empty preservation comparison also has `findings: []`. `causes` is a
 duplicate-free list of blocking prerequisite rule IDs or failed/missing input
 IDs, including `candidate` when appropriate. A policy violation alone has no
 causes.
 
-Emit one finding per selected relation occurrence or selected record, including
-satisfied occurrences. Each finding has `uid`, `occurrence`, `occurrenceIndex`,
-`status`, `code`, `message`, and object `evidence`. `uid` is the owning record
-for relation checks and the selected record for record checks. `occurrence`
-repeats its exact role, direction, and target; `occurrenceIndex` is its index in
-the owner's relations. For record checks, occurrence and occurrenceIndex are
-null; evidence carries every selected occurrence with its index. An indexed
-occurrence has `index`, `role`, `direction`, and `target`; graph witnesses also
-include its owning `uid`. Model checks may have no findings when satisfied;
-report each preservation difference or graph witness otherwise. For
-preservation, uid is the protected record, including when it is missing from the
-candidate. For graph-wide findings, uid may be null and evidence identifies the
-involved records and owned occurrences. `code` is a diagnostic string tag;
+Emit a finding for each evaluated leaf on each selected relation occurrence or
+record, including satisfied leaves; model leaves retain their graph or
+preservation witnesses. Add `predicatePath`, a JSON Pointer from the rule to the
+leaf, such as `/check`, `/check/all/1`, or `/select/where`. An operator result
+with no leaves uses its operator path when a diagnostic is needed. Input or
+prerequisite failures use null. Findings thus identify exactly which composed
+leaf failed. Each finding has `uid`, `occurrence`, `occurrenceIndex`,
+`predicatePath`, `status`, `code`, `message`, and object `evidence`. `uid` is
+the owning record for relation checks and the selected record for record checks.
+`occurrence` repeats its exact role, direction, and target; `occurrenceIndex` is
+its index in the owner's relations. For record checks, occurrence and
+occurrenceIndex are null; evidence carries every selected occurrence with its
+index. An indexed occurrence has `index`, `role`, `direction`, and `target`;
+graph witnesses also include its owning `uid`. Model checks may have no findings
+when satisfied; report each preservation difference or graph witness otherwise.
+For preservation, uid is the protected record, including when it is missing from
+the candidate. For graph-wide findings, uid may be null and evidence identifies
+the involved records and owned occurrences. `code` is a diagnostic string tag;
 `message` is explanatory text, not a machine-readable condition. Keep findings
 already discovered even when a later blocked or error result dominates
 aggregation.
@@ -755,7 +623,8 @@ complete candidate only when the envelope is satisfied.
       "path": ["F1a", "F1", "F0", "F2"],
       "walkedPath": ["F1a", "F1", "F0", "F2"],
       "boundary": null
-    }
+    },
+    "predicatePath": "/check/all/1"
   },
   {
     "uid": "F1a",
@@ -770,16 +639,18 @@ complete candidate only when the envelope is satisfied.
       "path": ["F1a", "F1", "F0", "F2", "F2a"],
       "walkedPath": ["F1a", "F1", "F0", "F2"],
       "boundary": "F2"
-    }
+    },
+    "predicatePath": "/check/all/1"
   }
 ]
 ```
 
-These are separate expected findings for independent additions to F1a's base
-relation list. The first walk ascends through F1 and F0, then visits closed F2
-and stops successfully. The second reaches F2 but cannot depart toward F2a
-because F1a is outside F2's subtree. An origin at F2a may reach F2b through
-closed F2 because that origin is already inside it.
+These are separate expected visibility-leaf findings from the combined R rule
+for independent additions to F1a's base relation list. The first walk ascends
+through F1 and F0, then visits closed F2 and stops successfully. The second
+reaches F2 but cannot depart toward F2a because F1a is outside F2's subtree. An
+origin at F2a may reach F2b through closed F2 because that origin is already
+inside it.
 
 ## Dependencies and blocking
 
@@ -799,19 +670,26 @@ rule-array order is not a schedule. Endpoint-path requires the exactly-one count
 rule for each endpoint selector and the forest-validity rule for its visibility
 hierarchy. Visible-target requires the forest-validity rule for its visibility
 hierarchy. The lowering rejects a missing or ambiguous prerequisite rather than
-inventing a check. Every other rule in this packet has an empty requires list. A
-violated or blocked required rule blocks the dependent rule for every
-occurrence: this is whole-rule granularity. An error prerequisite also blocks
-the dependent rule; the original execution error remains on the prerequisite.
-Thus an invalid H forest blocks every visibility and endpoint-path occurrence,
-even in an otherwise unaffected tree. A failed endpoint count on any BAR blocks
-endpoint-path on every BAR. Missing or multiple endpoints violate the count rule
-and block endpoint selection; never select an arbitrary occurrence. Check a
-rule's own input acquisition errors before dependencies, so every rule declaring
-a failed external input reports error. Missing candidate data or unusable
-required values must report cannot-evaluate findings, never satisfied by
-omission. Independent rules continue, retaining their own results. Unknown
-prerequisite IDs and dependency cycles are configuration errors.
+inventing a check. The lowering step walks every leaf under all, any, and not,
+unions their required rule IDs in traversal order, and removes duplicates; no
+Boolean branch hides a dependency. It also walks where. Other leaf kinds add no
+prerequisite. A prerequisite must be a different, unfiltered rule covering the
+same records for a count or the whole model for a forest. Its needed leaf must
+be standalone or under only all operators: a satisfied any or not does not
+establish that leaf's fact. Missing or ambiguous matches throw; keep endpoint
+counts and forest validity in separate prerequisite rules. A violated or blocked
+required rule blocks the dependent rule for every occurrence: this is whole-rule
+granularity. An error prerequisite also blocks the dependent rule; the original
+execution error remains on the prerequisite. Thus an invalid H forest blocks
+every visibility and endpoint-path occurrence, even in an otherwise unaffected
+tree. A failed endpoint count on any BAR blocks endpoint-path on every BAR.
+Missing or multiple endpoints violate the count rule and block endpoint
+selection; never select an arbitrary occurrence. Check a rule's own input
+acquisition errors before dependencies, so every rule declaring a failed
+external input reports error. Missing candidate data or unusable required values
+must report cannot-evaluate findings, never satisfied by omission. Independent
+rules continue, retaining their own results. Unknown prerequisite IDs and
+dependency cycles are configuration errors.
 
 ## Keywords
 
@@ -828,17 +706,15 @@ prerequisite IDs and dependency cycles are configuration errors.
   "to": ["target"],
   "compare": ["lt", "lte", "gt", "gte", "eq"],
   "direction": ["parent", "child"],
-  "scope": ["relation", "record", "model"],
   "status": ["satisfied", "violated", "blocked", "error"]
 }
 ```
 
 Each array above is the complete allowed value space for its field in this
 profile. Booleans are JSON booleans, not quoted strings. `compare` means <,
-<=, >, >=, and == in the displayed order. Rule `kind` is one of target-type,
+<=, >, >=, and == in the displayed order. Leaf `kind` is one of target-type,
 count, visible-target, endpoint-path, native-dag, forest-validity, preserve. The
-reserved fallback `kind: expression` can be emitted for unmatched authoring
-forms; this evaluator must report an unsupported-rule error for it. Declaration
+closed operator keys are all, any, and not; they are not kinds. Declaration
 `kind` is model, element, field, relation, view, input, or projection. Input
 `config.kind` has only external-snapshot. View `config.contract` has only
 selected-forest/v1 or origin-sensitive-visibility/v1. Input required and
@@ -873,9 +749,10 @@ envelopes.
 ]
 ```
 
-Element names are unique per model. `subject.element`, `subject.model`,
-candidate element/model, grammar `tag`, and projection `key` are names. The
-declarations index is the name→id map; every declaration has a name. Look up
+Element names are unique per model. `select.records.element`,
+`select.occurrences.element`, candidate element/model, grammar `tag`, and
+projection `key` are names. `select.model: true` refers to the bundle's model.
+The declarations index is the name→id map; every declaration has a name. Look up
 model and element names by kind and name. Look up a field by owner element ID
 and name; look up a relation by owner element ID, direction, and name.
 Projection key UID resolves separately on each record's element. Other
@@ -884,11 +761,11 @@ are declaration IDs. View, input, and projection IDs resolve in their
 corresponding named lists. Treat IDs as opaque after indexing; no parsing is
 needed to recover a name or configuration. The producer constructs deterministic
 paths, escaping percent and slash in names as %25 and %2F. An explicit check
-name keeps its identity; anonymous inline names derive from role and kind.
-Identical rule definitions with one ID merge origins; conflicting duplicate
-identities throw. Distinct rule IDs extend the rule set; replacement or
-disabling requires an explicit identity-targeted operation, which this stub does
-not supply.
+name keeps its identity; anonymous inline names derive from role and leaf kind
+or outer operator, as in R.all. Identical rule definitions with one ID merge
+origins; conflicting duplicate identities throw. Distinct rule IDs extend the
+rule set; replacement or disabling requires an explicit identity-targeted
+operation, which this stub does not supply.
 
 ## Defaults
 
@@ -1004,14 +881,15 @@ separators, and UTF-8 encoding for this packet's ASCII values.
 
 ## What is real
 
-The stub evaluates Nix declarations into native grammar, semantic metadata, flat
-rules, dependencies, and named configurations. It checks declaration identities
-and references, symbolic predicate shape, binder placement, Boolean defaults,
-rule conflicts, prerequisite selection, and keyword values. It is not a complete
-schema checker; ordinary collection role strings and many operand types remain
-unchecked during authoring. No backend evaluator, field decoder, default
-materializer, provider runner, graph validation, result generator, or candidate
-publication runs here. The JSON input and result samples specify the backend
-boundary; all semantic verdicts are handwritten expectations. `transcript.txt`
-is evidence only that the stub's four proofs ran and that one invalid policy
-keyword threw.
+The stub evaluates Nix declarations into native grammar, semantic metadata,
+selectors and Boolean checks over named leaves, dependencies, and
+configurations. It checks declaration identities and references, symbolic
+predicate shape, binder placement, Boolean defaults, rule conflicts,
+prerequisite selection, and keyword values. It is not a complete schema checker;
+ordinary collection role strings and many operand types remain unchecked during
+authoring. No backend evaluator, field decoder, default materializer, provider
+runner, graph validation, result generator, or candidate publication runs here.
+The JSON input and result samples specify the backend boundary; all semantic
+verdicts are handwritten expectations. `transcript.txt` records the four proofs,
+an invalid policy keyword throw, and the combined R check's two lowered leaves.
+It supplies no runtime semantic verdicts.

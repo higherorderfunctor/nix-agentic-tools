@@ -127,207 +127,225 @@
     ],
     "rules": [
       {
+        "check": {
+          "kind": "target-type",
+          "targetElement": "model:reference/element:FOO"
+        },
         "id": "model:reference/element:FOO/relation:parent:H/check:H.target-type",
         "inputs": ["candidate"],
-        "kind": "target-type",
         "name": "H.target-type",
         "origins": [
           "declaration:model:reference/element:FOO/relation:parent:H"
         ],
         "requires": [],
-        "scope": "relation",
-        "subject": {
-          "direction": "parent",
-          "element": "FOO",
-          "role": "H"
-        },
-        "targetElement": "model:reference/element:FOO"
+        "select": {
+          "occurrences": {
+            "direction": "parent",
+            "element": "FOO",
+            "role": "H"
+          }
+        }
       },
       {
-        "id": "model:reference/element:FOO/relation:parent:R/check:R.target-type",
-        "inputs": ["candidate"],
-        "kind": "target-type",
-        "name": "R.target-type",
-        "origins": [
-          "declaration:model:reference/element:FOO/relation:parent:R"
-        ],
-        "requires": [],
-        "scope": "relation",
-        "subject": {
-          "direction": "parent",
-          "element": "FOO",
-          "role": "R"
+        "check": {
+          "all": [
+            {
+              "kind": "target-type",
+              "targetElement": "model:reference/element:FOO"
+            },
+            {
+              "from": "owner",
+              "kind": "visible-target",
+              "to": "target",
+              "view": "model:reference/view:H-visibility"
+            }
+          ]
         },
-        "targetElement": "model:reference/element:FOO"
-      },
-      {
-        "compare": "lte",
-        "id": "model:reference/element:FOO/check:one-H-parent",
+        "id": "model:reference/element:FOO/relation:parent:R/check:R.all",
         "inputs": ["candidate"],
-        "kind": "count",
-        "name": "one-H-parent",
-        "origins": ["declaration:model:reference/element:FOO"],
-        "relation": {
-          "direction": "parent",
-          "role": "H"
-        },
-        "requires": [],
-        "scope": "record",
-        "subject": {
-          "element": "FOO"
-        },
-        "value": 1
-      },
-      {
-        "from": "owner",
-        "id": "model:reference/element:FOO/relation:parent:R/check:visible-R",
-        "inputs": ["candidate"],
-        "kind": "visible-target",
-        "name": "visible-R",
+        "name": "R.all",
         "origins": [
           "declaration:model:reference/element:FOO/relation:parent:R"
         ],
         "requires": ["model:reference/check:H-forest"],
-        "scope": "relation",
-        "subject": {
-          "direction": "parent",
-          "element": "FOO",
-          "role": "R"
-        },
-        "to": "target",
-        "view": "model:reference/view:H-visibility"
+        "select": {
+          "occurrences": {
+            "direction": "parent",
+            "element": "FOO",
+            "role": "R"
+          }
+        }
       },
       {
+        "check": {
+          "compare": "lte",
+          "kind": "count",
+          "relation": {
+            "direction": "parent",
+            "role": "H"
+          },
+          "value": 1
+        },
+        "id": "model:reference/element:FOO/check:one-H-parent",
+        "inputs": ["candidate"],
+        "name": "one-H-parent",
+        "origins": ["declaration:model:reference/element:FOO"],
+        "requires": [],
+        "select": {
+          "records": {
+            "element": "FOO"
+          }
+        }
+      },
+      {
+        "check": {
+          "kind": "target-type",
+          "targetElement": "model:reference/element:FOO"
+        },
         "id": "model:reference/element:BAR/relation:parent:P/check:P.target-type",
         "inputs": ["candidate"],
-        "kind": "target-type",
         "name": "P.target-type",
         "origins": [
           "declaration:model:reference/element:BAR/relation:parent:P"
         ],
         "requires": [],
-        "scope": "relation",
-        "subject": {
-          "direction": "parent",
-          "element": "BAR",
-          "role": "P"
-        },
-        "targetElement": "model:reference/element:FOO"
+        "select": {
+          "occurrences": {
+            "direction": "parent",
+            "element": "BAR",
+            "role": "P"
+          }
+        }
       },
       {
+        "check": {
+          "kind": "target-type",
+          "targetElement": "model:reference/element:FOO"
+        },
         "id": "model:reference/element:BAR/relation:child:Q/check:Q.target-type",
         "inputs": ["candidate"],
-        "kind": "target-type",
         "name": "Q.target-type",
         "origins": ["declaration:model:reference/element:BAR/relation:child:Q"],
         "requires": [],
-        "scope": "relation",
-        "subject": {
-          "direction": "child",
-          "element": "BAR",
-          "role": "Q"
-        },
-        "targetElement": "model:reference/element:FOO"
+        "select": {
+          "occurrences": {
+            "direction": "child",
+            "element": "BAR",
+            "role": "Q"
+          }
+        }
       },
       {
-        "compare": "eq",
+        "check": {
+          "compare": "eq",
+          "kind": "count",
+          "relation": {
+            "direction": "parent",
+            "role": "P"
+          },
+          "value": 1
+        },
         "id": "model:reference/element:BAR/check:one-P",
         "inputs": ["candidate"],
-        "kind": "count",
         "name": "one-P",
         "origins": ["declaration:model:reference/element:BAR"],
-        "relation": {
-          "direction": "parent",
-          "role": "P"
-        },
         "requires": [],
-        "scope": "record",
-        "subject": {
-          "element": "BAR"
-        },
-        "value": 1
+        "select": {
+          "records": {
+            "element": "BAR"
+          }
+        }
       },
       {
-        "compare": "eq",
+        "check": {
+          "compare": "eq",
+          "kind": "count",
+          "relation": {
+            "direction": "child",
+            "role": "Q"
+          },
+          "value": 1
+        },
         "id": "model:reference/element:BAR/check:one-Q",
         "inputs": ["candidate"],
-        "kind": "count",
         "name": "one-Q",
         "origins": ["declaration:model:reference/element:BAR"],
-        "relation": {
-          "direction": "child",
-          "role": "Q"
-        },
         "requires": [],
-        "scope": "record",
-        "subject": {
-          "element": "BAR"
-        },
-        "value": 1
+        "select": {
+          "records": {
+            "element": "BAR"
+          }
+        }
       },
       {
+        "check": {
+          "kind": "endpoint-path",
+          "lower": {
+            "direction": "child",
+            "role": "Q"
+          },
+          "requireSingleton": true,
+          "upper": {
+            "direction": "parent",
+            "role": "P"
+          },
+          "view": "model:reference/view:H-visibility"
+        },
         "id": "model:reference/element:BAR/check:endpoint-path",
         "inputs": ["candidate"],
-        "kind": "endpoint-path",
-        "lower": {
-          "direction": "child",
-          "role": "Q"
-        },
         "name": "endpoint-path",
         "origins": ["declaration:model:reference/element:BAR"],
-        "requireSingleton": true,
         "requires": [
           "model:reference/element:BAR/check:one-P",
           "model:reference/element:BAR/check:one-Q",
           "model:reference/check:H-forest"
         ],
-        "scope": "record",
-        "subject": {
-          "element": "BAR"
-        },
-        "upper": {
-          "direction": "parent",
-          "role": "P"
-        },
-        "view": "model:reference/view:H-visibility"
-      },
-      {
-        "id": "model:reference/check:native-dag",
-        "inputs": ["candidate"],
-        "kind": "native-dag",
-        "name": "native-dag",
-        "origins": ["declaration:model:reference"],
-        "requires": [],
-        "scope": "model",
-        "subject": {
-          "model": "reference"
+        "select": {
+          "records": {
+            "element": "BAR"
+          }
         }
       },
       {
+        "check": {
+          "kind": "native-dag"
+        },
+        "id": "model:reference/check:native-dag",
+        "inputs": ["candidate"],
+        "name": "native-dag",
+        "origins": ["declaration:model:reference"],
+        "requires": [],
+        "select": {
+          "model": true
+        }
+      },
+      {
+        "check": {
+          "kind": "forest-validity",
+          "view": "model:reference/view:H"
+        },
         "id": "model:reference/check:H-forest",
         "inputs": ["candidate"],
-        "kind": "forest-validity",
         "name": "H-forest",
         "origins": ["declaration:model:reference"],
         "requires": [],
-        "scope": "model",
-        "subject": {
-          "model": "reference"
-        },
-        "view": "model:reference/view:H"
+        "select": {
+          "model": true
+        }
       },
       {
-        "baseline": "model:reference/input:baseline",
+        "check": {
+          "baseline": "model:reference/input:baseline",
+          "kind": "preserve",
+          "projection": "model:reference/projection:modeled-record"
+        },
         "id": "model:reference/check:baseline-preserved",
         "inputs": ["candidate", "model:reference/input:baseline"],
-        "kind": "preserve",
         "name": "baseline-preserved",
         "origins": ["declaration:model:reference"],
-        "projection": "model:reference/projection:modeled-record",
         "requires": [],
-        "scope": "model",
-        "subject": {
-          "model": "reference"
+        "select": {
+          "model": true
         }
       }
     ],
