@@ -240,6 +240,10 @@
                 }/.kiro/steering/<legacy-owned-file>"
                 (probe ["ai" "kiro" "context"] {text = "probe";} {}))
               // {
+                # NOT an exemption: the gate verifies this claim in BOTH
+                # directions, so a body that DOES vary with the declaration is
+                # an error here, exactly as a passing exempted writer is.
+                declarationIndependent = "This writer deletes what a PRIOR generation's manifest recorded. mkRetirementScript takes no files argument (lib/ai/materialize.nix:448 for HM, :506-524 for devenv), so its body cannot vary with the current declaration by construction.";
                 role = "Enable-independent legacy-copy retirement; current context and rules use declarative paths.";
               })
           ];
@@ -482,11 +486,12 @@
         && writer.probe.option != []
         && writer.probe.nonEmpty != writer.probe.empty
       ))
+    && (!(writer ? declarationIndependent) || nonBlank writer.declarationIndependent)
     && (!(writer ? exemption) || (nonBlank (writer.exemption.reason or "") && nonBlank (writer.exemption.evidence or "")));
   expectedKeys = lib.concatMap (surface: lib.concatMap (ecosystem: map (mode: "${surface}/${ecosystem}/${mode}") modes) ecosystems) surfaces;
   validateRows = rows:
     assert lib.assertMsg (lib.all (row: lib.all (field: builtins.hasAttr field row) ["ecosystem" "mode" "surface"]) rows) "ai-delivery: every row must declare surface, ecosystem, and mode";
-    assert lib.assertMsg (lib.all (row: lib.all validWriter (writersOf row)) rows) "ai-delivery: incomplete or invalid writer (required fields, primitive, reason, reverifyCommand, probe, or exemption)";
+    assert lib.assertMsg (lib.all (row: lib.all validWriter (writersOf row)) rows) "ai-delivery: incomplete or invalid writer (required fields, primitive, reason, reverifyCommand, probe, declarationIndependent, or exemption)";
     assert lib.assertMsg (lib.sort builtins.lessThan (map key rows) == lib.sort builtins.lessThan expectedKeys) "ai-delivery: expected exactly one row for every surface/ecosystem in BOTH hm and devenv (use notApplicable with a reason for gaps)"; rows;
   rows = validateRows (flatten definitions);
 in
