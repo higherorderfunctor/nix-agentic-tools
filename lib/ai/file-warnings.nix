@@ -1,6 +1,14 @@
 # Observe the final devenv sinks after its files tasks. The private ledger keeps
 # retired AI paths visible even after upstream overwrites files.json; it never
 # grants deletion ownership and survives a runtime being disabled.
+#
+# Provenance is EXACT, never a config-directory prefix. `.codex/` and `.github/`
+# are shared namespaces: a consumer may declare `files.".codex/notes.md"` of
+# their own, and classifying it by prefix made this module report a retention
+# warning naming an `ai.*` option that never wrote the file. The managed set is
+# therefore the runtime's own file registry, the shared AGENTS.md registry, and
+# the literal targets the delivery policy declares — plus, for the templated
+# `<name>` targets, only the directory stem the policy itself claims.
 {
   config,
   lib,
@@ -12,26 +20,11 @@
   policy = import ../../config/ai-delivery.nix {inherit lib;};
   runtimes = import ./runtimes.nix;
   inherit (config) ai;
-  roots = builtins.listToAttrs (lib.concatMap (runtime: let
-    cfg = ai.${runtime} or {};
-  in
-    lib.optionals (cfg.enable or false) (map (name: {
-        inherit name;
-        value = "ai.${runtime}.files (including generated ai.${runtime} configuration)";
-      })
-      ([
-          (
-            if runtime == "codex"
-            then ".codex"
-            else cfg.configDir or ".${runtime}"
-          )
-        ]
-        ++ lib.optional (runtime == "codex") ".agents/skills"
-        ++ lib.optionals (runtime == "copilot") (map (suffix: "${cfg.projectDir or ".github"}/${suffix}") ["agents" "copilot-instructions.md" "instructions" "skills"])
-        ++ lib.optional (runtime == "claude") ".mcp.json"
-        ++ lib.optional (builtins.elem runtime ["codex" "kiro"]) (cfg.context.filename or "AGENTS.md"))))
-  runtimes);
-  fileSpecs = lib.concatMap (runtime: let
+  # Every devenv writer the policy declares for this runtime, with the policy's
+  # default directories rebased onto the evaluated ones so a custom configDir
+  # keeps its source option. additionalWriters count: a second document under
+  # the same row (Kimchi's harness/settings.json) is a managed path too.
+  policyTargets = runtime: let
     cfg = ai.${runtime} or {};
     # Codex configDir is HOME-relative; its project discovery path is fixed.
     prefix =
@@ -39,53 +32,67 @@
       then ".codex"
       else cfg.configDir or ".${runtime}";
     projectPrefix = cfg.projectDir or ".github";
-    matches = name:
-      builtins.hasAttr name (cfg.files or {})
-      || lib.hasPrefix "${prefix}/" name
-      || (runtime == "codex" && lib.hasPrefix ".agents/skills/" name)
-      || (runtime == "copilot" && lib.hasPrefix "${projectPrefix}/" name)
-      || (builtins.elem runtime ["codex" "kiro"] && builtins.hasAttr name config.ai.internal.files)
-      || (runtime == "claude" && name == ".mcp.json");
-    origins = name: let
-      rows = lib.filter (row:
-        row.ecosystem
-        == runtime
-        && row.mode == "devenv"
-        && row.target != null
-        && lib.hasPrefix "$DEVENV_ROOT/" row.target)
-      policy.rows;
-      # Policy templates use default directories. Rebase those prefixes onto
-      # the evaluated paths so a custom configDir keeps its source option.
-      related = lib.filter (row: let
-        defaultPrefix = options.ai.${runtime}.configDir.default or ".${runtime}";
-        defaultProjectPrefix = options.ai.${runtime}.projectDir.default or ".github";
-        original = lib.removePrefix "$DEVENV_ROOT/" row.target;
-        target =
-          if lib.hasPrefix "${defaultPrefix}/" original
-          then prefix + lib.removePrefix defaultPrefix original
-          else if runtime == "copilot" && lib.hasPrefix "${defaultProjectPrefix}/" original
-          then projectPrefix + lib.removePrefix defaultProjectPrefix original
-          else if original == "AGENTS.md"
-          then cfg.context.filename or original
-          else original;
-        stem = builtins.head (lib.splitString "<" target);
-      in
-        name == target || (lib.hasInfix "<" target && lib.hasPrefix stem name))
-      rows;
-    in
-      lib.concatStringsSep ", " (lib.unique (map lib.showOption (lib.concatMap (row: row.inputOptions) related))
-        ++ ["ai.${runtime}.files.${builtins.toJSON name}"]);
+    defaultPrefix = options.ai.${runtime}.configDir.default or ".${runtime}";
+    defaultProjectPrefix = options.ai.${runtime}.projectDir.default or ".github";
+    rebase = original:
+      if lib.hasPrefix "${defaultPrefix}/" original
+      then prefix + lib.removePrefix defaultPrefix original
+      else if runtime == "copilot" && lib.hasPrefix "${defaultProjectPrefix}/" original
+      then projectPrefix + lib.removePrefix defaultProjectPrefix original
+      else if original == "AGENTS.md"
+      then cfg.context.filename or original
+      else original;
   in
-    lib.optionals (cfg.enable or false) (lib.mapAttrsToList (name: file: {
-      inherit name;
-      value = {
-        mode = file.copyMode or "symlink";
-        option = origins name;
-        source = file.file or file.source or null;
-      };
-    }) (lib.filterAttrs (name: _: matches name) config.files)))
-  runtimes;
-  desired = builtins.listToAttrs fileSpecs;
+    map (writer: {
+      # additionalWriters carry their own inputs or none; only primary rows are
+      # stamped with the surface's shared list.
+      inputOptions = writer.inputOptions or [];
+      target = rebase (lib.removePrefix "$DEVENV_ROOT/" writer.target);
+    })
+    (lib.filter (writer:
+      writer.ecosystem
+      == runtime
+      && writer.mode == "devenv"
+      && writer.target != null
+      && lib.hasPrefix "$DEVENV_ROOT/" writer.target)
+    (lib.concatMap policy.writersOf policy.rows));
+  ownedFor = runtime: let
+    cfg = ai.${runtime} or {};
+    targets = policyTargets runtime;
+    templated = entry: lib.hasInfix "<" entry.target;
+    # A `<name>` / `<leaf>` template names a directory the policy claims for
+    # generated per-entry artifacts, so its stem matches as a prefix. A whole
+    # config directory never does.
+    matching = name:
+      lib.filter (entry:
+        entry.target
+        == name
+        || (templated entry
+          && lib.hasPrefix (builtins.head (lib.splitString "<" entry.target)) name))
+      targets;
+    option = name:
+      lib.concatStringsSep ", " (lib.unique (map lib.showOption (lib.concatMap (entry: entry.inputOptions) (matching name)))
+        ++ ["ai.${runtime}.files.${builtins.toJSON name}"]);
+    names =
+      builtins.attrNames (cfg.files or {})
+      ++ lib.optionals (builtins.elem runtime ["codex" "kiro"]) (builtins.attrNames config.ai.internal.files)
+      ++ map (entry: entry.target) (lib.filter (entry: !(templated entry)) targets);
+  in
+    lib.optionals (cfg.enable or false) (map (name: {
+        inherit name;
+        value = option name;
+      })
+      (lib.unique names));
+  # Name -> the consumer options that write it. Shared with the snapshot task,
+  # so the ledger bootstrap and the delivery report agree on what is managed.
+  owned = builtins.listToAttrs (lib.concatMap ownedFor runtimes);
+  desired =
+    lib.mapAttrs (name: file: {
+      mode = file.copyMode or "symlink";
+      option = owned.${name};
+      source = file.file or file.source or null;
+    })
+    (lib.filterAttrs (name: _: builtins.hasAttr name owned) config.files);
 in {
   config = lib.optionalAttrs isDevenv {
     tasks."ai:delivery:observe-retired" = {
@@ -96,7 +103,7 @@ in {
         shopt -s inherit_errexit 2>/dev/null || :
         ${pkgs.python3}/bin/python ${./file-warnings.py} snapshot \
           ${lib.escapeShellArg config.devenv.state} \
-          ${pkgs.writeText "ai-delivery-roots.json" (builtins.toJSON roots)}
+          ${pkgs.writeText "ai-delivery-owned.json" (builtins.toJSON owned)}
       '';
     };
     # Emitted as a VALUE-level conditional, never a structural one: deciding
@@ -105,11 +112,11 @@ in {
     # recursion. A project with no ai.* runtime declared gets the empty string,
     # so `enterShell == ""` still holds for a consumer that never opted in.
     #
-    # Residual, accepted: `roots` is built from `cfg.enable`, so disabling the
+    # Residual, accepted: `owned` is built from `cfg.enable`, so disabling the
     # last runtime also stops the shell-entry REPORT. The ledger task below is
     # unconditional and keeps recording, so nothing is lost — it is surfaced
     # again as soon as any runtime is enabled.
-    enterShell = lib.optionalString (roots != {}) ''
+    enterShell = lib.optionalString (owned != {}) ''
       ${pkgs.python3}/bin/python ${./file-warnings.py} \
         ${lib.escapeShellArg config.devenv.root} \
         ${lib.escapeShellArg config.devenv.state} \
