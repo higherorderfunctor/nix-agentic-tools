@@ -7,7 +7,7 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm hasLiteral mkTest mkWrapperGrepTest;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvHookTaskExec dvTaskExec hmHookPruneScript hmHookWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody renderKiroSecrets renderedMcpJson soleFork soleSame;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvHookTaskExec dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookWriteScript hmMcpPruneScript hmMcpWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody renderKiroSecrets renderedMcpJson soleFork soleSame;
 in {
   checks = {
     module-kiro-wrapper-prepend-both = mkTest "kiro-wrapper-prepend-both" (
@@ -311,7 +311,7 @@ in {
     # Kiro HM<->devenv parity: the SAME config yields the SAME rendered
     # mcp.json template on both backends (identical content -> identical
     # store path), each delivered as a REAL file (HM activation / devenv
-    # enterShell anchored to $DEVENV_ROOT). Replaces the old home.file
+    # task anchored to $DEVENV_ROOT). Replaces the old home.file
     # symlink parity now that delivery is uniform real-file.
     module-kiro-hm-devenv-mcp-json-parity = mkTest "kiro-hm-devenv-mcp-json-parity" (
       let
@@ -329,7 +329,7 @@ in {
           };
         };
         hmScript = (evalHm cfg).config.home.activation.kiroMcpJson.text or "";
-        dvScript = (evalDevenv cfg).config.enterShell or "";
+        dvScript = dvMcpTaskExec (evalDevenv cfg);
         # Same content -> same store path on both backends. Strip the
         # string context: `lib.hasInfix` compiles the needle into a
         # `builtins.match` regex, which rejects a store-path context.
@@ -362,9 +362,10 @@ in {
         script = result.config.home.activation.kiroMcpJson.text or "";
       in
         !(result.config.home.file ? ".kiro/settings/mcp.json")
-        && lib.hasInfix ''TARGET="$HOME/.kiro/settings/mcp.json"'' script
+        && lib.hasInfix ''NAT_MAT_TARGET_DIR="$HOME/.kiro/settings"'' script
+        && lib.hasInfix ''TARGET="$NAT_MAT_TARGET_DIR/mcp.json"'' script
         && lib.hasInfix "/bin/envsubst '\${KIRO_MCP_JIRA_URL}'" script
-        && lib.hasInfix "chmod 0400" script
+        && hasLiteral ''nat_mat_write mcp.json "$nat_mat_prev" 0400'' script
         # The secret read must be a BARE assignment whose status errexit can
         # see, then a separate `export`. `export VAR="$(cmd)"` returns export's
         # status (always 0), so a failed read is silent and envsubst writes
@@ -380,7 +381,7 @@ in {
         # unscoped strict-mode header leaks into later entries and HM's own
         # code, and the exported SECRET would stay live for the rest of
         # activation.
-        && lib.hasInfix "(\n  set -euETo pipefail" script
+        && lib.hasPrefix "(\nset -euETo pipefail" script
         && lib.hasSuffix ")\n" script
     );
 
@@ -399,7 +400,7 @@ in {
         };
         script = result.config.home.activation.kiroMcpJson.text or "";
       in
-        lib.hasInfix "chmod 0444" script
+        hasLiteral ''nat_mat_write mcp.json "$nat_mat_prev" 0444'' script
         && !(lib.hasInfix "envsubst" script)
         && !(result.config.home.file ? ".kiro/settings/mcp.json")
     );
@@ -422,8 +423,276 @@ in {
         script = result.config.home.activation.kiroMcpJson.text or "";
       in
         lib.hasInfix "'.[0] * .[1]'" script
-        && lib.hasInfix "chmod 0644" script
+        && hasLiteral ''nat_mat_write mcp.json "$nat_mat_prev" 0644'' script
     );
+
+    # The N→0 regression: both backends keep their manifest writer and prune
+    # when the last server disappears, in either write mode. Disabled modules
+    # remain inert. Non-empty pools are positive controls for the accessors.
+    module-kiro-mcp-empty-pool-still-prunes = mkTest "kiro-mcp-empty-pool-still-prunes" (
+      builtins.all (mode: let
+        cfg = servers: {
+          ai.kiro = {
+            enable = true;
+            mcpServers = servers;
+            mcpWriteMode = mode;
+          };
+        };
+        full = cfg {
+          demo = {
+            type = "http";
+            url = "https://example.invalid/mcp";
+          };
+        };
+        hmFull = evalHm full;
+        hmEmpty = evalHm (cfg {});
+        dvFull = evalDevenv full;
+        dvEmpty = evalDevenv (cfg {});
+        writes = [
+          (hmMcpWriteScript hmFull)
+          (hmMcpWriteScript hmEmpty)
+          (dvMcpTaskExec dvFull)
+          (dvMcpTaskExec dvEmpty)
+        ];
+        prunes = [
+          (hmMcpPruneScript hmEmpty)
+          (dvMcpTaskExec dvEmpty)
+        ];
+        task = dvEmpty.config.tasks."ai:kiro:materialize-mcp" or {};
+      in
+        builtins.all (lib.hasInfix "NAT_MAT_NEW_MANIFEST") writes
+        && builtins.all (s:
+          lib.hasInfix "$NAT_MAT_MANIFEST" s
+          && lib.hasInfix "rm -f" s
+          && !(hasLiteral "mcp.json) continue" s))
+        prunes
+        && hasLiteral "mcp.json) continue" (hmMcpPruneScript hmFull)
+        && lib.hasInfix "kiro-mcp.json" (hmMcpWriteScript hmFull)
+        && lib.hasInfix "kiro-mcp.json" (dvMcpTaskExec dvFull)
+        && !(lib.hasInfix "kiro-mcp.json" (hmMcpWriteScript hmEmpty))
+        && !(lib.hasInfix "kiro-mcp.json" (dvMcpTaskExec dvEmpty))
+        && lib.elem "sops-nix" hmFull.config.home.activation.kiroMcpJson.after
+        && lib.elem "checkLinkTargets" hmEmpty.config.home.activation."materialize-kiro-settings-prune".before
+        && lib.elem "devenv:enterShell" (task.before or [])
+        && lib.elem "devenv:files:cleanup" (task.after or [])
+        && hmMcpWriteScript (evalHm {ai.kiro.enable = false;}) == ""
+        && dvMcpTaskExec (evalDevenv {ai.kiro.enable = false;}) == "")
+      ["merge" "overwrite"]
+    );
+
+    module-kiro-materializer-entry-shapes = mkTest "kiro-materializer-entry-shapes" (
+      let
+        mat = import ../../../lib/ai/materialize.nix {inherit lib;};
+        entry = {
+          source = null;
+          strategy = "copy";
+          text = "static";
+        };
+        accepts = e:
+          builtins.all (a: a.assertion) (mat.mkEntryAssertions {
+            app = "kiro";
+            files."mcp.json" = e;
+            surface = "mcp";
+          });
+        rendered =
+          entry
+          // {
+            text = null;
+            renderCommand = "printf runtime";
+          };
+        typed =
+          (lib.evalModules {
+            modules = [
+              {
+                options.entry = lib.mkOption {type = mat.fileEntryType;};
+                config.entry = rendered;
+              }
+            ];
+          }).config.entry;
+      in
+        accepts entry
+        && accepts rendered
+        && accepts (rendered // {mode = "0400";})
+        && typed.mode == "0444"
+        && typed.renderCommand == "printf runtime"
+        && !(accepts (entry // {text = null;}))
+        && !(accepts (entry // {renderCommand = "printf duplicate";}))
+        && !(accepts (rendered // {strategy = "symlink";}))
+        && !(accepts (rendered // {mode = "0999";}))
+    );
+
+    # Execute the actual module writers against isolated roots. No Kiro
+    # package build or invocation: only shell scripts, JSON templates and the
+    # materializer's small tool closure. Replay HM prune then write.
+    module-kiro-mcp-materialize-runtime = let
+      mat = import ../../../lib/ai/materialize.nix {inherit lib;};
+      plainUrl = "https://example.invalid/mcp";
+      # Exercise the new generic renderer with output BEFORE failure. A
+      # direct pipe to nat_mat_write would publish these partial bytes.
+      failedRenderer =
+        pkgs.writeShellScript "kiro-mcp-failed-renderer"
+        (mat.mkDevenvTask {
+          files."mcp.json" = {
+            renderCommand = ''
+              printf 'partial output'
+              false
+              printf 'unreachable'
+            '';
+            strategy = "copy";
+          };
+          hasFiles = false;
+          stateSlug = "kiro-settings";
+          targetDir = ".kiro/settings";
+          inherit (pkgs) coreutils diffutils flock gnugrep;
+        }).exec;
+      cfg = mode: servers: {
+        ai.kiro = {
+          enable = true;
+          mcpServers = servers;
+          mcpWriteMode = mode;
+        };
+      };
+      server = url: {
+        demo = {
+          type = "http";
+          inherit url;
+        };
+      };
+      mkScript = backend: config: let
+        body =
+          if backend == "hm"
+          then let ev = evalHm config; in hmMcpPruneScript ev + "\n" + hmMcpWriteScript ev
+          else dvMcpTaskExec (evalDevenv config);
+      in
+        pkgs.writeShellScript "kiro-mcp-${backend}" ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          ${body}
+        '';
+      runBackend = backend: let
+        script = mode: servers: mkScript backend (cfg mode servers);
+        empty = script "overwrite" {};
+        emptyMerge = script "merge" {};
+        plain = script "overwrite" (server plainUrl);
+        merge = script "merge" (server plainUrl);
+        secret = script "overwrite" (server {file = "credential-url";});
+        secretMerge = script "merge" (server {file = "credential-url";});
+        failedHelper = script "overwrite" (server {helper = "./failed-helper";});
+      in ''
+        export HOME="$TMPDIR/${backend}-home"
+        export XDG_STATE_HOME="$TMPDIR/${backend}-state"
+        export DEVENV_ROOT="$HOME"
+        export DEVENV_STATE="$XDG_STATE_HOME"
+        mkdir -p "$HOME/.kiro/settings" "$HOME/subdir"
+        cd "$HOME"
+        target="$HOME/.kiro/settings/mcp.json"
+        ledger="$XDG_STATE_HOME/nix-agentic-tools/materialize"
+        manifest="$ledger/kiro-settings.manifest"
+        backups="$ledger/kiro-settings.bak"
+
+        # Empty-first must preserve a foreign file and its neighbors.
+        printf '{"mcpServers":{"hand":{"url":"https://hand.invalid"}}}\n' > "$target"
+        cp "$target" original
+        printf 'neighbor\n' > "$HOME/.kiro/settings/unmanaged.json"
+        ${empty}
+        cmp original "$target" || fail '${backend}: empty pool clobbered an unmanaged file'
+        [ ! -s "$manifest" ] || fail '${backend}: empty pool claimed an unmanaged file'
+
+        # Adoption backs up, and the manifest hashes the rendered bytes.
+        ${plain}
+        [ ! -L "$target" ] || fail '${backend}: managed file is a symlink'
+        [ "$(stat -c %a "$target")" = 444 ] || fail '${backend}: default mode'
+        cmp original "$backups"/mcp.json.* || fail '${backend}: adoption backup'
+        [ "$(cut -f 2 "$manifest")" = "$(sha256sum "$target" | cut -d ' ' -f 1)" ] \
+          || fail '${backend}: manifest did not hash actual content'
+        touch -t 200001010000 "$target"
+        before_mtime="$(stat -c %Y "$target")"
+        ${plain}
+        [ "$(stat -c %Y "$target")" = "$before_mtime" ] || fail '${backend}: identical content changed mtime'
+
+        # Identical rendered bytes must still tighten and loosen permissions.
+        printf '%s' '${plainUrl}' > credential-url
+        ${secret}
+        [ "$(stat -c %a "$target")" = 400 ] || fail '${backend}: unchanged secret mode'
+        ${plain}
+        [ "$(stat -c %a "$target")" = 444 ] || fail '${backend}: unchanged plain mode'
+
+        # A failing or empty credential must leave target AND manifest intact.
+        cp "$target" before-target
+        cp "$manifest" before-manifest
+        rm credential-url
+        expect_failure ${secret}
+        : > credential-url
+        expect_failure ${secret}
+        cat > failed-helper <<'HELPER'
+        #!${pkgs.runtimeShell}
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        printf 'partial-secret'
+        false
+        HELPER
+        chmod +x failed-helper
+        expect_failure ${failedHelper}
+        expect_failure ${failedRenderer}
+
+        # Emptying the pool removes only the owned file. A later foreign file
+        # with that name is preserved because the manifest has been drained.
+        ${empty}
+        [ ! -e "$target" ] || fail '${backend}: N to zero did not prune'
+        [ ! -s "$manifest" ] || fail '${backend}: manifest was not drained'
+        cp original "$target"
+        ${empty}
+        cmp original "$target" || fail '${backend}: drained ownership still clobbered'
+
+        # Preserve existing deep-merge behavior, including hand-added servers.
+        ${merge}
+        ${pkgs.jq}/bin/jq -e '.mcpServers | has("hand") and has("demo")' "$target" > /dev/null
+        [ "$(stat -c %a "$target")" = 644 ] || fail '${backend}: merge mode'
+        printf '%s' '${plainUrl}' > credential-url
+        ${secretMerge}
+        [ "$(stat -c %a "$target")" = 600 ] || fail '${backend}: secret merge mode'
+        ${pkgs.jq}/bin/jq -e '.mcpServers | has("hand") and has("demo")' "$target" > /dev/null
+
+        # User edits are backed up before an owned file is pruned in merge mode.
+        printf '{"edited":true}\n' > "$target"
+        cp "$target" edited
+        ${emptyMerge}
+        [ ! -e "$target" ] || fail '${backend}: empty merge pool did not prune'
+        found_backup=0
+        for backup in "$backups"/mcp.json.*; do
+          if cmp -s edited "$backup"; then found_backup=1; fi
+        done
+        [ "$found_backup" = 1 ] || fail '${backend}: edited content was not backed up'
+        [ "$(cat "$HOME/.kiro/settings/unmanaged.json")" = neighbor ] || fail '${backend}: neighbor changed'
+
+        # Non-regular collisions must fail without falsely claiming ownership.
+        mkdir "$target"
+        cp "$manifest" before-manifest
+        if ${plain}; then fail '${backend}: directory collision succeeded'; fi
+        [ -d "$target" ] || fail '${backend}: directory collision was removed'
+        cmp before-manifest "$manifest" || fail '${backend}: directory was claimed'
+        rmdir "$target"
+
+        # Devenv task execution must anchor writes even from a subdirectory.
+        cd "$HOME/subdir"
+        ${plain}
+        [ -f "$target" ] || fail '${backend}: root anchoring failed'
+        [ ! -e .kiro ] || fail '${backend}: wrote under caller cwd'
+      '';
+    in
+      pkgs.runCommand "module-test-kiro-mcp-materialize-runtime" {} ''
+        fail() { echo "FAIL: kiro-mcp-materialize-runtime: $1" >&2; exit 1; }
+        expect_failure() {
+          if "$1"; then fail 'credential failure unexpectedly succeeded'; fi
+          cmp before-target "$target" || fail 'failed render replaced target'
+          cmp before-manifest "$manifest" || fail 'failed render advanced manifest'
+        for temporary in "$HOME/.kiro/settings/".*.nat-tmp.*; do
+          [ ! -e "$temporary" ] || fail 'failed render left a credential temporary file'
+        done
+        }
+        ${lib.concatMapStrings runBackend ["hm" "devenv"]}
+        echo 'PASS: kiro-mcp-materialize-runtime' > "$out"
+      '';
 
     # ── Task 5 (A4): Kiro HM/devenv fanout absorption ────────────
 
@@ -1469,7 +1738,8 @@ in {
       in
         script
         != ""
-        && lib.hasInfix ".kiro/settings/mcp.json" script
+        && lib.hasInfix ".kiro/settings" script
+        && lib.hasInfix "/mcp.json" script
         && !(result.config.home.file ? ".kiro/settings/mcp.json")
     );
 
@@ -2450,7 +2720,7 @@ in {
         echo "PASS: kiro-hooks-materialize-runtime" > $out
       '';
 
-    # Devenv: mcp.json write — real-file enterShell delivery (no files.*
+    # Devenv: mcp.json write — real-file task delivery (no files.*
     # symlink), anchored to $DEVENV_ROOT.
     module-kiro-devenv-writes-mcp-json = mkTest "kiro-devenv-writes-mcp-json" (
       let
@@ -2462,9 +2732,10 @@ in {
             command = "hello";
           };
         };
-        script = result.config.enterShell or "";
+        script = dvMcpTaskExec result;
       in
-        lib.hasInfix ".kiro/settings/mcp.json" script
+        lib.hasInfix ".kiro/settings" script
+        && lib.hasInfix "/mcp.json" script
         && lib.hasInfix ''cd "$DEVENV_ROOT"'' script
         && !(result.config.files ? ".kiro/settings/mcp.json")
     );

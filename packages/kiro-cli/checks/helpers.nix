@@ -9,7 +9,7 @@
   # Generic idempotent-flag helper shared with mkKiro's wrapper (lib/idempotentFlags.nix).
   idempotentFlags = import ../../../lib/idempotentFlags.nix {inherit lib;};
   # Kiro mcp-secret preprocessor + the rendered mcp.json body the module
-  # feeds into its activation/enterShell writer (mkMcpJsonScript). Tests
+  # feeds into its materializer renderer (mkMcpJsonScript). Tests
   # assert placeholder content via `renderedMcpJson` and template-store-
   # path parity between the two backends.
   inherit (import ../lib/mcpSecrets.nix {inherit lib;}) renderKiroSecrets;
@@ -56,6 +56,9 @@
   hmHookPruneScript = ev: (ev.config.home.activation."materialize-kiro-hooks-prune" or {}).text or "";
   hmHookWriteScript = ev: (ev.config.home.activation."materialize-kiro-hooks-write" or {}).text or "";
   dvHookTaskExec = ev: ((ev.config.tasks or {})."ai:kiro:materialize-hooks" or {}).exec or "";
+  hmMcpPruneScript = ev: (ev.config.home.activation."materialize-kiro-settings-prune" or {}).text or "";
+  hmMcpWriteScript = ev: (ev.config.home.activation.kiroMcpJson or {}).text or "";
+  dvMcpTaskExec = ev: ((ev.config.tasks or {})."ai:kiro:materialize-mcp" or {}).exec or "";
   # Extract the heredoc body a copy writer embeds for <name> — the
   # #433 heredoc-extraction idiom (see module-kiro-hooks-typed-
   # colocation). The per-script EOF marker is content-hash-derived, so
@@ -64,7 +67,7 @@
   # reject, so strip it (byte content is unchanged).
   matHeredocBody = script: name: let
     t = builtins.unsafeDiscardStringContext script;
-    parts = lib.splitString "${lib.escapeShellArg name} \"$nat_mat_prev\" <<'" t;
+    parts = lib.splitString "${lib.escapeShellArg name} \"$nat_mat_prev\" ${lib.escapeShellArg "0444"} <<'" t;
   in
     if builtins.length parts < 2
     then null
@@ -75,5 +78,5 @@
     in
       builtins.head (lib.splitString "\n${marker}\n" body);
 in {
-  inherit dvHookTaskExec dvTaskExec hmHookPruneScript hmHookWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody renderKiroSecrets renderedMcpJson soleFork soleSame;
+  inherit dvHookTaskExec dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookWriteScript hmMcpPruneScript hmMcpWriteScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs matHeredocBody renderKiroSecrets renderedMcpJson soleFork soleSame;
 }
