@@ -14,6 +14,10 @@
 #   4. the retired normalized `instructions` surface reappears while preserving
 #      otherwise exact HM/devenv parity.
 #
+# StrictDoc is an explicit devenv-only project toolchain. Its namespace is
+# documented and checked separately below; every other ai.* option retains
+# exact backend parity.
+#
 # Exact option-tree parity is appropriate here even where runtime behavior
 # differs. Backend-specific boundaries such as Home Manager-only profile
 # materialization are represented by assertions/defaults, not by deleting the
@@ -34,6 +38,12 @@
     runtimes = import ../../lib/ai/runtimes.nix;
     devenvJson = "${docs.devenvOptionsDoc.optionsJSON}/share/doc/nixos/options.json";
     hmJson = "${docs.hmOptionsDoc.optionsJSON}/share/doc/nixos/options.json";
+    # Keep this filter shared by the real comparison and its mutation controls.
+    # The trailing dot matters: similarly named namespaces still require parity.
+    sharedAiOptions = pkgs.writeText "shared-ai-options.jq" ''
+      with_entries(select(.key | startswith("ai.") and (startswith("ai.strictdoc.") | not)))
+      | map_values({ type: .type })
+    '';
     expectedCodexRoots = pkgs.writeText "expected-codex-option-roots" (
       lib.concatStringsSep "\n" [
         "ai.codex.agents"
@@ -99,25 +109,33 @@
       # but accepts a different value shape in one backend. Defaults and
       # descriptions may intentionally differ with lifecycle/scope, so they are
       # documented and behavior-tested rather than mechanically equated here.
-      "$jq" -r '
-        keys[]
-        | select(startswith("ai."))
-      ' "${hmJson}" | "$sort" -u > hm-ai-options
-      "$jq" -r '
-        keys[]
-        | select(startswith("ai."))
-      ' "${devenvJson}" | "$sort" -u > devenv-ai-options
-      "$diff" -u hm-ai-options devenv-ai-options
-
-      "$jq" -S '
-        with_entries(select(.key | startswith("ai.")))
-        | map_values({ type: .type })
-      ' "${hmJson}" > hm-ai-types.json
-      "$jq" -S '
-        with_entries(select(.key | startswith("ai.")))
-        | map_values({ type: .type })
-      ' "${devenvJson}" > devenv-ai-types.json
+      "$jq" -S -f "${sharedAiOptions}" "${hmJson}" > hm-ai-types.json
+      "$jq" -S -f "${sharedAiOptions}" "${devenvJson}" > devenv-ai-types.json
       "$diff" -u hm-ai-types.json devenv-ai-types.json
+      "$jq" -r 'keys[]' hm-ai-types.json > hm-ai-options
+
+      # The exception is a real, documented devenv capability, never an empty HM
+      # facade. Check the namespace boundary and each configurable public root.
+      "$jq" --exit-status '[keys[] | select(startswith("ai.strictdoc."))] | length == 0' "${hmJson}" >/dev/null
+      "$jq" --exit-status '
+        [keys[] | select(startswith("ai.strictdoc.")) | split(".")[0:3] | join(".")]
+        | unique == ["ai.strictdoc.enable", "ai.strictdoc.grammars", "ai.strictdoc.package"]
+      ' "${devenvJson}" >/dev/null
+      "$grep" -Fq 'ai\.strictdoc\.enable' "${docs.devenvOptionsDoc.optionsCommonMark}"
+
+      # Positive controls: mutate real consumer docs, then run the same filter.
+      # Missing leaves, changed types, and a similarly named namespace must all
+      # remain visible to the comparison after adding the StrictDoc exception.
+      for mutation in \
+        'del(."ai.codex.enable")' \
+        '."ai.codex.enable".type = "parity-control-invalid-type"' \
+        '."ai.strictdocExtra.enable" = {type: "boolean"}'; do
+        "$jq" "$mutation" "${devenvJson}" | "$jq" -S -f "${sharedAiOptions}" > mutated-ai-types.json
+        if "$diff" -u hm-ai-types.json mutated-ai-types.json >/dev/null; then
+          echo "AI option parity failed to detect mutation: $mutation" >&2
+          exit 1
+        fi
+      done
 
       "$jq" -r '
         keys[]

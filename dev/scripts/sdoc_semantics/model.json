@@ -1,0 +1,179 @@
+{
+  "schema": "sdoc-semantics-model/1",
+  "model_version": "1",
+  "lifecycles": [
+    {
+      "name": "STATUS",
+      "subject": {
+        "kind": "element",
+        "tag": "DECISION",
+        "field": "STATUS"
+      },
+      "states": [
+        {
+          "name": "open",
+          "label": "open",
+          "note": "proposed, and nobody has ruled"
+        },
+        {
+          "name": "accepted",
+          "label": "accepted",
+          "note": "in force; its statement is now immutable"
+        },
+        {
+          "name": "rejected",
+          "label": "rejected",
+          "note": "ruled against -- terminal, and not the same as withdrawn"
+        },
+        {
+          "name": "superseded",
+          "label": "superseded",
+          "note": "replaced by a later decision that must be named"
+        }
+      ],
+      "initial": "open",
+      "terminal": ["rejected", "superseded"],
+      "note": "Branching on purpose: two terminal states, and one rule no machine can hold.",
+      "transitions": [
+        {
+          "trigger": "accept",
+          "from": "open",
+          "to": "accepted",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "a human rules for it; the statement becomes immutable at this moment",
+          "settled": false
+        },
+        {
+          "trigger": "reject",
+          "from": "open",
+          "to": "rejected",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "a human rules against it; the node stays as the record of the ruling",
+          "settled": false
+        },
+        {
+          "trigger": "supersede",
+          "from": "accepted",
+          "to": "superseded",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "only an ACCEPTED decision can be superseded; a rejected one was never in force",
+          "settled": false
+        }
+      ]
+    },
+    {
+      "name": "AUTHORED_BY",
+      "subject": {
+        "kind": "field",
+        "field": "AUTHORED_BY"
+      },
+      "states": [
+        {
+          "name": "llm",
+          "label": "llm",
+          "note": "written by a model, not looked at -- free to reverse"
+        },
+        {
+          "name": "human-adopted",
+          "label": "human adopted",
+          "note": "a human took model-written words on as their own -- a model may not reverse them"
+        },
+        {
+          "name": "human",
+          "label": "human",
+          "note": "written by a human -- differs from adopted only in lineage"
+        }
+      ],
+      "initial": "llm",
+      "terminal": ["human"],
+      "note": "Shape is settled by an accepted DECISION; the actor is not.",
+      "transitions": [
+        {
+          "trigger": "raise",
+          "from": "llm",
+          "to": "human-adopted",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "rises one rung; who is permitted to raise it is undecided",
+          "settled": false
+        },
+        {
+          "trigger": "raise",
+          "from": "human-adopted",
+          "to": "human",
+          "gates": [],
+          "writes": [],
+          "emits": [],
+          "rule_text": "rises one rung; who is permitted to raise it is undecided",
+          "settled": false
+        }
+      ]
+    }
+  ],
+  "actors": [],
+  "commands": [],
+  "events": [],
+  "operations": [],
+  "gates": [],
+  "relation_contracts": [],
+  "checkpoints": [],
+  "milestones": [],
+  "flows": [],
+  "rules": [
+    {
+      "id": "STATUS-SUPERSEDE-NEVER-EDIT",
+      "lifecycle": "STATUS",
+      "text": "Never edit an accepted DECISION's STATEMENT. Set STATUS to superseded, add Superseded_By, and write a new decision (dev/skills/sdoc/SKILL.md rule 4; DEC-UID-OUTLIVES-TYPE records four accepted decisions whose statements are frozen).",
+      "kind": "transcription",
+      "settled": true,
+      "cites": ["DEC-UID-OUTLIVES-TYPE"]
+    },
+    {
+      "id": "STATUS-SUPERSEDE-NEEDS-A-TARGET",
+      "lifecycle": "STATUS",
+      "text": "Reaching superseded without a Superseded_By relation is a dangling supersession. That is a rule ABOUT TWO NODES, so no state machine can carry it -- it needs graph validation.",
+      "kind": "open",
+      "settled": false,
+      "cites": ["DEC-UID-OUTLIVES-TYPE"]
+    },
+    {
+      "id": "STATUS-WITHDRAWN-MISSING-UNDECIDED",
+      "lifecycle": "STATUS",
+      "text": "COMMENTARY's STANDING carries a withdrawn value and STATUS does not. Whether an open DECISION can be taken back without being rejected is unruled.",
+      "kind": "open",
+      "settled": false,
+      "cites": []
+    },
+    {
+      "id": "AUTHORED-BY-RISES-ONLY",
+      "lifecycle": "AUTHORED_BY",
+      "text": "The ladder is one-directional: a value may rise and never fall, so there is no reachability question and no way to launder a human commitment back into a free one.",
+      "kind": "transcription",
+      "settled": true,
+      "cites": ["DEC-AUTHORSHIP-LADDER"]
+    },
+    {
+      "id": "AUTHORED-BY-TREATMENT",
+      "lifecycle": "AUTHORED_BY",
+      "text": "Two classes over three values: llm is FREE to reverse; human-adopted and human are HARD -- being unable to meet one is a STOP condition, not a workaround.",
+      "kind": "transcription",
+      "settled": true,
+      "cites": ["DEC-AUTHORSHIP-LADDER"]
+    },
+    {
+      "id": "AUTHORED-BY-WHO-MAY-RAISE-UNDECIDED",
+      "lifecycle": "AUTHORED_BY",
+      "text": "No actor is attached to any transition. The decision's own comment says raising to human-adopted is a human act with no natural place to happen, and the write guard makes the field the operator's, so the machine below is a shape with no hand on it yet.",
+      "kind": "open",
+      "settled": false,
+      "cites": ["DEC-AUTHORSHIP-LADDER", "MECH-RUNTIME-WRITE-GUARD"]
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+[DOCUMENT]
+TITLE: Scoped relation filters preserve selection and control exact edges
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SDOC-BOARD-SCOPED-RELATION-FILTER-SMOKE
+TITLE: Scoped relation filters preserve selection and control exact edges
+AUTHORED_BY: llm
+SOURCE: Chromium 152 headless via DevTools Protocol at 1440x900 against the live scribe daemon; 2026-09-02
+STATEMENT: >>>
+The final headless Chromium render exposed 7 source-type groups and 25 distinct
+source-type and role checkboxes from the live 449-node corpus. With
+the Graph view focused, disabling only WORK / Assumes changed its
+one-hop neighborhood from 4 nodes and 5 links to 3 nodes and 4 links while the
+other three Assumes variants stayed enabled. Shift-click drove all four variants
+on, all four off, then all four on from the clicked checkbox's resulting state.
+Independently, with SLICE-FP-DETECTOR focused at depth 2, disabling only
+REQUIREMENT / Governed_By removed that one visible edge while leaving the
+MECHANISM and WORK variants enabled (15 nodes, 29 links became 15 nodes, 28
+links). Shift-disabling the role removed every Governed_By edge (14 nodes, 25
+links), and Shift-restoring returned to 15 nodes and 29 links. The focal hash,
+central card, left-list selection, populated inspector selection, and keyboard
+focus stayed fixed. An independent probe measured a 610-high viewport over 932
+pixels of scrollable filter content: at initial scroll position zero, the
+Shift-click instruction was fully visible from y=344 through y=358.6875 and the
+first relation group began at y=358.6875. Pointer input on the helper and a role
+checkbox kept the popover open at scroll position zero; pointer input on the
+canvas closed it; and its opener restored the same zero-scroll placement. The
+1440 by 900 viewport had no page or popover horizontal overflow and produced no
+console, page-log, or runtime errors.
+<<<
+COMMENT: >>>
+Taken 2026-09-02 on the reference branch feat/work-graph-neighborhood-reference
+and ported here on 2026-09-08 as commits adf8e8d1..5ee1cc63; not retaken. The
+"449-node corpus" is that branch's canon -- the daemon on this tree holds 518
+nodes at generation 3 on 2026-09-08 -- so the source-type group count, the
+checkbox count, and every per-focus node and link number above describe that
+corpus rather than this one. The filter code they exercise is unchanged.
+<<<
+RELATIONS:
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/board.js
+- TYPE: File
+  VALUE: docs/sdoc/board/index.html
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/app.css

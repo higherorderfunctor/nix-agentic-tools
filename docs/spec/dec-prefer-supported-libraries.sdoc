@@ -1,0 +1,52 @@
+[DOCUMENT]
+TITLE: A maintained library beats a hand-rolled parser or protocol
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-PREFER-SUPPORTED-LIBRARIES
+TITLE: A maintained library beats a hand-rolled parser or protocol
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A hand-rolled replacement lands for something a qualifying library does, and the reason is recorded on it.
+STATEMENT: >>>
+Where a maintained library does a thing this repository's tooling needs -- a
+parser, a protocol, a validator, a state machine -- the tooling uses the
+library rather than a hand-rolled version. Maintained means a release within
+the last twelve months and an issue tracker that answers. The library enters
+through Nix (DEC-DEPS-VIA-NIX); one that nixpkgs lacks is packaged in-repo
+when its build is trivial, and the size it adds to the closure is measured
+and recorded where it is added.
+<<<
+RATIONALE: >>>
+Hand-rolled protocol and parser code is where the silent failures live. The
+scribe JSON-RPC layer, measured 2026-09-09, validated the envelope and the
+grammar field values and nothing in between: twelve gaps, five of them
+silent, including a dry_run that a non-empty string turned on. The one
+library this tree has removed, transitions, went for size -- 88 MiB on each
+of two interpreters for three state machines -- not for being a library.
+That is the cost this decision asks to be measured, not avoided.
+<<<
+COMMENT: >>>
+Operator, 2026-09-09, verbatim: "well supported libraries also prefered
+(DECISION?) like id prefer you didn't hand role parsers or even jsonrpc
+functionality." Earlier the same night, on a docstring that had been read
+as their ruling: "i dont recall ever calling for stdlib, its nix setup ...
+i probably said dont do any pip --user crap and must come from nix as the
+deterministic installer, but never said we couldn't make cleaner code with
+well supported libraries."
+
+First instance: pjrpc 2.2.0 for the scribe RPC layer
+(WORK-RPC-ON-PJRPC-AND-PYDANTIC) -- zero hard dependencies, pydantic as its
+validator, not in nixpkgs, packaged in devenv.nix.
+
+Drafted by the writer from the operator's words; STATUS open until they
+accept or reject it.
+
+Accepted by the operator on 2026-09-10 -- their words: "your packages are
+fine, approved" and, asked whether that was the decision or only the two
+packages, "human graded decision". The first instances it ratifies are
+pjrpc 2.2.0 and pydantic as direct dependencies of the scribe RPC layer.
+AUTHORED_BY is the operator's to raise; the writer has no flag for it.
+<<<

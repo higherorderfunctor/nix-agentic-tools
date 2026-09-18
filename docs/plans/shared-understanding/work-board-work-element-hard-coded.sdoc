@@ -1,0 +1,42 @@
+[DOCUMENT]
+TITLE: The Graph left pane hard-codes WORK as the planning element
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-BOARD-WORK-ELEMENT-HARD-CODED
+TITLE: The Graph left pane hard-codes WORK as the planning element
+AUTHORED_BY: llm
+STATEMENT: >>>
+Graph-tab audit row, 2026-09-08:
+
+| Requirement sentence | Verdict | Where | Fix |
+| --- | --- | --- | --- |
+| REQ-BOARD-GRAMMAR-DRIVEN: "The board app SHALL contain minimal hard-coded knowledge of the system it renders: anything the app cannot infer from the grammar is a gap." | partly | docs/sdoc/board/assets/board.js:914 (node.type === "WORK") | hours |
+
+MECH-SDOC-BOARD-CANVAS requires the left pane to list only WORK nodes, so
+the behavior is correct and this is not a bug. What the app cannot infer is
+WHICH grammar element is the planning element: the string "WORK" is written
+into board.js, and the surrounding vocabulary (work-item, work-list,
+work-search, work-state, workHaystack, the "work" state fallback label) is
+written around it. Rename the element in the grammar and the Graph tab lists
+nothing, with no error.
+
+The requirement calls that a gap by construction. Closing it needs the
+grammar to say which element plans -- a marker on the element, or a
+presentation payload the renderer reads -- and that is a grammar-layer
+decision, not a board edit. It is the same question WORK-PRESENTATION-GRAMMAR
+and WORK-WIRE-REQ-BOARD-GRAMMAR-DRIVEN circle, so groom it against those
+rather than in isolation.
+<<<
+COMMENT: >>>
+Filed by the Graph-tab contract audit, 2026-09-08. Recorded as a gap under the requirement rather than as a defect: every observable behavior matches MECH-SDOC-BOARD-CANVAS today.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-CANVAS
+  ROLE: Assumes

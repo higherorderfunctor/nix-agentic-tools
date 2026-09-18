@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: View tools read grammar from the resident daemon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-VIEWS-READ-GRAMMAR-FROM-DAEMON
+TITLE: View tools read grammar from the resident daemon
+AUTHORED_BY: llm
+STATEMENT: >>>
+Make view-check.py and wireline.py request workspace.grammar, validate the scribe-grammar/1 reply, and fail closed with the shared NoDaemon remedy. Remove their grammar-file option and parser import so neither view entrypoint reads grammar.sgra.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-DAEMON-IS-THE-ONLY-SOURCE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-VIEW-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-VIEW-WIRELINE
+  ROLE: Crosses

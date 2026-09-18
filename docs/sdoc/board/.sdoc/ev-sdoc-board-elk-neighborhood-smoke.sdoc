@@ -1,0 +1,52 @@
+[DOCUMENT]
+TITLE: ELK removes measured label collisions without losing semantic edges
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SDOC-BOARD-ELK-NEIGHBORHOOD-SMOKE
+TITLE: ELK removes measured label collisions without losing semantic edges
+AUTHORED_BY: llm
+SOURCE: Independent Chromium 152 headless DevTools probes at 1440x900 against the live scribe daemon, plus a synthetic pre-layout cap probe; 2026-09-03
+STATEMENT: >>>
+Against the live canon, independent headless Chromium rendered
+SLICE-CHECKPOINT-WIRING at one, two, and three hops as respectively 13, 48, and
+48 cards with 22, 110, and 110 semantic relations. The two- and three-hop views
+therefore exercised the deterministic 48-node nearest-neighborhood cap. The
+post-ELK coalescer produced 74, 420, and 420 real orthogonal segments with 8,
+35, and 35 labels.
+
+The reported Crosses route from the focal card to MECH-PLAN-REFS-CHECK ended at
+screen x=839.743652 while the card began at x=839.743408 at fit, a 0.000244
+pixel overlap rather than a gap. Near one-to-one scale the overlap was 0.001221
+pixels, and pixel inspection found no canvas-colored column between the route
+and card. The added bridge spans ELK's one-unit invisible junction only where
+the same role's adjacent route pieces share semantic relations; the observed
+bridge retained all six contributing Crosses relations.
+
+At every depth, geometric comparison found zero exact same-role overlaps and
+zero collinear same-role overlaps whose lane coordinates differed by one layout
+unit or less. Bounding-box and stroke sampling found zero label-label,
+label-node, and label-to-unrelated-edge intersections. Every path remained
+solid, inspection and dimming semantics remained consistent across visible
+nodes, and the page reported no runtime, console, or network errors.
+<<<
+COMMENT: >>>
+Taken 2026-09-03 on the reference branch feat/work-graph-neighborhood-reference,
+against a board that had no Grammars tab, no lifecycle widget and no semantics
+payload, and that loaded elkjs from docs/sdoc/board/assets/vendor/elkjs/ in the
+tree. The measurements were ported here on 2026-09-08 as commits
+adf8e8d1..5ee1cc63 and were not retaken. Two things about them are of that
+branch rather than this tree: the canon was smaller than the 518 nodes the
+daemon holds here at generation 3 on 2026-09-08, so the 48-node cap clips
+earlier now; and the elkjs delivery moved to Nix on 2026-09-08
+(MECH-SDOC-BOARD-LAYOUT). Neither weakens the numbers -- the layout code they
+describe is unchanged, and the store's elk-api.js and elk-worker.min.js are
+sha256-identical to the vendored copies these probes ran against.
+<<<
+RELATIONS:
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/layout.js
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/board.js

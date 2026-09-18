@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: The board reads without mutation and bounds graph rendering
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-SDOC-BOARD-MVP-READS-WHOLE-CANON
+TITLE: The board reads without mutation and bounds graph rendering
+AUTHORED_BY: llm
+STATEMENT: >>>
+The app may read every node and resolved Parent or Child declaration from the
+daemon for its different lenses, but the Graph view SHALL render only a focal
+node's bounded neighborhood and SHALL NOT offer an unbounded whole-canon
+canvas. The Graph defaults to one hop, exposes no depth beyond three, and caps
+rendering at 48 nodes. The app offers no editor, mutation endpoint or
+write-back path: search, filters, selection, pan, zoom, table queries and
+inspection are reading actions only.
+<<<
+COMMENT: >>>
+The bounded-neighborhood reference implementation superseded the no-filter
+and whole-canon Graph clauses on 2026-09-02 when the Graph neighborhood delivery landed. Plan and Perspective remain complete-canon
+lenses; this requirement bounds SVG rendering, not the shared payload.
+<<<

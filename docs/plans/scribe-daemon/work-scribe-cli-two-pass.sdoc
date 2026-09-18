@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: Scribe builds its parser from the daemon in two passes
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SCRIBE-CLI-TWO-PASS
+TITLE: Scribe builds its parser from the daemon in two passes
+AUTHORED_BY: llm
+STATEMENT: >>>
+Make scribe parse its command line in two passes. The first parser consumes only
+--root, then the client obtains workspace.grammar from that root's daemon and
+builds the real grammar-derived parser over the remaining arguments. Preserve
+the guarded-field scan ahead of both passes, and fail with the NoDaemon remedy
+plus boot usage before help or any operation can proceed without a daemon.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-DAEMON-IS-THE-ONLY-SOURCE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-COMMANDS-LOAD-IN-PROCESS
+  ROLE: Crosses

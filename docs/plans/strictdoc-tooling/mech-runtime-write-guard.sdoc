@@ -1,0 +1,54 @@
+[DOCUMENT]
+TITLE: Enforce field ownership at the runtime rather than in a document
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-RUNTIME-WRITE-GUARD
+TITLE: Enforce field ownership at the runtime rather than in a document
+AUTHORED_BY: human
+STATEMENT: >>>
+AUTHORED_BY and PARENT_FP are operator-owned fields with no client option. scribe_cmd.py derives field flags from workspace.grammar after subtracting GUARDED_FIELDS and also rejects either guarded spelling during the pre-daemon argv scan, so the refusal does not depend on daemon availability. scribe_ops.py repeats the guard for typed callers and writes AUTHORED_BY: llm on new nodes. sdoc_model validates at startup that the guarded names still exist and are required, preventing a grammar rename from silently weakening the absence-based guard.
+<<<
+RATIONALE: >>>
+Demonstrated rather than hypothetical. A hard rule in the authoring skill did not stop an agent signing five contracts, and because it committed under the operator's name those signatures were forensically indistinguishable from real ones. INV-GUARDS-MUST-EXECUTE records the wider split: every guard that lived in a document failed, every executable one held.
+
+Making the writer incapable of the write is the cheapest executable form and the only one that holds without the harness. Measured: the project settings file that would carry a hook is a devenv shell-entry artifact and is missing from 10 of this clone's 22 worktrees, with no PreToolUse hook at user level behind it. A guard whose guarantee rests on that file is absent about half the time, and absent silently.
+
+An override flag would put the failure back. The incident was a model doing the forbidden thing while holding the document that forbade it; an escape hatch it can reach is the same document with an exit code attached.
+<<<
+COMMENT: >>>
+The original statement proposed a tool-call hook and claimed it "works whether the model edits directly or through a script it wrote". The second half is false and was measured on 2026-08-27 against this repository's own guard, packages/claude-code/lib/memory-collision-guard.sh. A PreToolUse envelope carries tool_name and tool_input and nothing else: for Write and Edit that is a file_path, for Bash it is a command string. Positive control, same script, same guarded directory, one run apart -- the Write envelope naming the path returns permissionDecision deny with a populated reason; the Bash envelope whose command writes that same path produces empty stdout and exit 0, which is allow. A Bash matcher can only string-match the command, so it catches an invocation by name and not a heredoc. Logged as MECH-PRETOOLUSE-BLIND-TO-BASH.
+
+Delivery measurement behind the RATIONALE's number: 12 of the 22 worktrees under nix-agentic-tools-worktrees have .claude/settings.json, a symlink into /nix/store written on devenv shell entry and gitignored at .gitignore:38; 10 do not. The user-level ~/.claude/settings.json carries PreCompact and UserPromptSubmit hooks only, so nothing backstops a missing project hook. The same gap currently leaves validate-at-stop unarmed in those 10 worktrees, which is a live finding about this repository rather than a hypothetical about this guard. Logged as MECH-PROJECT-HOOKS-ABSENT-IN-WORKTREES.
+
+Test harness precedent: checks/claude-memory-collision-guard.nix, a hermetic runCommandLocal that drives the script over JSON envelopes, gates it through shellcheck -x, and pins the cadence because a deny that repeats is a livelock. A rejection test for this guard should take that shape, with the positive control being the same verb succeeding on an unguarded field -- otherwise a CLI that rejected everything would pass.
+
+fp-accept.py is guarded by nothing today. Any session can run it and one did. The CLI cannot tell operator from agent either: same binary, same uid, same git identity, which is what MECH-AGENT-IDENTITY-KEYS is about. That is why the discriminator here is the channel rather than the identity -- a harness hook fires only inside an agent session by construction, and the operator running the same command in their own terminal never reaches it.
+
+DEC-FP-ACCEPT-AUTHORITY is open and may later let an agent re-sign contracts that were only ever llm-graded. It does not conflict with this node and is deliberately not a parent: whatever authority rule lands will be implemented by whichever entry point performs the signing, and this node's claim is only that the ordinary authoring verbs are not that entry point. An edge would gate milestone two on an open decision without making the contract any truer.
+
+DEC-EXECUTABLE-RULES-ROADMAP already schedules an operator review of this milestone's verb list before implementation. An objection to create always writing llm belongs at that review, with this statement in front of it.
+
+AUTHORED_BY STILL READS human AND THE STATEMENT ABOVE IS NOT THE OPERATOR'S
+PROSE. It was rewritten wholesale by a model during the 2026-08-27 grooming
+pass, which preserved the node's intent and settled its interface but kept
+almost none of its wording. The field was left alone because only the operator
+turns it. Recorded here because MECH-AUTHORED-BY-GUARD is being built to catch
+exactly this, and this pass produced eight instances of it while the question of
+what the mark means was still open.
+
+IMPLEMENTED 2026-08-27, re-sited when the daemon split landed. The enforcement is the absence of a code path, as this node requires, and it is now on two doors. dev/scripts/scribe_cmd.py derives its field flags from the grammar minus GUARDED (scribe_cmd.py:54, :84, :122), so neither --authored-by nor --parent-fp exists to pass; dev/scripts/scribe_ops.py:58 holds the same set because a typed client is a second door onto the same pipeline, and scribe_ops.py:241 writes AUTHORED_BY: llm unconditionally because the grammar makes it REQUIRED on all five types. The retired dev/scripts/sdoc_cli.py is gone: packages/strictdoc-grammar/modules/devenv/default.nix:76 resolves scribe to scribe_cmd.py, and what survived of the old module is scribe_verbs.py, a helpers library with no parser, dispatch table or entrypoint.
+
+One thing had to be spoken rather than merely absent. argparse answers an undeclared flag with "unrecognized arguments", which reads as a typo rather than as a refusal, so reject_guarded scans argv before parsing and names the owner (dev/scripts/scribe_cmd.py:250, with the daemon-side twin at scribe_ops.py:62). Measured: scribe set MECH-... --authored-by human exits 1 saying AUTHORED_BY is the operator's. There is no override flag.
+
+PARENT_FP is not emitted by the CLI at all. fp-accept.py reaches it through
+the same Graph.set_field, which is why the guarded set is enforced at the
+CLI's flag surface rather than inside the model.
+
+The STATEMENT says the guarded set is held by the CLI. Since the daemon split it is held in three places: sdoc_model.py:84 GUARDED_FIELDS, checked against the loaded grammar by validate_guarded at sdoc_model.py:107 and called from scribe_ops.py:107 and :122; scribe_cmd.py:54; and scribe_ops.py:58. That duplication is deliberate per scribe_ops.py:55, but the STATEMENT singular is now inaccurate and this COMMENT entry is the correction.
+<<<
+RELATIONS:
+- TYPE: File
+  VALUE: dev/scripts/scribe_cmd.py

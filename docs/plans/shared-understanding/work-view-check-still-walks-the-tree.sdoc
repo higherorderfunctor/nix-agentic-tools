@@ -1,0 +1,34 @@
+[DOCUMENT]
+TITLE: view-check still walks the worktree for its UID-to-path map
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-VIEW-CHECK-STILL-WALKS-THE-TREE
+TITLE: view-check still walks the worktree for its UID-to-path map
+AUTHORED_BY: llm
+STATEMENT: >>>
+docs/sdoc/view/view-check.py still walks the worktree for .sdoc files to
+build its UID-to-path map, and checks/daemon-only-source.py carries a
+one-line NARROW_EXCEPTIONS entry to let it. The daemon already injects
+_DOCUMENT_PATH into its export, but the view pipeline's input is a hand-run
+`strictdoc export` (dev/tasks/generate.nix), which never passes through the
+daemon's in-memory generator patch, so the path is absent there.
+
+Closing it means moving the view pipeline's export onto the daemon
+(workspace.export) so the map comes off _DOCUMENT_PATH like the board's
+does, then deleting the exception. Not a contained change; left as debt.
+<<<
+COMMENT: >>>
+Surfaced 2026-09-10 by the agent landing session 3 onto the trial branch
+and confirmed by its verifier: the only remaining allowlisted violation of
+REQ-DAEMON-IS-THE-ONLY-SOURCE outside the semantics layer.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-DEBT-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-VIEWS-READ-GRAMMAR-FROM-DAEMON
+  ROLE: Assumes

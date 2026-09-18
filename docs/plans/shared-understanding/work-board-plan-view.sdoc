@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: A plan view: the work hierarchy as its own lens
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-BOARD-PLAN-VIEW
+TITLE: A plan view: the work hierarchy as its own lens
+AUTHORED_BY: llm
+STATEMENT: >>>
+Plan views over the canon. The first cut is SHIPPED, to the shape the
+operator specified on 2026-09-01: a tree view, collapsible, the selected
+node's full card in the right pane like the Graph view
+(MECH-SDOC-BOARD-PLAN-TREE). Still open, waiting on
+WORK-PLAN-GRAMMAR-RESHAPE for its vocabulary: the kanban cut under the same
+tab, cluster-versus-detail marking, and rows that respect dependency order.
+<<<
+COMMENT: >>>
+First cut shipped 2026-09-01 (MECH-SDOC-BOARD-PLAN-TREE): collapsible tree
+grouped by directory, nested by Assumes, right-pane card. Still open from
+the original sketch and the plan-grammar reshape: the kanban cut, cluster
+vs detail marking, dependency-ordered rows.
+
+Operator, 2026-09-02, verbatim: "plan, kanban in addition to tree view."
+The kanban cut is reaffirmed as wanted alongside the tree view; still open.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-ONE-APP-TWO-VIEWS
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: WORK-PLAN-LAYER
+  ROLE: Assumes

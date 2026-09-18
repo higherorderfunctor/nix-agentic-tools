@@ -1,0 +1,133 @@
+# Hand-written consumer DSL over ./normalized.nix. Sugar only: it cannot weaken
+# the types, it only saves typing. The shape is settled in
+# ../docs/implementation-brief.md ("Consumer DSL, hand-written, mapping onto
+# that") — this file implements that shape, it does not redesign it.
+#
+# Two things the brief fixes and a reader will otherwise get wrong:
+#   - There is NO `optional` constructor. Absence of `required` is optional.
+#   - `raw` is identity. It escapes the CONSTRUCTORS, never the surface: `raw`
+#     with choices on a string kind, two kinds at once, or an unknown kind are
+#     all rejected by the types.
+#
+# Nothing here asserts or coerces. Every constructor is a plain attrset literal,
+# so the only thing that can reject a value is the normalized option surface it
+# is checked against — which is exactly what "sugar only" has to mean for it to
+# be true rather than aspirational.
+#
+# WHY `normalized` IS ACCEPTED AND IGNORED. The barrel passes it (see
+# ./default.nix) and the eventual signature in that file names it, but the DSL
+# is value-level: types flow up from strictdoc into ./normalized.nix, values
+# flow down from here into ./emit.nix, and the two meet when a value is checked
+# against `normalized.types` (./check.nix does that). Reading the types here
+# would only duplicate that check. `...` keeps the barrel's call site honest
+# without naming an argument this file has no business reading.
+#
+# WHERE `title` LIVES, and why not where the brief's sketch drew it. The brief
+# sketches `fieldType = submodule { options = { title; kind = kindType; }; }` —
+# title hoisted out of the union. The GENERATED surface cannot hoist it: each of
+# the four `GrammarElementField*` rules carries its own `TITLE` production, so
+# the attrTag sits directly over the field and `title` is INSIDE the chosen
+# alternative. The generated surface is the one that is authoritative — it is
+# what a `.sgra` can express — so the DSL maps onto it:
+#
+#   field.str "UID"  =>  {string = {title = "UID"; required = false;};}
+#
+# That is a reshape, not a weakening: the value a constructor produces is
+# checked against exactly the same types either way. It also removes the `kind`
+# indirection, which existed only to carry the hoist.
+#
+# WHY `mk` SEEDS `required = false`. `REQUIRED` is mandatory on every field in
+# the grammar, so the surface's `required` option has no default and a value
+# omitting it does not type-check. Seeding it here is what makes "absence of
+# `field.required` is optional" a value the surface accepts rather than a claim
+# about a value it rejects — and `field.required` still overrides it. It is
+# seeded in `mk` rather than in the four named constructors so a kind reached
+# only through `mk` gets it too; every field kind the grammar has carries
+# `REQUIRED`.
+#
+# GENERIC CONSTRUCTORS. `field.mk` and `rel.mk` are the general forms the named
+# constructors specialize. They exist so that a field type or relation type
+# added upstream — the surface is generated, upstream ships ~3 releases a month
+# — is writable the day it appears, without this hand-written file being the
+# thing that has to be edited first. `mk` names the tag; `attrTag` still decides
+# whether that tag exists.
+#
+# ARITY. `parent` and `child` take both roles positionally; `file` is a bare
+# value, because the File relation has no REVERSE_ROLE production at all
+# (MEASURED). A role-less parent, or a File carrying a ROLE, is written with
+# `rel.mk` — the named constructors cover the common case, not every case.
+#
+# Worked example. All four field types and all three relation kinds:
+#
+#   (el "EXAMPLE" {prefix = "EX-";} {
+#     fields = [
+#       (field.required (field.str "UID"))
+#       (field.tag "LABELS")
+#       (field.one "STATUS" ["Draft" "Active"])
+#       (field.many "OWNERS" ["ops" "docs"])
+#     ];
+#     relations = [
+#       (rel.parent "Refines" "Refined_By")
+#       (rel.child "Parent_Of" "Child_Of")
+#       rel.file
+#     ];
+#   })
+#
+#   => {
+#     tag = "EXAMPLE";
+#     prefix = "EX-";
+#     fields = [
+#       {string         = {title = "UID";    required = true;};}
+#       {tag            = {title = "LABELS"; required = false;};}
+#       {singleChoice   = {title = "STATUS"; required = false; choices = ["Draft" "Active"];};}
+#       {multipleChoice = {title = "OWNERS"; required = false; choices = ["ops" "docs"];};}
+#     ];
+#     relations = [
+#       {parent = {role = "Refines";   reverseRole = "Refined_By";};}
+#       {child  = {role = "Parent_Of"; reverseRole = "Child_Of";};}
+#       {file = {};}
+#     ];
+#   }
+{lib, ...}: {
+  # Field constructors. `mk` is the general form the other four specialize.
+  field = rec {
+    mk = kindName: title: body: {
+      ${kindName} =
+        {
+          inherit title;
+          required = false;
+        }
+        // body;
+    };
+
+    str = title: mk "string" title {};
+    tag = title: mk "tag" title {};
+    one = title: choices: mk "singleChoice" title {inherit choices;};
+    many = title: choices: mk "multipleChoice" title {inherit choices;};
+
+    # REQUIRED lives inside the chosen alternative, so this maps over the single
+    # tag the field carries rather than naming it — which makes it work for any
+    # kind, including one `mk` reached that has no named constructor here.
+    #
+    # There is deliberately no `optional`: absence is optional.
+    required = field: lib.mapAttrs (_: body: body // {required = true;}) field;
+
+    raw = x: x;
+  };
+
+  # Relation constructors. See ARITY above for why `file` is a bare value.
+  rel = rec {
+    mk = typeName: body: {${typeName} = body;};
+
+    parent = role: reverseRole: mk "parent" {inherit role reverseRole;};
+    child = role: reverseRole: mk "child" {inherit role reverseRole;};
+    file = mk "file" {};
+
+    raw = x: x;
+  };
+
+  # Element constructor: tag, then the optional PROPERTIES block, then the
+  # FIELDS / RELATIONS body. `props` and `body` are merged rather than named so
+  # a property added upstream needs no edit here.
+  el = tag: props: body: {inherit tag;} // props // body;
+}

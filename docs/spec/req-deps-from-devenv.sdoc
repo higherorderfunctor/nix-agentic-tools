@@ -1,0 +1,43 @@
+[DOCUMENT]
+TITLE: Every program resolves its interpreter and libraries from the devenv closure
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-DEPS-FROM-DEVENV
+TITLE: Every program resolves its interpreter and libraries from the devenv closure
+AUTHORED_BY: llm
+STATEMENT: >>>
+Every program this repository runs -- a devenv process, a task, a check, a
+launcher script, a hand-run tool -- resolves its interpreter and its
+libraries from the devenv closure by construction. A launcher that resolves
+an ambient interpreter or binary from PATH violates this even when PATH
+happens to carry the Nix-built one.
+<<<
+RATIONALE: >>>
+DEC-DEPS-VIA-NIX rules where the bytes come from. This rules that a program
+cannot get them from anywhere else. The gap between the two was a launcher
+that was correct only because of what happened to be on PATH: the board's
+serve script executed `python3`, which under `devenv up` happened to be
+grammarPython and outside the shell was whatever the machine supplied.
+WORK-BOARD-SERVE-PINS-ITS-INTERPRETER replaced it with a Nix wrapper whose
+interpreter is strictdoc's own virtual environment. True by accident is not
+the property the decision asks for.
+<<<
+COMMENT: >>>
+Operator, 2026-09-09, verbatim: "every dependency should be coming from
+devenv here, nothing should come from the system. requirement."
+
+The recorded violation was fixed 2026-09-09 by
+WORK-BOARD-SERVE-PINS-ITS-INTERPRETER: `processes.board` executes the absolute
+Nix store path of the `sdoc-board` wrapper, which launches server.py with
+strictdoc's own virtual-environment interpreter. The executable
+`interpreter-launchers` check scans devenv process/task definitions and shell
+launchers under docs/ and dev/; its positive-control fixture is the removed
+serve script and fails on `exec python3`.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-DEPS-VIA-NIX
+  ROLE: Governed_By

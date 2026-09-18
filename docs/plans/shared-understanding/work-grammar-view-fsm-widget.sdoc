@@ -1,0 +1,27 @@
+[DOCUMENT]
+TITLE: Grammars view: a state-machine widget for the lifecycle, with external events
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-GRAMMAR-VIEW-FSM-WIDGET
+TITLE: Grammars view: a state-machine widget for the lifecycle, with external events
+AUTHORED_BY: llm
+STATEMENT: >>>
+The Grammars view renders each type's lifecycle ladder as a state-machine
+widget: states are the ladder's own values, and transitions are the moves
+the ladder allows between them. The widget should also be able to show the
+external events that drive a transition, in the shape
+[event:create] -> [state:opened], rather than showing bare states and arrows
+with no trigger. A concrete child of the lifecycle redesign tracked in
+WORK-GRAMMAR-TAB-LIFECYCLE-VIEW, and a natural consumer of the model shape
+recorded by [LINK: DEC-SEMANTICS-MODEL-IS-DATA].
+<<<
+COMMENT: >>>
+first cut landed 46cd3cf; events labelled; external events beyond the machine triggers still open.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-GRAMMAR-TAB-LIFECYCLE-VIEW
+  ROLE: Assumes

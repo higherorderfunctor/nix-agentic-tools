@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: The writer's module files still carry the retired name
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-MODULE-FILENAMES
+TITLE: The writer's module files still carry the retired name
+AUTHORED_BY: llm
+STATEMENT: >>>
+The writer command is scribe and its module names now expose the actual layers. scribe_cmd.py owns argv and the grammar-derived option surface, scribe_ops.py owns typed daemon operations, scribe_workspace.py owns the resident graph, and scribe_verbs.py owns only shared rendering and path helpers. The verbs module has no parser, dispatch table, main function, or executable entrypoint, so the source tree no longer advertises a second writer.
+
+What is left of the original finding is sdoc_model.py, which still carries the
+retired name. Renaming it restates prose in nodes that must not change -- the
+frozen ruling, and evidence nodes recording measurements against that path --
+so the canon cannot be made fully consistent by the rename and the churn buys
+only internal tidiness. Mechanical and unblocking when someone wants it.
+sdoc_fp.py is out of scope: it is format-side, not the writer.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

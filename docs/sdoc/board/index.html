@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SDoc Board</title>
+    <link rel="icon" href="data:," />
+    <link
+      rel="stylesheet"
+      crossorigin="anonymous"
+      href="https://cdn.jsdelivr.net/npm/@perspective-dev/viewer@5.3.0/dist/css/pro-dark.css"
+    />
+    <link rel="stylesheet" href="/assets/theme.css" />
+    <link rel="stylesheet" href="/assets/app.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <i></i><i></i><i></i><i></i>
+        </span>
+        <span>
+          <strong>SDOC BOARD</strong>
+          <small id="project-name">connecting to the scribe</small>
+        </span>
+      </div>
+
+      <nav class="view-switch" aria-label="View">
+        <button id="switch-grammars" type="button">Grammars</button>
+        <button id="switch-plan" type="button">Plan</button>
+        <button id="switch-board" type="button" class="is-active">Graph</button>
+        <button id="switch-perspective" type="button">Perspective</button>
+      </nav>
+
+      <dl class="stats" aria-label="Canon counts">
+        <div>
+          <dt>nodes</dt>
+          <dd id="node-count">—</dd>
+        </div>
+        <div>
+          <dt>relations</dt>
+          <dd id="edge-count">—</dd>
+        </div>
+        <div>
+          <dt>types</dt>
+          <dd id="type-count">—</dd>
+        </div>
+        <div>
+          <dt>gen</dt>
+          <dd id="generation">—</dd>
+        </div>
+      </dl>
+
+      <div class="global-actions">
+        <div class="status" role="status" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="status-text">connecting</span>
+        </div>
+        <button id="refresh" type="button" title="Refetch from the daemon">
+          Refresh
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section id="view-board" class="view board-view" aria-label="Board view">
+        <aside class="work-browser" aria-label="Work items">
+          <header class="work-browser-head">
+            <div>
+              <span class="pane-kicker">Navigation</span>
+              <h1>Work items</h1>
+            </div>
+            <div class="work-head-actions">
+              <span id="work-count" class="work-count">0</span>
+              <button
+                id="close-work-browser"
+                class="drawer-close"
+                type="button"
+                aria-label="Close work items"
+              >
+                ×
+              </button>
+            </div>
+          </header>
+          <label class="work-search">
+            <span class="visually-hidden">Search work items</span>
+            <span aria-hidden="true">⌕</span>
+            <input
+              id="work-search"
+              type="search"
+              autocomplete="off"
+              placeholder="Search work…"
+            />
+          </label>
+          <label class="work-state-filter">
+            <span>State</span>
+            <select id="work-state">
+              <option value="">All states</option>
+            </select>
+          </label>
+          <p id="work-list-summary" class="work-list-summary"></p>
+          <div id="work-list" class="work-list"></div>
+        </aside>
+
+        <div class="canvas-shell" aria-label="Work item neighborhood graph">
+          <header class="graph-controlbar">
+            <div class="graph-controlbar-start">
+              <details id="graph-filters" class="graph-filters">
+                <summary>
+                  <span aria-hidden="true">▽</span>
+                  Filters
+                  <span id="filter-count" class="filter-count">0</span>
+                </summary>
+                <div class="filter-popover">
+                  <fieldset>
+                    <legend>Node types</legend>
+                    <div id="type-filters" class="filter-options"></div>
+                  </fieldset>
+                  <fieldset>
+                    <legend>Relation roles</legend>
+                    <p class="filter-note relation-filter-help">
+                      Shift-click a role to toggle that name across node types.
+                    </p>
+                    <div id="role-filters" class="relation-filter-groups"></div>
+                  </fieldset>
+                  <button id="reset-filters" class="filter-reset" type="button">
+                    Reset filters
+                  </button>
+                </div>
+              </details>
+              <button
+                id="toggle-work-browser"
+                class="mobile-work-toggle"
+                type="button"
+              >
+                Work
+              </button>
+            </div>
+            <div
+              id="depth-options"
+              class="depth-options toolbar-depth"
+              role="group"
+              aria-label="Neighborhood distance"
+            >
+              <span class="depth-label" aria-hidden="true">Hops:</span>
+              <button
+                type="button"
+                data-depth="1"
+                class="is-active"
+                aria-label="1 hop"
+              >
+                1
+              </button>
+              <button type="button" data-depth="2" aria-label="2 hops">
+                2
+              </button>
+              <button type="button" data-depth="3" aria-label="3 hops">
+                3
+              </button>
+            </div>
+            <div
+              class="viewport-actions"
+              role="group"
+              aria-label="Viewport controls"
+            >
+              <button id="zoom-out" type="button" title="Zoom out">−</button>
+              <button id="zoom-in" type="button" title="Zoom in">+</button>
+              <button id="fit-view" type="button">Fit</button>
+            </div>
+          </header>
+          <div class="graph-stage">
+            <svg
+              id="graph"
+              role="group"
+              aria-label="Read-only StrictDoc relation graph"
+            >
+              <defs>
+                <pattern
+                  id="grid"
+                  width="28"
+                  height="28"
+                  patternUnits="userSpaceOnUse"
+                >
+                  <circle cx="1" cy="1" r="1" class="grid-dot"></circle>
+                </pattern>
+              </defs>
+              <rect
+                class="canvas-background"
+                width="100%"
+                height="100%"
+                fill="url(#grid)"
+              ></rect>
+              <g id="viewport">
+                <g id="edges"></g>
+                <g id="nodes"></g>
+              </g>
+            </svg>
+            <div id="graph-empty" class="graph-empty">
+              <span class="empty-mark" aria-hidden="true">◇</span>
+              <strong>Choose a work item</strong>
+              <span
+                >Explore its nearest relations without loading the canon.</span
+              >
+            </div>
+            <footer class="graph-footer">
+              <div
+                id="legend"
+                class="legend"
+                aria-label="Graph visual key"
+              ></div>
+              <p class="canvas-help">
+                <span class="canvas-help-long"
+                  >Drag to pan · wheel to zoom</span
+                >
+                <span class="canvas-help-short">Drag to pan</span>
+              </p>
+              <p id="neighborhood-summary" class="neighborhood-summary">
+                Choose a work item
+              </p>
+            </footer>
+          </div>
+        </div>
+
+        <aside id="inspector" class="inspector" aria-live="polite">
+          <button
+            id="close-inspector"
+            class="inspector-close"
+            type="button"
+            aria-label="Close inspector"
+          >
+            ×
+          </button>
+          <div id="inspector-empty" class="inspector-empty">
+            <span class="empty-mark" aria-hidden="true">◇</span>
+            <h1>Inspect a neighbor</h1>
+            <p>
+              Choose work on the left, then select any visible card to read its
+              fields and relations.
+            </p>
+            <p class="read-only">
+              Read only · one resident scribe · no mutations
+            </p>
+          </div>
+          <div id="inspector-content" hidden></div>
+        </aside>
+      </section>
+
+      <section
+        id="view-plan"
+        class="view plan-view"
+        aria-label="Plan view"
+        hidden
+      >
+        <div class="plan-shell">
+          <p class="grammar-hint">
+            Grouped by declaring directory · nested by Assumes · select a row
+            for the full card
+          </p>
+          <div id="plan-tree" class="plan-tree"></div>
+        </div>
+
+        <aside class="inspector" aria-live="polite">
+          <div id="plan-inspector-empty" class="inspector-empty">
+            <span class="empty-mark" aria-hidden="true">▤</span>
+            <h1>Walk the plans</h1>
+            <p>
+              Select any row to see the node's full card: fields, source
+              location, and declared relations.
+            </p>
+            <p class="read-only">read only · one resident scribe</p>
+          </div>
+          <div id="plan-inspector-content" hidden></div>
+        </aside>
+      </section>
+
+      <section
+        id="view-grammars"
+        class="view grammars-view"
+        aria-label="Grammars view"
+        hidden
+      >
+        <div class="grammar-shell">
+          <p class="grammar-hint">
+            One card per grammar element · grouped by grammar-groups.json ·
+            select a card for the full declaration
+          </p>
+          <div id="grammar-grid" class="grammar-outline"></div>
+        </div>
+
+        <aside class="inspector" aria-live="polite">
+          <div id="grammar-inspector-empty" class="inspector-empty">
+            <span class="empty-mark" aria-hidden="true">◈</span>
+            <h1>Read the grammar</h1>
+            <p>
+              Select a card to see everything the grammar declares for that
+              element: fields, kinds, choice words and relation roles.
+            </p>
+            <p class="read-only">generated from docs/sdoc/grammar.sgra</p>
+          </div>
+          <div id="grammar-inspector-content" hidden></div>
+        </aside>
+      </section>
+
+      <section
+        id="view-perspective"
+        class="view perspective-view"
+        aria-label="Perspective view"
+        hidden
+      >
+        <div class="table-switch" aria-label="Table">
+          <button id="table-nodes" type="button" class="is-active">
+            Nodes
+          </button>
+          <button id="table-relations" type="button">Relations</button>
+          <span class="table-hint"
+            >one row per node · one row per declared relation</span
+          >
+        </div>
+        <perspective-viewer id="viewer" theme="Aurora"></perspective-viewer>
+      </section>
+
+      <div id="loading" class="loading">
+        <span class="spinner" aria-hidden="true"></span>
+        <strong id="loading-title">Asking the scribe daemon</strong>
+        <small id="loading-detail">One resident graph, no re-parse</small>
+      </div>
+
+      <div id="no-daemon" class="no-daemon" hidden>
+        <strong>No scribe daemon is answering.</strong>
+        <pre id="no-daemon-detail"></pre>
+        <button id="retry" type="button">Retry</button>
+      </div>
+    </main>
+
+    <div id="error" class="error" hidden></div>
+    <script type="module" src="/assets/app.js"></script>
+  </body>
+</html>

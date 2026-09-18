@@ -1,0 +1,39 @@
+[DOCUMENT]
+TITLE: The deferred reload is the full one; the cheap rebuild is removed
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SCRIBE-DEFERRED-RELOAD-IS-FULL
+TITLE: The deferred reload is the full one; the cheap rebuild is removed
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: Upstream drains and validates pending inline links inside create_from_document_tree, making the cheap rebuild a complete cross-document check.
+STATEMENT: >>>
+The reload a write defers is strictdoc's FULL load. The cheap rebuild over
+already-parsed documents is removed from the design, not demoted.
+
+It does not re-derive every cross-document invariant. Inline link references
+in prose are appended to pending_inline_links inside
+create_from_document_tree and drained and validated only in the outer
+create(). Measured on this corpus: after a full load pending_inline_links is
+0 and 242 nodes carry incoming links; after the cheap rebuild it is 579 and
+ZERO nodes do. There are 579 inline links across 59 files and 10 UIDs that
+nothing but an inline link names, so the cheap rebuild accepts deleting a
+node the canon still points at.
+
+Batching is untouched, which was the whole point of deferring: a write costs
+about 10 ms and the next read pays ONE reload. Ten writes then a read is
+about 0.65 s against about 30 s through the one-shot command. The cheap level
+is deleted rather than kept behind a flag, because a tempting and unsound
+option left in the code is a defect waiting for someone in a hurry.
+<<<
+RATIONALE: >>>
+This supersedes a ruling that named the deferred check as covering "duplicate
+UIDs, dangling relation targets" and omitted inline links. That was wrong when
+written, and it contradicted DEC-SCRIBE-REFUSES-UID-RENAME in the same
+directory, which warns that a rename leaves every referring reference AND
+INLINE LINK pointing at a dead UID. Two rulings filed the same day disagreed;
+this is the correction.
+<<<

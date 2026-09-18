@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: Which shape the workflow DSL takes: Jira-style transitions, XState-style machines, or admission-style rules
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-DSL-SHAPE
+TITLE: Which shape the workflow DSL takes: Jira-style transitions, XState-style machines, or admission-style rules
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: The operator rules after reading the three candidate shapes, or the first real lifecycle is authored in one of them.
+STATEMENT: >>>
+Which of the three candidate shapes recorded by SPIKE-DSL-PRIOR-ART does the
+workflow DSL take: transitions in the Jira style
+(MECH-DSL-CANDIDATE-JIRA-TRANSITIONS), machines with named guards in the
+XState style (MECH-DSL-CANDIDATE-XSTATE-MACHINES), or a flat list of rules
+with a per-site action in the Kubernetes-admission style
+(MECH-DSL-CANDIDATE-ADMISSION-RULES)? A fourth shape, or a blend, is
+admissible.
+<<<
+RATIONALE: >>>
+The operator said they will know it when they see it, so the three are recorded as shapes to read rather than argued for. Each carries the same worked example.
+<<<

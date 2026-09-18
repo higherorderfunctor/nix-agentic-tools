@@ -1,0 +1,20 @@
+[DOCUMENT]
+TITLE: The retired sdoc module becomes daemon-only verbs
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SDOC-CLI-BECOMES-A-LIBRARY
+TITLE: The retired sdoc module becomes daemon-only verbs
+AUTHORED_BY: llm
+STATEMENT: >>>
+Rename the retired sdoc command module to scribe_verbs.py and reduce it to the graph renderers, prefix check, and target-path helper imported by scribe_ops.py. The module exposes no argparse parser, dispatch table, main function, or executable block; scribe_cmd.py remains the sole command surface.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-DAEMON-IS-THE-ONLY-SOURCE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-MODULE-FILENAMES
+  ROLE: Crosses

@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Converting the fleet corpus is adjudication, not migration
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-CONVERT-IS-ADJUDICATION
+TITLE: Converting the fleet corpus is adjudication, not migration
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: >>>
+The corpus is fully converted, at which point there is nothing left to adjudicate.
+<<<
+STATEMENT: >>>
+The source corpus is not trusted input. Its author could not manage it and does
+not know what is stale, what is dirty, or which requirements survive from
+superseded designs. Therefore no bulk conversion is planned. A cluster is
+converted at the moment someone is about to work on it, and the act of
+converting it is the act of deciding what is still true.
+<<<
+RATIONALE: >>>
+A migration project would import the mess wholesale and produce a validated
+graph of assertions nobody has checked. The parser proves an edge resolves; it
+cannot prove the two ends agree.
+<<<

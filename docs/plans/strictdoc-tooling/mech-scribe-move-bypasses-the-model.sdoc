@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: scribe move reaches disk outside save(), so a save-anchored handler misses it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-MOVE-BYPASSES-THE-MODEL
+TITLE: scribe move reaches disk outside save(), so a save-anchored handler misses it
+AUTHORED_BY: llm
+STATEMENT: >>>
+`scribe move` reaches disk outside `save()`. The destination is resolved by
+scribe_verbs.target_path, and the daemon's `_move`
+(dev/scripts/scribe_ops.py:254-278) does cross the validation boundary --
+it calls `workspace.write(lambda g: g.touch_document(document),
+dry_run=True)`, which renders the document and parses it back -- but that
+call is a dry run, so scribe_workspace.py:241-243 discards the generation:
+the `pending()` map it computed is thrown away and `save()` is never
+reached. The rename itself is a plain `source.rename(destination)`
+(scribe_ops.py:276), after which the held generation is discarded so the next
+read reloads the moved document instead of pretending the source path still
+exists. A handler anchored on the save path -- which is where
+every other write goes -- therefore never sees a move. Re-measured
+2026-09-09; the earlier form of this node cited sdoc_cli.py's `do_move`, and
+the library split has since removed it along with the verb table that was its
+only caller.
+<<<
+COMMENT: >>>
+Dry-run delivery record retained when its completed WORK row was retired on
+2026-09-10. A move preserves source bytes and previews only its rename. Both
+the real and dry-run paths touch, render, and reparse the source before rename,
+so both refuse a document that does not round-trip. Graph.touch_document is
+the public mutation seam used for that validation.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

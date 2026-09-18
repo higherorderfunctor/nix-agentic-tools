@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: Board reads grammar from the resident daemon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-BOARD-READS-GRAMMAR-FROM-DAEMON
+TITLE: Board reads grammar from the resident daemon
+AUTHORED_BY: llm
+STATEMENT: >>>
+The board source requests workspace.grammar for each daemon generation, validates the scribe-grammar/1 reply, and passes its type map into the adapter. No board runtime path parses docs/sdoc/grammar.sgra.
+<<<
+COMMENT: >>>
+The reply is validated by scribe_contract.WorkspaceGrammarResult, the same
+pydantic model the daemon serialises it with. That is unconditional because
+WORK-BOARD-SERVE-PINS-ITS-INTERPRETER pins the board to strictdoc's own
+virtual-environment interpreter, which carries pydantic; there is no
+importable-or-else branch and no second hand-written reading of the wire.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-DAEMON-IS-THE-ONLY-SOURCE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-SERVER
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-ADAPTER
+  ROLE: Crosses

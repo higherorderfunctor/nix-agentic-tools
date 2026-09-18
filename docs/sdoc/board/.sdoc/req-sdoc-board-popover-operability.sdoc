@@ -1,0 +1,41 @@
+[DOCUMENT]
+TITLE: Scrollable popovers show help first and dismiss outside
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-SDOC-BOARD-POPOVER-OPERABILITY
+TITLE: Scrollable popovers show help first and dismiss outside
+AUTHORED_BY: llm
+STATEMENT: >>>
+Any scrollable popover in the Board app MUST place instructions needed to
+operate its controls before the repeated scrollable content, so those
+instructions are visible when the popover first opens without scrolling.
+Pointer input inside the popover MUST leave it open. Pointer input outside the
+popover MUST dismiss it. These rules hold regardless of the content list's
+length.
+<<<
+RATIONALE: >>>
+Instructions below a long list cannot teach undiscovered interactions, and a
+transient control that stays open after the user moves elsewhere obstructs the
+surface it was meant to supplement.
+<<<
+COMMENT: >>>
+The operator established this rule on 2026-09-02 after the relation-role list
+placed its Shift-click instruction below the fold. The Graph filter popover is
+the first implementation and verification point.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-SCOPED-RELATION-FILTER-SMOKE
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: docs/sdoc/board/index.html
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/app.css
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/board.js

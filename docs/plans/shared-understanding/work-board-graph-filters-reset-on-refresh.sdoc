@@ -1,0 +1,44 @@
+[DOCUMENT]
+TITLE: Refresh silently re-enables every graph filter the reader turned off
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-BOARD-GRAPH-FILTERS-RESET-ON-REFRESH
+TITLE: Refresh silently re-enables every graph filter the reader turned off
+AUTHORED_BY: llm
+STATEMENT: >>>
+Graph-tab audit row, 2026-09-08:
+
+| Requirement sentence | Verdict | Where | Fix |
+| --- | --- | --- | --- |
+| MECH-SDOC-BOARD-SCOPED-RELATION-FILTERS: "Reset enables every observed pair. The role vocabulary remains payload-derived, and filter state remains local to the page." | partly | docs/sdoc/board/assets/board.js:909-913 (renderBoard rebuilds enabledTypes and enabledRelations) | hours |
+
+The header Refresh button refetches the snapshot and calls renderBoard,
+which rebuilds enabledTypes and enabledRelations from the new payload. Every
+node type and every source-type/role pair the reader had turned off comes
+back on. The page never navigated, so "local to the page" reads as though
+the state should have survived; only the Reset filters button is supposed to
+do this, and it is the one control that says so.
+
+The selected hop distance does survive Refresh, so the two halves of the
+control bar behave differently for the same gesture.
+
+Preserving the state is not a one-line change, which is why this is filed
+rather than fixed. A refetched canon can carry node types and relation pairs
+that did not exist a moment ago, and those must default to enabled; the
+right shape is to carry the DISABLED set across the refetch and enable
+anything newly observed. Whether a pair that vanished and returned should
+stay disabled is the judgement call.
+<<<
+COMMENT: >>>
+Filed by the Graph-tab contract audit, 2026-09-08. A browser reload legitimately resets both filters and hops -- MECH-SDOC-BOARD-CANVAS makes one hop the default and the filters are page-local by contract. This node is only about the in-page Refresh button.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-SCOPED-RELATION-FILTERS
+  ROLE: Assumes

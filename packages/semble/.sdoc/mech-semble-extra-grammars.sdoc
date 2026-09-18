@@ -1,0 +1,34 @@
+[DOCUMENT]
+TITLE: Semble loads extra tree-sitter grammars from the Nix store
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SEMBLE-EXTRA-GRAMMARS
+TITLE: Semble loads extra tree-sitter grammars from the Nix store
+AUTHORED_BY: llm
+STATEMENT: >>>
+The semble package is patched so that a grammar lookup failing against its
+bundled set falls through to a generated loader that opens store-backed parser
+libraries by ctypes and wraps them in a tree-sitter capsule. Grammar packages
+are supplied through the ai.programs.semble.grammars option and must expose a
+language attribute and a compiled parser output.
+<<<
+RATIONALE: >>>
+This keeps the upstream bundle intact and avoids its mutable extraction cache.
+<<<
+PARENT_FP: DEC-ARCH-COLOCATION:0000000
+COMMENT: >>>
+Delivery evidence retained when the completed semble-indexing WORK row was retired on 2026-09-10. The tree-sitter StrictDoc package is exposed as the tree-sitter-strictdoc flake package, supplied through ai.codex.programs.semble.grammars, and paired with *.sdoc and *.sgra docs-index path mappings. The module load check and checks/strictdoc-grammar-corpus.nix cover delivery and parsing.
+
+Independent chunking on an 8762-byte document returned 17 AST chunks versus 12 line chunks. Boundaries landed on node headers and field starts, and a node larger than the 750-character target split into its fields; returning a chunk list rather than None positively controlled that the parser loaded instead of falling back.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-ARCH-COLOCATION
+  ROLE: Governed_By
+- TYPE: File
+  VALUE: packages/semble/lib/withGrammars.nix
+- TYPE: File
+  VALUE: packages/semble/patches/extra-grammars.patch

@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Store the parent contract fingerprint in the node
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-FINGERPRINT-IN-NODE
+TITLE: Store the parent contract fingerprint in the node
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: >>>
+A second consumer needs per-edge state that a node field cannot carry, such as
+a reviewer identity or a waiver with its own expiry.
+<<<
+STATEMENT: >>>
+A node records the contract hash of each parent it depends on, in a PARENT_FP
+field on the node itself, rather than in a sidecar file keyed by node identity.
+Fingerprints point strictly downward: DECISION to MECHANISM to SLICE.
+<<<
+RATIONALE: >>>
+Accepting a change becomes a reviewable git diff, attributable to a commit and
+revertable. A sidecar makes sign-off invisible and needs a key-matching scheme.
+The downward-only rule means a garbage-collectable node has no inbound
+fingerprint, so deleting it can never strand one.
+<<<

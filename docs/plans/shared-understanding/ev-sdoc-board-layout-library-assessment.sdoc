@@ -1,0 +1,37 @@
+[DOCUMENT]
+TITLE: ELK.js best preserves the board while replacing layout and routing
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SDOC-BOARD-LAYOUT-LIBRARY-ASSESSMENT
+TITLE: ELK.js best preserves the board while replacing layout and routing
+AUTHORED_BY: llm
+SOURCE: Official ELK, ELK.js, Cytoscape.js, Dagre, and yFiles documentation plus a local ELK 0.12 probe against the live scribe payload; 2026-09-02
+STATEMENT: >>>
+A direct ELK.js integration is the best candidate for replacing the board's
+custom layout and routing while preserving its existing SVG cards, filters,
+inspector, hash selection, and bounded-neighborhood behavior. ELK Layered
+accepts measured node and edge-label boxes, supports orthogonal edge sections,
+and exposes label-label, label-node, edge-edge, and edge-node spacing. A local
+ELK 0.12 probe on the then-current RPC-and-service delivery node at two hops
+laid out its 14 nodes and 20 edges with zero label-node and zero label-label
+bounding-box overlaps in 1675 by 934 layout units, compared with the custom
+layout's 1864 by 1322.
+
+The integration should filter and cap the neighborhood before layout, measure
+card and label boxes, invoke a pinned vendored ELK worker, discard stale async
+results with a request token, and translate returned edge sections into the
+existing SVG paths. Role-aware shared trunks require explicit invisible
+junction nodes per shared endpoint, role, and direction; ELK mergeEdges merely
+shares attachment ports and is not role-aware. Cytoscape.js plus its ELK
+adapter would replace more of the existing renderer while the adapter omits
+the label dimensions and routed edge sections needed here. Dagre accepts label
+dimensions but lacks obstacle-aware orthogonal routing and role grouping.
+yFiles is the strongest bus-routing benchmark but is commercial and would be a
+larger SDK migration.
+<<<
+RELATIONS:
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/layout.js

@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: The viewer's form is not chosen
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-VIEWER-FORM-UNDECIDED
+TITLE: The viewer's form is not chosen
+AUTHORED_BY: human
+STATUS: open
+RETIRES_ON: >>>
+The kanban TUI prototype spike concludes, which is expected around the time the
+sdoc work lands.
+<<<
+STATEMENT: >>>
+Whether the eventual viewer is a terminal client or a web view is open. A kanban
+TUI prototype with a generic backend is in progress on the side and its outcome
+is the deciding input.
+<<<
+RATIONALE: >>>
+Recorded so the choice is made on the prototype's evidence rather than by
+whichever surface gets built first.
+<<<

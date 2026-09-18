@@ -1,7 +1,8 @@
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-09-12 — all owner recipes receive pinned packages from
-> the shared composer; both supported-system output baselines match.
+> **Last verified:** 2026-09-12 — StrictDoc preserves upstream derivation
+> identity; all owner recipes receive pinned packages from the shared composer;
+> both supported-system output baselines match.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show db6df0dd:dev/fragments/overlays/cache-hit-parity.md`.
@@ -253,9 +254,22 @@ curl -sI "https://nix-agentic-tools.cachix.org/${HASH}.narinfo" | head -1
 
 ### Exceptions
 
-**Pinned external derivations preserve the upstream identity.** Semble is
-selected directly from `inputs.llm-agents.packages.${system}.semble`, with no
-nixpkgs follow, `overlays.shared-nixpkgs`, local `ourPkgs` rebuild, or
+**Pinned external derivations preserve the upstream identity.** There are two:
+Semble and strictdoc. For both, parity holds for a STRUCTURAL reason rather than
+a maintained one — the derivation closes over the upstream flake's own locked
+nixpkgs and reads the injected `pkgs` for nothing but `system`, so neither side
+of the two-pin comparison can move.
+
+That makes the generic check weak for them, and the coverage is uneven. Measured
+2026-08-27: `checks/packaging/cache-hit-parity.nix` carries an explicit
+`sembleUpstreamOk` assertion pinning `self.packages.<system>.semble` to the
+upstream `drvPath` and `outPath`, wired into the pass condition with its own
+failure message. It names strictdoc nowhere at all. Giving that row real teeth
+means mirroring the Semble assertion, which is a check change and not a
+documentation one.
+
+Semble is selected directly from `inputs.llm-agents.packages.${system}.semble`,
+with no nixpkgs follow, `overlays.shared-nixpkgs`, local `ourPkgs` rebuild, or
 `overrideAttrs`. Its cache identity belongs to the upstream flake rather than to
 this repository's nixpkgs pin. Both the standalone output and a deliberately
 divergent consumer must match that upstream `drvPath` and `outPath` exactly.

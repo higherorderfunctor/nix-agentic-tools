@@ -1,0 +1,32 @@
+[DOCUMENT]
+TITLE: Suspect-link detection over the JSON export
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-FP-CHECK
+TITLE: Suspect-link detection over the JSON export
+AUTHORED_BY: llm
+STATEMENT: >>>
+Hash each node's contract-bearing fields from the JSON export. A node is suspect
+when a parent it records a fingerprint for no longer hashes to the recorded
+value, or when that parent has been deleted. Excludes the fields that are not
+the contract: RATIONALE, COMMENT, PARENT_FP and PLACE -- commentary, the
+fingerprint block itself, and the field that says where a node is drawn rather
+than what it claims.
+<<<
+RATIONALE: >>>
+StrictDoc has no suspect-link feature. It is on the upstream backlog as
+SDOC-SRS-117 and described unbuilt in their DO-178 notes.
+<<<
+PARENT_FP: DEC-FINGERPRINT-IN-NODE:0000000
+COMMENT: >>>
+Delivery record retained when the completed fingerprint WORK row was retired on 2026-09-10. dev/scripts/fp-check.py and fp-accept.py share dev/scripts/sdoc_fp.py for contract hashing and PARENT_FP parsing, while fp-accept writes through dev/scripts/sdoc_model.py. checks/strictdoc-fp-check.nix exports the whole canon into a fresh runCommand temporary directory on every build.
+
+The synthetic harness distinguishes signed-and-current, never-signed, drifted, unbacked, and deleted-parent cases. The first real run found five unbacked fingerprints, the defect class now enforced by MECH-FP-RELATION-LINT. A real multi-entry fp-accept write proved the block form as well as the single-entry path.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-FINGERPRINT-IN-NODE
+  ROLE: Governed_By

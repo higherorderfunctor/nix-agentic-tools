@@ -1,0 +1,55 @@
+[DOCUMENT]
+TITLE: Grammar carries an injected TEXT element nobody authored
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-GRAMMAR-TEXT-ELEMENT-INJECTED
+TITLE: Grammar carries an injected TEXT element nobody authored
+AUTHORED_BY: llm
+STATEMENT: >>>
+Our grammar declares eight tags and no TEXT, so strictdoc injects its own
+default TEXT element into every document in the corpus. The effective
+grammar is nine elements and we authored eight of them.
+
+The injection is unconditional and has no opt-out: at index build, when a
+document's imported grammar has no TEXT element, strictdoc adds the default
+one at position 0. Upstream marks it "for the backward compatibility with
+the existing users" and carries a FIXME to remove it. A parse of
+work-shared-understanding.sdoc returns TEXT plus our eight.
+
+Decide whether the corpus grammar should be the whole grammar -- declare
+TEXT explicitly in values.nix so the rendered .sgra says what a document
+actually gets -- or leave the injection implicit and record it as an
+upstream-owned element. Nothing in the corpus uses a TEXT node today, so
+removing the injection upstream would not break us; the exposure is that a
+grammar file nobody can read as complete is the thing every session reasons
+from.
+<<<
+COMMENT: >>>
+Measured 2026-09-09 against strictdoc-env
+cck3q51nd32dpbmpkwv5xpkxxhpnr2ak. Sites: the injection at index build is
+core/traceability_index_builder.py:449-456, guarded by
+DocumentGrammar.has_text_element(); a second, parse-time injection sits at
+backend/sdoc/processor.py:103 and is discarded when the imported grammar's
+elements replace the list. The FIXME comment is on the processor.py one.
+
+Positive control: parsing docs/plans/shared-understanding/
+work-shared-understanding.sdoc with SDReader alone returns elements
+['TEXT'] with is_default False and import_from_file unresolved, which shows
+the parse-time injection; the .sgra elements are merged in later by the
+index builder, which is where the surviving TEXT comes from.
+
+Surfaced answering the operator's question "is the default requirements
+grammar overrideable?" -- yes, per document and by replacement only, with
+TEXT the one element replacement does not cover. Not the operator's words;
+no ambiguity to preserve.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-GRAMMAR-ARCHITECTURE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

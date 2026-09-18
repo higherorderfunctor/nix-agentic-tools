@@ -1,0 +1,64 @@
+[DOCUMENT]
+TITLE: Draw the boundary between defining semantics and this system's semantics
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SEMANTICS-DEFINITION-BOUNDARY
+TITLE: Draw the boundary between defining semantics and this system's semantics
+AUTHORED_BY: llm
+STATEMENT: >>>
+Two layers, framed by the operator on 2026-08-25. The definition layer is how
+the semantics of any model are defined: a grammar; the state transitions over
+its fields; the gates on those transitions; the triggers that fire them; the
+flows that hit them; where validators wire in and which hook point each one
+belongs to; which validations run on CRUD-like operations versus commit and
+merge operations; and how a grammar maps to structured CLI arguments. The
+instance layer is this design system's particular semantics: fingerprints,
+contracts, the ripple, STATUS, AUTHORED_BY and signing authority.
+
+CRUD and git operations blur the line. They are assumed to be part of the
+semantic vocabulary and need a placement in the definition layer.
+
+TODO: define that boundary in docs/spec where it belongs, and link code to
+the layer it belongs to with parent and child relations against the boundary
+nodes, so an implementation of semantics is never mistaken for the definition
+of semantics.
+<<<
+RATIONALE: >>>
+SPIKE-EXECUTABLE-RULES answered at the instance layer while the operator was
+asking at the definition layer. The two are easy to conflate because the
+instance is the only worked example, and conflating them is how a meta-model
+ends up shaped by one implementation's preferences.
+<<<
+COMMENT: >>>
+Implementation record retained from the semantics delivery rows retired on
+2026-09-10. dev/scripts/sdoc_semantics/model.json is the sole lifecycle
+declaration surface in schema sdoc-semantics-model/1; model-shape.md documents
+the ordered-list shape. The standard-library interpreter validates the closed
+predicate vocabulary and references, stages transactional writes, records
+deterministic ripple provenance, refuses repeated transitions and a separate
+step bound, checks relation contracts, renders Mermaid, and emits
+sdoc-semantics/2. The daemon remains an observer: no write path calls fire().
+Rules carry an explicit lifecycle name or null, so compatibility rendering
+never infers ownership from an opaque rule ID.
+
+The former transitions-backed modules and registry were removed after the
+replacement passed its contract suite. Removing pytransitions and its
+unconditional pygraphviz propagation reduced both measured Nix delivery
+closures by 88.12 MiB; the final strictdocGrammarExtract measurement was
+928,235,704 bytes. DEC-SEMANTICS-MODEL-IS-DATA and
+EV-SEMANTICS-ENGINE-ALTERNATIVES retain the design and comparative evidence;
+EV-TRANSITIONS-ENGINE-SPIKE retains the superseded spike findings.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SYSTEM-PURPOSE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: EV-TRANSITIONS-ENGINE-SPIKE
+  ROLE: Proven_By

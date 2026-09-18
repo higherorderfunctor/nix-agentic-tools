@@ -11,6 +11,10 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 > native package assembly.
 >
 > Full lineage: `git show d1c28a21:dev/fragments/devenv/ci-lean-closure.md`.
+>
+> Branch measurement, 2026-09-03: the standard-library semantics interpreter
+> dropped `transitions` from `grammarPython` (`devenv.nix`), taking that
+> realized closure from 357,486,880 to 265,083,120 bytes.
 
 The Devenv Diagnostic workflow (`.github/workflows/devenv-test.yml`) runs only
 on `workflow_dispatch`. Its cold interactive shell closure is therefore an

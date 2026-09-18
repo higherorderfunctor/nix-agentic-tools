@@ -1,0 +1,53 @@
+# cspell:ignore sdoc
+"""Public seam for the data-defined StrictDoc semantics interpreter."""
+
+from .declare import FireResult, ModelError
+from .engine import (
+    MODEL_PATH,
+    MODEL_SCHEMA,
+    PAYLOAD_KEYS,
+    PREDICATE_OPERATIONS,
+    SCHEMA,
+    Interpreter,
+    adapt_graph,
+    applies_to,
+    build_payload,
+    check,
+    diagnostics,
+    evaluate,
+    fire,
+    gate_placement,
+    grammar_options,
+    load_model,
+    machine_payload,
+    mermaid,
+    payload,
+    transition_reference,
+    validate_model,
+)
+
+__all__ = [
+    "MODEL_PATH",
+    "MODEL_SCHEMA",
+    "PAYLOAD_KEYS",
+    "PREDICATE_OPERATIONS",
+    "SCHEMA",
+    "FireResult",
+    "Interpreter",
+    "ModelError",
+    "adapt_graph",
+    "applies_to",
+    "build_payload",
+    "check",
+    "diagnostics",
+    "evaluate",
+    "fire",
+    "gate_placement",
+    "grammar_options",
+    "load_model",
+    "machine_payload",
+    "mermaid",
+    "payload",
+    "transition_reference",
+    "validate_model",
+]

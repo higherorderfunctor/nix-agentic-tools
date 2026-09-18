@@ -1,0 +1,24 @@
+[DOCUMENT]
+TITLE: The daemon serves the author-facing grammar
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-DAEMON-SERVES-THE-GRAMMAR
+TITLE: The daemon serves the author-facing grammar
+AUTHORED_BY: llm
+STATEMENT: >>>
+Expose the held workspace's complete author-facing grammar through a typed
+workspace.grammar RPC result. Build it from StrictDoc's parsed GrammarElement
+objects so field kinds, choice options, required flags, relation directions and
+UID prefixes stay intact. Exclude StrictDoc's TEXT element through the same
+single filter used by the writer's tag list.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-DAEMON-IS-THE-ONLY-SOURCE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-RPC
+  ROLE: Crosses

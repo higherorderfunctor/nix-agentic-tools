@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: This exists to keep an implementing model on target, not to manage requirements
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SYSTEM-PURPOSE
+TITLE: This exists to keep an implementing model on target, not to manage requirements
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+A second consumer appears whose needs are not served by that purpose --
+compliance, audit, or a human readership that is not the plan's own author.
+<<<
+STATEMENT: >>>
+The system's purpose is context management and edge mechanics during
+implementation: keeping a model on target, and catching what it would otherwise
+miss -- contradictions, stale areas, orphans, conflicts nobody noticed.
+
+It is not a requirements management system, not a documentation system, and not
+a deliverable. Any feature that serves those and not the purpose above is out of
+scope by default.
+<<<
+RATIONALE: >>>
+Stated because nearly every alternative design in this space optimizes for a
+human readership or an audit trail, and inheriting those goals silently is how
+this becomes heavy. The reader being optimized for is a model with a bounded
+context and no memory of yesterday.
+<<<

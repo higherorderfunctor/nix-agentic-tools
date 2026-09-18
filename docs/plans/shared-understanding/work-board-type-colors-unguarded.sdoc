@@ -1,0 +1,45 @@
+[DOCUMENT]
+TITLE: Node-type colors are hand-written in two files with no completeness check
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-BOARD-TYPE-COLORS-UNGUARDED
+TITLE: Node-type colors are hand-written in two files with no completeness check
+AUTHORED_BY: llm
+STATEMENT: >>>
+Graph-tab audit row, 2026-09-08:
+
+| Requirement sentence | Verdict | Where | Fix |
+| --- | --- | --- | --- |
+| REQ-BOARD-GRAMMAR-DRIVEN: "Coloring and styles SHALL be deterministically validated as complete against the grammar -- every element and role styled, none silently falling to a default -- and should ideally be literally a CSS sheet." | not met | docs/sdoc/board/assets/card.js:7 (TYPE_COLORS), card.js:16 (FALLBACK_COLOR), assets/theme.css:62-82 | days |
+
+TYPE_COLORS names seven elements. The payload grammar declares eight:
+COMMENTARY has no entry and resolves through FALLBACK_COLOR, which is
+exactly the silent fall to a default the requirement forbids. Nothing
+notices, because no instance of COMMENTARY exists in the canon yet -- the
+first one drawn would be slate grey with no warning.
+
+theme.css:62-82 restates the same seven hexes twice more as the Perspective
+chart and datagrid series colors, so one type color is three edits in two
+files, and the comment there ("The same accents the Board cards use") is the
+only thing holding them together.
+
+The requirement asks for two guards, and neither exists: a static check in
+nix flake check that every grammar-declared element is styled and nothing
+stale remains, and a runtime check on the page as the reload safety net. It
+also prefers the styles be literally a CSS sheet, which the JS map is not.
+Deciding whether the palette becomes generated CSS, a payload field, or a
+checked hand-authored sheet is the design work here.
+<<<
+COMMENT: >>>
+Filed by the Graph-tab contract audit, 2026-09-08. REQ-BOARD-GRAMMAR-DRIVEN already names TYPE_COLORS and the duplicated theme.css series colors in its own COMMENT as standing violations to burn down; this node is that burn-down with the measurement attached. Two smaller instances of the same shape were fixed in the same session (commit 344c4dfd): the unreachable hard-coded edge-hue fallback in renderEdges, and the graph key focus swatch that pinned --outline-color to --accent-success rather than reading the focal node type color.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-CANVAS
+  ROLE: Assumes

@@ -1,0 +1,48 @@
+[DOCUMENT]
+TITLE: No program outside the daemon reads corpus content from disk
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: REQ-DAEMON-IS-THE-ONLY-SOURCE
+TITLE: No program outside the daemon reads corpus content from disk
+AUTHORED_BY: llm
+STATEMENT: >>>
+No program outside the scribe daemon reads corpus content from disk. Corpus
+content is the .sdoc nodes, the grammar, the UID-to-path map, and the
+semantics model. A consumer obtains all of it from the daemon over RPC, or it
+does without.
+
+A check that validates the corpus in the Nix sandbox is not a consumer of it:
+the sandbox has no daemon, and the checks are what prove the bytes the daemon
+serves.
+
+This is not satisfiable today. The semantics layer is not defined well enough
+to encode, so the representation the daemon would serve does not yet exist.
+Until it does, the board's model.json read stands as a recorded violation
+rather than a sanctioned exception.
+<<<
+RATIONALE: >>>
+One parsed, validated graph is the thing every consumer should reason from, and the daemon already holds it. Every second reader of the same bytes is a second parser with its own view. The board and the CLI each re-parsed grammar.sgra with an 81-line regex reader that could not see strictdoc's injected TEXT element; both now take the daemon's parsed grammar over RPC, and the view tooling is the last second reader left. Before `_DOCUMENT_PATH` joined the daemon export, the board also walked the whole worktree for .sdoc files on every generation change to rebuild a UID-to-path map; it now consumes the graph-owned path without that second corpus read. Parallel views of one file drift, and the drift is invisible until a surface shows something the other does not.
+<<<
+COMMENT: >>>
+Operator, 2026-09-09, verbatim: "ideally i want everything going through the daemon ... even board shouldn't read the disk directly for the sdoc contents including semantics, ever. id call that a requirement, just not satisfiable right now because we dont have the semantic layer defined well enough to encode. i dont want you just filling in that until ive made it definable through nix." And on the path map: "the daemon should be injecting the path, board shouldn't be walking that."
+
+Current violations, re-measured as this stack landed: the scribe client, the board, view-check and wireline all obtain the grammar from workspace.grammar and validate the shared scribe-grammar/1 contract, so nothing outside the daemon parses grammar.sgra any more. Corpus operations stay daemon-backed and every consumer fails closed with the NoDaemon socket and start remedy. The board's UID-to-path walk is closed too: workspace.export injects `_DOCUMENT_PATH`, and adapter.py reads it directly without importing view-check.py.
+
+Two readers are left. view-check.py still walks the worktree for .sdoc files, because the view pipeline's input is a hand-run `strictdoc export` and only an export that goes through the daemon carries `_DOCUMENT_PATH`; moving that pipeline onto the daemon export is what closes it, and checks/daemon-only-source.py permits exactly that one finding in that one file until then. And the board semantics payload and the operator-facing `scribe semantics` command still read model.json from disk -- the recorded violation named in the STATEMENT.
+
+Once the semantics representation exists and the daemon serves it, the second
+paragraph of the STATEMENT is deleted and the model.json reads become plain
+violations to fix. Extends DEC-SCRIBE-DAEMON-NO-FALLBACK and
+DEC-SDOC-BOARD-READS-THE-SCRIBE-DAEMON, which forbid a second GRAPH and a
+fallback LOAD but say nothing about reading corpus bytes directly;
+MECH-SCRIBE-COMMANDS-LOAD-IN-PROCESS previously justified the client-side grammar read as "needs no corpus"; this requirement withdrew that carve-out. The daemon bootstrap has since landed: the client's two-pass parser takes its option surface from workspace.grammar.
+
+The daemon-only-source flake check executes this boundary. It scans Python programs under dev/scripts and docs/sdoc for parse_sgra imports, grammar.sgra path literals, and filesystem walks over .sdoc files. Its permanent allowances are daemon implementation modules, sandboxed checks, tests, and dev/scripts/sdoc_semantics as the recorded violation. Its one narrow exception is view-check.py's worktree walk, named by FINDING rather than by file, so a grammar read added to that same file is still refused.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-DAEMON-NO-FALLBACK
+  ROLE: Governed_By

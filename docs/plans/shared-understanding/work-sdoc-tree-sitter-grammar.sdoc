@@ -1,0 +1,29 @@
+[DOCUMENT]
+TITLE: A tree-sitter grammar for the sdoc format, derived from the sdoc grammar
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SDOC-TREE-SITTER-GRAMMAR
+TITLE: A tree-sitter grammar for the sdoc format, derived from the sdoc grammar
+AUTHORED_BY: llm
+STATEMENT: >>>
+A dedicated tree-sitter grammar for the sdoc file format itself, derived from
+the sdoc .sgra grammar so the two stay in step rather than being maintained
+as two independent descriptions of the same format.
+<<<
+COMMENT: >>>
+Operator, 2026-09-02, verbatim: "sdoc grammars to custom tree-sitter grammar"
+
+A patched upstream grammar already exists at
+`overlays/generic/tree-sitter-strictdoc.nix` and its adjacent `.patch`,
+consumed by `checks/strictdoc-grammar-corpus.nix`, which parses every
+`.sdoc`/`.sgra` in this repository, and it was extended on 2026-09-03
+(commit d6633588) to teach `file_entry` StrictDoc's full File relation key
+set after element-grained relations stopped four documents parsing.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SDOC-TREE-SITTER-SUPPORT
+  ROLE: Assumes

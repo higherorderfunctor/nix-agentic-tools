@@ -1,0 +1,43 @@
+[DOCUMENT]
+TITLE: Python graph discovery and fingerprint parsing are hand-copied
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: MECH-SDOC-VOCABULARY-SINGLE-SOURCE
+TITLE: Python graph discovery and fingerprint parsing are hand-copied
+AUTHORED_BY: llm
+STATEMENT: >>>
+Node discovery remains written independently across `dev/scripts/` and
+`docs/sdoc/`: status.py and render.py recursively walk typed nodes, while
+sdoc_fp.py walks DOCUMENTS then NODES. The fingerprint placeholder is owned by
+sdoc_fp.py but rendered independently in status.py and render.py. PARENT_FP is
+parsed by sdoc_fp.py with `partition(":")` -- first colon, as
+DEC-FINGERPRINT-IN-NODE specifies -- and by render.py with `rsplit(":", 1)` --
+last colon. Fold the remaining copies into a shared module.
+<<<
+RATIONALE: >>>
+The discovery copies agreed on the measured corpus, so the present cost is
+silence when they diverge. A node nested in a `[SECTION]` is found by the two
+recursive walks and missed by sdoc_fp's two-level walk, while a new element
+added to the grammar is found by sdoc_fp and can be missed by the other two.
+MECH-SIGNATURE-REVOCATION also demonstrates why the parser delimiter must have
+one owner.
+<<<
+COMMENT: >>>
+Measured 2026-08-27 against a clean export of 144 nodes. The revocation
+divergence was confirmed by running both parser forms over the exact string
+MECH-SIGNATURE-REVOCATION specifies.
+
+Absorbs the proposed `MECH-NODE-DISCOVERY-SINGLE-SOURCE`, `MECH-FP-VOCABULARY-DUPLICATED` and `MECH-STATE-VOCABULARY-FROM-GRAMMAR`.
+
+Retyped from MECHANISM to EVIDENCE on 2026-08-30 by the mechanism mood test
+under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it
+records what was observed once, not how something always behaves. The UID
+keeps its prefix: DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

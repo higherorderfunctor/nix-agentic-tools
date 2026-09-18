@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: The target workspace is selected explicitly, and the socket is named from it
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SCRIBE-ROOT-SELECTS-THE-WORKSPACE
+TITLE: The target workspace is selected explicitly, and the socket is named from it
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: Scribe serves more than one root from one process, or a workspace stops being a single strictdoc project root.
+STATEMENT: >>>
+The workspace a scribe command acts on is selected by --root, then by
+SCRIBE_ROOT, then by walking up from the current directory for
+strictdoc_config.py. The socket name derives from the RESOLVED target root --
+never from the current directory, and never from where the binary lives.
+
+A client therefore operates on a worktree it was not launched from, which is
+the shape the beads harness needs: its dev shell is the stable checkout, while
+the work is in a worktree.
+
+The daemon reports its own root and the client asserts it matches what was
+asked for, so a stale or misdirected socket is a loud mismatch rather than
+another worktree's canon answering as if it were yours.
+<<<

@@ -1,0 +1,41 @@
+[DOCUMENT]
+TITLE: A workspace holds one graph and publishes it as an immutable generation
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-WORKSPACE
+TITLE: A workspace holds one graph and publishes it as an immutable generation
+AUTHORED_BY: llm
+STATEMENT: >>>
+A workspace owns one project root, hydrates its graph once, and publishes it as
+a numbered generation. Readers take the current generation without parsing. A
+write applies to that generation in memory and marks it dirty; a replacement is
+constructed in full and swapped in only after it succeeds, so a reader sees the
+old or the new state and never a half-built one.
+
+The workspace is the transport-neutral boundary. Neither the socket nor any
+future transport parses anything or owns state; both call this.
+<<<
+COMMENT: >>>
+Dry-run delivery record retained when its completed WORK row was retired on
+2026-09-10. Workspace.write runs the ordinary mutation, precheck, render, and
+reparse pipeline, captures Graph.pending(), and discards the speculative
+generation instead of saving it. A separate last-published counter survives
+that discard so the next reload advances the board cache generation. Across
+three isolated runs, capture-and-discard averaged 6.3 ms and the next full read
+943.1 ms; the rejected deepcopy design took 4,444.9 ms in one run.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-SCRIBE-HOLDS-ONE-GRAPH
+  ROLE: Guarantees
+- TYPE: Parent
+  VALUE: EV-SCRIBE-LOAD-COST
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: dev/scripts/scribe_workspace.py
+- TYPE: Parent
+  VALUE: EV-SCRIBE-WORKSPACE-CONTRACTS
+  ROLE: Proven_By

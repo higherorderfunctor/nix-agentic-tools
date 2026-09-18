@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: Include the emitter in the ripple cycle key
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SEMANTICS-RIPPLE-KEY-EMITTER
+TITLE: Include the emitter in the ripple cycle key
+AUTHORED_BY: llm
+STATEMENT: >>>
+The ripple's cycle key is (lifecycle, subject, transition, event) and omits the emitter, so two distinct emitters legitimately driving the same self-transition on the same subject in one command refuse the whole command as a cycle. Decide whether the key should carry the emitter, or whether a self-transition driven twice is a cycle by definition, and add a contract either way.
+<<<
+COMMENT: >>>
+Found by the semantics re-review on 2026-09-08 (engine.py:1288).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: MECH-SEMANTICS-DEFINITION-BOUNDARY
+  ROLE: Assumes

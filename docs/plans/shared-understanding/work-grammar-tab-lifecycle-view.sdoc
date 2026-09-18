@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: Grammar tab: file drawer, lifecycle FSM, semantics table
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-GRAMMAR-TAB-LIFECYCLE-VIEW
+TITLE: Grammar tab: file drawer, lifecycle FSM, semantics table
+AUTHORED_BY: llm
+STATEMENT: >>>
+Redesign the Grammars tab around lifecycle and semantics: a left drawer
+listing the grammar cards grouped by grammar FILE (once the split exists); a
+middle view showing the selected element's lifecycle graph (the STATUS and
+AUTHORED_BY ladders as FSMs) and a semantics table; the right pane unchanged,
+rendering what the grammar file declares.
+<<<
+COMMENT: >>>
+The reasoning groups landed first as MECH-SDOC-BOARD-GRAMMARS-VIEW (2026-09-02);
+the lifecycle/semantics redesign stays open.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-BOARD-SHIFT
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

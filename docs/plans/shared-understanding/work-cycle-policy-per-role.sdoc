@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: Acyclic per role where the role means it, not across the union
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-CYCLE-POLICY-PER-ROLE
+TITLE: Acyclic per role where the role means it, not across the union
+AUTHORED_BY: llm
+STATEMENT: >>>
+The operator's position for the grammar redesign, raised 2026-09-08: different role graphs can each be acyclic while their union contains a cycle, and that union cycle need not be a contradiction, because a reasoning connection such as a related edge carries no domain direction. So acyclicity is a property of a role whose meaning requires it (nesting, ordering, dependency), not of the whole graph. Today the canon rules the opposite: MECH-CYCLE-CHECK fails the build on any cycle over Parent edges of every role, while SLICE-BEHAVIOUR-MODEL's relation contracts already carry a per-role admits_cycles flag that the interpreter enforces per role. The two cannot both hold once any contract admits a cycle. Deciding this means superseding what MECH-CYCLE-CHECK rules, not editing it, and saying per role which ones stay acyclic. The overlay or annotation wording the operator remembers is not in the canon anywhere; this node is where it now lives.
+<<<
+COMMENT: >>>
+Operator, 2026-09-08: "I believe the graph must be acyclic. I thought we discussed like a work around with like overlay graphs (annotations) must be locally acyclic but when overlayed it could be cyclic or something." From their web session, verbatim: "Different role graphs can each be acyclic while their union contains a cycle. That was the original concern. There is also a separate StrictDoc implementation discrepancy, which I blurred into the same warning." "A mixed-role cycle need not be a semantic contradiction ... The return edge is only a reasoning connection. Our draft explicitly gives RELATED no domain-level direction. So rejecting this combined cycle would impose a constraint that neither relationship's meaning requires." "That is the distinction between 'each relevant overlay must be acyclic' and 'the whole graph must be acyclic.' The second is strictly stronger." "I would not require the combined graph to be a DAG. Boundary nesting and work ordering have reasons to be acyclic. Ordinary reasoning connections do not. Nor should USES acquire an acyclicity requirement merely because we encode it using native Parent/Child relations." On the strictdoc side, their reading of upstream 0.29.0 by static inspection: the graph builder's cycle traversal calls get_link_values() without a role selector, the database wrapper supplies edge=None, and the storage reads None as role-less edges only, so that path skips named-role edges; this matches MECH-CYCLE-CHECK's rationale.
+
+2026-09-08, same day: WORK-INDEPENDENT-FAMILY-GRAPHS may move where this rule is enforced. If families become independent graphs stitched by UID, the per-role cycle rule applies to the stitched graph in the semantic layer, and the global gate on one strictdoc export goes away with the single export. The rule itself is unchanged.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-GRAMMAR-ARCHITECTURE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-CYCLE-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
