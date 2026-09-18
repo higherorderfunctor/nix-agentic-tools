@@ -5,21 +5,28 @@
   ...
 }: let
   policy = import ../../config/ai-delivery.nix {inherit lib;};
+  # lib/testing/module-harness.nix declares `warnings` in both backend stubs,
+  # so this reads the module-system branch of mkBackendTransform rather than
+  # extending the eval to create the option a real backend always has.
   evaluate = mode: config:
-    ((
-        if mode == "hm"
-        then harness.evalHm config
-        else harness.evalDevenv config
-      ).extendModules {
-        modules = [
-          {
-            options.warnings = lib.mkOption {
-              type = lib.types.listOf lib.types.str;
-              default = [];
-            };
-          }
-        ];
-      }).config.warnings;
+    (
+      if mode == "hm"
+      then harness.evalHm config
+      else harness.evalDevenv config
+    )
+    .config
+    .warnings;
+  records = lib.mapAttrs (_: file:
+    import file {
+      lib = harness.hmLib;
+      inherit pkgs;
+    }) {
+    claude = ../../packages/claude-code/lib/mkClaude.nix;
+    codex = ../../packages/chatgpt-codex/lib/mkCodex.nix;
+    copilot = ../../packages/copilot-cli/lib/mkCopilot.nix;
+    kimchi = ../../packages/kimchi/lib/mkKimchi.nix;
+    kiro = ../../packages/kiro-cli/lib/mkKiro.nix;
+  };
   contains = needle: messages: lib.any (lib.hasInfix needle) messages;
   sample = {
     agents.probe = {
@@ -51,23 +58,37 @@
       else if row.surface == "permissions"
       then ["ai" row.ecosystem "permissions"]
       else ["ai" row.surface];
-    applicable = row.surface != "permissions" || row.ecosystem == "kiro";
     enabled = {ai.${row.ecosystem}.enable = true;};
     messages = evaluate row.mode (lib.recursiveUpdate enabled (lib.setAttrByPath path sample.${row.surface}));
     empty = evaluate row.mode enabled;
-    needle = lib.concatStringsSep "." path;
+    needle = lib.showOption path;
   in
-    !applicable
-    || (contains needle messages
+    # No permissions option or translation exists for these runtimes, so there
+    # is nothing to probe. Assert the EMPTY input list rather than skipping the
+    # row: a row that later grows an input option then stops passing by
+    # default instead of staying silently unexercised.
+    if row.surface == "permissions" && row.ecosystem != "kiro"
+    then row.inputOptions == []
+    # A bare root pool the runtime's capability gate excludes is deliberately
+    # silent — there is no per-runtime option to tombstone it with, so the
+    # warning would have no consumer remedy. The silence is the assertion.
+    else if builtins.length path == 2 && !(builtins.elem row.surface records.${row.ecosystem}.supportedPools)
+    then messages == [] && empty == []
+    else
+      contains needle messages
       && contains (row.deliveryGap or row.reason) messages
-      && !contains needle empty);
+      && !contains needle empty;
+  # `ai.kiro.trustedMcpTools` is NOT a case here: the wrapper appends
+  # `--trust-tools` on both backends, so a devenv consumer setting it has no
+  # delivery gap to be told about. The narrower withhold it does have — the v3
+  # `acp` arm and Darwin's bundle-discovery launcher — is asserted by
+  # ai-warnings-darwin-trust below.
+  #
+  # Root pools an incapable runtime excludes (`ai.agents`/`ai.hooks` on Kiro,
+  # `ai.shell` on Kimchi and Copilot) are not cases either: they are silent by
+  # design, and rowCase above asserts that silence.
   cases =
     [
-      {
-        runtime = "kiro";
-        path = ["ai" "kiro" "trustedMcpTools"];
-        value = ["@probe"];
-      }
       {
         runtime = "copilot";
         path = ["ai" "copilot" "context"];
@@ -79,26 +100,6 @@
         path = ["ai" "copilot" "rules"];
         value.probe.text = "probe";
         mode = "hm";
-      }
-      {
-        runtime = "kiro";
-        path = ["ai" "agents"];
-        value = sample.agents;
-      }
-      {
-        runtime = "kiro";
-        path = ["ai" "hooks"];
-        value = sample.hooks;
-      }
-      {
-        runtime = "kimchi";
-        path = ["ai" "shell"];
-        value = pkgs.bash;
-      }
-      {
-        runtime = "copilot";
-        path = ["ai" "shell"];
-        value = pkgs.bash;
       }
       {
         runtime = "codex";
@@ -199,6 +200,18 @@
         };
         suffix = ".inclusion";
       }
+      # A consumer key may contain a dot of its own: `foo.bar.md` lands at key
+      # `foo.bar`. The rendered path has to quote it, or the message names an
+      # option that does not exist and cannot be pasted back.
+      {
+        runtime = "kiro";
+        path = ["ai" "kiro" "rules" "foo.bar"];
+        value = {
+          text = "probe";
+          inclusion = "manual";
+        };
+        suffix = ".inclusion";
+      }
       {
         runtime = "kiro";
         path = ["ai" "kiro" "hooks" "probe"];
@@ -253,67 +266,89 @@
   casePass = case: let
     mode = case.mode or "devenv";
     input = lib.setAttrByPath case.path case.value;
-    needle = lib.concatStringsSep "." case.path + (case.suffix or "");
+    needle = lib.showOption case.path + (case.suffix or "");
     enabled = {ai.${case.runtime}.enable = true;};
   in
     contains needle (evaluate mode (lib.recursiveUpdate enabled input))
     && !contains needle (evaluate mode enabled)
     && evaluate mode input == [];
   mcp = import ../../lib/mcp.nix {inherit lib;};
-  darwinWarnings = v3: trustedMcpTools:
+  # `isDarwin` is forced in BOTH directions rather than left to the host: this
+  # check runs on x86_64-linux and aarch64-darwin, so reading the real platform
+  # would make the non-Darwin arms assert nothing on the Darwin runner.
+  trustWarnings = {
+    backend,
+    darwin ? false,
+    trustedMcpTools ? ["@probe"],
+    v3 ? false,
+  }: let
+    declaration = {
+      ai.kiro = {
+        enable = true;
+        inherit trustedMcpTools v3;
+      };
+    };
+  in
     import ../../lib/ai/delivery-warnings.nix {inherit lib;} {
-      appRecord =
-        (import ../../packages/kiro-cli/lib/mkKiro.nix {
-          lib = harness.hmLib;
-          inherit pkgs;
-        })
-        // {
-          pkgs.stdenv.hostPlatform.isDarwin = true;
-        };
-      backend = "hm";
+      appRecord = records.kiro // {pkgs.stdenv.hostPlatform.isDarwin = darwin;};
+      inherit backend;
       inherit
-        (harness.evalHm {
-          ai.kiro = {
-            enable = true;
-            inherit v3 trustedMcpTools;
-          };
-        })
+        (
+          if backend == "hm"
+          then harness.evalHm declaration
+          else harness.evalDevenv declaration
+        )
         config
         ;
+    };
+  # A hand-built config, not a harness eval: every policy path goes through
+  # lib.attrByPath, which answers `null` for a shared pool a minimal
+  # composition never declared, and the real module trees always declare them
+  # all. Each branch of `present` has to read that null as "nothing requested"
+  # instead of crashing the whole evaluation.
+  undeclaredSharedPools = backend:
+    import ../../lib/ai/delivery-warnings.nix {inherit lib;} {
+      appRecord = records.copilot;
+      inherit backend;
+      config.ai.copilot.enable = true;
     };
 in {
   imports = [./runtime.nix];
   checks = {
     ai-warnings-darwin-trust = harness.mkTest "ai-warnings-darwin-trust" (
-      contains "ai.kiro.trustedMcpTools" (darwinWarnings false ["@probe"])
-      && darwinWarnings false [] == []
-      && darwinWarnings true ["@probe"] == []
+      # Withheld: Darwin under either engine, and the v3 `acp` arm anywhere.
+      contains "ai.kiro.trustedMcpTools" (trustWarnings {
+        backend = "hm";
+        darwin = true;
+      })
+      && contains "ai.kiro.trustedMcpTools" (trustWarnings {
+        backend = "devenv";
+        darwin = true;
+        v3 = true;
+      })
+      && contains "ai.kiro.trustedMcpTools" (trustWarnings {
+        backend = "devenv";
+        v3 = true;
+      })
+      # Recovered, or never withheld.
+      && trustWarnings {
+        backend = "hm";
+        darwin = true;
+        v3 = true;
+      }
+      == []
+      && trustWarnings {
+        backend = "hm";
+        darwin = true;
+        trustedMcpTools = [];
+      }
+      == []
+      && trustWarnings {backend = "devenv";} == []
+      && trustWarnings {backend = "hm";} == []
     );
     ai-warnings-delivery = harness.mkTest "ai-warnings-delivery" (
       lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
       && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
-    );
-    ai-warnings-tombstones = harness.mkTest "ai-warnings-tombstones" (
-      evaluate "hm" {
-        ai.copilot = {
-          enable = true;
-          rules.probe = null;
-        };
-        ai.rules.probe.text = "probe";
-      }
-      == []
-      && evaluate "hm" {
-        ai.kimchi.enable = true;
-        ai.rules.probe = null;
-      }
-      == []
-      && evaluate "hm" {
-        ai.copilot = {
-          enable = true;
-          context.text = "";
-        };
-      }
-      == []
     );
     ai-warnings-mcp-assertions = harness.mkTest "ai-warnings-mcp-assertions" (
       let
@@ -339,6 +374,30 @@ in {
         });
       in
         valid.instanceUrl == null && !(valid ? assertions) && !invalid.success
+    );
+    ai-warnings-tombstones = harness.mkTest "ai-warnings-tombstones" (
+      evaluate "hm" {
+        ai.copilot = {
+          enable = true;
+          rules.probe = null;
+        };
+        ai.rules.probe.text = "probe";
+      }
+      == []
+      && evaluate "hm" {
+        ai.kimchi.enable = true;
+        ai.rules.probe = null;
+      }
+      == []
+      && evaluate "hm" {
+        ai.copilot = {
+          enable = true;
+          context.text = "";
+        };
+      }
+      == []
+      && undeclaredSharedPools "hm" == []
+      && undeclaredSharedPools "devenv" == []
     );
   };
 }

@@ -38,6 +38,17 @@
         type = lib.types.listOf lib.types.anything;
         default = [];
       };
+      # Both real backends declare `warnings`, and lib/ai/app/mkBackendTransform.nix
+      # branches on `options ? warnings`: with the option the delivery diagnostics
+      # are module-system warnings, without it they are `lib.warn` traces folded
+      # onto the installed packages. Omitting it here made every check in the
+      # corpus exercise the fallback branch and sprayed those traces through
+      # unrelated module evaluations. Declared so the harness exercises the
+      # real branch.
+      warnings = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+      };
       home = {
         activation = lib.mkOption {
           type = lib.types.attrsOf lib.types.anything;
@@ -103,6 +114,11 @@
     options = {
       assertions = lib.mkOption {
         type = lib.types.listOf lib.types.anything;
+        default = [];
+      };
+      # Same reason as hmStubs above: the module-system branch is the real one.
+      warnings = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
         default = [];
       };
       # Real devenv exposes this at EVAL time — `devenv eval devenv.state`
