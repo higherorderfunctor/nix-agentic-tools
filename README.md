@@ -267,6 +267,7 @@ nix build .#dns-root-hints
 | `copilot-cli` | GitHub Copilot CLI |
 | `kimchi` | Kimchi CLI |
 | `kiro-cli` | Kiro CLI |
+| `kiro-crew` | Kiro Crew |
 | `kiro-gateway` | Python proxy API for Kiro |
 | `semble` | Local semantic and lexical code-search CLI |
 

@@ -1,0 +1,111 @@
+diff --git a/src/kiro_crew/sandbox.py b/src/kiro_crew/sandbox.py
+index a07ec81..75a97b2 100644
+--- a/src/kiro_crew/sandbox.py
++++ b/src/kiro_crew/sandbox.py
+@@ -6748,7 +6748,9 @@ def delegated_workspace_exposes_agents_dir(work_dir: "str | os.PathLike[str] | N
+     """
+     if work_dir is None:
+         return None
+-    delegated = (sys.platform == "darwin" and kiro_internal_sandbox_enabled()) or (
++    # Keep this platform set in step with wrap_argv: delegation removes the
++    # Crew-owned agents-tree seal, so Linux needs the same overlap refusal.
++    delegated = (sys.platform in ("darwin", "linux") and kiro_internal_sandbox_enabled()) or (
+         sys.platform == "win32"
+     )
+     if not delegated:
+@@ -6856,7 +6858,8 @@ def _delegate_to_kiro_internal_sandbox(
+ 
+     This is NOT the forbidden silent unsandboxed fallback: the child still
+     runs under kiro-cli's own sandbox. On macOS the delegation is config-driven
+-    mutual exclusion with Kiro Crew's seatbelt; on Windows it is restricted to a
++    mutual exclusion with Kiro Crew's seatbelt; Linux uses the same opt-in
++    for its namespace wrapper. On Windows it is restricted to a
+     positive first-party Kiro backend classification because Kiro Crew has no
+     native OS wrapper there. The decision is deterministic (never a reaction to
+     a wrap failure), logged loudly once per process, and every delegated spawn
+@@ -6893,8 +6896,8 @@ def _delegate_to_kiro_internal_sandbox(
+                 "Windows Kiro backend delegation: kiro internal sandbox owns "
+                 "this spawn; Kiro Crew has no native Windows sandbox backend"
+                 if sys.platform == "win32"
+-                else "macOS sandbox mutual exclusion: kiro internal sandbox on -> "
+-                "KiroCrew seatbelt off for this kiro-cli spawn"
++                else f"{sys.platform} sandbox delegation: kiro internal sandbox on -> "
++                "KiroCrew OS wrapper off for this kiro-cli spawn"
+             ),
+             # audit-or-deny: written synchronously; a filesystem failure
+             # re-raises so an unaudited delegation can never proceed.
+@@ -6920,7 +6923,7 @@ def _delegate_to_kiro_internal_sandbox(
+             "SECURITY: delegating this %s kiro-cli spawn to kiro-cli's internal "
+             "sandbox and skipping Kiro Crew's OS wrapper. Env scrubbing still "
+             "applies.",
+-            "Windows" if sys.platform == "win32" else "macOS",
++            sys.platform,
+         )
+     if sys.platform == "win32":
+         return list(argv), None
+@@ -9568,10 +9571,11 @@ def wrap_argv(
+     # insufficient to grant this exception. All other Windows spawns retain the
+     # no-backend fail-closed path. Checked before backend detection so this is a
+     # deterministic capability decision, never a fallback after a probe failure.
+-    # Linux namespace isolation is unaffected.
++    # Packaged Linux deployments may also let the enabled Kiro sandbox own
++    # isolation. The agents-tree overlap gate above must expand with it.
+     kiro_spawn = _spawns_kiro_cli(argv) if is_kiro_cli is None else is_kiro_cli
+     delegate_to_kiro = (
+-        sys.platform == "darwin" and kiro_spawn and kiro_internal_sandbox_enabled()
++        sys.platform in ("darwin", "linux") and kiro_spawn and kiro_internal_sandbox_enabled()
+     ) or (sys.platform == "win32" and is_kiro_cli is True)
+     if private_memory:
+         delegate_to_kiro = False
+diff --git a/test/test_sandbox_agents_dir_workspace.py b/test/test_sandbox_agents_dir_workspace.py
+index 1997c38..9224eb7 100644
+--- a/test/test_sandbox_agents_dir_workspace.py
++++ b/test/test_sandbox_agents_dir_workspace.py
+@@ -29,8 +29,9 @@ def _overlapping(agents_dir):
+ 
+ 
+ class TestDelegatedWorkspaceExposesAgentsDir:
+-    def test_darwin_with_internal_sandbox_refuses_every_overlap(self, monkeypatch, agents_dir):
+-        monkeypatch.setattr(sandbox_mod.sys, "platform", "darwin")
++    @pytest.mark.parametrize("platform", ["darwin", "linux"])
++    def test_posix_with_internal_sandbox_refuses_every_overlap(self, monkeypatch, agents_dir, platform):
++        monkeypatch.setattr(sandbox_mod.sys, "platform", platform)
+         monkeypatch.setattr(sandbox_mod, "kiro_internal_sandbox_enabled", lambda: True)
+         for workspace in _overlapping(agents_dir):
+             reason = sandbox_mod.delegated_workspace_exposes_agents_dir(workspace)
+@@ -60,10 +61,10 @@ class TestDelegatedWorkspaceExposesAgentsDir:
+         for workspace in _overlapping(agents_dir):
+             assert sandbox_mod.delegated_workspace_exposes_agents_dir(workspace) is None
+ 
+-    def test_linux_never_refuses(self, monkeypatch, agents_dir):
++    def test_linux_without_internal_sandbox_keeps_the_seal(self, monkeypatch, agents_dir):
+         monkeypatch.setattr(sandbox_mod.sys, "platform", "linux")
+-        # Even with the kiro setting on: Linux never delegates.
+-        monkeypatch.setattr(sandbox_mod, "kiro_internal_sandbox_enabled", lambda: True)
++        # Without delegation the namespace wrapper still seals the agents tree.
++        monkeypatch.setattr(sandbox_mod, "kiro_internal_sandbox_enabled", lambda: False)
+         for workspace in _overlapping(agents_dir):
+             assert sandbox_mod.delegated_workspace_exposes_agents_dir(workspace) is None
+ 
+diff --git a/test/test_sandbox_default_fix.py b/test/test_sandbox_default_fix.py
+index 7286d4d..2f2796a 100644
+--- a/test/test_sandbox_default_fix.py
++++ b/test/test_sandbox_default_fix.py
+@@ -157,14 +157,15 @@ class TestDelegationDoesNotBlockEventLoop:
+     small-file read — acceptable for the hot path.
+     """
+ 
+-    def test_delegation_path_has_no_subprocess_call(self, monkeypatch):
++    @pytest.mark.parametrize("platform", ["darwin", "linux"])
++    def test_delegation_path_has_no_subprocess_call(self, monkeypatch, platform):
+         """Verify that the delegation path doesn't call subprocess.run."""
+         import subprocess
+         from unittest.mock import MagicMock
+ 
+         spy = MagicMock(side_effect=AssertionError("subprocess.run called on delegation path!"))
+         monkeypatch.setattr(subprocess, "run", spy)
+-        monkeypatch.setattr(sys, "platform", "darwin")
++        monkeypatch.setattr(sys, "platform", platform)
+         monkeypatch.setattr(sb, "kiro_internal_sandbox_enabled", lambda: True)
+         # Mock _delegate_to_kiro_internal_sandbox to avoid SEL
+         delegated = (["env", "-u", "SSH_AUTH_SOCK", "kiro-cli", "chat"], None)

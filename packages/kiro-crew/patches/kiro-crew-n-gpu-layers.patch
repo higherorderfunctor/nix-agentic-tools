@@ -1,0 +1,84 @@
+diff --git a/src/kiro_crew/embeddings.py b/src/kiro_crew/embeddings.py
+index 5282fb4..69a371a 100644
+--- a/src/kiro_crew/embeddings.py
++++ b/src/kiro_crew/embeddings.py
+@@ -276,6 +276,11 @@ _MODEL_URL_ENV = "KIROCREW_EMBED_MODEL_URL"
+ # _EDITABLE_CONFIG allowlist, so no API caller and no agent can point the
+ # embedder at an arbitrary file.
+ _MODEL_PATH_ENV = "KIROCREW_EMBED_MODEL_PATH"
++
++# Opt-in because GPU memory competes with the user's other workloads. Keep the
++# existing CPU-only default even when the vendored runtime has GPU support.
++_N_GPU_LAYERS_ENV = "KIROCREW_EMBED_N_GPU_LAYERS"
++_DEFAULT_N_GPU_LAYERS = 0
+ _DEFAULT_MODEL_URL = "https://d3j0sthz5doyui.cloudfront.net/models/qwen3-embedding-0.6b.gguf"
+ _HTTP_TIMEOUT_SECS = 1800  # 610MB at >=340KB/s; slower links retry with backoff
+ _HTTP_CHUNK_BYTES = 1 << 20
+@@ -661,6 +666,29 @@ def _read_memory_config() -> dict:
+     return {}
+ 
+ 
++def _embed_gpu_layers() -> int:
++    """Resolve GPU offload without letting a bad setting disable embeddings.
++
++    llama.cpp accepts -1 for all layers, or a nonnegative signed 32-bit count.
++    Bound the integer before passing it through ctypes, which would otherwise
++    wrap a very large value rather than report a configuration error.
++    """
++    raw = os.environ.get(_N_GPU_LAYERS_ENV)
++    if raw is None:
++        return _DEFAULT_N_GPU_LAYERS
++    try:
++        value = int(raw)
++        if -1 <= value <= 0x7FFFFFFF:
++            return value
++    except ValueError:
++        pass
++    logger.warning(
++        "Invalid %s=%r; expected -1 or a nonnegative 32-bit integer; using %d",
++        _N_GPU_LAYERS_ENV, raw, _DEFAULT_N_GPU_LAYERS,
++    )
++    return _DEFAULT_N_GPU_LAYERS
++
++
+ def _embed_threads() -> int:
+     """Thread count for llama.cpp's embedding compute pools.
+ 
+@@ -1744,6 +1772,7 @@ class LlamaCppEmbedder(EmbeddingBackend):
+                 embedding=True,
+                 pooling_type=_POOLING_TYPE_LAST,
+                 n_ctx=_N_CTX,
++                n_gpu_layers=_embed_gpu_layers(),
+                 # n_batch == n_ctx so the logical batch always covers the whole
+                 # input in one go, which last-token pooling needs. In embedding mode
+                 # the vendored constructor skips the ~1.24 GB per-token logits
+diff --git a/test/test_embeddings.py b/test/test_embeddings.py
+index 8a92b20..a9603b2 100644
+--- a/test/test_embeddings.py
++++ b/test/test_embeddings.py
+@@ -1230,6 +1230,25 @@ class TestSingletons:
+ # ═══════════════════════════════════════════════════════════════════════════
+ 
+ 
++class TestEmbedGpuLayers:
++    @pytest.mark.parametrize("raw,expected", [
++        (None, 0), ("0", 0), ("12", 12), ("-1", -1), (" 4 ", 4),
++        ("", 0), ("garbage", 0), ("1.5", 0), ("-2", 0), ("2147483648", 0),
++    ])
++    def test_gpu_layers_reach_constructor(self, raw, expected, tmp_path, monkeypatch, caplog):
++        if raw is None:
++            monkeypatch.delenv("KIROCREW_EMBED_N_GPU_LAYERS", raising=False)
++        else:
++            monkeypatch.setenv("KIROCREW_EMBED_N_GPU_LAYERS", raw)
++        fake_cls = _make_fake_llama_class()
++        monkeypatch.setattr(embeddings_mod, "_load_llama_class", lambda: fake_cls)
++        emb = LlamaCppEmbedder(model_path=_write_model_file(tmp_path / "model.gguf"))
++        assert emb.wait_ready(timeout=5)
++        assert fake_cls.instances[0].kwargs["n_gpu_layers"] == expected
++        invalid = raw in ("", "garbage", "1.5", "-2", "2147483648")
++        assert ("Invalid KIROCREW_EMBED_N_GPU_LAYERS" in caplog.text) is invalid
++
++
+ class TestEmbedThreads:
+     """llama.cpp must not size its compute pools from the host core count.
+ 

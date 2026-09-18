@@ -1,7 +1,7 @@
 ## Package ownership and native composition
 
-> **Last verified:** 2026-09-12 — all owners use native package, library,
-> module, registry, and check composition.
+> **Last verified:** 2026-09-17 — workspace check discovery rejects concerns
+> without a regular entry point; native owner composition is unchanged.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -31,9 +31,11 @@ to collision checks, even when a competing definition uses `mkForce`.
 `checks.nix` is a native module. It imports owner-local test modules and defines
 `checks.<name>` derivations. Root check groups expose
 `checks/<concern>/default.nix`; the workspace discovers those entry points one
-directory deep. Supporting files and fixture trees are not recursively
-registered. Adding a package check needs only owner edits; adding a root concern
-needs no flake export-list edit.
+directory deep. Every immediate directory must contain a regular `default.nix`;
+a missing or non-regular entry point fails evaluation and names the directory.
+Supporting files are ignored, and fixture trees belong below a concern because
+discovery does not recurse. Adding a package check needs only owner edits;
+adding a root concern needs no flake export-list edit.
 
 Root and owner check names share an exclusive claim boundary. Each contributor
 supplies isolated definitions for claim discovery, while its conditions and
