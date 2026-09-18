@@ -22,7 +22,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   llm-agents:
-    url: github:numtide/llm-agents.nix/05d654aca595e85555ef34d8207c3a83a6e3b5eb
+    url: github:numtide/llm-agents.nix/e22caee8b8e21297ac672acf8f4451a34d6bae4c
   mcp-nixos:
     url: github:utensils/mcp-nixos/6a517811658c21f97bd7703b35546085117fc310
     inputs:
