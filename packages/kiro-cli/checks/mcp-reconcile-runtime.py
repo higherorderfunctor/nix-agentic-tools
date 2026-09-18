@@ -65,7 +65,14 @@ def exercise(case, bash):
     assert read() == native
     assert not whole.exists() and len(leaves()) == 1
     assert not list((ledger / "materialize").glob("*.bak/*"))
-    assert stat.S_IMODE(config.stat().st_mode) == 0o444
+    # The merge target STATES its mode, so taking the path over re-widens the
+    # 0444 the overwrite generation locked it to. Merge's contract is a file
+    # the user may still hand-edit (see `mcpWriteMode`), and preserving 0444
+    # here would silently break it -- and leave the secret case group-readable.
+    permissions = stat.S_IMODE(config.stat().st_mode)
+    assert permissions == 0o644, oct(permissions)
+    assert permissions & stat.S_IWUSR, \
+        "a merge-mode file the user must be able to edit is read-only"
     activate("mergeEmpty")
     del native["mcpServers"]["alpha"]
     assert read() == native and not leaves() and not whole.exists()
@@ -117,6 +124,10 @@ def exercise(case, bash):
     assert all(path[0] == "mcpServers" for path in managed_paths)
     assert ["mcpServers", "alpha", "url"] in managed_paths
     assert ["mcpServers", "alpha", "headers", "Authorization"] in managed_paths
+    # A decrypted url is IN this file, so merge narrows it to owner-only --
+    # from the 0644 the previous generation left, with no rewrite in between.
+    assert stat.S_IMODE(config.stat().st_mode) == 0o600, \
+        "a merge write carrying a credential url is not owner-only"
     before = snapshot(config), snapshot(manifest)
     for value in (None, "", 'invalid " JSON'):
         if value is None:

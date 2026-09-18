@@ -1102,7 +1102,20 @@
       codec = "json";
       ledger = "json-settings/kiro-mcp-${builtins.hashString "sha256" cfg.configDir}.json";
       path = "${settingsDir}/mcp.json";
-      units = lib.optionalAttrs (cfg.mcpWriteMode == "merge") {run = render;};
+      units = lib.optionalAttrs (cfg.mcpWriteMode == "merge") {
+        # The one document target in the tree that states a mode, because it
+        # is the one whose file a SIBLING target also writes. Without it the
+        # merge write would inherit whatever the overwrite generation left —
+        # 0444, group-readable and not hand-editable — and merge's whole
+        # contract (below, `mcpWriteMode`) is a file the user may still edit.
+        # Owner-only when a credential url is substituted into it. Both values
+        # are what the bash writer chmod'd on every run before `own`.
+        mode =
+          if kiroSecrets.urlSecretEnv != {}
+          then "0600"
+          else "0644";
+        run = render;
+      };
     }
   ];
 
@@ -1462,7 +1475,10 @@ in
           - `merge`: Nix owns only its declared leaves. Removed leaves are
             retracted, including when the pool becomes empty; hand-added
             servers and unowned fields survive. Declared values are reasserted.
-            New files are private (0600); existing file permissions survive.
+            The file is left owner-writable (`0644`) so it can still be
+            hand-edited, or owner-only (`0600`) when a credential `url` is
+            substituted into it. Both are imposed on every activation,
+            including the one that switches away from `overwrite`.
 
           Switching modes retires the inactive writer's ownership. On the
           first switch from overwrite to merge, existing fields absent from

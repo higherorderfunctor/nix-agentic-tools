@@ -93,11 +93,16 @@
         else if target.units == {}
         then []
         else
-          # A container whose units are leaves of a shared byte stream has no
-          # business restating the document's mode; it preserves an existing
-          # file's and uses 0600 for a new one. Fail rather than ignore.
-          lib.optional (target.units ? mode)
-          "${label} declares a mode, which a document container never imposes"
+          # A leaf has no mode of its own — every leaf of a document lives in
+          # the same file — so the mode a document target may state is the
+          # FILE's, and it is optional. Absent, an existing regular file keeps
+          # the mode it has and a new one gets 0600. Stated, it is imposed on
+          # every write and on the run where the bytes did not move; kiro's
+          # merge target states it so a file an overwrite generation published
+          # 0444 goes back to being hand-editable, and so a substituted
+          # credential url never sits in a group-readable file.
+          lib.optional (target.units ? mode && builtins.match "0?[0-7]{3}" target.units.mode == null)
+          "${label} declaration mode must be octal permissions, not '${toString target.units.mode}'"
           ++ contentErrors "${label} declaration" (builtins.removeAttrs target.units ["mode"])
       );
 
