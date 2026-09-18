@@ -144,6 +144,7 @@ fileset
 findutils
 fixpoint
 foldl
+foldr
 footgun
 formedness
 frepo
@@ -342,6 +343,7 @@ prek
 prepatched
 prestart
 pretrained
+prio
 psql
 pthread
 purpleclay

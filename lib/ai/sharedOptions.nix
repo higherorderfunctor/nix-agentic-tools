@@ -134,7 +134,7 @@
   };
   sandboxSafeSshCommand = lib.getExe sandboxSafeSsh;
 in {
-  imports = [./app/sharedAgentsMd.nix];
+  imports = [./app/sharedAgentsMd.nix ./file-warnings.nix];
 
   options.ai = {
     context = lib.mkOption {
@@ -185,7 +185,7 @@ in {
         github.com's reviewer consumes only the committed project tree). Codex
         instead appends rules in key order
         to its single AGENTS.md, translating `matcher` to a prose scope note.
-        Kimchi has no rules pool, so root rules silently degrade for it.
+        Kimchi has no rules pool, so non-empty root rules warn for it.
         Per-app entries replace root entries at the same key; set
         `enable = false` to suppress an inherited rule for that runtime. For
         each rule, `text` and
