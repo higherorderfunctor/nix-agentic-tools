@@ -64,7 +64,7 @@ default policy without applying it to records.
 An element groups its fields, relations, and constraints. Here is BAZ, whose
 only field is UID and whose constraints list is empty. We will read its two
 relation declarations in the next chapter. (fragment of examples.nix, lines
-47–54):
+45–52):
 
 ```nix
   baz = el "BAZ" {} {
@@ -114,7 +114,7 @@ A **relation occurrence** is one declaration owned by a record and pointing at
 another record. `parent` and `child` declare which kinds of relation an element
 may own. BAR declares these two kinds inside its element frame. Read the
 `relations` list first; chapters 4–7 explain its constraints and the visibility
-view `sight`. (fragment of examples.nix, lines 30–44):
+view `sight`. (fragment of examples.nix, lines 28–42):
 
 ```nix
   bar = el "BAR" {} {
@@ -152,13 +152,18 @@ relation. Native connectivity means the underlying Parent and Child edges
 themselves, across every role and element kind, before any semantic rule
 applies.
 
-FOO uses the same inline pattern for its own H and R roles (fragment of
-examples.nix, lines 19–20):
+Predicates compose: `all` takes a list and requires every predicate, `any` takes
+a list and requires at least one, and `not` takes one predicate and reverses its
+Boolean result. Different leaf kinds can share one check. FOO's R requires both
+the target kind and visibility (fragment of examples.nix, line 20):
 
 ```nix
-      (parent "H" "H_back" (edge: isNodeType edge.target foo))
-      (parent "R" "R_back" (edge: isNodeType edge.target foo))
+      (parent "R" "R_back" (edge: all [(isNodeType edge.target foo) (visible sight edge.origin edge.target)]))
 ```
+
+The relation constructor supplies the selector; `all` combines its two leaves. A
+selector's optional `where` predicate narrows the selected subjects before the
+check; `on (where SUBJECT PREDICATE) CHECK` authors that filter.
 
 For F1a's Parent R targeting F2, the binder's origin is F1a and its target is
 F2. The later visibility walk starts at that authored origin. The name `edge` is
@@ -180,7 +185,10 @@ a prerequisite problem, not a finding that a resolved record has the wrong kind.
 | ------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `parent`     | `parent ROLE REVERSE_ROLE [PREDICATE]` | Two names you choose; optional callback receiving `edge.origin` and `edge.target`, or a named `check`. | each relation occurrence      | Declares Parent grammar and retains an inline check; a bare callback gets a derived name such as `"H.target-type"`. |
 | `child`      | `child ROLE REVERSE_ROLE [PREDICATE]`  | Two names you choose; optional callback receiving the same edge binder, or a named `check`.            | each relation occurrence      | Declares Child grammar and retains an inline check.                                                                 |
-| `isNodeType` | `isNodeType NODE ELEMENT`              | Node from `edge.origin` or `edge.target`; element reference from `el`.                                 | each relation occurrence here | Emits the type question; inspecting a record remains specified behavior.                                            |
+| `isNodeType` | `isNodeType NODE ELEMENT`              | Node from `edge.target`; element reference from `el`.                                                  | each relation occurrence here | Emits the type question; inspecting a record remains specified behavior.                                            |
+| `all`        | `all PREDICATES`                       | List of predicates for the same selector.                                                              | selected subjects             | Emits all; every child must hold.                                                                                   |
+| `any`        | `any PREDICATES`                       | List of predicates for the same selector.                                                              | selected subjects             | Emits any; at least one child must hold.                                                                            |
+| `not`        | `not PREDICATE`                        | One predicate for the same selector.                                                                   | selected subjects             | Emits not; reverses satisfied and violated, preserving blocked and error.                                           |
 
 ## 4. Rules that live on the element
 
@@ -188,9 +196,19 @@ The element's `constraints = [ ... ]` list plays the role of Django's `Meta`: it
 keeps rules beside the fields and relations they govern. `check` names a rule,
 while its placement supplies the scope. Check names are unique per subject
 identity (relation, element, or model), not global: the stub merges equal
-definitions for that subject and name, and throws when they differ. FOO's list
-contains a count rule and a rule attached to R. sight is the visibility view
-built in chapter 6. (fragment of examples.nix, lines 16–27):
+definitions for that subject and name, and throws when they differ. A rule is a
+selector plus a check: placement supplies what to inspect, and the predicate
+says what must hold.
+
+```text
+Meta list ⇒ records of the element
+inline    ⇒ occurrences of the relation
+on        ⇒ named selector
+```
+
+The check can combine leaves without changing its selector. The following
+alternative spelling keeps R's target and visibility checks separate to show
+`on`; Appendix A combines them. `sight` is the visibility view from chapter 6.
 
 ```nix
   foo = el "FOO" {} {
@@ -264,13 +282,14 @@ callback gets a derived name such as `"R.target-type"`, so it would not match a
 differently named check. Either form rejects F1a's R targeting Z0, and neither
 adds that rule to Z0's own R.
 
-| Constructor | Signature               | Arguments                                                                                       | Checks over                                                        | Real today                                                                           |
-| ----------- | ----------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `check`     | `check NAME EXPRESSION` | Name you choose; symbolic predicate, `record` expression, or callback receiving an edge binder. | each relation occurrence / each record / whole model, by placement | Names and lowers the predicate; rejects raw Boolean predicates.                      |
-| `record`    | `record BIND`           | Predicate-building function receiving a binder with `parents ROLE` and `children ROLE`.         | each record                                                        | Calls the function symbolically; rejects use outside record scope.                   |
-| `atMost`    | `atMost N COLLECTION`   | Integer bound; collection from the record binder's `parents` or `children`.                     | each record                                                        | sugar; see Counting.                                                                 |
-| `on`        | `on SUBJECT CHECK`      | Relation reference from `parentOf` or `childOf`; named predicate from `check`.                  | each relation occurrence                                           | Attaches the check to the selected relation.                                         |
-| `parentOf`  | `parentOf ELEMENT ROLE` | Element reference from `el`; reference key naming its declared Parent role.                     | none                                                               | Builds a reference qualified by owner and direction; normalization checks it exists. |
+| Constructor | Signature                 | Arguments                                                                                       | Checks over                                                        | Real today                                                                           |
+| ----------- | ------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `check`     | `check NAME PREDICATE`    | Name you choose; symbolic predicate, `record` expression, or callback receiving an edge binder. | each relation occurrence / each record / whole model, by placement | Names a check of leaves and Boolean combinators; rejects raw Booleans.               |
+| `record`    | `record BIND`             | Predicate-building function receiving a binder with `parents ROLE` and `children ROLE`.         | each record                                                        | Calls the function symbolically; rejects use outside record scope.                   |
+| `atMost`    | `atMost N COLLECTION`     | Integer bound; collection from the record binder's `parents` or `children`.                     | each record                                                        | sugar; see Counting.                                                                 |
+| `on`        | `on SUBJECT CHECK`        | Relation, element, or model reference, optionally filtered by `where`; named `check`.           | by selected subject                                                | Attaches the check to the named selector.                                            |
+| `parentOf`  | `parentOf ELEMENT ROLE`   | Element reference from `el`; reference key naming its declared Parent role.                     | none                                                               | Builds a reference qualified by owner and direction; normalization checks it exists. |
+| `where`     | `where SUBJECT PREDICATE` | Named subject and filter predicate, used through `on`.                                          | by selected subject                                                | Lowers the filter into select.where; filtering records is runtime work.              |
 
 ## 5. Counting: the lowest form and its sugar
 
@@ -303,24 +322,24 @@ and `transcript.txt` beside this file records it as true; `atLeast` and
 `exactly` are defined the same way. "Fewer than" and "more than" have no sugar:
 write `lt` or `gt` over `count`, as in the first example above.
 
-| Constructor | Signature              | Arguments in words                                                                | Lowers to                  | Real today                                            |
-| ----------- | ---------------------- | --------------------------------------------------------------------------------- | -------------------------- | ----------------------------------------------------- |
-| `count`     | `count COLLECTION`     | A collection from `parents` or `children`.                                        | Primitive `count`.         | Emits a count expression; does not count occurrences. |
-| `lt`        | `lt A B`               | Two count expressions or numbers; is the left less than the right?                | Primitive `lt`.            | Emits the comparison; does not evaluate it.           |
-| `lte`       | `lte A B`              | Two count expressions or numbers; is the left less than or equal to the right?    | Primitive `lte`.           | Emits the comparison; does not evaluate it.           |
-| `gt`        | `gt A B`               | Two count expressions or numbers; is the left greater than the right?             | Primitive `gt`.            | Emits the comparison; does not evaluate it.           |
-| `gte`       | `gte A B`              | Two count expressions or numbers; is the left greater than or equal to the right? | Primitive `gte`.           | Emits the comparison; does not evaluate it.           |
-| `eq`        | `eq A B`               | Two count expressions or numbers; are they equal?                                 | Primitive `eq`.            | Emits the comparison; does not evaluate it.           |
-| `atMost`    | `atMost N COLLECTION`  | An integer upper bound, then a collection.                                        | `lte (count COLLECTION) N` | Expands to primitives; does not check records.        |
-| `atLeast`   | `atLeast N COLLECTION` | An integer lower bound, then a collection.                                        | `gte (count COLLECTION) N` | Expands to primitives; does not check records.        |
-| `exactly`   | `exactly N COLLECTION` | An integer count, then a collection.                                              | `eq (count COLLECTION) N`  | Expands to primitives; does not check records.        |
+| Constructor | Signature              | Arguments in words                                      | Lowers to                    | Real today                                            |
+| ----------- | ---------------------- | ------------------------------------------------------- | ---------------------------- | ----------------------------------------------------- |
+| `count`     | `count COLLECTION`     | A collection from `parents` or `children`.              | Value within a count leaf.   | Emits a count expression; does not count occurrences. |
+| `lt`        | `lt A B`               | Owned-relation count on the left; integer on the right. | `count` leaf, compare `lt`.  | Emits the comparison; does not evaluate it.           |
+| `lte`       | `lte A B`              | Owned-relation count on the left; integer on the right. | `count` leaf, compare `lte`. | Emits the comparison; does not evaluate it.           |
+| `gt`        | `gt A B`               | Owned-relation count on the left; integer on the right. | `count` leaf, compare `gt`.  | Emits the comparison; does not evaluate it.           |
+| `gte`       | `gte A B`              | Owned-relation count on the left; integer on the right. | `count` leaf, compare `gte`. | Emits the comparison; does not evaluate it.           |
+| `eq`        | `eq A B`               | Owned-relation count on the left; integer on the right. | `count` leaf, compare `eq`.  | Emits the comparison; does not evaluate it.           |
+| `atMost`    | `atMost N COLLECTION`  | An integer upper bound, then a collection.              | `lte (count COLLECTION) N`   | Expands to primitives; does not check records.        |
+| `atLeast`   | `atLeast N COLLECTION` | An integer lower bound, then a collection.              | `gte (count COLLECTION) N`   | Expands to primitives; does not check records.        |
+| `exactly`   | `exactly N COLLECTION` | An integer count, then a collection.                    | `eq (count COLLECTION) N`    | Expands to primitives; does not check records.        |
 
 ## 6. Hierarchy and visibility
 
 The hierarchy uses only FOO's Parent H relations. Other roles cannot supply
 shortcuts between its nodes. `fieldOf foo flag` selects the field declaration
 whose Boolean value controls closed boundaries. (fragment of examples.nix, lines
-57–63):
+55–61):
 
 ```nix
   h = forest "H" (parentOf foo "H");
@@ -336,7 +355,7 @@ The first `"H"` names a view; the second refers to FOO's declared H role. All
 FOO records belong to this view, including isolated I0. `forest` declares the
 view, and `isForest` asks whether its structure is valid. Specified: no cycles
 and at most one H parent. Stub today: neither is detected. (fragment of
-examples.nix, lines 92–92):
+examples.nix, lines 90–90):
 
 ```nix
     (check "H-forest" (isForest h))
@@ -417,7 +436,7 @@ handling and traversal remain specified behavior.
 
 A BAR record owns both of its endpoints. `exactly 1` requires one relation in
 each endpoint collection. Then `only` selects that sole relation, and `.target`
-gives its declared endpoint. (fragment of examples.nix, lines 36–43):
+gives its declared endpoint. (fragment of examples.nix, lines 34–41):
 
 ```nix
     constraints = [
@@ -485,7 +504,7 @@ boundary.
 
 Some rules need facts beyond one record. An **input** declares data that runtime
 must supply for an evaluation. Here it supplies the external baseline introduced
-in chapter 2 (fragment of examples.nix, lines 65–70):
+in chapter 2 (fragment of examples.nix, lines 63–68):
 
 ```nix
   # Declare the input; acquisition and capture belong to runtime.
@@ -507,7 +526,7 @@ A **projection** describes which facts to extract before comparing records.
 `childOf` selects a declared Child role, just as `parentOf` selects a Parent
 role. This projection matches records by UID and includes their existence,
 element kind, FLAG presence and value, and selected owned relations (fragment of
-examples.nix, lines 71–87):
+examples.nix, lines 69–85):
 
 ```nix
   modeledRecord = projection "modeled-record" {
@@ -540,7 +559,7 @@ bookkeeping, and incoming declarations owned elsewhere are excluded.
 fields, and its owned modeled relations.”
 
 `preserve` compares that projection for every record listed in the baseline
-(fragment of examples.nix, lines 93–93):
+(fragment of examples.nix, lines 91–91):
 
 ```nix
     (check "baseline-preserved" (preserve baseline modeledRecord))
@@ -560,7 +579,7 @@ fields, and its owned modeled relations.”
 The **native graph** includes all underlying Parent and Child relations across
 every role and element kind. A **DAG**, or directed acyclic graph, is a directed
 graph with no cycle. `nativeDag` requires that property independently of the
-selected H forest and visibility policy (fragment of examples.nix, lines 91–91):
+selected H forest and visibility policy (fragment of examples.nix, lines 89–89):
 
 ```nix
     (check "native-dag" nativeDag)
@@ -573,7 +592,7 @@ selected H forest and visibility policy (fragment of examples.nix, lines 91–91
 
 The same cycle rule rejects a self-targeting R or an ancestor's R targeting its
 own H descendant. The complete rules list applies these checks to the model
-(fragment of examples.nix, lines 89–94):
+(fragment of examples.nix, lines 87–92):
 
 ```nix
   # The all-role DAG is independent of the selected forest and visibility.
@@ -607,7 +626,7 @@ must leave the complete candidate valid.
 `model` gathers the declarations and rules under one chosen name. A Nix variable
 holding a view does not register it; the model's `views` list does. The other
 lists register the remaining declaration kinds. (fragment of examples.nix, lines
-95–102):
+93–100):
 
 ```nix
 in
@@ -623,20 +642,23 @@ in
 **Lowered** means converted from Nix authoring values into ordinary data a later
 system could read. `normalize` calls callbacks with symbolic binders, never
 loaded records such as F1a. It returns native declarations in `grammar`, field
-types and default metadata in `semanticTypes`, and declarations and flat, named
-rule records in `bundle` under schema `semantic-constraints/v2`. Each rule has
-`id`, `name`, `scope`, `subject`, `kind`, named kind fields, `inputs`,
-`requires`, and `origins`; only an uncovered rule keeps a named-operand tree in
-`expression`. References are declaration IDs, and fallback binders use `record`,
-`owner`, and `target` tokens. The bundle also records named configurations and
-field declarations; `bundle.json` and `contract.md` show the lowered contract.
+types and default metadata in `semanticTypes`, and declarations and named rule
+records in `bundle` under schema `semantic-constraints/v2`. Each rule has `id`,
+`name`, `select`, `check`, `inputs`, `requires`, and `origins`. `select` chooses
+records, relation occurrences, or the model, optionally narrowed by `where`;
+`check` is a named leaf or `all`, `any`, or `not` over checks. Leaves retain
+their named fields and declaration references; unsupported predicates throw
+instead of emitting an open expression tree. The bundle also records named
+configurations and field declarations; `bundle.json` and `contract.md` show the
+lowered contract.
 
 Today normalization checks declaration identities, declared references it
 encounters, predicate shape, binder scope, and conflicting definitions of a
 check. It rejects duplicate declaration identities and undeclared selected
 references. It is not a complete schema checker: it leaves collection role
-strings and most operand types unchecked. It builds the required count and
-forest dependency links, but does not execute a runtime scheduler.
+strings and some operand types unchecked. It collects the required count and
+forest dependency links from every leaf, but does not execute a runtime
+scheduler.
 
 No graph evaluator, baseline acquisition, default application, candidate
 publication, or recovery runs in this stub. The runtime contract calls for
@@ -730,17 +752,17 @@ commands and all four proof results in `transcript.txt`.
 | Constructor  | Signature                        | Arguments                                                                                                         | Checks over                                                        | Real today                                                                                                  |
 | ------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
 | `contribute` | `contribute NAME SUBJECT CHECKS` | Name you choose; declared relation reference from `parentOf` or `childOf`; list of named predicates from `check`. | each relation occurrence                                           | Merges identical lowered checks and their origins; throws on conflicting meanings under one check identity. |
-| `const`      | `const VALUE`                    | Boolean literal: complete accepted set `false`, `true`.                                                           | each relation occurrence / each record / whole model, by placement | Emits a constant predicate and rejects non-Booleans; it has no operand that can block.                      |
+| `const`      | `const VALUE`                    | Boolean literal: complete accepted set `false`, `true`.                                                           | each relation occurrence / each record / whole model, by placement | Lowers true to empty all and false to empty any; rejects non-Booleans.                                      |
 
 ## 11. Write one yourself
 
 `inherit` brings constructor names into local scope from `dsl`, `field`, or
 `rel`. Adding a rule that uses a constructor not already on the `inherit` lines
-requires adding it there. These are the imports in `examples.nix` (fragment of
-examples.nix, lines 5–10):
+requires adding it there. These are the imports `examples.nix` uses; add `on`,
+`any`, `not`, or `where` to the first line when a rule needs them:
 
 ```nix
-  inherit (dsl) el field rel model normalize check on record;
+  inherit (dsl) el field rel model normalize check record all;
   inherit (field) required str boolean creationDefault;
   inherit (rel) parent child;
   inherit (dsl) parentOf childOf fieldOf isNodeType atMost exactly only;
@@ -748,42 +770,33 @@ examples.nix, lines 5–10):
   inherit (dsl) input projection preserve;
 ```
 
-Choose a scope before writing the rule. In this table, **specified** means
-supported by the reference contract and examples; **unattested** means they
-establish no promise for that placement. Every “stub accepts” entry assumes that
-all operands have been supplied and can be lowered. The stub checks symbolic
-shape and binder placement, but does not enforce the operators' intended scopes.
+Choose the selector before writing the check. Every leaf must be supported for
+that selector, including leaves inside `all`, `any`, `not`, and `where`. The
+stub rejects unsupported combinations during lowering.
 
-| Constructor       | Legal in relation scope   | Legal in record scope               | Legal in model scope      | Where its operands come from                                                                                                                               |
-| ----------------- | ------------------------- | ----------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `isNodeType`      | Stub accepts; specified.  | Stub accepts; unattested.           | Stub accepts; unattested. | Node: `edge.origin` or `edge.target` in the example; stub also accepts a singleton's `.target`; element: declaration from `el`.                            |
-| `count`           | Stub accepts; unattested. | Stub accepts; specified as a value. | Stub accepts; unattested. | Collection: a record binder's `parents ROLE` or `children ROLE`; returns a symbolic count.                                                                 |
-| `lt`              | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
-| `lte`             | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
-| `gt`              | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
-| `gte`             | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
-| `eq`              | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Each operand: a `count` expression or a number.                                                                                                            |
-| `atMost` (sugar)  | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Count: integer literal by contract; collection: `parents ROLE` or `children ROLE` supplied by `record`.                                                    |
-| `atLeast` (sugar) | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Count: integer literal by contract; collection: a record binder's `parents ROLE` or `children ROLE`.                                                       |
-| `exactly` (sugar) | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | Count: integer literal by contract; collection: the same record binder methods.                                                                            |
-| `only`            | Stub accepts; unattested. | Stub accepts; specified as a value. | Stub accepts; unattested. | Collection: a record binder's `parents ROLE` or `children ROLE`; returns the sole relation, whose `.target` supplies a node.                               |
-| `visible`         | Stub accepts; specified.  | Stub accepts; unattested.           | Stub accepts; unattested. | View: registered `visibility` declaration; nodes: `edge.origin` and `edge.target` in the example, or singleton `.target` expressions accepted by the stub. |
-| `canDescend`      | Stub accepts; unattested. | Stub accepts; specified.            | Stub accepts; unattested. | View: registered `visibility` declaration; nodes: singleton `.target` expressions in the example, or edge endpoints accepted by the stub.                  |
-| `nativeDag`       | Stub accepts; unattested. | Stub accepts; unattested.           | Stub accepts; specified.  | No author-supplied operands; the constructor fixes all native Parent/Child roles and parent-to-child orientation.                                          |
-| `preserve`        | Stub accepts; unattested. | Stub accepts; unattested.           | Stub accepts; specified.  | Registered `input` and `projection` declarations; no binder.                                                                                               |
-| `const`           | Stub accepts; specified.  | Stub accepts; specified.            | Stub accepts; specified.  | A Nix Boolean literal; no binder.                                                                                                                          |
+| Constructor                    | Occurrences | Records    | Model     | Operands                                                           |
+| ------------------------------ | ----------- | ---------- | --------- | ------------------------------------------------------------------ |
+| `isNodeType`                   | Supported   | Rejected   | Rejected  | `edge.target` and an element declaration.                          |
+| `count`                        | Rejected    | Value only | Rejected  | Record binder's `parents ROLE` or `children ROLE`.                 |
+| `lt`, `lte`, `gt`, `gte`, `eq` | Rejected    | Supported  | Rejected  | Owned-relation count on the left, integer on the right.            |
+| `atMost`, `atLeast`, `exactly` | Rejected    | Supported  | Rejected  | Integer bound and an owned-relation collection.                    |
+| `only`                         | Rejected    | Value only | Rejected  | Collection; `.target` feeds an endpoint-path leaf.                 |
+| `visible`                      | Supported   | Rejected   | Rejected  | Visibility view, `edge.origin`, `edge.target`.                     |
+| `canDescend`                   | Rejected    | Supported  | Rejected  | Visibility view and two singleton `.target` values.                |
+| `nativeDag`                    | Rejected    | Rejected   | Supported | No operands.                                                       |
+| `isForest`                     | Rejected    | Rejected   | Supported | Registered forest view.                                            |
+| `preserve`                     | Rejected    | Rejected   | Supported | Registered input and projection.                                   |
+| `all`, `any`, `not`            | Supported   | Supported  | Supported | Predicates valid for the same selector; no new binder.             |
+| `const`                        | Supported   | Supported  | Supported | Boolean literal; true lowers to empty `all`, false to empty `any`. |
+| `where`                        | Supported   | Supported  | Supported | Subject reference and a predicate valid for that selector.         |
 
-For these non-constant operators, the stub rejects direct Boolean operands but
-does not otherwise check operand types. A bare callback receives the edge binder
-only in relation scope; the stub rejects it in record or model scope. A `record`
-callback receives collection methods only in record scope; the stub rejects that
-binder elsewhere. Model scope supplies neither binder, so accepting an operator
-there does not create its missing node or collection operands. `only` is a value
-builder, but the stub even accepts it as a check because it only requires a
-symbolic expression shape. Yes, a singleton's `.target` can feed `visible` in a
-record check in the stub; it is not restricted to `edge.origin` and
-`edge.target`. The contract specifies visibility for FOO R's owner and target,
-but no example establishes `visible` in record scope.
+A bare callback receives the edge binder only for occurrences. A `record`
+callback receives collection methods only for records. `all` and `any` can
+combine callbacks, or appear inside a callback; `not` wraps one predicate in
+either position. Model checks supply neither binder. The stub rejects raw
+Booleans as predicates, standalone value builders, and leaves with no supported
+meaning for the selector. A singleton's `.target` feeds `canDescend`; `visible`
+requires the relation owner's origin and target.
 
 **First exercise:** Add a BAZ rule permitting at most one owned Child Q. Z0 may
 have no Q or one Q to G1, but not two Q declarations targeting G1 and I0. Use
@@ -831,7 +844,7 @@ missing operation.
 >
 > These gaps are for the reviewer's judgement.
 >
-> - `visible` in record scope is unattested by any example.
+> - No visibility leaf for arbitrary record endpoints is exposed.
 > - `el` grammar properties are never shown non-empty.
 > - Duplicate identical relation occurrences are stored and counted as authored.
 
@@ -847,7 +860,7 @@ can use `sight`.
 # No semantic prefix: checks read alongside the fields and relations they govern.
 let
   dsl = import ./dsl.nix;
-  inherit (dsl) el field rel model normalize check on record;
+  inherit (dsl) el field rel model normalize check record all;
   inherit (field) required str boolean creationDefault;
   inherit (rel) parent child;
   inherit (dsl) parentOf childOf fieldOf isNodeType atMost exactly only;
@@ -862,12 +875,10 @@ let
     fields = [uid flag];
     relations = [
       (parent "H" "H_back" (edge: isNodeType edge.target foo))
-      (parent "R" "R_back" (edge: isNodeType edge.target foo))
+      (parent "R" "R_back" (edge: all [(isNodeType edge.target foo) (visible sight edge.origin edge.target)]))
     ];
     constraints = [
       (check "one-H-parent" (record (node: atMost 1 (node.parents "H"))))
-      (on (parentOf foo "R")
-        (check "visible-R" (edge: visible sight edge.origin edge.target)))
     ];
   };
 
@@ -1032,9 +1043,9 @@ executes.
 | ------------------------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `el`                                                   | Lowered by stub + semantics specified | Wraps the native element declaration and retains constraints for later lowering.                                           |
 | `model`                                                | Lowered by stub + semantics specified | Supplies declaration-list defaults and the model identity.                                                                 |
-| `normalize`                                            | Lowered by stub + semantics specified | Builds grammar, metadata, and flat rule records with the authoring checks described above.                                 |
-| `check`                                                | Lowered by stub + semantics specified | Retains the name and lowers to a flat kind, or an expression fallback when no kind covers it.                              |
-| `on`                                                   | Lowered by stub + semantics specified | Changes the check subject and scope to the selected relation.                                                              |
+| `normalize`                                            | Lowered by stub + semantics specified | Builds grammar, metadata, and selector-plus-check rules with the authoring checks described above.                         |
+| `check`                                                | Lowered by stub + semantics specified | Retains the name and lowers to named leaves combined with all, any, and not; unsupported predicates throw.                 |
+| `on`                                                   | Lowered by stub + semantics specified | Supplies a named selector for relation occurrences, element records, or the model.                                         |
 | `record`                                               | Lowered by stub + semantics specified | Calls the callback with symbolic collections; emits no record wrapper or binder ID.                                        |
 | `required`                                             | Lowered by stub + semantics specified | Sets native requiredness and preserves semantic metadata; this stub does not validate records.                             |
 | `str`                                                  | Lowered by stub + semantics specified | Delegates native string-field construction; no record values are read.                                                     |
@@ -1045,17 +1056,17 @@ executes.
 | `parentOf`                                             | Lowered by stub + semantics specified | Builds a qualified Parent relation reference whose declared identity is checked during lowering.                           |
 | `childOf`                                              | Lowered by stub + semantics specified | Builds the corresponding qualified Child reference.                                                                        |
 | `fieldOf`                                              | Lowered by stub + semantics specified | Builds a field identity from the owner tag and the field title.                                                            |
-| `isNodeType`                                           | Lowered by stub, semantics prose only | Lowers a relation target test to target-type with targetElement; other forms use expression.                               |
-| `count`                                                | Lowered by stub, semantics prose only | Combines an owned-relation count and comparison into a flat count rule without counting records.                           |
-| `lt`                                                   | Lowered by stub, semantics prose only | Lowers count < integer to count with compare = lt; other forms use expression.                                             |
-| `lte`                                                  | Lowered by stub, semantics prose only | Lowers count <= integer to count with compare = lte; other forms use expression.                                           |
-| `gt`                                                   | Lowered by stub, semantics prose only | Lowers count > integer to count with compare = gt; other forms use expression.                                             |
-| `gte`                                                  | Lowered by stub, semantics prose only | Lowers count >= integer to count with compare = gte; other forms use expression.                                           |
-| `eq`                                                   | Lowered by stub, semantics prose only | Lowers count == integer to count with compare = eq; other forms use expression.                                            |
+| `isNodeType`                                           | Lowered by stub, semantics prose only | Lowers a relation target test to target-type with targetElement; unsupported forms throw.                                  |
+| `count`                                                | Lowered by stub, semantics prose only | Combines an owned-relation count and comparison into a count leaf without counting records.                                |
+| `lt`                                                   | Lowered by stub, semantics prose only | Lowers count < integer to count with compare = lt; unsupported forms throw.                                                |
+| `lte`                                                  | Lowered by stub, semantics prose only | Lowers count <= integer to count with compare = lte; unsupported forms throw.                                              |
+| `gt`                                                   | Lowered by stub, semantics prose only | Lowers count > integer to count with compare = gt; unsupported forms throw.                                                |
+| `gte`                                                  | Lowered by stub, semantics prose only | Lowers count >= integer to count with compare = gte; unsupported forms throw.                                              |
+| `eq`                                                   | Lowered by stub, semantics prose only | Lowers count == integer to count with compare = eq; unsupported forms throw.                                               |
 | `atMost`                                               | Lowered by stub, semantics prose only | Lowers to the same count record as lte (count COLLECTION) N; no count is computed.                                         |
 | `atLeast`                                              | Lowered by stub, semantics prose only | Lowers to count with compare = gte; no count is computed.                                                                  |
 | `exactly`                                              | Lowered by stub, semantics prose only | Lowers to count with compare = eq; no count is computed.                                                                   |
-| `only`                                                 | Lowered by stub, semantics prose only | Becomes requireSingleton in endpoint-path; other forms retain named expression operands.                                   |
+| `only`                                                 | Lowered by stub, semantics prose only | Becomes requireSingleton in endpoint-path; standalone or unsupported forms throw.                                          |
 | `forest`                                               | Lowered by stub, semantics prose only | Emits selected edges, owner-kind vertices, parent-to-child orientation, and permission for disconnected roots.             |
 | `isForest`                                             | Lowered by stub, semantics prose only | Lowers to forest-validity with a view reference; finds no cycles or hierarchy-parent counts.                               |
 | `visibility`                                           | Lowered by stub, semantics prose only | Emits hierarchy and policy; fixed shared-root, unique-path, and zero-length semantics are in contract.md.                  |
@@ -1066,7 +1077,9 @@ executes.
 | `projection`                                           | Lowered by stub, semantics prose only | Emits selected comparison facts without extracting them from records.                                                      |
 | `preserve`                                             | Lowered by stub, semantics prose only | Lowers to preserve with baseline and projection references and the input dependency; compares no snapshots.                |
 | `contribute`                                           | Lowered by stub + semantics specified | Adds relation-scoped checks and retains a contribution origin for composition.                                             |
-| `const`                                                | Lowered by stub + semantics specified | Accepts Boolean literals and emits expression with named op and value fields.                                              |
+| `const`                                                | Lowered by stub + semantics specified | Accepts Boolean literals; true emits empty all and false emits empty any.                                                  |
+| `all`, `any`, `not`                                    | Lowered by stub + semantics specified | Emit only the three Boolean operators over named leaves; collect dependencies recursively.                                 |
+| `where`                                                | Lowered by stub + semantics specified | Adds a predicate filter to a named selector; the stub does not evaluate the filter.                                        |
 | Relation `edge` binder                                 | Lowered by stub + semantics specified | Exposes owner and target tokens through the author-facing origin and target properties.                                    |
 | Record `node` or `bridge` binder                       | Lowered by stub + semantics specified | Exposes symbolic Parent and Child collection functions during normalization.                                               |
 | Singleton `.target`                                    | Lowered by stub, semantics prose only | Selects the declared target of each singleton endpoint relation; runtime resolution is not implemented.                    |

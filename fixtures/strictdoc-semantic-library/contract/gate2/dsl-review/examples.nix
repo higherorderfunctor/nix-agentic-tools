@@ -2,7 +2,7 @@
 # No semantic prefix: checks read alongside the fields and relations they govern.
 let
   dsl = import ./dsl.nix;
-  inherit (dsl) el field rel model normalize check on record;
+  inherit (dsl) el field rel model normalize check record all;
   inherit (field) required str boolean creationDefault;
   inherit (rel) parent child;
   inherit (dsl) parentOf childOf fieldOf isNodeType atMost exactly only;
@@ -17,12 +17,10 @@ let
     fields = [uid flag];
     relations = [
       (parent "H" "H_back" (edge: isNodeType edge.target foo))
-      (parent "R" "R_back" (edge: isNodeType edge.target foo))
+      (parent "R" "R_back" (edge: all [(isNodeType edge.target foo) (visible sight edge.origin edge.target)]))
     ];
     constraints = [
       (check "one-H-parent" (record (node: atMost 1 (node.parents "H"))))
-      (on (parentOf foo "R")
-        (check "visible-R" (edge: visible sight edge.origin edge.target)))
     ];
   };
 

@@ -1,4 +1,4 @@
-# Evaluation-only lowering. Flat rule records; no graph evaluator.
+# Evaluation-only lowering. Selectors and checks over named leaves; no graph evaluator.
 let
   inherit
     (builtins)
@@ -18,7 +18,7 @@ let
     removeAttrs
     ;
   native = import ../../../../../packages/strictdoc-grammar/lib/dsl.nix {lib = {inherit mapAttrs;};};
-  ruleKinds = ["target-type" "count" "visible-target" "endpoint-path" "native-dag" "forest-validity" "preserve" "expression"];
+  ruleKinds = ["target-type" "count" "visible-target" "endpoint-path" "native-dag" "forest-validity" "preserve"];
   declarationKinds = ["model" "element" "field" "relation" "view" "input" "projection"];
   keywordSpaces = {
     ascent = ["unrestricted"];
@@ -32,7 +32,6 @@ let
     to = ["target"];
     compare = ["lt" "lte" "gt" "gte" "eq"];
     direction = ["parent" "child"];
-    scope = ["relation" "record" "model"];
     kind = ruleKinds ++ declarationKinds ++ ["external-snapshot"];
     status = ["satisfied" "violated" "blocked" "error"];
     contract = ["selected-forest/v1" "origin-sensitive-visibility/v1"];
@@ -72,6 +71,16 @@ let
   gt = compare "gt";
   gte = compare "gte";
   eq = compare "eq";
+  all = terms:
+    if isList terms
+    then sym "all" {inherit terms;}
+    else throw "all expects a list of predicates";
+  any = terms:
+    if isList terms
+    then sym "any" {inherit terms;}
+    else throw "any expects a list of predicates";
+  not = term: sym "not" {inherit term;};
+  where = subject: predicate: subject // {_where = predicate;};
   check = name: expr: {inherit name expr;};
   on = subject: rule: {
     _on = true;
@@ -102,7 +111,7 @@ let
         // {
           _inline = [
             (
-              if isFunction predicate
+              if isFunction predicate || (isAttrs predicate && predicate ? _op)
               then {expr = predicate;}
               else predicate
             )
@@ -150,6 +159,7 @@ let
   el = name: props: body: (native.el name props body) // {_kind = "element";};
   model = name: body:
     {
+      _kind = "model";
       inherit name;
       elements = [];
       views = [];
@@ -189,16 +199,26 @@ let
       if elem id allIds
       then id
       else throw "undeclared reference: ${id}";
-    subjectOf = s:
+    scopeOf = s:
       if (s._ref or null) == "relation"
+      then "relation"
+      else if (s._kind or null) == "element"
+      then "record"
+      else if (s._kind or null) == "model"
+      then "model"
+      else throw "selector must name a relation, element, or model";
+    selectSubject = s:
+      if scopeOf s == "relation"
       then {
-        inherit (s) element;
-        role = s.name;
-        direction = s.nativeType;
+        occurrences = {
+          inherit (s) element;
+          role = s.name;
+          direction = s.nativeType;
+        };
       }
-      else if s._kind == "element"
-      then {element = s.tag;}
-      else {model = g.name;};
+      else if scopeOf s == "record"
+      then {records = {element = s.tag;};}
+      else {model = true;};
     bad = ctx: value: throw "check \"${ctx.name}\" at ${ctx.id}: expected symbolic predicate, got ${builtins.typeOf value}";
     lowerValue = ctx: value:
       if isAttrs value && (value ? _ref || value ? _kind)
@@ -245,6 +265,16 @@ let
             parents = collection "parent";
             children = collection "child";
           })
+      else if elem expr._op ["all" "any"]
+      then {
+        op = expr._op;
+        terms = map (lowerExpr ctx) expr.terms;
+      }
+      else if expr._op == "not"
+      then {
+        op = "not";
+        term = lowerExpr ctx expr.term;
+      }
       else
         {op = expr._op;}
         // mapAttrs (_: value:
@@ -264,8 +294,14 @@ let
       isOp "endpointTarget" e
       && isOp "only" e.relation
       && isCollection e.relation.collection;
-    flatten = scope: e:
-      if scope == "relation" && isOp "isNodeType" e && e.node == "target"
+    lowerPredicate = ctx: e: let
+      inherit (ctx) scope;
+    in
+      if isOp "all" e || isOp "any" e
+      then {${e.op} = map (lowerPredicate ctx) e.terms;}
+      else if isOp "not" e
+      then {not = lowerPredicate ctx e.term;}
+      else if scope == "relation" && isOp "isNodeType" e && e.node == "target"
       then {
         kind = "target-type";
         targetElement = e.element;
@@ -310,10 +346,7 @@ let
         kind = "preserve";
         inherit (e) baseline projection;
       }
-      else {
-        kind = "expression";
-        expression = e;
-      };
+      else throw "check \"${ctx.name}\" at ${ctx.id}: unsupported ${e.op} predicate at ${scope} scope";
     inputIds = map declId g.inputs;
     inputRefs = value:
       if builtins.isString value
@@ -330,37 +363,37 @@ let
       else [];
     lowerCheck = scope: sub: source: ck:
       if ck ? _on
-      then lowerCheck "relation" ck.subject source ck.rule
+      then lowerCheck (scopeOf ck.subject) ck.subject source ck.rule
       else let
         subjectId = reference sub;
+        subjectName = sub.name or sub.tag;
         ctx = {
           inherit scope;
           id = subjectId;
-          name = ck.name or "${sub.name}.inline";
+          name = ck.name or "${subjectName}.inline";
         };
-        expression = lowerExpr ctx ck.expr;
-        flat = flatten scope expression;
-        name =
-          ck.name or "${sub.name}.${
-            if flat.kind == "expression"
-            then expression.op
-            else flat.kind
-          }";
-      in
-        {
-          id = "${subjectId}/check:${escape name}";
-          inherit name scope;
-          subject = subjectOf sub;
-          inputs = unique (["candidate"] ++ inputRefs flat);
-          origins = [
-            (
-              if source == null
-              then "declaration:${subjectId}"
-              else source
-            )
-          ];
-        }
-        // flat;
+        predicate = lowerPredicate ctx (lowerExpr ctx ck.expr);
+        select =
+          selectSubject sub
+          // (
+            if sub ? _where
+            then {where = lowerPredicate ctx (lowerExpr ctx sub._where);}
+            else {}
+          );
+        name = ck.name or "${subjectName}.${predicate.kind or (head (attrNames predicate))}";
+      in {
+        id = "${subjectId}/check:${escape name}";
+        inherit name select;
+        check = predicate;
+        inputs = unique (["candidate"] ++ inputRefs [select predicate]);
+        origins = [
+          (
+            if source == null
+            then "declaration:${subjectId}"
+            else source
+          )
+        ];
+      };
     elementChecks = e:
       concatLists (map (r:
         map (lowerCheck "relation" (relationRef (direction r) e (role r)) null)
@@ -375,7 +408,7 @@ let
         null)
       g.constraints
       ++ concatLists (map (k: map (lowerCheck "relation" k.subject "contribution:${k.name}") k.checks) g.contributions);
-    # Compare complete flat meanings; origins do not affect check identity.
+    # Compare complete lowered meanings; origins do not affect check identity.
     mergedRules = map (id: let
       group = filter (r: r.id == id) lowered;
       first = head group;
@@ -390,35 +423,64 @@ let
       then (head matches).id
       else throw "requires: ${field}: expected one prerequisite, found ${toString (length matches)}";
     views = map lowerDecl g.views;
-    hierarchyFor = rule: let
-      view = head (filter (v: v.id == rule.view) views);
+    leaves = predicate:
+      if predicate ? kind
+      then [predicate]
+      else if predicate ? not
+      then leaves predicate.not
+      else concatLists (map leaves (predicate.all or predicate.any));
+    # Only positive conjuncts establish facts when a prerequisite rule succeeds.
+    guaranteedLeaves = predicate:
+      if predicate ? kind
+      then [predicate]
+      else if predicate ? all
+      then concatLists (map guaranteedLeaves predicate.all)
+      else [];
+    hierarchyFor = rule: leaf: let
+      view = head (filter (v: v.id == leaf.view) views);
     in
       if view.config.contract == "origin-sensitive-visibility/v1"
       then view.config.hierarchy
       else throw "requires: ${rule.id}: expected a visibility view";
-    forestFor = rule:
+    hasLeaf = predicate: rule: builtins.any predicate (guaranteedLeaves rule.check);
+    forestFor = rule: leaf:
       requireOne "${rule.id} forest-validity"
-      (filter (r: r.kind == "forest-validity" && r.view == hierarchyFor rule) mergedRules);
+      (filter (r:
+        r.id
+        != rule.id
+        && r.select == {model = true;}
+        && hasLeaf (l: l.kind == "forest-validity" && l.view == hierarchyFor rule leaf) r)
+      mergedRules);
     countFor = rule: relation:
       requireOne "${rule.id} count ${relation.direction} ${relation.role}"
       (filter (r:
-        r.kind
-        == "count"
-        && r.subject == rule.subject
-        && r.relation == relation
-        && r.compare == "eq"
-        && r.value == 1)
+        r.id
+        != rule.id
+        && r.select == removeAttrs rule.select ["where"]
+        && hasLeaf (l:
+          l.kind
+          == "count"
+          && l.relation == relation
+          && l.compare == "eq"
+          && l.value == 1)
+        r)
       mergedRules);
+    leafRequires = rule: leaf:
+      if leaf.kind == "endpoint-path"
+      then [(countFor rule leaf.upper) (countFor rule leaf.lower) (forestFor rule leaf)]
+      else if leaf.kind == "visible-target"
+      then [(forestFor rule leaf)]
+      else [];
     rules = map (rule:
       rule
       // {
-        kind = keyword "rule.kind" ruleKinds rule.kind;
-        requires =
-          if rule.kind == "endpoint-path"
-          then unique [(countFor rule rule.upper) (countFor rule rule.lower) (forestFor rule)]
-          else if rule.kind == "visible-target"
-          then [(forestFor rule)]
-          else [];
+        requires = unique (concatLists (map (leafRequires rule)
+          (leaves rule.check
+            ++ (
+              if rule.select ? where
+              then leaves rule.select.where
+              else []
+            ))));
       })
     mergedRules;
     lowerNative = e:
@@ -524,7 +586,7 @@ let
     then throw "duplicate declaration identity"
     else builtins.deepSeq (validateKeywords output) output;
 in {
-  inherit el field rel model normalize check on parentOf childOf fieldOf count lt lte gt gte eq validateKeyword;
+  inherit el field rel model normalize check on all any not where parentOf childOf fieldOf count lt lte gt gte eq validateKeyword;
   contribute = name: subject: checks: {inherit name subject checks;};
   record = bind: sym "record" {inherit bind;};
   isNodeType = node: element: sym "isNodeType" {inherit node element;};
@@ -535,10 +597,15 @@ in {
     singleton = sym "only" {inherit collection;};
   in
     singleton // {target = sym "endpointTarget" {relation = singleton;};};
-  allOf = terms: sym "allOf" {inherit terms;};
+  allOf = all;
   const = value:
     if isBool value
-    then sym "const" {inherit value;}
+    then
+      (
+        if value
+        then all []
+        else any []
+      )
     else throw "const expects a Boolean";
   forest = name: edges:
     declaration "view" name {

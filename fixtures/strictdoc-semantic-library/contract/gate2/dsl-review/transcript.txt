@@ -1,5 +1,5 @@
 Lowering evidence only; candidate and result JSON are handwritten samples.
-Commands ran in a temporary copy of this packet; displayed paths are relative.
+Commands ran in a temporary copy under out9; displayed paths are relative.
 The temporary dsl.nix used the supplied native grammar file; the delivered relative import is unchanged.
 
 Temporary keyword-invalid.nix:
@@ -14,10 +14,6 @@ let
   };
 in d.normalize (d.model "reference" {elements = [foo]; views = [h sight];})
 
-$ nix-instantiate --eval --strict --json examples.nix
-{"bundle":{"declarations":[{"id":"model:reference","kind":"model","name":"reference"},{"id":"model:reference/element:FOO","kind":"element","name":"FOO"},{"direction":"parent","id":"model:reference/element:FOO/relation:parent:H","kind":"relation","name":"H","owner":"model:reference/element:FOO"},{"direction":"parent","id":"model:reference/element:FOO/relation:parent:R","kind":"relation","name":"R","owner":"model:reference/element:FOO"},{"id":"model:reference/element:FOO/field:UID","kind":"field","name":"UID","owner":"model:reference/element:FOO"},{"id":"model:reference/element:FOO/field:FLAG","kind":"field","name":"FLAG","owner":"model:reference/element:FOO"},{"id":"model:reference/element:BAR","kind":"element","name":"BAR"},{"direction":"parent","id":"model:reference/element:BAR/relation:parent:P","kind":"relation","name":"P","owner":"model:reference/element:BAR"},{"direction":"child","id":"model:reference/element:BAR/relation:child:Q","kind":"relation","name":"Q","owner":"model:reference/element:BAR"},{"id":"model:reference/element:BAR/field:UID","kind":"field","name":"UID","owner":"model:reference/element:BAR"},{"id":"model:reference/element:BAZ","kind":"element","name":"BAZ"},{"direction":"parent","id":"model:reference/element:BAZ/relation:parent:R","kind":"relation","name":"R","owner":"model:reference/element:BAZ"},{"direction":"child","id":"model:reference/element:BAZ/relation:child:Q","kind":"relation","name":"Q","owner":"model:reference/element:BAZ"},{"id":"model:reference/element:BAZ/field:UID","kind":"field","name":"UID","owner":"model:reference/element:BAZ"}],"id":"model:reference","inputs":[{"config":{"complete":true,"kind":"external-snapshot","required":true},"id":"model:reference/input:baseline","kind":"input","name":"baseline"}],"projections":[{"config":{"element":true,"existence":true,"fieldPresence":true,"fields":["model:reference/element:FOO/field:FLAG"],"key":"UID","ownedRelations":["model:reference/element:FOO/relation:parent:H","model:reference/element:FOO/relation:parent:R","model:reference/element:BAR/relation:parent:P","model:reference/element:BAR/relation:child:Q","model:reference/element:BAZ/relation:parent:R","model:reference/element:BAZ/relation:child:Q"],"relationOrder":"set","relationProjection":["nativeType","role","target"]},"id":"model:reference/projection:modeled-record","kind":"projection","name":"modeled-record"}],"rules":[{"id":"model:reference/element:FOO/relation:parent:H/check:H.target-type","inputs":["candidate"],"kind":"target-type","name":"H.target-type","origins":["declaration:model:reference/element:FOO/relation:parent:H"],"requires":[],"scope":"relation","subject":{"direction":"parent","element":"FOO","role":"H"},"targetElement":"model:reference/element:FOO"},{"id":"model:reference/element:FOO/relation:parent:R/check:R.target-type","inputs":["candidate"],"kind":"target-type","name":"R.target-type","origins":["declaration:model:reference/element:FOO/relation:parent:R"],"requires":[],"scope":"relation","subject":{"direction":"parent","element":"FOO","role":"R"},"targetElement":"model:reference/element:FOO"},{"compare":"lte","id":"model:reference/element:FOO/check:one-H-parent","inputs":["candidate"],"kind":"count","name":"one-H-parent","origins":["declaration:model:reference/element:FOO"],"relation":{"direction":"parent","role":"H"},"requires":[],"scope":"record","subject":{"element":"FOO"},"value":1},{"from":"owner","id":"model:reference/element:FOO/relation:parent:R/check:visible-R","inputs":["candidate"],"kind":"visible-target","name":"visible-R","origins":["declaration:model:reference/element:FOO/relation:parent:R"],"requires":["model:reference/check:H-forest"],"scope":"relation","subject":{"direction":"parent","element":"FOO","role":"R"},"to":"target","view":"model:reference/view:H-visibility"},{"id":"model:reference/element:BAR/relation:parent:P/check:P.target-type","inputs":["candidate"],"kind":"target-type","name":"P.target-type","origins":["declaration:model:reference/element:BAR/relation:parent:P"],"requires":[],"scope":"relation","subject":{"direction":"parent","element":"BAR","role":"P"},"targetElement":"model:reference/element:FOO"},{"id":"model:reference/element:BAR/relation:child:Q/check:Q.target-type","inputs":["candidate"],"kind":"target-type","name":"Q.target-type","origins":["declaration:model:reference/element:BAR/relation:child:Q"],"requires":[],"scope":"relation","subject":{"direction":"child","element":"BAR","role":"Q"},"targetElement":"model:reference/element:FOO"},{"compare":"eq","id":"model:reference/element:BAR/check:one-P","inputs":["candidate"],"kind":"count","name":"one-P","origins":["declaration:model:reference/element:BAR"],"relation":{"direction":"parent","role":"P"},"requires":[],"scope":"record","subject":{"element":"BAR"},"value":1},{"compare":"eq","id":"model:reference/element:BAR/check:one-Q","inputs":["candidate"],"kind":"count","name":"one-Q","origins":["declaration:model:reference/element:BAR"],"relation":{"direction":"child","role":"Q"},"requires":[],"scope":"record","subject":{"element":"BAR"},"value":1},{"id":"model:reference/element:BAR/check:endpoint-path","inputs":["candidate"],"kind":"endpoint-path","lower":{"direction":"child","role":"Q"},"name":"endpoint-path","origins":["declaration:model:reference/element:BAR"],"requireSingleton":true,"requires":["model:reference/element:BAR/check:one-P","model:reference/element:BAR/check:one-Q","model:reference/check:H-forest"],"scope":"record","subject":{"element":"BAR"},"upper":{"direction":"parent","role":"P"},"view":"model:reference/view:H-visibility"},{"id":"model:reference/check:native-dag","inputs":["candidate"],"kind":"native-dag","name":"native-dag","origins":["declaration:model:reference"],"requires":[],"scope":"model","subject":{"model":"reference"}},{"id":"model:reference/check:H-forest","inputs":["candidate"],"kind":"forest-validity","name":"H-forest","origins":["declaration:model:reference"],"requires":[],"scope":"model","subject":{"model":"reference"},"view":"model:reference/view:H"},{"baseline":"model:reference/input:baseline","id":"model:reference/check:baseline-preserved","inputs":["candidate","model:reference/input:baseline"],"kind":"preserve","name":"baseline-preserved","origins":["declaration:model:reference"],"projection":"model:reference/projection:modeled-record","requires":[],"scope":"model","subject":{"model":"reference"}}],"schema":"semantic-constraints/v2","views":[{"config":{"connected":false,"contract":"selected-forest/v1","edges":"model:reference/element:FOO/relation:parent:H","orientation":"parent-to-child","vertices":"model:reference/element:FOO"},"id":"model:reference/view:H","kind":"view","name":"H"},{"config":{"contract":"origin-sensitive-visibility/v1","hierarchy":"model:reference/view:H","policy":{"ascent":"unrestricted","closedWhenTrue":"model:reference/element:FOO/field:FLAG","expand":"open-or-origin-in-subtree-including-self","visit":"always"}},"id":"model:reference/view:H-visibility","kind":"view","name":"H-visibility"}]},"grammar":[{"fields":[{"string":{"required":true,"title":"UID"}},{"singleChoice":{"choices":["false","true"],"required":true,"title":"FLAG"}}],"relations":[{"parent":{"reverseRole":"H_back","role":"H"}},{"parent":{"reverseRole":"R_back","role":"R"}}],"tag":"FOO"},{"fields":[{"string":{"required":true,"title":"UID"}}],"relations":[{"parent":{"reverseRole":"P_back","role":"P"}},{"child":{"reverseRole":"Q_back","role":"Q"}}],"tag":"BAR"},{"fields":[{"string":{"required":true,"title":"UID"}}],"relations":[{"parent":{"reverseRole":"R_back","role":"R"}},{"child":{"reverseRole":"Q_back","role":"Q"}}],"tag":"BAZ"}],"semanticTypes":[{"defaultsApply":"surviving-new-record-final-absence-only","digest":"6afd11b2c263f32dbac801ecfea4f3dd4eee61c1501d5c7263886e5ab78e83a5","element":"model:reference/element:FOO","fields":[{"default":null,"field":"model:reference/element:FOO/field:UID","native":{"string":{"required":true,"title":"UID"}},"semantic":{"type":"string"}},{"default":{"literal":false},"field":"model:reference/element:FOO/field:FLAG","native":{"singleChoice":{"choices":["false","true"],"required":true,"title":"FLAG"}},"semantic":{"codec":[{"native":"false","semantic":false},{"native":"true","semantic":true}],"type":"boolean"}}],"grammar":"model:reference","schema":"semantic-types/v1"},{"defaultsApply":"surviving-new-record-final-absence-only","digest":"102b073369b7118f4086cc32823a7d5d15238eefffc086a16883af52e58fa478","element":"model:reference/element:BAR","fields":[{"default":null,"field":"model:reference/element:BAR/field:UID","native":{"string":{"required":true,"title":"UID"}},"semantic":{"type":"string"}}],"grammar":"model:reference","schema":"semantic-types/v1"},{"defaultsApply":"surviving-new-record-final-absence-only","digest":"22b456170441d40658aced420a7717c49d63432fd3708c747c4352f1dad1c355","element":"model:reference/element:BAZ","fields":[{"default":null,"field":"model:reference/element:BAZ/field:UID","native":{"string":{"required":true,"title":"UID"}},"semantic":{"type":"string"}}],"grammar":"model:reference","schema":"semantic-types/v1"}]}
-exit = 0
-
 $ nix-instantiate --eval --strict --json -A sameNormalized composition.nix
 true
 exit = 0
@@ -29,11 +25,11 @@ exit = 0
 $ nix-instantiate --eval --strict --json -A conflict composition.nix
 error:
        … while calling the 'deepSeq' builtin
-         at dsl.nix:499:10:
-          498|     then throw "duplicate declaration identity"
-          499|     else builtins.deepSeq (validateKeywords output) output;
+         at dsl.nix:535:10:
+          534|     then throw "duplicate declaration identity"
+          535|     else builtins.deepSeq (validateKeywords output) output;
              |          ^
-          500| in {
+          536| in {
 
        … while evaluating the attribute 'bundle'
 
@@ -51,11 +47,11 @@ exit = 0
 $ nix-instantiate --eval --strict --json keyword-invalid.nix
 error:
        … while calling the 'deepSeq' builtin
-         at dsl.nix:499:10:
-          498|     then throw "duplicate declaration identity"
-          499|     else builtins.deepSeq (validateKeywords output) output;
+         at dsl.nix:535:10:
+          534|     then throw "duplicate declaration identity"
+          535|     else builtins.deepSeq (validateKeywords output) output;
              |          ^
-          500| in {
+          536| in {
 
        … while evaluating the attribute 'bundle'
 
@@ -66,13 +62,26 @@ error:
        error: invalid keyword ascent: "sideways"
 exit = 1
 
+$ nix-instantiate --eval --strict --json --expr 'let x = import ./examples.nix; in (builtins.head (builtins.filter (r: r.name == "R.all") x.bundle.rules)).check'
+{"all":[{"kind":"target-type","targetElement":"model:reference/element:FOO"},{"from":"owner","kind":"visible-target","to":"target","view":"model:reference/view:H-visibility"}]}
+exit = 0
+
+$ nix-instantiate --eval --strict --json examples.nix > normalized.json
+exit = 0
+bundle.json: matches fresh normalized.json evaluation; 11 rules.
+
+Additional lowering checks passed: all/any/not inside and outside relation and record callbacks; model checks; where on all three selectors; nested input and prerequisite collection; deduplicated count prerequisites; malformed and unsupported predicates rejected; nested keyword validation; non-guaranteeing prerequisite rejected.
+
 Artifact verification:
-examples.nix: byte-identical; SHA-256 d0ec080aceeed6269ea500da80094a1f0f1aaffb9f13e67c95a43aa52a21da6a
-composition.nix: byte-identical; SHA-256 d8fa2b324583d822b6b897ac3e23d5007092ae5b093242ce029f743bd887a588
-counting.nix: byte-identical; SHA-256 0a1cbc1d5e3b4a669713646b657e2ec072f314dc831404ecb4a245ddc666de7a
-README.md: all 32 fenced code blocks byte-identical
-dsl.nix: original relative grammar import line unchanged
-bundle.json: matches fresh evaluation; 12 flat rules; prerequisite IDs resolve; every declaration is named
-JSON samples: drawn corpus names and FLAG values; one expected entry per rule; all record/relation occurrences accounted for (structural checks only)
-contract.md: 448 lines, below 450
-contract.md: all 12 JSON sample blocks parse; requested section order verified; no case or decision identifiers in delivered files
+composition.nix: byte-identical to inputs/current9.
+counting.nix: byte-identical to inputs/current9.
+candidate.json: byte-identical to inputs/current9.
+baseline.json: byte-identical to inputs/current9.
+examples.nix: only all import, combined inline R predicate, and removal of visible-R changed.
+README.md: Appendix A equals examples.nix byte for byte; 30 other existing code blocks byte-identical; only the combined R teaching block and Appendix A changed; one selector mapping block added.
+dsl.nix: original relative grammar import unchanged.
+bundle.json: matches fresh evaluation; exactly 11 rules; unaffected rules preserve identity, fields, and dependencies; grammar, semanticTypes, and declaration/configuration lists unchanged; every check uses only named leaves and all/any/not.
+results.json: one entry per rule; each leaf finding identifies its predicatePath; combined R findings stay empty for the unchanged base candidate with no R occurrences.
+contract.md: 480 lines; all 17 JSON blocks parse; all retained sections present.
+No case or decision identifiers; transcript paths are relative.
+Longest prose run between code blocks in a touched README chapter: 266 whitespace-delimited words in chapter 9, excluding table rows. Including tables, the longest non-code run is Appendix C (1199 words).
