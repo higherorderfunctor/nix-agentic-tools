@@ -9,136 +9,134 @@ real output matches this file exactly on every normative field.
 
 ## Fixture index
 
-81 fixture directories carry a `results.json` (an actual expectation); 7 further
+88 fixture directories carry a `results.json` (an actual expectation); 8 further
 directories (`chain-depth-boundary-negative-family`,
-`nested-boundary-earlier-f2-rejected`, `provider-execution-error-family`,
-`s0-baseline-accepts-branch-only-change`,
+`nested-boundary-earlier-f2-rejected`, `note-state-field`,
+`provider-execution-error-family`, `s0-baseline-accepts-branch-only-change`,
 `s1-baseline-rejects-delete-or-flag-revision`,
 `script-default-source-success-vs-failure-family`,
 `visibility-truth-table-family`) are families: their own `case.md` states what
 the variants beneath share and carries no envelope of its own. `lowering-guards`
-is neither a fixture nor a family: it holds models that are lowered rather than
-evaluated, so it carries no envelope and no member, and
-`tests/test_lowering_guards.py` is what reads it. "What it exercises" is derived
-by reading each fixture's `results.json`: the statuses that appear across its
-rule and finding entries, any leaf kind beyond the five that appear in nearly
-every fixture (`count`, `native-dag`, `forest-validity`, `preserve`,
-`target-type`), and any code beyond a leaf's own same-named satisfied code. No
-fixture in this section exercises the `all`/`any`/`not` composed operators — see
-the coverage matrix.
+is neither a fixture nor a family: it holds nine lowering-time throw probes that
+`tests/test_lowering_guards.py` evaluates directly, so it carries no envelope
+and no member. "What it exercises" is derived by reading each fixture's
+`results.json`: the statuses that appear across its rule and finding entries,
+any leaf kind beyond the five that appear in nearly every fixture (`count`,
+`native-dag`, `forest-validity`, `preserve`, `target-type`), any code beyond a
+leaf's own same-named satisfied code, and any `all`/`any`/`not` composed
+operator, recovered from a finding's `predicatePath` segments since no finding
+in this corpus carries a literal `operator` key. 30 fixtures compose
+`target-type` and `visible-target` under `all`; the six `note-state-field`
+members compose `field-value` and `count` under `any`/`not`. Both are marked
+`ops:` below — see the coverage matrix for the per-status breakdown.
 
-| Fixture                                                                               | Section                                  | What it exercises                                                   | Provenance |
-| ------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------- | ---------- |
-| `bar-batch-boundary-rejection-preserves-authored-bytes`                               | Transition/batch/recovery                | satisfied/violated +endpoint-path codes:closed-boundary             | B06        |
-| `bar-boundary-f2-on-path-to-f2a-rejected`                                             | Traversal                                | satisfied/violated +endpoint-path codes:closed-boundary             | T07        |
-| `bar-bridge-no-h-ancestry-accepted`                                                   | Structural graph                         | satisfied +endpoint-path                                            | G08        |
-| `bar-downward-path-closed-endpoint-accepted`                                          | Traversal                                | satisfied +endpoint-path                                            | T06        |
-| `bar-endpoint-swap-final-one-q-accepted`                                              | Transition/batch/recovery                | satisfied +endpoint-path                                            | B03        |
-| `bar-final-state-accepted-despite-private-incomplete-mutation`                        | Transition/batch/recovery                | satisfied +endpoint-path                                            | B01        |
-| `bar-final-valid-despite-private-incomplete-endpoint-order`                           | Authoring/publication (revised controls) | satisfied +endpoint-path                                            | A01        |
-| `bar-missing-q-cardinality-rejected`                                                  | Transition/batch/recovery                | satisfied/violated/blocked codes:prerequisite                       | B02        |
-| `bar-no-h-path-despite-native-bridge-rejected`                                        | Traversal                                | satisfied/violated +endpoint-path codes:no-shared-root              | T08        |
-| `bar-ownership-f0-m-f2-no-reverse-edge-accepted`                                      | Structural graph                         | satisfied +endpoint-path                                            | G09        |
-| `bar-q-target-wrong-element-baz-rejected`                                             | Negative control (no catalogue id)       | satisfied/violated/blocked +endpoint-path codes:input               | none       |
-| `batch-reparent-hides-unchanged-r-rejected`                                           | Traversal                                | satisfied/violated +visible-target codes:closed-boundary            | T05        |
-| `baz-parent-r-unrestricted-accepted`                                                  | Structural graph                         | satisfied                                                           | G03        |
-| `boundary-opened-r-past-endpoint-accepted`                                            | Traversal                                | satisfied +visible-target                                           | T03        |
-| `captured-snapshot-consistency-across-provider-switch`                                | External-state                           | satisfied/violated codes:difference                                 | E06        |
-| `chain-depth-boundary-negative-family/depth-1-closed-endpoint-accepted`               | Traversal                                | satisfied +visible-target                                           | T10        |
-| `chain-depth-boundary-negative-family/depth-12-interior-closed-rejected`              | Traversal                                | satisfied/violated +visible-target codes:closed-boundary            | T10        |
-| `chain-depth-boundary-negative-family/depth-12-open-chain-accepted`                   | Traversal                                | satisfied +visible-target                                           | T10        |
-| `chain-depth-boundary-negative-family/depth-3-interior-closed-rejected`               | Traversal                                | satisfied/violated +visible-target codes:closed-boundary            | T10        |
-| `chain-depth-boundary-negative-family/depth-3-open-chain-accepted`                    | Traversal                                | satisfied +visible-target                                           | T10        |
-| `close-boundary-leaves-reference-hidden`                                              | Authoring/publication (revised controls) | satisfied/violated +visible-target codes:closed-boundary            | A02        |
-| `close-boundary-with-repaired-reference-in-same-batch`                                | Authoring/publication (revised controls) | satisfied +visible-target                                           | A02        |
-| `combined-role-cycle-across-h-r-q-rejected`                                           | Structural graph                         | satisfied/violated codes:cycle                                      | G07        |
-| `consistent-renaming-preserves-verdicts`                                              | Cross-cutting qualification              | satisfied/violated/blocked +visible-target codes:input              | X02        |
-| `create-set-unset-default-and-create-delete-lifecycle`                                | Defaults (revised controls)              | satisfied                                                           | DFT06      |
-| `delete-target-and-referencing-declarations-in-one-batch`                             | Authoring/publication (revised controls) | satisfied                                                           | A03        |
-| `deleted-target-leaves-dangling-reference`                                            | Authoring/publication (revised controls) | satisfied/blocked +visible-target codes:unresolved-target           | A03        |
-| `empty-baseline-allows-isolated-deletion`                                             | External-state                           | satisfied                                                           | E04        |
-| `empty-relation-collection-blocks-bar-endpoint-path`                                  | Authoring/publication (revised controls) | satisfied/violated/blocked codes:prerequisite                       | A10        |
-| `explicit-values-preserved-no-default-applied`                                        | Defaults (revised controls)              | satisfied/violated +visible-target codes:closed-boundary            | DFT02      |
-| `flag-absent-defaults-to-canonical-false`                                             | Defaults (revised controls)              | satisfied +visible-target                                           | DFT01      |
-| `flag-change-accepted-under-empty-baseline`                                           | External-state                           | satisfied                                                           | E02        |
-| `flag-change-rejected-under-protecting-baseline`                                      | External-state                           | satisfied/violated codes:difference                                 | E01; E03   |
-| `h-cardinality-two-parents-rejected`                                                  | Structural graph                         | satisfied/violated/blocked                                          | G05        |
-| `h-target-wrong-element-baz-rejected`                                                 | Negative control (no catalogue id)       | satisfied/violated/blocked                                          | none       |
-| `identical-candidate-accepted-under-narrow-baseline`                                  | Authoring/publication (revised controls) | satisfied                                                           | A08        |
-| `invalid-value-multiplicity-errors-never-defaulted`                                   | Defaults (revised controls)              | satisfied/blocked +visible-target codes:input                       | DFT03      |
-| `isolated-root-added-multi-root-forest-accepted`                                      | Structural graph                         | satisfied                                                           | G04        |
-| `missing-before-or-baseline-acquisition-cannot-evaluate`                              | Transition/batch/recovery                | satisfied/error codes:execution                                     | B09        |
-| `native-cycle-f0-f1-f1a-rejected`                                                     | Structural graph                         | satisfied/violated/blocked codes:cycle                              | G06        |
-| `nested-boundary-earlier-f2-rejected/inner-boundary-f2a-closed`                       | Traversal                                | satisfied/violated +endpoint-path codes:closed-boundary             | T09        |
-| `nested-boundary-earlier-f2-rejected/outer-boundary-f2-closed`                        | Traversal                                | satisfied/violated +endpoint-path codes:closed-boundary             | T09        |
-| `no-backfill-on-existing-absent-field`                                                | Defaults (revised controls)              | satisfied/blocked +visible-target codes:input                       | DFT05      |
-| `policy-or-provider-config-change-forces-recomputation`                               | Cross-cutting qualification              | satisfied/violated +visible-target codes:closed-boundary,difference | X06        |
-| `provider-execution-error-family/incomplete-snapshot`                                 | External-state                           | satisfied/error codes:execution                                     | E05        |
-| `provider-execution-error-family/malformed-output`                                    | External-state                           | satisfied/error codes:execution                                     | E05        |
-| `provider-execution-error-family/nonzero-exit`                                        | External-state                           | satisfied/error codes:execution                                     | E05        |
-| `provider-execution-error-family/timeout`                                             | External-state                           | satisfied/error codes:execution                                     | E05        |
-| `r-into-closed-endpoint-accepted`                                                     | Structural graph                         | satisfied +visible-target                                           | G01        |
-| `r-past-closed-boundary-rejected`                                                     | Traversal                                | satisfied/violated +visible-target codes:closed-boundary            | T02        |
-| `r-target-wrong-element-baz-rejected`                                                 | Structural graph                         | satisfied/violated/blocked +visible-target codes:input              | G02        |
-| `r-to-closed-endpoint-visible-path-accepted`                                          | Traversal                                | satisfied +visible-target                                           | T01        |
-| `closing-boundary-again-hides-existing-r-rejected`                                    | Traversal                                | satisfied/violated +visible-target codes:closed-boundary            | T04        |
-| `s0-baseline-accepts-branch-only-change/i0-deletion`                                  | Transition/batch/recovery                | satisfied                                                           | B05        |
-| `s0-baseline-accepts-branch-only-change/i0-flag-revision`                             | Transition/batch/recovery                | satisfied                                                           | B05        |
-| `s1-baseline-rejects-delete-or-flag-revision/i0-deletion`                             | Transition/batch/recovery                | satisfied/violated codes:difference                                 | B04        |
-| `s1-baseline-rejects-delete-or-flag-revision/i0-flag-revision`                        | Transition/batch/recovery                | satisfied/violated codes:difference                                 | B04        |
-| `script-default-source-success-vs-failure-family/empty-complete-snapshot-is-a-value`  | Defaults (revised controls)              | satisfied                                                           | DFT04      |
-| `script-default-source-success-vs-failure-family/provider-empty-stdout-refuses`       | Defaults (revised controls)              | satisfied/error codes:execution                                     | DFT04      |
-| `script-default-source-success-vs-failure-family/provider-malformed-output-refuses`   | Defaults (revised controls)              | satisfied/error codes:execution                                     | DFT04      |
-| `script-default-source-success-vs-failure-family/provider-missing-identity-refuses`   | Defaults (revised controls)              | satisfied/error codes:execution                                     | DFT04      |
-| `script-default-source-success-vs-failure-family/provider-non-object-json-refuses`    | Defaults (revised controls)              | satisfied/error codes:execution                                     | DFT04      |
-| `script-default-source-success-vs-failure-family/provider-nonzero-exit-refuses`       | Defaults (revised controls)              | satisfied/error codes:execution                                     | DFT04      |
-| `script-default-source-success-vs-failure-family/provider-timeout-refuses`            | Defaults (revised controls)              | satisfied/error codes:execution                                     | DFT04      |
-| `source-change-after-preparation-publishes-captured-value`                            | Defaults (revised controls)              | satisfied                                                           | DFT07      |
-| `visibility-truth-table-family/bridge-across-distinct-roots-rejected`                 | Traversal                                | satisfied/violated +endpoint-path codes:no-shared-root              | T11        |
-| `visibility-truth-table-family/bridge-between-siblings-needs-ascent-rejected`         | Traversal                                | satisfied/violated +endpoint-path                                   | T11        |
-| `visibility-truth-table-family/bridge-from-closed-start-accepted`                     | Traversal                                | satisfied +endpoint-path                                            | T11        |
-| `visibility-truth-table-family/bridge-past-closed-intermediate-rejected`              | Traversal                                | satisfied/violated +endpoint-path codes:closed-boundary             | T11        |
-| `visibility-truth-table-family/bridge-to-closed-endpoint-accepted`                    | Traversal                                | satisfied +endpoint-path                                            | T11        |
-| `visibility-truth-table-family/bridge-with-equal-endpoints-native-cycle-rejected`     | Traversal                                | satisfied/violated +endpoint-path codes:cycle                       | T11        |
-| `visibility-truth-table-family/closed-endpoint-visited-from-outside-accepted`         | Traversal                                | satisfied +visible-target                                           | T11        |
-| `visibility-truth-table-family/closed-origin-exits-its-own-compartment-accepted`      | Traversal                                | satisfied +visible-target                                           | T11        |
-| `visibility-truth-table-family/external-origin-cannot-expand-closed-node-rejected`    | Traversal                                | satisfied/violated +visible-target codes:closed-boundary            | T11        |
-| `visibility-truth-table-family/internal-origin-exits-closed-compartment-accepted`     | Traversal                                | satisfied +visible-target                                           | T11        |
-| `visibility-truth-table-family/internal-origin-reaches-internal-sibling-accepted`     | Traversal                                | satisfied +visible-target                                           | T11        |
-| `visibility-truth-table-family/opened-boundary-lets-external-origin-descend-accepted` | Traversal                                | satisfied +visible-target                                           | T11        |
-| `visibility-truth-table-family/relation-across-distinct-roots-rejected`               | Traversal                                | satisfied/violated +visible-target codes:no-shared-root             | T11        |
-| `visibility-truth-table-family/relation-to-own-descendant-native-cycle-rejected`      | Traversal                                | satisfied/violated +visible-target codes:cycle                      | T11        |
-| `visibility-truth-table-family/relation-to-self-native-cycle-rejected`                | Traversal                                | satisfied/violated +visible-target codes:cycle                      | T11        |
-| `warm-cache-recomputes-on-metadata-policy-baseline-change`                            | Authoring/publication (revised controls) | satisfied/violated codes:difference                                 | A08        |
+| Fixture                                                                               | Section                                  | What it exercises                                                           | Provenance    |
+| ------------------------------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------- | ------------- |
+| `bar-batch-boundary-rejection-preserves-authored-bytes`                               | Transition/batch/recovery                | satisfied/violated +endpoint-path codes:closed-boundary                     | B06           |
+| `bar-boundary-f2-on-path-to-f2a-rejected`                                             | Traversal                                | satisfied/violated +endpoint-path codes:closed-boundary                     | T07           |
+| `bar-bridge-no-h-ancestry-accepted`                                                   | Structural graph                         | satisfied +endpoint-path                                                    | G08           |
+| `bar-downward-path-closed-endpoint-accepted`                                          | Traversal                                | satisfied +endpoint-path                                                    | T06           |
+| `bar-endpoint-swap-final-one-q-accepted`                                              | Transition/batch/recovery                | satisfied +endpoint-path                                                    | B03           |
+| `bar-final-state-accepted-despite-private-incomplete-mutation`                        | Transition/batch/recovery                | satisfied +endpoint-path                                                    | B01           |
+| `bar-final-valid-despite-private-incomplete-endpoint-order`                           | Authoring/publication (revised controls) | satisfied +endpoint-path                                                    | A01           |
+| `bar-missing-q-cardinality-rejected`                                                  | Transition/batch/recovery                | satisfied/violated/blocked codes:prerequisite                               | B02           |
+| `bar-no-h-path-despite-native-bridge-rejected`                                        | Traversal                                | satisfied/violated +endpoint-path codes:no-shared-root                      | T08           |
+| `bar-ownership-f0-m-f2-no-reverse-edge-accepted`                                      | Structural graph                         | satisfied +endpoint-path                                                    | G09           |
+| `bar-q-target-wrong-element-baz-rejected`                                             | Negative control (no catalogue id)       | satisfied/violated/blocked +endpoint-path codes:input                       | none          |
+| `batch-reparent-hides-unchanged-r-rejected`                                           | Traversal                                | satisfied/violated +visible-target ops:all codes:closed-boundary            | T05           |
+| `baz-parent-r-unrestricted-accepted`                                                  | Structural graph                         | satisfied                                                                   | G03           |
+| `boundary-opened-r-past-endpoint-accepted`                                            | Traversal                                | satisfied +visible-target ops:all                                           | T03           |
+| `captured-snapshot-consistency-across-provider-switch`                                | External-state                           | satisfied/violated codes:difference                                         | E06           |
+| `chain-depth-boundary-negative-family/depth-1-closed-endpoint-accepted`               | Traversal                                | satisfied +visible-target ops:all                                           | T10           |
+| `chain-depth-boundary-negative-family/depth-12-interior-closed-rejected`              | Traversal                                | satisfied/violated +visible-target ops:all codes:closed-boundary            | T10           |
+| `chain-depth-boundary-negative-family/depth-12-open-chain-accepted`                   | Traversal                                | satisfied +visible-target ops:all                                           | T10           |
+| `chain-depth-boundary-negative-family/depth-3-interior-closed-rejected`               | Traversal                                | satisfied/violated +visible-target ops:all codes:closed-boundary            | T10           |
+| `chain-depth-boundary-negative-family/depth-3-open-chain-accepted`                    | Traversal                                | satisfied +visible-target ops:all                                           | T10           |
+| `close-boundary-leaves-reference-hidden`                                              | Authoring/publication (revised controls) | satisfied/violated +visible-target ops:all codes:closed-boundary            | A02           |
+| `close-boundary-with-repaired-reference-in-same-batch`                                | Authoring/publication (revised controls) | satisfied +visible-target ops:all                                           | A02           |
+| `combined-role-cycle-across-h-r-q-rejected`                                           | Structural graph                         | satisfied/violated codes:cycle                                              | G07           |
+| `consistent-renaming-preserves-verdicts`                                              | Cross-cutting qualification              | satisfied/violated/blocked +visible-target ops:all codes:input              | X02           |
+| `create-set-unset-default-and-create-delete-lifecycle`                                | Defaults (revised controls)              | satisfied                                                                   | DFT06         |
+| `delete-target-and-referencing-declarations-in-one-batch`                             | Authoring/publication (revised controls) | satisfied                                                                   | A03           |
+| `deleted-target-leaves-dangling-reference`                                            | Authoring/publication (revised controls) | satisfied/blocked +visible-target ops:all codes:unresolved-target           | A03           |
+| `empty-baseline-allows-isolated-deletion`                                             | External-state                           | satisfied                                                                   | E04           |
+| `empty-relation-collection-blocks-bar-endpoint-path`                                  | Authoring/publication (revised controls) | satisfied/violated/blocked codes:prerequisite                               | A10           |
+| `explicit-values-preserved-no-default-applied`                                        | Defaults (revised controls)              | satisfied/violated +visible-target ops:all codes:closed-boundary            | DFT02         |
+| `flag-absent-defaults-to-canonical-false`                                             | Defaults (revised controls)              | satisfied +visible-target ops:all                                           | DFT01         |
+| `flag-change-accepted-under-empty-baseline`                                           | External-state                           | satisfied                                                                   | E02           |
+| `flag-change-rejected-under-protecting-baseline`                                      | External-state                           | satisfied/violated codes:difference                                         | E01; E03      |
+| `h-cardinality-two-parents-rejected`                                                  | Structural graph                         | satisfied/violated/blocked                                                  | G05           |
+| `h-target-wrong-element-baz-rejected`                                                 | Negative control (no catalogue id)       | satisfied/violated/blocked                                                  | none          |
+| `identical-candidate-accepted-under-narrow-baseline`                                  | Authoring/publication (revised controls) | satisfied                                                                   | A08           |
+| `invalid-value-multiplicity-errors-never-defaulted`                                   | Defaults (revised controls)              | satisfied/blocked +visible-target ops:all codes:input                       | DFT03         |
+| `isolated-root-added-multi-root-forest-accepted`                                      | Structural graph                         | satisfied                                                                   | G04           |
+| `missing-before-or-baseline-acquisition-cannot-evaluate`                              | Transition/batch/recovery                | satisfied/error codes:execution                                             | B09           |
+| `native-cycle-f0-f1-f1a-rejected`                                                     | Structural graph                         | satisfied/violated/blocked codes:cycle                                      | G06           |
+| `nested-boundary-earlier-f2-rejected/inner-boundary-f2a-closed`                       | Traversal                                | satisfied/violated +endpoint-path codes:closed-boundary                     | T09           |
+| `nested-boundary-earlier-f2-rejected/outer-boundary-f2-closed`                        | Traversal                                | satisfied/violated +endpoint-path codes:closed-boundary                     | T09           |
+| `no-backfill-on-existing-absent-field`                                                | Defaults (revised controls)              | satisfied/blocked +visible-target ops:all codes:input                       | DFT05         |
+| `note-state-field/cited-source-in-draft-rejected`                                     | Field-value leaf (variant model)         | satisfied/violated +field-value ops:any,not                                 | variant model |
+| `note-state-field/cited-source-without-a-state-accepted`                              | Field-value leaf (variant model)         | satisfied/violated +field-value ops:any,not                                 | variant model |
+| `note-state-field/draft-note-owning-a-source-rejected`                                | Field-value leaf (variant model)         | satisfied/violated +field-value ops:any,not                                 | variant model |
+| `note-state-field/note-without-a-state-is-not-retired-accepted`                       | Field-value leaf (variant model)         | satisfied/violated +field-value ops:any,not                                 | variant model |
+| `note-state-field/retired-note-owning-a-source-accepted`                              | Field-value leaf (variant model)         | satisfied/violated +field-value ops:any,not                                 | variant model |
+| `note-state-field/retired-note-without-a-source-rejected`                             | Field-value leaf (variant model)         | satisfied/violated +field-value ops:any,not                                 | variant model |
+| `policy-or-provider-config-change-forces-recomputation`                               | Cross-cutting qualification              | satisfied/violated +visible-target ops:all codes:closed-boundary,difference | X06           |
+| `provider-execution-error-family/incomplete-snapshot`                                 | External-state                           | satisfied/error codes:execution                                             | E05           |
+| `provider-execution-error-family/malformed-output`                                    | External-state                           | satisfied/error codes:execution                                             | E05           |
+| `provider-execution-error-family/nonzero-exit`                                        | External-state                           | satisfied/error codes:execution                                             | E05           |
+| `provider-execution-error-family/timeout`                                             | External-state                           | satisfied/error codes:execution                                             | E05           |
+| `r-into-closed-endpoint-accepted`                                                     | Structural graph                         | satisfied +visible-target ops:all                                           | G01           |
+| `r-past-closed-boundary-rejected`                                                     | Traversal                                | satisfied/violated +visible-target ops:all codes:closed-boundary            | T02           |
+| `r-target-wrong-element-baz-rejected`                                                 | Structural graph                         | satisfied/violated/blocked +visible-target ops:all codes:input              | G02           |
+| `r-to-closed-endpoint-visible-path-accepted`                                          | Traversal                                | satisfied +visible-target ops:all                                           | T01           |
+| `closing-boundary-again-hides-existing-r-rejected`                                    | Traversal                                | satisfied/violated +visible-target ops:all codes:closed-boundary            | T04           |
+| `s0-baseline-accepts-branch-only-change/i0-deletion`                                  | Transition/batch/recovery                | satisfied                                                                   | B05           |
+| `s0-baseline-accepts-branch-only-change/i0-flag-revision`                             | Transition/batch/recovery                | satisfied                                                                   | B05           |
+| `s1-baseline-rejects-delete-or-flag-revision/i0-deletion`                             | Transition/batch/recovery                | satisfied/violated codes:difference                                         | B04           |
+| `s1-baseline-rejects-delete-or-flag-revision/i0-flag-revision`                        | Transition/batch/recovery                | satisfied/violated codes:difference                                         | B04           |
+| `script-default-source-success-vs-failure-family/empty-complete-snapshot-is-a-value`  | Defaults (revised controls)              | satisfied                                                                   | DFT04         |
+| `script-default-source-success-vs-failure-family/provider-empty-stdout-refuses`       | Defaults (revised controls)              | satisfied/error codes:execution                                             | DFT04         |
+| `script-default-source-success-vs-failure-family/provider-malformed-output-refuses`   | Defaults (revised controls)              | satisfied/error codes:execution                                             | DFT04         |
+| `script-default-source-success-vs-failure-family/provider-missing-identity-refuses`   | Defaults (revised controls)              | satisfied/error codes:execution                                             | DFT04         |
+| `script-default-source-success-vs-failure-family/provider-non-object-json-refuses`    | Defaults (revised controls)              | satisfied/error codes:execution                                             | DFT04         |
+| `script-default-source-success-vs-failure-family/provider-nonzero-exit-refuses`       | Defaults (revised controls)              | satisfied/error codes:execution                                             | DFT04         |
+| `script-default-source-success-vs-failure-family/provider-timeout-refuses`            | Defaults (revised controls)              | satisfied/error codes:execution                                             | DFT04         |
+| `source-change-after-preparation-publishes-captured-value`                            | Defaults (revised controls)              | satisfied                                                                   | DFT07         |
+| `unrelated-dangling-reference-stays-out-of-forest-causes`                             | Negative control (no catalogue id)       | satisfied/blocked codes:unresolved-target,prerequisite                      | none          |
+| `visibility-truth-table-family/bridge-across-distinct-roots-rejected`                 | Traversal                                | satisfied/violated +endpoint-path codes:no-shared-root                      | T11           |
+| `visibility-truth-table-family/bridge-between-siblings-needs-ascent-rejected`         | Traversal                                | satisfied/violated +endpoint-path                                           | T11           |
+| `visibility-truth-table-family/bridge-from-closed-start-accepted`                     | Traversal                                | satisfied +endpoint-path                                                    | T11           |
+| `visibility-truth-table-family/bridge-past-closed-intermediate-rejected`              | Traversal                                | satisfied/violated +endpoint-path codes:closed-boundary                     | T11           |
+| `visibility-truth-table-family/bridge-to-closed-endpoint-accepted`                    | Traversal                                | satisfied +endpoint-path                                                    | T11           |
+| `visibility-truth-table-family/bridge-with-equal-endpoints-native-cycle-rejected`     | Traversal                                | satisfied/violated +endpoint-path codes:cycle                               | T11           |
+| `visibility-truth-table-family/closed-endpoint-visited-from-outside-accepted`         | Traversal                                | satisfied +visible-target ops:all                                           | T11           |
+| `visibility-truth-table-family/closed-origin-exits-its-own-compartment-accepted`      | Traversal                                | satisfied +visible-target ops:all                                           | T11           |
+| `visibility-truth-table-family/external-origin-cannot-expand-closed-node-rejected`    | Traversal                                | satisfied/violated +visible-target ops:all codes:closed-boundary            | T11           |
+| `visibility-truth-table-family/internal-origin-exits-closed-compartment-accepted`     | Traversal                                | satisfied +visible-target ops:all                                           | T11           |
+| `visibility-truth-table-family/internal-origin-reaches-internal-sibling-accepted`     | Traversal                                | satisfied +visible-target ops:all                                           | T11           |
+| `visibility-truth-table-family/opened-boundary-lets-external-origin-descend-accepted` | Traversal                                | satisfied +visible-target ops:all                                           | T11           |
+| `visibility-truth-table-family/relation-across-distinct-roots-rejected`               | Traversal                                | satisfied/violated +visible-target ops:all codes:no-shared-root             | T11           |
+| `visibility-truth-table-family/relation-to-own-descendant-native-cycle-rejected`      | Traversal                                | satisfied/violated +visible-target ops:all codes:cycle                      | T11           |
+| `visibility-truth-table-family/relation-to-self-native-cycle-rejected`                | Traversal                                | satisfied/violated +visible-target ops:all codes:cycle                      | T11           |
+| `warm-cache-recomputes-on-metadata-policy-baseline-change`                            | Authoring/publication (revised controls) | satisfied/violated codes:difference                                         | A08           |
 
 ## Coverage matrix
 
-Rows are the closed status set (contract.md:778); columns are the seven closed
-leaf kinds (contract.md:797) plus the three composed operators (contract.md:799)
-plus a `non-leaf` column for whole-rule or envelope-level conditions that carry
-no leaf kind at all (`prerequisite`, `execution`, `configuration`). A cell
-counts fixtures whose `results.json` contains at least one finding with that
-(status, kind) pair; a fixture with two findings of the same pair, or the same
-pair on two rules, counts once. Row and column totals do not sum to 81: one
-fixture commonly contributes to several cells (`target-type` alone touches 86
-cell-hits across 81 fixtures because a handful assert both a satisfied and a
-violated leaf in the same envelope).
+Rows are the closed status set (contract.md:778); columns are the eight closed
+leaf kinds (contract.md:843) plus the three composed operators
+(contract.md:843). A cell counts the fixtures, of 88, whose `results.json` has
+at least one finding of that status carrying that leaf kind or whose
+`predicatePath` carries that operator segment; the `error` row is zero
+throughout because every `error` finding in this corpus carries `kind: null`
+with code `execution`, which matches no leaf-kind or operator column here.
 
-| Status    | target-type | count | visible-target | endpoint-path | native-dag | forest-validity | preserve | all | any | not | non-leaf¹ |
-| --------- | ----------- | ----- | -------------- | ------------- | ---------- | --------------- | -------- | --- | --- | --- | --------- |
-| satisfied | 81          | 81    | 16             | 9             | 75         | 78              | 64       | 0   | 0   | 0   | 0         |
-| violated  | 4           | 3     | 10             | 8             | 5          | 3               | 6        | 0   | 0   | 0   | 0         |
-| blocked   | 1           | 0     | 5              | 1             | 1          | 0               | 0        | 0   | 0   | 0   | 2         |
-| error     | 0           | 0     | 0              | 0             | 0          | 0               | 0        | 0   | 0   | 0   | 11        |
-
-¹ no fixture's `evidence.operator` appears anywhere in this corpus
-(`command grep -rl '"operator"'` over `backend/fixtures` returns nothing), so
-`all`/`any`/`not` are entirely uncovered here. The `non-leaf` column is 0 for
-`satisfied`/`violated` because a whole-rule prerequisite, execution, or
-configuration condition is never itself satisfied or violated in this corpus's
-closed code table (contract.md:804-818) — only `blocked` (2, the `prerequisite`
-cardinality-blocking fixtures) and `error` (11, the provider-acquisition-failure
-fixtures) apply to it.
+| Status    | target-type | count | field-value | visible-target | endpoint-path | native-dag | forest-validity | preserve | all | any | not |
+| --------- | ----------- | ----- | ----------- | -------------- | ------------- | ---------- | --------------- | -------- | --- | --- | --- |
+| satisfied | 82          | 88    | 5           | 16             | 9             | 75         | 78              | 65       | 27  | 6   | 2   |
+| violated  | 4           | 8     | 6           | 10             | 8             | 5          | 3               | 6        | 12  | 6   | 6   |
+| blocked   | 2           | 0     | 0           | 5              | 1             | 2          | 1               | 0        | 5   | 0   | 0   |
+| error     | 0           | 0     | 0           | 0              | 0             | 0          | 0               | 0        | 0   | 0   | 0   |
 
 ## Deferred to runtime
 
