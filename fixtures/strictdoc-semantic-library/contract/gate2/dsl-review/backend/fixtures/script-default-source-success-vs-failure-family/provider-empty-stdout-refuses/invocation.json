@@ -1,0 +1,8 @@
+{
+  "inputs": {
+    "model:reference/input:baseline": {
+      "command": ["sh", "-c", "true"],
+      "timeoutSeconds": 10
+    }
+  }
+}

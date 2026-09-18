@@ -47,6 +47,7 @@
         "functors",
         "incrementality",
         "microbenchmark",
+        "mmin",
         "multigraph",
         "networkx",
         "nonblocking",

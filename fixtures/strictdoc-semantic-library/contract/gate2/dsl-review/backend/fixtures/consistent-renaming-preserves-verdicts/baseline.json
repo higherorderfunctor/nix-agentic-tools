@@ -1,0 +1,16 @@
+{
+  "complete": true,
+  "identity": "baseline-gamma-solo-open",
+  "model": "reference",
+  "records": [
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["gamma-solo"]
+      },
+      "relations": [],
+      "uid": "gamma-solo"
+    }
+  ]
+}

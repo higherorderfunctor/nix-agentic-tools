@@ -1,0 +1,554 @@
+{
+  "baseline": "baseline-I0-open",
+  "evaluation": "truth-table-bridge-with-equal-endpoints-native-cycle-rejected",
+  "expected": true,
+  "findings": [],
+  "results": [
+    {
+      "causes": [],
+      "findings": [
+        {
+          "code": "target-type",
+          "evidence": {
+            "actualElement": "FOO",
+            "expectedElement": "FOO"
+          },
+          "kind": "target-type",
+          "message": "The target is FOO.",
+          "occurrence": {
+            "direction": "parent",
+            "role": "H",
+            "target": "F0"
+          },
+          "occurrenceIndex": 0,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "F1"
+        },
+        {
+          "code": "target-type",
+          "evidence": {
+            "actualElement": "FOO",
+            "expectedElement": "FOO"
+          },
+          "kind": "target-type",
+          "message": "The target is FOO.",
+          "occurrence": {
+            "direction": "parent",
+            "role": "H",
+            "target": "F1"
+          },
+          "occurrenceIndex": 0,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "F1a"
+        },
+        {
+          "code": "target-type",
+          "evidence": {
+            "actualElement": "FOO",
+            "expectedElement": "FOO"
+          },
+          "kind": "target-type",
+          "message": "The target is FOO.",
+          "occurrence": {
+            "direction": "parent",
+            "role": "H",
+            "target": "F0"
+          },
+          "occurrenceIndex": 0,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "F2"
+        },
+        {
+          "code": "target-type",
+          "evidence": {
+            "actualElement": "FOO",
+            "expectedElement": "FOO"
+          },
+          "kind": "target-type",
+          "message": "The target is FOO.",
+          "occurrence": {
+            "direction": "parent",
+            "role": "H",
+            "target": "F2"
+          },
+          "occurrenceIndex": 0,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "F2a"
+        },
+        {
+          "code": "target-type",
+          "evidence": {
+            "actualElement": "FOO",
+            "expectedElement": "FOO"
+          },
+          "kind": "target-type",
+          "message": "The target is FOO.",
+          "occurrence": {
+            "direction": "parent",
+            "role": "H",
+            "target": "F2"
+          },
+          "occurrenceIndex": 0,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "F2b"
+        },
+        {
+          "code": "target-type",
+          "evidence": {
+            "actualElement": "FOO",
+            "expectedElement": "FOO"
+          },
+          "kind": "target-type",
+          "message": "The target is FOO.",
+          "occurrence": {
+            "direction": "parent",
+            "role": "H",
+            "target": "G0"
+          },
+          "occurrenceIndex": 0,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "G1"
+        }
+      ],
+      "rule": "model:reference/element:FOO/relation:parent:H/check:H.target-type",
+      "status": "satisfied"
+    },
+    {
+      "causes": [],
+      "findings": [],
+      "rule": "model:reference/element:FOO/relation:parent:R/check:R.all",
+      "status": "satisfied"
+    },
+    {
+      "causes": [],
+      "findings": [
+        {
+          "code": "count",
+          "evidence": {
+            "compare": "lte",
+            "count": 0,
+            "occurrences": [],
+            "value": 1
+          },
+          "kind": "count",
+          "message": "The H count is at most one.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "F0"
+        },
+        {
+          "code": "count",
+          "evidence": {
+            "compare": "lte",
+            "count": 1,
+            "occurrences": [
+              {
+                "direction": "parent",
+                "occurrenceIndex": 0,
+                "role": "H",
+                "target": "F0"
+              }
+            ],
+            "value": 1
+          },
+          "kind": "count",
+          "message": "The H count is at most one.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "F1"
+        },
+        {
+          "code": "count",
+          "evidence": {
+            "compare": "lte",
+            "count": 1,
+            "occurrences": [
+              {
+                "direction": "parent",
+                "occurrenceIndex": 0,
+                "role": "H",
+                "target": "F1"
+              }
+            ],
+            "value": 1
+          },
+          "kind": "count",
+          "message": "The H count is at most one.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "F1a"
+        },
+        {
+          "code": "count",
+          "evidence": {
+            "compare": "lte",
+            "count": 1,
+            "occurrences": [
+              {
+                "direction": "parent",
+                "occurrenceIndex": 0,
+                "role": "H",
+                "target": "F0"
+              }
+            ],
+            "value": 1
+          },
+          "kind": "count",
+          "message": "The H count is at most one.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "F2"
+        },
+        {
+          "code": "count",
+          "evidence": {
+            "compare": "lte",
+            "count": 1,
+            "occurrences": [
+              {
+                "direction": "parent",
+                "occurrenceIndex": 0,
+                "role": "H",
+                "target": "F2"
+              }
+            ],
+            "value": 1
+          },
+          "kind": "count",
+          "message": "The H count is at most one.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "F2a"
+        },
+        {
+          "code": "count",
+          "evidence": {
+            "compare": "lte",
+            "count": 1,
+            "occurrences": [
+              {
+                "direction": "parent",
+                "occurrenceIndex": 0,
+                "role": "H",
+                "target": "F2"
+              }
+            ],
+            "value": 1
+          },
+          "kind": "count",
+          "message": "The H count is at most one.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "F2b"
+        },
+        {
+          "code": "count",
+          "evidence": {
+            "compare": "lte",
+            "count": 0,
+            "occurrences": [],
+            "value": 1
+          },
+          "kind": "count",
+          "message": "The H count is at most one.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "G0"
+        },
+        {
+          "code": "count",
+          "evidence": {
+            "compare": "lte",
+            "count": 1,
+            "occurrences": [
+              {
+                "direction": "parent",
+                "occurrenceIndex": 0,
+                "role": "H",
+                "target": "G0"
+              }
+            ],
+            "value": 1
+          },
+          "kind": "count",
+          "message": "The H count is at most one.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "G1"
+        },
+        {
+          "code": "count",
+          "evidence": {
+            "compare": "lte",
+            "count": 0,
+            "occurrences": [],
+            "value": 1
+          },
+          "kind": "count",
+          "message": "The H count is at most one.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "I0"
+        }
+      ],
+      "rule": "model:reference/element:FOO/check:one-H-parent",
+      "status": "satisfied"
+    },
+    {
+      "causes": [],
+      "findings": [
+        {
+          "code": "target-type",
+          "evidence": {
+            "actualElement": "FOO",
+            "expectedElement": "FOO"
+          },
+          "kind": "target-type",
+          "message": "The target is FOO.",
+          "occurrence": {
+            "direction": "parent",
+            "role": "P",
+            "target": "F2"
+          },
+          "occurrenceIndex": 0,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "M"
+        }
+      ],
+      "rule": "model:reference/element:BAR/relation:parent:P/check:P.target-type",
+      "status": "satisfied"
+    },
+    {
+      "causes": [],
+      "findings": [
+        {
+          "code": "target-type",
+          "evidence": {
+            "actualElement": "FOO",
+            "expectedElement": "FOO"
+          },
+          "kind": "target-type",
+          "message": "The target is FOO.",
+          "occurrence": {
+            "direction": "child",
+            "role": "Q",
+            "target": "F2"
+          },
+          "occurrenceIndex": 1,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "M"
+        }
+      ],
+      "rule": "model:reference/element:BAR/relation:child:Q/check:Q.target-type",
+      "status": "satisfied"
+    },
+    {
+      "causes": [],
+      "findings": [
+        {
+          "code": "count",
+          "evidence": {
+            "compare": "eq",
+            "count": 1,
+            "occurrences": [
+              {
+                "direction": "parent",
+                "occurrenceIndex": 0,
+                "role": "P",
+                "target": "F2"
+              }
+            ],
+            "value": 1
+          },
+          "kind": "count",
+          "message": "The BAR has exactly one P endpoint.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "M"
+        }
+      ],
+      "rule": "model:reference/element:BAR/check:one-P",
+      "status": "satisfied"
+    },
+    {
+      "causes": [],
+      "findings": [
+        {
+          "code": "count",
+          "evidence": {
+            "compare": "eq",
+            "count": 1,
+            "occurrences": [
+              {
+                "direction": "child",
+                "occurrenceIndex": 1,
+                "role": "Q",
+                "target": "F2"
+              }
+            ],
+            "value": 1
+          },
+          "kind": "count",
+          "message": "The BAR has exactly one Q endpoint.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "M"
+        }
+      ],
+      "rule": "model:reference/element:BAR/check:one-Q",
+      "status": "satisfied"
+    },
+    {
+      "causes": [],
+      "findings": [
+        {
+          "code": "endpoint-path",
+          "evidence": {
+            "boundary": null,
+            "lower": [
+              {
+                "direction": "child",
+                "occurrenceIndex": 1,
+                "role": "Q",
+                "target": "F2"
+              }
+            ],
+            "origin": "F2",
+            "path": ["F2"],
+            "target": "F2",
+            "upper": [
+              {
+                "direction": "parent",
+                "occurrenceIndex": 0,
+                "role": "P",
+                "target": "F2"
+              }
+            ],
+            "walkedPath": ["F2"]
+          },
+          "kind": "endpoint-path",
+          "message": "The route from the upper endpoint requires ascent.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": "M"
+        }
+      ],
+      "rule": "model:reference/element:BAR/check:endpoint-path",
+      "status": "satisfied"
+    },
+    {
+      "causes": [],
+      "findings": [
+        {
+          "code": "cycle",
+          "evidence": {
+            "cycles": [
+              {
+                "cycle": ["F2", "M", "F2"],
+                "edges": [
+                  {
+                    "direction": "parent",
+                    "occurrenceIndex": 0,
+                    "role": "P",
+                    "target": "F2",
+                    "uid": "M"
+                  },
+                  {
+                    "direction": "child",
+                    "occurrenceIndex": 1,
+                    "role": "Q",
+                    "target": "F2",
+                    "uid": "M"
+                  }
+                ]
+              }
+            ]
+          },
+          "kind": "native-dag",
+          "message": "The native graph contains a directed cycle.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "violated",
+          "uid": null
+        }
+      ],
+      "rule": "model:reference/check:native-dag",
+      "status": "violated"
+    },
+    {
+      "causes": [],
+      "findings": [
+        {
+          "code": "forest-validity",
+          "evidence": {
+            "violations": []
+          },
+          "kind": "forest-validity",
+          "message": "The selected hierarchy is a valid forest.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": null
+        }
+      ],
+      "rule": "model:reference/check:H-forest",
+      "status": "satisfied"
+    },
+    {
+      "causes": [],
+      "findings": [
+        {
+          "code": "preserve",
+          "evidence": {
+            "baseline": "baseline-I0-open",
+            "differences": []
+          },
+          "kind": "preserve",
+          "message": "All protected records are unchanged.",
+          "occurrence": null,
+          "occurrenceIndex": null,
+          "predicatePath": "/check",
+          "status": "satisfied",
+          "uid": null
+        }
+      ],
+      "rule": "model:reference/check:baseline-preserved",
+      "status": "satisfied"
+    }
+  ],
+  "status": "violated"
+}

@@ -1,0 +1,12 @@
+{
+  "inputs": {
+    "model:reference/input:baseline": {
+      "command": [
+        "sh",
+        "-c",
+        "d=\"${TMPDIR:-/tmp}/gate2-provider-switch-$PPID\"; if [ -n \"$(find \"$d\" -prune -mmin -2 2>/dev/null)\" ]; then printf %s '{\"model\":\"reference\",\"identity\":\"baseline-empty\",\"complete\":true,\"records\":[]}'; else rmdir \"$d\" 2>/dev/null || :; mkdir \"$d\" 2>/dev/null || :; cat baseline.json; fi"
+      ],
+      "timeoutSeconds": 10
+    }
+  }
+}

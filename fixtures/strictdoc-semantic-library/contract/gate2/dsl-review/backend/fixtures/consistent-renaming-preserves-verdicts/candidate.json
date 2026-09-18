@@ -1,0 +1,136 @@
+{
+  "created": [],
+  "model": "reference",
+  "records": [
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["alpha-0"]
+      },
+      "relations": [],
+      "uid": "alpha-0"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["alpha-1"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "alpha-0"
+        }
+      ],
+      "uid": "alpha-1"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["alpha-1-leaf"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "alpha-1"
+        },
+        {
+          "direction": "parent",
+          "role": "R",
+          "target": "omega-other"
+        }
+      ],
+      "uid": "alpha-1-leaf"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["true"],
+        "UID": ["alpha-2"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "alpha-0"
+        }
+      ],
+      "uid": "alpha-2"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["alpha-2-leaf"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "alpha-2"
+        }
+      ],
+      "uid": "alpha-2-leaf"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["alpha-2-twin"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "alpha-2"
+        }
+      ],
+      "uid": "alpha-2-twin"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["beta-0"]
+      },
+      "relations": [],
+      "uid": "beta-0"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["beta-1"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "H",
+          "target": "beta-0"
+        }
+      ],
+      "uid": "beta-1"
+    },
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["gamma-solo"]
+      },
+      "relations": [],
+      "uid": "gamma-solo"
+    },
+    {
+      "element": "BAZ",
+      "fields": {
+        "UID": ["omega-other"]
+      },
+      "relations": [],
+      "uid": "omega-other"
+    }
+  ]
+}

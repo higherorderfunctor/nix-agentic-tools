@@ -1,0 +1,12 @@
+{
+  "inputs": {
+    "model:reference/input:baseline": {
+      "command": [
+        "sh",
+        "-c",
+        "if [ -e provider-state ]; then printf '%s' '{\"complete\":true,\"identity\":\"baseline-I0-closed\",\"model\":\"reference\",\"records\":[{\"element\":\"FOO\",\"fields\":{\"FLAG\":[\"true\"],\"UID\":[\"I0\"]},\"relations\":[],\"uid\":\"I0\"}]}'; else : > provider-state; cat baseline.json; fi"
+      ],
+      "timeoutSeconds": 10
+    }
+  }
+}
