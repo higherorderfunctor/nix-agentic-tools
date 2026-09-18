@@ -512,7 +512,9 @@ rec {
   # The (attrPath, drvPattern, key) triples that the sidecar hash fixers
   # below compose. Declared once and named, so the derivation-name
   # patterns — which are load-bearing rather than decorative; see
-  # `fodHashFixFn` — cannot drift between the three fixers that use them.
+  # `fodHashFixFn` — cannot drift between the four consumers that replay
+  # them: `mkGoUpdateExtract`, `mkGoVendorFix`, `mkNpmDepsFix`, and an
+  # owner-declared `mkHashFix` such as kimchi's pnpm repair.
   hashFixTargets = {
     goVendor = {
       attrPath = "goModules";

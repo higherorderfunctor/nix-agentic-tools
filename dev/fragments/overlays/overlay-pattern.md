@@ -374,10 +374,11 @@ choice usually gets read as a question about the source shape. It mostly is not.
   repair path: failed verification discovers `fix_sidecar_hashes`, derives the
   hashes through the package's passthru fixers, and retries once. An out-of-band
   same-version change still needs the standalone fixer
-  (`passthru.fixVendorHash`, `passthru.fixNpmDepsHash`) as an explicit escape
-  hatch. Hashes are derived by those fixers, never edited by hand. Inline
-  re-derives every sweep and therefore self-heals without that repair path.
-  **Neither shape fails silently**; do not write that one does.
+  (`passthru.fixNpmDepsHash`, `passthru.fixPnpmDepsHash`,
+  `passthru.fixVendorHash`) as an explicit escape hatch. Hashes are derived by
+  those fixers, never edited by hand. Inline re-derives every sweep and
+  therefore self-heals without that repair path. **Neither shape fails
+  silently**; do not write that one does.
 - **Record the inversion.** It corrects a belief this repo held: the rows still
   on plain `nix-update` are paying that uncacheable per-sweep cost TODAY, so
   "sidecars are legacy overhead from an older design" is close to backwards.
@@ -460,8 +461,11 @@ PINNED src instead, so one hash covers both and the vendor set self-updates.
 Go has the same transitive-hash problem and no `importCargoLock` equivalent —
 `go.sum` records module hashes, not a Nix-fetchable vendor tree — so
 `vendorHash` must be recorded somewhere. It goes in the sidecar (`beads`, its
-nested paired Dolt, `gh`, `glab`, `gluetun`, `oh-my-posh`, `otel-tui`), never
-inline, and the mechanism is worth understanding before touching it:
+nested paired Dolt, `gh`, `glab`, `gluetun`, `kimchi`, `oh-my-posh`,
+`otel-tui`), never inline, and the mechanism is worth understanding before
+touching it. Kimchi is the odd row: the recorded hash covers its nested
+`proxy-helper` rather than a top-level Go build, and everything below still
+applies to it unchanged.
 
 - `mkUpdateScript` rebuilds the sidecar FROM SCRATCH on every write
   (`jq -n --arg v "$latest" '{version: $v}'`), so any key it does not itself
