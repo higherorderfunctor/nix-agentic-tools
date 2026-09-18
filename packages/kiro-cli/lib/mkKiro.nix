@@ -944,14 +944,15 @@
     };
 
   # Render settings/mcp.json to stdout at activation (HM) / shell entry
-  # (devenv). The selected writer owns persistence: the materializer for
-  # overwrite, the leaf reconciler for merge. This only assembles content.
+  # (devenv). This only assembles content; which container persists it — the
+  # whole file or its leaves — is the plan's business.
   # A credential url is substituted in HERE: `urlSecretEnv` vars are
   # exported from their decrypted secret and `envsubst`'d into the
   # template with an EXPLICIT var list, so header `${env:...}`
   # placeholders (which Kiro expands at launch) survive untouched. Empty
-  # `urlSecretEnv` → the template is used verbatim. Overwrite's materializer
-  # supplies NAT_MAT_TARGET_DIR; merge passes its target expression explicitly.
+  # `urlSecretEnv` → the template is used verbatim. `targetExpr` names the
+  # destination for the one message that mentions it, anchored on the exported
+  # backend root rather than on a variable the writer used to set.
   # Real-file delivery (never a store
   # symlink) is what lets a secret url land and dodges the
   # symlink<->real-file toggle + the devenv files.* silent skip.

@@ -7,9 +7,10 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-18 — every document whose leaves Nix owns at eval
-> time reconciles through `lib/ai/own.{nix,py}`; only kiro's `mcp.json` still
-> uses the older per-format activation helper.
+> **Last verified:** 2026-09-18 — everything a generation owns reconciles
+> through `lib/ai/own.{nix,py}`: documents by their leaves, directories by their
+> files. The generated-bash materializer and the per-format activation helper
+> are both deleted.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -178,10 +179,13 @@ i.e. after HM has actually linked the generation's files into the home
 directory. `entryAfter ["writeBoundary"]` is NOT sufficient for that:
 `writeBoundary` is a sibling of `linkGeneration` (order between siblings comes
 from `lib.toposort`), so a writeBoundary-ordered script can run before
-`home.file` entries exist on disk. The one `entryBefore` user is the steering
-materializer's prune phase (`lib/ai/materialize.nix`,
-`entryBefore ["checkLinkTargets"]`), which must clear flipped copy-mode files
-before HM checks link targets.
+`home.file` entries exist on disk. The `entryBefore` users all come from one
+function: `lib/ai/own.nix` gives every bundle holding a `dir` target a prune
+entry at `entryBefore ["checkLinkTargets"]` (kiro's hooks, its `settings`
+directory and the legacy steering retirement), which must clear a real file
+flipping to a symlink before HM checks link targets. A document-only bundle has
+no prune entry, because a document's retraction and its assertion are one
+read-modify-write that must not be split across two processes.
 
 **NEVER use `exit` as a short-circuit.** `home.activation.<name>` blocks are
 **inlined** into a single outer bash script at

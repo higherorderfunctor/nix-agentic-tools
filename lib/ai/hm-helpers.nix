@@ -11,22 +11,6 @@ in rec {
   # Delegated to lib/ai-common.nix (single source of truth).
   inherit (aiCommon) filterNulls;
 
-  # ── Option builders ──────────────────────────────────────────────────
-
-  mkContentOption = description:
-    lib.mkOption {
-      type = lib.types.attrsOf (lib.types.either lib.types.lines lib.types.path);
-      default = {};
-      inherit description;
-    };
-
-  mkDirOption = description:
-    lib.mkOption {
-      type = lib.types.nullOr lib.types.path;
-      default = null;
-      inherit description;
-    };
-
   # ── File entry builders ──────────────────────────────────────────────
 
   mkSourceEntry = content:
@@ -136,14 +120,6 @@ in rec {
     // (lib.optionalAttrs (server ? url) {type = "http";})
     // (lib.optionalAttrs (server ? command) {type = "stdio";})
     // {enabled = !(server.disabled or false);};
-
-  # ── Assertion builder ────────────────────────────────────────────────
-
-  # moduleName: e.g. "copilot-cli" or "kiro-cli"
-  mkExclusiveAssertion = moduleName: cfg: name: {
-    assertion = !(cfg.${name} != {} && cfg.${name + "Dir"} != null);
-    message = "Cannot specify both `programs.${moduleName}.${name}` and `programs.${moduleName}.${name}Dir`.";
-  };
 
   # ── Owned artifacts ──────────────────────────────────────────────────
 

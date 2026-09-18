@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-09-18 — the delivery diagnostics are silent for a root
 > pool an incapable runtime excludes, and report per-runtime requests a backend
-> cannot deliver.
+> cannot deliver; the `migrationConfig` exception is an `own` target that
+> declares no units, not a generated retirement script.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -92,12 +93,16 @@ runtime's delivery channel per backend, so that exemption cannot silently widen.
 
 The one bounded exception is `migrationConfig`: ownership-safe retirement may
 run outside the enable gate when the generation that disables a runtime must
-remove files recorded by an older implementation. It must be manifest-guarded,
-emit no product content, and become inert after deleting its legacy manifest.
-Kiro's one-shot steering-copy retirement is the current sole caller. It derives
-the old target from the current `configDir`, so a custom directory must remain
-unchanged for that retirement generation; change or remove it only after one
-activation/shell entry has drained the old manifest.
+remove files recorded by an older implementation. A retirement is not a
+mechanism — it is an `own` target that declares NO units, so the ordinary
+retraction removes what the previous generation's ledger recorded and then drops
+the ledger, which is what makes it inert afterwards and what keeps it from
+emitting product content. Kiro's one-shot steering-copy retirement is the
+current sole caller, and on Home Manager it is a PAIR of entries: the prune
+phase deletes the real files before `checkLinkTargets`, the write phase unlinks
+the drained ledger. It derives the old target from the current `configDir`, so a
+custom directory must remain unchanged for that retirement generation; change or
+remove it only after one activation/shell entry has drained the old ledger.
 
 ### Why there's no master switch
 
@@ -437,10 +442,12 @@ This is a static literal seam, not a universal file abstraction. Secret-bearing
 or merge/reconciliation-owned settings, agents, skills, hooks, and runtime state
 keep their existing typed lifecycle owners. Kiro steering uses ordinary symlinks
 after live 2.18.1 spikes confirmed startup discovery and same-session
-replacement reload in both global and project layouts; the Kiro hook
-materializer remains because hook symlink behavior was not part of that result.
-A manifest-guarded, enable-independent one-shot retirement drains only legacy
-manifest-owned steering copies and then removes its obsolete ledger.
+replacement reload in both global and project layouts; Kiro hooks stay real-file
+reconciled (`lib/ai/own.nix`, a `dir` target) because hook symlink behavior was
+not part of that result — the v3 scan keeps only `isFile()` entries. An
+enable-independent one-shot retirement, the same reconciler with a target that
+declares nothing, drains only the steering copies a legacy ledger records and
+then removes it.
 
 ### Documentation parity is capability parity
 
