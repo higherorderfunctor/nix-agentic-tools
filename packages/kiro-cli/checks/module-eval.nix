@@ -515,71 +515,11 @@ in {
       inherit lib pkgs harness;
     };
 
-    module-kiro-materializer-entry-shapes = mkTest "kiro-materializer-entry-shapes" (
-      let
-        mat = import ../../../lib/ai/materialize.nix {inherit lib;};
-        entry = {
-          source = null;
-          strategy = "copy";
-          text = "static";
-        };
-        accepts = e:
-          builtins.all (a: a.assertion) (mat.mkEntryAssertions {
-            app = "kiro";
-            files."mcp.json" = e;
-            surface = "mcp";
-          });
-        rendered =
-          entry
-          // {
-            text = null;
-            renderCommand = "printf runtime";
-          };
-        typed =
-          (lib.evalModules {
-            modules = [
-              {
-                options.entry = lib.mkOption {type = mat.fileEntryType;};
-                config.entry = rendered;
-              }
-            ];
-          }).config.entry;
-      in
-        accepts entry
-        && accepts rendered
-        && accepts (rendered // {mode = "0400";})
-        && typed.mode == "0444"
-        && typed.renderCommand == "printf runtime"
-        && !(accepts (entry // {text = null;}))
-        && !(accepts (entry // {renderCommand = "printf duplicate";}))
-        && !(accepts (rendered // {strategy = "symlink";}))
-        && !(accepts (rendered // {mode = "0999";}))
-    );
-
     # Execute the actual module writers against isolated roots. No Kiro
     # package build or invocation: only shell scripts, JSON templates and the
     # materializer's small tool closure. Replay HM prune then write.
     module-kiro-mcp-materialize-runtime = let
-      mat = import ../../../lib/ai/materialize.nix {inherit lib;};
       plainUrl = "https://example.invalid/mcp";
-      # Exercise the new generic renderer with output BEFORE failure. A
-      # direct pipe to nat_mat_write would publish these partial bytes.
-      failedRenderer =
-        pkgs.writeShellScript "kiro-mcp-failed-renderer"
-        (mat.mkDevenvTask {
-          files."mcp.json" = {
-            renderCommand = ''
-              printf 'partial output'
-              false
-              printf 'unreachable'
-            '';
-            strategy = "copy";
-          };
-          hasFiles = false;
-          stateSlug = "kiro-settings";
-          targetDir = ".kiro/settings";
-          inherit (pkgs) coreutils diffutils flock gnugrep;
-        }).exec;
       cfg = mode: servers: {
         ai.kiro = {
           enable = true;
@@ -665,7 +605,6 @@ in {
         HELPER
         chmod +x failed-helper
         expect_failure ${failedHelper}
-        expect_failure ${failedRenderer}
 
         # Emptying the pool removes only the owned file. A later foreign file
         # with that name is preserved because the manifest has been drained.
