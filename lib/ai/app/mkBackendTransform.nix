@@ -42,7 +42,11 @@
   lib,
   # Which key of the app record carries this backend's spec.
   backend,
-}: appRecord: {config, ...}: let
+}: appRecord: {
+  config,
+  options,
+  ...
+}: let
   aiCommon = import ../ai-common.nix {inherit lib;};
   dirHelpers = import ../dir-helpers.nix {inherit lib;};
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
@@ -56,6 +60,9 @@
     inherit (appRecord) pkgs;
   };
   cfg = config.ai.${appRecord.name};
+  deliveryWarnings = import ../delivery-warnings.nix {inherit lib;} {
+    inherit appRecord backend config options;
+  };
   supportedPools = appRecord.supportedPools or [];
   supportsPool = poolName: builtins.elem poolName supportedPools;
   # Per-runtime entries replace root entries atomically. Null is a tombstone
@@ -82,7 +89,7 @@
   # merged and fanned out only when the runtime consumes it.
   # Unsupported per-runtime writes therefore get an "option does not exist"
   # eval error, while unsupported root fanout deliberately degrades to the
-  # pool's neutral value.
+  # pool's neutral value, with a warning when the root request is non-empty.
   #
   # Reading it off the RECORD keeps it a build-time parameter, in the
   # same category as `backend` above: it forces neither `config` nor
@@ -197,10 +204,14 @@
   # lowering. `null` is the documented opt-out and exists for exactly one
   # case — see mkClaude.nix's `hm` spec.
   installPackageFn = backendSpec.installPackage or (_: cfg.package);
-  installedPackages =
+  rawInstalledPackages =
     if installPackageFn == null
     then []
     else [(installPackageFn callbackArgs)];
+  installedPackages =
+    if options ? warnings
+    then rawInstalledPackages
+    else lib.foldr lib.warn rawInstalledPackages deliveryWarnings;
   # `home.packages` on Home Manager, `packages` on devenv. The two option
   # names are the whole reason this cannot live in the factories without
   # being written twice per runtime.
@@ -344,6 +355,9 @@ in {
     // backendOptions;
 
   config = lib.mkMerge [
+    # Both real backends expose warnings. Minimal evalModules callers without
+    # that option still see diagnostics when they force the installed packages.
+    (lib.optionalAttrs (options ? warnings) {warnings = deliveryWarnings;})
     {_module.args.aiTransformers = appRecord.transformers;}
     # Narrow compatibility cleanup may need to run on the generation that
     # disables a runtime. Product output remains solely inside cfg.enable.

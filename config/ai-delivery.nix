@@ -339,7 +339,13 @@
         devenv =
           (declarative "devenv" ".claude/settings.json")
           // {
-            additionalWriters = [(absent "unpinLaunchEffort is an explicit HM-only global ~/.claude.json operation; devenv does not mutate HOME.")];
+            additionalWriters = [
+              ((absent "unpinLaunchEffort is an explicit HM-only global ~/.claude.json operation; devenv does not mutate HOME.")
+                // {
+                  inputOptions = ["ai.claude.unpinLaunchEffort"];
+                  warnOnlyExplicit = true;
+                })
+            ];
           };
       };
       codex = {
@@ -407,7 +413,7 @@
       then ["ai.${ecosystem}.nativeSettings.permissions"]
       else []
     else if surface == "settings"
-    then ["ai.${ecosystem}.nativeSettings"]
+    then ["ai.${ecosystem}.nativeSettings"] ++ lib.optional (ecosystem == "kimchi") "ai.kimchi.harnessSettings"
     else if ecosystem == "kiro" && builtins.elem surface ["agents" "hooks"]
     then ["ai.kiro.${surface}" "ai.kiro.${surface}Dir"] ++ lib.optional (surface == "hooks") "ai.kiro.hooksJson"
     else ["ai.${surface}" "ai.${ecosystem}.${surface}"];
@@ -416,13 +422,15 @@
       lib.concatMap (ecosystem:
         lib.mapAttrsToList (mode: writer:
           writer
+          // lib.optionalAttrs (ecosystem == "kimchi" && mode == "devenv" && builtins.elem surface ["context" "mcpServers" "settings" "skills"]) {
+            deliveryGap = "Kimchi reads its HOME config directory; these project-local files have no discovery or additive launcher flag.";
+          }
           // {
             inherit ecosystem mode surface;
             evidence = source packages.${ecosystem};
-            inputOptions =
-              if writer.primitive == "notApplicable"
-              then []
-              else inputOptions surface ecosystem;
+            # Gaps need their inputs too: the warning engine must distinguish
+            # an unused capability from a consumer request we cannot deliver.
+            inputOptions = inputOptions surface ecosystem;
           })
         declarations.${surface}.${ecosystem}) (builtins.attrNames declarations.${surface})) (builtins.attrNames declarations);
   key = row: "${row.surface}/${row.ecosystem}/${row.mode}";
