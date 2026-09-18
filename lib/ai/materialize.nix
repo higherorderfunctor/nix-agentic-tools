@@ -249,9 +249,12 @@ in rec {
   # this is safe to emit even while its runtime is disabled: it is a complete
   # no-op when the legacy manifest does not exist, and removes that manifest
   # after pruning so future generations remain inert.
+  # preserveFiles hands ownership to a co-authoring writer: relinquish only
+  # the ledger, without deleting, backing up, or adopting the user's file.
   mkRetirementScript = {
     common,
     coreutils,
+    preserveFiles ? false,
   }:
     ''
       set -euETo pipefail
@@ -260,12 +263,14 @@ in rec {
       if [ -f "$NAT_MAT_RETIRE_MANIFEST" ]; then
     ''
     + mkPrologue common
-    + mkSweep coreutils
-    + mkPruneCore {
-      inherit (common) stateSlug;
-      inherit coreutils;
-      currentNames = [];
-    }
+    + lib.optionalString (!preserveFiles) (
+      mkSweep coreutils
+      + mkPruneCore {
+        inherit (common) stateSlug;
+        inherit coreutils;
+        currentNames = [];
+      }
+    )
     + mkEpilogue common.stateSlug
     + ''
         ${coreutils}/bin/rm -f -- "$NAT_MAT_MANIFEST"
@@ -498,6 +503,7 @@ in rec {
     stateSlug,
     coreutils,
     flock,
+    preserveFiles ? false,
   }:
     assert lib.assertMsg (nameSafe stateSlug)
     "materialize: stateSlug must match ${nameRegex}: '${stateSlug}'"; let
@@ -508,7 +514,7 @@ in rec {
       };
     in {
       "retire-materialize-${stateSlug}" = lib.hm.dag.entryBefore ["checkLinkTargets"] (
-        scopedActivation (mkRetirementScript {inherit common coreutils;})
+        scopedActivation (mkRetirementScript {inherit common coreutils preserveFiles;})
       );
     };
 
@@ -571,6 +577,7 @@ in rec {
     hasFiles,
     coreutils,
     flock,
+    preserveFiles ? false,
   }:
     assert lib.assertMsg (nameSafe stateSlug)
     "materialize: stateSlug must match ${nameRegex}: '${stateSlug}'"; let
@@ -580,7 +587,7 @@ in rec {
         stateDirExpr = "$DEVENV_STATE/nix-agentic-tools/materialize";
       };
     in {
-      exec = mkRetirementScript {inherit common coreutils;};
+      exec = mkRetirementScript {inherit common coreutils preserveFiles;};
       after = ["devenv:files:cleanup"];
       before = ["devenv:enterShell"] ++ lib.optional hasFiles "devenv:files";
     };
