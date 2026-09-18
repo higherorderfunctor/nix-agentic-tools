@@ -73,7 +73,7 @@
         name == target || (lib.hasInfix "<" target && lib.hasPrefix stem name))
       rows;
     in
-      lib.concatStringsSep ", " (lib.unique (lib.concatMap (row: row.inputOptions) related)
+      lib.concatStringsSep ", " (lib.unique (map lib.showOption (lib.concatMap (row: row.inputOptions) related))
         ++ ["ai.${runtime}.files.${builtins.toJSON name}"]);
   in
     lib.optionals (cfg.enable or false) (lib.mapAttrsToList (name: file: {

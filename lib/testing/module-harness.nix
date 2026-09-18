@@ -109,6 +109,11 @@
         type = lib.types.listOf lib.types.anything;
         default = [];
       };
+      # Same reason as hmStubs above: the module-system branch is the real one.
+      warnings = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+      };
       # Real devenv exposes this at EVAL time — `devenv eval devenv.state`
       # returns an absolute path — which is what lets packages/glab derive
       # a project-local configDir with no runtime shell expansion. Same

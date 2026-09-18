@@ -103,7 +103,7 @@
   recursiveMerge = "On activation, lib/ai/hm-helpers.nix's mkSettingsActivationScript reasserts the declared leaves with `jq -s '.[0] * .[1]'` (lib/ai/hm-helpers.nix:186). A recursive merge CANNOT remove a key the declaration dropped (lib/ai/hm-helpers.nix:193-199), so a retired leaf survives in the file until the consumer deletes it by hand.";
   leaves = pruneTrigger: activation: target: declaration: {
     inherit pruneTrigger target;
-    inputOptions = [(lib.concatStringsSep "." declaration.option)];
+    inputOptions = [declaration.option];
     primitive = "ownLeaves";
     writerAttr = ["home" "activation" activation];
     probe = declaration;
@@ -343,7 +343,7 @@
           additionalWriters = [
             ((declarative mode ".codex/rules/<name>.rules")
               // {
-                inputOptions = ["ai.codex.execpolicyRules"];
+                inputOptions = [["ai" "codex" "execpolicyRules"]];
                 role = "Native execution-policy rules are a separate declaration from Markdown ai.rules.";
               })
           ];
@@ -371,7 +371,7 @@
             additionalWriters = [
               ((absent "unpinLaunchEffort is an explicit HM-only global ~/.claude.json operation; devenv does not mutate HOME.")
                 // {
-                  inputOptions = ["ai.claude.unpinLaunchEffort"];
+                  inputOptions = [["ai" "claude" "unpinLaunchEffort"]];
                   warnOnlyExplicit = true;
                 })
             ];
@@ -456,19 +456,31 @@
     kimchi = "kimchi";
     kiro = "kiro-cli";
   };
+  # Lists of attribute keys, never dotted strings: a consumer key may itself
+  # contain a dot (a `foo.bar.md` rule lands at key `foo.bar`), and a path that
+  # is re-split on "." loses that key. Renderers use lib.showOption.
+  #
+  # `ai.kiro.trustedMcpTools` is deliberately NOT here. The wrapper appends
+  # `--trust-tools` on BOTH backends (packages/kiro-cli/lib/mkKiro.nix:1127
+  # hands it to packages/kiro-cli/lib/wrapPackage.nix:256 for either install
+  # path), so listing it under a notApplicable permissions row made every
+  # default devenv consumer read a delivery gap that does not exist. The one
+  # genuinely withheld sliver — the `acp` arm under the v3 engine, and Darwin's
+  # bundle-discovery launcher — is a wrapper fact, reported by
+  # lib/ai/delivery-warnings.nix rather than by this row.
   inputOptions = surface: ecosystem:
     if surface == "permissions"
     then
       if ecosystem == "kiro"
-      then ["ai.kiro.permissions" "ai.kiro.trustedMcpTools"]
+      then [["ai" "kiro" "permissions"]]
       else if builtins.elem ecosystem ["claude" "codex"]
-      then ["ai.${ecosystem}.nativeSettings.permissions"]
+      then [["ai" ecosystem "nativeSettings" "permissions"]]
       else []
     else if surface == "settings"
-    then ["ai.${ecosystem}.nativeSettings"] ++ lib.optional (ecosystem == "kimchi") "ai.kimchi.harnessSettings"
+    then [["ai" ecosystem "nativeSettings"]] ++ lib.optional (ecosystem == "kimchi") ["ai" "kimchi" "harnessSettings"]
     else if ecosystem == "kiro" && builtins.elem surface ["agents" "hooks"]
-    then ["ai.kiro.${surface}" "ai.kiro.${surface}Dir"] ++ lib.optional (surface == "hooks") "ai.kiro.hooksJson"
-    else ["ai.${surface}" "ai.${ecosystem}.${surface}"];
+    then [["ai" "kiro" surface] ["ai" "kiro" "${surface}Dir"]] ++ lib.optional (surface == "hooks") ["ai" "kiro" "hooksJson"]
+    else [["ai" surface] ["ai" ecosystem surface]];
   flatten = declarations:
     lib.concatMap (surface:
       lib.concatMap (ecosystem:
@@ -508,13 +520,14 @@
         && writer.probe.option != []
         && writer.probe.nonEmpty != writer.probe.empty
       ))
+    && lib.all (path: builtins.isList path && path != [] && lib.all nonBlank path) (writer.inputOptions or [])
     && (!(writer ? constantGate) || nonBlank writer.constantGate)
     && (!(writer ? declarationIndependent) || nonBlank writer.declarationIndependent)
     && (!(writer ? exemption) || (nonBlank (writer.exemption.reason or "") && nonBlank (writer.exemption.evidence or "")));
   expectedKeys = lib.concatMap (surface: lib.concatMap (ecosystem: map (mode: "${surface}/${ecosystem}/${mode}") modes) ecosystems) surfaces;
   validateRows = rows:
     assert lib.assertMsg (lib.all (row: lib.all (field: builtins.hasAttr field row) ["ecosystem" "mode" "surface"]) rows) "ai-delivery: every row must declare surface, ecosystem, and mode";
-    assert lib.assertMsg (lib.all (row: lib.all validWriter (writersOf row)) rows) "ai-delivery: incomplete or invalid writer (required fields, primitive, reason, reverifyCommand, probe, constantGate, declarationIndependent, or exemption)";
+    assert lib.assertMsg (lib.all (row: lib.all validWriter (writersOf row)) rows) "ai-delivery: incomplete or invalid writer (required fields, primitive, reason, reverifyCommand, probe, inputOptions as key lists, constantGate, declarationIndependent, or exemption)";
     assert lib.assertMsg (lib.sort builtins.lessThan (map key rows) == lib.sort builtins.lessThan expectedKeys) "ai-delivery: expected exactly one row for every surface/ecosystem in BOTH hm and devenv (use notApplicable with a reason for gaps)"; rows;
   rows = validateRows (flatten definitions);
 in
