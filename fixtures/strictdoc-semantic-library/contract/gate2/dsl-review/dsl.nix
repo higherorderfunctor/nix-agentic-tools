@@ -452,18 +452,15 @@ let
         && hasLeaf (l: l.kind == "forest-validity" && l.view == hierarchyFor rule leaf) r)
       mergedRules);
     countFor = rule: relation:
-      requireOne "${rule.id} count ${relation.direction} ${relation.role}"
+      requireOne "${rule.id} endpoint ${relation.direction} ${relation.role} count"
       (filter (r:
         r.id
         != rule.id
         && r.select == removeAttrs rule.select ["where"]
-        && hasLeaf (l:
-          l.kind
-          == "count"
-          && l.relation == relation
-          && l.compare == "eq"
-          && l.value == 1)
-        r)
+        && (r.check.kind or null) == "count"
+        && r.check.relation == relation
+        && r.check.compare == "eq"
+        && r.check.value == 1)
       mergedRules);
     leafRequires = rule: leaf:
       if leaf.kind == "endpoint-path"
