@@ -4,6 +4,35 @@
 # utilities, and file generation helpers.
 {lib}: let
   aiCommon = import ./ai-common.nix {inherit lib;};
+
+  mkReconcileSettingsActivationScript = format: {
+    configFile,
+    python,
+    reconciler,
+    settingsJson,
+    stateName,
+  }:
+    assert lib.assertMsg (builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" stateName != null)
+    "settings activation: stateName must contain only alphanumeric, dot, underscore, or hyphen characters: '${stateName}'"; let
+      prefix = "NAT_${lib.toUpper format}";
+    in
+      aiCommon.scopedActivation ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
+        # Keep the ownership ledger outside the application's mutable config.
+        # The TOML directory is a live migration contract: never rename it.
+        NAT_SETTINGS_CONFIG="$HOME"/${lib.escapeShellArg configFile}
+        NAT_SETTINGS_STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/${format}-settings"
+        NAT_SETTINGS_MANIFEST="$NAT_SETTINGS_STATE_DIR/${stateName}.json"
+
+        ${python}/bin/python ${lib.escapeShellArg "${reconciler}"} \
+          --format ${format} \
+          --config "$NAT_SETTINGS_CONFIG" \
+          --manifest "$NAT_SETTINGS_MANIFEST" <<'${prefix}_SETTINGS_EOF'
+        ${settingsJson}
+        ${prefix}_SETTINGS_EOF
+      '';
 in rec {
   # ── Settings utilities ──────────────────────────────────────────────
 
@@ -144,91 +173,23 @@ in rec {
     message = "Cannot specify both `programs.${moduleName}.${name}` and `programs.${moduleName}.${name}Dir`.";
   };
 
-  # ── Settings activation script ───────────────────────────────────────
-  # Shell snippet that merges Nix-declared JSON settings into an existing
-  # mutable JSON config file at HM activation time. The settings JSON is
-  # INLINED via a quoted heredoc (not a store-path read) so module-eval
-  # tests can assert on rendered content and the merge stays atomic.
-  # `jq -s '.[0] * .[1]'` makes Nix-declared values win on key conflict
-  # while preserving runtime-added keys (oauth tokens in ~/.claude.json,
-  # trusted_folders in copilot settings.json, etc.).
+  # ── Settings activation scripts ──────────────────────────────────────
+  # Reconcile only Nix-owned leaves in mixed-authority, runtime-writable files.
+  # The prior-generation manifest removes retired leaves, current declarations
+  # reassert their values, and every unowned sibling survives. Always emit the
+  # writer: empty settings retract previous ownership, while an empty first
+  # generation leaves externally managed files untouched.
   #
-  # configFile:   path relative to $HOME (".copilot/settings.json",
-  #               ".kiro/settings/cli.json", ".claude.json").
-  # settingsJson: JSON string to merge (caller `builtins.toJSON`'s it;
-  #               Kiro flattens dot-keys first).
-  # jq:           absolute jq binary path ("${pkgs.jq}/bin/jq").
-  # coreutils:    coreutils package (absolute paths for every command).
-  mkSettingsActivationScript = {
-    configFile,
-    settingsJson,
-    jq,
-    coreutils,
-  }: let
-    parentDir = builtins.dirOf configFile;
-  in
-    # scopedActivation: `set -eu` here happens to match what home-manager
-    # already sets, so today the leak is benign — but it is a leak, and the
-    # rule is structural, not a bet on the current flag set staying identical.
-    aiCommon.scopedActivation ''
-      set -eu
-      TARGET_DIR="$HOME/${parentDir}"
-      CONFIG_FILE="$HOME/${configFile}"
-      ${coreutils}/bin/mkdir -p "$TARGET_DIR"
-      NIX_SETTINGS=$(${coreutils}/bin/mktemp)
-      ${coreutils}/bin/cat > "$NIX_SETTINGS" <<'NAT_SETTINGS_EOF'
-      ${settingsJson}
-      NAT_SETTINGS_EOF
-      if [ ! -f "$CONFIG_FILE" ]; then
-        ${coreutils}/bin/cp "$NIX_SETTINGS" "$CONFIG_FILE"
-      else
-        TMP=$(${coreutils}/bin/mktemp)
-        ${jq} -s '.[0] * .[1]' "$CONFIG_FILE" "$NIX_SETTINGS" > "$TMP"
-        ${coreutils}/bin/mv "$TMP" "$CONFIG_FILE"
-      fi
-      ${coreutils}/bin/rm -f "$NIX_SETTINGS"
-      ${coreutils}/bin/chmod 644 "$CONFIG_FILE"
-    '';
-
-  # Reconcile Nix-declared TOML leaves into a runtime-writable file without
-  # claiming the whole file. This is intentionally stronger than the JSON
-  # merge helper above: a plain recursive merge cannot remove a setting after
-  # the consumer deletes it from Nix, so stale Nix policy would survive
-  # forever. The reconciler records the exact leaves from the prior generation,
-  # removes only retired leaves, reasserts current leaves, and preserves every
-  # unowned sibling (including siblings in the same TOML table).
+  # configFile:   path relative to $HOME (e.g. ".copilot/settings.json").
+  # python:       Python package; TOML needs tomlkit, JSON uses the stdlib.
+  # reconciler:   shared reconcile-toml.py source path (both formats).
+  # settingsJson: inlined JSON declaration (Kiro flattens dot-keys first).
+  # stateName:    safe, stable name unique to the destination config file.
   #
-  # This helper exists for mixed-authority files only. Do not use it merely to
-  # make a declarative file writable: static home.file ownership remains the
-  # simpler and more honest default when the native application does not write
-  # required state into the same artifact.
-  mkTomlSettingsActivationScript = {
-    configFile,
-    python,
-    reconciler,
-    settingsJson,
-    stateName,
-  }:
-    assert lib.assertMsg (builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" stateName != null)
-    "mkTomlSettingsActivationScript: stateName must contain only alphanumeric, dot, underscore, or hyphen characters: '${stateName}'";
-      aiCommon.scopedActivation ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-
-        # The manifest lives outside the application config tree. Codex may
-        # freely inspect or rewrite config.toml, while this private ledger lets
-        # a later HM generation distinguish retired Nix leaves from native
-        # state that must survive activation.
-        NAT_TOML_CONFIG="$HOME"/${lib.escapeShellArg configFile}
-        NAT_TOML_STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/toml-settings"
-        NAT_TOML_MANIFEST="$NAT_TOML_STATE_DIR/${stateName}.json"
-
-        ${python}/bin/python ${lib.escapeShellArg "${reconciler}"} \
-          --config "$NAT_TOML_CONFIG" \
-          --manifest "$NAT_TOML_MANIFEST" <<'NAT_TOML_SETTINGS_EOF'
-        ${settingsJson}
-        NAT_TOML_SETTINGS_EOF
-      '';
+  # New files are private (0600); existing regular-file permissions survive.
+  # Static home.file ownership remains the default for wholly declarative files.
+  mkSettingsActivationScript = mkReconcileSettingsActivationScript "json";
+  mkTomlSettingsActivationScript = mkReconcileSettingsActivationScript "toml";
 
   # NOTE: Kiro hook files used to be written here by `mkHooksActivationScript`.
   # They now ride the shared strategy-driven materializer
