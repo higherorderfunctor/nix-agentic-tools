@@ -36,6 +36,7 @@
     hmJson = "${docs.hmOptionsDoc.optionsJSON}/share/doc/nixos/options.json";
     expectedCodexRoots = pkgs.writeText "expected-codex-option-roots" (
       lib.concatStringsSep "\n" [
+        "ai.codex.activation"
         "ai.codex.agents"
         "ai.codex.configDir"
         "ai.codex.context"
