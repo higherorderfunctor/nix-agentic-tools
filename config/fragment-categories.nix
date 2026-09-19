@@ -80,6 +80,10 @@ _: {
         # fragments loaded is how the rule gets "simplified" back out.
         "checks/*/module-eval.nix"
         "checks/module-provenance/**"
+        # The two backend adapters: the only code allowed to write the four
+        # native sink paths, and the far end of every fanout these fragments
+        # describe.
+        "lib/ai/adapters/**"
         "lib/ai/agent.nix"
         # Home of both merge helpers these fragments describe (`mergePool`,
         # `resolveOverride`) — previously
@@ -87,6 +91,10 @@ _: {
         "lib/ai/ai-common.nix"
         "lib/ai/app/**"
         "lib/ai/default.nix"
+        # The delivery layer: the router both adapters lower through, and the
+        # option schema a runtime describes its files and writers with.
+        "lib/ai/deliver.nix"
+        "lib/ai/delivery-options.nix"
         "lib/ai/hooks.nix"
         # The one factory that contributes to the pools from inside this repo,
         # so it is exactly where collision-semantics' "where a MODULE may
