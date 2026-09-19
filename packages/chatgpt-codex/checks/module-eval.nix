@@ -419,25 +419,11 @@ in {
         && !(devenv.config.files ? ".codex/hooks.json")
     );
 
-    # ── Permission models and CLI config-profile lockout ───────────────────
+    # ── Permission models ───────────────────────────────────────────────────
     # `[permissions.<name>]` tables are ordinary mergeable Codex config and are
-    # supported. `ai.codex.profiles` is the distinct whole-file `--profile`
-    # surface; its materialization remains locked until that lifecycle is needed.
-    module-codex-profiles-locked-out = mkTest "codex-profiles-locked-out" (
-      let
-        config.ai.codex = {
-          enable = true;
-          profiles.review.model_reasoning_effort = "low";
-        };
-        rejects = evaluated:
-          builtins.any (assertion:
-            !assertion.assertion
-            && lib.hasInfix "ai.codex.profiles is locked out" assertion.message)
-          evaluated.config.assertions;
-      in
-        rejects (evalHm config) && rejects (evalDevenv config)
-    );
-
+    # supported. The distinct whole-file `--profile` surface (`ai.codex.profiles`)
+    # was removed 2026-09-19 as unreachable dead code — see the reservation
+    # comment in `packages/chatgpt-codex/lib/mkCodex.nix`.
     module-codex-default-permissions-enabled = mkTest "codex-default-permissions-enabled" (
       let
         config.ai.codex = {
@@ -462,122 +448,6 @@ in {
       in
         passes (evalHm config) && passes (evalDevenv config)
     );
-
-    module-codex-profile-model-effort-inherit = mkTest "codex-profile-model-effort-inherit" (
-      let
-        config.ai.codex = {
-          enable = true;
-          profiles.inherit-model = {};
-        };
-        inherits = evaluated: let
-          failing = builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions;
-          profile = evaluated.config.ai.codex.profiles.inherit-model;
-        in
-          profile.model
-          == null
-          && profile.model_reasoning_effort == null
-          && builtins.length failing == 1
-          && lib.hasInfix "ai.codex.profiles is locked out" (builtins.head failing).message;
-      in
-        inherits (evalHm config) && inherits (evalDevenv config)
-    );
-
-    module-codex-profile-name-rejects-unsafe-stems = mkTest "codex-profile-name-rejects-unsafe-stems" (
-      let
-        evaluated = evalHm {
-          ai.codex = {
-            enable = true;
-            profiles."../escape".model = "gpt-5.6-sol";
-          };
-        };
-      in
-        builtins.any (assertion:
-          !assertion.assertion
-          && lib.hasInfix "must start with a letter or number" assertion.message)
-        evaluated.config.assertions
-    );
-
-    module-codex-profile-sandbox-model-conflict = mkTest "codex-profile-sandbox-model-conflict" (
-      let
-        config.ai.codex = {
-          enable = true;
-          profiles.mixed = {
-            default_permissions = "project-edit";
-            permissions.project-edit.extends = ":workspace";
-            sandbox_mode = "read-only";
-          };
-        };
-        rejects = evaluated:
-          builtins.any (assertion:
-            !assertion.assertion
-            && lib.hasInfix "ai.codex.profiles.mixed must use either" assertion.message)
-          evaluated.config.assertions;
-      in
-        rejects (evalHm config) && rejects (evalDevenv config)
-    );
-
-    module-codex-profile-settings-type-enforced = mkTest "codex-profile-settings-type-enforced" (
-      let
-        rejects = evaluator: let
-          attempt = builtins.tryEval (let
-            result = evaluator {
-              ai.codex = {
-                enable = true;
-                profiles.review.model_reasoning_effort = "impossible";
-              };
-            };
-          in
-            builtins.deepSeq result.config.ai.codex.profiles true);
-        in
-          !attempt.success;
-      in
-        rejects evalHm && rejects evalDevenv
-    );
-
-    module-codex-profiles-hm-devenv-parity = mkTest "codex-profiles-hm-devenv-parity" (
-      let
-        config.ai.codex = {
-          enable = true;
-          profiles.deep-review = {
-            model = "gpt-5.6-sol";
-            model_reasoning_effort = "high";
-          };
-        };
-        hm = evalHm config;
-        devenv = evalDevenv config;
-        profile = hm.config.home.file.".codex/deep-review.config.toml".source.value;
-        # Emission parity is still proven while this separate option is locked
-        # out. The lockout must also be the ONLY thing blocking it — if a second
-        # assertion starts failing here, the retained code has rotted behind it.
-        failing = builtins.filter (assertion: !assertion.assertion) devenv.config.assertions;
-      in
-        profile
-        == {
-          model = "gpt-5.6-sol";
-          model_reasoning_effort = "high";
-        }
-        && devenv.config.tasks ? "ai:codex:materialize-profiles"
-        && builtins.length failing == 1
-        && lib.hasInfix "ai.codex.profiles is locked out" (builtins.head failing).message
-    );
-
-    module-codex-empty-profile-materializer-writes-no-state = let
-      command =
-        (evalDevenv {ai.codex.enable = true;}).config.tasks."ai:codex:materialize-profiles".exec;
-    in
-      pkgs.runCommand "module-test-codex-empty-profile-materializer-writes-no-state" {} ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-
-        mkdir -p home project
-        HOME="$PWD/home" \
-          DEVENV_ROOT="$PWD/project" \
-          XDG_STATE_HOME="$PWD/state" \
-          ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg command}
-
-        test ! -e state/nix-agentic-tools/codex-profiles
-        touch "$out"
-      '';
 
     module-codex-mcp-lowering-parity = mkTest "codex-mcp-lowering-parity" (
       let

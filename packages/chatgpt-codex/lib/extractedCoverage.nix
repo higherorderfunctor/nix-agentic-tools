@@ -143,16 +143,15 @@
 
     flags = {
       # These flags expose durable semantics represented by typed/freeform
-      # settings, named profiles, permission profiles, feature toggles, or MCP
-      # records. Dedicated typed enums consume extracted values where the CLI
-      # publishes a closed set; the flag itself remains invocation-only.
+      # settings, permission profiles, feature toggles, or MCP records.
+      # Dedicated typed enums consume extracted values where the CLI publishes
+      # a closed set; the flag itself remains invocation-only.
       #
-      # `--profile` and `--permission-profile` keep this disposition even
-      # though the whole-file declarative counterpart for `--profile`
-      # (`ai.codex.profiles`) is currently locked out by assertion. Named
-      # permission tables selected by `default_permissions` are supported
-      # independently. The classification records that a typed representation
-      # exists; do not reclassify either flag as unrepresented.
+      # `--permission-profile` keeps this disposition: named permission tables
+      # selected by `default_permissions` are supported independently. Its
+      # sibling `--profile` moved to `sessionOnly` 2026-09-19 when
+      # `ai.codex.profiles` — the whole-file declarative counterpart — was
+      # removed as unreachable dead code; see that flag's note below.
       #
       # `--approve-for-me` is the one entry whose durable counterpart is a PAIR
       # of typed settings rather than a single key. Its help — route approval
@@ -187,7 +186,6 @@
         "--oauth-resource"
         "--oss"
         "--permission-profile"
-        "--profile"
         "--sandbox"
         "--scopes"
         "--search"
@@ -275,6 +273,15 @@
       # Reclassify the moment upstream grows a config key: a persistent
       # "always use a managed worktree" default is exactly the shape this
       # factory would want to own.
+      #
+      # `--profile` moved here 2026-09-19 from `declarativeEquivalent`, unlike
+      # `--worktree`: upstream DOES have a config surface for it (a whole
+      # `$CODEX_HOME/<name>.config.toml` layer), this factory's typed
+      # counterpart (`ai.codex.profiles`) was simply removed as unreachable
+      # dead code — it had been locked out by assertion since it landed
+      # because a profile layer silently overshadows the base user config
+      # beneath it. Reclassify back only if that lifecycle is rebuilt and
+      # tested, not merely re-added.
       sessionOnly = [
         "--add-dir"
         "--all"
@@ -309,6 +316,7 @@
         "--no-color"
         "--output-last-message"
         "--output-schema"
+        "--profile"
         "--remote"
         "--remote-auth-token-env"
         "--skip-git-repo-check"

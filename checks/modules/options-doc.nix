@@ -15,9 +15,9 @@
 #      otherwise exact HM/devenv parity.
 #
 # Exact option-tree parity is appropriate here even where runtime behavior
-# differs. Backend-specific boundaries such as Home Manager-only profile
-# materialization are represented by assertions/defaults, not by deleting the
-# option from devenv; that keeps discovery and diagnostics consistent.
+# differs. Backend-specific boundaries are represented by assertions/defaults,
+# not by deleting the option from either backend; that keeps discovery and
+# diagnostics consistent.
 {
   lib,
   pkgs,
@@ -47,7 +47,6 @@
         "ai.codex.mcpServers"
         "ai.codex.nativeSettings"
         "ai.codex.package"
-        "ai.codex.profiles"
         "ai.codex.programs"
         "ai.codex.projectDocMaxBytes"
         "ai.codex.rules"

@@ -706,151 +706,6 @@
     message = "${optionPath} must use either sandbox_mode/sandbox_workspace_write or default_permissions/permissions, never both";
   };
 
-  # CLI config profiles are whole extra files selected with `codex --profile`.
-  # Keep this separate surface locked until its cross-layer lifecycle is
-  # needed and tested. It is not the `[permissions.<name>]` model above: named
-  # permission tables merge normally across the user and project base files.
-  mkProfileAssertions = profiles:
-    [
-      {
-        assertion = profiles == {};
-        message = "ai.codex.profiles is locked out: a named profile layer silently overrides legacy sandbox settings in the user config beneath it. See the lockout comment in packages/chatgpt-codex/lib/mkCodex.nix.";
-      }
-    ]
-    ++ lib.concatLists (lib.mapAttrsToList (name: settings: [
-        {
-          assertion = builtins.match "[A-Za-z0-9][A-Za-z0-9_-]*" name != null;
-          message = "ai.codex.profiles.${name} must start with a letter or number and contain only letters, numbers, hyphens, and underscores";
-        }
-        (mkSandboxModelAssertion "ai.codex.profiles.${name}" settings)
-      ])
-      profiles);
-
-  mkProfileSources = profiles:
-    lib.mapAttrs (name: settings:
-      tomlFormat.generate "codex-profile-${name}.toml" (helpers.filterNulls settings))
-    profiles;
-
-  mkProfileEntries = prefix: profiles:
-    lib.mapAttrs' (name: source:
-      lib.nameValuePair "${prefix}/${name}.config.toml" {
-        inherit source;
-      })
-    (mkProfileSources profiles);
-
-  mkDevenvProfileMaterializer = {
-    configDir,
-    profiles,
-  }: let
-    sources = mkProfileSources profiles;
-    desiredAssignments = lib.concatStrings (lib.mapAttrsToList (name: source: ''
-        desired_targets[${lib.escapeShellArg name}]=${lib.escapeShellArg source}
-      '')
-      sources);
-  in
-    pkgs.writeShellApplication {
-      name = "codex-devenv-profile-materializer";
-      bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
-      text = ''
-        shopt -s inherit_errexit 2>/dev/null || :
-
-        if [ -n "''${CODEX_HOME:-}" ]; then
-          profile_dir="$CODEX_HOME"
-        else
-          profile_dir="$HOME"/${lib.escapeShellArg configDir}
-        fi
-
-        state_base="''${XDG_STATE_HOME:-$HOME/.local/state}"
-        if common_dir="$(${pkgs.git}/bin/git -C "$DEVENV_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
-          owner_key="$common_dir"
-        else
-          owner_key="$DEVENV_ROOT"
-        fi
-        owner_hash="$(${pkgs.coreutils}/bin/sha256sum <<<"$owner_key")"
-        owner_id="''${owner_hash%% *}"
-        state_dir="$state_base/nix-agentic-tools/codex-profiles/$owner_id"
-        manifest="$state_dir/manifest"
-        next_manifest="$state_dir/manifest.next.$$"
-
-        declare -A desired_targets=()
-        declare -A previous_targets=()
-        declare -A should_manage=()
-        ${desiredAssignments}
-
-        # Whole-file profiles remain locked out. Avoid manufacturing a lock
-        # directory for the ordinary empty case: doing so would force every
-        # sandboxed devenv invocation to grant the shared parent containing
-        # every repository's ownership state.
-        if [ "''${#desired_targets[@]}" -eq 0 ] && [ ! -f "$manifest" ]; then
-          exit 0
-        fi
-
-        ${pkgs.coreutils}/bin/mkdir -p "$state_dir"
-        exec {profile_lock_fd}> "$state_dir/lock"
-        ${lib.getExe pkgs.flock} "$profile_lock_fd"
-
-        ${pkgs.coreutils}/bin/mkdir -p "$profile_dir"
-
-        if [ -f "$manifest" ]; then
-          while IFS=$'\t' read -r name target; do
-            if [ -n "$name" ]; then
-              previous_targets["$name"]="$target"
-            fi
-          done < "$manifest"
-        fi
-
-        # Reject every collision before pruning or replacing anything. A
-        # failed shell entry must leave the previous owned generation intact.
-        for name in "''${!desired_targets[@]}"; do
-          source_path="''${desired_targets[$name]}"
-          destination="$profile_dir/$name.config.toml"
-
-          if [[ -n ''${previous_targets[$name]+present} ]] \
-            && [ -L "$destination" ] \
-            && [ "$(${pkgs.coreutils}/bin/readlink "$destination")" = "''${previous_targets[$name]}" ]; then
-            should_manage["$name"]=true
-          elif [ ! -e "$destination" ] && [ ! -L "$destination" ]; then
-            should_manage["$name"]=true
-          elif ${pkgs.diffutils}/bin/cmp -s "$source_path" "$destination"; then
-            should_manage["$name"]=false
-          else
-            printf '%s\n' \
-              "error: refusing to replace externally managed Codex profile $destination" \
-              "Choose a unique ai.codex.profiles name or remove the conflicting file." >&2
-            exit 1
-          fi
-        done
-
-        for name in "''${!previous_targets[@]}"; do
-          if [[ -z ''${desired_targets[$name]+present} ]]; then
-            destination="$profile_dir/$name.config.toml"
-            if [ -L "$destination" ] && [ "$(${pkgs.coreutils}/bin/readlink "$destination")" = "''${previous_targets[$name]}" ]; then
-              ${pkgs.coreutils}/bin/rm -f "$destination"
-            fi
-          fi
-        done
-
-        : > "$next_manifest"
-        cleanup() {
-          ${pkgs.coreutils}/bin/rm -f "$next_manifest"
-        }
-        trap cleanup EXIT
-
-        for name in "''${!desired_targets[@]}"; do
-          source_path="''${desired_targets[$name]}"
-          destination="$profile_dir/$name.config.toml"
-
-          if [ "''${should_manage[$name]}" = true ]; then
-            ${pkgs.coreutils}/bin/ln -sfn "$source_path" "$destination"
-            printf '%s\t%s\n' "$name" "$source_path" >> "$next_manifest"
-          fi
-        done
-
-        ${pkgs.coreutils}/bin/mv -f "$next_manifest" "$manifest"
-        trap - EXIT
-      '';
-    };
-
   reservedAgentKeys = ["description" "developer_instructions" "name"];
 
   mkAgentAssertions = agents:
@@ -1004,26 +859,17 @@ in
           it will run.
         '';
       };
-      profiles = lib.mkOption {
-        type = lib.types.attrsOf (codexSettingsType {});
-        default = {};
-        description = ''
-          LOCKED OUT. Setting this fails evaluation. These are whole extra
-          config files selected by `codex --profile`; they are unrelated to
-          the mergeable `[permissions.<name>]` tables in nativeSettings. Keep
-          using nativeSettings unless a separate CLI config layer is required.
-
-          Named user configuration layers written as
-          `''${configDir}/<name>.config.toml` and selected explicitly with
-          `codex --profile <name>`. Codex 0.134.0 and later no longer support
-          nested `[profiles]` tables or a persistent default selector.
-          Home Manager links these whole-file user layers directly. Devenv
-          materializes the same whole-file artifacts into the user CODEX_HOME
-          before shell entry because Codex does not discover named profiles in
-          trusted project configuration. Known settings are typed identically
-          to `ai.codex.nativeSettings`; unknown TOML-compatible keys remain available.
-        '';
-      };
+      # `profiles` (removed 2026-09-19): a whole-file `codex --profile <name>`
+      # layer, distinct from the mergeable `[permissions.<name>]` tables in
+      # nativeSettings. It was locked out by assertion from the day it landed
+      # — a named profile silently overrides legacy sandbox settings beneath
+      # it — which made the option and its HM/devenv materializer unreachable
+      # dead code. It is not reinstated here because a Codex profile cannot
+      # provide the per-agent skill/context visibility it was kept around
+      # for: a profile is a User-layer config file that cannot restrict which
+      # skills or AGENTS.md files Codex discovers. Revisit alongside the
+      # sandbox-stack work rather than reusing this option name for anything
+      # else without reading that history first.
       projectDocMaxBytes = lib.mkOption {
         type = lib.types.ints.positive;
         default = 32768;
@@ -1111,7 +957,6 @@ in
       assertions =
         mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
-        ++ mkProfileAssertions cfg.profiles
         ++ mkSkillNameAssertions mergedSkills
         ++ [
           (mkSizeAssertion {
@@ -1168,12 +1013,6 @@ in
           (helpers.mkSkillDirectoryEntries ".agents" codexSkills)
           (mkAgentEntries cfg.configDir mergedAgents)
           (mkExecpolicyEntries cfg.configDir cfg.execpolicyRules)
-          # Profile files are declarative layers selected by an explicit CLI
-          # flag; unlike the base user config, no native writer or required
-          # runtime state shares them. Static per-file ownership therefore
-          # remains the honest lifecycle and keeps removal semantics native to
-          # Home Manager.
-          (mkProfileEntries cfg.configDir cfg.profiles)
           (lib.mkIf (effectiveHooks != {}) {
             "${cfg.configDir}/hooks.json".source = jsonFormat.generate "codex-hooks.json" {hooks = renderHooks effectiveHooks;};
           })
@@ -1211,9 +1050,6 @@ in
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
         });
       ignoredSettings = lib.intersectLists projectIgnoredKeys (builtins.attrNames settings);
-      profileMaterializer = mkDevenvProfileMaterializer {
-        inherit (cfg) configDir profiles;
-      };
       environmentCacheHome = getEnv "XDG_CACHE_HOME";
       environmentHome = getEnv "HOME";
       effectiveCacheHome =
@@ -1256,7 +1092,6 @@ in
       assertions =
         mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
-        ++ mkProfileAssertions cfg.profiles
         ++ mkSkillNameAssertions mergedSkills
         ++ [
           {
@@ -1293,27 +1128,16 @@ in
           ".codex/config.toml".source = tomlFormat.generate "codex-project-config.toml" settings;
         })
       ];
-      tasks =
-        {
-          "ai:codex:materialize-profiles" = {
-            exec = ''
-              set -euETo pipefail
-              shopt -s inherit_errexit 2>/dev/null || :
-              exec ${lib.getExe profileMaterializer}
-            '';
-            before = ["devenv:enterShell"];
-          };
-        }
-        // lib.optionalAttrs (mergedSkills != {}) {
-          "ai:codex:migrate-skill-links" = {
-            exec = ''
-              set -euETo pipefail
-              shopt -s inherit_errexit 2>/dev/null || :
-              exec ${lib.getExe skillLinkMigrator} ${lib.escapeShellArg skillBackupRoot} ${lib.escapeShellArgs codexSkillTargets}
-            '';
-            after = ["devenv:files:cleanup"];
-            before = ["devenv:enterShell"] ++ lib.optional (config.files != {}) "devenv:files";
-          };
+      tasks = lib.optionalAttrs (mergedSkills != {}) {
+        "ai:codex:migrate-skill-links" = {
+          exec = ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            exec ${lib.getExe skillLinkMigrator} ${lib.escapeShellArg skillBackupRoot} ${lib.escapeShellArgs codexSkillTargets}
+          '';
+          after = ["devenv:files:cleanup"];
+          before = ["devenv:enterShell"] ++ lib.optional (config.files != {}) "devenv:files";
         };
+      };
     };
   }
