@@ -1,16 +1,21 @@
 ## Devenv runtimes merge with host config — the reason is auth, not tidiness
 
-> **Last verified:** 2026-09-02 (commit pending — first landing. States as one
-> cross-runtime rule what previously had to be inferred by reading three
-> factories side by side: no `ai.*` runtime redirects its config root, on either
-> backend, and the reason is identical in every case. The per-runtime MECHANISMS
-> differ, and that difference is the whole content — Copilot has an additive
-> flag, Codex does not and must materialize into the host directory instead.
-> Motivation hoisted from the measurement already recorded in
+> **Last verified:** 2026-09-19 — `ai.codex.profiles` (the whole-file
+> `--profile` layer and its devenv `CODEX_HOME` materializer) was removed as
+> unreachable dead code (see the Settled bullet in
+> `dev/fragments/ai-module/ai-module-fanout.md`). Codex's devenv facet no longer
+> writes into the host config root at all: it now merges project and user config
+> natively, the same shape as Claude and Kiro. Copilot is the only remaining
+> runtime that needs an additive flag instead of native merge.
+>
+> States as one cross-runtime rule what previously had to be inferred by reading
+> three factories side by side: no `ai.*` runtime redirects its config root, on
+> either backend, and the reason is identical in every case. Motivation hoisted
+> from the measurement already recorded in
 > `dev/fragments/ai-clis/copilot-config-delivery.md`, which stated it only for
 > Copilot. If you add a runtime, change how one delivers config, or set any
 > `*_HOME` / `*_CONFIG_DIR` variable in a wrapper, update this fragment in the
-> same commit.)
+> same commit.
 
 ### The rule
 
@@ -48,30 +53,30 @@ $COPILOT_HOME/logs/…
 ```
 
 `COPILOT_HOME` _works_ — it does relocate `mcp-config.json` lookup and does stop
-the `$HOME/.copilot/` read. It is refused anyway, for the cost above. The same
-refusal governs Codex, which is why devenv materializes files **into**
-`CODEX_HOME` rather than re-pointing it.
+the `$HOME/.copilot/` read. It is refused anyway, for the cost above.
 
 The corollary that is easy to miss: because the constraint is about auth and
 history rather than about config, a runtime that can add config **without**
-moving its root is free to do so. That is the only reason Copilot and Codex use
-different mechanisms.
+moving its root is free to do so. That is the only reason Copilot needs a
+different mechanism from the rest.
 
 ### Per-runtime mechanism
 
-| runtime   | host root read | what devenv adds                                                 | mechanism                                                     |
-| --------- | -------------- | ---------------------------------------------------------------- | ------------------------------------------------------------- |
-| `claude`  | `~/.claude/`   | `<repo>/.claude/settings.json`, `.mcp.json`, `CLAUDE.md`         | native project scope — the CLI merges user + project itself   |
-| `codex`   | `~/.codex/`    | `<repo>/.codex/config.toml`, plus named profiles in the host dir | materializer writes INTO `CODEX_HOME`; flock + owner manifest |
-| `copilot` | `~/.copilot/`  | project `mcp-config.json`                                        | additive wrapper flag `--additional-mcp-config @<path>`       |
-| `kiro`    | `~/.kiro/`     | `<repo>/.kiro/{steering,hooks,agents,settings}/`                 | native project scope via a repo-relative `configDir`          |
+| runtime   | host root read | what devenv adds                                         | mechanism                                                   |
+| --------- | -------------- | -------------------------------------------------------- | ----------------------------------------------------------- |
+| `claude`  | `~/.claude/`   | `<repo>/.claude/settings.json`, `.mcp.json`, `CLAUDE.md` | native project scope — the CLI merges user + project itself |
+| `codex`   | `~/.codex/`    | `<repo>/.codex/config.toml`                              | native project scope — the CLI merges user + project itself |
+| `copilot` | `~/.copilot/`  | project `mcp-config.json`                                | additive wrapper flag `--additional-mcp-config @<path>`     |
+| `kiro`    | `~/.kiro/`     | `<repo>/.kiro/{steering,hooks,agents,settings}/`         | native project scope via a repo-relative `configDir`        |
 
-Codex is the one that needs explaining. It has no additive flag, so the only way
-to add a named profile without replacing the user's config is to write the file
-into the user's own directory. That write is shared mutable host state, so it is
-guarded: a `flock`, and a manifest keyed by a hash of the git common dir so one
-checkout never prunes another's profiles. Read that machinery as a consequence
-of this rule, not as incidental complexity.
+Codex used to be the one that needed explaining: `ai.codex.profiles` had no
+additive-flag equivalent, so adding a named profile meant writing a whole extra
+file into the user's own `CODEX_HOME`, guarded by a `flock` and a manifest keyed
+by a hash of the git common directory. That surface was removed 2026-09-19 as
+unreachable dead code (see the Settled bullet in
+`dev/fragments/ai-module/ai-module-fanout.md`). Codex's devenv facet now only
+ever writes into the project directory, so it needs no more explanation than
+Claude or Kiro.
 
 ### What this rule does NOT cover
 

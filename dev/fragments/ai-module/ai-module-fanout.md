@@ -1,7 +1,9 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-12 — package modules own consumer checks; the
-> shared harness discovers backend imports and owner activation probes.
+> **Last verified:** 2026-09-20 — `ai.codex.profiles` and its HM/devenv
+> materializer were removed as unreachable dead code; the delivery-path and
+> config-parity passages below that used it as their worked example now use
+> `ai.codex.execpolicyRules` instead.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -25,6 +27,16 @@
 >   remove it as redundant.** Kiro ships two agent-schema parsers with different
 >   requirements: the Rust CLI requires `name`, the Node/ACP parser treats it as
 >   optional. The default satisfies both.
+> - **`ai.codex.profiles` cannot deliver "this agent sees only X" — dropped
+>   2026-09-19, not merely re-locked.** The whole-file `codex --profile <name>`
+>   layer was locked out by assertion from the day it landed (a profile layer
+>   silently overrides legacy sandbox settings in the user config beneath it),
+>   which left the option and its HM/devenv materializer unreachable dead code.
+>   It would not have delivered the per-agent skill/context visibility it was
+>   kept around for even if unlocked: a Codex profile is a User-layer config
+>   file (precedence 21) that cannot restrict which skills or AGENTS.md files
+>   Codex discovers. Revisit alongside the sandbox-stack work, which builds the
+>   actual mechanism (a distinct `CODEX_HOME` or a restricted filesystem view).
 
 The `ai.*` HM module provides a unified interface that fans out shared AI-CLI
 configuration to each capable enabled ecosystem (Claude, Codex, Copilot, Kimchi,
@@ -178,56 +190,46 @@ The ai module fans out TWO kinds of configuration:
   `xhigh` on both backends. Explicit native values override these defaults;
   normalized reasoning effort also overrides the native option default. Setting
   either native key to null omits it, allowing Codex's lower config layers or
-  runtime defaults to supply it. Named config profiles retain null defaults so
-  they do not pin a model or effort implicitly. Home Manager reconciles exact
-  declared leaves into a writable `${configDir}/config.toml`; devenv writes a
-  statically Nix-owned trusted-project `.codex/config.toml`. An empty first HM
-  generation is a no-op, while an empty later generation uses the ownership
-  manifest to remove formerly managed leaves without deleting native state.
-  Devenv rejects provider, profile, notification, and telemetry keys that Codex
-  documents as ignored at project scope. The backend ownership difference is
-  deliberate: Codex's user-level trust prompt writes ad-hoc
-  `projects.<path>.trust_level` entries into the same file through
-  `config/batchWrite`, while no project-local writer has been observed. A
-  versioned XDG-state manifest tracks Nix-owned leaf paths so activation can
-  reassert and retire them while preserving unknown/native siblings, including
-  siblings inside `projects`, `features`, and `mcp_servers`. MCP configuration
-  is composed into that shared user file or the static project file through the
-  same typed server pool. Stable security settings type `allow_login_shell`,
-  `approval_policy` (including granular prompt categories),
-  `approvals_reviewer`, `sandbox_mode`, and `sandbox_workspace_write`.
-  `default_permissions` and named `permissions` profiles type inheritance,
-  workspace roots, filesystem access and scoped paths, deny-glob scan depth, and
-  network proxy/domain/socket policy. Codex merges entries under the same named
-  permission profile across user and project config layers; both backends may
-  therefore contribute to one policy without restating lower-layer roots. The
-  older sandbox model and permission profiles remain mutually exclusive, so the
-  module fails when both appear in one settings tree and consumers must not put
-  legacy `sandbox_mode` in another loaded layer. Profile names and inheritance
-  graphs remain runtime-validated by Codex because config layers may contribute
-  parents dynamically. `ai.codex.profiles.<name>` is a distinct, still locked
-  surface: it uses the same typed/freeform settings schema and would emit a
-  separate static `${configDir}/<name>.config.toml` user layer selected with
-  `codex --profile <name>`. Home Manager links that whole file directly. Codex
-  resolves named profiles only from user CODEX_HOME, so devenv cannot place an
-  inert copy beside project config; instead a pre-shell task materializes the
-  repository-declared store file into CODEX_HOME. The task tracks ownership by
-  Git common directory, serializes concurrent shell entries with a repository
-  lock, updates and prunes only its own symlinks, accepts an identical
-  externally managed file, and rejects conflicting content before changing any
-  artifact. This keeps the declaration repository-scoped without changing
-  CODEX_HOME and forking authentication/session state.
-  `projects.<path>.trust_level` is accepted only by Home Manager's user-global
-  file: devenv rejects it because a project cannot bootstrap the trust required
-  to load its own `.codex/config.toml`. `ai.codex.execpolicyRules.<name>` writes
-  native Starlark to `<config-layer>/rules/<name>.rules` in both backends. It is
-  intentionally separate from Markdown `ai.rules`, which remains durable
-  AGENTS.md guidance. Home Manager reserves `execpolicyRules.default` because
-  Codex appends accepted user allow-list decisions to
-  `$CODEX_HOME/rules/default.rules`; other per-entry files remain declarative
-  while that native mutation can coexist. Trusted project rules are declarative
-  and may use `default` because Codex's native writer targets only the user
-  layer.
+  runtime defaults to supply it. Home Manager reconciles exact declared leaves
+  into a writable `${configDir}/config.toml`; devenv writes a statically
+  Nix-owned trusted-project `.codex/config.toml`. An empty first HM generation
+  is a no-op, while an empty later generation uses the ownership manifest to
+  remove formerly managed leaves without deleting native state. Devenv rejects
+  provider, profile, notification, and telemetry keys that Codex documents as
+  ignored at project scope. The backend ownership difference is deliberate:
+  Codex's user-level trust prompt writes ad-hoc `projects.<path>.trust_level`
+  entries into the same file through `config/batchWrite`, while no project-local
+  writer has been observed. A versioned XDG-state manifest tracks Nix-owned leaf
+  paths so activation can reassert and retire them while preserving
+  unknown/native siblings, including siblings inside `projects`, `features`, and
+  `mcp_servers`. MCP configuration is composed into that shared user file or the
+  static project file through the same typed server pool. Stable security
+  settings type `allow_login_shell`, `approval_policy` (including granular
+  prompt categories), `approvals_reviewer`, `sandbox_mode`, and
+  `sandbox_workspace_write`. `default_permissions` and named `permissions`
+  profiles type inheritance, workspace roots, filesystem access and scoped
+  paths, deny-glob scan depth, and network proxy/domain/socket policy. Codex
+  merges entries under the same named permission profile across user and project
+  config layers; both backends may therefore contribute to one policy without
+  restating lower-layer roots. The older sandbox model and permission profiles
+  remain mutually exclusive, so the module fails when both appear in one
+  settings tree and consumers must not put legacy `sandbox_mode` in another
+  loaded layer. Profile names and inheritance graphs remain runtime-validated by
+  Codex because config layers may contribute parents dynamically. The distinct
+  whole-file `ai.codex.profiles.<name>` surface (a separate static
+  `${configDir}/<name>.config.toml` user layer selected with
+  `codex --profile <name>`) was removed 2026-09-19 as unreachable dead code; see
+  the Settled bullet above. `projects.<path>.trust_level` is accepted only by
+  Home Manager's user-global file: devenv rejects it because a project cannot
+  bootstrap the trust required to load its own `.codex/config.toml`.
+  `ai.codex.execpolicyRules.<name>` writes native Starlark to
+  `<config-layer>/rules/<name>.rules` in both backends. It is intentionally
+  separate from Markdown `ai.rules`, which remains durable AGENTS.md guidance.
+  Home Manager reserves `execpolicyRules.default` because Codex appends accepted
+  user allow-list decisions to `$CODEX_HOME/rules/default.rules`; other
+  per-entry files remain declarative while that native mutation can coexist.
+  Trusted project rules are declarative and may use `default` because Codex's
+  native writer targets only the user layer.
 - `ai.codex.agents.<name>` — the semantic agent record plus a freeform `codex`
   TOML extension. Home Manager emits `${configDir}/agents/<name>.toml`; devenv
   emits trusted-project `.codex/agents/<name>.toml`. The filename stem supplies
@@ -396,10 +398,10 @@ Every option on the HM ai module must have a matching option on the devenv ai
 module with the same semantics. If you add an option to one, add it to the other
 in the same commit. Codex's exact generated option-name set is compared across
 both backends by `checks/modules/options-doc.nix`. Runtime scope differences
-belong in backend lowering, not divergent declarations: `ai.codex.profiles` is
-one typed surface, with HM linking its user-global files and devenv
-materializing the same whole-file layers from repository declarations into the
-native user lookup location.
+belong in backend lowering, not divergent declarations:
+`ai.codex.execpolicyRules` is one typed surface, with HM writing each `.rules`
+file into the user-global `${configDir}` and devenv writing the project-local
+`.codex/rules/<name>.rules` instead — Codex reads both layers natively.
 
 ### Final literal-file seam
 
@@ -546,22 +548,19 @@ custom named permission profile: Home Manager adds
 cache. When `treefmt.enable`, devenv also adds
 `${XDG_CACHE_HOME:-$HOME/.cache}/treefmt`; a disabled or absent treefmt module
 adds nothing. The effective cache home follows `XDG_CACHE_HOME` when present and
-otherwise uses its conventional `$HOME` fallback. The locked whole-file profile
-materializer exits before creating its state directory when it has neither
-desired profiles nor an existing ownership manifest. Codex therefore receives no
-broad grant over the XDG state parent holding every repository's profile state.
-Legacy workspace-write additionally receives `${config.devenv.root}/.git` for
-compatibility. Named permissions instead begin with devenv's automatically
-populated `config.git.root`, inspect its `.git` directory or pointer file, and
-resolve linked-worktree `gitdir` plus `commondir` metadata to the canonical
-shared common Git directory. Absolute and relative metadata values are both
-supported, and directory-form Git metadata follows its own `commondir` when
-present. The resolver requires the Git directory's `HEAD` and the common
-directory's config plus object database before emitting a rule, so an arbitrary
-directory named by a forged pointer cannot become a broad write grant. The
-result is a direct filesystem write rule, never a workspace root; a non-Git
-project emits no Git rule. A parent used to write several worktrees remains
-explicit repository-topology policy.
+otherwise uses its conventional `$HOME` fallback. Legacy workspace-write
+additionally receives `${config.devenv.root}/.git` for compatibility. Named
+permissions instead begin with devenv's automatically populated
+`config.git.root`, inspect its `.git` directory or pointer file, and resolve
+linked-worktree `gitdir` plus `commondir` metadata to the canonical shared
+common Git directory. Absolute and relative metadata values are both supported,
+and directory-form Git metadata follows its own `commondir` when present. The
+resolver requires the Git directory's `HEAD` and the common directory's config
+plus object database before emitting a rule, so an arbitrary directory named by
+a forged pointer cannot become a broad write grant. The result is a direct
+filesystem write rule, never a workspace root; a non-Git project emits no Git
+rule. A parent used to write several worktrees remains explicit
+repository-topology policy.
 
 Enabled integrations can append their own runtime-owned state through the hidden
 `ai.codex.internal._integration_writable_roots` pool. It is module plumbing
