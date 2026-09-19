@@ -685,3 +685,20 @@ dangerous ones:
   relation here carries a role.
 - Incremental export produces false greens; gates need a clean output directory.
 - `manage new` pre-fills required choice fields with `TBD`, which parses clean.
+
+## If steered to the semantic library
+
+The semantic library (authoring DSL, lowered contract, evaluator, exporter)
+lives on branch `feat/strictdoc-semantic-gate1`, draft PR #1762 against this
+branch. When the operator steers a session toward it, bootstrap from that
+branch's own file before reading anything else there:
+
+```bash
+git fetch origin feat/strictdoc-semantic-gate1
+git show origin/feat/strictdoc-semantic-gate1:fixtures/strictdoc-semantic-library/contract/gate2/dsl-review/BOOTSTRAP.md
+```
+
+That file names what to read, what to ignore as rejected prior art, the
+operator's readability bars, the traps already measured, the behavior that must
+survive a distillation, and the decisions that stay open. Nothing in this README
+applies to that work beyond the daemon, board and skill mechanics above.
