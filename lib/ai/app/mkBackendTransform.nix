@@ -47,7 +47,9 @@
   options,
   ...
 }: let
+  adapters = import ../adapters {inherit lib;};
   aiCommon = import ../ai-common.nix {inherit lib;};
+  deliveryOptions = import ../delivery-options.nix {inherit lib;};
   dirHelpers = import ../dir-helpers.nix {inherit lib;};
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
   # `pkgs` comes off the RECORD, never from the module arguments. Naming
@@ -251,6 +253,19 @@ in {
         # refers to a store path.
         description = "Reconciliation plans this generation owns, keyed by the writer's entry name.";
       };
+      activation = lib.mkOption {
+        type = deliveryOptions.writerMapType;
+        default = {};
+        description = ''
+          The writers that materialize ${appRecord.name}'s owned files, keyed
+          by a name of your choosing. Each one declares the literal activation
+          entry or devenv task it becomes, where it sits in that backend's
+          ordering, and every ledger it has ever owned — so a surface that
+          drops to zero files still emits the writer that retracts what the
+          previous generation wrote. A writer that owns no files at all
+          declares a `command` instead.
+        '';
+      };
       enable = lib.mkEnableOption appRecord.name;
       files = lib.mkOption {
         type = runtimeFiles.fileMapType;
@@ -421,6 +436,11 @@ in {
         inherit backend;
         files = runtimeSinkFiles;
       })
+      # The delivery layer's one lowering seam. Everything a runtime declares
+      # about how its files land is read HERE, by the backend's adapter, so no
+      # factory writes `home.file`, `home.activation`, `files` or `tasks`
+      # itself.
+      (adapters.${backend} {inherit cfg config;})
     ]))
   ];
 }
