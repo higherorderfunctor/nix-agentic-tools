@@ -1,0 +1,43 @@
+[DOCUMENT]
+TITLE: The writer of the canon is scribe, as a CLI and as a library
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SCRIBE-NAMES-THE-WRITER
+TITLE: The writer of the canon is scribe, as a CLI and as a library
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: The writer is replaced by something that is not this pipeline, or upstream ships a writer that makes it redundant.
+STATEMENT: >>>
+The writer of the canon is SCRIBE. The name covers every form of one
+pipeline: the resident daemon that holds the graph and applies each write,
+the `scribe` command that hands it a typed operation, and the Python modules
+a consumer imports to drive the same daemon-side pipeline in-process. Scribe
+is the ONLY write path to the canon, and joints behave the same through
+every form.
+
+"sdoc" is not a name for the writer. It names the file format and its
+grammar, nothing else. "strictdoc" names the upstream package.
+<<<
+RATIONALE: >>>
+Four things were called sdoc: the file type, the upstream package, the writer,
+and the contents. The writer needed its own name first because it is the thing
+the hook machinery attaches to, and a sentence like "the sdoc hooks the sdoc
+writes into the sdoc" was already being written. Candidates: scribe, quill,
+sdocw. Scribe won on carrying "writes the record under another's authority",
+which matches identity coming from the environment rather than from the tool.
+<<<
+COMMENT: >>>
+Ruled by the operator on 2026-08-28. Rewritten IN PLACE on 2026-09-09 on the
+operator's ruling that a wrong accepted decision on this branch is corrected,
+not superseded, because the branch is not in main and supersession semantics
+are not settled; the pre-rewrite text is in git history at fda6c066.
+
+The earlier implementation put argv parsing, graph writes, rendering, rollback, and dry-run in one standalone module exposed through a second command name. That boundary is retired. The only command is scribe: scribe_cmd.py derives its option surface from workspace.grammar and sends typed requests to the daemon; scribe_ops.py owns writes; scribe_verbs.py contains only shared renderers and path checks and has no main, parser, or dispatch table.
+
+The client gained dry-run on 2026-09-03. WORK-SDOC-CLI-BECOMES-A-LIBRARY completed the naming ruling by removing the standalone entrypoint and making the remaining library role explicit.
+
+AUTHORED_BY reads llm because the writer has no flag for the human rungs.
+<<<

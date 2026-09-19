@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: Let the install check import sdoc_semantics.grammar
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SEMANTICS-INSTALL-CHECK-GRAMMAR-IMPORT
+TITLE: Let the install check import sdoc_semantics.grammar
+AUTHORED_BY: llm
+STATEMENT: >>>
+The narrowed install-check source in packages/strictdoc-grammar/lib/mkExtract.nix splices only dev/scripts/sdoc_semantics onto PYTHONPATH, but sdoc_semantics/grammar.py now imports the sibling top-level module scribe_grammar, which is outside that fileset. The check imports the package root and passes; importing sdoc_semantics.grammar under the check's PYTHONPATH fails. Either include scribe_grammar.py in the fileset or make the check import the grammar module so the gap is visible.
+<<<
+COMMENT: >>>
+Found by the semantics re-review on 2026-09-08 (mkExtract.nix:170). Latent today.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: MECH-SEMANTICS-DEFINITION-BOUNDARY
+  ROLE: Assumes

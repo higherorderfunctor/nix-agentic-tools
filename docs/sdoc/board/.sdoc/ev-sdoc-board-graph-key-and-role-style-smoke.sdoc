@@ -1,0 +1,62 @@
+[DOCUMENT]
+TITLE: The graph key explains stable role hues and focal direction
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SDOC-BOARD-GRAPH-KEY-AND-ROLE-STYLE-SMOKE
+TITLE: The graph key explains role hues and card outline states
+AUTHORED_BY: llm
+SOURCE: Independent Chromium 152 headless DevTools probes at 1440x900 and 390x844 against the live scribe daemon; 2026-09-04
+STATEMENT: >>>
+Against the live canon at 1440 by 900, independent headless Chromium rendered
+SLICE-CHECKPOINT-WIRING at one hop as 13 cards and 22 semantic relations. Every
+card was one 244 by 102 SVG `foreignObject` containing a native
+`button.work-item.graph-work-item`. The graph and navigation focal cards had
+the same UID, state, title, and source-directory child structure, grid layout,
+ten-by-eleven-unit padding, six-unit gap and radius, and typography. The graph
+rendered no separate node-type text.
+
+Each graph card painted an un-clipped glow silhouette, full rounded type-color
+plate, inset main surface, transparent HTML card, one-pixel resting perimeter,
+and two-pixel interaction perimeter in that order. At graph scales 0.234061,
+0.982973, and 1.720864, the main inset measured exactly three screen pixels;
+inverse-scale expansion error stayed below 0.0000001 pixel. The resting and
+interaction perimeters extended respectively one and two total screen pixels
+outside the silhouette and consumed effectively zero pixels of its interior.
+Raster samples found clean lines across the full silhouette, including the
+type tab, with no corner seam, gap, color contamination, or inward tab loss.
+
+Normal cards kept main fill `rgb(22, 32, 40)`, type-specific tab fill, and a
+thin subtle-dark perimeter with no glow. Hover and focus changed only the
+perimeter to two pixels and the node-type color. Selected state changed only
+that perimeter to semantic white and enabled a solid outline-colored silhouette
+at 0.78 opacity blurred by seven pixels underneath the unchanged sharp layers.
+Source, target, inspected, and focal states similarly used yellow, light blue,
+white, and universal node-type semantic colors while preserving the same main
+fill and three-pixel type tab.
+
+Filters, centered Hops, and right-aligned zoom and Fit controls remained
+non-overlapping; the hop selector's center delta was zero pixels. One, two, and
+three hops rendered 13/22, 48/110, and 48/110 nodes/semantic relations, with
+the latter views reporting 48 of 60 and 48 of 206 nearest nodes under the cap.
+The focal hash remained stable and the page reported no runtime, console, or
+network errors.
+<<<
+COMMENT: >>>
+Taken 2026-09-04 on the reference branch feat/work-graph-neighborhood-reference,
+before the Grammars tab, the lifecycle widget and the Nix-delivered elkjs
+existed on this tree; ported here on 2026-09-08 as commits adf8e8d1..5ee1cc63
+and not retaken. The four-button narrow-width switcher the statement describes
+is the one this tree ships. The hop counts are of that branch's canon; the
+daemon here holds 518 nodes at generation 3 on 2026-09-08, so the same focus
+reaches the 48-node cap sooner.
+<<<
+RELATIONS:
+- TYPE: File
+  VALUE: docs/sdoc/board/index.html
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/app.css
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/board.js

@@ -1,0 +1,39 @@
+[DOCUMENT]
+TITLE: The merged app serves both views from the live daemon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[EVIDENCE]
+UID: EV-SDOC-BOARD-MERGED-SMOKE
+TITLE: The merged app serves both views from the live daemon
+AUTHORED_BY: llm
+SOURCE: Live scribe daemon (generation 3) and headless ungoogled-chromium 151 driven over the DevTools pipe; system python3; 2026-09-01
+STATEMENT: >>>
+Nine hermetic contracts passed under system python3: adapter fixtures covering
+edge resolution, the dangling-target diagnostic, per-table union key sets and
+degree facets, plus the HTTP allowlist, 405s on mutating methods, and a 503
+whose body carries "devenv up scribe". Against the live daemon the server
+adapted 384 nodes, 922 resolved edges, 0 diagnostics and 953 relation rows;
+/api/graph served 1,306,012 bytes and /api/rows 1,470,894 bytes at generation
+3, and a repeat request answered from the generation cache in about 18 ms with
+no export. In the driven browser the Board drew the whole canon with all seven
+type accents, and a hash-selected node dimmed unrelated topology and filled
+the inspector; the Perspective view rendered the Aurora datagrid at 384 rows
+by 8 columns, and the Relations switch rendered 953 rows by 8 with source and
+target facets. Switching tables via restore({table}) was refused with "Unknown
+column SOURCE_TYPE in field columns"; loading the Table object directly worked
+and logs upstream's deprecation of that path.
+<<<
+COMMENT: >>>
+Re-measured 2026-09-08 against this tree after the Graph port and the elkjs
+move. The hermetic suite is 16 tests rather than the nine contracts above; it
+grew cases for the static allowlist and the two Nix-backed
+/assets/vendor/elkjs/ routes. The live daemon now holds 518 nodes with 1,156
+resolved snapshot edges, 0 diagnostics and 1,245 relation rows at generation 3,
+and /api/graph and /api/rows serve 1,711,091 and 1,996,403 bytes. Every finding
+in the statement still holds; only the counts moved.
+<<<
+RELATIONS:
+- TYPE: File
+  VALUE: docs/sdoc/board/test_board.py

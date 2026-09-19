@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: Carry each node source path in the daemon export
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-EXPORT-CARRIES-NODE-PATH
+TITLE: Carry each node source path in the daemon export
+AUTHORED_BY: llm
+STATEMENT: >>>
+Extend the daemon-owned workspace export with each node source path relative to the workspace root, then make the board consume that field directly instead of walking the canon or importing view-check.py.
+<<<
+COMMENT: >>>
+Measured before implementation on 2026-09-09 with workspace.export over 527 documents: the path was absent, with no existing path field name. Each document had exactly GRAMMAR, NODES, TITLE and _NODE_TYPE; sampled nodes likewise carried no document path.
+
+Implemented as `_DOCUMENT_PATH`, injected from the held graph by an idempotent in-memory JSONGenerator patch. The board now reads that field and has no uid_paths or dynamic view-check.py import. Verified against the live daemon export: all 529 UID nodes named 529 existing files, and each file contained the stated UID. The graph and rows API payloads before and after were identical after normalizing only project.generation (3 to 1). Workspace contracts passed 23/23 and board tests passed 16/16.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-DAEMON-IS-THE-ONLY-SOURCE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-EXPORT-PAYLOAD
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-ADAPTER
+  ROLE: Crosses

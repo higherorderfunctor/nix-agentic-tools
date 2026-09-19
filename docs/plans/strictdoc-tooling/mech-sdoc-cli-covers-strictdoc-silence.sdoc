@@ -1,0 +1,59 @@
+[DOCUMENT]
+TITLE: Programs invoking strictdoc must refuse unregistered format handles
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[REQUIREMENT]
+UID: MECH-SDOC-CLI-COVERS-STRICTDOC-SILENCE
+TITLE: Programs invoking strictdoc must refuse unregistered format handles
+AUTHORED_BY: llm
+STATEMENT: >>>
+One silent failure in strictdoc's command line has to be closed by its caller,
+because it cannot be closed upstream through configuration. Asking for an
+output no registered format claims succeeds and writes nothing: with formats
+pinned, html, rst, markdown, excel and the bare default all exit 0 with zero
+non-cache files, and `--formats=html` additionally spends 0.53 s compiling
+Jinja templates first, because `ExportAction` gates template construction on
+the REQUESTED handle while dispatching on the REGISTERED one. The `--formats`
+allowlist is the hardcoded `EXPORT_FORMATS` list at commands/export.py:17 and
+a project config can only append to it at line 88, never remove from it, so no
+configuration makes an unregistered handle an argparse error. Any program in
+this repository that invokes strictdoc's command line must pass only format
+handles the loaded config registers, and must refuse an unregistered handle
+itself rather than reading strictdoc's exit code as success.
+<<<
+RATIONALE: >>>
+MECH-SDOC-LEAN-FORMATS records this false green as owed behavior outside its
+own scope. This node is that obligation at the actual boundary: every program
+that invokes strictdoc's command line must validate the format handle before
+treating exit status as success.
+<<<
+COMMENT: >>>
+The exposure is live: strictdoc_config.py registers only SDocFormat and
+JSONFormat. No program in the tree currently accepts a caller-supplied format
+handle; every repository invocation hardcodes json. The residual exposure is a
+human or agent hand-running strictdoc export from memory, which no wrapper can
+intercept and which is the honest argument for eventually retiring this node
+rather than building another guard.
+
+StrictDoc printing parse and semantic diagnostics to stdout is recorded with
+the wrapper that owns that behavior, MECH-TREEFMT-SDOC, and is no longer a
+second subject of this requirement.
+
+Absorbs the proposed MECH-UNREGISTERED-HANDLE-MUST-FAIL. The former
+MECH-STRICTDOC-ERRORS-ON-STDOUT half remains recorded by MECH-TREEFMT-SDOC.
+
+Retyped from MECHANISM to REQUIREMENT on 2026-08-30 by the mechanism mood test
+under DEC-NODE-FAMILIES, with medium confidence after a second opinion: it can
+be violated, because a counterexample would be fixed in the world rather than
+in this node. The operative rule is now: any program invoking strictdoc's
+command line must reject an unregistered format handle itself rather than
+reading strictdoc's exit code as success. The descriptive preamble records the
+upstream behavior that makes the rule necessary. The UID keeps its prefix:
+DEC-UID-OUTLIVES-TYPE.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-STRICTDOC-TOOLING
+  ROLE: Backlogged_In

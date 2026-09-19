@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: Do not delete nodes until the immutability mechanics are settled
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-NO-DELETES-YET
+TITLE: Do not delete nodes until the immutability mechanics are settled
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+The retention and immutability question settles: whether a node is deleted with
+Git history as the record, or is immutable outside explicit state changes.
+<<<
+STATEMENT: >>>
+Supersede, do not delete. Until the record model is chosen, a removed node is
+an unrecoverable choice made by whoever happened to be editing.
+
+Known violation, logged rather than reverted: SLICE-SEMBLE-SDOC was deleted
+during deduplication, having been written twice in two places. Restoring it
+would recreate the duplicate it was removed to fix, so grooming should rule on
+whether to reinstate it as superseded or accept the deletion.
+<<<
+RATIONALE: >>>
+The two candidate models -- delete with Git history as the record, versus
+immutable outside state changes -- differ in what a deletion costs. Deleting
+under the first is routine; under the second it destroys the record. Choosing
+by accident, one edit at a time, is how the answer gets made without anyone
+deciding it.
+<<<

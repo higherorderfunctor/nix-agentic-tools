@@ -1,0 +1,240 @@
+# cspell:ignore dlopened restype
+# The generation-time runner for the typed `.sgra` option surface: strictdoc's
+# own interpreter, importable, with the extractor's entry point passed as
+# argv[1].
+#
+# ── Why this is here and not in an overlay ───────────────────────────────────
+#
+# It used to live in `overlays/dev-tools/strictdoc-grammar-extract.nix`, which
+# read dev/fragments/overlays/overlay-pattern.md's "an overlay must not import
+# build sources from `packages/`" as forbidding the milestone's layout and
+# shipped a wrapped environment instead. RULED by the operator 2026-08-26
+# (MECH-GRAMMAR-EXTRACT-SOURCE-BOUNDARY): the invariant was read the wrong way
+# round. An overlay is the faithful CONVERSION of an upstream package; wrapping
+# — environment, flags, configuration — belongs to the module that consumes it.
+# This runner converts nothing, so the overlay was DELETED rather than thinned,
+# and `pkgs.ai.devTools.strictdoc-grammar-extract` no longer exists. Do not
+# reintroduce it: `packages/strictdoc/packages/ai/devTools/strictdoc/package.nix` is the conversion, this is
+# the wrap, and the split is the point.
+#
+# The wrap is a factory rather than inline module code because it has two
+# consumers that are not each other: `../modules/devenv`, which puts it in the
+# dev shell, and the owner and workspace checks, which run the same
+# entry points in a derivation with no module system in sight. The shared check helper builds
+# it for those checks; nothing else may build a second copy, or a session
+# and CI stop running the same interpreter.
+#
+# ── The environment ──────────────────────────────────────────────────────────
+#
+# The interpreter is UPSTREAM'S OWN VIRTUAL ENVIRONMENT, reached through the
+# shebang of `${strictdoc}/bin/strictdoc`, and that indirection is forced.
+# The StrictDoc owner recipe re-exports upstream's flake package, which is
+# `mkApplication` over a uv2nix venv: `$out` holds that one script and nothing
+# else, so there is no `site-packages` to put on PYTHONPATH and no list of
+# dependency derivations to hand to `withPackages` (`dependencies` on that
+# package is a uv2nix name → extras ATTRSET). The venv the shebang names is a
+# build input of the application, not a flake output, so the script is the only
+# handle on it. It carries strictdoc plus everything `uv.lock` pins, textx and
+# arpeggio included — neither of which is on a plain interpreter's path.
+#
+# ONE PACKAGE IS SPLICED ONTO PYTHONPATH, because that venv does not carry it.
+# `ast_grep_py`, because the normalizer matches over the faithful surface's Nix
+# source in process. The repository's `dev/scripts/sdoc_semantics/` interpreter
+# is standard-library-only and is supplied only to the install check below.
+# The extension module is a version coupling: it
+# built for `pkgs.python3` is only importable by upstream's interpreter while
+# the two agree on the Python MINOR version. MEASURED 2026-08-27 against this
+# repository's pin — 3.14.7 against upstream's 3.14.6, `import ast_grep_py`
+# clean and the grammar builder returning the same `4adcdb05…` grammar the
+# implementation brief records. The install check below is what makes a future
+# divergence fail here rather than in a session.
+#
+# `alejandra` is deliberately absent. `emit_nix.format_nix` shells out to it and
+# downgrades a miss to a WARNING, passing the source through unformatted, so a
+# caller that diffs against a formatted file has to name it itself — see the
+# header of packages/strictdoc-grammar/checks/strictdoc-grammar-surface-current.nix.
+#
+# ── Tree-sitter grammars for dev/scripts/sdoc_extractors/ ────────────────────
+#
+# THIS IS THE ONE SEAM, and it is why the grammars are delivered here rather
+# than in devenv.nix. Every scribe program — `scribe`, `scribe-daemon` (which
+# `processes.scribe` runs) and `scribe-client` — takes THIS derivation as its
+# `runner`, so a variable set on this wrapper reaches all of them, plus the
+# checks that run the same interpreter. Set it anywhere else and the daemon,
+# the one process that actually holds the graph, does not see it.
+#
+# `--set-default`, never `--set`: a developer pointing `SDOC_TS_NIX_PARSER` at
+# a locally built grammar has to win over the pinned one.
+#
+# THE CTYPES ROUTE IS FORCED, which is why a plain grammar derivation appears
+# here rather than a python package. `python3Packages.tree-sitter-grammars.*`
+# drags in pydantic, email_validator, dnspython and idna, none of which
+# upstream's venv carries; the plain derivation ships `$out/parser` — an ELF
+# shared object — with no python at all, and `tree_sitter.Language` accepts the
+# pointer `ctypes` hands back. The venv ALREADY carries py-tree-sitter, so
+# nothing goes on PYTHONPATH for this.
+#
+# The install check parses one buffer per grammar, and it is a BUILD gate
+# rather than a test on purpose: tree-sitter-nix is ABI 13, sitting exactly on
+# py-tree-sitter 0.25.2's MIN_COMPATIBLE floor, so either a grammar bump or a
+# strictdoc bump can break this with no change to any file here. Adding a
+# language is one row in `grammars` and nothing else.
+#
+# ── One consequence of moving the wrap out of the overlay ────────────────────
+#
+# Build inputs now come from the CONSUMER's `pkgs` rather than from the
+# overlay's isolated `ourPkgs`, which is what wrapping in a module means. That
+# is only safe here because the part that has to agree with upstream's venv —
+# the interpreter — is upstream's own, and the one spliced import is guarded by
+# the install check.
+{
+  lib,
+  pkgs,
+  strictdoc,
+}: let
+  inherit (pkgs) ast-grep makeWrapper python3 stdenvNoCC;
+
+  # Spliced onto the venv's PYTHONPATH, because that venv carries neither.
+  #
+  # `ast_grep_py` is an EXTENSION module, so it is only importable while this
+  # repository's `pkgs.python3` and upstream's interpreter agree on the Python
+  # MINOR version — see the header.
+  #
+  # `pjrpc` is the JSON-RPC dispatcher `dev/scripts/scribe_rpc.py` serves the
+  # daemon's socket through (MECH-SCRIBE-RPC). Pure Python, so the coupling
+  # above reduces to a directory name, and it is declared in ./pjrpc.nix rather
+  # than in devenv.nix because flake.nix builds this same factory for the
+  # grammar checks — that file's header carries the whole argument. Its
+  # partner pydantic is deliberately NOT listed: upstream's venv already has
+  # it, and the install check below is what asserts the two resolve together.
+  pythonPathPackages = [
+    pkgs.python3Packages.ast-grep-py
+    (import ./pjrpc.nix {
+      inherit lib;
+      inherit (pkgs) python3Packages;
+    })
+  ];
+
+  # Only the interpreter participates in this build-time import check. Other
+  # dev scripts, test fixtures and local bytecode must not invalidate the wrap.
+  semanticsSource = lib.fileset.toSource {
+    root = ../../../dev/scripts;
+    fileset =
+      lib.fileset.difference
+      (lib.fileset.fileFilter
+        (file: file.hasExt "py" || file.name == "model.json")
+        ../../../dev/scripts/sdoc_semantics)
+      ../../../dev/scripts/sdoc_semantics/tests;
+  };
+
+  # The one grammar registry. Shared with devenv.nix, which needs the same
+  # paths in the dev shell's env for a hand-run `strictdoc export`; see that
+  # file's header for why the list may not be written twice.
+  ts = import ./tsGrammars.nix {inherit lib pkgs;};
+
+  grammarFlags =
+    lib.concatStringsSep " \\\n        "
+    (lib.mapAttrsToList
+      (name: value: ''--set-default ${name} "${value}"'')
+      ts.env);
+
+  # `(env, symbol)` pairs the install check parses one buffer through.
+  grammarProbes =
+    lib.concatMapStringsSep ", "
+    (name: ''("${ts.envName name}", "${ts.symbolName name}")'')
+    (lib.attrNames ts.grammars);
+in
+  stdenvNoCC.mkDerivation {
+    pname = "strictdoc-grammar-extract";
+    version = "0.1.0";
+
+    # Nothing to fetch, unpack, configure or build: this derivation is one
+    # wrapper over an interpreter that is already built.
+    dontUnpack = true;
+    dontConfigure = true;
+    dontBuild = true;
+
+    nativeBuildInputs = [makeWrapper];
+
+    installPhase = ''
+      runHook preInstall
+
+      # Upstream's application is a single script whose shebang names the venv
+      # interpreter. Read it rather than guessing a path, and fail loudly if the
+      # shape ever changes — a wrapper, a launcher, anything but an interpreter
+      # — because the alternative is a wrapper that builds and cannot import.
+      venvPython=$(sed -n '1s|^#!||p' "${strictdoc}/bin/strictdoc")
+      if [ ! -x "$venvPython" ]; then
+        echo "strictdoc-grammar-extract: ${strictdoc}/bin/strictdoc no longer" \
+             "shebangs an executable interpreter (got '$venvPython')" >&2
+        exit 1
+      fi
+
+      makeWrapper "$venvPython" "$out/bin/strictdoc-grammar-extract" \
+        --prefix PYTHONPATH : "${lib.makeSearchPath python3.sitePackages pythonPathPackages}" \
+        --suffix PATH : "${lib.makeBinPath [ast-grep]}" \
+        ${grammarFlags}
+      runHook postInstall
+    '';
+
+    # The whole point of the package asserted at build time: strictdoc's grammar
+    # builder imports, and so does the matcher library. The repository
+    # interpreter is also imported from its source path below, so a broken
+    # delivery fails here rather than in a session.
+    #
+    # `pjrpc.server.validators.pydantic` is the ONE import that proves the
+    # spliced package and the venv's own pydantic resolve in the SAME
+    # interpreter: pjrpc comes off PYTHONPATH, pydantic out of upstream's venv,
+    # and that module imports pydantic at module scope. Either half missing is
+    # a build failure here rather than a daemon that starts and refuses every
+    # request (MECH-SCRIBE-RPC).
+    doInstallCheck = true;
+    installCheckPhase = ''
+      runHook preInstallCheck
+      PYTHONPATH="${semanticsSource}:''${PYTHONPATH-}" \
+        "$out/bin/strictdoc-grammar-extract" -c '
+      import ast_grep_py, arpeggio, textx, sdoc_semantics
+      import pjrpc, pydantic
+      from pjrpc.server import Dispatcher, MethodRegistry
+      from pjrpc.server.validators.pydantic import PydanticValidatorFactory
+      from strictdoc.backend.sdoc.grammar.grammar_builder import SDocGrammarBuilder
+      assert SDocGrammarBuilder.create_grammar_grammar()
+      assert sdoc_semantics.load_model()
+      assert Dispatcher(max_batch_size=1) and MethodRegistry(PydanticValidatorFactory())
+      '
+
+      # Every delivered tree-sitter grammar must be loadable by the SAME
+      # interpreter, through ctypes, and must parse. This is the ABI check:
+      # py-tree-sitter refuses a grammar below its MIN_COMPATIBLE floor, and
+      # tree-sitter-nix sits exactly on it. The buffer is deliberately trivial
+      # -- every grammar here accepts it as SOMETHING, so this asserts the
+      # dlopen and the ABI, not the language. What each grammar actually
+      # matches is dev/scripts/test_sdoc_extractors.py's job.
+      "$out/bin/strictdoc-grammar-extract" -c '
+      import ctypes, os, warnings
+      from tree_sitter import Language, Parser
+      for env, symbol in [${grammarProbes}]:
+          path = os.environ[env]
+          library = ctypes.CDLL(path)
+          entry_point = getattr(library, symbol)
+          entry_point.restype = ctypes.c_void_p
+          with warnings.catch_warnings():
+              warnings.simplefilter("ignore", DeprecationWarning)
+              language = Language(entry_point())
+          assert Parser(language).parse(b"{ a = 1; }").root_node.type, (env, path)
+      '
+      runHook postInstallCheck
+    '';
+
+    # The delivered grammars. Kept as passthru for a consumer that already
+    # holds this derivation; anything that only needs the paths imports
+    # ./tsGrammars.nix directly, as devenv.nix does.
+    passthru.tsGrammars = ts.grammars;
+
+    meta = {
+      description = "Generation-time runner for StrictDoc's typed .sgra Nix surface";
+      mainProgram = "strictdoc-grammar-extract";
+      license = lib.licenses.unlicense;
+      platforms = lib.platforms.unix;
+    };
+  }

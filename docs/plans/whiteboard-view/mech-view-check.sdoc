@@ -1,0 +1,49 @@
+[DOCUMENT]
+TITLE: The view check: the rules a tree of narratives must satisfy that strictdoc does not check
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-VIEW-CHECK
+TITLE: The view check: the rules a tree of narratives must satisfy that strictdoc does not check
+AUTHORED_BY: llm
+STATEMENT: >>>
+view-check.py validates the narrative-tree rules that StrictDoc does not check
+and returns one finding list, shared with wireline.py and embedded in the
+payload so the page lists them; it reports count first and exits 1 on any
+finding. It asks the resident daemon for workspace.grammar, validates the
+scribe-grammar/1 reply, and fails closed with the shared NoDaemon remedy
+instead of parsing grammar.sgra or loading a second graph.
+
+Named individually, because the wording is the rule: Contains forms a tree
+(each narrative contained at most once, no cycle -- strictdoc exits 0 on one);
+a Contains target is a NARRATIVE; every row bracket word is in the root's
+legend; a narrative's WIDGET agrees with its STATEMENT (rows has "- " items,
+glossary rows split on the first ": ", legend rows on two, table rows on
+pipes); a cited node is not superseded (a query, per DEC-SUPERSESSION-RULE);
+and no node outside the representation family points a Parent at a narrative in
+the tree. Beyond those, the rules also cover narrative types and placement,
+legends and shared colours, declared tabs and systems, query words, narrative
+dependency direction, and link resolution. What strictdoc already refuses -- a
+dangling Cites, a dangling inline link, an unregistered role, a field out of
+order -- is not repeated here.
+
+It still walks the worktree to map exported UIDs to their declaring files. This
+pipeline's input is a hand-run `strictdoc export`, and only an export that goes
+through the daemon carries `_DOCUMENT_PATH`, so that provenance join stays until
+the pipeline reads the daemon's export instead. The daemon-only-source guard
+names it as its one narrow exception, by finding rather than by file.
+<<<
+RATIONALE: >>>
+These are semantic-layer rules in a script (DEC-LAYER-STACK). They are allowed there for now on the operator's ruling that validation need not be modelled on joints yet, provided each is INDEXED -- which NAR-WHITEBOARD-VIEW-RULES does, so the porting inventory is a screen of the view.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-NARRATIVE-IS-THE-VIEW-NODE
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: REQ-NOTHING-DEPENDS-ON-A-NARRATIVE
+  ROLE: Guarantees
+- TYPE: File
+  VALUE: docs/sdoc/view/view-check.py

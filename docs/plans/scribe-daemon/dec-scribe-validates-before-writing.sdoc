@@ -1,0 +1,34 @@
+[DOCUMENT]
+TITLE: A write is checked before any byte moves, and never undone instead
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SCRIBE-VALIDATES-BEFORE-WRITING
+TITLE: A write is checked before any byte moves, and never undone instead
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A check is found that cannot be answered before the write and cannot be deferred to the next read.
+STATEMENT: >>>
+A write is checked before any byte moves. The mutation applies in memory, the
+cross-document rules that can be answered from the held index run, each
+touched document is rendered to a string and that string is parsed -- and only
+then does the write reach the disk. A refused write moved nothing, so there is
+nothing to undo.
+
+Rollback survives under the save itself, where a partial filesystem write
+cannot be prevented by any check. Nothing above that layer may depend on it.
+
+The rules that can be answered in memory are the ones the deferred reload
+would otherwise catch late: refusing to delete a node still referenced by a
+relation or an inline link, and refusing prose naming a [LINK:] that does not
+resolve. The deferred reload remains the backstop for what is not enumerated.
+<<<
+RATIONALE: >>>
+Operator's ruling: relying on rollback is lazy architecture. The moment
+something assumes an undo it has not read, and the logic around it is written
+loosely because rollback is believed to cover it, real damage starts. An error
+on a fast path escalating to a slow one is acceptable only where it BLOCKS the
+write rather than reversing it.
+<<<

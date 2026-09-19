@@ -1,0 +1,23 @@
+[DOCUMENT]
+TITLE: Enforce that nothing depends on a narrative
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-NARRATIVE-SINK-RULE-UNENFORCED
+TITLE: Enforce that nothing depends on a narrative
+AUTHORED_BY: llm
+STATEMENT: >>>
+REQ-NOTHING-DEPENDS-ON-A-NARRATIVE makes every narrative a pure sink that can never close a cycle, and its own COMMENT say nothing enforces it corpus-wide; MECH-VIEW-CHECK covers only the trees it walks. The presentation layer is built from ordinary Parent relations (Cites and Over on NARRATIVE), so today it sits inside the global cycle gate as if it were a dependency layer. Wire the rule into the relation-target lint, or into cycle-check.py as a target-type refusal, so the sink property is checked rather than assumed.
+<<<
+COMMENT: >>>
+Found by the acyclicity sweep on 2026-09-08.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-RELATION-TARGET-TYPE-LINT
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

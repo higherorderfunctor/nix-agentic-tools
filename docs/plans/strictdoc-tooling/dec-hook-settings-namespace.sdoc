@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: Where non-hook settings such as the git target live
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-HOOK-SETTINGS-NAMESPACE
+TITLE: Where non-hook settings such as the git target live
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: The option surface is implemented and a consumer has written against it.
+STATEMENT: >>>
+Where do settings that are not hooks -- the git target, for one -- live:
+beside the named hooks under ai.strictdoc.hooks, or under a settings
+attribute of their own?
+<<<
+RATIONALE: >>>
+The operator does not love the git target sitting in the same namespace as
+the named hooks and leans towards mounting it under something like
+.settings. Not unpacked further.
+<<<

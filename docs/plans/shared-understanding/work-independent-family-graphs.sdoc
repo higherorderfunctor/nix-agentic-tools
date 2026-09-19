@@ -1,0 +1,28 @@
+[DOCUMENT]
+TITLE: Independent sdoc graphs per family, stitched by UID after validation
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-INDEPENDENT-FAMILY-GRAPHS
+TITLE: Independent sdoc graphs per family, stitched by UID after validation
+AUTHORED_BY: llm
+STATEMENT: >>>
+The operator's idea for the grammar redesign, raised 2026-09-08 while shaping the cycle policy: annotations may point at anything, work points at itself and at spec, narratives cite anything, so any cross-family relation pulls the whole graph into one export and one acyclicity question. The proposal is to make each family its own sdoc graph, validated on its own (acyclic, resolvable), with cross-family references not being strictdoc relations at all, and to stitch the graphs back together by UID only in custom tools: the semantic validation and the render tools. The reading chosen on 2026-09-08 is separate strictdoc projects per family, some sharing nodes: the annotation project carries its annotation nodes plus copies of only the spec nodes an annotation points at, every other spec node culled; strictdoc validates each project alone (links resolve, no cycles), and our tool restitches the projects by UID so a node and its copy are one node again. The copies must be generated or checked against their originals so a stale copy cannot lie. Whether any cycle is ever useful is undecided and is being brainstormed in a separate session; the split does not decide it, it moves the question from strictdoc to the stitch tool. What moves with the split: fingerprints from work to spec, fp-check and the cycle policy all run on the stitched graph, and the stitch tool owns the dangling-reference check and reverse links strictdoc provides today. MIDs are assumed to be computed differently per graph; UIDs stay globally unique and are the stitch key.
+<<<
+COMMENT: >>>
+Operator, 2026-09-08: "may be moot. Annotations can point to anything. Work can point to self and spec. I can't see a scenerio where the full graph doesnt get pulled in unless we drop spec/work relations to indirect nodes from annotations and like wise spec from work. Narrative has the same problem to. Like we drop all spec nodes not directly related to an annotation. Independent sdoc graphs. Then post acyclic validation on each stitch it back together based on UIDs or something. Assuming MIDs will be computed differently. Stitching may only happen for like custom semantic validation or render tools."
+
+Operator, 2026-09-08, later: "im still not decided if cycles would be helpful but your question to align with my assumption was 1. split graphs, some with shared nodes, to restitch. like annotation is a layer that connects to spec. we cull spec nodes without an annotation. restitch after strictdocs validation based on the same nodes. but like, i need to make sure there is a use case for cycles or we can engineer around it. thats not your task as I've taken design to a fresh context session of the grammars and semantics, at least to brainstorm"
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-GRAMMAR-ARCHITECTURE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-CYCLE-POLICY-PER-ROLE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

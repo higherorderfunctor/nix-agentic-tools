@@ -1,7 +1,8 @@
 ## Overlay Grouping under `pkgs.ai`
 
 > **Last verified:** 2026-09-12 — native owner recipes replace grouped overlay
-> barrels; pinned build identity and consumer guards are preserved.
+> barrels; StrictDoc joins the upstream package exports, preserving pinned build
+> identity and consumer guards.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -73,6 +74,13 @@ when the channel next moves. The several-majors section below repeats the rule
 for majors of one package; this is the general form.
 
 ### Direct external-flake derivations
+
+StrictDoc uses the same external-flake package contract as Semble. Its native
+recipe at `packages/strictdoc/packages/ai/devTools/strictdoc/package.nix`
+re-exports `inputs.strictdoc.packages.${system}.default`; the input keeps its
+own nixpkgs and dependency lock. The package is published as
+`ai.devTools.strictdoc`, while the grammar module owns interpreter wrapping
+through `packages/strictdoc-grammar/lib/mkExtract.nix`.
 
 Semble is the external pinned-package exception to the local-build patterns
 below. `packages/semble/packages/ai/semble/package.nix` returns

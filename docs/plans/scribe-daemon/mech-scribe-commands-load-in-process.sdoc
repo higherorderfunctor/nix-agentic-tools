@@ -1,0 +1,67 @@
+[DOCUMENT]
+TITLE: No scribe command loads a graph of its own any more
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-COMMANDS-LOAD-IN-PROCESS
+TITLE: No scribe command loads a graph of its own any more
+AUTHORED_BY: llm
+STATEMENT: >>>
+Every scribe command is a typed operation against the graph the daemon already
+holds. The client parses its command line in two passes. A boot parser consumes
+only --root; the client resolves it, asks that workspace's daemon for
+workspace.grammar, validates the scribe-grammar/1 result, and builds the full
+grammar-derived parser over the remaining arguments. The real parser re-declares
+--root for help but ignores its value. No command reads grammar.sgra.
+
+The guarded-field scan remains ahead of both parsers and every socket attempt,
+so AUTHORED_BY or PARENT_FP is refused before a missing daemon can mask it.
+With no daemon, every command -- help included -- exits non-zero with the
+NoDaemon remedy and the boot parser's usage. There is no autostart, fallback,
+or client-side grammar load.
+
+The daemon validates the resulting operation against the held graph and never
+sees an argv. The caller still resolves @file and stdin values before sending,
+because the daemon does not own the caller's working directory or input.
+
+The last command that loaded a graph itself was `new`, which reloaded
+mid-operation to resolve the grammar alias on the file it had just written.
+That stopped on 2026-09-01: [LINK: MECH-SCRIBE-NEW-BUILDS-THE-DOCUMENT].
+
+One recorded violation remains and is not this mechanism's to invent away:
+`scribe semantics` obtains the grammar from the daemon and then reads
+dev/scripts/sdoc_semantics/model.json from disk. The operator owns the semantics
+representation under [LINK: REQ-DAEMON-IS-THE-ONLY-SOURCE].
+
+What this node predicted got one thing right and one thing wrong, and the wrong
+one is worth keeping. RIGHT: the commands could not move until their
+verification was the workspace's rather than finish() -> verify()'s, which is a
+change to the writer and not to transport. WRONG: the shape was expected to be
+one socket call carrying the command line, and the seam is TYPED instead. A
+daemon that parsed an argv would have to own the caller's working directory and
+the caller's stdin, which is where @file and - are resolved.
+
+The earlier justification for parsing client-side was that the option surface
+came from the grammar FILE and so needed no corpus.
+[LINK: REQ-DAEMON-IS-THE-ONLY-SOURCE] withdrew that carve-out, and the two-pass
+client above closes it: the option surface now comes from the daemon. The argv
+seam is unaffected.
+<<<
+COMMENT: >>>
+Dry-run delivery record retained when its completed WORK row was retired on
+2026-09-10. Every writing leaf named by scribe_protocol.WRITES receives one
+--dry-run flag through the built parser tree, and dry_run is folded into the
+typed RPC payload once rather than separately in each verb. scribe_diff.py
+owns the byte-based, path-by-path unified diff helper.
+
+CLI delivery record retained when the completed writer WORK row was retired on 2026-09-10. The grammar-derived leaf surface covers new, set, relate, unrelate, move, delete, show, list, and check; per-type choices and relation roles come from the loaded grammar. Writing operations validate the speculative graph, serialize canonically, reload it, and roll back on BaseException so StrictDoc validation cannot leave a partial write. Delimiter refusal is limited to a <<< line at column zero; a bare >>> line round-trips and is allowed.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-RPC
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-NEW-BUILDS-THE-DOCUMENT
+  ROLE: Assumes

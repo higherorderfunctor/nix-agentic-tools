@@ -1,0 +1,57 @@
+[DOCUMENT]
+TITLE: Layered card plates keep tabs and semantic outlines clean
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-CARD-OUTLINE-STATES
+TITLE: Layered card plates keep tabs and semantic outlines clean
+AUTHORED_BY: llm
+STATEMENT: >>>
+Navigation and graph cards are built by one HTML summary-card function. Both
+use the same native `.work-item` button structure and CSS box model for UID,
+state, title, source directory, padding, and typography. The graph hosts that
+button in a fixed-size SVG `foreignObject`, so ELK still places one measured
+244 by 102 card while the HTML contents scale and pan with its SVG group. The
+graph adds no redundant node-type label; its HTML background and borders are
+transparent so presentation cannot compete with the SVG silhouette underneath.
+
+Graph card chrome is a deliberate paint stack. An un-clipped solid rounded
+rectangle in the active semantic color sits underneath everything and is
+blurred when a glow is required. A full rounded plate in the universal
+node-type color is painted above it. A borderless main surface covers that
+plate from a three-pixel screen-space inset through the right edge, leaving a
+clean type tab; the inset is recalculated from graph zoom so it remains three
+physical pixels. The transparent HTML card supplies contents above those
+fills. No interaction state changes the tab width, tab fill, or main fill.
+
+Two no-fill rounded perimeters finish the stack above the HTML contents and
+cross the complete silhouette, including the type tab. A one-pixel subtle-dark
+perimeter is always visible. A separate two-pixel perimeter is transparent at
+rest, becomes the node-type color on pointer hover or keyboard focus, and
+becomes the active semantic color for focal, inspected, source, and target
+states. Both perimeter geometries expand outward by half their non-scaling
+stroke width, recalculated from graph zoom, so thicker states consume none of
+the fixed tab or card interior. Semantic states add the blurred underlay glow;
+hover alone does not.
+
+The URL-hash focal card uses its universal node-type color for outline and
+glow. A card opened in the inspector is white and replaces the focal color when
+they are the same card. A source whose declared relation targets the inspected
+card is yellow; a target of a relation declared by the inspected card is light
+blue. Unrelated cards dim while the focal card remains visible. The graph key
+names these relationships as `Focused work`, `Inspected`,
+`Source → inspected`, and `Inspected → target`.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+  ROLE: Governed_By
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/app.css
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/board.js
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-GRAPH-KEY-AND-ROLE-STYLE-SMOKE
+  ROLE: Proven_By

@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: The few tables no narrative can hold are computed by one registered query module
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-VIEW-QUERIES
+TITLE: The few tables no narrative can hold are computed by one registered query module
+AUTHORED_BY: llm
+STATEMENT: >>>
+A narrative can draw over what it Contains or names with Over. The few corpus-wide tables that cannot be named that way use a closed TAGS vocabulary: roots, nodes, grammar, systems, and terms. queries.py computes each table over the already-built Canon; grammar is the validated workspace.grammar reply carried into that Canon, not a file the query module reads. Adding a query word requires both a canon decision and an implementation change.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-ONE-PAGE-RENDERS-THE-WHOLE-CANON
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-WIDGET-SUBJECT-IS-ITS-OVER-TARGET
+  ROLE: Governed_By
+- TYPE: File
+  VALUE: docs/sdoc/view/queries.py

@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: The board records cycles the cycle gate reports as zero
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-BOARD-CYCLES-VS-GATE-ZERO
+TITLE: The board records cycles the cycle gate reports as zero
+AUTHORED_BY: llm
+STATEMENT: >>>
+MECH-SDOC-BOARD-LAYOUT records two two-node cycles preserved in the real snapshot, condensed as strongly connected components for ranking, while MECH-CYCLE-CHECK's recorded run reports zero cycles and the gate is green. The two walk different edge sets: the gate filters on TYPE Parent and skips all Child edges, the board takes the whole snapshot. Either the board's count names cycles through Child edges that the canon permits, or the gate has a hole. Identify the two cycles and say which.
+<<<
+COMMENT: >>>
+Found by the acyclicity sweep on 2026-09-08.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-CYCLE-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-LAYOUT
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

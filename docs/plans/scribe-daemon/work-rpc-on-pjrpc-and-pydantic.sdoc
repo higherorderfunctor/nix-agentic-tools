@@ -1,0 +1,101 @@
+[DOCUMENT]
+TITLE: The scribe RPC runs on pjrpc with a typed pydantic contract per method
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-RPC-ON-PJRPC-AND-PYDANTIC
+TITLE: The scribe RPC runs on pjrpc with a typed pydantic contract per method
+AUTHORED_BY: llm
+STATEMENT: >>>
+The scribe RPC stops hand-rolling JSON-RPC. pjrpc supplies the sync,
+framework-free dispatcher and pydantic supplies one typed contract per method,
+so a malformed request is refused by name instead of being absorbed.
+
+WHY. Validation today checks the envelope in scribe_rpc.py and the field VALUES
+against the grammar in scribe_ops.py, and reaches everything else through
+`.get()`. That leaves twelve gaps, five of them SILENT: a truthy string for
+dry_run writes for real, an unknown parameter key is ignored, `fields` as a
+list of pairs is accepted, the client's served-root assertion is skipped when
+the result is not a dict, and the client indexes `response["result"]` bare so a
+malformed reply is a traceback rather than a refusal.
+
+The operator's ruling is that a maintained, Nix-packageable library beats
+hand-rolled protocol code. pjrpc 2.2.0 (2026-08-08, Unlicense, python >=3.10)
+has ZERO hard dependencies -- pydantic is an extra -- and
+`pjrpc.server.Dispatcher.dispatch(request_text, context)` is synchronous and
+framework-free, which is what a threading Unix-socket server can use. pydantic
+is already in the strictdoc venv every scribe program execs through, so the
+typed half costs nothing. pjrpc is not in nixpkgs: it is a buildPythonPackage
+from the PyPI sdist, spliced onto the strictdoc-grammar-extract wrapper's
+PYTHONPATH beside ast_grep_py, with the install check making a missing copy a
+build failure.
+
+THE TRANSPORT STAYS OURS. The Unix socket, one JSON value per newline, the
+16 MiB request cap, the threading server, the derived socket path and
+DEC-SCRIBE-DAEMON-NO-FALLBACK are unchanged: pjrpc replaces the envelope
+handling inside the frame, not the frame.
+<<<
+COMMENT: >>>
+MEASURED 2026-09-09.
+
+pjrpc 2.2.0 from the PyPI sdist, hash
+sha256-M4v9meCtXg8N8NzOmr+kJieEm/EN+prEwtl88o1mkT0= as printed by
+`nix store prefetch-file --json`; build-system poetry-core, no extras.
+Closure of strictdoc-grammar-extract 928,235,704 -> 929,482,264 bytes:
++1,246,560, or +0.13%. pydantic 2.13.4 was already in upstream's venv and
+nothing was added for it.
+
+WHERE THE DERIVATION LIVES, and why not where the plan said. It is
+packages/strictdoc-grammar/lib/pjrpc.nix, not devenv.nix beside boardElkjs.
+The reasoning for "not an overlay" holds and is recorded in the file; the
+reasoning for "not devenv.nix" is that flake.nix builds the SAME mkExtract
+factory for the grammar checks, handing it only lib, pkgs and strictdoc. A
+pjrpc declared in devenv.nix and threaded in as an argument would be absent
+from that copy, and the install check that makes a missing pjrpc a build
+failure would then redden `nix flake check` instead of protecting the daemon.
+
+TESTS. dev/scripts/test_scribe_rpc.py 12 contracts -> 25, all passing;
+dev/scripts/test_scribe_workspace.py 23 contracts, unchanged and passing.
+Run with `strictdoc-grammar-extract <file>` and strictdoc on PATH -- without
+it, test_export_matches self-refuses rather than passing vacuously.
+
+THE TWELVE GAPS AND THE CONTRACT THAT CLOSES EACH.
+  1 a truthy STRING for dry_run     test_dry_run_string_refused
+  2 a key another operation owns    test_unknown_param_key_refused
+  3 fields as a list of pairs       test_fields_list_of_pairs_refused
+  4 a non-string in a string field  test_uid_int_refused_naming_field
+  5 root check skipped, non-dict    test_root_check_runs_on_non_dict_result
+  6 bare response["result"] index   test_client_refuses_missing_result
+  7 bare error["code"] index        test_client_refuses_malformed_error
+  8 naked json.loads on the reply   test_client_refuses_non_json_line
+  9 a request id of any type        test_id_type_checked_or_documented
+ 10 relations entries unchecked     test_relations_non_dict_entry_refused
+ 11 an oversized request            test_oversized_request_refused_cleanly
+ 12 an unknown key on the wire      test_extra_key_on_scribe_apply_refused
+Each sends the bad payload and asserts the code and the named field; 1, 2 and
+12 carry positive controls proving the same call succeeds once corrected.
+
+BATCHES ARE ALLOWED, capped at eight. pjrpc runs a batch sequentially in the
+calling thread and every write serializes behind one held graph, so an
+uncapped batch is one client holding the workspace while the rest block.
+
+TWO CHOICES WORTH KNOWING. `from __future__ import annotations` is now
+forbidden in scribe_rpc.py -- pjrpc builds its models with
+`pydantic.create_model` from `inspect.signature`, and stringified annotations
+resolve in pydantic's module, not ours. And `PydanticValidatorFactory` must be
+handed `exclude=exclude_named_param("workspace")`: pjrpc derives that
+exclusion for `pass_context` only when a method carries no validator factory,
+so without it pydantic demands a `workspace` key in every call's params.
+
+SCHEMA IS NOW scribe-rpc/2. Same framing, same socket, same six methods; what
+changed is that a malformed request is refused by name.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-RPC
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: DEC-SCRIBE-DAEMON-NO-FALLBACK
+  ROLE: Governed_By

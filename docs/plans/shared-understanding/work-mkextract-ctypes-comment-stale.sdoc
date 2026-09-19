@@ -1,0 +1,45 @@
+[DOCUMENT]
+TITLE: The ctypes-route comment overstates what tree-sitter-grammars adds
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-MKEXTRACT-CTYPES-COMMENT-STALE
+TITLE: The ctypes-route comment overstates what tree-sitter-grammars adds
+AUTHORED_BY: llm
+STATEMENT: >>>
+The comment at packages/strictdoc-grammar/lib/mkExtract.nix:69-75 justifies
+forcing the ctypes route by saying python3Packages.tree-sitter-grammars.*
+"drags in pydantic, email_validator, dnspython and idna, none of which
+upstream's venv carries". Two of those four are already carried.
+
+Measured 2026-09-09 against the live env: pydantic 2.13.4 and idna 3.19 are
+both in strictdoc-env's site-packages, pydantic arriving transitively through
+strictdoc's fastapi dependency. Only email_validator and dnspython are
+genuinely absent. So the comment overstates the closure cost of the route it
+rejects, and a reader sizing that trade-off from it is reading a number that
+is roughly half wrong.
+
+The decision it defends may still be right for other reasons. Correct the
+justification, or record what the real delta is.
+<<<
+COMMENT: >>>
+Surfaced while auditing whether adding pydantic to the scribe RPC layer would
+cost closure size. It would not: pydantic and click are both already resident
+in the interpreter every scribe program execs through, so the same evidence
+that answers that question falsifies this comment.
+
+Method: readlink -f on .devenv/profile/bin/strictdoc resolves to
+/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env; its
+lib/python3.14/site-packages carries pydantic-2.13.4.dist-info,
+pydantic_core-2.46.4.dist-info, idna-3.19.dist-info and click-8.1.8.dist-info.
+No hits for email_validator or dnspython.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

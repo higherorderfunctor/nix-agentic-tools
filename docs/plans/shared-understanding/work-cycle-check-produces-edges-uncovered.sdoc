@@ -1,0 +1,26 @@
+[DOCUMENT]
+TITLE: Child Produces edges are walked by neither cycle check
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-CYCLE-CHECK-PRODUCES-EDGES-UNCOVERED
+TITLE: Child Produces edges are walked by neither cycle check
+AUTHORED_BY: llm
+STATEMENT: >>>
+The two acyclicity checks cover disjoint edge sets: cycle-check.py walks every relation of TYPE Parent regardless of role, and view-check.py walks TYPE Child with role Contains inside one narrative tree. TYPE Child with role Produces (16 live edges on 2026-09-08) is covered by neither, and no node says so. NAR-CANON-EDGES argues a Child role is never a dependency, which is a reason these edges cannot make a dependency cycle, not a check. Decide whether Produces needs a check or a stated exemption.
+<<<
+COMMENT: >>>
+Found by the acyclicity sweep on 2026-09-08.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-CYCLE-CHECK
+  ROLE: Crosses
+- TYPE: Parent
+  VALUE: WORK-CYCLE-POLICY-PER-ROLE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

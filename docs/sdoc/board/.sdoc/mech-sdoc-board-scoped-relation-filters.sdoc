@@ -1,0 +1,44 @@
+[DOCUMENT]
+TITLE: Relation filters are scoped by source node type
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-SCOPED-RELATION-FILTERS
+TITLE: Relation filters are scoped by source node type
+AUTHORED_BY: llm
+STATEMENT: >>>
+The Graph view derives each relation filter from an edge's source node type and
+role, then groups role checkboxes under color-keyed source-type headings. A
+regular toggle hides only that source-type and role pair. Shift-click applies
+the clicked checkbox's resulting state to every pair with the same role name.
+The filter popover stays open for interactions inside it and closes on a pointer
+press elsewhere. Its Shift-click instruction sits between the Relation roles
+heading and the grouped list, where it is visible before the list scrolls.
+Filtering occurs before bounded neighborhood traversal, so hidden pairs also
+stop expansion paths. Reset enables every observed pair. The role vocabulary
+remains payload-derived, and filter state remains local to the page.
+<<<
+COMMENT: >>>
+Added by the Graph neighborhood reference implementation on 2026-09-02.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-CANVAS
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+  ROLE: Governed_By
+- TYPE: File
+  VALUE: docs/sdoc/board/index.html
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/app.css
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/board.js
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-SCOPED-RELATION-FILTER-SMOKE
+  ROLE: Proven_By
+- TYPE: Parent
+  VALUE: REQ-SDOC-BOARD-POPOVER-OPERABILITY
+  ROLE: Guarantees

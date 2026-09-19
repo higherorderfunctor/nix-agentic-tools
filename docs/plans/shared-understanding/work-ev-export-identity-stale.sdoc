@@ -1,0 +1,35 @@
+[DOCUMENT]
+TITLE: The export-identity evidence predates the daemon's additions
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-EV-EXPORT-IDENTITY-STALE
+TITLE: The export-identity evidence predates the daemon's additions
+AUTHORED_BY: llm
+STATEMENT: >>>
+EV-SCRIBE-RPC-AND-EXPORT still says the daemon export is byte-identical to
+`strictdoc export` and that seven contracts pass. Neither holds: the export
+has carried element-grained File item slots since the traceability work, it
+now carries `_DOCUMENT_PATH` per document, and test_scribe_rpc.py holds 25
+contracts. The evidence node's numbers (0.270 s against 2.292 s on a 375-node
+canon) were measured on a corpus that no longer exists.
+
+Re-measure rather than reword: run the same comparison on the current corpus
+and record what differs and by how much, then rewrite the TITLE and STATEMENT
+to say "identical modulo the daemon's additions" with the additions named.
+<<<
+COMMENT: >>>
+Surfaced 2026-09-10 by the agent landing session 2's export-path change onto
+the trial branch, which had to teach test_export_matches about a second
+deliberate difference. Left untouched there because correcting an EVIDENCE
+node honestly means re-measuring, not rewording.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: WORK-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In

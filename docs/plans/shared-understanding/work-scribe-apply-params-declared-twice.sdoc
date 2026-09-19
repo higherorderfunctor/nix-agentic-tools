@@ -1,0 +1,38 @@
+[DOCUMENT]
+TITLE: scribe.apply names its parameters in two places
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-SCRIBE-APPLY-PARAMS-DECLARED-TWICE
+TITLE: scribe.apply names its parameters in two places
+AUTHORED_BY: llm
+STATEMENT: >>>
+`scribe.apply` declares every operation's parameters flat in its RPC signature
+so pjrpc can build a pydantic model from it, and scribe_ops declares them again
+per operation. The names are written twice, and only the second layer knows
+which of them an operation actually takes.
+
+The duplication is forced by the shape of pjrpc's validator, which builds its
+model from `inspect.signature` and therefore needs a real parameter list. A
+VAR_KEYWORD pass-through was tried and does not work: pjrpc's binder hands the
+captured mapping back as a keyword whose NAME is the parameter's, so
+`def scribe_apply(workspace, **operation)` receives `{"operation": {...}}`
+rather than the payload.
+
+What would remove it: a discriminated union on `op` as the single declared
+parameter, which needs the wire shape to nest the operation's fields under one
+key -- a client change and a protocol bump, not a refactor. Left as debt rather
+than done, because the cost today is a list of names that a mismatch makes
+noisy rather than silent: a key in the signature and not in any operation model
+is refused by the second layer, and a key in a model and not the signature is
+refused by the first.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-DEBT-SHARED-UNDERSTANDING
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: WORK-RPC-ON-PJRPC-AND-PYDANTIC
+  ROLE: Assumes

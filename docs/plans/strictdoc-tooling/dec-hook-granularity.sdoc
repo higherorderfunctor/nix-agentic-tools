@@ -1,0 +1,22 @@
+[DOCUMENT]
+TITLE: Joints at scribe's phases, or at CRUD plus pre and post
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-HOOK-GRANULARITY
+TITLE: Joints at scribe's phases, or at CRUD plus pre and post
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: The operator has read the writer's code and ruled, or the hook layer is implemented against one of the two.
+STATEMENT: >>>
+Are joints the scribe pipeline's phases -- command, load, change, write,
+reload, read -- or only CRUD plus pre and post?
+<<<
+RATIONALE: >>>
+The operator assumed the granularity would be CRUD with pre and post. The
+finer phases came from reading the writer's code, which the operator had not
+read when the proposal was snapshotted, so they have no opinion yet on where
+the two sets of assumptions differ.
+<<<

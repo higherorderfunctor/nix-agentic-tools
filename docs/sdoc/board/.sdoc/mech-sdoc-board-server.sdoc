@@ -1,0 +1,89 @@
+[DOCUMENT]
+TITLE: One stdlib HTTP server serves the app over the resident daemon
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-SERVER
+TITLE: One stdlib HTTP server serves the app over the resident daemon
+AUTHORED_BY: llm
+STATEMENT: >>>
+server.py is one stdlib threaded HTTP server: GET and HEAD only, an allowlisted
+static surface, and three JSON routes -- /api/health (the daemon's describe),
+/api/graph (the sdoc-board/2 snapshot) and /api/rows (the sdoc-perspective/2
+tables). source.py obtains workspace.describe, workspace.export and
+workspace.grammar from the resident daemon, validates the grammar reply, adapts
+both payloads, and holds them keyed by daemon generation, re-exporting only when
+describe reports movement, so a repeat request costs no export. A NoDaemon
+refusal becomes HTTP 503 with the remedy in the body; any other daemon error is
+a 502.
+
+The ai.strictdoc devenv module builds `sdoc-board` with the same mkScribe
+factory and strictdoc virtual-environment runner as the three scribe programs,
+then `processes.board` executes that wrapper by absolute Nix store path. The
+board therefore shares scribe's interpreter and its pydantic dependency by
+construction; no repository launcher or ambient Python lookup sits between
+the process manager and server.py. Because that interpreter carries pydantic,
+source.py validates the workspace.grammar reply with the same
+WorkspaceGrammarResult model the daemon serialised it with -- one model, one
+call site, and no second hand-written reading of the wire.
+
+source.py also builds the snapshot's semantics key by calling
+sdoc_semantics.build_payload over the same grammar the adapter receives.
+sdoc_semantics is standard-library-only, so its import can fail only when that
+package is off the path; build_payload does still read the operator-owned
+semantics model from disk, and source.py labels that a recorded violation of
+REQ-DAEMON-IS-THE-ONLY-SOURCE rather than disguising it as daemon data. The
+extractor the adapter asks for KIND words is the one real optional dependency,
+because it needs tree_sitter and a compiled grammar. The pinned interpreter
+carries both, and both lookups stay fail-soft at the adapter boundary: an
+import or lookup failure becomes a named refusal or a null label rather than a
+missing payload key or a dead process.
+<<<
+COMMENT: >>>
+Updated 2026-09-03 for commits 8823edf1 and 46cd3cf1: the static allowlist grew
+grammar-groups.json and fsm.js, and source.py gained the semantics payload. The
+three JSON routes are unchanged -- semantics rides inside /api/graph rather
+than on a fourth route.
+
+Updated 2026-09-08 for commit 8b936c3c: the allowlist grew two more entries,
+/assets/vendor/elkjs/elk-api.js and /assets/vendor/elkjs/elk-worker.min.js,
+and they are the only ones not backed by a file in this directory -- server.py
+resolves them against the Nix store path in SDOC_BOARD_ELKJS_DIR and refuses
+to start when that variable is unset or does not hold both files.
+SDOC_BOARD_ELKJS_DIR is the one environment variable the process requires
+beyond its interpreter; MECH-SDOC-BOARD-LAYOUT owns the delivery. Still three
+JSON routes.
+
+Corrected 2026-09-10: sdoc_semantics has been standard-library-only since the
+transitions dependency was removed, so the KIND-word extractor is the only
+optional dependency left. The server no longer parses grammar.sgra at all --
+WORK-BOARD-READS-GRAMMAR-FROM-DAEMON moved that input onto workspace.grammar.
+
+Updated 2026-09-10 by WORK-BOARD-SERVE-PINS-ITS-INTERPRETER: the pinned
+interpreter landed. The ambient docs/sdoc/board/serve launcher was deleted, the
+strictdoc devenv module now packages server.py as `sdoc-board`, launches its
+absolute store path as the board process, and shares the strictdoc
+virtual-environment interpreter used by scribe. The interpreter-launchers check
+guards the boundary with the removed launcher as its positive control.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-READS-THE-SCRIBE-DAEMON
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-ONE-APP-TWO-VIEWS
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: REQ-SDOC-BOARD-MVP-READS-WHOLE-CANON
+  ROLE: Guarantees
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-MERGED-SMOKE
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: docs/sdoc/board/server.py
+- TYPE: File
+  VALUE: docs/sdoc/board/source.py
+- TYPE: File
+  VALUE: dev/scripts/sdoc_semantics/__init__.py

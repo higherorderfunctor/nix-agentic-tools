@@ -1,0 +1,35 @@
+[DOCUMENT]
+TITLE: Scribe composes the index primitives and never calls strictdoc's transforms layer
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SCRIBE-AVOIDS-THE-TRANSFORMS-LAYER
+TITLE: Scribe composes the index primitives and never calls strictdoc's transforms layer
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: Upstream moves validation out of the HTML form layer into the command, and stops stamping every document's modification time on an edit.
+STATEMENT: >>>
+Scribe composes strictdoc's TraceabilityIndex primitives directly and never
+calls the core.transforms command layer.
+
+Two independent reasons, both measured. CreateOrUpdateNodeCommand.perform()
+calls os.utime on EVERY document in the tree -- 348 of 348 changed by a no-op
+edit -- which defeats the pickle cache corpus-wide and would wake a file
+watcher for every document. And its validation does not live in the command at
+all: uniqueness, cycle and revision checks sit in a form object in strictdoc's
+HTML export layer, reachable only with a web request's revision counter.
+
+Two obligations follow. A relation must be written to BOTH node.relations and
+the graph buckets, because the graph-only primitive leaves the writer emitting
+a byte-identical file and the edge disappears on reload. And strictdoc's own
+cycle detection is inert on this corpus, so the repository's role-aware cycle
+check stays in the loop.
+<<<
+RATIONALE: >>>
+The measurements came from an adversarial pair: one agent argued the primitives
+are usable, one argued they corrupt. Both were right about different things.
+The primitives work; raw use half-applies with no rollback. The design that
+survives both is composing them behind a rebuild that verifies.
+<<<

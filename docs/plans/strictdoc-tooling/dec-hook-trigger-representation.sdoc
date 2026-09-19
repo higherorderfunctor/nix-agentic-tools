@@ -1,0 +1,20 @@
+[DOCUMENT]
+TITLE: Trigger points as strings, or a typed alternative
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-HOOK-TRIGGER-REPRESENTATION
+TITLE: Trigger points as strings, or a typed alternative
+AUTHORED_BY: llm
+STATUS: open
+RETIRES_ON: The option surface is implemented, or a typed alternative is proposed and weighed.
+STATEMENT: >>>
+Is a trigger point named by a string (on = "scribe.change") or by a typed
+alternative?
+<<<
+RATIONALE: >>>
+The operator does not love string-based trigger points and has no opinion yet
+on the alternative. Recorded so the question is not lost.
+<<<

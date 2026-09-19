@@ -1,0 +1,70 @@
+[DOCUMENT]
+TITLE: Graph controls stay visible while a grouped key explains encodings
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-GRAPH-CONTROLS-AND-KEY
+TITLE: Graph controls stay visible while a grouped key explains encodings
+AUTHORED_BY: llm
+STATEMENT: >>>
+Neighborhood distance, filters, and viewport actions occupy a dedicated control
+bar above the graph rather than overlaying its drawing area. Filters is the
+first control at the left; the depth control stays horizontally centered and
+presents one, two, and three as a single `Hops:` segmented pill; zoom out, zoom
+in, and Fit occupy the right. Changing distance does not increment the Filters
+badge, which counts only disabled node types and scoped relation roles, and
+Reset filters does not change the selected distance. A pointer press outside
+the open Filters disclosure closes it.
+
+A persistent compact key anchors to the graph's lower left and presents three
+groups: visible node types with their universal colors, visible relation roles
+grouped by name with their stable solid-line hues, and card-outline states for
+focus and inspection context. The Key heading occupies its own row; Nodes and
+Relations share the first content row, while Card outlines spans the width below
+them as one compact list. Its outer inset matches the pan hint and a deliberately
+generous inter-column gap separates encodings. Horizontal overflow remains
+bounded rather than lengthening the header or clipping graph controls.
+
+On wider screens the key, geometrically centered pan and zoom hint, and
+bottom-right relation summary share one bottom baseline without intersecting.
+The summary reports visible nodes and semantic relations; hop distance appears
+only in the centered selector and is not repeated there. Counts appear only in
+this status box rather than consuming space in the key. These footer zones
+remain bounded so their content cannot expand the page or load the whole canon.
+
+At narrow widths the global chrome remains two deliberate rows: compact brand
+and Refresh above four equal-width view buttons. The graph control bar also
+becomes two explicit rows: Filters and the Work drawer control share the first
+row with the right-aligned viewport actions, and the centered hop selector spans
+the second row. The persistent key receives its own footer row, while a
+shortened pan hint and visible relation summary share the row below it. The
+workspace derives from the taller mobile topbar so every global and graph
+control remains in the viewport and hit-testable.
+<<<
+COMMENT: >>>
+Added by the Graph neighborhood reference implementation on 2026-09-02 after comparing the beadboard control-strip and inset-legend pattern.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-RELATION-ROLE-STYLES
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: REQ-SDOC-BOARD-POPOVER-OPERABILITY
+  ROLE: Guarantees
+- TYPE: File
+  VALUE: docs/sdoc/board/index.html
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/app.css
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/board.js
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-GRAPH-KEY-AND-ROLE-STYLE-SMOKE
+  ROLE: Proven_By
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-CARD-OUTLINE-STATES
+  ROLE: Assumes

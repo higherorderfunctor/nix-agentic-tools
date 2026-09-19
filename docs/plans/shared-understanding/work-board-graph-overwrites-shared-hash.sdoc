@@ -1,0 +1,47 @@
+[DOCUMENT]
+TITLE: Opening the Graph tab overwrites another view selection in the hash
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-BOARD-GRAPH-OVERWRITES-SHARED-HASH
+TITLE: Opening the Graph tab overwrites another view selection in the hash
+AUTHORED_BY: llm
+STATEMENT: >>>
+Graph-tab audit row, 2026-09-08:
+
+| Requirement sentence | Verdict | Where | Fix |
+| --- | --- | --- | --- |
+| MECH-SDOC-BOARD-CANVAS: "Its focal selection stays in the URL as a raw #UID." | partly | docs/sdoc/board/assets/board.js:926-933 (renderBoard initial focus), board.js:858-874 (hashchange) | hours |
+
+The Graph and the Plan tab share one hash namespace -- app.js keeps the view
+in the query string precisely so node selection can stay in the hash -- but
+the Plan tab writes ANY node UID there, while the Graph accepts only WORK
+UIDs.
+
+Select a MECHANISM in Plan, then switch to Graph: renderBoard finds the hash
+UID is not a work item, falls back to the alphabetically first work item, and
+rewrites the hash to it. Switching back to Plan lands on that work item
+instead of the mechanism, and the link the reader may have copied now points
+somewhere else. The hashchange branch at board.js:869 does the same thing
+from the other direction: a hash naming a non-work UID clears the hash
+entirely.
+
+Both behaviors are reasonable read from inside the Graph alone. The gap is
+that no node says what a shared hash means when one view cannot represent
+the other view selection. Options are to leave a foreign UID alone and show
+the empty state, to give each view its own hash key, or to let the Graph
+focus any node type. That choice belongs to a settled node, not to whichever
+view runs last.
+<<<
+COMMENT: >>>
+Filed by the Graph-tab contract audit, 2026-09-08. Reproduced by reading, not by driving a browser: board.js:927 selects workItems[0] when the hash UID is not a work item and passes updateHash true, and plan.js:137 writes the selected UID to the same hash.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-BACKLOG-SHARED-UNDERSTANDING
+  ROLE: Backlogged_In
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-GRAPH-CONTROLS-AND-KEY
+  ROLE: Assumes

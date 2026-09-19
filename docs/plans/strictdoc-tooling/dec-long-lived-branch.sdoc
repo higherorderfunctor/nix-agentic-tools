@@ -1,0 +1,30 @@
+[DOCUMENT]
+TITLE: Work accumulates on one long-lived branch, restacked into pull requests later
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-LONG-LIVED-BRANCH
+TITLE: Work accumulates on one long-lived branch, restacked into pull requests later
+AUTHORED_BY: human
+STATUS: accepted
+RETIRES_ON: >>>
+The first restack completes and the branch merges, at which point the next unit
+of work chooses its own shape.
+<<<
+STATEMENT: >>>
+No pull request is opened during development and none is offered. Work
+accumulates on one branch until the operator calls a milestone, then it is
+restacked into a series of reviewable pull requests.
+
+Two reviews, with different subjects. The stack is reviewed as a whole for
+usability, design and flow. The pull requests are reviewed for implementation
+choices. Operator acceptance is turned at the second of these, never before.
+<<<
+RATIONALE: >>>
+Commit boundaries are what make the restack legible, which is why worker
+sessions commit per unit of work rather than once at the end. And there is no
+signature to turn yet: the fingerprints are placeholders until the suspect-link
+check exists, so acceptance has nothing to attach to before then.
+<<<

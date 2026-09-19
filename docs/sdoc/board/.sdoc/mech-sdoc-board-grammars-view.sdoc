@@ -1,0 +1,74 @@
+[DOCUMENT]
+TITLE: One card per grammar element; the declaration in the side pane
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-GRAMMARS-VIEW
+TITLE: One card per grammar element; the declaration in the side pane
+AUTHORED_BY: llm
+STATEMENT: >>>
+The Grammars view draws one card per grammar element from the snapshot grammar key and shows the selected declaration: UID prefix, fields, choices, required flags, relation roles, and node count. source.py fills that key from the daemon workspace.grammar reply, so the tab does not parse grammar.sgra and an element with zero nodes remains visible. The hand-authored grammar-groups.json controls only presentation groups and glosses. Its rest group keeps new types visible, while the static grammar-groups check and runtime checkGroups validation reject stale, duplicate, missing, or malformed placement.
+
+Two further sections close the right-hand pane, and neither reads the
+grammar. They read the snapshot's semantics key, the sdoc-semantics/2
+payload the engine computes: Rules, the sentences that engine states about
+this type's state fields, then Lifecycle, one machine per lifecycle that
+payload names for this type -- machines are keyed by lifecycle name and
+indexed by type under by_type, so two type-specific lifecycles over one
+field stay distinct -- each drawn as an inline SVG by assets/fsm.js. The
+grammar says a type has a STATUS field with four words in it; the semantics
+engine says which of those words a node may move to next and under what
+rule. Rules come first because an operator shaping the model reads the
+sentence before the diagram. fsm.js knows no field name -- STATUS and
+AUTHORED_BY arrive as data -- and it
+lays its machines out transposed, rank running down and branches spreading
+across, because the pane is 350px wide and a six-rung ladder never fit it
+sideways. Its geometry is measured in CSS pixels with no viewBox, so no
+label is scaled below the app's 10px floor. Each section degrades to a named
+absence: no engine, no machine for this type, or a machine with no rules yet
+all still render a section that says so, because a missing section reads as
+settled and nothing here is.
+<<<
+COMMENT: >>>
+Updated 2026-09-02 for commits 8823edf1 and 35f2a499 (grammar-groups.json,
+coverage check, pill order).
+
+Updated 2026-09-03 for commits b6c01bd4 and 46cd3cf1: the layout now carries
+the canon's glosses verbatim, and the inspector gained the Rules and
+Lifecycle sections over the semantics payload.
+
+Corrected 2026-09-08: the payload is sdoc-semantics/2, and its machines are
+keyed by lifecycle name and indexed by type under by_type rather than being
+one per state field. Today the two readings coincide -- the engine emits
+STATUS and AUTHORED_BY, and machinesFor() maps a tag through by_type --
+but the tab reads the index, not the field list.
+
+Delivery context retained when the completed grouping row was retired on
+2026-09-10: the operator requested the Spec / Definition 2x2 grid, Coverage,
+and an Unsorted rest group to surface future splits. The static check and
+runtime banner landed in 8823edf1, the pill order in 35f2a499, and an
+independent headless-browser run plus injected bad-layout controls verified
+both guards. The axis words were corrected to DEC-NODE-FAMILIES'
+universal/particular vocabulary. The still-open choice between rendering the
+grid from its narrative and keeping code plus a dirty edge remains in
+WORK-CODE-LINKAGE-EXTRACTORS and WORK-GRAMMAR-GLOSSES-INTERIM.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-ONE-APP-TWO-VIEWS
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+  ROLE: Governed_By
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/grammars.js
+- TYPE: File
+  VALUE: docs/sdoc/board/index.html
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/fsm.js
+- TYPE: File
+  VALUE: docs/sdoc/board/grammar-groups.json
+- TYPE: File
+  VALUE: dev/scripts/grammar-groups-check.py

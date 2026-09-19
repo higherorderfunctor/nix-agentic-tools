@@ -1,0 +1,41 @@
+[DOCUMENT]
+TITLE: Pin the board server to the strictdoc interpreter
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[WORK]
+UID: WORK-BOARD-SERVE-PINS-ITS-INTERPRETER
+TITLE: Pin the board server to the strictdoc interpreter
+AUTHORED_BY: llm
+STATEMENT: >>>
+Package the board server with the same strictdoc virtual-environment interpreter used by scribe, route the devenv board process through that wrapper, remove the ambient-python launcher, and gate every repository launcher against bare interpreter execution.
+<<<
+COMMENT: >>>
+Filed 2026-09-09 from the interpreter provenance audit. The former
+docs/sdoc/board/serve launcher executed a PATH-resolved python3; it was replaced
+by an `sdoc-board` mkScribe wrapper over strictdoc's own virtual environment.
+The ai.strictdoc module installs that wrapper and launches its absolute Nix
+store path as `processes.board`. The remaining Python commands in devenv tasks
+now name the nixpkgs interpreter by store path.
+
+The `interpreter-launchers` flake check scans active devenv task/process
+definitions plus executable shell launchers under docs/ and dev/. Its corpus
+run covered 34 files with 0 findings; the verbatim removed serve launcher is a
+positive-control fixture and exits 1 on `exec python3`.
+
+Verified 2026-09-09: all four board tabs and all three API routes returned HTTP
+200 on port 8877. Board PID 3670805 executed
+/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14.
+test_board.py ran 16 tests, test_sdoc_flip.py ran 12 contracts, and the
+interpreter-launchers, module-strictdoc-enable-installs-cli-and-runner,
+strictdoc-nix-extractor, formatting and repo-lints flake checks all passed with
+--max-jobs 1.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-DEPS-FROM-DEVENV
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: MECH-SDOC-BOARD-SERVER
+  ROLE: Crosses

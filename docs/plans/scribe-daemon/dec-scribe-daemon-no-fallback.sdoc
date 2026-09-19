@@ -1,0 +1,31 @@
+[DOCUMENT]
+TITLE: A scribe client fails when no daemon answers, and never loads the graph itself
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[DECISION]
+UID: DEC-SCRIBE-DAEMON-NO-FALLBACK
+TITLE: A scribe client fails when no daemon answers, and never loads the graph itself
+AUTHORED_BY: llm
+STATUS: accepted
+RETIRES_ON: A harness owns daemon lifecycle and starts one on demand, at which point a client that waits for its own daemon is no longer a silent degradation.
+STATEMENT: >>>
+When no scribe daemon answers on the workspace's socket, the client exits
+non-zero naming the socket and the command that starts it. It does NOT fall
+back to loading the graph in its own process.
+
+A fallback is worse than a failure here. A silent in-process load turns ten
+reads into thirty seconds of work nobody asked for, spread across ten
+invocations that each look normal. A refusal costs one interruption and the
+operator starts the daemon.
+
+The scribe skill carries a daemon check as a preflight step, so a subagent
+meets the instruction before it meets the wall.
+<<<
+RATIONALE: >>>
+Degrading silently is the failure mode this trial is trying to remove
+everywhere else: a thing that still works, slowly, and never says why. The
+harness that owns daemon lifecycle later can start one on demand; until then
+the operator is the scheduler and wants to be told.
+<<<

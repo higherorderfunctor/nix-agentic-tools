@@ -1,4 +1,4 @@
-# cspell:ignore sembleignore
+# cspell:ignore dlopens sembleignore
 {
   config,
   pkgs,
@@ -155,6 +155,80 @@
       echo "ai.shell test vector passed"
     '';
   };
+
+  # Interpreter for packages/strictdoc-grammar/extract/ (SLICE-GRAMMAR-FROM-NIX).
+  # A plain `python3` plus `ast_grep_py`, which the normalizer uses to match and
+  # capture over the faithful surface's Nix source in process — ast-grep is
+  # tree-sitter based and ships a Nix grammar, so nothing else is needed.
+  #
+  # A SUPERSET of the bare `python3` this list used to carry, so the operator-run
+  # `fixtures/kiro-primitives` suites still resolve their interpreter. Kept as one
+  # entry rather than two so a single `python3` is on PATH and it is never
+  # ambiguous which one a script got.
+  #
+  # It deliberately does NOT carry strictdoc's own modules. That is what
+  # `ai.strictdoc.enable` installs — packages/strictdoc-grammar/lib/mkExtract.nix
+  # wraps upstream's OWN venv interpreter, because `python3Packages.strictdoc`
+  # does not exist and `withPackages` cannot reach the grammar builder.
+  # `dev/scripts/sdoc_semantics/` is deliberately standard-library-only, and
+  # `python3 -m sdoc_semantics` reaches it from a hand-run shell. The board
+  # imports it through the strictdoc-venv wrapper owned by `ai.strictdoc`.
+  grammarPython = pkgs.python3.withPackages (ps: [ps.ast-grep-py]);
+
+  # elkjs 0.12.0 — the layout engine docs/sdoc/board/assets/layout.js loads in a
+  # worker (MECH-SDOC-BOARD-LAYOUT). DEC-DEPS-VIA-NIX rules that runtime
+  # dependencies enter through Nix; until 2026-09-08 this one did not, its two
+  # files sitting in the tree under docs/sdoc/board/assets/vendor/elkjs/.
+  #
+  # A derivation HERE rather than an overlay under `packages/`, and the
+  # reason is what an overlay entry COSTS rather than any doubt about the
+  # pattern. An overlay is a PUBLISHED package of this flake: it lands in
+  # `pkgs.ai.*` and `packages.<system>`, owes a `config.checks.cacheHitParity`
+  # row, owes either a `config.update.targets` row or a written
+  # `passthru.updateTargetExempt` reason, and — being version-tracked against a
+  # registry — owes a sidecar plus an update script the 4x/day sweep runs. None
+  # of that buys anything for a browser asset that only the dev-only board app
+  # under `docs/` ever loads, and publishing elkjs as a product of
+  # nix-agentic-tools misstates what this repo ships. `grammarPython` above is
+  # the precedent: a dev-shell-only dependency of a dev-only tool, declared here
+  # and nowhere else. If the board ever ships as a package, this moves and takes
+  # the whole overlay contract with it.
+  #
+  # The pin is upstream's published tarball; its hash came from
+  # `nix store prefetch-file`. Its `lib/elk-api.js` and `lib/elk-worker.min.js`
+  # were verified byte-identical (sha256) to the vendored files they replace, so
+  # this swap moved no bytes the browser sees.
+  boardElkjs =
+    pkgs.runCommand "elkjs-0.12.0" {
+      src = pkgs.fetchurl {
+        url = "https://registry.npmjs.org/elkjs/-/elkjs-0.12.0.tgz";
+        hash = "sha256-wddxlyPgILEHJOPMvJNWlqKITx5402HN0DdmMJ6Ojio=";
+      };
+      meta = {
+        description = "ELK layout engine, as the sdoc board's worker loads it";
+        homepage = "https://github.com/kieler/elkjs";
+        license = with lib.licenses; [epl20 gpl3Plus];
+      };
+    } ''
+      mkdir -p "$out"
+      tar -xzf "$src" -C "$out" --strip-components=1
+    '';
+
+  # The typed `.sgra` surface, imported here for ONE reason: its consumer DSL.
+  # `ai.strictdoc.grammars.<name>.elements` is declared with the NORMALIZED
+  # type, and packages/strictdoc-grammar/values.nix is written against the sugar
+  # over it — so the DSL has to be handed in from the call site. Everything else
+  # about the surface is the module's business, not this file's.
+  sdocGrammar = import ./packages/strictdoc-grammar/lib/grammar.nix {inherit lib;};
+
+  # The tree-sitter grammars dev/scripts/sdoc_extractors/ dlopens. The SAME
+  # registry packages/strictdoc-grammar/lib/mkExtract.nix bakes onto the
+  # strictdoc-grammar-extract wrapper — imported rather than re-listed, because
+  # two copies of a language list drift silently and the failure is a source
+  # reader that simply finds nothing.
+  sdocTsGrammars = import ./packages/strictdoc-grammar/lib/tsGrammars.nix {
+    inherit lib pkgs;
+  };
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
@@ -164,6 +238,8 @@ in {
     ./packages/kimchi/modules/devenv
     ./packages/kiro-cli/modules/devenv
     ./packages/semble/modules/devenv
+    # The same project-only backend discovered by the public consumer module.
+    ./packages/strictdoc-grammar/modules/devenv
     # NOTE: the stacked-workflows devenv module is NOT imported here. Enabling
     # it would fan its skills into `ai.skills` UNPREFIXED (stack-*), which, once
     # installed user-global via nixos-config, would silently shadow the
@@ -187,6 +263,26 @@ in {
   # ── Binary Cache ──────────────────────────────────────────────────────
   cachix.pull = ["nix-agentic-tools"];
 
+  # ── Environment ───────────────────────────────────────────────────────
+  #
+  # The tree-sitter parsers strictdoc's source readers dlopen. NOT optional
+  # since strictdoc_config.py turned REQUIREMENT_TO_SOURCE_TRACEABILITY on: a
+  # HAND-RUN `strictdoc export` is not the wrapped interpreter and would
+  # otherwise die with "no tree-sitter parser for symbol". The scribe programs
+  # get the same values from the wrapper's `--set-default`, which these
+  # deliberately override — that is the developer's lever for pointing at a
+  # locally built grammar.
+  #
+  # SDOC_BOARD_ELKJS_DIR joins them because it is the same kind of thing: a
+  # store path a program resolves at RUN time and cannot guess. It reaches the
+  # dev shell, `test_board.py`, and the `processes.board` wrapper that the
+  # `ai.strictdoc` module launches from the same environment.
+  env =
+    sdocTsGrammars.env
+    // {
+      SDOC_BOARD_ELKJS_DIR = "${boardElkjs}/lib";
+    };
+
   # ── Packages ──────────────────────────────────────────────────────────
   packages = with pkgs;
     [
@@ -207,8 +303,24 @@ in {
     # the packages it explains rather than being read as an LSP concern.
     ++ lib.optionals (!isCI) [
       jq
-      python3
+      grammarPython
     ]
+    # strictdoc CLI for the sdoc skill's required format/export loop and for
+    # dev/scripts/fp-check.py, fp-accept.py (SLICE-FP-DETECTOR) and
+    # cycle-check.py (MECH-CYCLE-CHECK). Interactive only --
+    # checks/strictdoc/strictdoc-fp-check.nix and checks/strictdoc/strictdoc-cycle-check.nix pull
+    # it via nativeBuildInputs, not devShell PATH. (checks/
+    # strictdoc-grammar-corpus.nix, named here until 2026-08-25, needs no
+    # strictdoc at all: it exercises the patched tree-sitter grammar against a
+    # pinned fetch of strictdoc's own .sdoc docs.)
+    #
+    # strictdoc itself and the grammar-surface runner are NOT listed here. They
+    # come from `ai.strictdoc.enable` below, which is the module that owns the
+    # wrap. `pkgs.ast-grep` stays: it is the matcher CLI, for writing and
+    # testing rules by hand before the normalizer embeds them, and it is not
+    # part of the extractor's environment (that one carries ast_grep_py, the
+    # library).
+    ++ lib.optionals (!isCI) [pkgs.ast-grep]
     # LSP servers (in PATH for ENABLE_LSP_TOOL and MCP bridging) —
     # interactive-only, dropped from the diagnostic closure (~1GB: nixd pulls
     # llvm, marksman pulls dotnet). See the isCI note above.
@@ -257,13 +369,16 @@ in {
       programs.semble = {
         enable = !isCI;
         # Use this flake's pinned nixpkgs grammars directly; the Cachix nixpkgs
-        # follow already supplies their store paths. If a future grammar needs a
-        # custom derivation, also expose that grammar alone in flake packages so
-        # the authenticated package sweep publishes it. Do not expose the
-        # grammar-patched Semble derivation.
+        # follow already supplies their store paths. tree-sitter-strictdoc is
+        # the one custom derivation this covers today — absent from nixpkgs,
+        # so it is exposed alone in flake packages
+        # (pkgs.ai.generic.tree-sitter-strictdoc) so the authenticated package
+        # sweep publishes it. Do not expose the grammar-patched Semble
+        # derivation.
         grammars = with pkgs.tree-sitter-grammars; [
           tree-sitter-awk
           tree-sitter-jq
+          pkgs.ai.generic.tree-sitter-strictdoc
         ];
         mcp.pathMappings = [
           {
@@ -296,6 +411,11 @@ in {
             content = "docs";
             language = "markdown";
             patterns = ["*.md.fixture"];
+          }
+          {
+            content = "docs";
+            language = "strictdoc";
+            patterns = ["*.sdoc" "*.sgra"];
           }
         ];
         # AGENTS.md already carries the repository's Semble search workflow from
@@ -414,7 +534,70 @@ in {
         index-repo-docs = traceSource.tracedPath ./dev/skills/index-repo-docs;
         pr-review-loop = traceSource.tracedPath ./dev/skills/pr-review-loop;
         repo-review = traceSource.tracedPath ./dev/skills/repo-review;
+        sdoc = traceSource.tracedPath ./dev/skills/sdoc;
       };
+
+    # strictdoc plus the grammar-surface runner
+    # (packages/strictdoc-grammar/modules/devenv). Interactive only, on the
+    # same reasoning as the LSP servers above: the sdoc skill's format/export
+    # loop and milestone one's generation are both locally invoked, and CI
+    # reaches strictdoc through nativeBuildInputs on the checks rather than
+    # through this shell's PATH.
+    #
+    # `package` is left at its default, which is deliberate rather than
+    # incidental: the two generated layers of the option surface are extracted
+    # from ONE strictdoc release's own grammar string, so overriding it
+    # type-checks values against a grammar nothing runs.
+    strictdoc = {
+      enable = !isCI;
+
+      # docs/sdoc/grammar.sgra is GENERATED, by the operator's 2026-08-27
+      # ruling on MECH-GRAMMAR-SGRA-NOT-GENERATED: every `.sgra` in this
+      # repository comes through this module. Do not hand-edit the file —
+      # `nix flake check`'s strictdoc-grammar-model-equal diffs it against
+      # what values.nix renders, and it is the render that wins.
+      #
+      # Write it with: devenv tasks run generate:sgra
+      #
+      # Declared unconditionally, which costs nothing in CI: the module reads
+      # `grammars` only from inside its `mkIf cfg.enable`, so with `enable`
+      # false nothing forces `rendered` and no grammar is rendered during a
+      # `devenv test`. The flake check renders its own copy from the flake's
+      # `self` regardless.
+      grammars.repo = {
+        target = "docs/sdoc/grammar.sgra";
+        elements = import ./packages/strictdoc-grammar/values.nix {
+          inherit (sdocGrammar) dsl;
+        };
+      };
+
+      # ── PROPOSAL, NOT WIRED ────────────────────────────────────────────
+      #
+      # A layer-0 two-grammar split under consideration: `plan` for disposable
+      # work decomposition, `spec` for the durable knowledge a finished plan
+      # dissolves into. Written out in full at
+      # packages/strictdoc-grammar/values/{plan,spec}.nix, whose headers carry
+      # the reasoning.
+      #
+      # Left commented deliberately. Uncommenting renders two more `.sgra`
+      # files into docs/sdoc/ on the next `generate:sgra`, and neither has a
+      # corpus, an alias registered in StrictDoc's project config, or a check
+      # that reads it. Enabling it is a decision, not a formality.
+      #
+      # grammars.plan = {
+      #   target = "docs/sdoc/plan.sgra";
+      #   elements = import ./packages/strictdoc-grammar/values/plan.nix {
+      #     inherit (sdocGrammar) dsl;
+      #   };
+      # };
+      #
+      # grammars.spec = {
+      #   target = "docs/sdoc/spec.sgra";
+      #   elements = import ./packages/strictdoc-grammar/values/spec.nix {
+      #     inherit (sdocGrammar) dsl;
+      #   };
+      # };
+    };
   };
 
   # ── treefmt ────────────────────────────────────────────────────────────
@@ -659,7 +842,7 @@ in {
 
   # ── Tasks ─────────────────────────────────────────────────────────────
   tasks = let
-    checkTasks = (import ./dev/tasks/check.nix {}).tasks;
+    checkTasks = (import ./dev/tasks/check.nix {inherit pkgs;}).tasks;
     generateTasks = (import ./dev/tasks/generate.nix {inherit lib pkgs instr;}).tasks;
   in
     checkTasks
@@ -733,6 +916,42 @@ in {
             --no-nom \
             --no-link
         '';
+      };
+
+      # ── strictdoc export timing ──────────────────────────────────────
+      # What source linking costs on every export, measured rather than
+      # assumed. The `@relation` below is a BACKWARD marker: it names the
+      # EVIDENCE node that holds the table, an unknown UID there fails the
+      # export, and that node carries the forward File relation back to this
+      # binding by id. Neither end can be renamed without a red check.
+      #
+      # The runner is `strictdoc-grammar-extract`, not `python3`: this
+      # script drives strictdoc and needs the one interpreter that carries
+      # it, the same wrapper every scribe program takes. Tune it through
+      # the environment, since a devenv task takes no argv:
+      # `SDOC_BENCH_RUNS=1` for one repetition, `SDOC_BENCH_PROFILE=1` to
+      # add a serialized cProfile arm.
+      #
+      # THE MARKER MUST BE THE FIRST LINE OF THE COMMENT BLOCK THAT TOUCHES
+      # THE BINDING, which is why the prose above is a separate block. The
+      # extractor hands strictdoc's MarkerParser the comment slice starting
+      # at the first `#`, so every LATER line still carries its indentation
+      # -- and an indented `@relation` line does not match the marker
+      # grammar. It fails SILENTLY: the export stays green and no marker is
+      # registered, which is indistinguishable from a marker that resolved.
+      # Measured 2026-09-02; a bogus UID in an indented marker exits 0.
+
+      # @relation(EV-STRICTDOC-EXPORT-TIMING, scope=function)
+      # EV-STRICTDOC-EXPORT-TIMING holds the measurements; re-take them with
+      # `devenv tasks run strictdoc:bench`.
+      #
+      # `1>&2` is not decoration: devenv CAPTURES a task's stdout as its
+      # output value and prints none of it, `--show-output` included
+      # (measured), so the markdown table would be swallowed. stderr is the
+      # only stream a task can put in front of a person.
+      "strictdoc:bench" = {
+        description = "Measure export wall time with source linking on and off (EV-STRICTDOC-EXPORT-TIMING)";
+        exec = ''exec strictdoc-grammar-extract "$DEVENV_ROOT/dev/scripts/bench-export.py" 1>&2'';
       };
     }
     // lib.optionalAttrs (!isCI) {

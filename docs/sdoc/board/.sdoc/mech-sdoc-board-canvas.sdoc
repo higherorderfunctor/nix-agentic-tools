@@ -1,0 +1,58 @@
+[DOCUMENT]
+TITLE: The Board canvas renders a focal work item's bounded neighborhood
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-CANVAS
+TITLE: The Board canvas renders a focal work item's bounded neighborhood
+AUTHORED_BY: llm
+STATEMENT: >>>
+board.js presents three panes over the snapshot. The left pane lists only
+WORK nodes and searches their UID, title, summary, and source path. Its focal
+selection stays in the URL as a raw #UID. The middle SVG draws that node and a
+one-hop neighborhood by default, with explicit two- and three-hop choices,
+payload-derived node-type filters, source-type-scoped relation-role filters,
+and a 48-node rendering ceiling. Cards show type, UID, and title; orthogonal
+edges show the declared role and an arrow; pointer and wheel transforms
+provide pan, zoom, and fit. Clicking a graph card changes only the right-pane
+inspector, not the focal node or hash; that inspector is card.js's shared
+renderer, the same full card the Plan view draws, and its type name links into
+the Grammars view. On a narrow screen, the work list and populated inspector
+become dismissible drawers over a full-width canvas. The shell (app.js) fetches
+the snapshot and calls renderBoard; the view module fetches nothing itself.
+<<<
+COMMENT: >>>
+The bounded-neighborhood reference implementation replaced the whole-canon
+canvas on 2026-09-02. The operator asked for a searchable list of WORK nodes,
+a highlighted focal node, immediate-neighbor rendering, and right-pane details
+without changing the focal selection. The list and graph are two readings of
+one already-fetched snapshot; neither fetches or mutates data.
+
+Reconciled 2026-09-08, after that reference landed here as commits
+adf8e8d1..5ee1cc63. The reference was built on a board with no shared card
+renderer, so its rewrite of this statement dropped what the right pane actually
+draws. On this tree the inspector is card.js -- the renderer the Plan view
+uses -- which is why card.js is now a File of this node.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: REQ-SDOC-BOARD-MVP-READS-WHOLE-CANON
+  ROLE: Guarantees
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-MERGED-SMOKE
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: docs/sdoc/board/index.html
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/app.css
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/app.js
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/board.js
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/card.js

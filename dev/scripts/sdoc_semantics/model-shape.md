@@ -1,0 +1,38 @@
+# Semantics model shape
+
+`model.json` is the hand-written transcription of the semantics model. Its
+top-level value is an object with schema `sdoc-semantics-model/1`, a
+`model_version`, and named collections in presentation order: `lifecycles`,
+`actors`, `commands`, `events`, `operations`, `gates`, `relation_contracts`,
+`checkpoints`, `milestones`, `flows`, and `rules`. Every collection is a list;
+order is data and must not be recovered from object keys.
+
+A lifecycle has a `name`, optional string `note`, tagged `subject`, ordered
+`states`, `initial` and `terminal` state names, and `transitions`. A subject is
+one of:
+
+- `{ "kind": "field", "field": "..." }`, for every grammar element carrying the
+  field;
+- `{ "kind": "element", "tag": "...", "field": "..." }`, for one element tag and
+  field; or
+- `{ "kind": "role", "role": "...", "field": "..." }`, for a relation role and
+  field.
+
+States have `name`, `label`, and `note`. Transitions have `trigger`, `from`,
+`to`, `gates`, `writes`, `emits`, `rule_text`, and `settled`. The remaining
+collections are the vocabulary for the interpreter: references are names and are
+validated when the document is loaded. A gate or checkpoint `sees` list uses
+`field:<field>` and `role:<role>` for grammar vocabulary, plus the closed
+literals `actor` and `git_base_ref`. Top-level rules have `id`, `text`, `kind`,
+`settled`, `cites`, and `lifecycle`: a lifecycle name, or null for a rule about
+the whole model. The compatibility payload groups rules by that explicit
+reference and omits the association key from its existing machine rows. A
+model-wide rule is not assigned to any lifecycle.
+
+This first document deliberately has no gates, operations, events, or other
+cross-lifecycle entries. The two lifecycle declarations are a transcription of
+the former Python machines, including their open rules; shaping those questions
+belongs to the operator.
+
+Related predicates traverse at most one hop; logical nesting cannot introduce a
+second relation traversal. A relation contract's `propagates` value is a list.

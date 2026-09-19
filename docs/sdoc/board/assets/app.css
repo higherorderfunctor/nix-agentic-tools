@@ -1,0 +1,2503 @@
+/* One dark look for both views, on beadboard's Aurora palette: deep
+ * blue-black surfaces, teal accent, per-type accent colors shared with the
+ * Perspective theme in theme.css. */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces (beadboard aurora.css) */
+  --surface-backdrop: #0a0f14;
+  --surface-elevated: #0d1218;
+  --surface-primary: #111820;
+  --surface-secondary: #162028;
+  --surface-tertiary: #1c2a35;
+  --surface-quaternary: #233543;
+  --surface-overlay: #070a0e;
+  --surface-input: #131d26;
+
+  /* Borders */
+  --border-subtle: rgb(100 255 218 / 12%);
+  --border-default: rgb(100 255 218 / 22%);
+  --border-strong: rgb(100 255 218 / 38%);
+  --border-accent: rgb(139 92 246 / 55%);
+
+  /* Text */
+  --text-primary: #e6f7ff;
+  --text-secondary: #a8c5d9;
+  --text-tertiary: #6b8fa8;
+  --text-disabled: #4a6170;
+
+  /* Accents */
+  --accent-info: #64ffda;
+  --accent-success: #4ade80;
+  --accent-warning: #fbbf24;
+  --accent-danger: #fb7185;
+  --outline-target: #6ecbff;
+
+  --font-sans:
+    Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:
+    "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace,
+    SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Type ramp. --fs-base is the ONE knob and 12px is the reading size:
+   * every title, field value, relation target, button label and table cell
+   * the app renders itself sits on --fs-body. The steps below it were
+   * RE-STEPPED, not clamped: the old 7-11px labels now land on 10, 10.5 and
+   * 11 at base 12 (10px is the floor, nothing renders under it), and their
+   * order is preserved -- a step that was smaller stays no larger. No
+   * max()/min()/clamp() anywhere on a font-size. Tokens are named by role,
+   * never by px, since the px depends on the knob. Perspective is separate:
+   * its datagrid cells are sized by its own shadow stylesheet from the 16px
+   * it inherits, which is why body and .perspective-view set no font-size. */
+  --fs-base: 12px;
+  --fs-micro: calc(var(--fs-base) * 10 / 12);
+  --fs-small: calc(var(--fs-base) * 10.5 / 12);
+  --fs-meta: calc(var(--fs-base) * 11 / 12);
+  --fs-body: var(--fs-base);
+  --fs-lead: calc(var(--fs-base) * 13 / 12);
+  --fs-title: calc(var(--fs-base) * 14 / 12);
+  --fs-heading: calc(var(--fs-base) * 17 / 12);
+  --fs-display: calc(var(--fs-base) * 18 / 12);
+  --fs-mark: calc(var(--fs-base) * 42 / 12);
+
+  /* One pre-token pixel: type-coupled geometry (row heights, badge and chip
+   * padding, indents, dots) is written as calc(N * var(--u)) with N the px
+   * it had at the 12px body, so it rides the knob without riding the local
+   * font-size -- a chip whose text grew from 8px to 10.5px keeps its 2px
+   * padding. At base 12 this is exactly 1px. */
+  --u: calc(var(--fs-base) / 12);
+
+  /* The chrome row's height, shared with the workspace that fills the rest. */
+  --topbar-height: calc(64 * var(--u));
+
+  font-family: var(--font-sans);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--surface-backdrop);
+  color: var(--text-primary);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+button {
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  background: var(--surface-tertiary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-body);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+button:hover,
+button:focus-visible {
+  border-color: var(--accent-info);
+  background: var(--surface-quaternary);
+  outline: none;
+}
+
+/* ---- top bar: global chrome, stable across views ---------------------- */
+
+.topbar {
+  position: relative;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: stretch;
+  height: var(--topbar-height);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-elevated);
+  box-shadow: 0 8px 30px rgb(0 0 0 / 30%);
+  font-size: var(--fs-body);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--u));
+  padding: 0 calc(20 * var(--u));
+  border-right: 1px solid var(--border-subtle);
+}
+
+.brand strong,
+.brand small {
+  display: block;
+}
+
+.brand strong {
+  font-size: var(--fs-title);
+  letter-spacing: 0.065em;
+}
+
+.brand small {
+  max-width: 200px;
+  margin-top: calc(3 * var(--u));
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-mark {
+  display: grid;
+  grid-template-columns: repeat(2, calc(7 * var(--u)));
+  gap: calc(3 * var(--u));
+  width: calc(34 * var(--u));
+  height: calc(34 * var(--u));
+  place-content: center;
+  border: 1px solid var(--border-default);
+  background: var(--surface-primary);
+}
+
+.brand-mark i {
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+  border: 1px solid var(--accent-info);
+}
+
+.view-switch {
+  display: flex;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  padding: 0 calc(16 * var(--u));
+  border-right: 1px solid var(--border-subtle);
+}
+
+.view-switch button {
+  height: calc(34 * var(--u));
+  padding: 0 calc(18 * var(--u));
+  border-color: transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.view-switch button.is-active {
+  border-color: var(--border-default);
+  background: rgb(100 255 218 / 12%);
+  color: var(--accent-info);
+}
+
+.stats {
+  display: flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  min-width: 0;
+  margin: 0;
+  padding: 0 calc(20 * var(--u));
+  overflow: hidden;
+}
+
+.stats div {
+  display: flex;
+  align-items: baseline;
+  gap: calc(10 * var(--u));
+  min-width: calc(96 * var(--u));
+  padding: calc(9 * var(--u)) calc(12 * var(--u));
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+}
+
+.stats dt {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.stats dd {
+  margin: 0;
+  color: var(--accent-info);
+  font-family: var(--font-mono);
+  font-size: var(--fs-lead);
+  font-weight: 800;
+}
+
+.global-actions {
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--u));
+  padding: 0 calc(16 * var(--u));
+  border-left: 1px solid var(--border-subtle);
+}
+
+.global-actions button {
+  height: calc(34 * var(--u));
+  padding: 0 calc(14 * var(--u));
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+}
+
+.status-dot {
+  width: calc(8 * var(--u));
+  height: calc(8 * var(--u));
+  border-radius: 50%;
+  background: var(--accent-warning);
+  box-shadow: 0 0 12px rgb(251 191 36 / 60%);
+}
+
+html[data-status="ready"] .status-dot {
+  background: var(--accent-success);
+  box-shadow: 0 0 12px rgb(74 222 128 / 60%);
+}
+
+html[data-status="error"] .status-dot {
+  background: var(--accent-danger);
+  box-shadow: 0 0 12px rgb(251 113 133 / 60%);
+}
+
+/* ---- workspace -------------------------------------------------------- */
+
+.workspace {
+  position: relative;
+  height: calc(100% - var(--topbar-height));
+}
+
+.view {
+  height: 100%;
+}
+
+/* ---- board view ------------------------------------------------------- */
+
+.board-view {
+  display: grid;
+  grid-template-columns: 292px minmax(0, 1fr) 350px;
+  font-size: var(--fs-body);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.work-browser {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  overflow: hidden;
+  border-right: 1px solid var(--border-default);
+  background: var(--surface-primary);
+}
+
+.work-head-actions {
+  display: flex;
+  align-items: center;
+  gap: calc(7 * var(--u));
+}
+
+.drawer-close,
+.inspector-close,
+.mobile-work-toggle {
+  display: none;
+}
+
+.work-browser-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(17 * var(--u)) calc(16 * var(--u)) calc(12 * var(--u));
+}
+
+.pane-kicker {
+  display: block;
+  margin-bottom: calc(4 * var(--u));
+  color: var(--accent-info);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.work-browser-head h1 {
+  margin: 0;
+  font-size: var(--fs-heading);
+}
+
+.work-count {
+  min-width: calc(30 * var(--u));
+  padding: calc(4 * var(--u)) calc(8 * var(--u));
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  text-align: center;
+}
+
+.work-search {
+  display: flex;
+  align-items: center;
+  gap: calc(7 * var(--u));
+  margin: 0 calc(12 * var(--u));
+  padding: 0 calc(10 * var(--u));
+  border: 1px solid var(--border-default);
+  background: var(--surface-input);
+  color: var(--text-tertiary);
+}
+
+.work-search:focus-within {
+  border-color: var(--accent-info);
+}
+
+.work-search input {
+  width: 100%;
+  height: calc(36 * var(--u));
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-body);
+}
+
+.work-search input::placeholder {
+  color: var(--text-disabled);
+}
+
+.work-state-filter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: calc(8 * var(--u));
+  margin: calc(8 * var(--u)) calc(12 * var(--u)) 0;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+.work-state-filter select {
+  min-width: 0;
+  height: calc(30 * var(--u));
+  padding: 0 calc(8 * var(--u));
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  outline: 0;
+  background: var(--surface-input);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-small);
+}
+
+.work-state-filter select:focus-visible {
+  border-color: var(--accent-info);
+}
+
+.work-list-summary {
+  margin: calc(9 * var(--u)) calc(14 * var(--u)) calc(7 * var(--u));
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+.work-list {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: calc(7 * var(--u));
+  padding: 0 calc(10 * var(--u)) calc(12 * var(--u));
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.work-item {
+  display: grid;
+  min-width: 0;
+  gap: calc(6 * var(--u));
+  width: 100%;
+  padding: calc(10 * var(--u)) calc(11 * var(--u));
+  border-color: var(--border-subtle);
+  border-left: calc(3 * var(--u)) solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface-secondary);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-align: left;
+}
+
+.work-item:hover,
+.work-item:focus-visible {
+  background: var(--surface-tertiary);
+}
+
+.work-item.is-selected {
+  border-color: var(--accent);
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), var(--surface-secondary) 88%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent), transparent 72%);
+}
+
+.work-item-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8 * var(--u));
+}
+
+.work-item-uid,
+.work-item-state,
+.work-item-path {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-item-uid {
+  min-width: 0;
+  color: var(--accent);
+}
+
+.work-item-state {
+  flex: none;
+  padding: calc(2 * var(--u)) calc(5 * var(--u));
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 65%);
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+
+.work-item-title {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.work-item-path {
+  color: var(--text-disabled);
+}
+
+.work-list-empty {
+  margin: calc(18 * var(--u)) calc(8 * var(--u));
+  color: var(--text-tertiary);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.canvas-shell {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border-right: 1px solid var(--border-default);
+  background: var(--surface-elevated);
+}
+
+.graph-controlbar {
+  position: relative;
+  z-index: 5;
+  display: grid;
+  min-width: 0;
+  min-height: calc(48 * var(--u));
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  padding: calc(7 * var(--u)) calc(14 * var(--u));
+  border-bottom: 1px solid var(--border-default);
+  background: rgb(13 18 24 / 96%);
+}
+
+.graph-controlbar-start {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: calc(7 * var(--u));
+  justify-self: start;
+}
+
+.graph-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 43%, rgb(100 255 218 / 5%), transparent 48%),
+    var(--surface-backdrop);
+}
+
+.mobile-work-toggle {
+  flex: none;
+}
+
+.graph-filters {
+  position: relative;
+  flex: none;
+}
+
+.graph-filters > summary {
+  display: flex;
+  height: calc(32 * var(--u));
+  align-items: center;
+  gap: calc(6 * var(--u));
+  padding: 0 calc(11 * var(--u));
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: rgb(13 18 24 / 92%);
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 25%);
+}
+
+.graph-filters > summary::-webkit-details-marker {
+  display: none;
+}
+
+.graph-filters[open] > summary,
+.graph-filters > summary:hover {
+  border-color: var(--accent-info);
+  color: var(--text-primary);
+}
+
+.filter-count {
+  min-width: calc(18 * var(--u));
+  padding: calc(1 * var(--u)) calc(5 * var(--u));
+  border-radius: 999px;
+  background: rgb(100 255 218 / 13%);
+  color: var(--accent-info);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  text-align: center;
+}
+
+.filter-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  width: min(410px, calc(100vw - 80px));
+  max-height: min(68vh, 620px);
+  gap: calc(14 * var(--u));
+  padding: calc(15 * var(--u));
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: rgb(13 18 24 / 98%);
+  box-shadow: 0 18px 42px rgb(0 0 0 / 48%);
+}
+
+.filter-popover fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.filter-popover legend {
+  margin-bottom: calc(8 * var(--u));
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.depth-options {
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--surface-input);
+}
+
+.toolbar-depth {
+  justify-self: center;
+}
+
+.depth-label {
+  display: flex;
+  align-items: center;
+  padding: 0 calc(9 * var(--u));
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.depth-options button {
+  min-width: calc(33 * var(--u));
+  min-height: calc(32 * var(--u));
+  padding: 0 calc(9 * var(--u));
+  border: 0;
+  border-left: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: var(--surface-input);
+  color: var(--text-tertiary);
+  font-size: var(--fs-body);
+}
+
+.depth-options button.is-active {
+  background: rgb(100 255 218 / 12%);
+  color: var(--accent-info);
+  box-shadow: inset 0 0 0 1px var(--accent-info);
+}
+
+.filter-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(5 * var(--u)) calc(10 * var(--u));
+}
+
+.filter-option {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: calc(6 * var(--u));
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+
+.filter-option input {
+  flex: none;
+  accent-color: var(--accent-info);
+}
+
+.filter-option > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-swatch {
+  flex: none;
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.relation-filter-groups {
+  display: grid;
+  gap: calc(8 * var(--u));
+}
+
+.relation-filter-group {
+  display: grid;
+  gap: calc(7 * var(--u));
+  padding: calc(8 * var(--u));
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-primary);
+}
+
+.relation-filter-group-title {
+  display: flex;
+  align-items: center;
+  gap: calc(6 * var(--u));
+  margin: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.relation-filter-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(5 * var(--u)) calc(10 * var(--u));
+}
+
+.role-filter-swatch {
+  border-radius: 50%;
+}
+
+.relation-filter-help {
+  margin-bottom: calc(8 * var(--u));
+}
+
+.filter-reset {
+  min-height: calc(31 * var(--u));
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+}
+
+.filter-note {
+  margin: 0;
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  line-height: 1.4;
+}
+
+.neighborhood-summary {
+  justify-self: end;
+  margin: 0;
+  padding: calc(6 * var(--u)) calc(9 * var(--u));
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: rgb(7 10 14 / 84%);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  white-space: nowrap;
+}
+
+/* board.js reads this computed size to scale the card geometry it draws. */
+#graph {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  font-size: var(--fs-body);
+  touch-action: none;
+  user-select: none;
+}
+
+#graph.is-panning {
+  cursor: grabbing;
+}
+
+.grid-dot {
+  fill: var(--surface-tertiary);
+}
+
+.legend {
+  display: inline-grid;
+  min-width: 0;
+  width: max-content;
+  max-width: 100%;
+  grid-template-columns: repeat(2, max-content);
+  gap: calc(5 * var(--u)) calc(32 * var(--u));
+  padding: calc(6 * var(--u)) calc(9 * var(--u));
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: rgb(7 10 14 / 84%);
+  scrollbar-width: thin;
+  pointer-events: auto;
+}
+
+.legend:empty {
+  display: none;
+}
+
+.legend-heading {
+  align-self: start;
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.legend-group {
+  display: grid;
+  align-content: start;
+  gap: calc(3 * var(--u));
+}
+
+.legend-title {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.legend-items {
+  display: grid;
+  gap: calc(2 * var(--u));
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(5 * var(--u));
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.04em;
+}
+
+.legend-node-item::before {
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+  border-radius: 2px;
+  background: var(--accent);
+  content: "";
+}
+
+.legend-line {
+  flex: none;
+  width: calc(26 * var(--u));
+  border-top: 2px solid var(--role-color);
+}
+
+.legend-role-item {
+  min-width: 0;
+}
+
+.legend-role-item > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legend-outline-group {
+  grid-column: 1 / -1;
+}
+
+.legend-outline-items {
+  grid-template-columns: max-content;
+}
+
+.legend-outline-swatch {
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+  flex: none;
+  border: 1px solid var(--outline-color);
+  border-radius: 2px;
+  background: color-mix(
+    in srgb,
+    var(--outline-color),
+    var(--surface-overlay) 72%
+  );
+  box-shadow: 0 0 9px color-mix(in srgb, var(--outline-color), transparent 28%);
+}
+
+.outline-inspected {
+  --outline-color: var(--text-primary);
+}
+
+.outline-source {
+  --outline-color: var(--accent-warning);
+}
+
+.outline-target {
+  --outline-color: var(--outline-target);
+}
+
+.graph-footer {
+  position: absolute;
+  z-index: 2;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
+  gap: calc(10 * var(--u));
+  pointer-events: none;
+}
+
+.viewport-actions {
+  display: flex;
+  gap: calc(7 * var(--u));
+  justify-self: end;
+}
+
+.viewport-actions button {
+  height: calc(30 * var(--u));
+  min-width: calc(30 * var(--u));
+  padding: 0 calc(10 * var(--u));
+  background: rgb(7 10 14 / 88%);
+}
+
+.canvas-help {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  justify-self: center;
+  margin: 0;
+  padding: calc(6 * var(--u)) calc(9 * var(--u));
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: rgb(7 10 14 / 80%);
+  color: var(--text-tertiary);
+  font-size: var(--fs-meta);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.canvas-help-short {
+  display: none;
+}
+
+.edge-path {
+  fill: none;
+  stroke: var(--role-color);
+  stroke-width: 1.6;
+  opacity: 0.62;
+  vector-effect: non-scaling-stroke;
+  transition:
+    opacity 120ms ease,
+    stroke 120ms ease;
+}
+
+.edge-label {
+  fill: var(--role-color);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  paint-order: stroke;
+  stroke: var(--surface-backdrop);
+  stroke-linejoin: round;
+  stroke-width: calc(4 * var(--u));
+  text-anchor: middle;
+  transition:
+    opacity 120ms ease,
+    fill 120ms ease;
+}
+
+.edge.touches-inspected .edge-path {
+  opacity: 1;
+  stroke-width: 2.2;
+}
+
+.edge.touches-inspected .edge-label {
+  opacity: 1;
+}
+
+.edge.is-dim .edge-path,
+.edge.is-dim .edge-label {
+  opacity: 0.08;
+}
+
+.node-card {
+  cursor: pointer;
+  outline: none;
+  transition: opacity 120ms ease;
+}
+
+.node-card .card-border,
+.node-card .card-outline {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+  transition: stroke 120ms ease;
+}
+
+.node-card .card-border {
+  stroke: var(--border-subtle);
+  stroke-width: calc(1 * var(--u));
+}
+
+.node-card .card-outline {
+  stroke: transparent;
+  stroke-width: calc(2 * var(--u));
+}
+
+.node-card .card-tab {
+  fill: var(--accent);
+  pointer-events: none;
+}
+
+.node-card .card-main {
+  fill: var(--surface-secondary);
+  pointer-events: none;
+}
+
+.node-card .card-glow {
+  fill: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    fill 120ms ease,
+    filter 120ms ease,
+    opacity 120ms ease;
+}
+
+.card-foreign-object {
+  overflow: visible;
+}
+
+.graph-work-item {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-color: transparent;
+  border-left-color: transparent;
+  background: transparent;
+}
+
+.graph-work-item:hover,
+.graph-work-item:focus-visible {
+  background: transparent;
+}
+
+.node-card:hover .card-outline,
+.node-card:focus-within .card-outline {
+  stroke: var(--accent);
+}
+
+.node-card.pointed-to-by-inspected {
+  --outline-color: var(--outline-target);
+}
+
+.node-card.points-to-inspected {
+  --outline-color: var(--accent-warning);
+}
+
+.node-card.is-center {
+  --outline-color: var(--accent);
+}
+
+.node-card.is-selected {
+  --outline-color: var(--text-primary);
+}
+
+.node-card:is(
+    .pointed-to-by-inspected,
+    .points-to-inspected,
+    .is-center,
+    .is-selected
+  )
+  .card-outline {
+  stroke: var(--outline-color);
+}
+
+.node-card:is(
+    .pointed-to-by-inspected,
+    .points-to-inspected,
+    .is-center,
+    .is-selected
+  )
+  .card-glow {
+  fill: var(--outline-color);
+  opacity: 0.78;
+  filter: blur(calc(7 * var(--u)));
+}
+
+.node-card.is-dim {
+  opacity: 0.14;
+}
+
+.node-card.is-center.is-dim {
+  opacity: 1;
+}
+
+.graph-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: calc(7 * var(--u));
+  padding: calc(30 * var(--u));
+  color: var(--text-tertiary);
+  font-size: var(--fs-body);
+  text-align: center;
+  pointer-events: none;
+}
+
+.graph-empty strong {
+  color: var(--text-primary);
+  font-size: var(--fs-title);
+}
+
+/* ---- inspector -------------------------------------------------------- */
+
+.inspector {
+  position: relative;
+  overflow: auto;
+  background: var(--surface-primary);
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.inspector-empty {
+  display: grid;
+  min-height: 100%;
+  padding: 48px 34px;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.empty-mark {
+  color: var(--accent-info);
+  font-size: var(--fs-mark);
+}
+
+.inspector-empty h1 {
+  margin: calc(16 * var(--u)) 0 calc(7 * var(--u));
+  font-size: var(--fs-display);
+}
+
+.inspector-empty p {
+  max-width: 250px;
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--fs-body);
+  line-height: 1.55;
+}
+
+.inspector-empty .read-only {
+  margin-top: calc(24 * var(--u));
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  text-transform: uppercase;
+}
+
+.inspector-head {
+  padding: 22px 22px 19px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-secondary);
+}
+
+.inspector-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.inspector-head h1 {
+  margin: calc(11 * var(--u)) 0 calc(7 * var(--u));
+  font-size: var(--fs-heading);
+  line-height: 1.25;
+}
+
+.inspector-uid,
+.inspector-source {
+  overflow-wrap: anywhere;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+}
+
+.inspector-source {
+  margin-top: calc(12 * var(--u));
+  color: var(--text-disabled);
+}
+
+.inspector-section {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.inspector-section h2 {
+  margin: 0 0 calc(12 * var(--u));
+  color: var(--text-tertiary);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.field {
+  margin-bottom: calc(15 * var(--u));
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.field dt {
+  margin-bottom: calc(5 * var(--u));
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  letter-spacing: 0.08em;
+}
+
+.field dd {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.relation-list {
+  display: grid;
+  gap: calc(7 * var(--u));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Role beside the target while the target fits on the role's line; a target
+ * that would wrap drops to its own full-width line instead (flex-wrap with an
+ * auto basis), so at the 12px reading size "UID · title" never breaks a UID
+ * mid-word in a side column too narrow for it. */
+.relation-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: calc(3 * var(--u)) calc(7 * var(--u));
+  padding: calc(8 * var(--u)) calc(9 * var(--u));
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-input);
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.relation-list li:hover {
+  border-color: var(--border-strong);
+}
+
+.relation-role {
+  color: var(--accent-info);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+.relation-target {
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+
+/* A File relation names a file, and sometimes one item inside it. The row
+ * reuses the relation row wholesale -- the kind sits where a role sits, the
+ * path where a target sits -- so the two lists read as one thing. What it
+ * does NOT reuse is the pointer: there is no node to select. */
+.file-list li {
+  cursor: default;
+}
+
+.file-sep {
+  color: var(--text-tertiary);
+}
+
+/* The qualified name is what an operator types back into an `ID:` field, so
+ * it is monospaced for the same reason a UID is: quotes, dots and colons in
+ * it have to be readable one character at a time. */
+.file-id {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.file-lines {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+}
+
+/* ---- plan view -------------------------------------------------------- */
+
+.plan-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  font-size: var(--fs-body);
+}
+
+.plan-shell {
+  overflow: auto;
+  padding: 18px;
+  border-right: 1px solid var(--border-default);
+  background:
+    radial-gradient(circle at 50% 0%, rgb(100 255 218 / 5%), transparent 44%),
+    var(--surface-backdrop);
+}
+
+.plan-tree {
+  display: grid;
+  gap: calc(8 * var(--u));
+}
+
+.plan-group {
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--surface-primary);
+}
+
+.plan-group > summary {
+  display: flex;
+  align-items: baseline;
+  gap: calc(10 * var(--u));
+  padding: calc(10 * var(--u)) calc(14 * var(--u));
+  cursor: pointer;
+  list-style: none;
+}
+
+.plan-group > summary::before {
+  color: var(--text-tertiary);
+  content: "▸";
+  font-size: var(--fs-meta);
+}
+
+.plan-group[open] > summary::before {
+  content: "▾";
+}
+
+.plan-group-dir {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  font-weight: 700;
+}
+
+.plan-group-count {
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+}
+
+.plan-group-body {
+  display: grid;
+  gap: calc(2 * var(--u));
+  padding: calc(4 * var(--u)) calc(10 * var(--u)) calc(12 * var(--u));
+}
+
+.plan-branch > summary {
+  display: flex;
+  align-items: center;
+  gap: calc(6 * var(--u));
+  cursor: pointer;
+  list-style: none;
+}
+
+.plan-branch > summary::before {
+  color: var(--text-tertiary);
+  content: "▸";
+  font-size: var(--fs-meta);
+}
+
+.plan-branch[open] > summary::before {
+  content: "▾";
+}
+
+.plan-leaf {
+  padding-left: calc(15 * var(--u));
+}
+
+.plan-nest {
+  display: grid;
+  gap: calc(2 * var(--u));
+  padding-left: calc(22 * var(--u));
+  border-left: 1px solid var(--border-subtle);
+  margin-left: calc(4 * var(--u));
+}
+
+.plan-row {
+  display: flex;
+  align-items: baseline;
+  gap: calc(8 * var(--u));
+  min-width: 0;
+  padding: calc(4 * var(--u)) calc(8 * var(--u));
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-align: left;
+}
+
+.plan-row:hover,
+.plan-row:focus-visible {
+  border-color: var(--border-default);
+  background: var(--surface-secondary);
+}
+
+.plan-row.is-selected {
+  border-color: var(--border-strong);
+  background: var(--surface-tertiary);
+}
+
+.plan-dot {
+  flex: none;
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.plan-uid {
+  flex: none;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  font-weight: 700;
+}
+
+.plan-title {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-state {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+/* ---- grammars view ---------------------------------------------------- */
+
+.grammars-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  font-size: var(--fs-body);
+}
+
+.grammar-shell {
+  overflow: auto;
+  padding: 18px;
+  border-right: 1px solid var(--border-default);
+  background:
+    radial-gradient(circle at 50% 0%, rgb(100 255 218 / 5%), transparent 44%),
+    var(--surface-backdrop);
+}
+
+.grammar-hint {
+  margin: 0 0 calc(14 * var(--u));
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* The outline grammar-groups.json draws: a section is a top-level heading
+ * over a rule, a group a subtitle over centered cards or the axis grid. The
+ * banner is the runtime guard's voice and sits first when it has findings. */
+.grammar-outline {
+  display: grid;
+  gap: calc(30 * var(--u));
+}
+
+.grammar-banner {
+  padding: calc(12 * var(--u)) calc(16 * var(--u));
+  border: 1px solid var(--accent-danger);
+  border-left-width: calc(4 * var(--u));
+  border-radius: 8px;
+  background: color-mix(
+    in srgb,
+    var(--accent-danger),
+    var(--surface-overlay) 82%
+  );
+  color: #ffd4dd;
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+}
+
+.grammar-banner strong {
+  display: block;
+  margin-bottom: calc(6 * var(--u));
+  color: var(--accent-danger);
+  font-size: var(--fs-lead);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.grammar-banner ul {
+  margin: 0;
+  padding-left: calc(18 * var(--u));
+}
+
+.grammar-banner li + li {
+  margin-top: calc(3 * var(--u));
+}
+
+.grammar-section-title {
+  margin: 0 0 calc(8 * var(--u));
+  color: var(--text-primary);
+  font-size: var(--fs-display);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.grammar-rule {
+  height: 0;
+  margin: 0 0 calc(18 * var(--u));
+  border: 0;
+  border-top: 1px solid var(--border-default);
+}
+
+.grammar-group + .grammar-group {
+  margin-top: calc(24 * var(--u));
+}
+
+.grammar-group-title {
+  margin: 0 0 calc(12 * var(--u));
+  color: var(--text-secondary);
+  font-size: var(--fs-title);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+/* align-items is deliberately NOT stretch: every card carries the tab's one
+ * --card-h, and fitCards() measures each card's natural height with that
+ * released. A stretching row would hand back the row's height instead of
+ * the card's and the shared height would ratchet up on every run. */
+.grammar-cards {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 12px;
+}
+
+.grammar-cards > .grammar-card,
+.grammar-cards > .grammar-ghost {
+  flex: 0 1 260px;
+  min-width: 200px;
+}
+
+/* The axis grid: one label column, one label row, a card per cell. Tracks
+ * shrink to 200px and the shell scrolls below that -- the narrow-screen
+ * rules never adapted this view, so the matrix is not asked to either.
+ * An axis label is the word plus its gloss from the layout: the column
+ * header reads them on one line, the row label stands them on end down
+ * the left edge (vertical-rl turned 180deg reads bottom to top, and the
+ * grid sizes the label's untransformed box, so the track stays two lines
+ * wide). Row height is the tab's one --card-h with a floor, not a ceiling:
+ * a stood-up label can be taller than its cards, and minmax() lets that row
+ * grow for the label without taking the cards with it. Both labels keep the
+ * caption style the tab already uses. */
+.grammar-matrix {
+  display: grid;
+  grid-template-columns: auto repeat(var(--columns, 2), minmax(200px, 260px));
+  grid-template-rows: auto;
+  grid-auto-rows: minmax(var(--card-h, auto), auto);
+  justify-content: center;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.grammar-axis {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.grammar-axis-label {
+  text-align: center;
+}
+
+.grammar-axis-word {
+  color: var(--text-secondary);
+}
+
+.grammar-axis-column .grammar-axis-gloss::before {
+  content: " — ";
+}
+
+.grammar-axis-row {
+  padding-right: calc(4 * var(--u));
+}
+
+.grammar-axis-row .grammar-axis-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.grammar-axis-row .grammar-axis-word,
+.grammar-axis-row .grammar-axis-gloss {
+  display: block;
+}
+
+/* align-content: start for the same reason .grammar-cards is flex-start --
+ * the cell stretches to its grid row, the card inside it must not. */
+.grammar-cell {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.grammar-cell > .grammar-card {
+  width: 100%;
+}
+
+.grammar-cell.is-empty {
+  place-content: center;
+  place-items: center;
+  min-height: var(--card-h, calc(76 * var(--u)));
+  border: 1px dashed var(--accent-danger);
+  border-radius: 9px;
+  color: var(--accent-danger);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.grammar-ghost {
+  display: grid;
+  align-content: center;
+  gap: calc(4 * var(--u));
+  min-height: var(--card-h, auto);
+  padding: calc(14 * var(--u)) calc(14 * var(--u)) calc(12 * var(--u));
+  border: 1px dashed var(--accent-danger);
+  border-radius: 9px;
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+}
+
+.grammar-ghost strong {
+  color: var(--accent-danger);
+  font-size: var(--fs-body);
+  letter-spacing: 0.08em;
+}
+
+.grammar-empty,
+.grammar-note {
+  margin: 0;
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  text-align: center;
+}
+
+.grammar-note {
+  margin-bottom: calc(8 * var(--u));
+  color: var(--accent-danger);
+}
+
+/* A card is a column with three bands: the title block at the top, the
+ * facts at the bottom, and the gloss centred in whatever is left. Its
+ * height is --card-h -- ONE value for every card on the tab, set on
+ * .grammar-outline by fitCards() in grammars.js, which steps an oversized
+ * gloss down the type ramp before it lets that shared height grow. The
+ * fallback is the card's own content height, which is what renders on a
+ * hidden tab, before the first fit, or with scripting off. */
+.grammar-card {
+  display: flex;
+  flex-direction: column;
+  gap: calc(12 * var(--u));
+  height: var(--card-h, auto);
+  padding: calc(14 * var(--u)) calc(14 * var(--u)) calc(12 * var(--u));
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent);
+  border-radius: 9px;
+  background: var(--surface-quaternary);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 7px 14px rgb(0 0 0 / 22%);
+}
+
+.grammar-card:hover,
+.grammar-card:focus-visible {
+  border-color: var(--accent);
+  border-left-color: var(--accent);
+  background: var(--surface-tertiary);
+  outline: none;
+}
+
+.grammar-card.is-selected {
+  border-color: var(--text-primary);
+  border-left-color: var(--accent);
+  background: var(--surface-tertiary);
+}
+
+.grammar-card-head {
+  display: grid;
+  flex: 0 0 auto;
+  gap: calc(4 * var(--u));
+}
+
+.grammar-card-tag {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.grammar-card-prefix {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+}
+
+/* The middle band. It takes every pixel the head and the facts do not
+ * (flex: 1) and centres the gloss in it, so a one-line gloss sits on the
+ * card's midline rather than under its header. min-height: 0 lets it be
+ * SMALLER than its content -- without it a flex item floors at its content
+ * height, the card would grow past --card-h and the fit would have nothing
+ * to detect. overflow: hidden is the backstop for that detection failing;
+ * a clipped gloss is a bug, not a design. This box is what fitCards()
+ * measures the gloss against. It is rendered even when a type has no
+ * gloss, so the facts land on the same baseline on every card. */
+.grammar-card-body {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The canon's one-line gloss for the type, between the title block and the
+ * facts: reading size, muted, in the prose face rather than the mono the
+ * rest of the card is set in. font-size is the ONE property fitCards()
+ * writes inline, stepping down the ramp (body 12 -> meta 11 -> small 10.5
+ * -> micro 10) when the gloss will not fit the shared height. */
+.grammar-card-gloss {
+  width: 100%;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  line-height: 1.4;
+}
+
+.grammar-card-facts {
+  display: flex;
+  flex: 0 0 auto;
+  gap: calc(14 * var(--u));
+  margin: auto 0 0;
+}
+
+.grammar-card-facts div {
+  display: flex;
+  align-items: baseline;
+  gap: calc(5 * var(--u));
+}
+
+.grammar-card-facts dt {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.grammar-card-facts dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  font-weight: 800;
+}
+
+.grammar-field-list {
+  display: grid;
+  gap: calc(7 * var(--u));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grammar-field {
+  padding: calc(8 * var(--u)) calc(9 * var(--u));
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-input);
+}
+
+.grammar-field-head {
+  display: flex;
+  align-items: baseline;
+  gap: calc(8 * var(--u));
+}
+
+.grammar-field-name {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  font-weight: 700;
+}
+
+.grammar-field-kind {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+}
+
+.grammar-required,
+.grammar-optional {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.grammar-required {
+  color: var(--accent-warning);
+}
+
+.grammar-optional {
+  color: var(--text-disabled);
+}
+
+.grammar-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(4 * var(--u));
+  margin-top: calc(7 * var(--u));
+}
+
+.grammar-option {
+  padding: calc(2 * var(--u)) calc(7 * var(--u));
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+/* ---- rules and the lifecycle widget ----------------------------------- */
+
+/* The Grammars inspector's last two sections. Everything here is sized off
+ * the --fs-* ramp and the --u unit, so both ride the one font-size knob; the
+ * SVG inside is the exception the widget handles itself, in measured pixels
+ * (see fsm.js). --accent is the per-type color the inspector sets on its
+ * content root. */
+
+.rule-list {
+  display: grid;
+  gap: calc(8 * var(--u));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rule-item {
+  padding: calc(9 * var(--u)) calc(10 * var(--u));
+  border: 1px solid var(--border-subtle);
+  border-left: calc(3 * var(--u)) solid var(--border-default);
+  border-radius: 6px;
+  background: var(--surface-input);
+}
+
+/* A rule the engine has NOT settled: written down, not decided. Dashed, so
+ * the pill beside it keeps meaning only one thing -- where the rule is
+ * from -- and an operator scanning for what is still theirs to decide can
+ * find it without reading a word. */
+.rule-item.is-unsettled {
+  border-left-style: dashed;
+  border-left-color: var(--accent-warning);
+}
+
+.rule-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: calc(3 * var(--u)) calc(7 * var(--u));
+  margin-bottom: calc(6 * var(--u));
+}
+
+.rule-field {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.rule-id {
+  overflow-wrap: anywhere;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+.rule-kind {
+  margin-left: auto;
+  padding: calc(2 * var(--u)) calc(7 * var(--u));
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rule-kind.is-transcription {
+  border-color: var(--border-default);
+  color: var(--accent-info);
+}
+
+.rule-kind.is-policy {
+  border-color: rgb(74 222 128 / 45%);
+  color: var(--accent-success);
+}
+
+.rule-kind.is-derived {
+  color: var(--text-secondary);
+}
+
+/* Undecided has to READ as undecided at a glance -- it is the whole reason
+ * the section exists this early in the model's life. */
+.rule-kind.is-open {
+  border-color: rgb(251 191 36 / 55%);
+  background: rgb(251 191 36 / 10%);
+  color: var(--accent-warning);
+  font-weight: 700;
+}
+
+.rule-text {
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+
+.rule-cites {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(4 * var(--u));
+  margin-top: calc(6 * var(--u));
+}
+
+.rule-cite {
+  overflow-wrap: anywhere;
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+.rule-note {
+  padding: calc(9 * var(--u)) calc(10 * var(--u));
+  border: 1px dashed var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+
+.rule-note.is-unavailable {
+  overflow-wrap: anywhere;
+  border-color: rgb(251 191 36 / 45%);
+  color: var(--accent-warning);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+.fsm-list {
+  display: grid;
+  gap: calc(16 * var(--u));
+}
+
+.fsm-figure {
+  margin: 0;
+  padding: calc(10 * var(--u)) calc(11 * var(--u)) calc(8 * var(--u));
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-secondary);
+}
+
+.fsm-figure-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(3 * var(--u)) calc(8 * var(--u));
+}
+
+.fsm-field {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.fsm-counts,
+.fsm-meta {
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+.fsm-meta {
+  overflow-wrap: anywhere;
+  margin-top: calc(4 * var(--u));
+  color: var(--text-tertiary);
+}
+
+.fsm-svg {
+  display: block;
+  width: 100%;
+  margin-top: calc(10 * var(--u));
+  overflow: visible;
+}
+
+.fsm-state-body {
+  fill: var(--surface-input);
+  stroke: var(--border-default);
+  stroke-width: 1;
+}
+
+.fsm-state.is-initial .fsm-state-body,
+.fsm-state.is-current .fsm-state-body {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+}
+
+.fsm-state.is-current .fsm-state-body {
+  fill: var(--surface-quaternary);
+}
+
+.fsm-state-inner {
+  fill: none;
+  stroke: var(--border-default);
+  stroke-width: 1;
+}
+
+/* A state nothing can reach is a finding, not decoration: it is drawn so the
+ * diagnostic under the diagram has something to point at. */
+.fsm-state.is-unreachable .fsm-state-body {
+  stroke: var(--accent-danger);
+  stroke-dasharray: 4 3;
+}
+
+.fsm-state-label {
+  fill: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
+.fsm-state.is-unreachable .fsm-state-label {
+  fill: var(--accent-danger);
+}
+
+.fsm-edge-path {
+  fill: none;
+  stroke: rgb(100 255 218 / 40%);
+  stroke-width: 1.4;
+}
+
+.fsm-edge.is-unsettled .fsm-edge-path {
+  stroke: var(--accent-warning);
+  stroke-dasharray: 5 3;
+}
+
+.fsm-arrow-head {
+  fill: rgb(100 255 218 / 55%);
+}
+
+.fsm-start-dot {
+  fill: var(--accent);
+}
+
+/* The halo is the same trick the graph's edge labels use: stroke the
+ * background color under the glyphs so a label crossing an arrow stays
+ * readable without a box behind it. */
+.fsm-edge-label {
+  fill: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.02em;
+  paint-order: stroke;
+  stroke: var(--surface-secondary);
+  stroke-linejoin: round;
+  stroke-width: calc(4 * var(--u));
+}
+
+.fsm-edge-label.is-unsettled {
+  fill: var(--accent-warning);
+}
+
+.fsm-diagnostics {
+  display: grid;
+  gap: calc(4 * var(--u));
+  margin: calc(9 * var(--u)) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fsm-diagnostics li {
+  padding: calc(5 * var(--u)) calc(8 * var(--u));
+  border: 1px solid rgb(251 113 133 / 45%);
+  border-radius: 5px;
+  color: var(--accent-danger);
+  font-size: var(--fs-small);
+  line-height: 1.45;
+}
+
+/* The Board inspector's type name links into this view. */
+.type-link {
+  height: auto;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-decoration: underline dotted;
+  text-underline-offset: calc(3 * var(--u));
+}
+
+.type-link:hover,
+.type-link:focus-visible {
+  background: none;
+  color: var(--text-primary);
+}
+
+/* ---- perspective view ------------------------------------------------- */
+
+.perspective-view {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 12px;
+  gap: 10px;
+  background:
+    radial-gradient(circle at 50% 0%, rgb(100 255 218 / 5%), transparent 44%),
+    var(--surface-backdrop);
+}
+
+.table-switch {
+  display: flex;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  font-size: var(--fs-body);
+}
+
+.table-switch button {
+  height: calc(30 * var(--u));
+  padding: 0 calc(16 * var(--u));
+  border-color: transparent;
+  border-radius: 8px;
+  background: var(--surface-primary);
+  color: var(--text-secondary);
+}
+
+.table-switch button.is-active {
+  border-color: var(--border-default);
+  background: rgb(100 255 218 / 12%);
+  color: var(--accent-info);
+}
+
+.table-hint {
+  margin-left: calc(12 * var(--u));
+  color: var(--text-disabled);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+}
+
+perspective-viewer {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  box-shadow: 0 14px 40px rgb(0 0 0 / 28%);
+}
+
+/* ---- overlays --------------------------------------------------------- */
+
+.loading,
+.no-daemon {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: calc(8 * var(--u));
+  text-align: center;
+  background: rgb(7 10 14 / 92%);
+  font-size: var(--fs-body);
+}
+
+.loading strong,
+.no-daemon strong {
+  font-size: var(--fs-title);
+  letter-spacing: 0.05em;
+}
+
+.loading small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-body);
+}
+
+.spinner {
+  width: calc(34 * var(--u));
+  height: calc(34 * var(--u));
+  margin-bottom: calc(6 * var(--u));
+  border: 2px solid var(--border-default);
+  border-top-color: var(--accent-info);
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.no-daemon pre {
+  max-width: min(90vw, 640px);
+  margin: calc(6 * var(--u)) 0 calc(10 * var(--u));
+  padding: calc(14 * var(--u)) calc(18 * var(--u));
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-input);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.no-daemon button {
+  padding: calc(8 * var(--u)) calc(22 * var(--u));
+}
+
+.error {
+  position: fixed;
+  z-index: 20;
+  right: 18px;
+  bottom: 18px;
+  max-width: 520px;
+  padding: calc(13 * var(--u)) calc(16 * var(--u));
+  border: 1px solid var(--accent-danger);
+  border-radius: 8px;
+  background: color-mix(
+    in srgb,
+    var(--accent-danger),
+    var(--surface-overlay) 85%
+  );
+  color: #ffd4dd;
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 42%);
+}
+
+/* ---- narrow screens --------------------------------------------------- */
+
+@media (max-width: 1180px) {
+  .stats div:nth-child(n + 3) {
+    display: none;
+  }
+
+  .board-view {
+    grid-template-columns: 250px minmax(0, 1fr) 300px;
+  }
+}
+
+@media (max-width: 680px) {
+  :root {
+    --topbar-height: calc(104 * var(--u));
+  }
+
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: calc(56 * var(--u)) calc(48 * var(--u));
+  }
+
+  .brand {
+    min-width: 0;
+    gap: calc(8 * var(--u));
+    padding: 0 calc(12 * var(--u));
+  }
+
+  .brand small {
+    display: none;
+  }
+
+  .view-switch {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    gap: calc(2 * var(--u));
+    padding: 0 calc(8 * var(--u));
+    border-top: 1px solid var(--border-subtle);
+    border-right: 0;
+  }
+
+  .view-switch button {
+    min-width: 0;
+    flex: 1 1 0;
+    padding: 0 calc(6 * var(--u));
+  }
+
+  .stats {
+    display: none;
+  }
+
+  .status {
+    display: none;
+  }
+
+  .global-actions {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 0 calc(10 * var(--u));
+  }
+
+  .grammars-view {
+    grid-template-columns: 1fr;
+  }
+
+  .board-view {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .work-browser {
+    position: absolute;
+    z-index: 9;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(86vw, 300px);
+    border-right-color: var(--border-strong);
+    box-shadow: 12px 0 30px rgb(0 0 0 / 42%);
+    transform: translateX(-102%);
+    transition: transform 140ms ease;
+  }
+
+  .board-view.is-list-open .work-browser {
+    transform: translateX(0);
+  }
+
+  .drawer-close,
+  .mobile-work-toggle {
+    display: block;
+  }
+
+  .drawer-close,
+  .inspector-close {
+    width: calc(30 * var(--u));
+    height: calc(30 * var(--u));
+    padding: 0;
+    background: var(--surface-input);
+  }
+
+  .board-view > .inspector {
+    display: none;
+    position: absolute;
+    z-index: 10;
+    right: 0;
+    bottom: 0;
+    width: min(92vw, 350px);
+    height: 100%;
+    border-left: 1px solid var(--border-default);
+    box-shadow: -12px 0 30px rgb(0 0 0 / 38%);
+  }
+
+  .board-view > .inspector:has(#inspector-content:not([hidden])) {
+    display: block;
+  }
+
+  .board-view > .inspector .inspector-close {
+    position: sticky;
+    z-index: 2;
+    top: calc(9 * var(--u));
+    float: right;
+    display: block;
+    margin: calc(9 * var(--u)) calc(9 * var(--u)) calc(-39 * var(--u)) 0;
+  }
+
+  .graph-controlbar {
+    min-height: calc(82 * var(--u));
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: calc(6 * var(--u));
+    padding: calc(7 * var(--u)) calc(10 * var(--u));
+  }
+
+  .graph-controlbar-start {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .viewport-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .toolbar-depth {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .legend {
+    width: 100%;
+  }
+
+  .graph-footer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+  }
+
+  .graph-footer .legend {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .canvas-help {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: center;
+  }
+
+  .canvas-help-long {
+    display: none;
+  }
+
+  .canvas-help-short {
+    display: inline;
+  }
+
+  .neighborhood-summary {
+    grid-column: 2;
+    grid-row: 2;
+    padding-inline: calc(3 * var(--u));
+  }
+
+  .plan-view .inspector,
+  .grammars-view .inspector {
+    position: absolute;
+    z-index: 8;
+    right: 0;
+    bottom: 0;
+    width: min(88vw, 350px);
+    height: 100%;
+    border-left: 1px solid var(--border-default);
+    box-shadow: -12px 0 30px rgb(0 0 0 / 38%);
+  }
+}

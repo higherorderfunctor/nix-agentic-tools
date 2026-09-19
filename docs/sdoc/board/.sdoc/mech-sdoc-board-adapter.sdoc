@@ -1,0 +1,67 @@
+[DOCUMENT]
+TITLE: One export becomes the snapshot and two queryable tables
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-ADAPTER
+TITLE: One export becomes the snapshot and two queryable tables
+AUTHORED_BY: llm
+STATEMENT: >>>
+adapter.py's adapt() turns one workspace.export index.json into both browser
+payloads in a single pass. Each node's provenance path arrives in the export
+itself as `_DOCUMENT_PATH`, so the board neither walks the canon nor imports
+view-check.py to recover it. What the export still does not carry is the parsed
+grammar for field kinds and option lists, since the export types every field as
+String; the caller hands that in, and source.py obtains it from the daemon's
+workspace.grammar result rather than parsing grammar.sgra itself. The snapshot
+(sdoc-board/2) is one record per node plus one edge per RESOLVED Parent or Child
+declaration, with unresolved targets kept as diagnostics rather than dropped.
+The rows payload (sdoc-perspective/2) is two tables: nodes, one row per node
+with PATH, DIR and degree facets; and relations, one row per declared relation,
+denormalized with both endpoints' type, title, state and path. Every row of a
+table carries the union key set with nulls for absent fields, because
+Perspective infers its column schema from the rows.
+
+A File relation may name part of a file rather than the whole of it, and both payloads carry that grain: ELEMENT and ID for a named item, or a LINE_RANGE, travel onto the relation row and onto the node's own fileRelations list. One thing beside them is not in the export at all -- the extractor's KIND word for the named item, such as option, module or binding -- and the adapter joins it by asking dev/scripts/sdoc_extractors for the items of that file. That lookup is optional by construction. The board's strictdoc-pinned interpreter carries the extractor, but an extractor that cannot be imported, or a file no configured glob covers, leaves kind null and the card falls back to the ELEMENT word. Reporting that an ID names nothing is element-check.py's job, not the board's; a null kind here means "unknown", never "wrong".
+
+The snapshot carries a third top-level key, semantics, and the adapter does not compute it: the caller passes the sdoc-semantics/2 payload in. When none arrives the adapter writes an explicit refusal record naming the reason rather than omitting the key, because a missing key gives a reader no null to branch on and reads as a settled empty answer.
+<<<
+RATIONALE: >>>
+The spike squashed relations into comma-joined facet strings on the node row;
+Perspective cannot explode a string back into rows, so relations were
+unqueryable (the operator's report, 2026-09-01). The denormalized second table
+is the fix.
+<<<
+COMMENT: >>>
+Updated 2026-09-03 for commits 6fbaa76b, 7d6886d1 and 46cd3cf1: File
+relations became element-grained in both payloads, the KIND word is joined
+from the extractor, and the snapshot gained the semantics key.
+
+Corrected 2026-09-08: the payload the caller passes in is sdoc-semantics/2,
+not /1. The engine's SCHEMA and adapter.py's SEMANTICS_SCHEMA both read
+sdoc-semantics/2; the statement had been carrying the older string. The two
+schema strings the adapter itself owns, sdoc-board/2 and sdoc-perspective/2,
+are unchanged.
+
+Corrected 2026-09-10 to distinguish adapt() from its caller: adapt receives the
+grammar rather than reading that source itself. The caller obtains it from the
+daemon's workspace.grammar result; no board process parses grammar.sgra.
+
+Updated 2026-09-10: provenance now comes from each exported node's
+`_DOCUMENT_PATH`; the UID-to-file walk and the dynamic view-check.py import are
+gone. File relation grain, extractor KIND enrichment and sdoc-semantics/2
+carriage remain additive, so sdoc-board/2 and sdoc-perspective/2 are unchanged.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-READS-THE-SCRIBE-DAEMON
+  ROLE: Governed_By
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-MERGED-SMOKE
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: docs/sdoc/board/adapter.py
+- TYPE: File
+  VALUE: dev/scripts/sdoc_extractors/registry.py

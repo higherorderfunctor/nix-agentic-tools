@@ -1,0 +1,13 @@
+[GRAMMAR]
+ELEMENTS:
+- TAG: NOTE
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  RELATIONS:
+  - TYPE: Parent
+    REVERSE_ROLE: Refined_By

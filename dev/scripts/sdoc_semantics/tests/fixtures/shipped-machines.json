@@ -1,0 +1,159 @@
+{
+  "STATUS": {
+    "field": "STATUS",
+    "applies_to": ["DECISION"],
+    "initial": "open",
+    "terminal": ["rejected", "superseded"],
+    "states": [
+      {
+        "name": "open",
+        "label": "open",
+        "note": "proposed, and nobody has ruled"
+      },
+      {
+        "name": "accepted",
+        "label": "accepted",
+        "note": "in force; its statement is now immutable"
+      },
+      {
+        "name": "rejected",
+        "label": "rejected",
+        "note": "ruled against -- terminal, and not the same as withdrawn"
+      },
+      {
+        "name": "superseded",
+        "label": "superseded",
+        "note": "replaced by a later decision that must be named"
+      }
+    ],
+    "transitions": [
+      {
+        "trigger": "accept",
+        "source": "open",
+        "dest": "accepted",
+        "conditions": [],
+        "unless": [],
+        "rule_text": "a human rules for it; the statement becomes immutable at this moment",
+        "settled": false
+      },
+      {
+        "trigger": "reject",
+        "source": "open",
+        "dest": "rejected",
+        "conditions": [],
+        "unless": [],
+        "rule_text": "a human rules against it; the node stays as the record of the ruling",
+        "settled": false
+      },
+      {
+        "trigger": "supersede",
+        "source": "accepted",
+        "dest": "superseded",
+        "conditions": [],
+        "unless": [],
+        "rule_text": "only an ACCEPTED decision can be superseded; a rejected one was never in force",
+        "settled": false
+      }
+    ],
+    "rules": [
+      {
+        "id": "STATUS-SUPERSEDE-NEVER-EDIT",
+        "text": "Never edit an accepted DECISION's STATEMENT. Set STATUS to superseded, add Superseded_By, and write a new decision (dev/skills/sdoc/SKILL.md rule 4; DEC-UID-OUTLIVES-TYPE records four accepted decisions whose statements are frozen).",
+        "kind": "transcription",
+        "settled": true,
+        "cites": ["DEC-UID-OUTLIVES-TYPE"]
+      },
+      {
+        "id": "STATUS-SUPERSEDE-NEEDS-A-TARGET",
+        "text": "Reaching superseded without a Superseded_By relation is a dangling supersession. That is a rule ABOUT TWO NODES, so no state machine can carry it -- it needs graph validation.",
+        "kind": "open",
+        "settled": false,
+        "cites": ["DEC-UID-OUTLIVES-TYPE"]
+      },
+      {
+        "id": "STATUS-WITHDRAWN-MISSING-UNDECIDED",
+        "text": "COMMENTARY's STANDING carries a withdrawn value and STATUS does not. Whether an open DECISION can be taken back without being rejected is unruled.",
+        "kind": "open",
+        "settled": false,
+        "cites": []
+      }
+    ],
+    "diagnostics": []
+  },
+  "AUTHORED_BY": {
+    "field": "AUTHORED_BY",
+    "applies_to": [
+      "DECISION",
+      "MECHANISM",
+      "REQUIREMENT",
+      "EVIDENCE",
+      "USE_CASE",
+      "NARRATIVE",
+      "WORK",
+      "COMMENTARY"
+    ],
+    "initial": "llm",
+    "terminal": ["human"],
+    "states": [
+      {
+        "name": "llm",
+        "label": "llm",
+        "note": "written by a model, not looked at -- free to reverse"
+      },
+      {
+        "name": "human-adopted",
+        "label": "human adopted",
+        "note": "a human took model-written words on as their own -- a model may not reverse them"
+      },
+      {
+        "name": "human",
+        "label": "human",
+        "note": "written by a human -- differs from adopted only in lineage"
+      }
+    ],
+    "transitions": [
+      {
+        "trigger": "raise",
+        "source": "llm",
+        "dest": "human-adopted",
+        "conditions": [],
+        "unless": [],
+        "rule_text": "rises one rung; who is permitted to raise it is undecided",
+        "settled": false
+      },
+      {
+        "trigger": "raise",
+        "source": "human-adopted",
+        "dest": "human",
+        "conditions": [],
+        "unless": [],
+        "rule_text": "rises one rung; who is permitted to raise it is undecided",
+        "settled": false
+      }
+    ],
+    "rules": [
+      {
+        "id": "AUTHORED-BY-RISES-ONLY",
+        "text": "The ladder is one-directional: a value may rise and never fall, so there is no reachability question and no way to launder a human commitment back into a free one.",
+        "kind": "transcription",
+        "settled": true,
+        "cites": ["DEC-AUTHORSHIP-LADDER"]
+      },
+      {
+        "id": "AUTHORED-BY-TREATMENT",
+        "text": "Two classes over three values: llm is FREE to reverse; human-adopted and human are HARD -- being unable to meet one is a STOP condition, not a workaround.",
+        "kind": "transcription",
+        "settled": true,
+        "cites": ["DEC-AUTHORSHIP-LADDER"]
+      },
+      {
+        "id": "AUTHORED-BY-WHO-MAY-RAISE-UNDECIDED",
+        "text": "No actor is attached to any transition. The decision's own comment says raising to human-adopted is a human act with no natural place to happen, and the write guard makes the field the operator's, so the machine below is a shape with no hand on it yet.",
+        "kind": "open",
+        "settled": false,
+        "cites": ["DEC-AUTHORSHIP-LADDER", "MECH-RUNTIME-WRITE-GUARD"]
+      }
+    ],
+    "diagnostics": []
+  }
+}

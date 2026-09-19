@@ -1,0 +1,57 @@
+[DOCUMENT]
+TITLE: The render reads an export generated from the held graph
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-EXPORT-PAYLOAD
+TITLE: The render reads an export generated from the held graph
+AUTHORED_BY: llm
+STATEMENT: >>>
+A render obtains the export JSON from the held graph rather than by running a fresh export. StrictDoc's JSON generator is a pure function of a built index -- strictdoc's own server calls it against its live one -- so the daemon runs it against the resident graph into a directory the caller names, and every downstream consumer reads those bytes. The payload is written to a directory rather than returned, because the current export is about 10 MB. An export reconciles first, like any read.
+
+Two things about those bytes differ deliberately from a hand-run export. First, StrictDoc's JSON generator drops ELEMENT and ID from element-grained File relations. `carry_file_element_into_json` patches that generator seam in memory so the daemon preserves both. Second, the generator receives each node's declaring document but omits its path. `carry_document_path_into_json` stamps every held document with its workspace-relative source path and patches `_write_requirement` once to emit `_DOCUMENT_PATH` on every node. Both patches are idempotent and fail closed when their upstream method changes shape. They live here rather than in the package because overlays/dev-tools/strictdoc.nix re-exports upstream's derivation unchanged for cache-hit parity; `strictdoc export` run by hand therefore still omits these additions.
+
+The board adapter reads `_DOCUMENT_PATH` directly and no longer walks the canon for provenance. Other downstream readers continue to consume the same shape with additive metadata. The daemon's own graph load passes `skip_source_files=True`, so the source-traceability walk the project config enables does not run inside it and none of that walk's cost reaches a read.
+<<<
+COMMENT: >>>
+Updated 2026-09-03 for commits 6fbaa76b and c64a0147: the daemon's export
+carries ELEMENT and ID through an in-memory patch, and the daemon's own load
+is exempt from the source-traceability walk the project config now enables.
+
+Retained from the retired export-payload delivery row on 2026-09-10:
+view:render falls back LOUDLY to a fresh strictdoc export when no
+daemon answers (dev/tasks/generate.nix). This deliberately diverges from
+DEC-SCRIBE-DAEMON-NO-FALLBACK because one render is one slow hit rather than
+many compounding small reads. REQ-DAEMON-IS-THE-ONLY-SOURCE has no carve-out
+for that fallback, so it is also a recorded violation of the newer rule until
+the fallback is removed or the requirement is revised.
+
+Updated 2026-09-10: the export also carries each node's workspace-relative
+`_DOCUMENT_PATH`, stamped by a second in-memory, idempotent generator patch.
+The board consumes that path directly rather than walking the canon for it.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: REQ-SCRIBE-HOLDS-ONE-GRAPH
+  ROLE: Guarantees
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-WORKSPACE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: EV-SCRIBE-LOAD-COST
+  ROLE: Proven_By
+- TYPE: Parent
+  VALUE: EV-SCRIBE-RPC-AND-EXPORT
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: dev/tasks/generate.nix
+- TYPE: File
+  VALUE: dev/tasks/generate.nix
+  ELEMENT: function
+  ID: tasks."generate:devenv-yaml"
+- TYPE: File
+  VALUE: dev/scripts/sdoc_model.py
+- TYPE: File
+  VALUE: dev/scripts/scribe_workspace.py

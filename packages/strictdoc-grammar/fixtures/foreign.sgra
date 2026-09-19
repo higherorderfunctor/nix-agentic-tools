@@ -1,0 +1,47 @@
+[GRAMMAR]
+ELEMENTS:
+- TAG: CHAPTER
+  PROPERTIES:
+    IS_COMPOSITE: True
+    PREFIX: CH-
+    VIEW_STYLE: Narrative
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: TITLE
+    HUMAN_TITLE: Chapter heading
+    TYPE: String
+    REQUIRED: True
+  - TITLE: LABELS
+    TYPE: Tag
+    REQUIRED: False
+  - TITLE: AUDIENCE
+    TYPE: MultipleChoice(reader, author, reviewer)
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: Child
+    ROLE: Contains
+    REVERSE_ROLE: Contained_By
+  - TYPE: File
+    ROLE: Renders_From
+- TAG: NOTE
+  FIELDS:
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: STATEMENT
+    TYPE: String
+    REQUIRED: True
+  - TITLE: LICENCE
+    TYPE: SingleChoice("MIT (Expat)", GPL-3-only, proprietary)
+    REQUIRED: False
+  - TITLE: NOTES
+    TYPE: String
+    REQUIRED: False
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: Refines
+    REVERSE_ROLE: Refined_By
+  - TYPE: Parent
+  - TYPE: File

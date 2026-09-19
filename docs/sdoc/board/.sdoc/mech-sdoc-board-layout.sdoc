@@ -1,0 +1,88 @@
+[DOCUMENT]
+TITLE: The board sends only a bounded neighborhood to ELK.js
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SDOC-BOARD-LAYOUT
+TITLE: The board sends only a bounded neighborhood to ELK.js
+AUTHORED_BY: llm
+STATEMENT: >>>
+layout.js first traverses only the selected node's filtered incoming and
+outgoing adjacency to the requested hop depth, ranks candidates for
+deterministic clipping, and retains at most 48 nodes. Only that bounded induced
+subgraph is sent to the ELK.js 0.12 worker; the whole canon is never serialized
+to the layout engine.
+
+ELK Layered places the measured card boxes from left to right and returns
+orthogonal edge sections. The board supplies measured relation-label boxes and
+label-label, label-node, edge-edge, edge-node, and inter-layer spacing, then
+translates ELK positions, bends, and label coordinates back into
+application-owned render objects. Fan-outs of at least three semantic edges
+sharing an endpoint, role, and direction use an invisible junction: one labeled
+trunk branches into unlabeled terminal pieces. Generic ELK edge merging stays
+disabled because it is not role-aware.
+
+A post-layout pass removes the subpixel route doubling and one-unit junction
+gaps that ELK can leave around its invisible junction nodes. It quantizes
+orthogonal coordinates to hundredths, clusters only overlapping same-role lanes
+within one scaled layout unit, splits partial overlaps at their breakpoints, and
+emits each occupied interval once. It bridges a remaining gap no wider than the
+junction tolerance only when the adjacent segments have the same role and
+intersecting semantic-edge sets. Normalized coordinates carry through
+perpendicular bends. Different role hues and unrelated routes never coalesce or
+bridge. Shared intervals, bridges, and label-only records retain every
+contributing semantic edge so filtering, inspection highlighting, arrowheads,
+and counts continue to describe canon relations.
+
+Layout is asynchronous. A monotonically increasing request token makes the
+latest depth, filter, hash, or refresh selection win and discards stale worker
+results. Initial layout failures keep the app from reporting ready; later
+failures reach the shared error banner.
+
+The API and worker are pinned, same-origin assets served through the static
+allowlist, and they come from Nix rather than from the tree. devenv.nix builds
+elkjs 0.12.0 from upstream's published tarball and puts the derivation's lib
+directory in SDOC_BOARD_ELKJS_DIR, for the dev shell and the board process
+alike; server.py reads that variable to back the two /assets/vendor/elkjs/
+routes and refuses to start without it. The route paths are unchanged, because
+layout.js resolves them relative to its own URL.
+<<<
+COMMENT: >>>
+The ELK.js layout replaced the reference implementation's custom SCC,
+barycentric, and orthogonal router on 2026-09-02. elkjs 0.12.0 is EPL-2.0 OR
+GPL-3.0-or-later. It was vendored in the tree until 2026-09-08, when its Nix
+delivery moved it behind SDOC_BOARD_ELKJS_DIR; the served bytes did not change.
+
+Delivery facts retained when the completed WORK row was retired on 2026-09-10:
+devenv.nix builds boardElkjs with pkgs.runCommand from the published 0.12.0
+tarball (sha256-wddxlyPgILEHJOPMvJNWlqKITx5402HN0DdmMJ6Ojio=). A dev-only
+runCommand was chosen over a published overlay because the board alone consumes
+the asset. The realized npm package measured 7.8 MiB. The served elk-api.js and
+elk-worker.min.js hashes stayed
+ccca46175c05bbd280b5de6c9853103711e52c666a101f145b717e345363e24d and
+e4f5c51c6f2fd564bb64e52e81c4a85a316ef2f24f8b90e1db5eb886c765b030.
+server.py resolves SDOC_BOARD_ELKJS_DIR at import and refuses an unset or
+incomplete directory. Verification covered both unchanged asset byte counts,
+the Graph route, 16 board tests, formatting, repository lints, and all 14
+strictdoc checks.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: DEC-SDOC-BOARD-MVP-NATIVE-WEB
+  ROLE: Governed_By
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/layout.js
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/app.js
+- TYPE: File
+  VALUE: docs/sdoc/board/assets/board.js
+- TYPE: File
+  VALUE: docs/sdoc/board/server.py
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-ELK-NEIGHBORHOOD-SMOKE
+  ROLE: Proven_By
+- TYPE: Parent
+  VALUE: EV-SDOC-BOARD-LAYOUT-LIBRARY-ASSESSMENT
+  ROLE: Proven_By

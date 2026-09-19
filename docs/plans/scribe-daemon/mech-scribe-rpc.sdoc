@@ -1,0 +1,74 @@
+[DOCUMENT]
+TITLE: One Unix socket carries newline-framed JSON-RPC to the workspace
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[MECHANISM]
+UID: MECH-SCRIBE-RPC
+TITLE: One Unix socket carries newline-framed JSON-RPC to the workspace
+AUTHORED_BY: llm
+STATEMENT: >>>
+Requests reach the workspace as JSON-RPC 2.0, one JSON value per newline, over
+an AF_UNIX stream socket at mode 0600 inside a directory at mode 0700 owned by
+the caller.
+
+THE ENVELOPE IS pjrpc'S, THE TRANSPORT IS OURS. A synchronous, framework-free
+pjrpc Dispatcher owns request parsing, the id and version rules, method lookup,
+batch handling and error serialization. The socket, the newline framing, the
+16 MiB request cap, the threading server, the derived socket path, the
+ownership probe and the no-fallback rule remain this repository's.
+
+Every method is registered with a pydantic contract built from its signature,
+forbidding extra keys and refusing a value of the wrong JSON type, so an
+unknown parameter or a string where a bool was declared is -32602 naming the
+field rather than a key that is quietly dropped. Which parameters a given
+OPERATION requires, and which it forbids, is a second layer: one model per
+operation, beside the operations themselves. Refusals keep their codes --
+-32001 for a workspace that could not answer, -32002 for an operation that was
+understood and declined. A WorkspaceError reached through scribe.apply is the
+latter: validation failures and rejected saves are operations the held
+workspace understood. An unexpected exception inside a registered method is
+-32603 Internal error and retains str(exc) as diagnostic data.
+
+A request over the cap is drained before its refusal is written, so the client
+receives the refusal instead of a broken pipe. Batches are accepted up to eight
+requests and refused above that, because the daemon serializes every write
+behind one held graph.
+
+On start the server probes any socket already at its path: refused or absent
+means stale and it is replaced; a successful connect means another daemon owns
+this workspace and the start fails. On stop the socket is removed only if its
+inode is the one that was bound.
+
+rpc.discover reports the schema -- `scribe-rpc/2` since the envelope moved onto
+pjrpc -- the framing, the served root, and the seven methods READ OFF THE
+REGISTRY: daemon.ping, rpc.discover, scribe.apply, workspace.describe,
+workspace.export, workspace.grammar and workspace.reload. What exists and what
+is advertised cannot drift apart. The discovery and mutable-workspace replies
+name the root they served, and the client refuses a malformed result rather
+than indexing into it.
+
+workspace.grammar is the versioned exception to the root-bearing result shape:
+its exact scribe-grammar/1 result is the types map and schema name. It is read
+from the GrammarElement objects on the held graph, preserving field kinds and
+choice options that the JSON export flattens. The socket path is derived from
+the client's resolved root. StrictDoc's injected TEXT element is excluded by
+the same one filter that supplies sdoc_model's author-facing tag list.
+<<<
+COMMENT: >>>
+Retained from the retired RPC-and-service delivery row on 2026-09-10: daemon
+hydration completes before the socket is bound
+(dev/scripts/scribe_daemon.py calls workspace.current() before build_server()).
+The socket's existence is therefore the readiness signal: a client checks by
+connecting rather than by polling a second state surface.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: MECH-SCRIBE-WORKSPACE
+  ROLE: Assumes
+- TYPE: Parent
+  VALUE: EV-SCRIBE-RPC-AND-EXPORT
+  ROLE: Proven_By
+- TYPE: File
+  VALUE: dev/scripts/scribe_rpc.py
