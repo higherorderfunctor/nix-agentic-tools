@@ -62,6 +62,14 @@
         type = lib.types.listOf lib.types.anything;
         default = [];
       };
+      # Required since the delivery adapter moved into the shared backend
+      # transform: it writes `tasks` for every ENABLED runtime, whether or not
+      # that runtime declares a writer, so a harness without the option throws
+      # before any test assertion runs.
+      tasks = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
     };
   };
 
