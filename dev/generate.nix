@@ -642,8 +642,10 @@
     through `ai.codex.nativeSettings.default_permissions` and
     `ai.codex.nativeSettings.permissions`. Do not mix those models in any loaded
     config layer. Same-named permission tables merge across user and project
-    files. The distinct `ai.codex.profiles` option, which would materialize
-    whole extra files selected with `codex --profile`, remains locked out.
+    files. The distinct `ai.codex.profiles` option, which would have
+    materialized whole extra files selected with `codex --profile`, was
+    removed as unreachable; per-agent visibility belongs to the sandbox-stack
+    work instead.
 
     With legacy `workspace-write`, the module automatically adds the Nix cache
     and, under devenv, the current repository's `.git`. With a selected custom
@@ -765,10 +767,9 @@
 
     Native-only settings remain under `ai.codex.nativeSettings`. Normalized
     settings live under `ai.codex.settings` and narrow `ai.settings` field by
-    field. Named whole-file
-    layers (`ai.codex.profiles`) are typed and emit correctly in both backends
-    but are **locked out** — see the sandbox section above for why. Native
-    Starlark command policy uses `ai.codex.execpolicyRules` rather than Markdown
+    field. The named whole-file `ai.codex.profiles` layer was removed as
+    unreachable — see the sandbox section above for why. Native Starlark
+    command policy uses `ai.codex.execpolicyRules` rather than Markdown
     `ai.rules`.
 
     </details>
