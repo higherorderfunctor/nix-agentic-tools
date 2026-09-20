@@ -1,8 +1,7 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-20 — shared documents use the same owned-leaf
-> reconciler on HM activation and devenv shell entry; Copilot and Kimchi now
-> declare their settings writers on both backends.
+> **Last verified:** 2026-09-20 — the delivery router builds all runtime-owned
+> document bundles; compatibility document and source helpers are removed.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -210,26 +209,25 @@ reconciles the leaves it owns. A factory says so by stating
 `facts.harnessWrites` on the file and naming the `ai.<runtime>.activation`
 writer whose ledger claims it; the rule resolves that to `shared` and
 `lib/ai/deliver.nix` builds the `lib/ai/own.nix` bundle that `lib/ai/own.py`
-runs. Copilot and Kimchi declare these writers on both backends: HM emits
-activation entries, while devenv emits tasks under `$DEVENV_ROOT` with ledgers
-under `$DEVENV_STATE/nix-agentic-tools`. (Factories not yet migrated still call
-`helpers.mkOwnedDocument`, which builds the same bundle from the caller's side.)
-Declared leaves are asserted, a leaf the previous generation declared and this
-one DROPPED is retracted, and every unowned sibling — a runtime-written
-`trusted_folders`, an oauth token — is left alone. A blind `jq -s '.[0] * .[1]'`
-cannot do the middle one: it has no way to tell a native key from a Nix key that
-was deleted.
+runs. Copilot, Kimchi and Kiro declare settings writers on both backends: HM
+emits activation entries, while devenv emits tasks under `$DEVENV_ROOT` with
+ledgers under `$DEVENV_STATE/nix-agentic-tools`. Factories describe files and
+ledgers; the router is the sole caller of the bundle helper. Declared leaves are
+asserted, a leaf the previous generation declared and this one DROPPED is
+retracted, and every unowned sibling — a runtime-written `trusted_folders`, an
+oauth token — is left alone. A blind `jq -s '.[0] * .[1]'` cannot do the middle
+one: it has no way to tell a native key from a Nix key that was deleted.
 
 **Mixed TOML ownership requires a leaf manifest, not a blind merge.** Codex's
 user `config.toml` contains Nix-declared settings and required native state: the
 TUI trust prompt writes ad-hoc `projects.<path>.trust_level` entries through
-`config/batchWrite`. `helpers.mkOwnedDocument` lowers it into the same
-`lib/ai/own.nix` bundle, and `lib/ai/own.py` records exact managed leaf paths
-under XDG state, removes only retired managed leaves, overlays current leaves,
-preserves native siblings within the same table, and publishes the whole
-document with one atomic replacement. The manifest is necessary because
-`existing * desired` cannot tell a native key from a Nix key deleted in the next
-generation.
+`config/batchWrite`. Its shared delivery entry claims a TOML ledger that the
+router lowers into the same `lib/ai/own.nix` bundle, and `lib/ai/own.py` records
+exact managed leaf paths under XDG state, removes only retired managed leaves,
+overlays current leaves, preserves native siblings within the same table, and
+publishes the whole document with one atomic replacement. The manifest is
+necessary because `existing * desired` cannot tell a native key from a Nix key
+deleted in the next generation.
 
 Modes on a document are the reconciler's, not the caller's: a NEW file is
 created 0600, and an existing regular file keeps the mode it has — unless its
@@ -495,11 +493,10 @@ This matters when passing values to options that gate on `lib.isPath` or
 literal OR store-path string), so the skill packages deliberately use strings.
 But the type distinction still bites for values flowing into sinks that gate on
 the STRICT `lib.isPath` — `cfg.context` writes a string as **text**, not a
-symlink — and for older HM pins. (`mkSourceEntry`, the helper this used to name
-first, is deleted: its last caller was the single-file skill branch, which now
-states `content.source` unconditionally.) When the sink's tolerance is unknown,
-the safe form is a `./` path literal (introduce a module-relative one in the
-`let` block so filtering doesn't coerce it to a string):
+symlink — and for older HM pins. The single-file skill branch states
+`content.source` unconditionally. When the sink's tolerance is unknown, the safe
+form is a `./` path literal (introduce a module-relative one in the `let` block
+so filtering doesn't coerce it to a string):
 
 ```nix
 { ... }: let

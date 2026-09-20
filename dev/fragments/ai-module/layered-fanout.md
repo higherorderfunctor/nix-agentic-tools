@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-20 — shared context arbitration discovers runtime
-> claimants by path; other contested paths and differing methods fail.
+> **Last verified:** 2026-09-20 — one runtime transformer describes delivery;
+> adapters own all native sink writes and the corpus permits zero direct writes.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -215,8 +215,8 @@ reader imports an evaluator.
 
 - L1 options and L1→L2 expansion → `lib/ai/sharedOptions.nix`
 - L2b options (CLI-generic) and L2b→L3 expansion →
-  `lib/ai/app/mkBackendTransform.nix` (the HM/devenv transform files are thin
-  selectors)
+  `lib/ai/app/mkBackendTransform.nix` (public backend selectors share it
+  directly through `lib/ai/app/default.nix`)
 - L2b options (CLI-specific, like Claude's `agentsDir` or `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/null filtering → transform (`aiCommon.mergePool`)
@@ -240,8 +240,8 @@ reader imports an evaluator.
 2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline (if every
    supported CLI handles it the same way) or in each per-CLI factory (if the
    shape differs).
-3. Add `X` to `supportedPools` only on app records whose callbacks consume it.
-   The uniform normalized `settings` schema is the explicit exception: every
+3. Add `X` to `supportedPools` only on app records whose transformers consume
+   it. The uniform normalized `settings` schema is the explicit exception: every
    runtime declares it, while each field's native lowering may be narrower.
 4. Add L4 routing/rendering into `ai.<runtime>.files` in each supporting per-CLI
    factory's `config`. Declare owned outputs' ledgers under
@@ -249,7 +249,8 @@ reader imports an evaluator.
 5. Let the existing L5 router lower the surviving entry; change
    `lib/ai/deliver.nix` or an adapter only when the delivery contract itself
    changes, and never write `home.file`, `home.activation`, `files` or `tasks`
-   from a factory — `module-delivery-no-new-direct-sink-writes` scans for it.
+   from a factory — `module-delivery-no-new-direct-sink-writes` requires zero
+   direct writes across the full corpus, with no exemptions.
 6. Wire L2↔L3 through `mergePool`, add the pool to the package-provenance guard,
    or document and test the concern's intentional non-pool composition rule
    (hooks append per-event lists).

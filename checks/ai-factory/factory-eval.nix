@@ -8,6 +8,21 @@
   inherit (import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) ai devenvStubs factoryProxyServer hmStubs mkProxyTestRecord mkTest;
 in {
   checks = {
+    factory-mkAiApp-rejects-backend-config = mkTest "mkAiApp-rejects-backend-config" (
+      let
+        base = {
+          name = "testapp";
+          transformers.markdown = ai.transformers.claude;
+        };
+      in
+        lib.all (backend:
+          !(builtins.tryEval (ai.app.mkAiApp (base
+            // {
+              ${backend}.config = _: {};
+            }))).success) ["devenv" "hm"]
+        && (builtins.tryEval (ai.app.mkAiApp (base // {config = _: {};}))).success
+    );
+
     # ── mkAiApp tests ───────────────────────────────────────────────
     factory-mkAiApp-hmTransform-exists = mkTest "mkAiApp-hmTransform-exists" (
       builtins.isFunction ai.app.hmTransform
@@ -103,10 +118,8 @@ in {
               default = 0;
             };
           };
-          hm = {
-            config = {mergedServers, ...}: {
-              ai.testapp._mergedServerCount = builtins.length (builtins.attrNames mergedServers);
-            };
+          config = {mergedServers, ...}: {
+            ai.testapp._mergedServerCount = builtins.length (builtins.attrNames mergedServers);
           };
         };
         module = ai.app.hmTransform record;

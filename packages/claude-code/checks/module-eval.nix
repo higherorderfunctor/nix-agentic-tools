@@ -761,11 +761,7 @@ in {
     # One runtime corpus covers the document codec plus actual HM activations
     # and devenv tasks. Every empty generation is evaluated and executed,
     # so a missing writer cannot satisfy the N-to-0 check.
-    #
-    # `harness.hmLib` rather than `lib`: `own` places its entry with
-    # `lib.hm.dag`, which only the harness stubs.
     module-json-settings-reconciliation = let
-      helpers = import ../../../lib/ai/hm-helpers.nix {lib = harness.hmLib;};
       mkCase = name: configFile: first: second: native: render: {
         inherit configFile first name native second;
         scripts = map render [first second {}];
@@ -807,24 +803,24 @@ in {
             nested.native = "survives";
             oauthAccount.token = "native-test-token";
           } (settings:
-            # The codec, not a caller: a space in the path, a dotted key, a
-            # null leaf, an array and a scalar/table transition, none of which
-            # any real caller declares all at once. `runtime` only decides
-            # where the eval-visible record lands, and this case reads the
-            # writer alone.
-              (helpers.mkOwnedDocument {
-                entry = "documentCodecTest";
-                ledger = "json-settings/document-codec-test.json";
-                path = ".settings with spaces/config.json";
-                python = pkgs.python3;
-                runtime = "claude";
-                value = settings;
-                inherit pkgs;
-              })
-            .home
-            .activation
-            .documentCodecTest
-            .text))
+            # A real delivery description exercises the codec's unusual keys
+            # through the same writer path as every runtime-owned document.
+              (evalHm {
+                ai.claude = {
+                  enable = true;
+                  activation.documentCodecTest.ledgers."json-settings/document-codec-test.json" = {
+                    codec = "json";
+                    path = ".settings with spaces/config.json";
+                  };
+                  files.".settings with spaces/config.json" = {
+                    content.value = settings;
+                    entry = "documentCodecTest";
+                    facts.harnessWrites = true;
+                    format = "json";
+                    ledger = "json-settings/document-codec-test.json";
+                  };
+                };
+              }).config.home.activation.documentCodecTest.text))
         (mkCase "claude" ".claude.json" {
             unpinFirstLaunchEffort = true;
             unpinSecondLaunchEffort = true;
