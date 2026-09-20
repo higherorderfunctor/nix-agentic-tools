@@ -465,7 +465,7 @@ in {
       # hands it the stripped map rather than filtering behind its back.
       (adapters.${backend} {
         cfg = cfg // {files = runtimeSinkFiles;};
-        inherit config;
+        inherit config options;
         runtime = appRecord.name;
       })
     ]))

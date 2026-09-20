@@ -16,11 +16,11 @@
   helpers = import ./hm-helpers.nix {inherit lib;};
   runtimeFiles = import ./runtime-files.nix {inherit lib;};
 
-  # The methods this layer delivers today. `upstream` is declared and not
-  # routed: it is how a surface another module owns stays visible in the
-  # delivery description, and it lands with the factory that needs it.
+  # The methods this layer delivers today. The assertion below is an
+  # EXHAUSTIVENESS guard: a method added to `deliveryMethod.methods` without a
+  # bucket here would otherwise resolve for a file that nothing then writes.
   owningMethods = ["copy-ro" "shared"];
-  routed = ["copy-ro" "shared" "symlink"];
+  routed = ["copy-ro" "shared" "symlink" "upstream"];
 
   # Abstract ordering tokens → the node each backend actually has. A token with
   # no node on this backend is DROPPED rather than translated into a name that
@@ -37,11 +37,32 @@
     devenv.shell = "devenv:enterShell";
     hm.linkCheck = "checkLinkTargets";
   };
+
+  # The roots an `upstream` sink may land under, per backend. This is not a
+  # policy about which options deserve a sink — it is the module system's
+  # constraint, measured on this file: a fragment whose TOP-LEVEL attribute
+  # name comes from a configuration value forces `ai.<runtime>.files` while
+  # the module system is still collecting the definitions that option is made
+  # of, and evaluation dies with `error: infinite recursion encountered`. An
+  # adapter can therefore only host a sink under a root it states as a
+  # LITERAL, and these are the roots each adapter already writes.
+  #
+  # It is also why the list is as SHORT as it is. Hosting a root makes that
+  # root's sub-names derived, so anything read under it forces the whole file
+  # map: adding `home` made `config.home.packages` force every runtime's
+  # entries, and `checks/ai-context` caught it — a `rulesDir` that only has to
+  # be valid when something reads the rules stopped being lazy. These two
+  # roots are the ones a delegated surface actually lands in.
+  upstreamRoots = {
+    devenv = ["files"];
+    hm = ["programs"];
+  };
 in
   {
     backend,
     cfg,
     config,
+    options,
     runtime,
   }: let
     edges = tokens: names: lib.filter (node: node != null) (map (token: tokens.${backend}.${token} or null) names);
@@ -214,6 +235,14 @@ in
           }
       )
       owningWriters;
+    # An upstream entry hands its content to another module's option. The
+    # VALUE travels, never the rendered bytes: the option that owns the file
+    # owns how it is written, which is the whole point of delegating it.
+    sunk = lib.attrValues (bucket "upstream");
+    upstreamValue = entry:
+      entry.content.value
+      or entry.content.source
+      or entry.content.text;
     # Merged into CONSTANT attribute paths: a list of fragments whose length
     # comes from `cfg.activation` forces that option while the module system is
     # still collecting the definitions it is made of.
@@ -267,6 +296,24 @@ in
       )
       (bucket "symlink");
 
+    # ── upstream: the bytes are another module's to write ────────────────
+    #
+    # The content is handed to the option `sink` names and no file is
+    # delivered for it here. That is how a surface another module owns — an
+    # upstream `programs.<cli>` option, or a document a backend deep-merges —
+    # stays IN this runtime's delivery description instead of vanishing from
+    # it, with the same facts, tombstone and override boundary as a file this
+    # layer writes itself.
+    #
+    # Handed to the adapter one ROOT at a time, because that root is the one
+    # attribute name the adapter has to state as a literal; see the
+    # `upstreamRoots` table above for what happens otherwise.
+    upstreamRoots = upstreamRoots.${backend};
+    upstreamUnder = root:
+      lib.foldl' lib.recursiveUpdate {}
+      (map (entry: lib.setAttrByPath (lib.tail entry.sink) (upstreamValue entry))
+        (lib.filter (entry: entry.sink != [] && lib.head entry.sink == root) sunk));
+
     owned = {
       activation = mergeBundles ["home" "activation"];
       enterTest = lib.concatStringsSep "\n" (lib.filter (body: body != "") (map (bundle: bundle.enterTest or "") bundles));
@@ -305,6 +352,36 @@ in
         '';
       })
       resolved
+      # `sink` and `upstream` are one declaration in two fields: a sink with
+      # another method is ignored, and an upstream entry without one has
+      # nowhere to put its bytes.
+      ++ lib.mapAttrsToList (path: entry: {
+        assertion = (entry.method == "upstream") == (entry.sink != []);
+        message = ''
+          ai.${runtime}.files."${path}" ${
+            if entry.method == "upstream"
+            then "is delivered as `upstream`, so it needs the `sink` that names the option owning it"
+            else "names a `sink`, which only `method = \"upstream\"` reads"
+          }.
+          An upstream file is handed to another module's option; nothing in the
+          delivery layer writes it.
+        '';
+      })
+      resolved
+      ++ map (entry: {
+        assertion =
+          lib.elem (lib.head entry.sink) upstreamRoots.${backend}
+          && options ? ${lib.head entry.sink};
+        message = ''
+          ai.${runtime}.files."${entry.path}" hands its content to
+          `${lib.concatStringsSep "." entry.sink}`, whose root the ${backend}
+          adapter does not host. It writes upstream sinks under
+          ${lib.concatMapStringsSep " and " (root: "`${root}`") upstreamRoots.${backend}}
+          only, because an attribute name it cannot state as a literal forces
+          ai.${runtime}.files while that option is still collecting its own
+          definitions.
+        '';
+      }) (lib.filter (entry: entry.sink != []) sunk)
       ++ lib.mapAttrsToList (path: entry: {
         assertion = !(entry.content ? run) || lib.elem entry.method owningMethods;
         message = ''
@@ -417,6 +494,24 @@ in
           one of them and silently discards the other.
         '';
       }) (lib.filter (claim: claim.declaration.codec != "dir") ledgerClaims)
+      # `before` reaches a bundle through nothing: `own` positions itself, and
+      # the router hands it `after` only. The default happens to be exactly
+      # what `own` does — `devenv:enterShell` plus the conditional
+      # `devenv:files` on devenv, and the prune phase before
+      # `checkLinkTargets` on Home Manager — so anything else is a silent
+      # no-op, which is the one outcome worth failing for.
+      ++ lib.mapAttrsToList (name: writer: {
+        assertion = writer.before == ["shell"];
+        message = ''
+          ai.${runtime}.activation.${name} owns ledgers and states
+          `before = ${builtins.toJSON writer.before}`. A reconciler bundle
+          positions itself: it runs before `devenv:enterShell` (plus the
+          conditional `devenv:files`) on devenv, and its prune phase before
+          `checkLinkTargets` on Home Manager. `before` is read for a `command`
+          writer only, so this value would be ignored.
+        '';
+      })
+      owningWriters
       ++ lib.mapAttrsToList (name: writer: {
         assertion = writer.command != null || writer.ledgers != {};
         message = ''
