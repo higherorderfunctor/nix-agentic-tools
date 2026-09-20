@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-20 — routing, path arbitration and matrix
-> observation share one delivery-method resolver.
+> **Last verified:** 2026-09-20 — generated structured documents preserve their
+> siblings under ordinary content extensions.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -43,7 +43,7 @@
 ┌────────────────────────────────────────────────────────────┐
 │ L4: Final runtime output map                               │
 │   ai.<cli>.files = attrsOf (nullOr { content; ... })       │
-│   - generated content uses mkDefault                      │
+│   - text/source default; structured leaves compose         │
 │   - sibling fields compose; null suppresses entries       │
 └────────────────────────────────────────────────────────────┘
                              │
@@ -75,6 +75,11 @@
 - **AGENTS.md keeps a whole-entry default.** Codex and the shared repository
   writer decide whether a file exists by reading composed content. Deferring
   that read until priority arbitration keeps replaced store sources lazy.
+- **Structured documents contribute ordinary leaves.** Codex HM settings and
+  Copilot MCP/LSP use `content.value` at ordinary priority. Adding one leaf
+  keeps generated siblings, including leaves already recorded by Codex's ledger;
+  defaulting the whole content would silently retire those siblings. Text and
+  source content retain their whole-content defaults.
 - **Delegated surfaces still have delivery entries.** Claude's Home Manager
   agents, hook scripts, skills, LSP and MCP maps use `method = "upstream"` with
   sinks under `programs.claude-code`. Settings, permissions and typed hooks

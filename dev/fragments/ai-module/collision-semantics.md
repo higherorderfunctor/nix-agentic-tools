@@ -1,7 +1,7 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-19 — cross-runtime path claims are computed; shared
-> context targets arbitrate overrides and require one delivery method.
+> **Last verified:** 2026-09-20 — structured file leaves compose at ordinary
+> priority while text/source content keeps its generated default.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -16,22 +16,22 @@ This matrix is the authoritative cross-runtime merge and fanout contract. Any
 change to one of these boundaries must update the corresponding row in the same
 commit.
 
-| ID  | Boundary                                          | Unit    | Behavior                                                                                                                                                       |
-| --- | ------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B0  | root pool → runtime lacking that pool             | pool    | Degrade to the neutral value; the corresponding per-runtime option does not exist.                                                                             |
-| B1  | root pool ↔ runtime pool, same key                | entry   | The runtime entry replaces the root entry wholesale.                                                                                                           |
-| B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                                            |
-| B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                                 |
-| B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                                 |
-| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                                          |
-| B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                                          |
-| B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                              |
-| B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                              |
-| B6a | normalized rule matcher → native scope            | field   | Null is always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex routing prose.                                          |
-| B7  | generated native file ↔ runtime file entry        | field   | Generator defaults `content` alone; a consumer replaces the bytes, changes a sibling field, or suppresses the entry with `null`, which wins at equal priority. |
-| B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                                                                 |
-| B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                                                         |
-| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops the entry after the shallow merge.                                                                                                        |
+| ID  | Boundary                                          | Unit    | Behavior                                                                                                                                                             |
+| --- | ------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B0  | root pool → runtime lacking that pool             | pool    | Degrade to the neutral value; the corresponding per-runtime option does not exist.                                                                                   |
+| B1  | root pool ↔ runtime pool, same key                | entry   | The runtime entry replaces the root entry wholesale.                                                                                                                 |
+| B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                                                  |
+| B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                                       |
+| B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                                       |
+| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                                                |
+| B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                                                |
+| B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                                    |
+| B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                                    |
+| B6a | normalized rule matcher → native scope            | field   | Null is always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex routing prose.                                                |
+| B7  | generated native file ↔ runtime file entry        | field   | Generator defaults text/source `content`; structured leaves compose at ordinary priority. Sibling fields compose, and `null` suppresses the entry at equal priority. |
+| B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                                                                       |
+| B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                                                               |
+| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops the entry after the shallow merge.                                                                                                              |
 
 B3 is why `//` is correct and `recursiveUpdate` is wrong. B7's unit used to be
 the complete rendered native file; it is now the delivery entry's fields, and
@@ -146,11 +146,11 @@ consumer value or null at that same per-runtime key wins through ordinary
 module-system priority before root/runtime composition happens.
 
 **`ai.<runtime>.files` is the exception, and the reason is worth knowing before
-copying either shape.** A generated FILE entry defaults its `content` option and
-leaves every sibling at ordinary priority, because `filterOverrides` runs before
-a type merges: a whole-entry `mkDefault` is discarded outright by a consumer who
-sets only `method` or a fact, and the survivor has no bytes at all. Two
-consequences follow.
+copying either shape.** A generated text/source FILE entry defaults its
+`content` option and leaves every sibling at ordinary priority, because
+`filterOverrides` runs before a type merges: a whole-entry `mkDefault` is
+discarded outright by a consumer who sets only `method` or a fact, and the
+survivor has no bytes at all. Two consequences follow.
 
 - Pushing the default below a `nullOr` boundary normally breaks the tombstone —
   Nix must choose the null or record branch before leaf priorities arbitrate,
@@ -164,6 +164,11 @@ consequences follow.
   consumer already replaced. The two composed AGENTS.md writers (`mkCodex.nix`,
   `lib/ai/app/sharedAgentsMd.nix`) keep whole-entry `mkDefault` and say so at
   the site.
+
+Structured documents instead contribute ordinary `content.value` leaves (or
+per-leaf defaults). A default on the whole content or value drops every
+generated leaf when a consumer adds one, silently retiring previously owned
+siblings.
 
 Always-on process defaults such as the sandbox-safe SSH command still use the
 internal callback channel instead of writing a hidden normalized-pool
