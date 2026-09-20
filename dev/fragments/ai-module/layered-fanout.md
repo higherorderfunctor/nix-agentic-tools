@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-21 — context and rules use shared text-source
-> `enable` gates and arbitrate `text` against `source` by module priority.
+> **Last verified:** 2026-09-22 — context and rules retain text-source priority
+> and enable semantics; L5 is the delivery router plus one adapter per backend.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
