@@ -285,7 +285,8 @@ in
             ai.kimchi.files."${cfg.configDir}/harness/${cfg.context.filename}" = contextEntry;
           })
 
-          # harness/skills/ — Layout B via mkSkillEntries.
+          # harness/skills/ — Layout B: one delivery entry per skill tree,
+          # expanded by Home Manager natively and by the router for devenv.
           (lib.mkIf (mergedSkills != {}) {
             ai.kimchi.files = helpers.mkSkillFiles {
               configDir = "${cfg.configDir}/harness";
