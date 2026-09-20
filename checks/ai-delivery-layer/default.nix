@@ -206,6 +206,81 @@
     && !lib.any usesExit (lib.splitString "\n" body);
 in {
   checks = {
+    module-delivery-normalized-keyed-pools-extend = mkTest "delivery-normalized-keyed-pools-extend" (
+      let
+        samples = {
+          agents = {
+            description = "probe";
+            instructions = "probe";
+          };
+          environmentVariables = "probe";
+          lspServers.command = "probe";
+          mcpServers.command = "probe";
+          rules.text = "probe";
+          skills = ./fixtures/probe-skill;
+        };
+      in
+        lib.all (
+          evaluate:
+            lib.all (
+              pool: let
+                base.ai = {
+                  ${pool}.inherited = samples.${pool};
+                  copilot = {
+                    enable = true;
+                    ${pool}.local = samples.${pool};
+                  };
+                };
+                original = (evaluate base).config.ai.copilot.normalized.${pool};
+                extension.extra = original.inherited;
+                result = value:
+                  (evaluate (lib.recursiveUpdate base {
+                    ai.copilot.normalized.${pool} = value;
+                  })).config;
+                extended = result extension;
+                forced = result (lib.mkForce extension);
+              in
+                lib.assertMsg (
+                  builtins.attrNames extended.ai.copilot.normalized.${pool}
+                  == ["extra" "inherited" "local"]
+                  && extended.ai.copilot.normalized.${pool}.inherited == original.inherited
+                  && builtins.attrNames forced.ai.copilot.normalized.${pool} == ["extra"]
+                  && lib.all (assertion: assertion.assertion) (extended.assertions ++ forced.assertions)
+                ) "normalized ${pool}: ordinary extension must retain inherited keys and mkForce must replace the pool"
+            ) (builtins.attrNames samples)
+        ) [evalHm evalDevenv]
+    );
+
+    module-delivery-normalized-rule-extension-reaches-files = mkTest "delivery-normalized-rule-extension-reaches-files" (
+      lib.all (
+        evaluate: let
+          cfg =
+            (evaluate {
+              ai.rules.inherited.text = "INHERITED-RULE";
+              ai.kiro = {
+                enable = true;
+                normalized.rules.extra = {
+                  matcher = ["src/**"];
+                  text = "EXTRA-RULE";
+                };
+              };
+            }).config;
+          files =
+            if cfg ? home
+            then cfg.home.file
+            else cfg.files;
+          inheritedPath =
+            if cfg ? home
+            then ".kiro/steering/inherited.md"
+            else "AGENTS.md";
+        in
+          files ? ${inheritedPath}
+          && lib.hasInfix "INHERITED-RULE" files.${inheritedPath}.text
+          && lib.hasInfix "EXTRA-RULE" files.".kiro/steering/extra.md".text
+          && lib.all (assertion: assertion.assertion) cfg.assertions
+      ) [evalHm evalDevenv]
+    );
+
     module-delivery-document-ledger-rejects-symlink = mkTest "delivery-document-ledger-rejects-symlink" (
       lib.all (
         evaluate:
