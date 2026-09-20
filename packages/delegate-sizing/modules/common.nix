@@ -103,6 +103,24 @@ in {
 
   config =
     {
+      ai.programs.delegate-sizing.whenToDelegate = {
+        "Launch independent work together" = {
+          enable = lib.mkDefault false;
+          source = lib.mkDefault ../fragments/launch-independent-work-together.md;
+        };
+        "Orchestrator session" = {
+          enable = lib.mkDefault false;
+          source = lib.mkDefault ../fragments/orchestrator-session.md;
+        };
+        "Prefer the flat-rate pool" = {
+          enable = lib.mkDefault false;
+          source = lib.mkDefault ../fragments/prefer-the-flat-rate-pool.md;
+        };
+        "Verify by the artifact" = {
+          enable = lib.mkDefault false;
+          source = lib.mkDefault ../fragments/verify-by-the-artifact.md;
+        };
+      };
       assertions =
         (
           if options ? warnings
