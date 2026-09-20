@@ -242,12 +242,29 @@ in
     # VALUE travels, never the rendered bytes: the option that owns the file
     # owns how it is written, which is the whole point of delegating it.
     sunk = lib.attrValues (bucket "upstream");
-    upstreamValue = entry:
-      if entry.content.value != null
-      then entry.content.value
-      else if aiTypes.textSourceUsesSource entry.content
-      then entry.content.source
-      else entry.content.text;
+    upstreamValue = entry: let
+      contentOption = options.ai.${runtime}.files.valueMeta.attrs.${entry.path}.configuration.options.content;
+      field =
+        if entry.content.value != null
+        then "value"
+        else if aiTypes.textSourceUsesSource entry.content
+        then "source"
+        else "text";
+    in
+      # Moving the evaluated VALUE makes defaults ordinary definitions in the
+      # host module: a generated `mkDefault` leaf would then conflict with a
+      # consumer's own definition of it, and `mkBefore`/`mkAfter` list order
+      # would be lost. Alias the surviving content definitions instead, which
+      # keeps both content-level priority and the nested leaf/list properties
+      # for the host option's own merge.
+      builtins.seq entry.content.${field} (
+        lib.modules.mkAliasAndWrapDefsWithPriority lib.id (contentOption
+          // {
+            definitions =
+              map (content: content.${field})
+              (lib.filter (content: content ? ${field}) contentOption.definitions);
+          })
+      );
     # Merged into CONSTANT attribute paths: a list of fragments whose length
     # comes from `cfg.activation` forces that option while the module system is
     # still collecting the definitions it is made of.
@@ -322,8 +339,7 @@ in
     # `upstreamRoots` table above for what happens otherwise.
     upstreamRoots = upstreamRoots.${backend};
     upstreamUnder = root:
-      lib.foldl' lib.recursiveUpdate {}
-      (map (entry: lib.setAttrByPath (lib.tail entry.sink) (upstreamValue entry))
+      lib.mkMerge (map (entry: lib.setAttrByPath (lib.tail entry.sink) (upstreamValue entry))
         (lib.filter (entry: entry.sink != [] && lib.head entry.sink == root) sunk));
 
     owned = {

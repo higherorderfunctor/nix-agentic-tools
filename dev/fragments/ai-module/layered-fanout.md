@@ -66,6 +66,19 @@
 - **AGENTS.md keeps a whole-entry default.** Codex and the shared repository
   writer decide whether a file exists by reading composed content. Deferring
   that read until priority arbitration keeps replaced store sources lazy.
+- **Delegated surfaces still have delivery entries.** Claude's Home Manager
+  agents, hook scripts, skills, LSP and MCP maps use `method = "upstream"` with
+  sinks under `programs.claude-code`. Settings, permissions and typed hooks
+  share the `.claude/settings.json` entry. On devenv that entry delegates to
+  `files.".claude/settings.json".json`, so upstream's hooks still merge into the
+  same document. The router aliases definitions so upstream overrides still beat
+  generated defaults and the host owns list merging. Declare each sink path
+  once: repeating a list-valued `sink` on every content contribution
+  concatenates the path segments. The backend's supported roots remain explicit;
+  devenv's `claude.code.mcpServers` integration is outside those roots and
+  retains its native delegation. Claude's user-global `.claude.json` instead
+  claims the existing JSON ledger under `claudeUnpinLaunchEffort`; its writer
+  survives empty declarations and remains Home Manager only.
 - **Writers belong beside the file map.** Codex's user `config.toml` claims a
   TOML ledger because the trust prompt writes native state there; project config
   remains a generated source. Its skill-link migrator owns no ledger and uses
