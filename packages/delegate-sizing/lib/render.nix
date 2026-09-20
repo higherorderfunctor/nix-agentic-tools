@@ -104,7 +104,7 @@ in ''
   description: Before calling a subagent, spawning a delegate, or building a workflow, size the model and effort for the task and available runtime pools.
   ---
 
-  ${lib.removePrefix "<!-- prettier-ignore -->\n" (builtins.readFile ../fragments/skill-routing.md)}
+  ${builtins.readFile ./rules.md}
   Use this skill for delegates and workflow nodes. Size each stage separately.
   Set effort every time; harness defaults differ. If a model has no effort
   control, record effort as not applicable. State the selected model and effort
