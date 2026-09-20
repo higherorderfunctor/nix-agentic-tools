@@ -359,9 +359,10 @@ in {
         && devenv.config.ai.kiro.enable
     );
 
-    # Skill packages consume the generic program factory. Shared declarations
-    # produce identical HM/devenv root and runtime option trees within each
-    # package's capability set, including nested runtime-only settings.
+    # Skill packages consume the generic program factory. Each package's
+    # portable option tree is exact, and shared declarations produce identical
+    # HM/devenv root and runtime option trees within its capability set,
+    # including nested runtime-only settings.
     # `gitPreset` deliberately stays out of this tree as an HM-only top-level
     # companion because it configures machine-wide Git, not a runtime.
     module-skill-packages-program-option-parity = mkTest "skill-packages-program-option-parity" (
@@ -376,9 +377,9 @@ in {
           shape ((lib.getAttrFromPath path evaluated.options).type.getSubOptions []);
         hm = evalHm {};
         devenv = evalDevenv {};
-        programParity = package: runtimes:
+        programParity = package: expectedRootShape: runtimes:
           optionShape hm ["ai" "programs" package]
-          == {enable = "boolean";}
+          == expectedRootShape
           && optionShape hm ["ai" "programs" package]
           == optionShape devenv ["ai" "programs" package]
           && lib.all
@@ -387,8 +388,11 @@ in {
             == optionShape devenv ["ai" runtime "programs" package])
           runtimes;
       in
-        programParity "delegate-sizing" ["claude" "codex" "kiro"]
-        && programParity "stacked-workflows" harnessNames
+        programParity "delegate-sizing" {
+          enable = "boolean";
+          whenToDelegate = "attribute set of (submodule)";
+        } ["claude" "codex" "kiro"]
+        && programParity "stacked-workflows" {enable = "boolean";} harnessNames
         && hm.options.stacked-workflows ? gitPreset
         && !(devenv.options ? stacked-workflows)
     );
