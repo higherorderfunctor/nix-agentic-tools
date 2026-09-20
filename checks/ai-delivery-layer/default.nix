@@ -10,9 +10,29 @@
 {
   harness,
   lib,
+  pkgs,
   ...
 }: let
   inherit (harness) evalDevenv evalHm harnessNames mkTest;
+
+  # The factories that still write a native sink themselves, with the step of
+  # the migration that takes each one off the list. This is keyed by PATH and
+  # not by a count: the anchored patterns below see 33 of today's 36 sites, and
+  # the other three live inside codex's nested `home = {` block, which the
+  # second pattern flags as a whole rather than line by line.
+  #
+  # An entry is removed when its factory stops writing sinks directly, and the
+  # check fails in BOTH directions — a new writer anywhere under
+  # `packages/*/lib/` fails it, and so does an entry the scan can no longer
+  # reproduce. The list is empty when the migration is done, and then this
+  # check is what keeps it empty.
+  sinkWriters = {
+    "packages/chatgpt-codex/lib/mkCodex.nix" = "skill/agent/execpolicy/hooks entries and the two skill-link migrators";
+    "packages/claude-code/lib/mkClaude.nix" = "the devenv settings.json deep merges and the skill walker";
+    "packages/copilot-cli/lib/mkCopilot.nix" = "lsp, mcp and settings documents, rules, agents and skills";
+    "packages/kimchi/lib/mkKimchi.nix" = "config.json, harness settings and mcp.json, and skills";
+    "packages/kiro-cli/lib/mkKiro.nix" = "permissions, lsp, cli.json, agents, the agents-dir walker and skills";
+  };
 
   # One writer, both backends, every ordering feature: a backend-keyed entry
   # name, a token with no devenv node (`secrets`), the literal-node escape
@@ -112,6 +132,53 @@ in {
         && withoutFiles.files == {}
         && withoutFiles.tasks.probeDefaults.before == ["devenv:enterShell"]
     );
+
+    # A corpus scan, not a changed-files scan: a gate that only looks at the
+    # diff cannot notice that the tree behind it grew a new direct write.
+    module-delivery-no-new-direct-sink-writes =
+      pkgs.runCommandLocal "delivery-no-new-direct-sink-writes" {
+        src = ../..;
+        nativeBuildInputs = [pkgs.coreutils pkgs.diffutils pkgs.findutils pkgs.gnugrep];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
+        # The source is a read-only store path, so artifacts land in the build
+        # directory while the scan itself runs with repo-relative paths.
+        work="$PWD"
+        cd "$src"
+
+        # An assignment to one of the four native sinks, at the start of a
+        # line. `files` and `tasks` are matched bare because that is how a
+        # devenv fragment writes them.
+        anchored='^[[:space:]]*(home\.file|home\.activation|files|tasks)([."[]|[[:space:]]*=)'
+        # The nested form: a `home = {` block whose body writes `file` and
+        # `activation` at a depth the anchored pattern cannot see. Flagging the
+        # block is enough, because this list is keyed by file.
+        nested='^[[:space:]]*home[[:space:]]*=[[:space:]]*\{'
+
+        find packages -mindepth 3 -path 'packages/*/lib/*' -type f -name '*.nix' -print0 \
+          | sort -z > "$work/corpus"
+        # A scan of nothing exits 0 and is indistinguishable from a pass.
+        test -s "$work/corpus"
+        echo "scanned $(tr -d -c '\0' < "$work/corpus" | wc -c) factory library files"
+
+        xargs -0 -r grep -lE -e "$anchored" -e "$nested" < "$work/corpus" | sort > "$work/actual" || true
+        {
+          ${lib.concatMapStringsSep "\n          " (path: "echo ${lib.escapeShellArg path}") (lib.attrNames sinkWriters)}
+        } | sort > "$work/allowed"
+
+        if ! diff -u "$work/allowed" "$work/actual" > "$work/sink-writers.diff"; then
+          echo "delivery: the set of files writing a native sink directly has changed." >&2
+          echo "A '+' line writes home.file/home.activation/files/tasks itself; route it" >&2
+          echo "through ai.<runtime>.files or ai.<runtime>.activation instead. A '-' line" >&2
+          echo "no longer does; drop it from sinkWriters in this check." >&2
+          cat "$work/sink-writers.diff" >&2
+          exit 1
+        fi
+
+        echo "PASS: ${toString (lib.length (lib.attrNames sinkWriters))} recorded factories write a native sink directly; no others do" > "$out"
+      '';
 
     module-delivery-writers-reach-every-runtime = mkTest "delivery-writers-reach-every-runtime" (
       lib.all (runtime: let
