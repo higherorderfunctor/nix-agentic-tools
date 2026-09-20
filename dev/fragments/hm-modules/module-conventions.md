@@ -237,10 +237,12 @@ nothing about what a writer will assert is visible in its activation body.
 `helpers.mkOwnBundle` therefore records the whole plan on the internal
 `ai.<runtime>._ownPlans.<write entry>` option, which is what module-eval checks
 read (`harness.ownPlan` for the plan, `harness.ownedDocument` for one document's
-ledger and value). Reading the plan FILE back would be import-from-derivation,
-and `builtins.fromJSON` refuses a string that refers to a store path, so the
-value a document declares is recorded beside the plan rather than recovered from
-it.
+ledger and value). The delivery router builds that bundle's INPUT — one target
+per ledger a writer declares, whether or not a file claims it this generation,
+which is how a path is released — and never its behavior. Reading the plan FILE
+back would be import-from-derivation, and `builtins.fromJSON` refuses a string
+that refers to a store path, so the value a document declares is recorded beside
+the plan rather than recovered from it.
 
 Do not generalize this to every TOML file or every runtime. Static ownership is
 still preferred when no required native writer shares the artifact. That is why
