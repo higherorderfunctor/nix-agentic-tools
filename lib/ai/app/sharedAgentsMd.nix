@@ -2,9 +2,9 @@
 # AGENTS.md-standard runtimes. Runtime factories contribute named context/rule
 # units; this module renders each filename once after the module system has
 # deduplicated equal definitions and rejected divergent definitions for a key.
-# Applicable public final-file entries from enabled Codex/Kimchi/Kiro runtimes
+# Applicable public final-file entries from enabled runtimes
 # arbitrate here too, before the single native sink, so replacement and
-# disabled content cannot bypass ownership or their runtime's sole enable gate.
+# tombstones cannot bypass ownership or their runtime's sole enable gate.
 {
   config,
   lib,
@@ -16,6 +16,7 @@
     && lib.hasAttrByPath ["files"] options;
   agentsmd = import ../transformers/agentsmd.nix {inherit lib;};
   aiTypes = import ../types.nix {inherit lib;};
+  deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
   deduplicatingType = {
@@ -107,7 +108,20 @@
       '';
     })
     config.ai.internal.agentsMd;
-  sharedRuntimeNames = ["codex" "kimchi" "kiro"];
+  # Discover public app records from their option shape, including downstream
+  # runtimes absent from this repository's first-party registry.
+  runtimeNames = builtins.attrNames (lib.filterAttrs (_name: runtime:
+    runtime ? enable && runtime ? files && runtime ? methodFor)
+  options.ai);
+  backend =
+    if isDevenv
+    then "devenv"
+    else "hm";
+  sharedTarget = runtime: path:
+    isDevenv
+    && options.ai.${runtime} ? normalized.context
+    && config.ai.${runtime}.context.filename == path
+    && builtins.hasAttr path config.ai.internal.agentsMd;
   projectEntry = entry:
     entry
     // {
@@ -120,19 +134,54 @@
         // lib.optionalAttrs (entry.content.run != null) {inherit (entry.content) run;}
         // lib.optionalAttrs (entry.content.value != null) {inherit (entry.content) value;};
     };
-  sharedOverrideDefinitions = map (runtime: let
-    enabled = lib.attrByPath ["ai" runtime "enable"] false config;
-    files = lib.attrByPath ["ai" runtime "files"] {} config;
+  claims = lib.concatMap (runtime: let
+    cfg = config.ai.${runtime};
   in
-    lib.mkIf enabled {
-      ai.internal.files = lib.mapAttrs (_filename: projectEntry) (
-        lib.filterAttrs (
-          filename: _entry: builtins.hasAttr filename config.ai.internal.agentsMd
-        )
-        files
-      );
+    lib.optionals cfg.enable (lib.mapAttrsToList (path: entry: {
+      inherit entry path runtime;
+      method =
+        if entry.method != null
+        then entry.method
+        else
+          cfg.methodFor {
+            inherit backend path;
+            inherit (entry) facts;
+            default = deliveryMethod.byRule;
+          };
+    }) (lib.filterAttrs (_path: runtimeFiles.isLive) cfg.files)))
+  runtimeNames;
+  byPath = lib.groupBy (claim: claim.path) claims;
+  contested = lib.filterAttrs (_path: entries: builtins.length entries > 1) byPath;
+  collisionAssertions =
+    lib.mapAttrsToList (path: entries: {
+      assertion = lib.all (claim: sharedTarget claim.runtime path) entries;
+      message = "ai: ${lib.concatMapStringsSep ", " (claim: claim.runtime) entries} all deliver `${path}`; a contested path needs one owner. Give one runtime a distinct path; only a shared AGENTS.md context target is arbitrated.";
     })
-  sharedRuntimeNames;
+    contested;
+  methodAssertions =
+    lib.mapAttrsToList (path: entries: {
+      assertion = builtins.length (lib.unique (map (claim: claim.method) entries)) <= 1;
+      message = "ai: `${path}` is delivered by different methods; one path has one owner and one method.";
+    })
+    contested;
+  # A public claim on an aggregate also competes with its generated owner even
+  # when no second runtime supplies a public override. That owner is a native
+  # symlink; silently ignoring a claimant's method would lie about delivery.
+  aggregateAssertions = map (claim: {
+    assertion = sharedTarget claim.runtime claim.path && claim.method == "symlink";
+    message = "ai.${claim.runtime}.files.\"${claim.path}\": the shared AGENTS.md aggregate requires a matching context target and one method (symlink).";
+  }) (lib.filter (claim: isDevenv && builtins.hasAttr claim.path config.ai.internal.agentsMd) claims);
+  sharedOverrideDefinitions = map (runtime: let
+    inherit (config.ai.${runtime}) enable files;
+  in
+    lib.mkIf enable {
+      ai.internal.files =
+        lib.filterAttrs (
+          filename: _entry: sharedTarget runtime filename
+        )
+        (lib.mapAttrs (_filename: projectEntry) files);
+    })
+  runtimeNames;
 in {
   options.ai.internal.agentsMd = lib.mkOption {
     type = lib.types.attrsOf fileType;
@@ -150,39 +199,44 @@ in {
     description = "Single-owner repository files rendered from cross-runtime compositions.";
   };
 
-  config = lib.optionalAttrs isDevenv (lib.mkMerge (
-    [
-      {assertions = sizeAssertions;}
-      (lib.mkIf (config.ai.internal.agentsMd != {}) {
-        # Do not inspect rendered bytes to discover whether a target exists.
-        # The separate boolean inventory lets priority arbitration discard this
-        # lazy default without forcing source-backed generated content.
-        # Whole-entry priority keeps the rendered-body test lazy. A public
-        # replacement or disable can discard this definition before a
-        # store-backed body is read; a sibling-only override is diagnosed as an
-        # empty entry and must restate content.
-        ai.internal.files = lib.mapAttrs (_filename: text:
-          lib.mkDefault (
-            if text == ""
-            then {
-              content = {
-                enable = false;
-                inherit text;
-              };
-            }
-            else {
-              content = {
-                enable = true;
-                inherit text;
-              };
-            }
-          ))
-        generatedRendered;
-      })
-      (lib.mkIf (config.ai.internal.files != {}) {
-        files = runtimeFiles.liveFiles config.ai.internal.files;
-      })
-    ]
-    ++ sharedOverrideDefinitions
-  ));
+  config = lib.mkMerge [
+    (lib.optionalAttrs (options ? assertions) {
+      assertions = collisionAssertions ++ methodAssertions ++ aggregateAssertions;
+    })
+    (lib.optionalAttrs isDevenv (lib.mkMerge (
+      [
+        {assertions = sizeAssertions;}
+        (lib.mkIf (config.ai.internal.agentsMd != {}) {
+          # Do not inspect rendered bytes to discover whether a target exists.
+          # The separate boolean inventory lets priority arbitration discard this
+          # lazy default without forcing source-backed generated content.
+          # Whole-entry priority keeps the rendered-body test lazy. A public
+          # replacement or disable can discard this definition before a
+          # store-backed body is read; a sibling-only override is diagnosed as an
+          # empty entry and must restate content.
+          ai.internal.files = lib.mapAttrs (_filename: text:
+            lib.mkDefault (
+              if text == ""
+              then {
+                content = {
+                  enable = false;
+                  inherit text;
+                };
+              }
+              else {
+                content = {
+                  enable = true;
+                  inherit text;
+                };
+              }
+            ))
+          generatedRendered;
+        })
+        (lib.mkIf (config.ai.internal.files != {}) {
+          files = runtimeFiles.liveFiles config.ai.internal.files;
+        })
+      ]
+      ++ sharedOverrideDefinitions
+    )))
+  ];
 }
