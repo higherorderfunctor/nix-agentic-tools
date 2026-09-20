@@ -3,6 +3,7 @@
   dirHelpers = import ./dir-helpers.nix {inherit lib;};
 in {
   agent = import ./agent.nix {inherit lib;};
+  # One record transformer, selected by backend through the public app API.
   app = import ./app {inherit lib;};
   # The delivery method vocabulary and the rule that picks one from a file's
   # stated consumer facts. Exported because `ai.<runtime>.methodFor` documents

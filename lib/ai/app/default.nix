@@ -1,5 +1,7 @@
-{lib}: {
+{lib}: let
+  backendTransform = backend: import ./mkBackendTransform.nix {inherit lib backend;};
+in {
+  devenvTransform = backendTransform "devenv";
+  hmTransform = backendTransform "hm";
   mkAiApp = import ./mkAiApp.nix {inherit lib;};
-  hmTransform = import ./hmTransform.nix {inherit lib;};
-  devenvTransform = import ./devenvTransform.nix {inherit lib;};
 }

@@ -115,10 +115,9 @@ in
         '';
       };
       # Copilot-specific freeform settings. Consumed by the settings.json leaf
-      # reconciliation in `hm.config` (`helpers.mkOwnedDocument`, which owns
-      # exactly these leaves, retracts one this generation drops, and leaves a
-      # runtime-written sibling such as `trusted_folders` alone) and by the
-      # static write in `devenv.config`. Full typed surface (editor
+      # reconciliation on both backends, which owns exactly these leaves,
+      # retracts one this generation drops, and leaves a runtime-written sibling
+      # such as `trusted_folders` alone. Full typed surface (editor
       # integration, telemetry, typed model selection) is tracked in
       # docs/plan.md "Ideal architecture gate → Absorption backlog" under
       # the copilot-cli absorption item.

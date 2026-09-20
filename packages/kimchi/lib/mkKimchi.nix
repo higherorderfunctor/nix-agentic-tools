@@ -19,9 +19,8 @@
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   mcpLib = import ../../../lib/mcp.nix {inherit lib;};
 
-  # Shared per-backend data prep. hm.config and devenv.config derive the
-  # same settings/env/context values from the merged inputs the
-  # transform injects — compute them once here instead of duplicating.
+  # The delivery transformer and package hook need the same settings, env
+  # and context values from normalized inputs; prepare them once.
   mkPrep = {
     cfg,
     mergedEnvironmentVariables,

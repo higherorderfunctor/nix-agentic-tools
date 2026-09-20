@@ -78,7 +78,7 @@
   handDefinitions = {
     agents = {
       claude = {
-        devenv = absent "Parity gap: mergedAgents is not consumed by mkClaude.devenv.config, although the option exists.";
+        devenv = absent "Parity gap: mergedAgents is not consumed by the Claude devenv transformer, although the option exists.";
         hm = delegated "hm" "agents" "$HOME/.claude/agents/<name>.md";
       };
       kimchi = both (absent "Kimchi's supportedPools excludes agents and no native agent writer exists.");
