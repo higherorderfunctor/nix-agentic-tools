@@ -1,4 +1,4 @@
-"""Exercise the shared JSON helper and real HM callers across generations."""
+"""Exercise the shared JSON helper and real HM/devenv callers across generations."""
 
 import copy
 import json
@@ -27,12 +27,19 @@ def snapshot(path):
 def exercise(case, bash, mode, use_xdg):
     root = Path.cwd() / f"{case['name']}-{mode:o}-{use_xdg}"
     home = root / "home"
-    state = root / "state" if use_xdg else home / ".local/state"
-    config = home / case["configFile"]
+    project = root / "project with spaces"
+    devenv = case.get("backend", "hm") == "devenv"
+    xdg_state = root / "state" if use_xdg else home / ".local/state"
+    state = project / ".devenv/state" if devenv else xdg_state
+    config_root = project if devenv else home
+    config = config_root / case["configFile"]
+    empty = case.get("empty", {})
     environment = dict(os.environ, HOME=str(home))
     environment.pop("XDG_STATE_HOME", None)
     if use_xdg:
-        environment["XDG_STATE_HOME"] = str(state)
+        environment["XDG_STATE_HOME"] = str(xdg_state)
+    if devenv:
+        environment.update(DEVENV_ROOT=str(project), DEVENV_STATE=str(state))
     # A case whose writer STATES the mode its file must carry (kiro's merge
     # mcp.json, the one document a sibling target also writes) asserts
     # imposition instead of preservation: the stated mode on a new file, on a
@@ -66,20 +73,32 @@ def exercise(case, bash, mode, use_xdg):
         assert (result.returncode == 0) == succeeds, result.stderr
         if succeeds:
             assert "later-entry-ran" in result.stdout
+        if devenv:
+            assert not home.exists(), f"{case['name']}: task wrote to HOME"
+            assert not xdg_state.exists(), f"{case['name']}: task wrote to XDG state"
 
     # First empty generation creates neither config nor ownership state. It
     # must also leave an externally managed, even malformed, file byte-identical.
-    activate(2)
-    assert not home.exists()
-    assert not state.exists()
-    config.parent.mkdir(parents=True)
-    config.write_text("externally managed, not JSON\n")
-    config.chmod(mode)
-    before = snapshot(config)
-    activate(2)
-    assert snapshot(config) == before
-    assert not state.exists()
-    config.unlink()
+    if not empty:
+        activate(2)
+        assert not config_root.exists()
+        assert not state.exists()
+        config.parent.mkdir(parents=True)
+        config.write_text("externally managed, not JSON\n")
+        config.chmod(mode)
+        before = snapshot(config)
+        activate(2)
+        assert snapshot(config) == before
+        assert not state.exists()
+        config.unlink()
+    else:
+        # A typed default can keep owning leaves after the user's declaration
+        # is empty. A file tombstone, the fourth generation, releases those too.
+        activate(3)
+        assert not config_root.exists()
+        assert not state.exists()
+        activate(2)
+        assert json.loads(config.read_text()) == empty
 
     # New files are private, regardless of umask. Existing files retain their
     # permissions through both changed-content and unchanged-content writes,
@@ -135,12 +154,20 @@ def exercise(case, bash, mode, use_xdg):
     manifest.write_bytes(before_manifest[0])
 
     activate(2)
-    assert json.loads(config.read_text()) == case["native"]
+    assert json.loads(config.read_text()) == merge(empty, case["native"])
     assert stat.S_IMODE(config.stat().st_mode) == settled(mode)
-    assert not manifest.exists()
+    assert manifest.exists() == bool(empty)
     before = snapshot(config)
     activate(2)
     assert snapshot(config) == before
+    if empty:
+        activate(3)
+        assert json.loads(config.read_text()) == case["native"]
+        assert stat.S_IMODE(config.stat().st_mode) == settled(mode)
+        assert not manifest.exists()
+        before = snapshot(config)
+        activate(3)
+        assert snapshot(config) == before
     assert not list(config.parent.glob(".*.nat-tmp.*"))
     print(f"PASS: {case['name']} mode={mode:o} xdg={use_xdg}")
 
@@ -149,7 +176,8 @@ cases = json.loads(Path(sys.argv[1]).read_text())
 assert cases, "JSON runtime corpus is empty"
 assert len({case["name"] for case in cases}) == len(cases), "duplicate runtime case"
 for case in cases:
-    assert len(case["scripts"]) == 3, f"{case['name']}: expected three generations"
+    generations = 4 if case.get("empty") else 3
+    assert len(case["scripts"]) == generations, f"{case['name']}: expected {generations} generations"
     assert all(isinstance(script, str) and script.strip() for script in case["scripts"]), \
         f"{case['name']}: missing activation body"
 os.umask(0)

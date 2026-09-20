@@ -694,8 +694,8 @@ in {
         (unpinDocument result).value.unpinOpus48LaunchEffort == false
     );
 
-    # One runtime corpus covers the document codec directly plus actual Claude
-    # and Kiro module output. Every empty generation is evaluated and executed,
+    # One runtime corpus covers the document codec plus actual HM activations
+    # and devenv tasks. Every empty generation is evaluated and executed,
     # so a missing writer cannot satisfy the N-to-0 check.
     #
     # `harness.hmLib` rather than `lib`: `own` places its entry with
@@ -705,6 +705,28 @@ in {
       mkCase = name: configFile: first: second: native: render: {
         inherit configFile first name native second;
         scripts = map render [first second {}];
+      };
+      mkDevenvCase = {
+        configFile,
+        empty ? {},
+        entry,
+        first,
+        native,
+        option,
+        runtime,
+        second,
+      }: let
+        render = extra:
+          (evalDevenv (lib.recursiveUpdate {ai.${runtime}.enable = true;} extra)).config.tasks.${entry}.exec;
+      in {
+        inherit configFile empty first native second;
+        backend = "devenv";
+        name = "${runtime}-${option}-devenv";
+        scripts =
+          map (settings: render {ai.${runtime}.${option} = settings;}) [first second {}]
+          # Kimchi's config defaults still claim skillPaths = []. Suppressing
+          # its file must retire even that last leaf without losing the writer.
+          ++ lib.optional (empty != {}) (render {ai.${runtime}.files.${configFile} = lib.mkForce null;});
       };
       cases = [
         (mkCase "document" ".settings with spaces/config.json" {
@@ -772,6 +794,50 @@ in {
                 };
               };
             }).config.home.activation.kiroSettingsMerge.text))
+        (mkDevenvCase {
+          configFile = ".config/github-copilot/settings.json";
+          entry = "ai:copilot:settings-merge";
+          first = {
+            model = "first";
+            preferences.managed = true;
+          };
+          native = {
+            preferences.native = "survives";
+            trusted_folders = ["native-folder"];
+          };
+          option = "nativeSettings";
+          runtime = "copilot";
+          second.model = "second";
+        })
+        (mkDevenvCase {
+          configFile = ".config/kimchi/config.json";
+          empty.skillPaths = [];
+          entry = "ai:kimchi:config-merge";
+          first = {
+            llmEndpoint = "https://first.invalid";
+            preferences.managed = true;
+            skillPaths = ["managed-skill"];
+          };
+          native.preferences.native = "survives";
+          option = "nativeSettings";
+          runtime = "kimchi";
+          second = {
+            llmEndpoint = "https://second.invalid";
+            skillPaths = [];
+          };
+        })
+        (mkDevenvCase {
+          configFile = ".config/kimchi/harness/settings.json";
+          entry = "ai:kimchi:harness-settings-merge";
+          first.resources = {
+            managed = true;
+            retained = true;
+          };
+          native.resources.native = true;
+          option = "harnessSettings";
+          runtime = "kimchi";
+          second.resources.retained = false;
+        })
       ];
     in
       pkgs.runCommand "module-test-json-settings-reconciliation" {} ''

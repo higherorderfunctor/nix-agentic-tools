@@ -100,7 +100,7 @@
   # Retraction MECHANISM, one string per mechanism rather than per writer.
   # There is exactly one: every ownLeaves writer runs the same program, so the
   # jq recursive merge that could not remove a dropped key has no rows left.
-  ownRetraction = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+  ownRetraction = mode: "On ${retractionMoment mode}, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
   # The same program with the other container, for a target whose units are
   # whole files. The ledger records one sha256 per file it wrote, so a file the
   # declaration dropped is removed, a file edited since it was written is
@@ -112,11 +112,15 @@
     if mode == "hm"
     then "activation"
     else "shell entry";
-  leaves = pruneTrigger: activation: target: declaration: {
-    inherit pruneTrigger target;
+  leaves = mode: activation: target: declaration: {
+    inherit target;
+    pruneTrigger = ownRetraction mode;
     inputOptions = [declaration.option];
     primitive = "ownLeaves";
-    writerAttr = ["home" "activation" activation];
+    writerAttr =
+      if mode == "hm"
+      then ["home" "activation" activation]
+      else ["tasks" activation];
     probe = declaration;
   };
   wrapper = mode: executable: {
@@ -196,7 +200,7 @@
           role = "Prune phase must survive an empty declaration as well as the write phase.";
         });
     };
-  codexConfig = leaves ownRetraction "codexSettingsReconcile" "$HOME/.codex/config.toml" (settingsProbe "codex");
+  codexConfig = leaves "hm" "codexSettingsReconcile" "$HOME/.codex/config.toml" (settingsProbe "codex");
   copilotInert = "Factory documents this project file as undelivered: Copilot offers no flag or discovery for it. Presence is not proof of application consumption.";
 
   # A row's primary writer and additionalWriters use the same schema. Keeping
@@ -379,7 +383,7 @@
           (delegated "hm" "settings" "$HOME/.claude/settings.json")
           // {
             additionalWriters = [
-              (leaves ownRetraction "claudeUnpinLaunchEffort" "$HOME/.claude.json"
+              (leaves "hm" "claudeUnpinLaunchEffort" "$HOME/.claude.json"
                 (probe ["ai" "claude" "unpinLaunchEffort"] {probe = true;} {}))
             ];
           };
@@ -388,29 +392,42 @@
         devenv = declarative "devenv" ".codex/config.toml";
         hm = codexConfig;
       };
-      copilot = {
-        devenv = (declarative "devenv" ".config/github-copilot/settings.json") // {deliveryGap = copilotInert;};
-        hm = leaves ownRetraction "copilotSettingsMerge" "$HOME/.copilot/settings.json" (settingsProbe "copilot");
-      };
-      kimchi = {
-        devenv =
-          (declarative "devenv" ".config/kimchi/config.json")
-          // {
-            additionalWriters = [(declarative "devenv" ".config/kimchi/harness/settings.json")];
-          };
-        hm =
-          (leaves ownRetraction "kimchiConfigMerge" "$HOME/.config/kimchi/config.json"
-            (probe ["ai" "kimchi" "nativeSettings"] {
-              llmEndpoint = "https://example.invalid";
-              skillPaths = ["probe"];
-            } {}))
-          // {
-            additionalWriters = [
-              (leaves ownRetraction "kimchiHarnessSettingsMerge" "$HOME/.config/kimchi/harness/settings.json"
-                (probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {}))
-            ];
-          };
-      };
+      copilot = lib.genAttrs modes (mode:
+        (leaves mode (
+            if mode == "hm"
+            then "copilotSettingsMerge"
+            else "ai:copilot:settings-merge"
+          ) (
+            if mode == "hm"
+            then "$HOME/.copilot/settings.json"
+            else "$DEVENV_ROOT/.config/github-copilot/settings.json"
+          ) (settingsProbe "copilot"))
+        // lib.optionalAttrs (mode == "devenv") {deliveryGap = copilotInert;});
+      kimchi = lib.genAttrs modes (mode: let
+        root =
+          if mode == "hm"
+          then "$HOME"
+          else "$DEVENV_ROOT";
+      in
+        (leaves mode (
+            if mode == "hm"
+            then "kimchiConfigMerge"
+            else "ai:kimchi:config-merge"
+          ) "${root}/.config/kimchi/config.json"
+          (probe ["ai" "kimchi" "nativeSettings"] {
+            llmEndpoint = "https://example.invalid";
+            skillPaths = ["probe"];
+          } {}))
+        // {
+          additionalWriters = [
+            (leaves mode (
+                if mode == "hm"
+                then "kimchiHarnessSettingsMerge"
+                else "ai:kimchi:harness-settings-merge"
+              ) "${root}/.config/kimchi/harness/settings.json"
+              (probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {}))
+          ];
+        });
       kiro = {
         devenv =
           (declarative "devenv" ".kiro/settings/cli.json")
@@ -418,7 +435,7 @@
             deliveryConstraint = "Only the pinned workspace-allowlisted setting keys are accepted; global-only settings fail module assertions.";
           };
         hm =
-          leaves ownRetraction "kiroSettingsMerge" "$HOME/.kiro/settings/cli.json"
+          leaves "hm" "kiroSettingsMerge" "$HOME/.kiro/settings/cli.json"
           (probe ["ai" "kiro" "nativeSettings"] {chat.defaultModel = "probe";} {});
       };
     };
