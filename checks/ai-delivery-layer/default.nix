@@ -102,7 +102,6 @@
   # leaves this list it has stopped calling `own` directly too, and
   # `ai.<runtime>._ownPlans` is where a check reads what its writers do.
   sinkWriters = {
-    "packages/claude-code/lib/mkClaude.nix" = "the devenv settings.json deep merges and the skill walker";
     "packages/kiro-cli/lib/mkKiro.nix" = "permissions, lsp, cli.json, agents, the agents-dir walker and skills";
   };
 
@@ -875,6 +874,78 @@ in {
             };
           };
         })
+    );
+
+    # Use the host's real JSON type: the general harness's `anything` stub
+    # cannot concatenate lists. Definitions must reach this type with their
+    # priorities and ordering intact, even when two entries share a sink.
+    module-delivery-upstream-preserves-host-merge = mkTest "delivery-upstream-preserves-host-merge" (
+      let
+        deliveryOptions = import ../../lib/ai/delivery-options.nix {inherit lib;};
+        adapter = import ../../lib/ai/adapters/devenv.nix {inherit lib pkgs;};
+        evaluated = lib.evalModules {
+          modules = [
+            ({
+              config,
+              options,
+              ...
+            }: {
+              options = {
+                ai.probe = {
+                  _ownPlans = lib.mkOption {type = lib.types.attrsOf lib.types.anything;};
+                  activation = lib.mkOption {
+                    type = deliveryOptions.writerMapType;
+                    default = {};
+                  };
+                  files = lib.mkOption {type = deliveryOptions.fileMapType;};
+                  methodFor = lib.mkOption {
+                    type = lib.types.functionTo lib.types.str;
+                    default = deliveryMethod.byRule;
+                  };
+                };
+                assertions = lib.mkOption {type = lib.types.listOf lib.types.anything;};
+                files = lib.mkOption {
+                  type = lib.types.attrsOf (lib.types.submodule {
+                    options.json = lib.mkOption {inherit (pkgs.formats.json {}) type;};
+                  });
+                };
+              };
+              config = adapter {
+                inherit config options;
+                cfg = config.ai.probe;
+                runtime = "probe";
+              };
+            })
+            {
+              ai.probe.files = {
+                "first.json" = {
+                  content.value = {
+                    defaultLeaf = lib.mkDefault "generated";
+                    list = lib.mkBefore ["first"];
+                  };
+                  method = "upstream";
+                  sink = ["files" "settings.json" "json"];
+                };
+                "second.json" = {
+                  content.value.list = lib.mkAfter ["last"];
+                  method = "upstream";
+                  sink = ["files" "settings.json" "json"];
+                };
+              };
+              files."settings.json".json = {
+                defaultLeaf = "consumer";
+                list = ["middle"];
+              };
+            }
+          ];
+        };
+      in
+        evaluated.config.files."settings.json".json
+        == {
+          defaultLeaf = "consumer";
+          list = ["first" "middle" "last"];
+        }
+        && lib.all (a: a.assertion) evaluated.config.assertions
     );
 
     # What the adapter puts in `tasks` is exactly the runtime's writers, and
