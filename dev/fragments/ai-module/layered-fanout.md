@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-19 — delivery gate fixtures lower real writer
-> declarations through both adapters before testing populated and empty bodies.
+> **Last verified:** 2026-09-19 — the committed delivery matrix is derived from
+> the layer, with independent probes, live absence correspondence and drift.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -155,6 +155,37 @@ claims remain independent policy evidence, checked in both directions. Schema
 controls still reject malformed policy records; separate sink-corruption
 controls pin the body accessor for shapes the delivery types cannot emit. No
 behavioral control depends on a production row's guessed writer name.
+
+### Generated delivery matrix
+
+`config/ai-delivery.nix` remains a pure `{lib}` import. Its schema and consumer
+facts are hand-authored; physical writer records come from the committed
+`config/ai-delivery-generated.nix`. The partition requires every matrix cell
+exactly once across derived and hand-authored rows. Absence reasons, upstream
+contracts, package wrappers, input associations and behavioral probes remain
+independent of the observed delivery implementation.
+
+`checks/ai-delivery/generate.nix` evaluates populated specimens at default
+config directories. It reads typed files and activation ledgers, resolves
+methods with the runtime's rule, and uses the router's backend naming. Recursive
+skills use the real leaf walk. Shared devenv AGENTS.md currently comes from the
+typed `ai.internal.files` owner; Claude's native devenv MCP integration is
+observed at its existing upstream destination. Package wrappers have no file
+entry.
+
+The production gate compares live absence against hand-authored gaps in both
+directions and verifies upstream sink correspondence. Its three body arms stay;
+derived names make the first arm's name agreement a tautology, not a stronger
+check. Empty-declaration survival and body variation still discriminate. Kiro
+MCP's two strategies keep independent probes, including both HM phases.
+
+Regenerate the data with
+`nix build .#checks.x86_64-linux.ai-delivery-generated.generated --no-link --print-out-paths`,
+copy the printed output to `config/ai-delivery-generated.nix`, then run
+`treefmt config/ai-delivery-generated.nix`. The `ai-delivery-generated` check
+regenerates and requires byte identity. `file-warnings.nix` continues rebasing
+the matrix's default directories onto consumer configuration; neither warning
+reader imports an evaluator.
 
 ### Layer location map
 
