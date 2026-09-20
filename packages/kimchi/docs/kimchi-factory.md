@@ -1,10 +1,8 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-19 — one `config` callback on the app record
-> describes delivery for BOTH backends; the two runtime-writable documents are
-> `ai.kimchi.activation` writers whose files state `facts.harnessWrites`, and
-> nothing in this factory writes a native sink. Full lineage:
-> `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> **Last verified:** 2026-09-19 — both runtime-writable documents reconcile on
+> HM activation and devenv shell entry, including empty declarations. Full
+> lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -16,9 +14,8 @@ an `hm.config` and a `devenv.config`. The two it replaced were near-duplicates
 that differed only in which native sink each wrote into, and that choice is now
 the delivery layer's: the callback DESCRIBES each file — its bytes, the consumer
 facts, and the writer that owns it if it is not a symlink — and
-`lib/ai/deliver.nix` decides how it lands. The callback receives `backend` for
-the one thing a fact cannot express: a surface one backend genuinely does not
-have.
+`lib/ai/deliver.nix` decides how it lands. Kimchi needs no backend split in its
+delivery description.
 
 The factory consumes Kimchi-shaped JSON from `ai.kimchi.nativeSettings`. The
 closed `ai.kimchi.settings` submodule is the shared normalized surface; a field
@@ -40,17 +37,22 @@ The `harness/` tree is **mutable at runtime** — Kimchi rewrites `settings.json
 `config.json` and `harness/settings.json` each state `facts.harnessWrites` and
 name an `ai.kimchi.activation` writer that declares their ledger: the rule
 resolves them to `shared`, and the router builds one `lib/ai/own.nix` bundle and
-one activation entry per document, reconciling only the leaves Nix declares
-against a per-document ledger. The two are separate writers on purpose: nothing
-orders them against each other, and each entry name is a consumer-visible
-contract.
+one activation entry or devenv task per document, reconciling only the leaves
+Nix declares against a per-document ledger. The two are separate writers on
+purpose: nothing orders them against each other, and each entry name is a
+consumer-visible contract. Devenv requires namespaced task names, so each writer
+uses backend-keyed `entry`: `ai:kimchi:config-merge` and
+`ai:kimchi:harness-settings-merge` on devenv, with the existing
+`kimchiConfigMerge` and `kimchiHarnessSettingsMerge` names on HM.
 
-The fact is stated PER BACKEND (`{devenv = false; hm = true;}`) because only
-Home Manager reconciles these documents today; devenv still links a whole file,
-which is what it did before this migration. Flipping devenv onto the reconciler
-is a behavior change and lands as its own step. That is also why the writers
-themselves are declared on Home Manager only: a writer with ledgers but no
-claiming file lowers to a task that retracts nothing.
+Both files state `facts.harnessWrites = true`, and both writers survive an empty
+declaration on either backend. HM uses `$HOME` and XDG state; devenv uses
+`$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`. New documents are 0600 and
+existing regular files retain their modes. Empty harness settings release all
+owned leaves; empty native settings still declare the typed `skillPaths = []`
+default. A file tombstone releases that final claim too. This changes
+project-file ownership, not discovery: Kimchi still reads its HOME config tree,
+so the existing devenv delivery-gap warnings remain.
 
 Everything else Kimchi delivers is immutable and symlink-readable, so it takes
 both defaults and states no fact at all. Normalized context renders into the
