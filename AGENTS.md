@@ -44,7 +44,8 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
     [`dev/fragments/ai-config-scope/host-config-merge.md`](dev/fragments/ai-config-scope/host-config-merge.md)
 
 - **`ai-module`**
-  - Match: `checks/*/module-eval.nix`, `checks/module-provenance/**`,
+  - Match: `checks/*/module-eval.nix`, `checks/ai-delivery/**`,
+    `checks/module-provenance/**`, `config/ai-delivery*.nix`,
     `lib/ai/adapters/**`, `lib/ai/agent.nix`, `lib/ai/ai-common.nix`,
     `lib/ai/app/**`, `lib/ai/default.nix`, `lib/ai/deliver.nix`,
     `lib/ai/delivery-options.nix`, `lib/ai/deliveryMethod.nix`,
