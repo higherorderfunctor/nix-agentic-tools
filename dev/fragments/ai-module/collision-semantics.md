@@ -239,15 +239,24 @@ lowering. Package callbacks may render entries into the runtime map but must not
 read that map to define normalized inputs; keeping the edge one-way is what
 makes the module fixed point evaluable.
 
-Repository-local Codex/Kiro `AGENTS.md` is the shared-target exception, not a B7
-exception. `sharedAgentsMd.nix` admits applicable public entries from enabled
-runtimes into its hidden final map before the one native sink; a disabled
-runtime's declared map remains inert. The generated composition is a lazy
-default there, so ordinary replacements and disabled records arbitrate at B7
-without reading discarded source-backed generator content; equal runtime entries
-deduplicate and divergent ones fail. Size guards read only the surviving inline
-final entry. A surviving store-backed `source` remains lazy and is not
-size-checked at eval, avoiding IFD.
+Runtime delivery options, including downstream app records, define the path
+claim inventory. Two enabled runtimes claiming the same live file path fail
+evaluation on both backends, even if their bytes match. Disabled entries (the
+same `runtimeFiles.isLive` rule the router uses) and disabled runtimes do not
+participate. A shared repository context target is the sole exception: each
+claimant's `context.filename` must resolve to that target, and all claimants
+must select the same method. The aggregate's native owner uses `symlink`; a
+public override cannot silently select an owned-file method.
+
+Repository-local `AGENTS.md` is the shared-target exception, not a B7 exception.
+`sharedAgentsMd.nix` admits applicable public entries from enabled runtimes
+discovered from their delivery options into its hidden final map before the one
+native sink; a disabled runtime's declared map remains inert. The generated
+composition is a lazy default there, so ordinary replacements and disabled
+records arbitrate at B7 without reading discarded source-backed generator
+content; equal runtime entries deduplicate and divergent ones fail. Size guards
+read only the surviving inline final entry. A surviving store-backed `source`
+remains lazy and is not size-checked at eval, avoiding IFD.
 
 ### Adding a normalized pool
 

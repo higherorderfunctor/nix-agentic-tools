@@ -155,6 +155,98 @@
     && !lib.any usesExit (lib.splitString "\n" body);
 in {
   checks = {
+    module-delivery-shared-agentsmd-admits-third-claimant = mkTest "delivery-shared-agentsmd-admits-third-claimant" (
+      let
+        base.ai = {
+          codex.enable = true;
+          context.text = "GENERATED-CONTEXT";
+          kimchi.enable = true;
+          kiro.enable = true;
+        };
+        evaluate = entry:
+          evalDevenv (lib.recursiveUpdate base {
+            ai.kimchi.files."AGENTS.md" = entry;
+          });
+        replaced = (evaluate {content.text = "THIRD-CLAIMANT";}).config;
+        suppressed = (evaluate null).config;
+      in
+        replaced.ai.internal.files."AGENTS.md".content.text
+        == "THIRD-CLAIMANT"
+        && replaced.files."AGENTS.md".text == "THIRD-CLAIMANT"
+        && lib.all (assertion: assertion.assertion) replaced.assertions
+        && suppressed.ai.internal.files."AGENTS.md" == null
+        && !(suppressed.files ? "AGENTS.md")
+        && lib.all (assertion: assertion.assertion) suppressed.assertions
+    );
+
+    module-delivery-runtime-path-collisions-need-one-owner = mkTest "delivery-runtime-path-collisions-need-one-owner" (
+      lib.all (
+        evaluate: let
+          base.ai = {
+            codex = {
+              enable = true;
+              files."contested.md".content.text = "SAME";
+            };
+            kimchi.enable = true;
+            kiro = {
+              enable = true;
+              files."separate.md".content.text = "SEPARATE";
+            };
+          };
+          result = entry:
+            (evaluate (lib.recursiveUpdate base {
+              ai.kimchi.files."contested.md" = entry;
+            })).config;
+          failed =
+            lib.filter (assertion: !assertion.assertion)
+            (result {content.text = "SAME";}).assertions;
+          healthy = result null;
+        in
+          lib.any (assertion:
+            lib.hasInfix "codex, kimchi" assertion.message
+            && lib.hasInfix "contested.md" assertion.message
+            && lib.hasInfix "one owner" assertion.message)
+          failed
+          && lib.all (assertion: assertion.assertion) healthy.assertions
+      ) [evalHm evalDevenv]
+    );
+
+    module-delivery-shared-agentsmd-needs-one-method = mkTest "delivery-shared-agentsmd-needs-one-method" (
+      let
+        inherit
+          (evalDevenv {
+            ai = {
+              codex = {
+                enable = true;
+                files."AGENTS.md".content.text = "SAME";
+              };
+              kimchi = {
+                enable = true;
+                files."AGENTS.md".content.text = "SAME";
+                methodFor = lib.mkForce ({
+                    path,
+                    default,
+                    ...
+                  } @ args:
+                    if path == "AGENTS.md"
+                    then "copy-ro"
+                    else default args);
+              };
+              kiro = {
+                enable = true;
+                files."AGENTS.md".content.text = "SAME";
+              };
+            };
+          })
+          config
+          ;
+      in
+        lib.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "one path has one owner and one method" assertion.message)
+        config.assertions
+    );
+
     module-delivery-normalized-rules-reach-files = mkTest "delivery-normalized-rules-reach-files" (
       lib.all (
         evaluate: let
