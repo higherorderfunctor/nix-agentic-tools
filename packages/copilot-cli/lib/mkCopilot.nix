@@ -416,18 +416,20 @@ in
             inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
           in {
             ai.copilot.files = lib.mapAttrs' (name: rule:
-              lib.nameValuePair "${cfg.projectDir}/instructions/${name}.instructions.md" (lib.mkDefault {
-                content.text = fragmentsLib.mkRenderer copilotTransformer {} (rule
-                  // {
-                    paths = rule.matcher;
-                    text = aiCommon.readContent rule;
-                  });
-              }))
+              lib.nameValuePair "${cfg.projectDir}/instructions/${name}.instructions.md" {
+                content = lib.mkDefault {
+                  text = fragmentsLib.mkRenderer copilotTransformer {} (rule
+                    // {
+                      paths = rule.matcher;
+                      text = aiCommon.readContent rule;
+                    });
+                };
+              })
             mergedRules;
           })
           # Repository context consumed by github.com's Copilot reviewer.
           (lib.mkIf hasMergedContext {
-            ai.copilot.files."${cfg.projectDir}/${cfg.context.filename}" = lib.mkDefault contextEntry;
+            ai.copilot.files."${cfg.projectDir}/${cfg.context.filename}" = contextEntry;
           })
           # settings.json — devenv does NOT support HM-style activation
           # scripts, so the runtime-merge story is different. Devenv
