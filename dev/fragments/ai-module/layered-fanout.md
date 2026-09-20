@@ -92,16 +92,31 @@
   host-directory materializer through a command writer named
   `ai:codex:materialize-profiles`. The materializer still owns its
   Git-common-directory manifest and lock.
-- **Shared documents reconcile on both backends.** Copilot settings state
-  `facts.harnessWrites = true` and declare the writer unconditionally while
-  enabled. The adapter runs the same bundle on HM activation or devenv shell
-  entry. Backend-keyed `entry` preserves HM names while giving devenv its
-  required namespace, such as `ai:copilot:settings-merge`. Devenv uses
-  `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`, with verification in
-  `enterTest`. Empty declarations retain their writers so prior leaves can be
-  retracted. Existing file modes and unowned leaves survive; a new file is 0600.
-  This does not change Copilot's project-discovery limitation. Codex's project
-  config remains a static source because its native writer is user-scoped.
+- **Shared documents reconcile on both backends.** Copilot settings and Kiro's
+  cli.json state `facts.harnessWrites = true` and declare writers
+  unconditionally while enabled. The adapter runs the same bundle on HM
+  activation or devenv shell entry. Backend-keyed `entry` preserves HM names
+  while giving devenv its required namespace, such as
+  `ai:copilot:settings-merge`. Devenv uses `$DEVENV_ROOT` and
+  `$DEVENV_STATE/nix-agentic-tools`, with verification in `enterTest`. Empty
+  declarations retain their writers so prior leaves can be retracted. Existing
+  file modes and unowned leaves survive; a new file is 0600. This does not
+  change existing project-discovery limitations. Codex's project config remains
+  a static source because its native writer is user-scoped.
+- **Kiro keeps one MCP writer for both modes.** Both historical ledgers are
+  declared together; the selected file claims one and the other retracts. Merge
+  keeps `content.run` even with zero servers; empty overwrite has no claimant.
+  URL-secret modes remain 0400/0600, otherwise 0444/0644. Only this writer waits
+  for secrets. The devenv renderer keeps its project-root anchor for relative
+  secret readers. Hooks state `facts.symlinkReadable = false` because the v3
+  scan keeps only `isFile()` entries, and their writer survives N→0. Permissions
+  remain HM-only because Kiro never reads them from project `.kiro/`.
+- **Retirement can survive disable explicitly.** Kiro's migration callback
+  declares its unclaimed steering ledger with `runWhenDisabled = true`. The
+  adapter strips every file claim and ordinary writer while disabled; the
+  opted-in writer keeps both HM phases or the existing devenv task. A directory
+  ledger's unit basenames must be unique; the router rejects collisions before a
+  claimant can disappear into the attribute map.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
   entries replace same-key root entries wholesale. Nullable pools use null to
   suppress an inherited entry after the shallow merge; rules use
