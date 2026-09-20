@@ -281,10 +281,15 @@ in {
           devenv), and described rather than lowered: each entry says what
           bytes it carries, the consumer facts that decide how it lands, and
           which writer owns it if it is not a symlink. `null` suppresses a
-          generated entry. Generated CONTENT is contributed at `mkDefault`
-          priority and every sibling field at ordinary priority, so a consumer
-          can replace the bytes, change the method, or do one without the
-          other.
+          generated entry.
+
+          Generated `content.text` and `content.source` are contributed at
+          `mkDefault` priority with every sibling field at ordinary priority,
+          so a consumer can replace the bytes, change the method, or do one
+          without the other. A `content.value` document is contributed at
+          ordinary priority or one `mkDefault` per leaf instead: a default on
+          the whole value, or on the whole content, is discarded outright by a
+          consumer's single leaf. See the `content` option's own description.
         '';
       };
       methodFor = lib.mkOption {
@@ -299,9 +304,12 @@ in {
           the rest rather than restating the rule. Replacing it never means
           reimplementing ownership, deletion or pruning: those live below it,
           in the router and the reconciler, which this function never names.
-          Two definitions of a function cannot merge, so this option is
-          REPLACED with `lib.mkForce` and never added to; composing a
-          per-file exception is what `method` on the entry is for.
+          Replace it rather than add to it, with `lib.mkForce`; composing a
+          per-file exception is what `method` on the entry is for. Two
+          definitions are not a merge error in themselves — `functionTo`
+          merges the RESULTS, so two that agree are fine — but two that
+          disagree fail where the ROUTER calls the function rather than where
+          they were written.
         '';
       };
       package = lib.mkOption {

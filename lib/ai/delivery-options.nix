@@ -86,9 +86,21 @@
         default = null;
         description = ''
           The bytes this file carries, tagged with where they come from.
-          Generators contribute it at `mkDefault` priority and leave every
-          sibling field at ordinary priority, so a consumer can change HOW a
-          generated file lands without restating WHAT is in it.
+
+          `text` and `source` are contributed WHOLE by a generator, at
+          `mkDefault`, with every sibling field left at ordinary priority:
+          that is what lets a consumer change HOW a generated file lands
+          without restating WHAT is in it.
+
+          A `value` document is the exception, and it is measured rather than
+          reasoned: `content = mkDefault {value = …;}` and
+          `content.value = mkDefault {…}` BOTH lose every generated leaf the
+          moment a consumer defines one of its own, because `filterOverrides`
+          keeps only the priority-100 definitions and the generated leaves
+          leave with the definition it drops. A document contributes its
+          leaves at ordinary priority, or one `mkDefault` per LEAF
+          (`content.value.<leaf> = lib.mkDefault …`) — that is the shape that
+          merges leaf-wise and survives.
         '';
       };
       entry = lib.mkOption {
