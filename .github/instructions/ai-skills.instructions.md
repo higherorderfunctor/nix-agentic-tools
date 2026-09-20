@@ -7,8 +7,9 @@ applyTo: "lib/ai/hm-helpers.nix,lib/ai/mkSkillPackageModule.nix,packages/chatgpt
 
 ## ai.skills Fanout Delegation Pattern
 
-> **Last verified:** 2026-09-19 — skill-package callbacks receive the runtime
-> being written, so one factory import can render different content per runtime.
+> **Last verified:** 2026-09-21 — runtime-aware skill-package callbacks reach
+> each backend through `helpers.mkSkillFiles` and the delivery router's one
+> walk.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.

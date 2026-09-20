@@ -175,10 +175,11 @@ this paragraph would rot the next time one is added.)
 
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-09-12 — devenv's `createFileScript` is now a
-> `copyMode` dispatcher, not the symlink writer this fragment used to quote. The
-> quoted body is `createSymlinkScript`; `createCopyScript` is the other branch
-> and it DOES recurse.
+> **Last verified:** 2026-09-19 — the user-space recursive walk is the delivery
+> router's `lib/ai/formats.nix:walk`, shared by every runtime. devenv's
+> `createFileScript` is a `copyMode` dispatcher, not the symlink writer this
+> fragment used to quote: the quoted body is `createSymlinkScript`, and
+> `createCopyScript` is the other branch, which DOES recurse.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
