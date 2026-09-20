@@ -1,8 +1,8 @@
 # Delegate sizing package
 
-> **Last verified:** 2026-09-19 (commit d1bb79ef) — one factory import renders
-> all supported runtimes through the runtime callback argument. Manual-only
-> precedence also applies to external-runtime enable validation.
+> **Last verified:** 2026-09-19 (commit 1a3fe521) — generated skills use
+> formatted content and a concrete script store path; the always-on load
+> instruction stays outside the skill.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,
@@ -30,15 +30,19 @@ apply the selected model and effort.
 Usage commands run in the caller's shell. Claude requires `curl` and `jq`; the
 Codex helper requires GNU `timeout`, `jq`, Python 3 and `codex` on PATH. The
 content package does not install those tools. The helper reads account limits
-without launching a model turn.
+without launching a model turn. A separate script-content derivation supplies
+its absolute store path, avoiding a dependency cycle with skills that include
+the command. Skill derivations format their Markdown with Prettier; the preview
+functions read those built files.
 
-The eight-line `fragments/skill-routing.md` is the sole always-on rule source,
-delivered to consumers through the factory's rules hook. This repository also
-includes it in `dev/generate.nix`'s root composition, which reaches AGENTS.md
-even with Codex CLI instructions disabled. Repository devenv config suppresses
-the native Claude and Kiro rule copies so shell entry cannot add a second stub.
-The retired monorepo fragment is unregistered. Keep model tables and harness
-details in the generated skill.
+`fragments/skill-routing.md` contains only the five rules. `router.nix` appends
+the load instruction, qualified for harnesses that provide the skill, and
+supplies the always-on rule to both the factory and repository projections. This
+repository includes that rule in `dev/generate.nix`'s root composition, which
+reaches AGENTS.md even with Codex CLI instructions disabled. Repository devenv
+config suppresses the native Claude, Codex and Kiro rule copies: Codex rules
+compose into the tracked AGENTS.md, and the other copies would duplicate the
+stub. Keep model tables and harness details in the generated skill.
 
 Content, HM/devenv modules and eval checks are discovered through the package
 owner layout. The registry excludes this generated content package from release

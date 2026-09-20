@@ -4,28 +4,27 @@
   claude = {
     checkUsage = ''
       Read `five_hour.utilization` and `seven_day.utilization` with this command.
-      Requires `curl` and `jq`. The token is unset on exit.
+      Requires `curl` and `jq`. The token is unset after the request.
 
       ```bash
       #!/usr/bin/env bash
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      set +x
-      trap 'unset delegate_usage_token' EXIT
       delegate_usage_token=$(jq -er '.claudeAiOauth.accessToken' ~/.claude/.credentials.json)
       curl --fail --silent --show-error --config - <<EOF_USAGE | jq '{five_hour, seven_day, seven_day_opus, seven_day_sonnet, extra_usage}'
       url = "https://api.anthropic.com/api/oauth/usage"
       header = "Authorization: Bearer $delegate_usage_token"
       header = "anthropic-beta: oauth-2025-04-20"
       EOF_USAGE
+      unset delegate_usage_token
       ```
     '';
     delegateTools = ''
       Use Workflow `agent(prompt, {model, effort})` with effort `low`, `medium`,
       `high`, `xhigh` or `max`. The Agent tool accepts `model: "fable"`,
       `"haiku"`, `"opus"` or `"sonnet"`, but inherits session effort.
-      If that differs from your choice, use Workflow or `claude -p`.
-      Haiku has no effort control. Use a Bash step for an external delegate.
+      If that differs from your choice, use Workflow, or a shell step running `claude -p --model <id> --effort <level> "<prompt>"`.
+      Haiku has no effort control. Use a shell step for an external delegate.
     '';
     introspectModels = ''
       Read the Agent tool's `model` enum and the `maxEffortLevel` settings
@@ -94,10 +93,9 @@
       here is `high`. Haiku has no effort control.
     '';
     launch = ''
-      `kiro-cli chat --no-interactive --model gpt-5.6-luna "<prompt>"`
+      `kiro-cli chat --no-interactive --model gpt-5.6-luna --effort <level> "<prompt>"`
 
-      Employer credits: fixture probes only, pin Luna. This manual-only launch
-      has no explicit effort flag; check the effort settings before proceeding.
+      Employer credits: fixture probes only, pin Luna.
     '';
   };
 }

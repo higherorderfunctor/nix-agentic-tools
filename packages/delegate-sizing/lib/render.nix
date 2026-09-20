@@ -109,6 +109,9 @@ in ''
   control, record effort as not applicable. State the selected model and effort
   in the brief and apply them through the controls below.
 
+  A harness without a per-delegate model or effort control (Copilot today) does the work inline at the session's sizing, or hands it to an external delegate.
+  Sizing is a budget decision, not a rigor decision: a cheaper delegate still owes the same evidence, and a task that cannot meet the bar on the cheap model is sized up, not relaxed.
+
   If one model clearly stands out for the work, take it regardless of usage
   unless that pool is exhausted. If candidates are close, take the pool with
   more remaining. Check usage with the runtime's command. If no usage check is
