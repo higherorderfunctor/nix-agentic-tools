@@ -36,20 +36,15 @@ in
           # this file. Keys derived from an option belong inside a VALUE.
           home.activation =
             delivery.owned.activation
-            // lib.mapAttrs' (
-              name: writer:
-                lib.nameValuePair (delivery.nameFor "${name}.entry" writer.entry) (
-                  # `entryBetween` rather than `entryAfter`: a body that deletes a
-                  # real file has to run BEFORE `checkLinkTargets`, and one that
-                  # writes a new file after `linkGeneration`, so both ends of the
-                  # position are the writer's to state.
-                  lib.hm.dag.entryBetween
-                  (delivery.beforeEdges writer)
-                  (delivery.afterEdges writer)
-                  (delivery.commandBody writer)
-                )
-            )
-            delivery.commands;
+            // delivery.commandEntries (writer:
+              # `entryBetween` rather than `entryAfter`: a body that deletes a
+              # real file has to run BEFORE `checkLinkTargets`, and one that
+              # writes a new file after `linkGeneration`, so both ends of the
+              # position are the writer's to state.
+                lib.hm.dag.entryBetween
+                (delivery.beforeEdges writer)
+                (delivery.afterEdges writer)
+                (delivery.commandBody writer));
         }
       ]
     )
