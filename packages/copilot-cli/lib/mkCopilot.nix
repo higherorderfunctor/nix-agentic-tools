@@ -271,7 +271,10 @@ in
           # symlinks) and is path-type-agnostic (accepts both Nix path
           # literals and absolute string paths).
           {
-            home.file = helpers.mkSkillEntries cfg.configDir mergedSkills;
+            ai.copilot.files = helpers.mkSkillFiles {
+              inherit (cfg) configDir;
+              skills = mergedSkills;
+            };
           }
           # Reconcile settings.json leaves while preserving native state such
           # as trusted_folders. Always emit the writer so empty settings retract
@@ -401,7 +404,10 @@ in
           (let
             helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
           in {
-            files = helpers.mkDevenvSkillEntries cfg.projectDir mergedSkills;
+            ai.copilot.files = helpers.mkSkillFiles {
+              configDir = cfg.projectDir;
+              skills = mergedSkills;
+            };
           })
           # mcp-config.json — static write of the merged MCP server
           # pool. Inlined as `text` for consistency with the HM side.

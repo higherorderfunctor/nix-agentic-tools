@@ -13,13 +13,15 @@
     && !(lib.hasPrefix "/" target)
     && lib.all (segment: segment != "" && segment != "." && segment != "..") segments;
 in rec {
-  # One live entry as the native sink wants it. `executable` is always stated
-  # because both backends default it themselves and a silent divergence
-  # between the two is exactly what this seam exists to prevent; `recursive` is
-  # stated only when true, because Home Manager reads its absence as false and
-  # the devenv adapter has no such option at all.
+  # One live entry as the native sink wants it. `executable` is stated unless
+  # it is null, because both backends default it themselves and a silent
+  # divergence between the two is what this seam exists to prevent — while a
+  # null means "leave the source's mode alone" and has to reach the sink as an
+  # ABSENT attribute, which is how a tree of source files keeps its modes.
+  # `recursive` is stated only when true: Home Manager reads its absence as
+  # false and the devenv adapter has no such option at all.
   sinkEntry = entry:
-    {inherit (entry) executable;}
+    lib.optionalAttrs (entry.executable != null) {inherit (entry) executable;}
     // lib.optionalAttrs entry.recursive {recursive = true;}
     // (
       if entry.content ? source

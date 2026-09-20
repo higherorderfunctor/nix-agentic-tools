@@ -486,12 +486,10 @@ This matters when passing values to options that gate on `lib.isPath` or
   `/nix/store/abc-skills/stack-fix` instead of real YAML frontmatter, so Claude
   couldn't load the skill.
 
-- Our `lib/hm-helpers.nix:mkSkillEntries` had the same bug until commit
-  `1f1ad35`. It now uses `(isPath || isString) && (readFileType == "directory")`
-  to handle both types correctly.
-
-- Our `mkDevenvSkillEntries` walker (commit `8655130`) also uses
-  `builtins.readFileType` — agnostic to path vs string.
+- Our own skill helper had the same bug until commit `1f1ad35`. Both backends go
+  through `lib/ai/hm-helpers.nix:mkSkillFiles` now, which asks
+  `builtins.readFileType` — agnostic to path versus string — and the devenv walk
+  in `lib/ai/formats.nix` does the same.
 
 **How to apply.** For **skills** on a modern HM pin either form works (path
 literal OR store-path string), so the skill packages deliberately use strings.
@@ -526,9 +524,8 @@ written as text) for weeks. Worked around in commit `5a14a0c` with a
 module-relative `skillsRepo` path literal; the root cause is gone now that
 upstream `mkSkillEntry` uses `isPathLike` (above).
 
-**Both our helpers and modern upstream are string-tolerant.** Our
-`mkSkillEntries` / `mkDevenvSkillEntries` and modern upstream `mkSkillEntry` all
-accept path-typed values AND store-path strings. A generated store-path string
-remains a supported, deliberate pattern even though this repository no longer
-ships a first-party producer. Reserve the `./`-literal discipline for the
-strict-`isPath` sinks noted above.
+**Both our helper and modern upstream are string-tolerant.** Our `mkSkillFiles`
+and modern upstream `mkSkillEntry` both accept path-typed values AND store-path
+strings. A generated store-path string remains a supported, deliberate pattern
+even though this repository no longer ships a first-party producer. Reserve the
+`./`-literal discipline for the strict-`isPath` sinks noted above.
