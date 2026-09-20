@@ -1968,7 +1968,7 @@ in {
         customFile != null && agentsFile == null
     );
 
-    # HM: skills fanout via mkSkillEntries.
+    # HM: skills fanout via the delivery entries `mkSkillFiles` writes.
     module-kiro-hm-writes-skills = mkTest "kiro-hm-writes-skills" (
       let
         result = evalHm {
