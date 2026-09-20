@@ -127,21 +127,23 @@
   # the malformed-body and failed-assertion controls override what the fixture
   # module produced, which is a shape no declaration can express.
   inspect = {
+    correspondenceErrors ? [],
     evaluators,
     writers ? [writer],
   }:
     import ./gate.nix {inherit lib;} {
       policy = policy // {imperativeWriters = writers;};
-      inherit evaluators;
+      inherit correspondenceErrors evaluators;
     };
   gateOf = {
+    correspondenceErrors ? [],
     constant ? false,
     gated ? false,
     missing ? false,
     writers ? [writer],
   }:
     inspect {
-      inherit writers;
+      inherit correspondenceErrors writers;
       evaluators = evaluatorsFor {inherit constant gated missing;};
     };
   gate = gated: gateOf {inherit gated;};
@@ -265,11 +267,34 @@
     whitespace-body = {text = " \n\t";};
     wrong-backend = {exec = "wrong backend field";};
   };
+  correspondence = row: absentKeys:
+    import ./correspondence.nix {inherit lib;} {
+      inherit absentKeys;
+      delegations = [];
+      policy = policy // {rows = [row];};
+    };
+  absentRow = writer // {primitive = "notApplicable";};
+  policySchema = import ../../config/ai-delivery-schema.nix {inherit lib;};
+  partition = parts: builtins.deepSeq (policySchema.validateRows parts policy.rows) true;
   controls =
     lib.mapAttrs (_: rows: {passed = builtins.deepSeq (policy.validateRows rows) true;}) schemaControls
     // lib.mapAttrs (_: malformedWriter) malformedControls
     // {
       absent = gateOf {missing = true;};
+      absent-without-row = gateOf {correspondenceErrors = correspondence writer [(policy.key writer)];};
+      live-under-absent-row = gateOf {correspondenceErrors = correspondence absentRow [];};
+      missing-partition = {
+        passed = partition {
+          derivedKeys = builtins.tail policy.expectedKeys;
+          handKeys = [];
+        };
+      };
+      overlapping-partition = {
+        passed = partition {
+          derivedKeys = policy.expectedKeys;
+          handKeys = [(policy.key first)];
+        };
+      };
       assertion = rejectedAssertion;
       inherit constant;
       exempted-absent = exemptedAbsent;
@@ -282,7 +307,9 @@ in {
   inherit controls;
   broken = gate true;
   valid = gate false;
-  passed = assert lib.assertMsg (lib.all (control: !(builtins.tryEval control.passed).success) (builtins.attrValues controls))
+  passed = assert lib.assertMsg (correspondence writer [] == [] && correspondence absentRow [(policy.key writer)] == [])
+  "ai-delivery fixture: valid absence correspondence rejected";
+  assert lib.assertMsg (lib.all (control: !(builtins.tryEval control.passed).success) (builtins.attrValues controls))
   "ai-delivery fixture: a negative control passed";
   assert lib.assertMsg (lib.all (backend: let
     backendWriter =
