@@ -245,9 +245,8 @@ in
             home.file."${cfg.configDir}/lsp-config.json".text =
               builtins.toJSON (lib.mapAttrs aiCommon.mkCopilotLspConfig mergedLspServers);
           })
-          # Inline agent .md files. Mirrors the legacy
-          # `mkMarkdownEntries` shape — one entry per agent, written
-          # under `${configDir}/agents/<name>.md`.
+          # Inline agent .md files — one entry per agent, written under
+          # `${configDir}/agents/<name>.md`.
           (lib.mkIf (mergedAgents != {}) {
             home.file = lib.mapAttrs' (name: content:
               lib.nameValuePair "${cfg.configDir}/agents/${name}.md" {
@@ -269,12 +268,12 @@ in
               mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
             };
           })
-          # Skills fanout — copilot has no upstream HM skills option, so
-          # we write `home.file."${configDir}/skills/<name>"` entries
-          # directly via `mkSkillEntries`, which uses `recursive = true`
-          # to produce Layout B (a real directory with per-file
-          # symlinks) and is path-type-agnostic (accepts both Nix path
-          # literals and absolute string paths).
+          # Skills fanout — copilot has no upstream HM skills option, so the
+          # tree is DESCRIBED as a delivery entry under
+          # `${configDir}/skills/<name>` and the adapter lowers it.
+          # `recursive = true` is Layout B (a real directory with per-file
+          # symlinks): Home Manager expands the directory source itself, and
+          # the router walks it for devenv.
           {
             ai.copilot.files = helpers.mkSkillFiles {
               inherit (cfg) configDir;
@@ -401,11 +400,12 @@ in
           })
           # agentsDir handled at L2b→L3 above — expansion runs
           # through the existing per-file agents emission.
-          # Skills via the user-space walker. devenv's `files.*.source`
-          # cannot walk a directory recursively (see the devenv files
-          # internals fragment), so we enumerate leaves at eval time
-          # via `mkDevenvSkillEntries`. Produces one `files.<path>`
-          # entry per leaf file under `${projectDir}/skills/<skill>/`.
+          # Skills — the same declaration as Home Manager, against the
+          # project directory. devenv's `files.*.source` cannot walk a
+          # directory recursively (see the devenv files internals fragment),
+          # so the delivery router enumerates the leaves at eval time and
+          # emits one `files.<path>` entry per leaf under
+          # `${projectDir}/skills/<skill>/`.
           (let
             helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
           in {
