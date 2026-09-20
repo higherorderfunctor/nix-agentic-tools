@@ -249,12 +249,14 @@ in {
 
     programs.delegate-sizing.enable = true;
 
+    # dev/generate.nix owns this repo's stub; suppress native rule copies.
     claude = {
       enable = true;
       programs.delegate-sizing = {
         extraRuntimes = ["codex"];
         manualExternalDelegates = ["kiro"];
       };
+      rules.delegate-sizing-router = null;
     };
     codex = {
       enable = true;
@@ -331,6 +333,7 @@ in {
     kimchi.enable = true;
     kiro = {
       enable = true;
+      rules.delegate-sizing-router = null;
       # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,
       # a launcher-global option, so it reaches every subcommand including
       # `acp`. Without it devenv's kiro-cli ran the legacy engine and

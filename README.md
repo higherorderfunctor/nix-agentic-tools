@@ -145,11 +145,13 @@ way. If you have already added the `follows`, remove it — that is the fix.
 
 ## Skills
 
-Stacked commit workflow skills using git-branchless, git-absorb, and git-revise.
+Delegate sizing for models and effort, plus stacked commit workflows using
+git-branchless, git-absorb, and git-revise.
 
 <!-- prettier-ignore -->
 | Skill | Description |
 |-------|-------------|
+| `/delegate-sizing` | Size model and effort before calling subagents or building workflows |
 | `/stack-fix` | Absorb fixes into correct stack commits |
 | `/stack-plan` | Plan and build a commit stack from description or existing commits |
 | `/stack-split` | Split a large commit into reviewable atomic commits |
