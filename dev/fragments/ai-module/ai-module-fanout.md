@@ -8,6 +8,11 @@
 > wrongly. Full lineage:
 > `git show d1c28a21:dev/fragments/ai-module/ai-module-fanout.md`.
 >
+> - **No generic backend config escape hatch on the runtime record.**
+>   `mkBackendTransform` correctly removed duplication until an untyped callback
+>   accumulated about 1,400 lines of backend-specific delivery. One record-level
+>   transformer describes typed files and writers; backend specs retain only
+>   options, defaults, installation and bounded migration hooks.
 > - **Don't hardcode Copilot's instructions/rules destination to
 >   `.github/instructions/`.** That resolves to `$HOME/.github/instructions/` on
 >   Home Manager, a directory copilot-cli never reads — every named instruction
@@ -386,10 +391,10 @@ documented composition semantics.
 ### Per-pool capability gate
 
 Every app record carries one `supportedPools` list. The shared transformer uses
-it for the per-runtime option schema, keyed-pool merge, callback fanout, and
-shell resolution. A per-runtime pool write that the runtime cannot consume is
-therefore an unknown-option error. A ROOT pool value stays portable and degrades
-to the neutral value for an incapable runtime.
+it for the per-runtime option schema, keyed-pool merge, delivery transformation,
+and shell resolution. A per-runtime pool write that the runtime cannot consume
+is therefore an unknown-option error. A ROOT pool value stays portable and
+degrades to the neutral value for an incapable runtime.
 
 Kimchi is the sharp example: it supports `context`, `environmentVariables`,
 `mcpServers`, `settings`, and `skills`, but not `rules`. Consequently root
@@ -546,8 +551,8 @@ broken — fix the module, not the consumer.
 
 `lib/ai/sharedOptions.nix` declares cross-app pools (`ai.skills`, `ai.rules`,
 `ai.mcpServers`, `ai.lspServers`, `ai.environmentVariables`, `ai.agents`,
-`ai.hooks`, `ai.context`). It's imported by BOTH `hmTransform.nix` and
-`devenvTransform.nix`.
+`ai.hooks`, `ai.context`). Both backend module trees import it; the public
+backend selectors share `mkBackendTransform.nix` directly.
 
 **The option declarations are shared. The values are NOT.**
 
@@ -565,10 +570,12 @@ Contributing in one and expecting the other to pick it up will silently fail —
 the contribution just doesn't land in the other eval. A program option tree can
 make enablement structural without changing that per-evaluation ownership.
 
-AI CLI factories (`mkAiApp`) instead share one record-level `config` callback,
-which receives `backend` for intentional scope differences. Backend specs retain
-package installation and migration callbacks. Each backend still evaluates that
-configuration independently; sharing code never shares option values.
+AI CLI factories (`mkAiApp`) share one record-level `config` delivery
+transformer, which reads the public normalized options and receives `backend`
+for intentional scope differences. Backend config callbacks are rejected by the
+record factory; backend specs retain package installation and bounded migration
+hooks. Each backend still evaluates that configuration independently; sharing
+code never shares option values.
 
 Portable program integrations use `lib.ai.program.mkProgram`. One specification
 declares the program name, its runtime capability set, and its nested option
