@@ -4,7 +4,7 @@
 # instruction files. Consumed by both devenv tasks and flake derivations.
 #
 # Takes { lib, pkgs } where pkgs has all content overlays applied
-# (coding-standards, fragments-ai, stacked-workflows).
+# (coding-standards, delegate-sizing, stacked-workflows).
 #
 # Returns:
 #   agentsMd    — full AGENTS.md content string
@@ -27,6 +27,7 @@
 
   # ── Fragments from content packages (via overlay) ────────────────────
   commonFragments = builtins.attrValues pkgs.coding-standards.passthru.fragments;
+  delegateSizingFragments = builtins.attrValues pkgs.delegate-sizing-content.passthru.fragments;
   swsFragments = builtins.attrValues pkgs.stacked-workflows-content.passthru.fragments;
 
   # ── Dev-only fragment reader ─────────────────────────────────────────
@@ -102,7 +103,7 @@
 
   # ── Extra published fragments per package (beyond commonFragments) ───
   extraPublishedFragments = {
-    monorepo = swsFragments;
+    monorepo = delegateSizingFragments ++ swsFragments;
     stacked-workflows = swsFragments;
   };
 
@@ -383,6 +384,7 @@
       };
       copilot.enable = true;
       kiro.enable = true;
+      programs.delegate-sizing.enable = true;
       programs.stacked-workflows.enable = true;
       settings.reasoningEffort = "high";
     };
@@ -473,8 +475,8 @@
 
     ## Skills
 
-    Stacked commit workflow skills using git-branchless, git-absorb, and
-    git-revise.
+    Delegate sizing for models and effort, plus stacked commit workflows using
+    git-branchless, git-absorb, and git-revise.
 
     <!-- prettier-ignore -->
     | Skill | Description |
@@ -561,6 +563,7 @@
     | Package | Description |
     |---------|-------------|
     | `coding-standards` | Reusable coding standard fragments (DRY, conventional commits, etc.) |
+    | `delegate-sizing-content` | Per-runtime model/effort sizing skills and a short routing rule |
     | `stacked-workflows-content` | Skills, references, and skill-routing fragment |
 
     Content packages are derivations with `passthru.fragments` for
@@ -573,6 +576,7 @@
     <!-- prettier-ignore -->
     | Feature | Without Nix | Home-Manager | DevEnv |
     |---------|-------------|--------------|--------|
+    | Delegate sizing | Copy a generated runtime skill | `ai.programs.delegate-sizing.enable` (Claude + Codex + Kiro) | Same; project-native paths |
     | Stacked workflow skills | Copy skills/ | `ai.programs.stacked-workflows.enable` | `ai.programs.stacked-workflows.enable` |
     | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
     | Unified MCP config | Manual native config | `ai.mcpServers.*` (all five CLIs) | `ai.mcpServers.*` (all five CLIs) |
@@ -857,6 +861,32 @@
     </details>
 
     <details>
+    <summary><strong>Delegate Sizing</strong></summary>
+
+    ```nix
+    ai.programs.delegate-sizing.enable = true;
+    ai.claude.programs.delegate-sizing = {
+      extraRuntimes = ["codex"];
+      manualExternalDelegates = ["kiro"];
+    };
+    ```
+
+    Enable each auto-selectable external runtime with `ai.<runtime>.enable`.
+    Manual-only entries require an explicit user request and do not require that
+    runtime's module to be enabled. Codex and Kiro default to their own models.
+    Kimchi and Copilot are excluded because supported delegation controls are absent
+    or unestablished.
+
+    Runtime-only overrides include `settings.delegateTools`,
+    `settings.introspectModels`, `settings.checkUsage` and `settings.launch`:
+    strings replace the presets, and `false` omits a block. Launch instructions are
+    used when that runtime appears as an external delegate in another skill. The
+    package intersects Kiro models with its catalog and requires a live list before
+    pinning. Both Home Manager and devenv expose the same options.
+
+    </details>
+
+    <details>
     <summary><strong>Stacked Workflows</strong></summary>
 
     ```nix
@@ -982,6 +1012,7 @@
     |---------------|----------|-----------|
     | Dev-only (monorepo/tooling) | `dev/fragments/<pkg>/<name>.md` | No |
     | Published coding standards | `packages/coding-standards/fragments/<name>.md` | Yes |
+    | Published delegate-sizing rule | `packages/delegate-sizing/fragments/<name>.md` | Yes |
     | Published SWS skill-routing rule | `packages/stacked-workflows/fragments/<name>.md` | Yes |
 
     To add a dev-only fragment:

@@ -37,8 +37,8 @@ nix flake check       # linters + evaluation (does NOT build packages)
 
 ## Generation Architecture
 
-> **Last verified:** 2026-09-12 — document generation reads the same owner
-> metadata registry as flake assembly.
+> **Last verified:** 2026-09-19 — the root instruction composition includes the
+> delegate-sizing stub alongside the published coding and workflow rules.
 
 Content is generated via Nix derivations wrapped in devenv tasks, organized by
 scope:
