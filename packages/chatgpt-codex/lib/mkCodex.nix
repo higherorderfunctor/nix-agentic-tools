@@ -715,11 +715,6 @@
     message = "${optionPath} must use either sandbox_mode/sandbox_workspace_write or default_permissions/permissions, never both";
   };
 
-  # CLI config profiles are whole extra files selected with `codex --profile`.
-  # Keep this separate surface locked until its cross-layer lifecycle is
-  # needed and tested. It is not the `[permissions.<name>]` model above: named
-  # permission tables merge normally across the user and project base files.
-
   reservedAgentKeys = ["description" "developer_instructions" "name"];
 
   mkAgentAssertions = agents:
