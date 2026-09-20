@@ -244,7 +244,7 @@ in
         # Kiro with it. Non-empty requests receive the delivery policy's warning.
         (lib.mkIf (mergedLspServers != {}) {
           ai.copilot.files."${cfg.configDir}/lsp-config.json" = {
-            content = lib.mkDefault {value = lib.mapAttrs aiCommon.mkCopilotLspConfig mergedLspServers;};
+            content.value = lib.mapAttrs aiCommon.mkCopilotLspConfig mergedLspServers;
             format = "json";
           };
         })
@@ -269,9 +269,7 @@ in
         # lsp-config.json and settings.json are not.
         (lib.mkIf (mergedServers != {}) {
           ai.copilot.files."${cfg.configDir}/mcp-config.json" = {
-            content = lib.mkDefault {
-              value.mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
-            };
+            content.value.mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
             format = "json";
           };
         })
