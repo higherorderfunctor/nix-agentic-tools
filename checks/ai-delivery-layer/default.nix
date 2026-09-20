@@ -195,6 +195,56 @@
     && !lib.any usesExit (lib.splitString "\n" body);
 in {
   checks = {
+    module-delivery-document-ledger-rejects-symlink = mkTest "delivery-document-ledger-rejects-symlink" (
+      lib.all (
+        evaluate:
+          lib.all (
+            codec: let
+              path = ".kiro/probe.${codec}";
+              ledger = "documents/probe.json";
+              base.ai.kiro = {
+                enable = true;
+                activation.probeDocument.ledgers.${ledger} = {inherit codec path;};
+                files.${path} = {
+                  content.value.generated = true;
+                  entry = "probeDocument";
+                  facts.harnessWrites = true;
+                  format = codec;
+                  inherit ledger;
+                };
+              };
+              result = overlay: (evaluate {ai.kiro = lib.mkMerge [base.ai.kiro overlay];}).config;
+              failures = cfg: map (assertion: assertion.message) (lib.filter (assertion: !assertion.assertion) cfg.assertions);
+              healthy = result {};
+              retired = result {files.${path} = null;};
+              unrelated = result {files.".kiro/unrelated.json".content.text = "{}";};
+              expected = ''ai.kiro.files."${path}" resolves to `symlink`, but ai.kiro.activation.probeDocument.ledgers."${ledger}" still declares this ${codec} document path. Empty document retirement preserves a regular file and native leaves; it cannot hand this path to symlink delivery.'';
+            in
+              lib.all (overlay: failures (result overlay) == [expected]) [
+                {files.${path}.method = lib.mkForce "symlink";}
+                {
+                  methodFor = lib.mkForce ({default, ...} @ args:
+                    if args.path == path
+                    then "symlink"
+                    else default args);
+                }
+                # Path reservation does not depend on an entry still naming its
+                # old writer: removing the claim leaves the retirement target.
+                {
+                  files.${path} = lib.mkForce {
+                    content.value.replacement = true;
+                    format = codec;
+                  };
+                }
+              ]
+              && failures healthy == []
+              && failures retired == []
+              && failures unrelated == []
+              && (lib.head retired.ai.kiro._ownPlans.probeDocument.plan.targets).units == {}
+          ) ["json" "toml"]
+      ) [evalHm evalDevenv]
+    );
+
     module-delivery-codex-content-extension-keeps-generated-leaves = mkTest "delivery-codex-content-extension-keeps-generated-leaves" (
       let
         evaluated = codexExtension true;
