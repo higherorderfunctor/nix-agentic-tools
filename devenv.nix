@@ -314,6 +314,8 @@ in {
         # to replace that tracked real file with the redundant module projection.
         instructions.cli.enable = false;
       };
+      # Codex rules compose into AGENTS.md, conflicting with the tracked projection.
+      rules.delegate-sizing-router = null;
       # Temporarily disable Codex's OS sandbox for project sessions. The Home
       # Manager layer has already migrated to named permissions, but this
       # project override deliberately takes precedence while unrestricted
