@@ -1,7 +1,8 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-17 — the package builds from the release source
-> with pinned pnpm and Go dependencies; module delivery still uses the same
+> **Last verified:** 2026-09-20 — the package builds from the release source
+> with pinned pnpm and Go dependencies and patches bundled-skill discovery to
+> read store directories in place; module delivery still uses the same
 > executable and asset layout.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
@@ -111,5 +112,14 @@ resources.
 Upstream's `bin/` and `share/kimchi/` layout remains intact. Generic ELF
 rewriting and stripping are disabled to preserve Bun's compiled module graph.
 The install check requires the exact release version, a runnable helper, and the
-theme, export, and bundled-skill assets. Linux and Darwin builds run in CI. This
-packaging change does not alter discovery or configuration behavior.
+theme, export, and bundled-skill assets. Linux and Darwin builds run in CI. The
+source-build switch itself does not alter discovery or configuration behavior.
+
+## Immutable skill discovery
+
+The Nix patch returns individual bundled skill directories directly to Pi's
+resource inventory. Pi supports those paths and resolves supporting files
+relative to SKILL.md, so no temporary copy or exit cleanup is needed. Upstream's
+copy preserved the store's 0555 directory modes, causing EACCES during recursive
+cleanup. Filtering still omits bundled names supplied by stronger roots and now
+recognizes symlinked skill directories, including broken-link tolerance.
