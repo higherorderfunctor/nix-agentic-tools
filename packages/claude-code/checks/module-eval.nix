@@ -177,10 +177,8 @@ in {
         result.config.programs.claude-code.enable or false
     );
 
-    # HM: ai.claude.native.settings.<key> reaches programs.claude-code.settings.<key>
-    # via the transitional raw-inherit in mkClaude.nix. Regression guard for
-    # the inherit; will update to assert translation semantics when HM migrates
-    # to the devenv pattern.
+    # HM: native settings reach the upstream settings option through the
+    # delivery entry, including nested permission leaves.
     module-claude-hm-settings-reach-upstream = mkTest "claude-hm-settings-reach-upstream" (
       let
         result = evalHm {
@@ -436,6 +434,72 @@ in {
         };
       in
         result.config.programs.claude-code.skills ? stack-fix
+    );
+
+    # Settings carries the settings, permissions and typed-hook surfaces;
+    # script hooks have their own upstream option. None may gain a second
+    # writer in home.file when the factory moves onto the delivery layer.
+    module-claude-hm-delivery-delegates-upstream-surfaces = mkTest "claude-hm-delivery-delegates-upstream-surfaces" (
+      let
+        result =
+          (evalHm {
+            ai = {
+              agents.probe = "probe agent";
+              claude = {
+                enable = true;
+                hookScripts.probe = "probe script";
+                native.settings.permissions.allow = ["Read"];
+              };
+              hooks.PreToolUse = [{hooks = [{command = "true";}];}];
+              lspServers.probe.command = "probe";
+              mcpServers.probe.command = "probe";
+              skills.probe = ./fixtures/claude-skills/skill-a;
+            };
+          }).config;
+        delegated = {
+          ".claude/agents" = "agents";
+          ".claude/hooks" = "hooks";
+          ".claude/settings.json" = "settings";
+          ".claude/skills" = "skills";
+          ".claude/skills/claude-code-home-manager/.lsp.json" = "lspServers";
+          ".claude/skills/claude-code-home-manager/.mcp.json" = "mcpServers";
+        };
+      in
+        lib.all (path: let
+          entry = result.ai.claude.files.${path};
+        in
+          entry.method
+          == "upstream"
+          && entry.sink == ["programs" "claude-code" delegated.${path}]
+          && entry.content.value == result.programs.claude-code.${delegated.${path}}
+          && !(result.home.file ? ${path}))
+        (lib.attrNames delegated)
+        && result.programs.claude-code.settings.permissions.allow == ["Read"]
+        && handlerCommands result.programs.claude-code.settings.hooks.PreToolUse == ["true"]
+    );
+
+    module-claude-hm-upstream-overrides-generated-defaults = mkTest "claude-hm-upstream-overrides-generated-defaults" (
+      let
+        result =
+          (evalHm {
+            ai = {
+              claude.enable = true;
+              mcpServers.probe.command = "probe";
+              skills = {
+                kept = ./fixtures/claude-skills/skill-a;
+                replaced = ./fixtures/claude-skills/skill-a;
+              };
+            };
+            programs.claude-code = {
+              settings.env.ENABLE_LSP_TOOL = "0";
+              skills.replaced = ./fixtures/claude-skills/skill-b;
+            };
+          }).config.programs.claude-code;
+      in
+        result.settings.env.ENABLE_LSP_TOOL
+        == "0"
+        && result.skills.kept == ./fixtures/claude-skills/skill-a
+        && result.skills.replaced == ./fixtures/claude-skills/skill-b
     );
 
     module-claude-devenv-delegates-claude-code = mkTest "claude-devenv-delegates-claude-code" (
