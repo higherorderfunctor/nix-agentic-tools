@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-20 — generated structured documents preserve their
-> siblings under ordinary content extensions.
+> **Last verified:** 2026-09-20 — symlink delivery rejects destinations still
+> reserved by a declared document ledger.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -117,6 +117,12 @@
   retracted. Existing file modes and unowned leaves survive; a new file is 0600.
   This does not change existing project-discovery limitations. Codex's project
   config remains a static source because its native writer is user-scoped.
+- **A document ledger reserves its path against symlink delivery.** Both
+  `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
+  symlink destination still has a declared JSON/TOML ledger, even without a
+  claimant. Empty retirement preserves the regular document and native siblings;
+  it cannot safely hand that path to a link writer. Ordinary empty retirement
+  and Kiro's transitions between owned MCP modes remain supported.
 - **Kiro keeps one MCP writer for both modes.** Both historical ledgers are
   declared together; the selected file claims one and the other retracts. Merge
   keeps `content.run` even with zero servers; empty overwrite has no claimant.
