@@ -39,6 +39,23 @@
   });
 in {
   inherit (textSourceOptions) assertions;
+  mkPreset = args @ {
+    source ? null,
+    text ? null,
+  }:
+    if args ? source && args ? text
+    then throw "whenToDelegate.mkPreset accepts exactly one of `source` or `text`; passing both would define them at the same priority and trigger the text/source conflict assertion"
+    else if !(args ? source) && !(args ? text)
+    then throw "whenToDelegate.mkPreset requires exactly one of `source` or `text`"
+    else
+      {
+        enable = lib.mkDefault false;
+      }
+      // (
+        if args ? source
+        then {source = lib.mkDefault source;}
+        else {text = lib.mkDefault text;}
+      );
   rename = entries:
     builtins.foldl' (result: oldName: let
       newName = renames.${oldName};

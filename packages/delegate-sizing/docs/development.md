@@ -22,10 +22,14 @@ pools and instruction overrides cannot be set at `ai.programs.delegate-sizing`.
 The portable `whenToDelegate` attribute set is the exception: each entry adds
 always-on guidance under a heading taken from its attribute name. Entries use
 the shared text/source option contract and default to enabled so consumer text
-renders without a separate toggle. Package presets can use `mkDefault false` to
-remain dormant until a consumer explicitly enables them. Consumer content that
-accidentally reuses a dormant preset name produces a warning; an explicit
-`enable = false` does not. Attribute-key renames live in
+renders without a separate toggle. Packages must declare presets with
+`lib/when-to-delegate.nix`'s `mkPreset`, passing exactly one independent
+`source` path or `text` value. The constructor applies `mkDefault` to both the
+content and `enable = false`, keeping the preset dormant until a consumer
+explicitly enables it. Consumer entries must NOT use `mkPreset`: their fields
+must remain at normal priority so preset collisions can be detected. Consumer
+content that accidentally reuses a dormant preset name produces a warning; an
+explicit `enable = false` does not. Attribute-key renames live in
 `lib/when-to-delegate-renames.nix`; old-key definitions merge into the new key
 and warn until consumers update their configuration.
 
