@@ -324,7 +324,7 @@ in {
     in
       credAssertions;
 
-    systemd.user.services = mkIf pkgs.stdenv.isLinux (mapAttrs' (name: srv: let
+    systemd.user.services = mkIf pkgs.stdenv.hostPlatform.isLinux (mapAttrs' (name: srv: let
       serverDef = serverFiles.${name};
       srvEnv = effectiveEnvFor name srv "http";
       # Optional per-server ExecStartPre, contributed by a server module's
@@ -369,7 +369,7 @@ in {
     # changes (token rotation). See mkRotationCheck above. Gated on
     # Linux (systemd user services) + at least one file-credentialed
     # service, so it is inert for stdio-only or credential-free setups.
-    home.activation = mkIf (pkgs.stdenv.isLinux && credentialedServiceFiles != {}) {
+    home.activation = mkIf (pkgs.stdenv.hostPlatform.isLinux && credentialedServiceFiles != {}) {
       mcpRestartOnSecretRotation =
         lib.hm.dag.entryAfter ["linkGeneration" "sops-nix"] rotationRestartScript;
     };

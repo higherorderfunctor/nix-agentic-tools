@@ -38,7 +38,7 @@ in {
           message = "glab.keyringSync.enable requires glab.enable.";
         }
         {
-          assertion = !cfg.keyringSync.enable || pkgs.stdenv.isLinux;
+          assertion = !cfg.keyringSync.enable || pkgs.stdenv.hostPlatform.isLinux;
           message = "glab.keyringSync.enable currently requires Linux Secret Service and systemd user units.";
         }
         {
@@ -63,7 +63,7 @@ in {
     (lib.mkIf (cfg.enable && lib.hasAttrByPath ["ai" "codex" "internal"] options && config.ai.codex.enable) {
       ai.codex.internal._integration_writable_roots = lib.mkAfter [effectiveConfigDir];
     })
-    (lib.mkIf (cfg.enable && cfg.keyringSync.enable && pkgs.stdenv.isLinux) {
+    (lib.mkIf (cfg.enable && cfg.keyringSync.enable && pkgs.stdenv.hostPlatform.isLinux) {
       # Activation records one attempt without touching the secret. The path
       # unit remains dormant outside a graphical session, then consumes this
       # marker exactly once. The service removes it on EVERY exit, so a locked
