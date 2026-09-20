@@ -384,6 +384,12 @@ in {
         && !(result.config.ai.kimchi ? rules)
     );
 
+    # A REAL directory, not `../fixtures`, which never existed. Both probes
+    # used to pass on laziness alone: nothing forced the fanout, so the
+    # accepted arm proved only that `home.packages` did not read it. Hosting a
+    # delivery `upstream` sink under `programs` made that read eager — see the
+    # `upstreamRoots` table in lib/ai/deliver.nix — and the arm started
+    # failing on the missing path rather than on its own claim.
     module-ai-rules-dir-accepted-for-claude = mkTest "ai-rules-dir-accepted-for-claude" (
       let
         probe =
@@ -391,7 +397,7 @@ in {
           (evalHm {
             ai.claude = {
               enable = true;
-              rulesDir = ../fixtures;
+              rulesDir = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
             };
           })
       .config.home.packages;
@@ -406,7 +412,7 @@ in {
           (evalHm {
             ai.kimchi = {
               enable = true;
-              rulesDir = ../fixtures;
+              rulesDir = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
             };
           })
       .config.home.packages;
