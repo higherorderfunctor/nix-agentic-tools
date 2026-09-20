@@ -1,5 +1,4 @@
-#!/usr/bin/env bash
-set -euETo pipefail
+# shellcheck shell=bash
 shopt -s inherit_errexit 2>/dev/null || :
 
 timeout 25s python3 - <<'PY' | jq '.rateLimits.primary | {usedPercent, remainingPercent: (100 - .usedPercent), resetsAt: (.resetsAt | strflocaltime("%Y-%m-%d %H:%M:%S %Z"))}'

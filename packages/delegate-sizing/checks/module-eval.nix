@@ -24,7 +24,10 @@
     codex = "Call `collaboration.spawn_agent`";
     kiro = "Set `modelId` and `effortLevel`";
   };
-  presets = import ../lib/presets.nix {codexUsageScript = "/nix/store/test-codex-usage.sh";};
+  presets = import ../lib/presets.nix {
+    claudeUsageScript = "/nix/store/test-claude-usage";
+    codexUsageScript = "/nix/store/test-codex-usage";
+  };
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-sizing}/SKILL.md";
   render = args: import ../lib/render.nix ({inherit lib presets;} // args);
   renderKiro = kiroModels:
@@ -125,7 +128,8 @@
       && !(lib.hasInfix "via `" kiro)
       && catalogIntersectionChecked
       && nativeDelegateToolsChecked
-      && builtins.pathExists "${result.config.ai.claude.skills.delegate-sizing}/scripts/codex-usage.sh"
+      && lib.hasInfix "/bin/claude-usage`" claude
+      && lib.hasInfix "/bin/codex-usage`" codex
     );
     "module-delegate-sizing-${name}-external-enable" = mkTest "delegate-sizing-${name}-external-enable" (
       !(builtins.tryEval invalidChecked).success

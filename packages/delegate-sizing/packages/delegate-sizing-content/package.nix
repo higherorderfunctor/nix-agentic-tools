@@ -5,14 +5,19 @@
   ...
 }: let
   inherit (pkgs) lib;
-  # Keep script content independent of the skills that reference its store path.
-  scriptContent = pkgs.writeTextFile {
-    name = "delegate-sizing-script-content";
-    destination = "/scripts/codex-usage.sh";
-    text = builtins.readFile ../../scripts/codex-usage.sh;
+  mkUsageScript = name: runtimeInputs:
+    pkgs.writeShellApplication {
+      inherit name runtimeInputs;
+      bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+      text = builtins.readFile (../../scripts + "/${name}.sh");
+    };
+  usageScripts = {
+    claude-usage = mkUsageScript "claude-usage" [pkgs.curl pkgs.jq];
+    codex-usage = mkUsageScript "codex-usage" [pkgs.coreutils pkgs.jq pkgs.python3];
   };
   presets = import ../../lib/presets.nix {
-    codexUsageScript = "${scriptContent}/scripts/codex-usage.sh";
+    claudeUsageScript = lib.getExe usageScripts.claude-usage;
+    codexUsageScript = lib.getExe usageScripts.codex-usage;
   };
   render = args: builtins.readFile "${mkSkill args}/SKILL.md";
   mkSkill = args: let
@@ -25,9 +30,8 @@
       # Full strict mode is required here: stdenv does not set every flag (#909).
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      mkdir -p "$out/scripts"
+      mkdir -p "$out"
       install -m 644 ${pkgs.writeText "SKILL.md" text} "$out/SKILL.md"
-      cp ${scriptContent}/scripts/codex-usage.sh "$out/scripts/codex-usage.sh"
       prettier --write --prose-wrap always "$out/SKILL.md"
     '';
   skills = lib.genAttrs ["claude" "codex" "kiro"] (runtime: mkSkill {inherit runtime;});
@@ -35,7 +39,7 @@ in
   pkgs.runCommand "delegate-sizing-content" {
     passthru = {
       fragments = import ../../lib/fragments.nix {inherit fragmentsLib repoPath;};
-      inherit mkSkill presets render skills;
+      inherit mkSkill presets render skills usageScripts;
     };
   } ''
     # Full strict mode is required here: stdenv does not set every flag (#909).
