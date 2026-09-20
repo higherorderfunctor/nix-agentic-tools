@@ -348,8 +348,9 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-09-12 — native owner recipes replace grouped overlay
-> barrels; pinned build identity and consumer guards are preserved.
+> **Last verified:** 2026-09-19 — Kiro refreshes its public model snapshot
+> outside the binary version check; pinned build identity and consumer guards
+> are preserved.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -880,11 +881,12 @@ then restores `vendorHash` — all three edges forced, which is precisely what t
 old welded `mkGoSrcVendorFix` (src+vendor in ONE script) could not express.
 
 `glab` also carries a `passthru.extracted` sidecar, so the SAME `extraExtract`
-runs `vu.mkExtractRegen` after the hash fixer — and it is the only extracted
-package whose ordering matters. The other three (`chatgpt-codex`, `claude-code`,
-`kiro-cli`) fetch a prebuilt binary and have no hash to restore, so they pass
-`mkExtractRegen` alone; glab's extract BUILDS `src` and `goModules`, so running
-it before the fixer would hit `lib.fakeHash` instead of producing a schema.
+runs `vu.mkExtractRegen` after the hash fixer. Its extract BUILDS `src` and
+`goModules`, so running it before the fixer would hit `lib.fakeHash` instead of
+producing a schema. `chatgpt-codex` and `claude-code` fetch prebuilt binaries
+and pass `mkExtractRegen` alone. Kiro also fetches a prebuilt binary, but its
+update wrapper refreshes the public model snapshot before regeneration on EVERY
+sweep: model changes do not wait for a binary version bump.
 
 Wiring that regeneration is not optional for an extracted package, and glab
 demonstrates the cost of missing it: it was the one such package that never had

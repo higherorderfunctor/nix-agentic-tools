@@ -463,11 +463,15 @@ rec {
     # second pass over a ~800 MB binary to re-derive the same regex would be
     # both slower and a second place for that regex to drift.
     settingsJson=$("$python3" ${kiroSettingsExtractScript pkgs} "$kiroChatBin")
+    # Model availability is server-side and account-dependent. Suggestions come
+    # from the public documentation snapshot, refreshed independently of releases.
+    modelsJson=$("$python3" ${../extract/models.py} ids ${../model-catalog.json})
 
     "$jq" -n --argjson hookTriggers "$hookTriggersJson" --argjson documentedAbsent "$documentedAbsentJson" \
+      --argjson models "$modelsJson" \
       --argjson rolloutFeatures "$rolloutFeaturesJson" \
       --argjson settings "$settingsJson" \
-      '{hookTriggers: $hookTriggers, documentedAbsent: $documentedAbsent, rolloutFeatures: $rolloutFeatures, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "${dest}"
+      '{hookTriggers: $hookTriggers, documentedAbsent: $documentedAbsent, models: $models, rolloutFeatures: $rolloutFeatures, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "${dest}"
   '';
 
   # Same-LENGTH in-place rewrite of a rollout-manifest entry, flipping it to

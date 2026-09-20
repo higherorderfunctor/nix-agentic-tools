@@ -29,13 +29,14 @@ in {
           if [ "$only_auto" = "true" ] || [ -z "$model_ids" ]; then
             log "Kiro: offline auto-only stub detected — SKIPPED (not a drift)"
           else
-            committed=$(jq -r '.[]' packages/kiro-cli/models.json | sort -u)
+            committed=$(jq -r '.models[]' packages/kiro-cli/extracted.json | sort -u)
             missing=$(comm -23 <(printf '%s\n' "$model_ids") <(printf '%s\n' "$committed") || true)
             if [ -z "$missing" ]; then
-              log "Kiro: OK — packages/kiro-cli/models.json covers the live catalog"
+              log "Kiro: OK — extracted model suggestions cover this account's catalog"
             else
-              log "Kiro: DRIFT — live ids missing from packages/kiro-cli/models.json:"
+              log "Kiro: DRIFT — live ids missing from packages/kiro-cli/extracted.json:"
               printf '    %s\n' $missing >&2
+              exit 1
             fi
           fi
         fi
