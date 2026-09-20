@@ -1232,7 +1232,7 @@ in {
             nativeSettings.chat.modelDefaults."claude-opus-5".effort = "high";
           };
         };
-        text = (result.config.files.".kiro/settings/cli.json" or {}).text or "";
+        text = (builtins.head (harness.ownPlan "kiro" "ai:kiro:settings-merge" result).targets).units.text;
       in
         lib.hasInfix ''"chat.modelDefaults":{"claude-opus-5":{"effort":"high"}}'' text
         && !lib.hasInfix "chat.modelDefaults.claude-opus-5" text
@@ -1270,7 +1270,7 @@ in {
             nativeSettings.chat.enableTangentMode = true;
           };
         };
-        text = (result.config.files.".kiro/settings/cli.json" or {}).text or "";
+        text = (builtins.head (harness.ownPlan "kiro" "ai:kiro:settings-merge" result).targets).units.text;
       in
         lib.hasInfix ''"chat.enableTangentMode":true'' text
         && !lib.hasInfix ''"chat":{'' text
@@ -2802,7 +2802,7 @@ in {
         needles = ["KIRO_LOG_LEVEL" "debug"];
       };
 
-    # Devenv: settings/cli.json static write.
+    # Devenv: settings/cli.json reconciles the flattened workspace settings.
     module-kiro-devenv-writes-settings-json = mkTest "kiro-devenv-writes-settings-json" (
       let
         result = evalDevenv {
@@ -2816,11 +2816,11 @@ in {
             nativeSettings.chat.enableTangentMode = true;
           };
         };
-        settingsFile = result.config.files.".kiro/settings/cli.json" or null;
       in
-        settingsFile
-        != null
-        && lib.hasInfix "chat.enableTangentMode" (settingsFile.text or "")
+        (cliDocument result).value."chat.enableTangentMode"
+        == true
+        && lib.hasInfix "--phase all" result.config.tasks."ai:kiro:settings-merge".exec
+        && !(result.config.files ? ".kiro/settings/cli.json")
     );
 
     # Devenv: Kiro context joins the shared repository-root AGENTS.md.
@@ -3029,6 +3029,11 @@ in {
       in
         hm.config.ai.kiro.files
         == {}
+        && dv.config.ai.kiro.files == {}
+        && hm.config.ai.kiro.activation.retireSteering.runWhenDisabled
+        && dv.config.ai.kiro.activation.retireSteering.runWhenDisabled
+        && builtins.attrNames hm.config.ai.kiro._ownPlans == ["retire-materialize-kiro-steering-ledger"]
+        && builtins.attrNames dv.config.ai.kiro._ownPlans == ["ai:kiro:retire-steering-copies"]
         && target.units == {}
         && target.path == ".kiro/steering"
         && target.ledger == "materialize/kiro-steering.manifest"

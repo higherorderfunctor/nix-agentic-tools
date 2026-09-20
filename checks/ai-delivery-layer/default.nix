@@ -101,9 +101,7 @@
   # `copy-ro`/`shared` bucket replaces, one factory at a time. When a factory
   # leaves this list it has stopped calling `own` directly too, and
   # `ai.<runtime>._ownPlans` is where a check reads what its writers do.
-  sinkWriters = {
-    "packages/kiro-cli/lib/mkKiro.nix" = "permissions, lsp, cli.json, agents, the agents-dir walker and skills";
-  };
+  sinkWriters = {};
 
   # One writer, both backends, every ordering feature: a backend-keyed entry
   # name, a token with no devenv node (`secrets`), the literal-node escape
@@ -202,6 +200,70 @@ in {
         == ["devenv:enterShell" "devenv:files"]
         && withoutFiles.files == {}
         && withoutFiles.tasks.probeDefaults.before == ["devenv:enterShell"]
+    );
+
+    # The opt-in must not accidentally activate ordinary command writers,
+    # owned writers, file claims or packages when the runtime is disabled.
+    module-delivery-disabled-runtime-keeps-only-opted-in-writers = mkTest "delivery-disabled-runtime-keeps-only-opted-in-writers" (
+      let
+        declaration = enable: {
+          ai.codex = {
+            inherit enable;
+            activation = {
+              ordinary.command = "printf ordinary";
+              ordinaryOwned = {
+                ledgers."materialize/ordinary.manifest" = {
+                  codec = "dir";
+                  path = ".probe/ordinary";
+                };
+                pruneEntry = "ordinaryPrune";
+              };
+              retireCommand = {
+                command = "printf retired";
+                runWhenDisabled = true;
+              };
+              retireOwned = {
+                ledgers."materialize/retired.manifest" = {
+                  codec = "dir";
+                  path = ".probe/retired";
+                };
+                pruneEntry = "retirePrune";
+                runWhenDisabled = true;
+              };
+            };
+            files = {
+              ".probe/plain".content.text = "plain";
+              ".probe/retired/owned" = {
+                content.text = "owned";
+                entry = "retireOwned";
+                facts.symlinkReadable = false;
+                ledger = "materialize/retired.manifest";
+              };
+            };
+          };
+        };
+        hm = evalHm (declaration false);
+        dv = evalDevenv (declaration false);
+        enabled = evalHm (declaration true);
+        retired = evaluated: builtins.head (ownPlan "codex" "retireOwned" evaluated).targets;
+      in
+        hm.config.home.file
+        == {}
+        && hm.config.home.packages == []
+        && dv.config.files == {}
+        && dv.config.packages == []
+        && !(hm.config.home.activation ? ordinary)
+        && !(hm.config.home.activation ? ordinaryOwned)
+        && !(dv.config.tasks ? ordinary)
+        && !(dv.config.tasks ? ordinaryOwned)
+        && strict hm.config.home.activation.retireCommand.text
+        && strict dv.config.tasks.retireCommand.exec
+        && (retired hm).units == {}
+        && (retired dv).units == {}
+        && enabled.config.home.activation ? ordinary
+        && enabled.config.home.activation ? ordinaryOwned
+        && enabled.config.home.file.".probe/plain".text == "plain"
+        && (retired enabled).units.owned.text == "owned"
     );
 
     module-delivery-method-rule = mkTest "delivery-method-rule" (
@@ -1007,6 +1069,8 @@ in {
 
         xargs -0 -r grep -lE -e "$anchored" -e "$nested" < "$work/corpus" | sort > "$work/actual" || true
         {
+          # Bash requires a command even when the final factory leaves the list.
+          :
           ${lib.concatMapStringsSep "\n          " (path: "echo ${lib.escapeShellArg path}") (lib.attrNames sinkWriters)}
         } | sort > "$work/allowed"
 
