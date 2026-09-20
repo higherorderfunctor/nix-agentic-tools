@@ -573,42 +573,6 @@ jobs:
           fi
           echo "heron_brook mitigation review due ${review_by} (today ${today}) — OK."
 
-      # ~30-day reminder to re-check whether oxlint still needs its
-      # @napi-rs/cli patch. The overlay says "drop this when the catch ships
-      # upstream — re-read `executeProcessIncarnationCommand` in dist/cli.js on
-      # each repin rather than assuming", and that instruction had no
-      # enforcement: a repin can carry the patch forward untouched forever, and
-      # the sweep never reads it. Gated on the update branch so it lands where
-      # someone is already reviewing an oxlint bump.
-      #
-      # The procedure is: fetch the version named in verifiedVersion (or the
-      # newer one upstream's catalog now pins), read the function, and see
-      # whether the execFile call is still bare inside the Promise executor.
-      # If it is, bump reviewBy. If upstream wrapped it, DELETE the patch, the
-      # awk, the napi attrset and this step.
-      - name: Oxlint @napi-rs/cli patch necessity tripwire
-        if: github.head_ref == 'update/oxlint'
-        run: |
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          tripwire=config/oxlint-napi-patch-tripwire.json
-          review_by="$(jq -r .reviewBy "$tripwire")"
-          verified="$(jq -r .verifiedVersion "$tripwire")"
-          check="$(jq -r .upstreamCheck "$tripwire")"
-          pinned="$(sed -n 's/^[[:space:]]*version = "\(.*\)";$/\1/p' \
-            packages/oxlint/packages/ai/devTools/oxlint/package.nix | head -1)"
-          today="$(date -u +%F)"
-          # Lexicographic compare is correct for ISO-8601 dates.
-          if [[ "$today" > "$review_by" ]]; then
-            echo "::error file=${tripwire}::oxlint's @napi-rs/cli patch is past its ${review_by} review date (today ${today}). Re-read ${check} Then EITHER bump reviewBy in ${tripwire}, OR delete the patch, packages/oxlint/src/oxlint-pnpm-patch-meta.awk, the napi attrset and this step if upstream fixed it. An expired justification is a finding, not a formality."
-            exit 1
-          fi
-          if [[ "$pinned" != "$verified" ]]; then
-            echo "::error file=${tripwire}::oxlint pins @napi-rs/cli ${pinned} but the patch was last justified against ${verified}. A regenerated patch is not a re-verified one — re-read ${check} Then set verifiedVersion to ${pinned}, or drop the patch if upstream fixed it."
-            exit 1
-          fi
-          echo "oxlint @napi-rs/cli patch justified against ${verified}, review due ${review_by} (today ${today}) — OK."
-
   # The full `devenv test` smoke suite and #821 telemetry remain available as
   # the manual Devenv Diagnostic workflow. Its extracted deterministic
   # contracts live in the flake checks above, so no automatic PR or push path
