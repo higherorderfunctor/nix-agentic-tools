@@ -110,6 +110,13 @@ in ''
   control, record effort as not applicable. State the selected model and effort
   in the brief and apply them through the controls below.
 
+  A delegate CLI resolves its permission and default configuration from the
+  directory it is launched in, so launching it elsewhere silently changes the
+  permission model; a bypass or full-access flag reached for to compensate may
+  be refused outright by the hosting harness. This is why the launch blocks say
+  to launch from the current working directory and pass model and effort
+  explicitly instead of inheriting them.
+
   A harness without a per-delegate model or effort control (Copilot today) does the work inline at the session's sizing, or hands it to an external delegate.
   Sizing is a budget decision, not a rigor decision: a cheaper delegate still owes the same evidence, and a task that cannot meet the bar on the cheap model is sized up, not relaxed.
 
