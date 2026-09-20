@@ -296,6 +296,85 @@ in {
 
     ai-delivery-snapshot = pkgs.writeText "ai-delivery-snapshot" snapshot;
 
+    # The point of moving the generators' priority onto `content`: a consumer
+    # who changes HOW a generated file lands keeps WHAT is in it. One case per
+    # generator family, because each one contributes its entry differently.
+    module-delivery-sibling-definition-keeps-generated-content = mkTest "delivery-sibling-definition-keeps-generated-content" (
+      let
+        base = runtime: {
+          ai =
+            {
+              context.text = "GENERATED-CONTEXT";
+              rules.probe.text = "GENERATED-RULE";
+            }
+            // {${runtime}.enable = true;};
+        };
+        withSibling = {
+          evaluate,
+          path,
+          runtime,
+          sibling,
+        }:
+          (evaluate (lib.recursiveUpdate (base runtime) {
+            ai.${runtime}.files.${path} = sibling;
+          }))
+          .config
+          .ai
+          .${
+            runtime
+          }
+          .files
+          .${
+            path
+          };
+        # A pure consumer FACT: it changes the method the rule resolves, and
+        # implies nothing about ownership.
+        fact.facts.symlinkReadable = false;
+        claudeContext = withSibling {
+          evaluate = evalHm;
+          path = ".claude/CLAUDE.md";
+          runtime = "claude";
+          sibling = fact;
+        };
+        claudeRule = withSibling {
+          evaluate = evalHm;
+          path = ".claude/rules/probe.md";
+          runtime = "claude";
+          # `mkForce` on a sibling is the same shape and must behave the same.
+          sibling.method = lib.mkForce "copy-ro";
+        };
+        copilotRule = withSibling {
+          evaluate = evalDevenv;
+          path = ".github/instructions/probe.instructions.md";
+          runtime = "copilot";
+          sibling = fact;
+        };
+        kimchiContext = withSibling {
+          evaluate = evalDevenv;
+          path = ".config/kimchi/harness/AGENTS.md";
+          runtime = "kimchi";
+          sibling = fact;
+        };
+        kiroRule = withSibling {
+          evaluate = evalHm;
+          path = ".kiro/steering/probe.md";
+          runtime = "kiro";
+          sibling = fact;
+        };
+      in
+        claudeContext.content.text
+        == "GENERATED-CONTEXT"
+        && claudeContext.facts.symlinkReadable == false
+        && lib.hasInfix "GENERATED-RULE" claudeRule.content.text
+        && claudeRule.method == "copy-ro"
+        && lib.hasInfix "GENERATED-RULE" copilotRule.content.text
+        && copilotRule.facts.symlinkReadable == false
+        && kimchiContext.content.text == "GENERATED-CONTEXT"
+        && kimchiContext.facts.symlinkReadable == false
+        && lib.hasInfix "GENERATED-RULE" kiroRule.content.text
+        && kiroRule.facts.symlinkReadable == false
+    );
+
     # A corpus scan, not a changed-files scan: a gate that only looks at the
     # diff cannot notice that the tree behind it grew a new direct write.
     module-delivery-no-new-direct-sink-writes =
