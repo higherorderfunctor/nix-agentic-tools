@@ -136,15 +136,10 @@
   in
     lib.optionals cfg.enable (lib.mapAttrsToList (path: entry: {
         inherit entry path runtime;
-        method =
-          if entry.method != null
-          then entry.method
-          else
-            cfg.methodFor {
-              inherit backend path;
-              inherit (entry) facts;
-              default = deliveryMethod.byRule;
-            };
+        method = deliveryMethod.resolve {
+          inherit backend entry path;
+          inherit (cfg) methodFor;
+        };
       }) (lib.filterAttrs (_path: entry:
         entry.content.enable || entry.content.run != null || entry.content.value != null)
       cfg.files)))

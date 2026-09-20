@@ -91,7 +91,7 @@ in
       entry.content.enable || entry.content.run != null || entry.content.value != null)
     cfg.files;
 
-    # The ONE place a method is resolved. Not at type level and not in an
+    # Resolve through the shared rule after merging. Not at type level or in an
     # `apply`: both would read a sibling option while the option they belong to
     # is still merging, and `ai.<runtime>.files` carries an `apply` of its own.
     # Here `cfg` is finished, so `mkForce` on `method` and on `methodFor` both
@@ -100,15 +100,10 @@ in
       entry
       // {
         inherit path;
-        method =
-          if entry.method != null
-          then entry.method
-          else
-            cfg.methodFor {
-              inherit backend path;
-              inherit (entry) facts;
-              default = deliveryMethod.byRule;
-            };
+        method = deliveryMethod.resolve {
+          inherit backend entry path;
+          inherit (cfg) methodFor;
+        };
         # Structured content becomes bytes once, here. The ORIGINAL content
         # stays: a reconciled document declares the VALUE it owns leaves of,
         # and that value cannot be recovered from the bytes.
