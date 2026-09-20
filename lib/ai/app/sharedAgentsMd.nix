@@ -141,6 +141,11 @@ in {
         # Do not inspect rendered bytes to discover whether a target exists.
         # The separate boolean inventory lets priority arbitration discard this
         # lazy default without forcing source-backed generated content.
+        # Whole-entry priority, for the same reason mkCodex.nix states at its
+        # own AGENTS.md entry: choosing between a file and no file reads the
+        # rendered body, and a consumer who replaced this target must not pay
+        # for reading a source they discarded. The `mkDefault` wrapper is what
+        # defers that read until `filterOverrides` has kept the definition.
         ai.internal.files = lib.mapAttrs (_filename: text:
           lib.mkDefault (
             if text == ""
