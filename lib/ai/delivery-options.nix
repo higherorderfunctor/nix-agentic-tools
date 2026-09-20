@@ -170,6 +170,10 @@
           ledger's own codec and path live on the writer, so a ledger no file
           claims still produces a valid empty target — which is how a path is
           released rather than abandoned.
+
+          `copy-ro` requires a directory ledger. A JSON/TOML document claimant
+          must use the ledger's exact path and matching format, since the ledger
+          determines where and how the reconciler writes.
         '';
       };
       method = lib.mkOption {

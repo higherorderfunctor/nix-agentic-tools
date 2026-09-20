@@ -15,6 +15,7 @@
 }: let
   inherit (harness) evalDevenv evalHm harnessNames hasLiteral mkTest ownPlan;
   deliveryMethod = import ../../lib/ai/deliveryMethod.nix {inherit lib;};
+  ownedControls = import ../ai-delivery/owned-fixtures.nix {inherit harness lib;};
 
   # A file that states no fact at all takes both defaults, which is the shape
   # the rule answers `symlink` for.
@@ -206,6 +207,10 @@
     && !lib.any usesExit (lib.splitString "\n" body);
 in {
   checks = {
+    module-delivery-owned-entry-controls = mkTest "delivery-owned-entry-controls" (
+      lib.all (backend: lib.all (control: control.passed) (builtins.attrValues backend)) (builtins.attrValues ownedControls)
+    );
+
     module-delivery-normalized-keyed-pools-extend = mkTest "delivery-normalized-keyed-pools-extend" (
       let
         samples = {
