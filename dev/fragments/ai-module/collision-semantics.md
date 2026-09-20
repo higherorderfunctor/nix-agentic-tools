@@ -1,7 +1,7 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-19 — B7's unit is the delivery entry's FIELDS:
-> generators default `content` and `null` absorbs at equal priority.
+> **Last verified:** 2026-09-19 — cross-runtime path claims are computed; shared
+> context targets arbitrate overrides and require one delivery method.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -216,15 +216,23 @@ Package callbacks may render entries into the runtime map but must not read that
 map to define normalized inputs; keeping the edge one-way is what makes the
 module fixed point evaluable.
 
-Repository-local Codex/Kiro `AGENTS.md` is the shared-target exception, not a B7
-exception. `sharedAgentsMd.nix` admits applicable public entries from enabled
-runtimes into its hidden final map before the one native sink; a disabled
-runtime's declared map remains inert. The generated composition is a lazy
-default there, so ordinary replacements and null tombstones arbitrate at B7
-without reading discarded source-backed generator content; equal runtime entries
-deduplicate and divergent ones fail. Size guards read only the surviving inline
-final entry. A surviving store-backed `source` remains lazy and is not
-size-checked at eval, avoiding IFD.
+Runtime delivery options, including downstream app records, define the path
+claim inventory. Two enabled runtimes claiming the same non-null file path fail
+evaluation on both backends, even if their bytes match. Null and disabled
+runtime claims do not participate. A shared repository context target is the
+sole exception: each claimant's `context.filename` must resolve to that target,
+and all claimants must select the same method. The aggregate's native owner uses
+`symlink`; a public override cannot silently select an owned-file method.
+
+Repository-local `AGENTS.md` is the shared-target exception, not a B7 exception.
+`sharedAgentsMd.nix` admits applicable public entries from enabled runtimes
+discovered from their delivery options into its hidden final map before the one
+native sink; a disabled runtime's declared map remains inert. The generated
+composition is a lazy default there, so ordinary replacements and null
+tombstones arbitrate at B7 without reading discarded source-backed generator
+content; equal runtime entries deduplicate and divergent ones fail. Size guards
+read only the surviving inline final entry. A surviving store-backed `source`
+remains lazy and is not size-checked at eval, avoiding IFD.
 
 ### Adding a normalized pool
 
