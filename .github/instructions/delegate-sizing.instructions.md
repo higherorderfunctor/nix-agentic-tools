@@ -8,7 +8,7 @@ applyTo: "packages/delegate-sizing/**"
 # Delegate sizing package
 
 > **Last verified:** 2026-09-20 — the always-on stub is one sentence under its
-> own heading; the five rules live only in the generated skills.
+> own heading; the six rules live only in the generated skills.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,
@@ -46,7 +46,7 @@ functions read those built files.
 
 `fragments/skill-routing.md` contains a one-sentence always-on stub under its
 own heading. `router.nix` supplies that file unchanged to both the factory and
-repository projections. `lib/rules.md` holds the five rules; `lib/render.nix`
+repository projections. `lib/rules.md` holds the six rules; `lib/render.nix`
 places them at the top of each runtime's skill, before the preamble. This
 repository includes that rule in `dev/generate.nix`'s root composition, which
 reaches AGENTS.md even with Codex CLI instructions disabled. Repository devenv
