@@ -30,9 +30,10 @@
   #   - a consumer's `content.source` still replaces a defaulted
   #     `content.text`, so the tag never sees two definitions at once.
   #
-  # The `value` and `run` tags of the design land with the renderer and the
-  # reconciler that consume them. A tag the layer cannot yet deliver would be
-  # a promise, not a schema.
+  # The `run` tag of the design — a program that WRITES the file at activation,
+  # for bytes that cannot exist in the store — lands with the reconciler that
+  # can run it. A tag the layer cannot yet deliver would be a promise, not a
+  # schema.
   contentType = lib.types.attrTag {
     source = lib.mkOption {
       type = lib.types.path;
@@ -41,6 +42,16 @@
     text = lib.mkOption {
       type = lib.types.str;
       description = "Literal bytes.";
+    };
+    value = lib.mkOption {
+      type = lib.types.attrsOf lib.types.anything;
+      description = ''
+        Structured content, rendered into bytes by `format`. Two definitions at
+        equal priority merge leaf-wise and a divergent leaf conflicts naming
+        the option path, which is exactly the contract a document several
+        modules contribute to needs — and the reason content is one tagged
+        option rather than one opaque value.
+      '';
     };
   };
 
