@@ -1033,10 +1033,10 @@ in
               })
             mergedRules;
           })
-          # Skills — devenv has no upstream skills option on
-          # claude.code (cachix/devenv#2441), so we write per-leaf
-          # files.* entries via the mkDevenvSkillEntries walker. The
-          # walker mirrors HM `recursive = true` in user space because
+          # Skills — devenv has no upstream skills option on claude.code
+          # (cachix/devenv#2441), so the tree is described as a delivery
+          # entry and the router walks it into per-leaf `files.*` entries.
+          # That walk mirrors HM `recursive = true` in user space, because
           # devenv `files.*.source` cannot recurse a directory itself.
           (let
             helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};

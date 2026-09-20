@@ -263,8 +263,15 @@ in
         ${writer.command}
       '';
 
-    # Writers that own no files at all: their whole product is the body.
-    commands = lib.filterAttrs (_name: writer: writer.command != null) cfg.activation;
+    # Writers that own no files at all: their whole product is the body. One
+    # entry each, keyed by the literal name that backend uses — the only part
+    # an adapter states is the TAIL, the activation entry or task record the
+    # backend takes, because that is the only part that differs.
+    commandEntries = lower:
+      lib.mapAttrs' (
+        name: writer: lib.nameValuePair (nameFor "${name}.entry" writer.entry) (lower writer)
+      )
+      (lib.filterAttrs (_name: writer: writer.command != null) cfg.activation);
 
     # `tasks."devenv:files"` exists only when the project declares files, and
     # devenv's runner hard-errors on a dangling reference, so that edge stays
