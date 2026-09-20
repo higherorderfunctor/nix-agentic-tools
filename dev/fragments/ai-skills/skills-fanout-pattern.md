@@ -1,7 +1,7 @@
 ## ai.skills Fanout Delegation Pattern
 
-> **Last verified:** 2026-08-19 — the retired generated-skill exception is
-> removed; Stacked Workflows remains the sole skill-package program consumer.
+> **Last verified:** 2026-09-19 — skill-package callbacks receive the runtime
+> being written, so one factory import can render different content per runtime.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -86,6 +86,11 @@ enablement. Its portable option is `ai.programs.<name>.enable`; generated
 `ai.<runtime>.programs.<name>.enable` leaves use B4 null-as-inherit semantics. A
 resolved false runtime receives no package skills or router rule, while siblings
 continue to inherit the portable value.
+
+The factory passes `config`, `lib`, `pkgs` and `runtime` to both `skills` and
+`rules` callbacks. Import it once with the full supported runtime set; render
+per-runtime content inside the callbacks. Existing callbacks that ignore
+`runtime`, such as stacked-workflows, keep the same behavior.
 
 This controls whether the package writes its existing
 `ai.<runtime>.{skills,rules}` entries; it does not move those entries to the
