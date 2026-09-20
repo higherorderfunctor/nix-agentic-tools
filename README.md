@@ -594,11 +594,12 @@ Kimchi and Copilot are excluded because supported delegation controls are absent
 or unestablished.
 
 Runtime-only overrides include `settings.delegateTools`,
-`settings.introspectModels`, `settings.checkUsage` and `settings.launch`:
-strings replace the presets, and `false` omits a block. Launch instructions are
-used when that runtime appears as an external delegate in another skill. The
-package intersects Kiro models with its catalog and requires a live list before
-pinning. Both Home Manager and devenv expose the same options.
+`settings.introspectModels`, `settings.checkUsage` and `settings.launch`: set
+`.text` (or `.source`) to replace a preset, and `.enable = false` to omit a
+block. Launch instructions are used when that runtime appears as an external
+delegate in another skill. The package intersects Kiro models with its catalog
+and requires a live list before pinning. Both Home Manager and devenv expose the
+same options.
 
 </details>
 

@@ -10,7 +10,7 @@
       #!/usr/bin/env bash
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      delegate_usage_token=$(jq -er '.claudeAiOauth.accessToken' ~/.claude/.credentials.json)
+      delegate_usage_token=$(jq -er '.claudeAiOauth.accessToken' "''${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.credentials.json")
       curl --fail --silent --show-error --config - <<EOF_USAGE | jq '{five_hour, seven_day, seven_day_opus, seven_day_sonnet, extra_usage}'
       url = "https://api.anthropic.com/api/oauth/usage"
       header = "Authorization: Bearer $delegate_usage_token"
@@ -56,7 +56,7 @@
       Never select `ultra`: it adds automatic delegation to `max`.
     '';
     introspectModels.text = ''
-      For external delegates, read `~/.codex/models_cache.json` or start
+      For external delegates, read `''${CODEX_HOME:-$HOME/.codex}/models_cache.json` or start
       `codex app-server`: send `initialize`, then `initialized`, then
       `model/list` with `limit: 100` and `includeHidden: false`.
       Follow `nextCursor` until null. Read `data[].model`,
