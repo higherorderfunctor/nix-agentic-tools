@@ -52,12 +52,15 @@ as a revset to select which commits to submit. Default is the current stack.
 
    ```bash
    # If $ARGUMENTS is a revset (use git sl or git branchless log, not git log):
+   SELECTED="$ARGUMENTS"
    git sl
 
    # If $ARGUMENTS is empty, try stack():
+   SELECTED='stack()'
    git sl
 
    # If on main with no stack, use draft():
+   SELECTED='draft()'
    git query 'draft()'
 
    # If all commits are public (on main), the user needs to specify
@@ -67,7 +70,7 @@ as a revset to select which commits to submit. Default is the current stack.
 3. **Sync with main** to ensure the stack is up to date:
 
    ```bash
-   git sync --pull 'stack()'
+   git sync --pull "$SELECTED"
    ```
 
    A bare `git sync` rebases every local stack, including branches checked out
@@ -81,7 +84,7 @@ as a revset to select which commits to submit. Default is the current stack.
 
    If conflicts are reported (without `--merge`), stop and inform the user which
    commits conflict. Ask if they want to resolve with
-   `git sync --merge 'stack()'` or handle individually with
+   `git sync --merge "$SELECTED"` or handle individually with
    `git move -b <hash> -d main --merge`.
 
 4. **Run tests across the stack** to validate each commit independently. This is
