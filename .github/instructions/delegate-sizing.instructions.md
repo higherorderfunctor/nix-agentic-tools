@@ -26,6 +26,15 @@ once with all three supported runtimes. The factory passes `runtime` to its
 `skills` and `rules` callbacks, so each skill uses that runtime's settings.
 Runtime-only options extend the factory's program override submodule; external
 pools and instruction overrides cannot be set at `ai.programs.delegate-sizing`.
+The portable `whenToDelegate` attribute set is the exception: each entry adds
+always-on guidance under a heading taken from its attribute name. Entries use
+the shared text/source option contract and default to enabled so consumer text
+renders without a separate toggle. Package presets can use `mkDefault false` to
+remain dormant until a consumer explicitly enables them. Consumer content that
+accidentally reuses a dormant preset name produces a warning; an explicit
+`enable = false` does not. Attribute-key renames live in
+`lib/when-to-delegate-renames.nix`; old-key definitions merge into the new key
+and warn until consumers update their configuration.
 
 Instruction presets live in `lib/presets.nix`. The source runtime's settings
 control its external launch even when its skill is disabled: an enabled Codex
@@ -46,14 +55,20 @@ skills without creating a dependency cycle. Skill derivations format their
 Markdown with Prettier; the preview functions read those built files.
 
 `fragments/skill-routing.md` contains a one-sentence always-on stub under its
-own heading. `router.nix` supplies that file unchanged to both the factory and
-repository projections. `lib/rules.md` holds the six rules; `lib/render.nix`
-places them at the top of each runtime's skill, before the preamble. This
-repository includes that rule in `dev/generate.nix`'s root composition, which
-reaches AGENTS.md even with Codex CLI instructions disabled. Repository devenv
-config suppresses the native Claude, Codex and Kiro rule copies: Codex rules
-compose into the tracked AGENTS.md, and the other copies would duplicate the
-stub. Keep model tables and harness details in the generated skill.
+own heading. `router.nix` appends enabled `whenToDelegate` entries to that stub
+and supplies the result to both the factory and repository projections. With no
+enabled entries, the result is byte-identical to the source stub. `lib/rules.md`
+holds the six rules; `lib/render.nix` places them at the top of each runtime's
+skill, before the preamble. This repository includes that rule in
+`dev/generate.nix`'s root composition, which reaches AGENTS.md even with Codex
+CLI instructions disabled. Repository devenv config suppresses the native
+Claude, Codex and Kiro rule copies: Codex rules compose into the tracked
+AGENTS.md, and the other copies would duplicate the stub. Keep model tables and
+harness details in the generated skill.
+
+Home Manager exposes generated diagnostics through its module-system `warnings`
+option. Devenv does not declare that option, so the common module uses
+`lib.warn` while evaluating its assertions as a portable fallback.
 
 Content, HM/devenv modules and eval checks are discovered through the package
 owner layout. The registry excludes this generated content package from release

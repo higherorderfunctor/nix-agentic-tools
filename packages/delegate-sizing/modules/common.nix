@@ -1,3 +1,4 @@
+# cspell:ignore foldr
 {
   config,
   lib,
@@ -21,16 +22,14 @@
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
   present = builtins.filter (runtime: lib.hasAttrByPath ["ai" runtime "skills"] options) supportedRuntimes;
   settings = lib.genAttrs supportedRuntimes (runtime: config.ai.${runtime}.programs.delegate-sizing.settings);
-  textSourceOptions = import ../../../lib/mkTextSourceOptions.nix {inherit lib;};
-
-  whenToDelegateEntry = lib.types.submodule {
-    imports = [(textSourceOptions.submodule "the delegation guidance")];
-    options.enable = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = "Whether to include this delegation guidance in the always-on rule.";
-    };
+  whenToDelegateOptions = import ../lib/when-to-delegate.nix {
+    inherit lib;
+    renames = import ../lib/when-to-delegate-renames.nix;
   };
+  whenToDelegate = config.ai.programs.delegate-sizing.whenToDelegate;
+  warningMessages = whenToDelegateOptions.warnings whenToDelegate;
+  emitWarnings = value:
+    lib.foldr (warning: result: lib.warn warning result) value warningMessages;
 
   # Declare runtime-only settings alongside the factory's enable override.
   runtimeOptions = runtime: {
@@ -70,8 +69,9 @@ in {
     })
     // {
       programs.delegate-sizing.whenToDelegate = lib.mkOption {
-        type = lib.types.attrsOf whenToDelegateEntry;
+        inherit (whenToDelegateOptions) type;
         default = {};
+        apply = whenToDelegateOptions.rename;
         description = "Always-on guidance describing when to delegate work.";
       };
     };
@@ -100,23 +100,36 @@ in {
     })
   ];
 
-  # Reject automatic external delegates whose runtime is disabled.
-  config.assertions =
-    lib.concatMap (runtime:
-      map (target: {
-        assertion = !(programEnabled runtime && runtimeEnabled runtime) || runtimeEnabled target;
-        message = "ai.${runtime}.programs.delegate-sizing.extraRuntimes includes `${target}`, but ai.${target}.enable is false. Enable that runtime or use manualExternalDelegates.";
-      })
-      (lib.subtractLists
-        config.ai.${runtime}.programs.delegate-sizing.manualExternalDelegates
-        config.ai.${runtime}.programs.delegate-sizing.extraRuntimes))
-    present
-    ++ lib.concatMap (runtime:
-      textSourceOptions.assertions
-      ["ai" runtime "programs" "delegate-sizing" "settings"]
-      settings.${runtime})
-    present
-    ++ textSourceOptions.assertions
-    ["ai" "programs" "delegate-sizing" "whenToDelegate"]
-    config.ai.programs.delegate-sizing.whenToDelegate;
+  config =
+    {
+      assertions =
+        (
+          if options ? warnings
+          then lib.id
+          else emitWarnings
+        )
+        (
+          # Reject automatic external delegates whose runtime is disabled.
+          lib.concatMap (runtime:
+            map (target: {
+              assertion = !(programEnabled runtime && runtimeEnabled runtime) || runtimeEnabled target;
+              message = "ai.${runtime}.programs.delegate-sizing.extraRuntimes includes `${target}`, but ai.${target}.enable is false. Enable that runtime or use manualExternalDelegates.";
+            })
+            (lib.subtractLists
+              config.ai.${runtime}.programs.delegate-sizing.manualExternalDelegates
+              config.ai.${runtime}.programs.delegate-sizing.extraRuntimes))
+          present
+          ++ lib.concatMap (runtime:
+            textSourceOptions.assertions
+            ["ai" runtime "programs" "delegate-sizing" "settings"]
+            settings.${runtime})
+          present
+          ++ whenToDelegateOptions.assertions
+          ["ai" "programs" "delegate-sizing" "whenToDelegate"]
+          whenToDelegate
+        );
+    }
+    // lib.optionalAttrs (options ? warnings) {
+      warnings = warningMessages;
+    };
 }
