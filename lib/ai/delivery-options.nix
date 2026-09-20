@@ -344,10 +344,22 @@
   in
     base
     // {
-      merge = loc: definitions:
-        if lib.any (definition: definition.value == null) definitions
-        then null
-        else base.merge loc definitions;
+      # Retain the submodule's option metadata: upstream delivery aliases the
+      # surviving content definitions so their priorities reach the host too.
+      merge = {
+        __functor = self: loc: defs: (self.v2 {inherit loc defs;}).value;
+        v2 = {
+          loc,
+          defs,
+        }:
+          if lib.any (definition: definition.value == null) defs
+          then {
+            headError = null;
+            value = null;
+            valueMeta = {};
+          }
+          else base.merge.v2 {inherit loc defs;};
+      };
       substSubModules = modules: suppressible (elemType.substSubModules modules);
     };
 in {

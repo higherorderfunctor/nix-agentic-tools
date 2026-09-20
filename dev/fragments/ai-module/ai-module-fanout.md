@@ -1,9 +1,7 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-19 — the final seam is a DELIVERY description, not
-> a literal-file map: `content` is a tagged sum defaulted on its own, the method
-> comes from consumer facts, and the router plus two adapters are the only
-> writers of a native sink.
+> **Last verified:** 2026-09-19 — upstream delivery aliases surviving content
+> definitions so defaults and list ordering reach the host module unchanged.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -450,7 +448,8 @@ whole-entry contract:
 
 How a file lands is a METHOD — `symlink`, `copy-ro`, `shared`, `upstream` —
 resolved by `ai.<runtime>.methodFor` from the facts, or stated per file as the
-light exception. A runtime states facts, never a method and never a reason.
+light exception. A runtime normally states facts; upstream delegation explicitly
+states its method and sink. Reasons belong in comments.
 
 The graph is one-way: normalized pools compose, runtime routing chooses a
 target, the target renderer emits final bytes into `ai.<runtime>.files`, and the
@@ -469,15 +468,22 @@ the generated default, and null suppresses it.
 It is a delivery description, not a universal file abstraction. Secret-bearing
 values and runtime state keep their existing typed lifecycle owners, and a
 surface another module owns is DESCRIBED here — `method = "upstream"` plus the
-`sink` that owns it — rather than written here. Skills go through the map now:
-one entry per tree, expanded by Home Manager natively and walked by the router
-for devenv. Kiro steering uses ordinary symlinks after live 2.18.1 spikes
-confirmed startup discovery and same-session replacement reload in both global
-and project layouts; Kiro hooks stay real-file reconciled (`lib/ai/own.nix`, a
-`dir` target) because hook symlink behavior was not part of that result — the v3
-scan keeps only `isFile()` entries. An enable-independent one-shot retirement,
-the same reconciler with a target that declares nothing, drains only the
-steering copies a legacy ledger records and then removes it.
+`sink` that owns it — rather than written here. The router aliases the surviving
+content definitions, including their priorities, instead of copying the merged
+value: copying strips `mkDefault` and breaks ordinary upstream overrides. The
+suppressible entry type preserves submodule option metadata for that alias.
+Definitions combine through `mkMerge` below each adapter's literal hosted root,
+so the host retains its own deep-merge and list-ordering semantics. Dynamic
+top-level roots remain forbidden because they recurse during option collection.
+Skills go through the map now: one entry per tree, expanded by Home Manager
+natively and walked by the router for devenv. Kiro steering uses ordinary
+symlinks after live 2.18.1 spikes confirmed startup discovery and same-session
+replacement reload in both global and project layouts; Kiro hooks stay real-file
+reconciled (`lib/ai/own.nix`, a `dir` target) because hook symlink behavior was
+not part of that result — the v3 scan keeps only `isFile()` entries. An
+enable-independent one-shot retirement, the same reconciler with a target that
+declares nothing, drains only the steering copies a legacy ledger records and
+then removes it.
 
 ### Documentation parity is capability parity
 
