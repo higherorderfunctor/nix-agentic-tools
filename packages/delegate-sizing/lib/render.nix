@@ -3,21 +3,16 @@
   runtime,
   extraRuntimes ? [],
   manualExternalDelegates ? [],
-  settings ? import ./presets.nix,
+  presets,
+  settings ? presets,
 }: let
   # Read model decisions and runtime routes before selecting table candidates.
   models = import ./models.nix;
-  presets = import ./presets.nix;
   kiroModels = builtins.fromJSON (builtins.readFile ../../kiro-cli/models.json);
   firstParty = {
     claude = ["anthropic"];
     codex = ["openai"];
     kiro = ["anthropic" "openai"];
-  };
-  launchNames = {
-    claude = "claude -p";
-    codex = "codex exec";
-    kiro = "kiro-cli chat";
   };
   # Manual-only wins if a consumer names the same runtime in both lists.
   extras = lib.subtractLists manualExternalDelegates (lib.unique extraRuntimes);
@@ -35,12 +30,7 @@
     id = "`${modelId target model}`";
   in
     if target != runtime
-    then
-      if settings.${target}.launch == false
-      then "external ${target}: ${id} (launch instruction disabled)"
-      else if settings.${target}.launch == presets.${target}.launch
-      then "via `${launchNames.${target}}`: ${id} (see ${target} launch block)"
-      else "via ${target} launch block: ${id}"
+    then "via ${target} launch block: ${id}"
     else if runtime == "claude"
     then "Agent/Workflow `model`: ${id}"
     else if runtime == "codex"
@@ -113,7 +103,7 @@ in ''
   description: Before calling a subagent, spawning a delegate, or building a workflow, size the model and effort for the task and available runtime pools.
   ---
 
-  ${builtins.readFile ../fragments/skill-routing.md}
+  ${lib.removePrefix "<!-- prettier-ignore -->\n" (builtins.readFile ../fragments/skill-routing.md)}
   Use this skill for delegates and workflow nodes. Size each stage separately.
   Set effort every time; harness defaults differ. If a model has no effort
   control, record effort as not applicable. State the selected model and effort
@@ -127,12 +117,10 @@ in ''
   ## delegate sizing
 
   OpenAI writer order: Sol/medium, then Luna/high, then Terra/medium.
-  For an external delegate, use its launch block in a Bash step.
+  ${lib.optionalString (extras != [] || manualExternalDelegates != []) "For an external delegate, use its launch block in a shell step."}
 
   ${joinBlocks (map tier ["frontier" "strong" "mid" "small"])}
   ${lib.concatMapStringsSep "\n" runtimeBlock runtimes}
-  ${lib.optionalString (manualExternalDelegates != [])
-    ("## manual-only external delegate sizing\n\n" + lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates))}
   ## procedure
 
   1. Write the rubric from operator-approved examples and give it to the writer and judge.
@@ -147,4 +135,7 @@ in ''
      At the cap, return the artifact, remaining defects and needed decision to the operator.
   7. For two reviewers, take the union of their findings and adjudicate each one.
      Do not intersect findings or use cross-vendor panels. Sol must not be the sole judge.
+
+  ${lib.optionalString (manualExternalDelegates != [])
+    ("## manual-only external delegate sizing\n\n" + lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates))}
 ''
