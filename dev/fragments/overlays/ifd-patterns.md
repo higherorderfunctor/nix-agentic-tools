@@ -1,7 +1,8 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-09-13 — native package shards warm their own platform
-> before evaluation; source ownership follows native package assembly.
+> **Last verified:** 2026-09-19 — Kiro's extracted sidecar also includes public
+> model suggestions; extraction still reads committed sources without
+> evaluation-time network access.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -167,6 +168,12 @@ and emit a JSON sidecar that is COMMITTED (`packages/<owner>/extracted.json`).
 Modules `builtins.readFile` the committed file, never the derivation, so option
 surfaces derived from a binary cost no IFD. `checks/<pkg>-extracted.nix` then
 compares committed against freshly-built to catch a stale sidecar.
+
+Kiro's `models` field is the exception to the binary source: it is derived from
+the committed public documentation snapshot, refreshed by the update job even
+without a CLI release. Its live model list requires authentication and varies by
+account. See `packages/kiro-cli/docs/settings-shape.md` for the source boundary
+and measured exclusions.
 
 **Two of the four are no longer greps, and that is the direction of travel.**
 `glab`'s extract is a Go program compiled against upstream's own
