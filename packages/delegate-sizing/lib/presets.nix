@@ -25,6 +25,8 @@
       `"haiku"`, `"opus"` or `"sonnet"`, but inherits session effort.
       If that differs from your choice, use Workflow, or a shell step running `claude -p --model <id> --effort <level> "<prompt>"`.
       Haiku has no effort control. Use a shell step for an external delegate.
+      When launching an external delegate from a shell step, use the harness's own background mechanism alone; do not also detach the process with `nohup` or a trailing `&`.
+      Detaching makes the harness report the step as finished while the delegate is still running, so a later step reads a half-written tree.
     '';
     introspectModels.text = ''
       Read the Agent tool's `model` enum and the `maxEffortLevel` settings
