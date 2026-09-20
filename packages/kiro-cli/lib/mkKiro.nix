@@ -1872,11 +1872,13 @@ in
             (lib.mkIf (cfg.agents != {}) {
               home.file = agentEntries;
             })
-            # External agents directory — symlinked wholesale via
-            # `recursive = true` (Layout B).
+            # External agents directory — one recursive entry on both
+            # backends: Home Manager expands it natively and the router walks
+            # it for devenv.
             (lib.mkIf (cfg.agentsDir != null) {
-              home.file."${cfg.configDir}/agents" = {
-                source = cfg.agentsDir;
+              ai.kiro.files."${cfg.configDir}/agents" = {
+                content.source = cfg.agentsDir;
+                executable = null;
                 recursive = true;
               };
             })
@@ -1916,11 +1918,14 @@ in
               targets = [(mkHookTarget cfg)];
               inherit pkgs;
             })
-            # Skills fanout via mkSkillEntries, which uses
-            # `recursive = true` to produce Layout B (a real directory with
-            # per-file symlinks) and is path-type-agnostic.
+            # Skills fanout: one entry per skill with a directory source and
+            # `recursive`, which Home Manager expands natively into Layout B (a
+            # real directory of per-file symlinks).
             {
-              home.file = helpers.mkSkillEntries cfg.configDir mergedSkills;
+              ai.kiro.files = helpers.mkSkillFiles {
+                inherit (cfg) configDir;
+                skills = mergedSkills;
+              };
             }
             # Reconcile settings/cli.json leaves, including retirement when
             # settings become empty. An empty first generation leaves externally
@@ -2051,22 +2056,15 @@ in
                 })
                 cfg.agents;
             })
-            # External agents directory — devenv's `files.*.source`
-            # can't recurse, so we walk the directory at eval time.
-            (lib.mkIf (cfg.agentsDir != null) (let
-              walkDir = prefix: dir:
-                lib.concatMapAttrs (
-                  name: kind:
-                    if kind == "directory"
-                    then walkDir "${prefix}/${name}" (dir + "/${name}")
-                    else if kind == "regular" || kind == "symlink"
-                    then {"${prefix}/${name}".source = dir + "/${name}";}
-                    else {}
-                )
-                (builtins.readDir dir);
-            in {
-              files = walkDir "${cfg.configDir}/agents" cfg.agentsDir;
-            }))
+            # External agents directory — the same recursive entry Home
+            # Manager gets. The walk that used to live here is the router's.
+            (lib.mkIf (cfg.agentsDir != null) {
+              ai.kiro.files."${cfg.configDir}/agents" = {
+                content.source = cfg.agentsDir;
+                executable = null;
+                recursive = true;
+              };
+            })
             # Hook JSON files — written as REAL files, NOT devenv `files.*`
             # (which symlinks into /nix/store). The 2.18.1 spike changed only
             # steering evidence; hooks retain their measured real-file
@@ -2100,11 +2098,14 @@ in
               targets = [(mkHookTarget cfg)];
               inherit pkgs;
             })
-            # Skills via the user-space walker. devenv's `files.*.source`
-            # cannot walk a directory recursively, so we enumerate leaves
-            # at eval time via `mkDevenvSkillEntries`.
+            # Skills: the same declaration as Home Manager. devenv's
+            # `files.*.source` cannot recurse, so the router walks the tree and
+            # emits one entry per leaf.
             {
-              files = helpers.mkDevenvSkillEntries cfg.configDir mergedSkills;
+              ai.kiro.files = helpers.mkSkillFiles {
+                inherit (cfg) configDir;
+                skills = mergedSkills;
+              };
             }
             # settings/cli.json — devenv does NOT support HM-style
             # activation scripts. Devenv projects are project-local, so

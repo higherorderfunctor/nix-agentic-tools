@@ -40,6 +40,38 @@
     };
   };
 
+  # devenv has no recursive symlink primitive, so the router walks the tree
+  # itself and emits one entry per leaf. This is the ONE walk: it replaced the
+  # skill-entry helper, its devenv twin, and kiro's inline agents-directory
+  # copy of the same recursion.
+  #
+  # `builtins.readDir` is type-agnostic about its argument, which is why both
+  # Nix path literals and absolute path STRINGS work — a skill that comes from
+  # a package is `"${pkg}/share/skill"`, and treating that as a file writes the
+  # path itself as the file's content.
+  walk = path: source: let
+    walkDir = prefix: directory:
+      lib.concatMapAttrs (
+        name: kind:
+          if kind == "directory"
+          then walkDir "${prefix}/${name}" (directory + "/${name}")
+          else if kind == "regular" || kind == "symlink"
+          then {"${prefix}/${name}" = directory + "/${name}";}
+          # Anything else — a socket, a device node — is not a file this layer
+          # can deliver, and silently skipping it is what the helper it
+          # replaced did.
+          else {}
+      )
+      (builtins.readDir directory);
+  in
+    if (builtins.readFileType source) == "directory"
+    then walkDir path source
+    else
+      throw ''
+        ai delivery: "${path}" sets `recursive`, but its `content.source` is
+        not a directory. A single file is delivered by naming its own path.
+      '';
+
   # A store name for a rendered file, derived from the target path. The `ai-`
   # prefix is not decoration: a store name may not begin with a period, and
   # plenty of these paths do.
