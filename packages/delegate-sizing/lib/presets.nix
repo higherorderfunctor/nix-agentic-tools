@@ -1,23 +1,13 @@
 # Runtime instruction blocks. The renderer puts native controls before external
 # launches and keeps manual-only delegates after all automatic candidates.
-{codexUsageScript}: {
+{
+  claudeUsageScript,
+  codexUsageScript,
+}: {
   claude = {
     checkUsage.text = ''
-      Read `five_hour.utilization` and `seven_day.utilization` with this command.
-      Requires `curl` and `jq`. The token is unset after the request.
-
-      ```bash
-      #!/usr/bin/env bash
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      delegate_usage_token=$(jq -er '.claudeAiOauth.accessToken' "''${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.credentials.json")
-      curl --fail --silent --show-error --config - <<EOF_USAGE | jq '{five_hour, seven_day, seven_day_opus, seven_day_sonnet, extra_usage}'
-      url = "https://api.anthropic.com/api/oauth/usage"
-      header = "Authorization: Bearer $delegate_usage_token"
-      header = "anthropic-beta: oauth-2025-04-20"
-      EOF_USAGE
-      unset delegate_usage_token
-      ```
+      Run `${claudeUsageScript}` to read `five_hour.utilization` and
+      `seven_day.utilization`. The token is unset after the request.
     '';
     delegateTools.text = ''
       Use Workflow `agent(prompt, {model, effort})` with effort `low`, `medium`,
@@ -43,9 +33,9 @@
   };
   codex = {
     checkUsage.text = ''
-      Run `bash ${codexUsageScript}` from this installed
-      skill to read `usedPercent`, `remainingPercent` and `resetsAt`.
-      Requires GNU `timeout`, `jq`, Python 3 and `codex` on PATH.
+      Run `${codexUsageScript}` to read `usedPercent`, `remainingPercent` and
+      `resetsAt`. The `codex` CLI must be available through the consumer's own
+      runtime configuration.
     '';
     delegateTools.text = ''
       Call `collaboration.spawn_agent` with `model: "<slug>"`,

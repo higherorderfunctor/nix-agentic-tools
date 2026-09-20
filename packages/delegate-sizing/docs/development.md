@@ -39,13 +39,13 @@ Kiro's default external launch is manual-only and pins Luna for fixture probes.
 Before adding Kiro to `extraRuntimes`, override its `settings.launch.text` or
 `.source` with instructions that apply the selected model and effort.
 
-Usage commands run in the caller's shell. Claude requires `curl` and `jq`; the
-Codex helper requires GNU `timeout`, `jq`, Python 3 and `codex` on PATH. The
-content package does not install those tools. The helper reads account limits
-without launching a model turn. A separate script-content derivation supplies
-its absolute store path, avoiding a dependency cycle with skills that include
-the command. Skill derivations format their Markdown with Prettier; the preview
-functions read those built files.
+Usage helpers are packaged applications with their own runtime closures. The
+Claude helper carries `curl` and `jq`; the Codex helper carries GNU `timeout`,
+`jq` and Python 3. It deliberately does not carry the `codex` CLI, which comes
+from the consumer's own runtime configuration. Both helpers read account limits
+without launching a model turn. Their absolute store paths are embedded in the
+skills without creating a dependency cycle. Skill derivations format their
+Markdown with Prettier; the preview functions read those built files.
 
 `fragments/skill-routing.md` contains a one-sentence always-on stub under its
 own heading. `router.nix` appends enabled `whenToDelegate` entries to that stub
