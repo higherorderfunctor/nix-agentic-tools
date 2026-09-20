@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-19 — the committed delivery matrix is derived from
-> the layer, with independent probes, live absence correspondence and drift.
+> **Last verified:** 2026-09-19 — merged pools are ordinary public normalized
+> options; transformer inputs honor forced overrides on both backends.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -34,6 +34,10 @@
 │   - same-key value atomically replaces L2                  │
 │   - same-key null suppresses the inherited L2 entry        │
 └────────────────────────────────────────────────────────────┘
+                             │
+                             ▼  root-to-runtime fold
+                  ai.<cli>.normalized.<pool>
+                  ordinary option; default = fold
                              │
                              ▼  routing + native rendering
 ┌────────────────────────────────────────────────────────────┐
@@ -131,6 +135,14 @@
   Codex contributes both unscoped rules and scoped rules degraded to prose; Kiro
   contributes only unscoped always-on rules. The keyed writer deduplicates
   byte-identical same-key contributions.
+- **Merged pools are ordinary options.** `ai.<runtime>.normalized.<pool>` exists
+  for each supported pool, defaults to the root-to-runtime fold and is public,
+  writable with `mkForce`. Every transformer argument reads this option; the
+  older argument names are aliases of it. MCP entries are already lowered client
+  records. Hooks carry the portable root input; native event lists still append
+  inside the runtime. Default context presence uses the structural input
+  inventory until final-file arbitration keeps its content; an explicit
+  normalized context override determines its own presence.
 - **Normalized settings are a uniform scalar-field surface.** Every runtime
   declares the same closed `settings` submodule. Each field resolves root versus
   per-runtime with `resolveOverride`; native lowering remains per-runtime and
