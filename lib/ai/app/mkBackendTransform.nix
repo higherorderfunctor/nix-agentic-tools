@@ -269,16 +269,19 @@ in {
       };
       enable = lib.mkEnableOption appRecord.name;
       files = lib.mkOption {
-        type = runtimeFiles.fileMapType;
+        type = deliveryOptions.fileMapType;
         default = {};
         apply = runtimeFiles.validateFiles appRecord.name;
         description = ''
           Final static files owned by ${appRecord.name}, keyed by a path relative
           to the active backend root (HOME for Home Manager, project root for
-          devenv). Each non-null entry must set exactly one of inline `text` or a
-          store-backed `source`; `null` suppresses a generated default. Generated
-          entries use whole-file `mkDefault` priority, so an ordinary consumer
-          entry replaces the complete file.
+          devenv), and described rather than lowered: each entry says what
+          bytes it carries, the consumer facts that decide how it lands, and
+          which writer owns it if it is not a symlink. `null` suppresses a
+          generated entry. Generated CONTENT is contributed at `mkDefault`
+          priority and every sibling field at ordinary priority, so a consumer
+          can replace the bytes, change the method, or do one without the
+          other.
         '';
       };
       methodFor = lib.mkOption {
