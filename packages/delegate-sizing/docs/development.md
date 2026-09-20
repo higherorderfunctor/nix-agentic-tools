@@ -23,7 +23,11 @@ The portable `whenToDelegate` attribute set is the exception: each entry adds
 always-on guidance under a heading taken from its attribute name. Entries use
 the shared text/source option contract and default to enabled so consumer text
 renders without a separate toggle. Package presets can use `mkDefault false` to
-remain dormant until a consumer explicitly enables them.
+remain dormant until a consumer explicitly enables them. Consumer content that
+accidentally reuses a dormant preset name produces a warning; an explicit
+`enable = false` does not. Attribute-key renames live in
+`lib/when-to-delegate-renames.nix`; old-key definitions merge into the new key
+and warn until consumers update their configuration.
 
 Instruction presets live in `lib/presets.nix`. The source runtime's settings
 control its external launch even when its skill is disabled: an enabled Codex
@@ -53,6 +57,10 @@ CLI instructions disabled. Repository devenv config suppresses the native
 Claude, Codex and Kiro rule copies: Codex rules compose into the tracked
 AGENTS.md, and the other copies would duplicate the stub. Keep model tables and
 harness details in the generated skill.
+
+Home Manager exposes generated diagnostics through its module-system `warnings`
+option. Devenv does not declare that option, so the common module uses
+`lib.warn` while evaluating its assertions as a portable fallback.
 
 Content, HM/devenv modules and eval checks are discovered through the package
 owner layout. The registry excludes this generated content package from release
