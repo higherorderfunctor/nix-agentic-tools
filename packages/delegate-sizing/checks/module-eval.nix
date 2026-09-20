@@ -30,7 +30,7 @@
       ai.programs.delegate-sizing.enable = true;
       ai.codex.programs.delegate-sizing.enable = false;
     };
-    manualDisabled = evaluate {
+    manualScenario = {
       ai = {
         claude = {
           enable = true;
@@ -42,6 +42,10 @@
         kiro.enable = lib.mkForce false;
       };
     };
+    manualDisabled = evaluate manualScenario;
+    manualOverlap = evaluate (lib.recursiveUpdate manualScenario {
+      ai.claude.programs.delegate-sizing.extraRuntimes = ["kiro"];
+    });
     invalid = evaluate {
       ai = {
         claude = {
@@ -98,6 +102,8 @@
       failed
       && lib.all (item: item.assertion) manualDisabled.config.assertions
       && lib.hasInfix "### kiro\n" (readSkill manualDisabled "claude")
+      && lib.all (item: item.assertion) manualOverlap.config.assertions
+      && readSkill manualOverlap "claude" == readSkill manualDisabled "claude"
     );
     "module-delegate-sizing-${name}-options" = mkTest "delegate-sizing-${name}-options" (
       let
