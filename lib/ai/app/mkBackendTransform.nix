@@ -150,9 +150,19 @@
     then config.ai.hooks
     else {};
 
+  # A whole-pool option default disappears when a consumer adds just one key.
+  # Keep these folds as per-key definitions, so ordinary additions preserve
+  # unrelated entries while a whole-pool mkForce still replaces everything.
+  normalizedKeyedPools = {
+    agents = mergedAgents;
+    environmentVariables = mergedEnvironmentVariables;
+    lspServers = mergedLspServers;
+    mcpServers = mergedServers;
+    rules = mergedRules;
+    skills = mergedSkills;
+  };
   normalizedPools = {
     agents = {
-      default = mergedAgents;
       type = lib.types.attrsOf agent.agentType;
     };
     context = {
@@ -160,7 +170,6 @@
       type = lib.types.nullOr aiCommon.optionalContentModule;
     };
     environmentVariables = {
-      default = mergedEnvironmentVariables;
       type = lib.types.attrsOf lib.types.str;
     };
     hooks = {
@@ -169,17 +178,14 @@
       type = hooks.hooksType;
     };
     lspServers = {
-      default = mergedLspServers;
       type = lib.types.attrsOf aiCommon.lspServerModule;
     };
     # Proxy entries are already lowered here; applying the declaration schema
     # again would add defaults to the credential-free client record.
     mcpServers = {
-      default = mergedServers;
       type = lib.types.attrsOf lib.types.raw;
     };
     rules = {
-      default = mergedRules;
       type = lib.types.attrsOf (appRecord.ruleModule or aiCommon.ruleModule);
     };
     settings = {
@@ -191,7 +197,6 @@
       type = lib.types.nullOr lib.types.package;
     };
     skills = {
-      default = mergedSkills;
       type = lib.types.attrsOf lib.types.path;
     };
   };
@@ -381,14 +386,21 @@ in {
       normalized = lib.mapAttrs (pool: spec:
         lib.mkOption (spec
           // {
-            defaultText = lib.literalExpression "the root-to-runtime ${pool} fold";
+            default = spec.default or {};
+            defaultText = lib.literalExpression (
+              if normalizedKeyedPools ? ${pool}
+              then "{}"
+              else "the root-to-runtime ${pool} fold"
+            );
             internal = false;
             readOnly = false;
             description = ''
               Merged ${pool} consumed by ${appRecord.name}'s transformer. The
-              default is the supported root-to-runtime fold, after replacement
-              and tombstone filtering for keyed pools. Override this ordinary
-              option with `lib.mkForce` to replace the transformer's input.
+              supported root-to-runtime fold supplies per-key defaults after
+              replacement and tombstone filtering for keyed pools, so ordinary
+              additions preserve unrelated inherited keys. Other pools default
+              to the fold as a whole. Use `lib.mkForce` on this ordinary option
+              to replace the transformer's input.
             '';
           })) (lib.filterAttrs (pool: _: supportsPool pool) normalizedPools);
       package = lib.mkOption {
@@ -523,6 +535,11 @@ in {
     # that option still see diagnostics when they force the installed packages.
     (lib.optionalAttrs (options ? warnings) {warnings = deliveryWarnings;})
     {_module.args.aiTransformers = appRecord.transformers;}
+    {
+      ai.${appRecord.name}.normalized =
+        lib.mapAttrs (_: pool: lib.mapAttrs (_: lib.mkDefault) pool)
+        (lib.filterAttrs (pool: _: supportsPool pool) normalizedKeyedPools);
+    }
     # Narrow compatibility cleanup may need to run on the generation that
     # disables a runtime. Product output remains solely inside cfg.enable.
     migrationConfig

@@ -39,7 +39,7 @@
                              │
                              ▼  root-to-runtime fold
                   ai.<cli>.normalized.<pool>
-                  ordinary option; default = fold
+                  ordinary option; per-key fold defaults
                              │
                              ▼  routing + native rendering
 ┌────────────────────────────────────────────────────────────┐
@@ -167,13 +167,16 @@
   contributes only unscoped always-on rules. The keyed writer deduplicates
   byte-identical same-key contributions.
 - **Merged pools are ordinary options.** `ai.<runtime>.normalized.<pool>` exists
-  for each supported pool, defaults to the root-to-runtime fold and is public,
-  writable with `mkForce`. Every transformer argument reads this option; the
-  older argument names are aliases of it. MCP entries are already lowered client
-  records. Hooks carry the portable root input; native event lists still append
-  inside the runtime. Default context presence uses the structural input
-  inventory until final-file arbitration keeps its content; an explicit
-  normalized context override determines its own presence.
+  for each supported pool and is public, writable with `mkForce`. Keyed pools
+  have neutral `{}` option defaults and receive the root-to-runtime fold as
+  per-key defaults: ordinary additions retain unrelated inherited keys, while
+  whole-pool `mkForce` replaces all entries. Other pools default to the complete
+  fold. Every transformer argument reads this option; the older argument names
+  are aliases of it. MCP entries are already lowered client records. Hooks carry
+  the portable root input; native event lists still append inside the runtime.
+  Default context presence uses the structural input inventory until final-file
+  arbitration keeps its content; an explicit normalized context override
+  determines its own presence.
 - **Normalized settings are a uniform scalar-field surface.** Every runtime
   declares the same closed `settings` submodule. Each field resolves root versus
   per-runtime with `resolveOverride`; native lowering remains per-runtime and

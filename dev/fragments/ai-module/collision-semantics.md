@@ -219,14 +219,15 @@ and testing their distinct composition contracts.
 
 `lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
 filter for nullable pools. `lib/ai/app/mkBackendTransform.nix` calls it once for
-every supported pool, then additionally filters disabled rules, as the default
-of `ai.<runtime>.normalized.<pool>`. Transformer arguments read those public
-options, so a consumer can replace the merged input. For MCP,
-`lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy declarations at each
-scope while preserving null tombstones; only those client views cross the
-root/runtime merge. `lib/ai/sharedOptions.nix` separately aggregates explicit
-proxy owners, rejects reused keys before the module system can collide, and
-emits only unique active units.
+every supported pool, additionally filters disabled rules, and contributes the
+result as per-key defaults beneath `ai.<runtime>.normalized.<pool>`, whose
+option default is `{}`. Ordinary extensions retain unrelated inherited keys;
+whole-pool `mkForce` replaces the merged input. Transformer arguments read those
+public options. For MCP, `lib/ai/mcpProxy.nix:lowerClientEntries` first lowers
+proxy declarations at each scope while preserving null tombstones; only those
+client views cross the root/runtime merge. `lib/ai/sharedOptions.nix` separately
+aggregates explicit proxy owners, rejects reused keys before the module system
+can collide, and emits only unique active units.
 
 Context is the lazy exception: `mkBackendTransform.nix` derives
 `hasMergedContext` structurally from the two raw content records before calling
