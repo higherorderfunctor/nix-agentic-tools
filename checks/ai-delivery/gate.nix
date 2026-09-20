@@ -1,6 +1,7 @@
 # Pure gate shared by the production contract and the deliberately broken
 # module fixture. Evaluators return config; no test owns a second gate.
 {lib}: {
+  correspondenceErrors ? [],
   evaluators,
   policy,
 }: let
@@ -97,7 +98,10 @@
       else [];
   };
   results = map inspect policy.imperativeWriters;
-  errors = lib.concatMap (result: result.errors) results;
+  # Generated writer names make the first arm a name-agreement tautology for
+  # derived rows. Empty-declaration survival and body variation still measure
+  # behavior; live correspondence remains independent of committed row data.
+  errors = correspondenceErrors ++ lib.concatMap (result: result.errors) results;
 in {
   inherit errors results;
   checked = builtins.length results;
