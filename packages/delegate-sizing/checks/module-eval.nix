@@ -43,6 +43,12 @@
     kiro = "Set `modelId` and `effortLevel`";
   };
   presets = import ../lib/presets.nix {codexUsageScript = "/nix/store/test-codex-usage.sh";};
+  presetSources = {
+    "Launch independent work together" = ../fragments/launch-independent-work-together.md;
+    "Orchestrator session" = ../fragments/orchestrator-session.md;
+    "Prefer the flat-rate pool" = ../fragments/prefer-the-flat-rate-pool.md;
+    "Verify by the artifact" = ../fragments/verify-by-the-artifact.md;
+  };
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-sizing}/SKILL.md";
   render = args: import ../lib/render.nix ({inherit lib presets;} // args);
   renderKiro = kiroModels:
@@ -147,6 +153,9 @@
         enable = true;
         text = lib.mkDefault "Delegate a preset task.";
       };
+    });
+    enabledShippedPreset = evaluate (lib.recursiveUpdate scenario {
+      ai.programs.delegate-sizing.whenToDelegate."Launch independent work together".enable = true;
     });
     collision = evaluate (lib.recursiveUpdate scenario {
       ai.programs.delegate-sizing.whenToDelegate.Collision = {
@@ -320,6 +329,14 @@
       && lib.hasInfix "### Consumer\n\nDelegate when the task is independently verifiable." (ruleText consumerEntry)
       && !(lib.hasInfix "### Preset" (ruleText disabledPreset))
       && lib.hasInfix "### Preset\n\nDelegate a preset task." (ruleText enabledPreset)
+      && lib.hasInfix
+      "### Launch independent work together\n\n${lib.removeSuffix "\n" (builtins.readFile presetSources."Launch independent work together")}" (ruleText enabledShippedPreset)
+      && lib.all
+      (preset: !lib.hasInfix "### ${preset}" (ruleText enabledShippedPreset))
+      ["Orchestrator session" "Prefer the flat-rate pool" "Verify by the artifact"]
+      && lib.all
+      (source: builtins.pathExists source && builtins.readFile source != "")
+      (builtins.attrValues presetSources)
     );
     "module-delegate-sizing-${name}-when-to-delegate-protection" = mkTest "delegate-sizing-${name}-when-to-delegate-protection" protectionContract;
   };
