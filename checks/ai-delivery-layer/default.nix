@@ -92,6 +92,16 @@
   # `packages/*/lib/` fails it, and so does an entry the scan can no longer
   # reproduce. The list is empty when the migration is done, and then this
   # check is what keeps it empty.
+  #
+  # What the scan CANNOT see is a bundle a helper returns —
+  # `lib.mkMerge [(helpers.mkOwnedDocument …)]` writes `home.activation`,
+  # `tasks` and `enterTest` from inside `lib/ai/own.nix`, and no anchored
+  # pattern over the caller's text will ever match it. That is not a hole to
+  # regex around: every factory that does it is on the list below for its
+  # other writes, and the direct-`own` call is exactly what the router's
+  # `copy-ro`/`shared` bucket replaces, one factory at a time. When a factory
+  # leaves this list it has stopped calling `own` directly too, and
+  # `ai.<runtime>._ownPlans` is where a check reads what its writers do.
   sinkWriters = {
     "packages/chatgpt-codex/lib/mkCodex.nix" = "skill/agent/execpolicy/hooks entries and the two skill-link migrators";
     "packages/claude-code/lib/mkClaude.nix" = "the devenv settings.json deep merges and the skill walker";
@@ -910,10 +920,13 @@ in {
         work="$PWD"
         cd "$src"
 
-        # An assignment to one of the four native sinks, at the start of a
-        # line. `files` and `tasks` are matched bare because that is how a
-        # devenv fragment writes them.
-        anchored='^[[:space:]]*(home\.file|home\.activation|files|tasks)([."[]|[[:space:]]*=)'
+        # An assignment to one of the native sinks, at the start of a line.
+        # `files`, `tasks` and `enterTest` are matched bare because that is how
+        # a devenv fragment writes them. `enterTest` is here because a writer's
+        # verification is as much a sink write as the writer itself: a factory
+        # that emitted one directly would keep a second way, outside the router, to make
+        # `devenv test` fail.
+        anchored='^[[:space:]]*(home\.file|home\.activation|files|tasks|enterTest)([."[]|[[:space:]]*=)'
         # The nested form: a `home = {` block whose body writes `file` and
         # `activation` at a depth the anchored pattern cannot see. Flagging the
         # block is enough, because this list is keyed by file.
