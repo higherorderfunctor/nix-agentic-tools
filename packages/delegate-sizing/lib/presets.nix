@@ -66,7 +66,10 @@
       Launch from the current working directory. Use no `-C`, `--worktree`,
       bypass or trust flags. Put the task, decisions, constraints and acceptance
       criteria in the brief; tell the delegate to enter the worktree if needed.
-      Use a fresh output path. Check the exit code and `turn.failed`/`error`
+      Use a fresh output path.
+      The terminal `-` with `< <prompt-file>` already closes stdin; do not also
+      append `</dev/null`, which wins the redirect and sends an empty prompt.
+      Check the exit code and `turn.failed`/`error`
       events, then verify the output.
     '';
   };
