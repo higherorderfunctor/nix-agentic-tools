@@ -77,6 +77,17 @@
   host-directory materializer through a command writer named
   `ai:codex:materialize-profiles`. The materializer still owns its
   Git-common-directory manifest and lock.
+- **Shared documents reconcile on both backends.** Copilot settings and Kimchi's
+  config and harness settings state `facts.harnessWrites = true` and declare
+  writers unconditionally while enabled. The adapter runs the same bundle on HM
+  activation or devenv shell entry. Backend-keyed `entry` preserves HM names
+  while giving devenv its required namespace, such as
+  `ai:copilot:settings-merge`. Devenv uses `$DEVENV_ROOT` and
+  `$DEVENV_STATE/nix-agentic-tools`, with verification in `enterTest`. Empty
+  declarations retain their writers so prior leaves can be retracted. Existing
+  file modes and unowned leaves survive; a new file is 0600. This does not
+  change either runtime's project-discovery limitations. Codex's project config
+  remains a static source because its native writer is user-scoped.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
   entries replace same-key root entries wholesale. Nullable pools use null to
   suppress an inherited entry after the shallow merge; rules use
