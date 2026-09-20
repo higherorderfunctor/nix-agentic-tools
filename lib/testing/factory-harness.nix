@@ -85,10 +85,7 @@
         default = {};
         internal = true;
       };
-      hm.config = {mergedServers, ...}: {
-        ai.${name}._observedServers = mergedServers;
-      };
-      devenv.config = {mergedServers, ...}: {
+      config = {mergedServers, ...}: {
         ai.${name}._observedServers = mergedServers;
       };
     };
@@ -150,7 +147,7 @@
           // lib.optionalAttrs (builtins.hasAttr poolName customPoolOptions) {
             ${poolName} = customPoolOptions.${poolName};
           };
-        hm.config = args: {
+        config = args: {
           ai.${name}._observedPool = args.${mergedArg};
         };
       };

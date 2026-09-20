@@ -5,7 +5,7 @@
 # `devenvTransform` to the record.
 #
 # Factory-of-factory pattern: outer call supplies package-specific
-# name + shared option schemas + per-backend config callbacks.
+# name + shared option schemas + one delivery transformer.
 # Returns a record that per-backend transformers project into
 # module functions consumed by the HM / devenv module systems.
 #
@@ -21,13 +21,9 @@
 #                                    # Same-named native options in `options` are independent.
 #     contextDescription ? null;     # runtime-specific option description override
 #     rulesDescription ? null;       # runtime-specific option description override
-#     config ? null;                 # ONE consumer callback for BOTH backends; it
-#                                    #   receives `backend` and describes delivery
-#                                    #   rather than lowering it, so a runtime with
-#                                    #   no per-backend lowering writes it once. A
-#                                    #   backend spec's own `config` still wins,
-#                                    #   which is how a runtime migrates one
-#                                    #   backend at a time.
+#     config ? _: {};                # ONE delivery transformer for BOTH backends;
+#                                    # receives normalized pools and describes files
+#                                    # and activation writers rather than lowering them.
 #     hm = {
 #       installPackage ? (_: cfg.package);
 #                              # callback (same args as `config`) returning the
@@ -38,7 +34,6 @@
 #       options ? {};                # HM-only option additions
 #       defaults ? {};               # HM-only default overrides
 #       migrationConfig ? _: {};     # bounded cleanup outside runtime enable
-#       config ? _: {};              # consumer callback projecting merged view → module attrs
 #     };
 #     devenv = {
 #       installPackage ? (_: cfg.package);
@@ -50,22 +45,13 @@
 #       options ? {};                # devenv-only option additions
 #       defaults ? {};               # devenv-only default overrides
 #       migrationConfig ? _: {};     # bounded cleanup outside runtime enable
-#       config ? _: {};              # consumer callback
 #     };
 #   }
 #
-# Consumer callbacks receive ONE attrset and return module config attributes
-# (home.file.*, programs.claude-code.*, home.activation.*, files.*,
-# claude.code.*, etc.) appropriate for their backend.
-#
-# That attrset is assembled in exactly one place — `customConfig` in
-# `mkBackendTransform.nix` — and read it rather than trusting a list here.
-# It currently carries `cfg`, `config`, every `merged*` pool,
-# `resolvedSettings`, `resolvedShell`, `mergedContext`, and `topHooks`. This comment
-# used to enumerate four of them and had silently drifted from the real
-# call, which is the failure mode a second copy of the list invites; every
-# callback takes `...` anyway, so a stale list here misleads without ever
-# breaking a build.
+# The delivery transformer receives the arguments assembled in
+# mkBackendTransform.nix, including `normalized` and compatibility aliases for
+# its pools. Backend specs retain options, defaults, installation and bounded
+# migration hooks; they cannot replace the delivery transformer.
 {lib}: {
   name,
   transformers,
@@ -76,7 +62,7 @@
   contextDescription ? null,
   ruleModule ? null,
   rulesDescription ? null,
-  config ? null,
+  config ? (_: {}),
   hm ? {},
   devenv ? {},
   # The package set the factory was built with, carried on the record so
@@ -99,11 +85,12 @@
   # need it must degrade rather than throw.
   pkgs ? null,
 }:
-{
-  inherit name transformers defaults options supportedPools hm devenv pkgs;
-}
-// lib.optionalAttrs (config != null) {inherit config;}
-// lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}
-// lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
-// lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}
-// lib.optionalAttrs (rulesDescription != null) {inherit rulesDescription;}
+assert lib.assertMsg (!(hm ? config) && !(devenv ? config))
+"mkAiApp: backend config callbacks are retired; declare one record-level delivery transformer";
+  {
+    inherit name transformers defaults options supportedPools config hm devenv pkgs;
+  }
+  // lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}
+  // lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
+  // lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}
+  // lib.optionalAttrs (rulesDescription != null) {inherit rulesDescription;}

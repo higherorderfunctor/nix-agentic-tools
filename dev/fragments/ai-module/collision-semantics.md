@@ -213,8 +213,9 @@ and testing their distinct composition contracts.
 
 `lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
 filter for nullable pools. `lib/ai/app/mkBackendTransform.nix` calls it once for
-every supported pool, then additionally filters disabled rules, and hands only
-the surviving `merged*` values to package callbacks. For MCP,
+every supported pool, then additionally filters disabled rules, as the default
+of `ai.<runtime>.normalized.<pool>`. Transformer arguments read those public
+options, so a consumer can replace the merged input. For MCP,
 `lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy declarations at each
 scope while preserving null tombstones; only those client views cross the
 root/runtime merge. `lib/ai/sharedOptions.nix` separately aggregates explicit
@@ -223,20 +224,20 @@ emits only unique active units.
 
 Context is the lazy exception: `mkBackendTransform.nix` derives
 `hasMergedContext` structurally from the two raw content records before calling
-`composeContent`. Package callbacks use that boolean to decide whether to
+`composeContent`. Runtime transformers use that boolean to decide whether to
 contribute a generated default; they must not probe `mergedContext != null`,
 because two-part composition reads source bytes and would force a default that
 B7 later replaces or tombstones. The composed value stays inside the lazy
 default until priority arbitration selects it.
 
-`hmTransform.nix` and `devenvTransform.nix` are thin backend selectors; do not
-duplicate pool logic into them.
+The public backend selectors are defined in `lib/ai/app/default.nix` and share
+`mkBackendTransform.nix`; do not duplicate pool logic between backends.
 
 B7's type lives in `lib/ai/delivery-options.nix`; `lib/ai/runtime-files.nix`
 owns path and content validation, null filtering, and the shape one entry takes
 in a native sink; `lib/ai/deliver.nix` and the two adapters own the lowering.
-Package callbacks may render entries into the runtime map but must not read that
-map to define normalized inputs; keeping the edge one-way is what makes the
+Runtime transformers may render entries into the runtime map but must not read
+that map to define normalized inputs; keeping the edge one-way is what makes the
 module fixed point evaluable.
 
 Runtime delivery options, including downstream app records, define the path
@@ -274,7 +275,7 @@ remains lazy and is not size-checked at eval, avoiding IFD.
 
 ### Debugging
 
-For a missing emitted entry, inspect both levels before the callback:
+For a missing emitted entry, inspect both levels before the transformer:
 
 ```bash
 nix eval .#homeConfigurations.<host>.config.ai.<pool>

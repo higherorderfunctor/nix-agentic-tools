@@ -1,21 +1,19 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-08-16 — resolves #877: Kiro's FHS root supplies bash
-> but hides a host zsh, and that does not justify a runtime-specific implicit
-> shell default. `ai.shell` stays null; see below for the standing decision and
-> the override rule it shares with normalized `settings`.
+> **Last verified:** 2026-09-19 — the supported fold defaults ordinary
+> normalized options consumed by one runtime delivery transformer.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
 ### One record is the capability source
 
 Every `mkAiApp` record declares the normalized pools its runtime exposes in
-`supportedPools`. `mkBackendTransform.nix` reads that build-time list in four
-places:
+`supportedPools`. `mkBackendTransform.nix` uses that build-time list to
+determine:
 
 - only supported per-runtime pool options are declared;
 - only supported pools participate in shared/per-runtime merging;
-- only supported root pools reach the backend callback; and
+- only supported merged pools reach the runtime transformer; and
 - `shell` resolution runs only when `shell` is in the list.
 
 An unsupported per-runtime write is therefore an "option does not exist" eval

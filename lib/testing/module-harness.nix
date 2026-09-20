@@ -315,7 +315,7 @@
   # `value` cannot come out of the plan itself — a document target's content is
   # `builtins.toJSON value`, and `builtins.fromJSON` refuses a string that
   # refers to a store path — so it is read from the same record's `declared`
-  # map, which `mkOwnedDocument` fills from the value it serialized.
+  # map, which the delivery router fills from the document's declared value.
   ownedDocument = runtime: path: evaluated: let
     plans =
       lib.attrByPath ["ai" runtime "_ownPlans"]

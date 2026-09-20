@@ -1,18 +1,8 @@
 # Shared backend transformer body.
 #
-# `hmTransform.nix` and `devenvTransform.nix` were ~135 near-identical
-# lines each. Every merge, every option declaration and the whole
-# `config` block were duplicated verbatim; the ONLY functional
-# difference was which key of the app record the backend-specific
-# spec is read from (`hm` vs `devenv`). That is this file's `backend`
-# argument, and nothing else differs.
-#
-# Keeping them as two copies meant every change to the shared option
-# surface had to be made twice, and the two had already drifted — the
-# devenv copy's `mcpServers`, `rules`, `skills` and `skillsDir`
-# descriptions had lost the merge semantics the HM copy documented,
-# even though both run the SAME merge code. Unifying on the fuller
-# text makes the devenv option docs correct rather than terse.
+# Backend selection happens in app/default.nix. One module owns the pool fold,
+# public normalized options, package installation and delivery lowering.
+# The runtime supplies one delivery transformer shared by both backends.
 #
 # Input record shape (from mkAiApp):
 #   {
@@ -20,6 +10,7 @@
 #     transformers;
 #     defaults ? {package};
 #     options ? {};            # shared across backends
+#     config ? _: {};           # one delivery transformer for both backends
 #     supportedPools ? [];      # normalized ai.* pools this runtime consumes
 #     contextDescription ? null;
 #     rulesDescription ? null;
@@ -27,10 +18,6 @@
 #       options ? {};          # backend-only option additions
 #       defaults ? {};         # backend-only default overrides
 #       migrationConfig ? _: {}; # bounded cleanup emitted outside enable gate
-#       config ? _: {};        # consumer callback:
-#                              #   {cfg, config, merged*, mergedContext, topHooks,
-#                              #    resolvedSettings}
-#                              #   → module attrs
 #     };
 #     <other-backend> ? { ... };   # ignored here
 #   }
@@ -225,11 +212,6 @@
   backendSpec = appRecord.${backend} or {};
   backendOptions = backendSpec.options or {};
   backendDefaults = backendSpec.defaults or {};
-  # A runtime that describes its delivery rather than lowering it needs ONE
-  # callback, so the record may carry it directly. A backend spec's own
-  # `config` still wins, which is what lets a runtime move one backend at a
-  # time while the other keeps its existing body.
-  backendConfigFn = backendSpec.config or appRecord.config or (_: {});
   migrationConfigFn = backendSpec.migrationConfig or (_: {});
 
   defaults = appRecord.defaults or {};
@@ -259,7 +241,7 @@
     resolvedShell = normalizedPool "shell" null;
     topHooks = normalizedPool "hooks" {};
   };
-  customConfig = backendConfigFn callbackArgs;
+  customConfig = appRecord.config callbackArgs;
   migrationConfig = migrationConfigFn callbackArgs;
   # Repository AGENTS.md targets have one cross-runtime owner. Public file
   # entries for those paths arbitrate inside sharedAgentsMd.nix;
