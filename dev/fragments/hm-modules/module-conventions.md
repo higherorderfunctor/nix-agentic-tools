@@ -1,10 +1,8 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-18 — everything a generation owns reconciles
-> through `lib/ai/own.{nix,py}`: documents by their leaves, directories by their
-> files. A document target may state the mode its file must carry. The
-> generated-bash materializer and the per-format activation helper are both
-> deleted.
+> **Last verified:** 2026-09-20 — shared documents use the same owned-leaf
+> reconciler on HM activation and devenv shell entry; Copilot and Kimchi now
+> declare their settings writers on both backends.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -212,12 +210,15 @@ reconciles the leaves it owns. A factory says so by stating
 `facts.harnessWrites` on the file and naming the `ai.<runtime>.activation`
 writer whose ledger claims it; the rule resolves that to `shared` and
 `lib/ai/deliver.nix` builds the `lib/ai/own.nix` bundle that `lib/ai/own.py`
-runs. (Factories not yet migrated still call `helpers.mkOwnedDocument`, which
-builds the same bundle from the caller's side.) Declared leaves are asserted, a
-leaf the previous generation declared and this one DROPPED is retracted, and
-every unowned sibling — a runtime-written `trusted_folders`, an oauth token — is
-left alone. A blind `jq -s '.[0] * .[1]'` cannot do the middle one: it has no
-way to tell a native key from a Nix key that was deleted.
+runs. Copilot and Kimchi declare these writers on both backends: HM emits
+activation entries, while devenv emits tasks under `$DEVENV_ROOT` with ledgers
+under `$DEVENV_STATE/nix-agentic-tools`. (Factories not yet migrated still call
+`helpers.mkOwnedDocument`, which builds the same bundle from the caller's side.)
+Declared leaves are asserted, a leaf the previous generation declared and this
+one DROPPED is retracted, and every unowned sibling — a runtime-written
+`trusted_folders`, an oauth token — is left alone. A blind `jq -s '.[0] * .[1]'`
+cannot do the middle one: it has no way to tell a native key from a Nix key that
+was deleted.
 
 **Mixed TOML ownership requires a leaf manifest, not a blind merge.** Codex's
 user `config.toml` contains Nix-declared settings and required native state: the
@@ -401,8 +402,8 @@ use either module's activation guard.
 **Intentional differences** exist and are NOT parity gaps:
 
 - Activation scripts are HM-only (devenv lifecycle is different)
-- HM uses `home.file` / `home.activation`; devenv uses `files.*` (per-project
-  writable tree, not home dir)
+- HM uses `home.file` / `home.activation`; devenv uses `files.*` / `tasks.*`
+  with `enterTest` verification (per-project writable tree, not home dir)
 - glab's `keyringSync` declaration exists in both facets, but devenv rejects
   enabling it: repository shells may consume global keyring state, while login,
   Secret Service, and graphical-session lifecycle belong to Home Manager

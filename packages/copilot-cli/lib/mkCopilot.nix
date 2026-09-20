@@ -309,32 +309,33 @@ in
         ]))
 
         # settings.json — Copilot rewrites it while it runs (`trusted_folders`,
-        # the oauth record), so Home Manager owns only the leaves declared here
-        # and leaves every native sibling alone. The writer is declared whether
+        # the oauth record), so both backends own only the leaves declared here
+        # and leave every native sibling alone. The writer is declared whether
         # or not there are leaves: an empty declaration RETRACTS what the
         # previous generation owned, and with no prior ownership it leaves an
         # externally managed file untouched — which is what a consumer enabling
         # Copilot purely for MCP or skills fanout needs.
         #
-        # The fact is keyed by backend because only Home Manager reconciles it
-        # today; the project copy is still a whole-file write, and flipping it
-        # is a behavior change of its own. The writer is declared on Home
-        # Manager for the same reason — a writer with ledgers and no claiming
-        # file lowers to a task that retracts nothing.
-        (lib.optionalAttrs isHm {
-          ai.copilot.activation.copilotSettingsMerge.ledgers.${settingsLedger} = {
-            codec = "json";
-            path = "${cfg.configDir}/settings.json";
+        # Devenv uses the same bundle under the project root. This preserves
+        # edits there without changing Copilot's project-discovery limitation.
+        {
+          ai.copilot.activation.copilotSettingsMerge = {
+            # Devenv requires a namespace; retain HM's existing ordering name.
+            entry = {
+              devenv = "ai:copilot:settings-merge";
+              hm = "copilotSettingsMerge";
+            };
+            ledgers.${settingsLedger} = {
+              codec = "json";
+              path = "${cfg.configDir}/settings.json";
+            };
           };
-        })
+        }
         {
           ai.copilot.files."${cfg.configDir}/settings.json" = {
             content.value = cfg.nativeSettings;
             entry = "copilotSettingsMerge";
-            facts.harnessWrites = {
-              devenv = false;
-              hm = true;
-            };
+            facts.harnessWrites = true;
             format = "json";
             ledger = settingsLedger;
           };
