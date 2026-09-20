@@ -7,16 +7,25 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-19 — both runtime-writable documents reconcile
-> their owned leaves through `lib/ai/own.py`, one bundle and one activation
-> entry each, and the context entry defaults its `content` option rather than
-> the whole entry. Full lineage:
+> **Last verified:** 2026-09-19 — one `config` callback on the app record
+> describes delivery for BOTH backends; the two runtime-writable documents are
+> `ai.kimchi.activation` writers whose files state `facts.harnessWrites`, and
+> nothing in this factory writes a native sink. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
 mutable tree). The HM and devenv modules are thin shims that apply `hmTransform`
 / `devenvTransform` to the record.
+
+It is the first runtime to carry ONE record-level `config` callback instead of
+an `hm.config` and a `devenv.config`. The two it replaced were near-duplicates
+that differed only in which native sink each wrote into, and that choice is now
+the delivery layer's: the callback DESCRIBES each file — its bytes, the consumer
+facts, and the writer that owns it if it is not a symlink — and
+`lib/ai/deliver.nix` decides how it lands. The callback receives `backend` for
+the one thing a fact cannot express: a surface one backend genuinely does not
+have.
 
 The factory consumes Kimchi-shaped JSON from `ai.kimchi.nativeSettings`. The
 closed `ai.kimchi.settings` submodule is the shared normalized surface; a field
@@ -35,21 +44,29 @@ Kimchi splits config across two roots under `<configDir>` (default
 
 The `harness/` tree is **mutable at runtime** — Kimchi rewrites `settings.json`
 (`/multi-model`, `kimchi resources`) and downloads vendor content into it. So
-`config.json` and `harness/settings.json` each go through
-`helpers.mkOwnedDocument` on HM — one `lib/ai/own.nix` bundle and one activation
-entry per document, reconciling only the leaves Nix declares against a
-per-document ledger — and a static write on devenv, never a raw
-symlink-to-store. The two are separate bundles on purpose: nothing orders them
-against each other, and each entry name is a consumer-visible contract.
-Immutable artifacts ultimately use static `home.file` / `files.*`, but
-normalized context first renders into the final `ai.kimchi.files` map and only
-then reaches that generic sink. This makes `harness/AGENTS.md` a consumer
-replacement point: the generated body is a default on the entry's `content`
-option alone, so a consumer replaces the bytes, changes how the file lands, or
-suppresses it with `null`, independently; `mcp.json` and skills retain their
-existing typed owners. When both root and Kimchi-specific context are
-configured, their bodies concatenate root-first; `ai.kimchi.context.filename`
-controls the artifact name.
+`config.json` and `harness/settings.json` each state `facts.harnessWrites` and
+name an `ai.kimchi.activation` writer that declares their ledger: the rule
+resolves them to `shared`, and the router builds one `lib/ai/own.nix` bundle and
+one activation entry per document, reconciling only the leaves Nix declares
+against a per-document ledger. The two are separate writers on purpose: nothing
+orders them against each other, and each entry name is a consumer-visible
+contract.
+
+The fact is stated PER BACKEND (`{devenv = false; hm = true;}`) because only
+Home Manager reconciles these documents today; devenv still links a whole file,
+which is what it did before this migration. Flipping devenv onto the reconciler
+is a behavior change and lands as its own step. That is also why the writers
+themselves are declared on Home Manager only: a writer with ledgers but no
+claiming file lowers to a task that retracts nothing.
+
+Everything else Kimchi delivers is immutable and symlink-readable, so it takes
+both defaults and states no fact at all. Normalized context renders into the
+`ai.kimchi.files` map, which makes `harness/AGENTS.md` a consumer replacement
+point: the generated body is a default on the entry's `content` option alone, so
+a consumer replaces the bytes, changes how the file lands, or suppresses it with
+`null`, independently; `mcp.json` and skills retain their existing typed owners.
+When both root and Kimchi-specific context are configured, their bodies
+concatenate root-first; `ai.kimchi.context.filename` controls the artifact name.
 
 ## Normalized pool capability boundary
 
@@ -109,5 +126,7 @@ so the scoped-fragment transforms do not apply to it.
 ## Shared prep
 
 `mkPrep` (top-level `let`) computes the backend-agnostic values (filtered
-settings, effective env, agency text, the wrapped package) once; the `hm` and
-`devenv` config closures each call it rather than duplicating the logic.
+settings, effective env, agency text, the wrapped package) once. The `config`
+callback and the `installPackage` hook each call it rather than duplicating the
+logic; Nix caches thunks and not function applications at distinct call sites,
+so the second application re-evaluates and yields the identical derivation.
