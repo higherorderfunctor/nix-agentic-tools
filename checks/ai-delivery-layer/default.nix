@@ -611,8 +611,28 @@ in {
           facts.symlinkReadable = false;
           ledger = "materialize/probe.manifest";
         };
+        document = {
+          ai.kiro = {
+            enable = true;
+            activation.probeDocument.ledgers."json-settings/probe-doc.json" = {
+              codec = "json";
+              path = ".kiro/probe-doc.json";
+            };
+          };
+        };
+        claimsDocument = {
+          entry = "probeDocument";
+          facts.harnessWrites = true;
+          format = "json";
+          ledger = "json-settings/probe-doc.json";
+        };
         failures = overlay: let
           evaluated = evalHm (lib.recursiveUpdate base overlay);
+        in
+          map (assertion: assertion.message)
+          (lib.filter (assertion: !assertion.assertion) evaluated.config.assertions);
+        documentFailures = overlay: let
+          evaluated = evalHm (lib.recursiveUpdate document overlay);
         in
           map (assertion: assertion.message)
           (lib.filter (assertion: !assertion.assertion) evaluated.config.assertions);
@@ -620,11 +640,21 @@ in {
         noWriter = failures {
           ai.kiro.files.".kiro/probe/alpha.json" = removeAttrs owned ["entry"];
         };
+        unknownWriter = failures {
+          ai.kiro.files.".kiro/probe/alpha.json" = owned // {entry = "probeAbsent";};
+        };
         unknownLedger = failures {
           ai.kiro.files.".kiro/probe/alpha.json" = owned // {ledger = "materialize/absent.manifest";};
         };
+        # NESTED, not elsewhere: the container is still a prefix of the path,
+        # which is exactly what the old containment test accepted while the
+        # unit landed one level up from where it was declared.
         outsideContainer = failures {
-          ai.kiro.files.".kiro/elsewhere/alpha.json" = owned;
+          ai.kiro.files.".kiro/probe/a/alpha.json" = owned;
+        };
+        duplicateUnit = failures {
+          ai.kiro.files.".kiro/probe/a/alpha.json" = owned;
+          ai.kiro.files.".kiro/probe/b/alpha.json" = owned;
         };
         sharedYaml = failures {
           ai.kiro.files.".kiro/probe/alpha.json" =
@@ -637,15 +667,92 @@ in {
         emptyWriter = failures {
           ai.kiro.activation.probeNothing = {};
         };
+        commandAndLedgers = failures {
+          ai.kiro.activation.probeMaterialize.command = "printf 'probe'";
+        };
+        recursiveFile = failures {
+          ai.kiro.files.".kiro/tree" = {
+            content.source = ./fixtures/probe-skill/SKILL.md;
+            recursive = true;
+          };
+        };
+        runWithoutOwner = failures {
+          ai.kiro.files.".kiro/probe/written.json".content.run = "printf '{}' > \"$1\"";
+        };
+        documentText = documentFailures {
+          ai.kiro.files.".kiro/probe-doc.json" = claimsDocument // {content.text = "{}";};
+        };
+        documentClaimedTwice = documentFailures {
+          ai.kiro.files.".kiro/probe-doc.json" = claimsDocument // {content.value.probe = true;};
+          ai.kiro.files.".kiro/probe-doc-too.json" = claimsDocument // {content.value.probe = false;};
+        };
       in
         says "needs the writer that materializes it" noWriter
+        && says "which ai.kiro.activation does not declare" unknownWriter
         && says "which does not declare it" unknownLedger
         && says "whose container is `.kiro/probe`" outsideContainer
+        && says "at one unit address" duplicateUnit
+        && says "alpha.json" duplicateUnit
         && says "names no container leaves can be owned in" sharedYaml
         && says "declares neither a `command` nor a" emptyWriter
+        && says "declares both a `command` and" commandAndLedgers
+        && says "delivers the\nleaves of a DIRECTORY" recursiveFile
+        && says "has a write step" runWithoutOwner
+        && says "literal bytes name no leaves to own" documentText
+        && says "claiming it twice writes" documentClaimedTwice
         # The control: the same declaration, described correctly, asserts
-        # nothing at all.
+        # nothing at all — on both shapes.
         && failures {ai.kiro.files.".kiro/probe/alpha.json" = owned;} == []
+        && documentFailures {
+          ai.kiro.files.".kiro/probe-doc.json" = claimsDocument // {content.value.probe = true;};
+        }
+        == []
+    );
+
+    # The two per-backend declarations that used to fail as a bare
+    # `attribute 'devenv' missing`, naming neither the option nor the fix. Nix
+    # gives no way to read a caught message back, so the messages themselves
+    # are recorded in the commit; what is pinned here is that a HALF-stated
+    # declaration fails at all, and that the complete one does not.
+    module-delivery-partial-backend-declarations-fail = mkTest "delivery-partial-backend-declarations-fail" (
+      let
+        fact = value:
+          builtins.tryEval (builtins.deepSeq
+            (evalDevenv {
+              ai.kiro = {
+                enable = true;
+                files.".kiro/probe.json" = {
+                  content.text = "{}";
+                  facts.symlinkReadable = value;
+                };
+              };
+            })
+            .config
+            .files
+            true);
+        writer = {
+          ai.kiro = {
+            enable = true;
+            activation.probeMigrate = {
+              command = "printf 'probe'";
+              entry.hm = "probeMigrate";
+            };
+          };
+        };
+      in
+        # A fact keyed by backend states BOTH backends or neither: the rule
+        # reads the key for the backend it is running on, and there is no
+        # honest default for the other one.
+        (fact {
+          devenv = true;
+          hm = true;
+        })
+        .success
+        && !(fact {hm = true;}).success
+        && (fact true).success
+        # An entry name keyed by backend, on the backend it names.
+        && (builtins.tryEval (builtins.deepSeq (evalHm writer).config.home.activation true)).success
+        && !(builtins.tryEval (builtins.deepSeq (evalDevenv writer).config.tasks true)).success
     );
 
     # A corpus scan, not a changed-files scan: a gate that only looks at the

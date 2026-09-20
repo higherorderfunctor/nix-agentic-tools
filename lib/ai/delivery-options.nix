@@ -18,7 +18,25 @@
   # A consumer fact usually holds on both backends. When it does not, the
   # exception is keyed by backend; `either` keeps the common case a bare bool
   # and adds no type a home-manager reader has not met.
-  factType = lib.types.either lib.types.bool (lib.types.attrsOf lib.types.bool);
+  #
+  # The per-backend arm is a SUBMODULE with both keys required, not an
+  # `attrsOf bool`: the rule reads `value.<backend>`, so a fact stated for one
+  # backend only — or under a typo'd key — used to surface as a bare
+  # `attribute 'devenv' missing` naming no option at all. Requiring both is
+  # also the honest shape, because a fact that holds on one backend and is
+  # unstated on the other has no default to fall back to.
+  factType = lib.types.either lib.types.bool (lib.types.submodule {
+    options = {
+      devenv = lib.mkOption {
+        type = lib.types.bool;
+        description = "The fact, as it holds for the devenv backend.";
+      };
+      hm = lib.mkOption {
+        type = lib.types.bool;
+        description = "The fact, as it holds for the Home Manager backend.";
+      };
+    };
+  });
 
   # The bytes, as a TAGGED sum rather than a pair of nullable siblings. Three
   # things follow, and each one is load-bearing:
