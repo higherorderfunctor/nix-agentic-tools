@@ -12,11 +12,24 @@ in
     delivery = deliver (args // {backend = "devenv";});
   in {
     inherit (delivery) assertions;
+    # See adapters/hm.nix: the plan is the only eval-visible record of what a
+    # writer will do.
+    ai.${args.runtime}._ownPlans = delivery.owned.plans;
+    # A failed writer only warns at shell entry, so every bundle also
+    # contributes a verification that makes `devenv test` and CI fail.
+    #
+    # `mkIf` rather than an empty string: `enterTest` is a lines option, so an
+    # empty definition still contributes a separator and would change the
+    # bytes of a script this layer did not write. The condition is a VALUE, so
+    # it is forced when the option merges rather than while the module system
+    # is collecting definitions.
+    enterTest = lib.mkIf (delivery.owned.enterTest != "") delivery.owned.enterTest;
     files = delivery.symlinkEntries;
     # ONE literal attribute path; see the note in adapters/hm.nix for why a
     # fragment per writer recurses.
     tasks =
-      lib.mapAttrs' (
+      delivery.owned.tasks
+      // lib.mapAttrs' (
         _name: writer:
           lib.nameValuePair (delivery.nameFor writer.entry) {
             after = delivery.afterEdges writer;
