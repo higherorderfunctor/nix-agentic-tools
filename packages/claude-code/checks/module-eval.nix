@@ -910,6 +910,21 @@ in {
           runtime = "kimchi";
           second.resources.retained = false;
         })
+        (mkDevenvCase {
+          configFile = ".kiro/settings/cli.json";
+          entry = "ai:kiro:settings-merge";
+          first = {
+            "chat.enableTangentMode" = true;
+            "chat.modelDefaults"."claude-opus-4.8".effort = "high";
+          };
+          native = {
+            "chat.modelDefaults".native.effort = "low";
+            "native.setting" = "survives";
+          };
+          option = "nativeSettings";
+          runtime = "kiro";
+          second."chat.enableTangentMode" = false;
+        })
       ];
     in
       pkgs.runCommand "module-test-json-settings-reconciliation" {} ''
