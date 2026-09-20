@@ -1,13 +1,15 @@
 ## Naming Conventions
 
-> **Last verified:** 2026-09-12 — recipes, source sidecars, and registrations
-> live with their owners.
+> **Last verified:** 2026-09-20 — generated npm locks retain nix-update's
+> standard filename beside the recipe.
 
 - Package recipes:
   `packages/<owner>/packages/<namespace...>/<name>/package.nix`. Directory
   components below the inner `packages/` encode public namespaces. Source
-  sidecars and patches live with their owner; retain the existing
-  `<name>-package-lock.json` suffix while formatter/spelling excludes use it.
+  sidecars and patches live with their owner. For
+  `nix-update --generate-lockfile`, keep `package-lock.json` beside the recipe,
+  where the updater writes it. Formatter/spelling exclusions cover both that
+  standard name and existing `<name>-package-lock.json` files.
 - Owner metadata: `packages/<owner>/registry.nix` contributes
   update/cache/documentation rows; derive mutable recipe paths with
   `repoPath ./relative/package.nix`.
