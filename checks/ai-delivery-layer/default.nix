@@ -109,6 +109,48 @@
     && !lib.any usesExit (lib.splitString "\n" body);
 in {
   checks = {
+    module-delivery-method-resolver-is-shared = mkTest "delivery-method-resolver-is-shared" (
+      deliveryMethod ? resolve
+      && lib.all (path: lib.hasInfix "deliveryMethod.resolve" (builtins.readFile path)) [
+        ../ai-delivery/generate.nix
+        ../../lib/ai/app/sharedAgentsMd.nix
+        ../../lib/ai/deliver.nix
+      ]
+      && lib.all (
+        backend: let
+          args = {
+            inherit backend;
+            entry = {
+              facts = plainFacts;
+              method = null;
+            };
+            methodFor = {
+              backend,
+              default,
+              path,
+              ...
+            } @ request:
+              if path == "probe" && backend == "hm"
+              then "shared"
+              else default request;
+            path = "probe";
+          };
+        in
+          deliveryMethod.resolve args
+          == (
+            if backend == "hm"
+            then "shared"
+            else "symlink"
+          )
+          && deliveryMethod.resolve (args
+            // {
+              entry = args.entry // {method = "copy-ro";};
+              methodFor = _: throw "explicit method must bypass methodFor";
+            })
+          == "copy-ro"
+      ) ["devenv" "hm"]
+    );
+
     module-delivery-shared-agentsmd-admits-third-claimant = mkTest "delivery-shared-agentsmd-admits-third-claimant" (
       let
         base.ai = {
