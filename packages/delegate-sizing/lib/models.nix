@@ -1,16 +1,16 @@
-# Decisions only. Runtime spellings live beside each model, including Claude's
-# short Agent/Workflow alias and its distinct headless id.
+# Model decisions and runtime spellings, grouped by tier. The renderer orders
+# tiers by capability and puts first-party models first within each tier.
 {
   frontier = {
     astra = {
       avoidFor = "ultra (automatic delegation with unknown cost)";
-      effort = "medium sweet spot; high is the operator's config default; xhigh only for named-hard work; flat above medium";
+      effort = "medium sweet spot; high is the operator's config default; xhigh only for explicitly difficult work; flat above medium";
       ids = {
         codex = "gpt-6-astra";
         kiro = "gpt-6-astra";
       };
       name = "Astra (GPT-6)";
-      useFor = "hardest coding and agentic work on the Codex pool; long implementation runs, computer use, novel reasoning and debug loops";
+      useFor = "hardest coding and agentic work on the Codex pool; long implementation runs; computer use; novel reasoning; debug loops";
       vendor = "openai";
     };
     fable = {
@@ -36,7 +36,7 @@
         kiro = "claude-sonnet-5";
       };
       name = "Sonnet 5";
-      useFor = "code to a spec, tests by analogy, transcription and summaries; cheap writer in a writer/judge loop; give explicit requirements";
+      useFor = "code to a spec, tests by analogy; transcription; summaries; cheap writer in a writer/judge loop";
       vendor = "anthropic";
     };
     terra = {
@@ -53,8 +53,8 @@
   };
   small = {
     haiku = {
-      avoidFor = "open judgment, design or spec writing; long transcriptions (empty or truncated); context over 200k";
-      effort = "no knob, no thinking; record effort as not applicable";
+      avoidFor = "judgment; long transcriptions (empty or truncated)";
+      effort = "no knob; no thinking";
       ids = {
         claude = "haiku";
         claudeHeadless = "claude-haiku-4-5";
@@ -65,20 +65,20 @@
       vendor = "anthropic";
     };
     luna = {
-      avoidFor = "long context (vendor-only recall cliff); spec writing and judging";
-      effort = "low or medium for mechanical work; medium to high is the best marginal buy (+7 for twice the cost); no ultra";
+      avoidFor = "long context; spec writing and judging";
+      effort = "medium to high is the best marginal buy; twice the cost per rung; no ultra";
       ids = {
         codex = "gpt-5.6-luna";
         kiro = "gpt-5.6-luna";
       };
       name = "Luna (5.6)";
-      useFor = "classification, extraction, routing and high-volume mechanical work; cheapest code writer with reliable checks";
+      useFor = "classification, extraction, routing and high-volume mechanical work; cheapest code writer";
       vendor = "openai";
     };
   };
   strong = {
     opus = {
-      avoidFor = "mechanical work (ten times Haiku price); unnecessary extra verification or delegation on small tasks";
+      avoidFor = "mechanical work (ten times Haiku price)";
       effort = "medium sweet spot; high for open-ended investigation; xhigh only for long autonomous runs; flattens after medium";
       ids = {
         claude = "opus";
@@ -90,7 +90,7 @@
       vendor = "anthropic";
     };
     sol = {
-      avoidFor = "sole grader or judge; ultra; underspecified briefs that leave constraints implicit";
+      avoidFor = "sole grader or judge; ultra";
       effort = "low is its Codex default; medium sweet spot; above high rarely pays";
       ids = {
         codex = "gpt-5.6-sol";
