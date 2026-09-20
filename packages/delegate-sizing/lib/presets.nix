@@ -1,6 +1,6 @@
 # Runtime instruction blocks. The renderer puts native controls before external
 # launches and keeps manual-only delegates after all automatic candidates.
-{
+{codexUsageScript}: {
   claude = {
     checkUsage = ''
       Read `five_hour.utilization` and `seven_day.utilization` with this command.
@@ -42,7 +42,7 @@
   };
   codex = {
     checkUsage = ''
-      Run `bash <skill-directory>/scripts/codex-usage.sh` from this installed
+      Run `bash ${codexUsageScript}` from this installed
       skill to read `usedPercent`, `remainingPercent` and `resetsAt`.
       Requires GNU `timeout`, `jq`, Python 3 and `codex` on PATH.
     '';
