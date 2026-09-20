@@ -65,6 +65,13 @@
   proxy ownership: `sharedOptions.nix` aggregates proxy declaration scopes and
   emits unique active systemd units, while only lowered client entries traverse
   this five-stage pipeline.
+- **One owner per physical path.** Enabled runtime file maps supply claims on
+  both backends. Only shared repository context targets arbitrate multiple
+  runtime claims; contributors are discovered from their context target and
+  delivery options, without a runtime-name list. Public overrides and tombstones
+  enter the aggregate before lowering, and claimants must agree with its symlink
+  method. Kimchi's current native context stays under its harness directory; an
+  explicit root AGENTS.md entry can participate as a third claimant.
 - **AGENTS.md keeps a whole-entry default.** Codex and the shared repository
   writer decide whether a file exists by reading composed content. Deferring
   that read until priority arbitration keeps replaced store sources lazy.
