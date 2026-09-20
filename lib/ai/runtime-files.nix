@@ -1,65 +1,10 @@
-# Shared literal-file option and backend lowering.
+# Validation and native lowering for `ai.<runtime>.files`.
 #
-# This is the final static output seam for every `ai.<runtime>.files` map:
-# generators contribute whole entries at `mkDefault` priority, consumers may
-# replace or tombstone them, and the surviving entries lower one-way into the
-# active backend's native file sink. Nothing in this layer feeds back into a
-# normalized input pool.
+# The option's TYPE lives in `lib/ai/delivery-options.nix` beside the writer
+# submodule, because the two describe one layer. What is left here is the
+# `apply` that rejects a malformed map before anything reads it, and the
+# lowering of a symlinked entry into the shape both backends' file sinks take.
 {lib}: let
-  hasExactlyOneContent = entry:
-    ((entry.text or null) == null) != ((entry.source or null) == null);
-  entrySubmodule =
-    lib.types.addCheck (lib.types.submodule {
-      options = {
-        executable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          description = "Whether the materialized file should be executable.";
-        };
-        source = lib.mkOption {
-          type = lib.types.nullOr lib.types.path;
-          default = null;
-          description = "Store-backed source for the file. Mutually exclusive with text.";
-        };
-        text = lib.mkOption {
-          type = lib.types.nullOr lib.types.str;
-          default = null;
-          description = "Literal file content. Mutually exclusive with source.";
-        };
-      };
-    })
-    hasExactlyOneContent;
-
-  nullableEntry = lib.types.nullOr entrySubmodule;
-
-  # An attrsOf-submodule normally merges fields independently. A final output
-  # registry needs the opposite contract: priority selects one WHOLE entry.
-  # Normalize each surviving same-priority definition through the submodule,
-  # deduplicate byte-identical values, and reject divergent values.
-  mkAtomicEntry = nullableType:
-    lib.types.mkOptionType rec {
-      name = "atomicLiteralFile";
-      inherit (nullableType) description descriptionClass;
-      check = value:
-        value
-        == null
-        || (entrySubmodule.check value && hasExactlyOneContent value);
-      merge = loc: defs: let
-        normalize = definition:
-          if check definition.value
-          then nullableType.merge loc [definition]
-          else throw "The option `${lib.showOption loc}` must set exactly one of `text` or `source`";
-        values = lib.unique (map normalize defs);
-      in
-        if builtins.length values == 1
-        then builtins.head values
-        else throw "The option `${lib.showOption loc}` has divergent whole-file definitions at the same priority";
-      inherit (nullableType) emptyValue getSubModules getSubOptions;
-      substSubModules = modules: mkAtomicEntry (nullableType.substSubModules modules);
-      nestedTypes.elemType = nullableType;
-    };
-  atomicEntry = mkAtomicEntry nullableEntry;
-
   targetIsNormalized = target: let
     segments = lib.splitString "/" target;
   in
@@ -67,16 +12,29 @@
     != ""
     && !(lib.hasPrefix "/" target)
     && lib.all (segment: segment != "" && segment != "." && segment != "..") segments;
-in rec {
-  fileEntryType = atomicEntry;
-  fileMapType = lib.types.attrsOf fileEntryType;
 
+  # One live entry as the native sink wants it. `executable` is always stated
+  # because both backends default it themselves and a silent divergence
+  # between the two is exactly what this seam exists to prevent; `recursive` is
+  # stated only when true, because Home Manager reads its absence as false and
+  # the devenv adapter has no such option at all.
+  sinkEntry = entry:
+    {inherit (entry) executable;}
+    // lib.optionalAttrs entry.recursive {recursive = true;}
+    // (
+      if entry.content ? source
+      then {inherit (entry.content) source;}
+      else {inherit (entry.content) text;}
+    );
+in rec {
   validateFiles = runtime: files: let
     invalidTargets = builtins.filter (target: !targetIsNormalized target) (builtins.attrNames files);
-    invalidEntries = builtins.attrNames (lib.filterAttrs (
-        _target: entry: entry != null && !hasExactlyOneContent entry
-      )
-      files);
+    # A live entry with no content is the shape a consumer gets by defining a
+    # SIBLING field on a generated file whose content was contributed as a
+    # whole-entry default: priority discards the generated definition and what
+    # survives has no bytes. Naming it here is what turns that into a
+    # diagnostic instead of a file that silently stops being written.
+    withoutContent = builtins.attrNames (lib.filterAttrs (_target: entry: entry != null && entry.content == null) files);
   in
     if invalidTargets != []
     then
@@ -85,16 +43,16 @@ in rec {
         without absolute roots, empty segments, or `.`/`..` traversal segments;
         invalid target(s): ${lib.concatStringsSep ", " invalidTargets}
       ''
-    else if invalidEntries == []
+    else if withoutContent == []
     then files
     else
       throw ''
-        ai.${runtime}.files entries must set exactly one of `text` or `source`;
-        invalid target(s): ${lib.concatStringsSep ", " invalidEntries}
+        ai.${runtime}.files entries must set `content` to one of `source` or
+        `text`; entries without it: ${lib.concatStringsSep ", " withoutContent}
       '';
 
   liveFiles = files:
-    lib.mapAttrs (_target: lib.filterAttrs (_field: value: value != null))
+    lib.mapAttrs (_target: sinkEntry)
     (lib.filterAttrs (_target: entry: entry != null) files);
 
   mkBackendSink = {

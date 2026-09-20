@@ -9,7 +9,7 @@
   inherit (harness) evalDevenv evalHm hasLiteral mkTest mkWrapperGrepTest ownedDocument;
   cliDocument = evaluated:
     ownedDocument "kiro" "${evaluated.config.ai.kiro.configDir}/settings/cli.json" evaluated;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
 in {
   checks = {
     module-kiro-wrapper-prepend-both = mkTest "kiro-wrapper-prepend-both" (
@@ -137,7 +137,7 @@ in {
             };
           };
         };
-        steering = kiroSteeringFiles evaluated;
+        steering = kiroSteeringContent evaluated;
         contextFile = (steering."AGENTS.md" or {}).text or "";
         unnamedFile = steering."unnamed.md" or null;
         namedFile = steering."named-rule.md" or null;
@@ -169,7 +169,7 @@ in {
             };
           };
         };
-        steering = kiroSteeringFiles evaluated;
+        steering = kiroSteeringContent evaluated;
         contextFile = (evaluated.config.files."AGENTS.md" or {}).text or "";
         namedFile = steering."named-rule.md" or null;
       in
@@ -1807,7 +1807,7 @@ in {
             };
           };
         };
-        steeringFile = (kiroSteeringFiles result)."my-steering.md" or null;
+        steeringFile = (kiroSteeringContent result)."my-steering.md" or null;
       in
         steeringFile
         != null
@@ -1843,8 +1843,8 @@ in {
             };
           };
         };
-        hmSteering = kiroSteeringFiles (evalHm config);
-        devenvSteering = kiroSteeringFiles (evalDevenv config);
+        hmSteering = kiroSteeringContent (evalHm config);
+        devenvSteering = kiroSteeringContent (evalDevenv config);
         manual = (hmSteering."on-demand.md" or {}).text or "";
         auto = (hmSteering."semantic.md" or {}).text or "";
       in
@@ -1880,7 +1880,7 @@ in {
             };
           };
         };
-        kiro = ((kiroSteeringFiles native)."semantic.md" or {}).text or "";
+        kiro = ((kiroSteeringContent native)."semantic.md" or {}).text or "";
       in
         !portableAttempt.success
         && lib.hasInfix "inclusion: auto" kiro
@@ -1912,7 +1912,7 @@ in {
             context.text = "Project conventions go here.";
           };
         };
-        contextFile = (kiroSteeringFiles result)."AGENTS.md" or null;
+        contextFile = (kiroSteeringContent result)."AGENTS.md" or null;
       in
         contextFile
         != null
@@ -1927,7 +1927,7 @@ in {
           ai.kiro.enable = true;
           ai.context.text = "Top-level context flows everywhere.";
         };
-        contextFile = (kiroSteeringFiles result)."AGENTS.md" or null;
+        contextFile = (kiroSteeringContent result)."AGENTS.md" or null;
       in
         contextFile
         != null
@@ -1944,7 +1944,7 @@ in {
           };
           ai.context.text = "Top-level context.";
         };
-        contextFile = (kiroSteeringFiles result)."AGENTS.md" or null;
+        contextFile = (kiroSteeringContent result)."AGENTS.md" or null;
       in
         contextFile
         != null
@@ -1963,8 +1963,8 @@ in {
             };
           };
         };
-        customFile = (kiroSteeringFiles result)."custom.md" or null;
-        agentsFile = (kiroSteeringFiles result)."AGENTS.md" or null;
+        customFile = (kiroSteeringContent result)."custom.md" or null;
+        agentsFile = (kiroSteeringContent result)."AGENTS.md" or null;
       in
         customFile != null && agentsFile == null
     );
@@ -2841,7 +2841,7 @@ in {
         contextFile
         != null
         && lib.hasInfix "Project conventions" (contextFile.text or "")
-        && !((kiroSteeringFiles result) ? "AGENTS.md")
+        && !((kiroSteeringContent result) ? "AGENTS.md")
     );
 
     # Devenv: top-level ai.context fans to kiro when per-CLI unset.
@@ -3012,7 +3012,7 @@ in {
               };
             };
           in
-            builtins.seq ev.config.ai.kiro.files.".kiro/steering/AGENTS.md".text true
+            builtins.seq ev.config.ai.kiro.files.".kiro/steering/AGENTS.md".content.text true
         );
       in
         !attempt.success
@@ -3114,11 +3114,11 @@ in {
         dv = evalDevenv config;
       in
         hm.config.home.file.".kiro/steering/enter-test.md".text
-        == hm.config.ai.kiro.files.".kiro/steering/enter-test.md".text
+        == hm.config.ai.kiro.files.".kiro/steering/enter-test.md".content.text
         && hm.config.home.file.".kiro/steering/AGENTS.md".text
-        == hm.config.ai.kiro.files.".kiro/steering/AGENTS.md".text
+        == hm.config.ai.kiro.files.".kiro/steering/AGENTS.md".content.text
         && dv.config.files.".kiro/steering/enter-test.md".text
-        == dv.config.ai.kiro.files.".kiro/steering/enter-test.md".text
+        == dv.config.ai.kiro.files.".kiro/steering/enter-test.md".content.text
         && lib.hasInfix "CONTEXT-TOKEN." dv.config.files."AGENTS.md".text
         # The retirement declares NO units on either backend, so it cannot
         # write a steering file whatever the current declaration says.
@@ -3158,7 +3158,7 @@ in {
               text = "SYMLINK-RULE-TOKEN.";
             };
             files = {
-              ".kiro/steering/AGENTS.md".text = "CONSUMER-CONTEXT.";
+              ".kiro/steering/AGENTS.md".content.text = "CONSUMER-CONTEXT.";
               ".kiro/steering/symlinked.md" = null;
             };
           };
@@ -3188,7 +3188,7 @@ in {
             text = "Write tests for all new features.";
           };
         };
-        ruleFile = (kiroSteeringFiles result)."testing.md" or null;
+        ruleFile = (kiroSteeringContent result)."testing.md" or null;
       in
         ruleFile
         != null
@@ -3207,7 +3207,7 @@ in {
           };
           ai.rules.same-name.text = "Top-level loses.";
         };
-        rendered = (kiroSteeringFiles result)."same-name.md".text;
+        rendered = (kiroSteeringContent result)."same-name.md".text;
       in
         lib.hasInfix "Per-CLI wins." rendered
         && !(lib.hasInfix "Top-level loses." rendered)
@@ -3223,7 +3223,7 @@ in {
             text = "Write tests.";
           };
         };
-        ruleFile = (kiroSteeringFiles result)."testing.md" or null;
+        ruleFile = (kiroSteeringContent result)."testing.md" or null;
       in
         ruleFile
         != null
@@ -3400,7 +3400,7 @@ in {
             rulesDir = ./fixtures/kiro-steering;
           };
         };
-        steering = kiroSteeringFiles result;
+        steering = kiroSteeringContent result;
         hasAlpha = steering ? "alpha.md";
         hasBeta = steering ? "beta.md";
         hasGamma = steering ? "gamma.md";
@@ -3429,7 +3429,7 @@ in {
             };
           };
         };
-        steering = kiroSteeringFiles result;
+        steering = kiroSteeringContent result;
       in
         steering
       ? "alpha.md"
@@ -3448,8 +3448,8 @@ in {
           };
         };
       in
-        lib.hasInfix "Alpha steering body." (kiroSteeringFiles result)."alpha.md".text
-        && !(lib.hasInfix "explicit top-level" (kiroSteeringFiles result)."alpha.md".text)
+        lib.hasInfix "Alpha steering body." (kiroSteeringContent result)."alpha.md".text
+        && !(lib.hasInfix "explicit top-level" (kiroSteeringContent result)."alpha.md".text)
     );
 
     # Devenv-side unscoped directory rules join the shared AGENTS.md.
@@ -3486,12 +3486,13 @@ in {
             rules.my-rule.text = "Inline content";
           };
         };
-        entry = (kiroSteeringFiles result)."my-rule.md" or null;
+        entry = (kiroSteeringContent result)."my-rule.md" or null;
       in
         entry
         != null
         && entry.text != null
-        && entry.source == null
+        # The tag is the exclusion: a text entry has no `source` attribute.
+        && !(entry ? source)
         && lib.hasInfix "Inline content" entry.text
     );
 
@@ -3504,12 +3505,14 @@ in {
             rules.rule-from-path.source = ./fixtures/kiro-steering/alpha.md;
           };
         };
-        entry = (kiroSteeringFiles result)."rule-from-path.md" or null;
+        entry = (kiroSteeringContent result)."rule-from-path.md" or null;
       in
         entry
         != null
         && entry.text != null
-        && entry.source == null
+        # The tag itself is the exclusion now: a baked path carries `text` and
+        # no `source` attribute at all.
+        && !(entry ? source)
         && lib.hasInfix "Alpha steering body" entry.text
     );
 
