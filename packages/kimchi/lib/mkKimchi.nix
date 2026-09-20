@@ -287,7 +287,10 @@ in
 
           # harness/skills/ — Layout B via mkSkillEntries.
           (lib.mkIf (mergedSkills != {}) {
-            home.file = helpers.mkSkillEntries "${cfg.configDir}/harness" mergedSkills;
+            ai.kimchi.files = helpers.mkSkillFiles {
+              configDir = "${cfg.configDir}/harness";
+              skills = mergedSkills;
+            };
           })
         ];
     };
@@ -333,7 +336,10 @@ in
 
           # harness/skills/ — devenv recursive walk.
           (lib.mkIf (mergedSkills != {}) {
-            files = helpers.mkDevenvSkillEntries "${cfg.configDir}/harness" mergedSkills;
+            ai.kimchi.files = helpers.mkSkillFiles {
+              configDir = "${cfg.configDir}/harness";
+              skills = mergedSkills;
+            };
           })
         ];
     };
