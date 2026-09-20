@@ -12,7 +12,7 @@
     != ""
     && !(lib.hasPrefix "/" target)
     && lib.all (segment: segment != "" && segment != "." && segment != "..") segments;
-
+in rec {
   # One live entry as the native sink wants it. `executable` is always stated
   # because both backends default it themselves and a silent divergence
   # between the two is exactly what this seam exists to prevent; `recursive` is
@@ -26,7 +26,6 @@
       then {inherit (entry.content) source;}
       else {inherit (entry.content) text;}
     );
-in rec {
   validateFiles = runtime: files: let
     invalidTargets = builtins.filter (target: !targetIsNormalized target) (builtins.attrNames files);
     # A live entry with no content is the shape a consumer gets by defining a
@@ -51,17 +50,10 @@ in rec {
         `text`; entries without it: ${lib.concatStringsSep ", " withoutContent}
       '';
 
+  # The shared repository AGENTS.md map lowers through here rather than
+  # through the router: it is one arbitrated target rather than a runtime's
+  # delivery description, and it has no methods, facts or writers.
   liveFiles = files:
     lib.mapAttrs (_target: sinkEntry)
     (lib.filterAttrs (_target: entry: entry != null) files);
-
-  mkBackendSink = {
-    backend,
-    files,
-  }:
-    if backend == "hm"
-    then {home.file = liveFiles files;}
-    else if backend == "devenv"
-    then {files = liveFiles files;}
-    else throw "runtime-files: unsupported backend `${backend}`";
 }

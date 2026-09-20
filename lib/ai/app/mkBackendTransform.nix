@@ -47,7 +47,10 @@
   options,
   ...
 }: let
-  adapters = import ../adapters {inherit lib;};
+  adapters = import ../adapters {
+    inherit lib;
+    inherit (appRecord) pkgs;
+  };
   aiCommon = import ../ai-common.nix {inherit lib;};
   deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
@@ -453,15 +456,18 @@ in {
     (lib.mkIf cfg.enable (lib.mkMerge [
       packageInstallConfig
       customConfig
-      (runtimeFiles.mkBackendSink {
-        inherit backend;
-        files = runtimeSinkFiles;
-      })
       # The delivery layer's one lowering seam. Everything a runtime declares
       # about how its files land is read HERE, by the backend's adapter, so no
       # factory writes `home.file`, `home.activation`, `files` or `tasks`
       # itself.
-      (adapters.${backend} {inherit cfg config;})
+      #
+      # The adapter reads `cfg.files`, so the shared-AGENTS.md arbitration
+      # hands it the stripped map rather than filtering behind its back.
+      (adapters.${backend} {
+        cfg = cfg // {files = runtimeSinkFiles;};
+        inherit config;
+        runtime = appRecord.name;
+      })
     ]))
   ];
 }

@@ -96,6 +96,7 @@ _: {
         "lib/ai/deliver.nix"
         "lib/ai/delivery-options.nix"
         "lib/ai/deliveryMethod.nix"
+        "lib/ai/formats.nix"
         "lib/ai/hooks.nix"
         # The one factory that contributes to the pools from inside this repo,
         # so it is exactly where collision-semantics' "where a MODULE may
