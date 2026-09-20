@@ -1,7 +1,8 @@
 # Delegate sizing package
 
 > **Last verified:** 2026-09-19 (commit d1bb79ef) — one factory import renders
-> all supported runtimes through the runtime callback argument.
+> all supported runtimes through the runtime callback argument. Manual-only
+> precedence also applies to external-runtime enable validation.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,
@@ -20,8 +21,16 @@ pools and instruction overrides cannot be set at `ai.programs.delegate-sizing`.
 Instruction presets live in `lib/presets.nix`. The source runtime's settings
 control its external launch even when its skill is disabled: an enabled Codex
 CLI may still serve Claude delegates without installing its own sizing skill.
-`false` omits an instruction block. The packaged usage script only reads Codex
-account limits; no model turn is launched.
+`false` omits an instruction block; it does not remove models from the table.
+The consumer supplies the omitted instructions when needed. Kiro's default
+external launch is manual-only and pins Luna for fixture probes. Before adding
+Kiro to `extraRuntimes`, override its `settings.launch` with instructions that
+apply the selected model and effort.
+
+Usage commands run in the caller's shell. Claude requires `curl` and `jq`; the
+Codex helper requires GNU `timeout`, `jq`, Python 3 and `codex` on PATH. The
+content package does not install those tools. The helper reads account limits
+without launching a model turn.
 
 The eight-line `fragments/skill-routing.md` is the sole always-on rule source,
 delivered to consumers through the factory's rules hook. This repository also
