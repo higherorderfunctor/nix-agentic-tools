@@ -25,9 +25,8 @@
 # THE LOCKFILE IS VENDORED because the npm tarball does not ship one and
 # `fetchNpmDeps` requires one. It is regenerated per upstream release with
 # `npm install --package-lock-only --ignore-scripts` in an extracted copy of
-# the tarball. `.*-package-lock\.json$` is already a cspell exclusion in
-# devenv.nix, which is why the file is named `aihubmix-mcp-package-lock.json`
-# rather than living in a subdirectory.
+# the tarball. This manually maintained lock lives in the owner's src/ as
+# aihubmix-mcp-package-lock.json; formatter and spelling exclusions cover it.
 #
 # THE PATCH ADDS A FEATURE UPSTREAM DOES NOT HAVE: an optional `save_path`
 # argument on `image_generate` that writes generated images to disk.

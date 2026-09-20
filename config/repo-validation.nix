@@ -136,7 +136,7 @@
       hook = {
         enable = true;
         excludes = [
-          ".*-package-lock\\.json$"
+          ".*package-lock\\.json$"
           ".*\\.lock$"
           "^config/cspell/"
           "^docs/"

@@ -1,7 +1,7 @@
 ## MCP Server Packages
 
-> **Last verified:** 2026-09-12 — native owner trees supply recipes, metadata,
-> factories, and source support files.
+> **Last verified:** 2026-09-20 — vendored npm lock locations follow their
+> manual or automatic updater.
 >
 > Full lineage: `git show ed5898b1:dev/fragments/mcp-servers/overlay-guide.md`.
 
@@ -77,11 +77,12 @@ than a git repo, and three things follow that do NOT follow for the
   the registry document's `dist-tags` (see `packages/pnpm/lib/mkMajor.nix` for
   the `curl … | jq -r '.["dist-tags"]…'` shape).
 - **npm publishes no lockfile in the tarball**, but `fetchNpmDeps` requires one.
-  Vendor it under the owner directory as
+  For a manually regenerated lock, vendor it under the owner directory as
   `packages/<owner>/src/<name>-package-lock.json` and `cp` it in from
-  `postPatch`. That exact name is load-bearing: `treefmt.nix`'s global excludes
-  and `devenv.nix`'s cspell excludes are both keyed on the `*-package-lock.json`
-  glob, so biome does not restyle a file whose canonical formatter is npm.
+  `postPatch`. Automated generators may require a different location; follow the
+  [packaging naming conventions](../packaging/naming-conventions.md). Formatter
+  and spelling exclusions cover standard and prefixed npm lock names; npm owns
+  their formatting.
 
 ### A local patch is an update-cadence decision, not a detail
 
@@ -177,7 +178,8 @@ around; plan for the patch to be DELETED, not maintained forever.
 1. Create the owner recipe under `packages/<owner>/packages/ai/mcpServers/`. Use
    the appropriate builder and route build inputs through pinned `pkgs`.
 2. Put patches and vendored source files in the owner's `patches/` and `src/`.
-   Keep the `<name>-package-lock.json` suffix for formatter/spelling exclusions.
+   For generated lockfiles, follow the updater's output location as described
+   above.
 3. Contribute update, cache-parity, and `documentation.mcpServerMeta` rows in
    the owner's `registry.nix`. Adding the native recipe needs no root edit.
 4. Export consumer factories through the owner's `lib/default.nix`. Managed
