@@ -126,7 +126,64 @@
         text = lib.mkDefault "Delegate a preset task.";
       };
     });
+    collision = evaluate (lib.recursiveUpdate scenario {
+      ai.programs.delegate-sizing.whenToDelegate.Collision = {
+        enable = lib.mkDefault false;
+        text = lib.mkMerge [
+          (lib.mkDefault "Package guidance.")
+          "Consumer guidance."
+        ];
+      };
+    });
+    explicitlyDisabled = evaluate (lib.recursiveUpdate scenario {
+      ai.programs.delegate-sizing.whenToDelegate.Intentional = {
+        enable = lib.mkMerge [(lib.mkDefault false) false];
+        text = "Consumer guidance.";
+      };
+    });
+    packageWhenToDelegateOptions = import ../lib/when-to-delegate.nix {
+      inherit lib;
+      renames = import ../lib/when-to-delegate-renames.nix;
+    };
+    testWhenToDelegateOptions = import ../lib/when-to-delegate.nix {
+      inherit lib;
+      renames."Old guidance" = "New guidance";
+    };
+    renamed = lib.evalModules {
+      modules = [
+        {
+          options.entries = lib.mkOption {
+            inherit (testWhenToDelegateOptions) type;
+            default = {};
+            apply = testWhenToDelegateOptions.rename;
+          };
+          config.entries."Old guidance".text = "Renamed consumer guidance.";
+        }
+      ];
+    };
+    renamedEntries = renamed.config.entries;
+    renamedRuleText =
+      (import ../router.nix {
+        entries = renamedEntries;
+        inherit lib;
+      }).delegate-sizing-router.text;
+    renamedWarnings = testWhenToDelegateOptions.warnings renamedEntries;
     ruleText = value: value.config.ai.claude.rules.delegate-sizing-router.text;
+    whenToDelegateWarnings = value: packageWhenToDelegateOptions.warnings value.config.ai.programs.delegate-sizing.whenToDelegate;
+    protectionContract =
+      if builtins.length (whenToDelegateWarnings collision) != 1
+      then throw "delegate-sizing-${name}: collision did not produce exactly one warning"
+      else if builtins.head (whenToDelegateWarnings collision) != "ai.programs.delegate-sizing.whenToDelegate.Collision collides with a package preset that defaults to off; choose a different name or set enable = true."
+      then throw "delegate-sizing-${name}: collision warning text changed"
+      else if whenToDelegateWarnings explicitlyDisabled != []
+      then throw "delegate-sizing-${name}: explicitly disabled consumer entry unexpectedly warned"
+      else if !(lib.hasInfix "### New guidance\n\nRenamed consumer guidance." renamedRuleText)
+      then throw "delegate-sizing-${name}: renamed entry did not render under the new key"
+      else if lib.hasInfix "### Old guidance" renamedRuleText
+      then throw "delegate-sizing-${name}: renamed entry still rendered under the old key"
+      else if renamedWarnings != ["ai.programs.delegate-sizing.whenToDelegate.Old guidance has been renamed to ai.programs.delegate-sizing.whenToDelegate.New guidance; update the attribute name."]
+      then throw "delegate-sizing-${name}: rename did not produce exactly one warning"
+      else true;
   in {
     "module-delegate-sizing-${name}-content" = mkTest "delegate-sizing-${name}-content" (
       lib.hasInfix "codex exec --model <slug> --config 'model_reasoning_effort=\"<level>\"' --json --output-last-message <out>.md - < <prompt-file>" claude
@@ -208,6 +265,7 @@
       && !(lib.hasInfix "### Preset" (ruleText disabledPreset))
       && lib.hasInfix "### Preset\n\nDelegate a preset task." (ruleText enabledPreset)
     );
+    "module-delegate-sizing-${name}-when-to-delegate-protection" = mkTest "delegate-sizing-${name}-when-to-delegate-protection" protectionContract;
   };
 in {
   checks = checkBackend "devenv" evalDevenv // checkBackend "hm" evalHm;
