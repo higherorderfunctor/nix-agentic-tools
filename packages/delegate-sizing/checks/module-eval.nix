@@ -43,12 +43,6 @@
     kiro = "Set `modelId` and `effortLevel`";
   };
   presets = import ../lib/presets.nix {codexUsageScript = "/nix/store/test-codex-usage.sh";};
-  presetSources = {
-    "Launch independent work together" = ../fragments/launch-independent-work-together.md;
-    "Orchestrator session" = ../fragments/orchestrator-session.md;
-    "Prefer the flat-rate pool" = ../fragments/prefer-the-flat-rate-pool.md;
-    "Verify by the artifact" = ../fragments/verify-by-the-artifact.md;
-  };
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-sizing}/SKILL.md";
   render = args: import ../lib/render.nix ({inherit lib presets;} // args);
   renderKiro = kiroModels:
@@ -137,6 +131,14 @@
       runtimes)
     "delegate-sizing rendered skills must not contain another runtime's native delegate tools"; true;
     noEntries = evaluate scenario;
+    shippedPresets = noEntries.config.ai.programs.delegate-sizing.whenToDelegate;
+    shippedPresetNames = builtins.attrNames shippedPresets;
+    shippedPresetSource = preset:
+      ../fragments + "/${lib.replaceStrings [" "] ["-"] (lib.toLower preset)}.md";
+    enabledShippedPresets = lib.genAttrs shippedPresetNames (preset:
+      evaluate (lib.recursiveUpdate scenario {
+        ai.programs.delegate-sizing.whenToDelegate.${preset}.enable = true;
+      }));
     consumerEntry = evaluate (lib.recursiveUpdate scenario {
       ai.programs.delegate-sizing.whenToDelegate.Consumer = {
         text = "Delegate when the task is independently verifiable.";
@@ -153,9 +155,6 @@
         enable = true;
         text = lib.mkDefault "Delegate a preset task.";
       };
-    });
-    enabledShippedPreset = evaluate (lib.recursiveUpdate scenario {
-      ai.programs.delegate-sizing.whenToDelegate."Launch independent work together".enable = true;
     });
     collision = evaluate (lib.recursiveUpdate scenario {
       ai.programs.delegate-sizing.whenToDelegate.Collision = {
@@ -329,14 +328,24 @@
       && lib.hasInfix "### Consumer\n\nDelegate when the task is independently verifiable." (ruleText consumerEntry)
       && !(lib.hasInfix "### Preset" (ruleText disabledPreset))
       && lib.hasInfix "### Preset\n\nDelegate a preset task." (ruleText enabledPreset)
-      && lib.hasInfix
-      "### Launch independent work together\n\n${lib.removeSuffix "\n" (builtins.readFile presetSources."Launch independent work together")}" (ruleText enabledShippedPreset)
       && lib.all
-      (preset: !lib.hasInfix "### ${preset}" (ruleText enabledShippedPreset))
-      ["Orchestrator session" "Prefer the flat-rate pool" "Verify by the artifact"]
-      && lib.all
-      (source: builtins.pathExists source && builtins.readFile source != "")
-      (builtins.attrValues presetSources)
+      (preset: let
+        declaredSource = shippedPresets.${preset}.source;
+        expectedSource = shippedPresetSource preset;
+        text = ruleText enabledShippedPresets.${preset};
+      in
+        assert lib.assertMsg (declaredSource == expectedSource)
+        "delegate-sizing-${name}: preset `${preset}` source must match its name-derived fragment path";
+          lib.hasInfix
+          "### ${preset}\n\n${lib.removeSuffix "\n" (builtins.readFile declaredSource)}"
+          text
+          && lib.all
+          (other:
+            other
+            == preset
+            || !(lib.hasInfix (lib.removeSuffix "\n" (builtins.readFile shippedPresets.${other}.source)) text))
+          shippedPresetNames)
+      shippedPresetNames
     );
     "module-delegate-sizing-${name}-when-to-delegate-protection" = mkTest "delegate-sizing-${name}-when-to-delegate-protection" protectionContract;
   };
