@@ -12,8 +12,6 @@
     pkgs.runCommand "delegate-sizing-${args.runtime}-skill" {
       passthru = {inherit text;};
     } ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
       mkdir -p "$out/scripts"
       cp ${pkgs.writeText "SKILL.md" text} "$out/SKILL.md"
       cp ${pkgs.writeText "codex-usage.sh" (builtins.readFile ../../scripts/codex-usage.sh)} "$out/scripts/codex-usage.sh"
@@ -26,8 +24,6 @@ in
       inherit mkSkill render skills;
     };
   } ''
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
     mkdir -p "$out/fragments" "$out/skills"
     cp ${../../fragments/skill-routing.md} "$out/fragments/skill-routing.md"
     ${lib.concatMapStringsSep "\n" (runtime: "cp -r ${skills.${runtime}} \"$out/skills/${runtime}\"") (builtins.attrNames skills)}

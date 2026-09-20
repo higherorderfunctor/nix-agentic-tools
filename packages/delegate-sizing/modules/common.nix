@@ -72,6 +72,8 @@ in {
       assertion = !(programEnabled runtime && runtimeEnabled runtime) || runtimeEnabled target;
       message = "ai.${runtime}.programs.delegate-sizing.extraRuntimes includes `${target}`, but ai.${target}.enable is false. Enable that runtime or use manualExternalDelegates.";
     })
-    config.ai.${runtime}.programs.delegate-sizing.extraRuntimes)
+    (lib.subtractLists
+      config.ai.${runtime}.programs.delegate-sizing.manualExternalDelegates
+      config.ai.${runtime}.programs.delegate-sizing.extraRuntimes))
   present;
 }
