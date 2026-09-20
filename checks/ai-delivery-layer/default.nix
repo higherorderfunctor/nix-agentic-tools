@@ -14,6 +14,15 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm harnessNames mkTest;
+  deliveryMethod = import ../../lib/ai/deliveryMethod.nix {inherit lib;};
+
+  # A file that states no fact at all takes both defaults, which is the shape
+  # the rule answers `symlink` for.
+  plainFacts = {
+    harnessWrites = false;
+    symlinkReadable = true;
+  };
+  resolve = args: deliveryMethod.byRule ({facts = plainFacts;} // args);
 
   # The factories that still write a native sink themselves, with the step of
   # the migration that takes each one off the list. This is keyed by PATH and
@@ -131,6 +140,106 @@ in {
         == ["devenv:enterShell" "devenv:files"]
         && withoutFiles.files == {}
         && withoutFiles.tasks.probeDefaults.before == ["devenv:enterShell"]
+    );
+
+    module-delivery-method-rule = mkTest "delivery-method-rule" (
+      # The rule is stated once and read by the router; these are its four
+      # answers and the shape of the fact that produces each.
+      resolve {backend = "hm";}
+      == "symlink"
+      && resolve {
+        backend = "hm";
+        facts = plainFacts // {harnessWrites = true;};
+      }
+      == "shared"
+      && resolve {
+        backend = "hm";
+        facts = plainFacts // {symlinkReadable = false;};
+      }
+      == "copy-ro"
+      # A harness-written file is `shared` whether or not it is also
+      # symlink-readable: the first arm wins, because owning leaves inside a
+      # file the CLI rewrites is the only way to keep both sides' edits.
+      && resolve {
+        backend = "hm";
+        facts = {
+          harnessWrites = true;
+          symlinkReadable = false;
+        };
+      }
+      == "shared"
+      # A backend-keyed fact is the operator's own claude case: one
+      # declaration, a store symlink under $HOME and a real file in the
+      # project. A consumer module has no `backend` in scope, so stating the
+      # FACT per backend is what lets it reach both without replacing the rule.
+      && resolve {
+        backend = "hm";
+        facts =
+          plainFacts
+          // {
+            symlinkReadable = {
+              devenv = false;
+              hm = true;
+            };
+          };
+      }
+      == "symlink"
+      && resolve {
+        backend = "devenv";
+        facts =
+          plainFacts
+          // {
+            symlinkReadable = {
+              devenv = false;
+              hm = true;
+            };
+          };
+      }
+      == "copy-ro"
+      && lib.all (method: lib.elem method deliveryMethod.methods) [
+        (resolve {backend = "hm";})
+        (resolve {
+          backend = "hm";
+          facts = plainFacts // {harnessWrites = true;};
+        })
+        (resolve {
+          backend = "hm";
+          facts = plainFacts // {symlinkReadable = false;};
+        })
+      ]
+    );
+
+    module-delivery-method-for-delegates-to-the-rule = mkTest "delivery-method-for-delegates-to-the-rule" (
+      let
+        ask = evaluated: path:
+          evaluated.config.ai.kiro.methodFor {
+            backend = "hm";
+            default = deliveryMethod.byRule;
+            facts = plainFacts;
+            inherit path;
+          };
+        standard = evalHm {ai.kiro.enable = true;};
+        # The exotic case: replace the lambda, override ONE path, and hand
+        # every other case back to the rule that was passed in.
+        replaced = evalHm {
+          ai.kiro = {
+            enable = true;
+            methodFor = lib.mkForce ({
+              backend,
+              default,
+              facts,
+              path,
+            }:
+              if lib.hasPrefix ".kiro/steering/" path
+              then "copy-ro"
+              else default {inherit backend facts path;});
+          };
+        };
+      in
+        ask standard ".kiro/steering/orientation.md"
+        == "symlink"
+        && ask replaced ".kiro/steering/orientation.md" == "copy-ro"
+        && ask replaced ".kiro/settings/lsp.json" == "symlink"
     );
 
     # A corpus scan, not a changed-files scan: a gate that only looks at the
