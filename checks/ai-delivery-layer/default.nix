@@ -24,6 +24,46 @@
   };
   resolve = args: deliveryMethod.byRule ({facts = plainFacts;} // args);
 
+  codexExtension = extended:
+    evalHm {
+      ai.codex = {
+        enable = true;
+        native.settings = {
+          model = "generated-model";
+          model_reasoning_effort = "xhigh";
+        };
+        files = lib.optionalAttrs extended {
+          ".codex/config.toml".content.value.ui.theme = "dark";
+        };
+      };
+    };
+  copilotExtension = pool: filename:
+    lib.all (
+      evaluate: let
+        base.ai.copilot = {
+          configDir = ".copilot";
+          enable = true;
+          ${pool}.original.command = "original";
+        };
+        path = ".copilot/${filename}";
+        original = (evaluate base).config.ai.copilot.files.${path}.content.value;
+        added = lib.setAttrByPath (lib.optional (pool == "mcpServers") "mcpServers" ++ ["added" "command"]) "added";
+        cfg =
+          (evaluate (lib.recursiveUpdate base {
+            ai.copilot.files.${path}.content.value = added;
+          })).config;
+        files =
+          if cfg ? home
+          then cfg.home.file
+          else cfg.files;
+        expected = lib.recursiveUpdate original added;
+      in
+        cfg.ai.copilot.files.${path}.content.value
+        == expected
+        && builtins.fromJSON files.${path}.text == expected
+        && lib.all (assertion: assertion.assertion) cfg.assertions
+    ) [evalHm evalDevenv];
+
   # ── The delivered-surface snapshot ──────────────────────────────────
   # Everything the delivery layer puts on disk, rendered as sorted text. It is
   # not an assertion: it is the EVIDENCE that a refactor of the layer changed
@@ -155,6 +195,47 @@
     && !lib.any usesExit (lib.splitString "\n" body);
 in {
   checks = {
+    module-delivery-codex-content-extension-keeps-generated-leaves = mkTest "delivery-codex-content-extension-keeps-generated-leaves" (
+      let
+        evaluated = codexExtension true;
+        expected = {
+          model = "generated-model";
+          model_reasoning_effort = "xhigh";
+          ui.theme = "dark";
+        };
+      in
+        evaluated.config.ai.codex.files.".codex/config.toml".content.value
+        == expected
+        && (harness.ownedDocument "codex" ".codex/config.toml" evaluated).value == expected
+        && lib.all (assertion: assertion.assertion) evaluated.config.assertions
+    );
+
+    # Evaluate the factory twice and execute its actual writer: a dropped
+    # generated leaf otherwise looks like an intentional retirement on disk.
+    module-delivery-codex-content-extension-runtime = pkgs.runCommand "module-test-delivery-codex-content-extension-runtime" {} ''
+      export HOME="$PWD/home"
+      export XDG_STATE_HOME="$PWD/state"
+      ${(codexExtension false).config.home.activation.codexSettingsReconcile.text}
+      printf '\n[native]\nkeep = true\n' >> "$HOME/.codex/config.toml"
+      ${(codexExtension true).config.home.activation.codexSettingsReconcile.text}
+      ${pkgs.python3}/bin/python - "$HOME/.codex/config.toml" <<'PY'
+      import pathlib
+      import sys
+      import tomllib
+
+      document = tomllib.loads(pathlib.Path(sys.argv[1]).read_text())
+      assert document.get("model") == "generated-model", "generated model retired by a content extension"
+      assert document.get("model_reasoning_effort") == "xhigh", "generated effort retired by a content extension"
+      assert document["native"]["keep"] is True
+      assert document["ui"]["theme"] == "dark"
+      PY
+      touch "$out"
+    '';
+
+    module-delivery-copilot-lsp-content-extension-keeps-generated-leaves = mkTest "delivery-copilot-lsp-content-extension-keeps-generated-leaves" (copilotExtension "lspServers" "lsp-config.json");
+
+    module-delivery-copilot-mcp-content-extension-keeps-generated-leaves = mkTest "delivery-copilot-mcp-content-extension-keeps-generated-leaves" (copilotExtension "mcpServers" "mcp-config.json");
+
     module-delivery-method-resolver-is-shared = mkTest "delivery-method-resolver-is-shared" (
       deliveryMethod ? resolve
       && lib.all (path: lib.hasInfix "deliveryMethod.resolve" (builtins.readFile path)) [
