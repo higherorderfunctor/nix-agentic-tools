@@ -77,9 +77,14 @@
         '';
       };
       executable = lib.mkOption {
-        type = lib.types.bool;
+        type = lib.types.nullOr lib.types.bool;
         default = false;
-        description = "Whether the materialized file should be executable. Symlinked files only; an owned copy states `mode` instead.";
+        description = ''
+          Whether the materialized file should be executable. `null` leaves the
+          mode alone, which is what a tree of source files needs: a skill that
+          ships a script would otherwise have its executable bit cleared at
+          link time. Symlinked files only; an owned copy states `mode`.
+        '';
       };
       facts = {
         harnessWrites = lib.mkOption {
