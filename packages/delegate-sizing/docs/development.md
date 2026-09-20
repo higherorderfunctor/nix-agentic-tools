@@ -1,7 +1,7 @@
 # Delegate sizing package
 
-> **Last verified:** 2026-09-19 (commit ebf06268) — initial package
-> implementation.
+> **Last verified:** 2026-09-19 (commit d1bb79ef) — one factory import renders
+> all supported runtimes through the runtime callback argument.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,
@@ -11,12 +11,11 @@ before a workflow pins an id. Manual external entries add instructions, never
 candidate rows; manual-only wins if a consumer lists a runtime in both external
 lists.
 
-Both backends import `modules/common.nix`. It maps the existing
-`mkSkillPackageModule` factory over the three supported runtimes, binding a
-runtime to each callback through a singleton capability set. The identical
-portable enable declarations merge. Runtime-only options extend the matching
-program submodule, so external pools and instruction overrides cannot be set at
-`ai.programs.delegate-sizing`. No shared engine changes are needed.
+Both backends import `modules/common.nix`. It imports `mkSkillPackageModule`
+once with all three supported runtimes. The factory passes `runtime` to its
+`skills` and `rules` callbacks, so each skill uses that runtime's settings.
+Runtime-only options extend the factory's program override submodule; external
+pools and instruction overrides cannot be set at `ai.programs.delegate-sizing`.
 
 Instruction presets live in `lib/presets.nix`. The source runtime's settings
 control its external launch even when its skill is disabled: an enabled Codex
@@ -25,11 +24,39 @@ CLI may still serve Claude delegates without installing its own sizing skill.
 account limits; no model turn is launched.
 
 The eight-line `fragments/skill-routing.md` is the sole always-on rule source,
-delivered through the factory's rules hook. The retired monorepo fragment is
-unregistered. Keep model tables and harness details in the generated skill.
+delivered to consumers through the factory's rules hook. This repository also
+includes it in `dev/generate.nix`'s root composition, which reaches AGENTS.md
+even with Codex CLI instructions disabled. Repository devenv config suppresses
+the native Claude and Kiro rule copies so shell entry cannot add a second stub.
+The retired monorepo fragment is unregistered. Keep model tables and harness
+details in the generated skill.
 
 Content, HM/devenv modules and eval checks are discovered through the package
 owner layout. The registry excludes this generated content package from release
 updates. `checks/module-eval.nix` verifies both consumer backends, including
 runtime-only options, manual access without enable, custom/disabled blocks and
 the short stub. Its file checks realize the generated skill directories.
+
+## Preview a runtime's skill
+
+Run from the repository root. The Claude preview uses this repository's external
+delegates; the Codex and Kiro previews use package defaults. Each command prints
+the generated `SKILL.md` without launching a delegate.
+
+Claude:
+
+```bash
+nix eval --raw .#delegate-sizing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; }'
+```
+
+Codex:
+
+```bash
+nix eval --raw .#delegate-sizing-content.skills.codex.text
+```
+
+Kiro:
+
+```bash
+nix eval --raw .#delegate-sizing-content.skills.kiro.text
+```

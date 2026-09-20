@@ -5,6 +5,7 @@
   manualExternalDelegates ? [],
   settings ? import ./presets.nix,
 }: let
+  # Read model decisions and runtime routes before selecting table candidates.
   models = import ./models.nix;
   presets = import ./presets.nix;
   kiroModels = builtins.fromJSON (builtins.readFile ../../kiro-cli/models.json);
@@ -45,6 +46,7 @@
     else if runtime == "codex"
     then "`collaboration.spawn_agent` model: ${id}"
     else "workflow step `modelId`: ${id}";
+  # Emit tiers in capability order, with first-party rows before external rows.
   cell = lib.replaceStrings ["|" "\n"] ["\\|" " "];
   row = model:
     "| "
@@ -71,28 +73,27 @@
       | --- | --- | --- | --- | --- |
       ${lib.concatMapStringsSep "\n" row (native ++ external)}
     '';
+  # Emit only configured blocks; manual-only instructions follow the main table.
   block = target: key: title:
-    lib.optionalString (settings.${target}.${key} != false) ''
-      #### ${target} ${title}
-
-      ${settings.${target}.${key}}
-    '';
-  runtimeBlock = target: ''
-    ### ${target} runtime
-
-    ${block target "delegateTools" "delegate tools"}
-    ${block target "introspectModels" "models and effort"}
-    ${block target "checkUsage" "usage"}
-    ${lib.optionalString (target != runtime) (block target "launch" "launch")}
-  '';
+    lib.optionalString (settings.${target}.${key} != false)
+    "#### ${target} ${title}\n\n${lib.removeSuffix "\n" settings.${target}.${key}}\n";
+  joinBlocks = blocks: lib.concatStringsSep "\n" (builtins.filter (text: text != "") blocks);
+  runtimeBlock = target:
+    "### ${target} runtime\n\n"
+    + joinBlocks [
+      (block target "delegateTools" "delegate tools")
+      (block target "introspectModels" "models and effort")
+      (block target "checkUsage" "usage")
+      (lib.optionalString (target != runtime) (block target "launch" "launch"))
+    ];
   allModels = lib.concatMap (name: builtins.attrValues models.${name}) ["frontier" "strong" "mid" "small"];
   manual = target: let
     known = builtins.filter (available target) allModels;
     ids = lib.concatMapStringsSep "; " (model: "${model.name}: `${modelId target model}`") known;
     purpose = {
-      claude = "For user-requested Claude delegates, use the corresponding tier's model guidance above when present; manual inclusion adds no auto-selectable rows.";
-      codex = "For user-requested Codex code writers and debug loops, use the corresponding tier's model guidance above when present; manual inclusion adds no auto-selectable rows.";
-      kiro = "Employer credits: fixture probes only, pin Luna. Use the Luna row above when present; this section adds no implementation candidate.";
+      claude = "For a Claude external delegate, follow the matching model row in the main table when present.";
+      codex = "For a Codex external delegate, follow the matching model row in the main table when present.";
+      kiro = "Follow the Luna row in the main table when present.";
     };
   in ''
     ### ${target}
@@ -102,11 +103,9 @@
     ${purpose.${target}}
 
     Slug spelling: ${ids}.
-    Availability depends on the live runtime/account catalog; a listed spelling
-    does not grant access. ${lib.optionalString (target == "kiro") "This Kiro account has no Astra or Fable."}
+    Confirm availability in the live catalog before launching.
 
-    ${block target "launch" "launch"}
-    ${block target "introspectModels" "models and effort"}
+    ${joinBlocks [(block target "launch" "launch") (block target "introspectModels" "models and effort")]}
   '';
 in ''
   ---
@@ -115,57 +114,37 @@ in ''
   ---
 
   ${builtins.readFile ../fragments/skill-routing.md}
-  Scope: delegates and workflow nodes. Interactive root selection stays with
-  the operator. No task class is reserved for a vendor.
+  Use this skill for delegates and workflow nodes. Size each stage separately.
+  Set effort every time; harness defaults differ. If a model has no effort
+  control, record effort as not applicable. State the selected model and effort
+  in the brief and apply them through the controls below.
 
-  If one model clearly stands out for the work type, take it regardless of usage
-  unless that pool is exhausted. If candidates are close, take the pool with more
-  remaining; check usage with the command in the runtime block. If no usage read
-  is configured or available, report that gap and prefer the pool you are not
-  currently in among otherwise close candidates.
-
-  Effort is set explicitly every time because defaults differ per harness. When
-  the model has no effort knob, record it as not applicable; never invent one.
-  Name the selected pair and the task reason in the launch message, and apply
-  them through the actual controls described below. Size each workflow stage
-  separately; a follow-up message does not change a running delegate's pair.
+  If one model clearly stands out for the work, take it regardless of usage
+  unless that pool is exhausted. If candidates are close, take the pool with
+  more remaining. Check usage with the runtime's command. If no usage check is
+  available, prefer the other pool among otherwise close candidates.
 
   ## delegate sizing
 
-  Tiers put both vendors next to each other, with first-party rows first and
-  external routes marked by launch command. Rows appear only for reachable
-  candidates. OpenAI writer order: Sol/medium, then Luna/high, then Terra/medium.
-  For an external runtime, use its launch block in the host's Bash step;
-  delegate-tools blocks describe controls inside that runtime.
+  OpenAI writer order: Sol/medium, then Luna/high, then Terra/medium.
+  For an external delegate, use its launch block in a Bash step.
 
-  ${lib.concatMapStringsSep "\n" tier ["frontier" "strong" "mid" "small"]}
+  ${joinBlocks (map tier ["frontier" "strong" "mid" "small"])}
   ${lib.concatMapStringsSep "\n" runtimeBlock runtimes}
-  ${lib.optionalString (manualExternalDelegates != []) ''
-    ## manual-only external delegate sizing
-
-    ${lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates)}
-  ''}
+  ${lib.optionalString (manualExternalDelegates != [])
+    ("## manual-only external delegate sizing\n\n" + lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates))}
   ## procedure
 
-  1. Write the rubric first from operator-approved examples. For a change,
-     decide whether to extend an existing abstraction or replace it before
-     assigning implementation; give the writer that decision and its boundaries.
-  2. Select model and effort for each bounded task. Prefer deterministic checks
-     for checkable work. Judge correctness and readability separately, using
-     acceptance calibration, actionability, precision, recall and stopping
-     behavior. A judge returns accept, revise or insufficient evidence, with
-     localized reasons and a minimal repair direction.
-  3. Set a hard round cap before starting (default: three writer/reviewer
-     rounds). Classify failures: conceptual means step up the model;
-     evidence-missing means fetch the missing evidence; execution means repair
-     the concrete tool or implementation failure; unclear-standard means clarify
-     the rubric with the operator; done means stop. More effort does not repair
-     missing evidence or an unclear standard.
-  4. Escalate after two rounds with the same defect class; do not repeat an
-     unchanged brief. At the cap, stop the loop and return the artifact, remaining
-     defects and needed decision to the operator. Escalation never resets the cap.
-  5. When two reviewers are warranted, UNION their findings and adjudicate;
-     never intersect them. No cross-vendor panels. Use one strong judge at high
-     for taste/architecture, and a cheap judge with written criteria and several
-     samples for rubric-checkable work. Sol must never be the sole grader.
+  1. Write the rubric from operator-approved examples and give it to the writer and judge.
+  2. Before assigning a change, decide whether to extend an existing abstraction or replace it.
+  3. Set a hard cap before starting: three writer/reviewer rounds by default.
+  4. Classify each failure: conceptual, missing evidence, execution, unclear standard or done.
+     Step up the model for conceptual failures; fetch missing evidence; repair execution failures.
+     Clarify unclear standards with the operator. Stop when done.
+  5. Judge correctness and readability separately. Check calibration, actionability, precision,
+     recall and stopping. Return accept, revise or insufficient evidence with a localized reason.
+  6. Escalate after two rounds with the same defect. Change the brief; do not reset the cap.
+     At the cap, return the artifact, remaining defects and needed decision to the operator.
+  7. For two reviewers, take the union of their findings and adjudicate each one.
+     Do not intersect findings or use cross-vendor panels. Sol must not be the sole judge.
 ''

@@ -4,8 +4,8 @@
   options,
   ...
 }: let
-  # Kimchi has no delegate primitive and its open-weight models are out of
-  # scope. Copilot's delegate sizing controls are not established: no facet.
+  # Resolve the supported runtimes and their instruction presets. Kimchi has
+  # no delegate primitive; Copilot's sizing controls are not established.
   supportedRuntimes = ["claude" "codex" "kiro"];
   presets = import ../lib/presets.nix;
   enabled = runtime:
@@ -18,6 +18,8 @@
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
   present = builtins.filter (runtime: lib.hasAttrByPath ["ai" runtime "skills"] options) supportedRuntimes;
   settings = lib.genAttrs supportedRuntimes (runtime: config.ai.${runtime}.programs.delegate-sizing.settings);
+
+  # Declare runtime-only settings alongside the factory's enable override.
   runtimeOptions = runtime: {
     extraRuntimes = lib.mkOption {
       type = lib.types.listOf (lib.types.enum (lib.remove runtime supportedRuntimes));
@@ -38,15 +40,23 @@
     presets.${runtime};
   };
 in {
-  # Bind a runtime to each factory callback, without changing the shared
-  # factory's callback API or copying its enable/pool/priority logic. Identical
-  # portable enable declarations merge; only overrides differ by runtime.
-  imports = map (runtime:
-    import ../../../lib/ai/mkSkillPackageModule.nix {
+  options.ai = lib.genAttrs supportedRuntimes (runtime: {
+    programs.delegate-sizing = lib.mkOption {
+      type = lib.types.submodule {options = runtimeOptions runtime;};
+    };
+  });
+
+  # Emit one portable enable option and skills/rules for each supported runtime.
+  imports = [
+    (import ../../../lib/ai/mkSkillPackageModule.nix {
       name = "delegate-sizing";
       enableDescription = "delegate model and effort sizing skills and rule";
-      supportedRuntimes = [runtime];
-      skills = {pkgs, ...}: {
+      inherit supportedRuntimes;
+      skills = {
+        pkgs,
+        runtime,
+        ...
+      }: {
         delegate-sizing = "${pkgs.delegate-sizing-content.passthru.mkSkill {
           inherit runtime settings;
           inherit (config.ai.${runtime}.programs.delegate-sizing) extraRuntimes manualExternalDelegates;
@@ -54,14 +64,9 @@ in {
       };
       rules = _: import ../router.nix;
     })
-  supportedRuntimes;
+  ];
 
-  options.ai = lib.genAttrs supportedRuntimes (runtime: {
-    programs.delegate-sizing = lib.mkOption {
-      type = lib.types.submodule {options = runtimeOptions runtime;};
-    };
-  });
-
+  # Reject automatic external delegates whose runtime is disabled.
   config.assertions = lib.concatMap (runtime:
     map (target: {
       assertion = !(programEnabled runtime && runtimeEnabled runtime) || runtimeEnabled target;
