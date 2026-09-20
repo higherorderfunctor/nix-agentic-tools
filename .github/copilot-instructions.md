@@ -519,8 +519,8 @@ exists and WHERE, and stops there.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-09-12 — source paths and ownership guidance follow
-> native package assembly.
+> **Last verified:** 2026-09-20 — follow-ups amend the PR whose scope they
+> belong to.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -824,6 +824,23 @@ silently resolves one level too deep, into
    ```
 
    The remote branch auto-deletes on merge.
+
+### Put a follow-up in the PR it belongs to
+
+A fix for a PR's own review, a follow-up its author already intended, a defect
+found while reviewing it — all of these amend that PR. Do not open a second PR
+to avoid disturbing a green one.
+
+A stacked follow-up costs the same CI and the same review round as an amendment.
+It just spreads them across more PRs and hands the reviewer a worse shape. "It
+is already green and reviewed" is not a reason: CI is free on this repository,
+and the review being protected examined a shape that has since been superseded.
+
+The instinct this replaces is a sound one in a project with several reviewers,
+where unasked additions tax people who did not ask for them. Here there is one
+reviewer, and they would rather review the right shape once.
+
+Open a separate PR when the change is genuinely unrelated to any open one.
 
 ### Bot `update/*` PRs land themselves
 
