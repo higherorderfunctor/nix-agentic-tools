@@ -139,15 +139,10 @@
   in
     lib.optionals cfg.enable (lib.mapAttrsToList (path: entry: {
       inherit entry path runtime;
-      method =
-        if entry.method != null
-        then entry.method
-        else
-          cfg.methodFor {
-            inherit backend path;
-            inherit (entry) facts;
-            default = deliveryMethod.byRule;
-          };
+      method = deliveryMethod.resolve {
+        inherit backend entry path;
+        inherit (cfg) methodFor;
+      };
     }) (lib.filterAttrs (_path: runtimeFiles.isLive) cfg.files)))
   runtimeNames;
   byPath = lib.groupBy (claim: claim.path) claims;
