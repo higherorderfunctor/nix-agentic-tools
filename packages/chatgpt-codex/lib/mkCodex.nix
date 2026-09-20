@@ -904,7 +904,7 @@
     finalText =
       if finalEntry == null
       then null
-      else finalEntry.text or null;
+      else (finalEntry.content or {}).text or null;
     renderedBytes =
       if finalText == null
       then 0
@@ -1100,7 +1100,7 @@ in
           ${agentsMdTarget} = lib.mkDefault (
             if agentsMd == ""
             then null
-            else {text = agentsMd;}
+            else {content.text = agentsMd;}
           );
         };
         internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter ["${config.xdg.cacheHome}/nix"]);

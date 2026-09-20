@@ -856,7 +856,7 @@ in
           in {
             ai.claude.files = lib.mapAttrs' (name: rule:
               lib.nameValuePair ".claude/rules/${name}.md" (lib.mkDefault {
-                text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
+                content.text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
                   // {
                     text = resolveRuleText rule;
                     paths = rule.matcher;
@@ -1028,7 +1028,7 @@ in
           in {
             ai.claude.files = lib.mapAttrs' (name: rule:
               lib.nameValuePair ".claude/rules/${name}.md" (lib.mkDefault {
-                text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
+                content.text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
                   // {
                     text = resolveRuleText rule;
                     paths = rule.matcher;

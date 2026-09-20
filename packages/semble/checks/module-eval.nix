@@ -8,7 +8,7 @@
 }: let
   inherit (harness) aiStubs evalDevenv evalHm hmLib mkTest mkWrapperGrepTest;
   inherit (import ../../chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
-  inherit (import ../../kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringFiles;
+  inherit (import ../../kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringContent;
 in {
   checks = {
     # ── Semble convenience integration ───────────────────────────────
@@ -879,8 +879,8 @@ in {
         };
         hm = (evalHm nativeConfig).config;
         devenv = (evalDevenv nativeConfig).config;
-        hmKiroSteering = kiroSteeringFiles (evalHm nativeConfig);
-        devenvKiroSteering = kiroSteeringFiles (evalDevenv nativeConfig);
+        hmKiroSteering = kiroSteeringContent (evalHm nativeConfig);
+        devenvKiroSteering = kiroSteeringContent (evalDevenv nativeConfig);
         hmKiroInstruction = (hmKiroSteering."semble.md" or {}).text or "";
         hmClaudeRule = (hm.home.file.".claude/rules/semble.md" or {}).text or "";
       in
