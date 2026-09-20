@@ -1,3 +1,4 @@
+# cspell:ignore Prio
 # Exercise the generated files as delivered through both consumer backends.
 {
   lib,
@@ -136,6 +137,29 @@
     noEntries = evaluate scenario;
     shippedPresets = noEntries.config.ai.programs.delegate-sizing.whenToDelegate;
     shippedPresetNames = builtins.attrNames shippedPresets;
+    shippedPresetFieldDefinitions = preset:
+      lib.modules.mergeAttrDefinitionsWithPrio {
+        type = lib.types.attrsOf lib.types.raw;
+        definitionsWithLocations =
+          map
+          (definition: {
+            inherit (definition) file;
+            value = definition.value.whenToDelegate.${preset};
+          })
+          (builtins.filter
+            (definition:
+              definition.value ? whenToDelegate
+              && builtins.hasAttr preset definition.value.whenToDelegate)
+            noEntries.options.ai.programs.delegate-sizing.definitionsWithLocations);
+      };
+    shippedPresetPrioritiesChecked = assert lib.assertMsg
+    (lib.all
+      (preset:
+        lib.all
+        (field: field.highestPrio == (lib.mkDefault null).priority)
+        (builtins.attrValues (shippedPresetFieldDefinitions preset)))
+      shippedPresetNames)
+    "delegate-sizing-${name}: every field defined by package whenToDelegate presets must use lib.mkDefault"; true;
     shippedPresetSource = preset:
       ../fragments + "/${lib.replaceStrings [" "] ["-"] (lib.toLower preset)}.md";
     enabledShippedPresets = lib.genAttrs shippedPresetNames (preset:
@@ -365,6 +389,7 @@
       && !(result.config.ai.skills ? delegate-sizing)
       && !(result.config.ai.rules ? delegate-sizing-router)
     );
+    "module-delegate-sizing-${name}-preset-priorities" = mkTest "delegate-sizing-${name}-preset-priorities" shippedPresetPrioritiesChecked;
     "module-delegate-sizing-${name}-stub" = mkTest "delegate-sizing-${name}-stub" (
       builtins.length (lib.splitString "\n" (lib.removeSuffix "\n" stub))
       <= 10
