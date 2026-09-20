@@ -76,6 +76,10 @@
         type = lib.types.attrsOf lib.types.anything;
         default = {};
       };
+      warnings = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+      };
       # Home-manager provides these XDG paths in a real eval. Semble uses
       # cacheHome for its Codex sandbox grant, while glab uses stateHome for its
       # keyring synchronization marker.
@@ -172,18 +176,21 @@
   };
   aiStubs = (pkgs.ai or {}) // testing.homeManagerAiPackages;
 
-  evalHm = config:
+  evalHmWithSpecialArgs = extraSpecialArgs: config:
     lib.evalModules {
-      specialArgs = {
-        lib = hmLib;
-        pkgs = pkgs // {ai = aiStubs;};
-        inherit (hmLib) hm;
-      };
+      specialArgs =
+        {
+          lib = hmLib;
+          pkgs = pkgs // {ai = aiStubs;};
+          inherit (hmLib) hm;
+        }
+        // extraSpecialArgs;
       modules =
         [../ai/sharedOptions.nix]
         ++ moduleImports "homeManager"
         ++ [hmStubs {inherit config;}];
     };
+  evalHm = evalHmWithSpecialArgs {};
 
   evalDevenvWithSpecialArgs = extraSpecialArgs: config:
     lib.evalModules {
@@ -282,6 +289,6 @@
   # the needle is shell syntax rather than prose.
   hasLiteral = needle: hay: builtins.length (lib.splitString needle hay) > 1;
 in {
-  inherit aiBase aiStubs devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm harnessNames hasLiteral hmLib hmStubs mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest tomlFormat;
+  inherit aiBase aiStubs devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmStubs mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest tomlFormat;
   inherit testing;
 }

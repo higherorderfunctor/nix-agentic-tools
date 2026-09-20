@@ -1,11 +1,12 @@
 # cspell:ignore foldr
-{
+args @ {
   config,
   lib,
   options,
   pkgs,
   ...
 }: let
+  delegateSizingRenames = args.delegateSizingRenames or (import ../lib/when-to-delegate-renames.nix);
   # Resolve the supported runtimes and their instruction presets. Kimchi has
   # no delegate primitive; Copilot's sizing controls are not established.
   supportedRuntimes = ["claude" "codex" "kiro"];
@@ -24,7 +25,7 @@
   settings = lib.genAttrs supportedRuntimes (runtime: config.ai.${runtime}.programs.delegate-sizing.settings);
   whenToDelegateOptions = import ../lib/when-to-delegate.nix {
     inherit lib;
-    renames = import ../lib/when-to-delegate-renames.nix;
+    renames = delegateSizingRenames;
   };
   whenToDelegate = config.ai.programs.delegate-sizing.whenToDelegate;
   warningMessages = whenToDelegateOptions.warnings whenToDelegate;
