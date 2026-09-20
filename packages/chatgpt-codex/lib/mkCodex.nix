@@ -1273,7 +1273,9 @@ in
             (mkProfileEntries cfg.configDir cfg.profiles)
             {
               ${configFile} = {
-                content = lib.mkDefault {value = settings;};
+                # Ordinary leaves retain generated siblings when a consumer
+                # extends this document; a whole-content default discards them.
+                content.value = settings;
                 entry = "codexSettingsReconcile";
                 facts.harnessWrites = true;
                 format = "toml";
