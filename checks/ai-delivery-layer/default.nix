@@ -434,6 +434,52 @@ in {
         && lib.hasInfix "`shared`" (lib.head failed).message
     );
 
+    # One walk, two backends: Home Manager expands a directory source itself,
+    # the router expands it for devenv, and the leaves are the same either way.
+    module-delivery-recursive-entry-walks-for-devenv = mkTest "delivery-recursive-entry-walks-for-devenv" (
+      let
+        tree = {
+          content.source = ./fixtures/probe-skill;
+          # A tree of source files keeps its own modes; stating one here would
+          # clear the executable bit on anything the tree ships.
+          executable = null;
+          recursive = true;
+        };
+        config = {
+          ai.kiro = {
+            enable = true;
+            files.".kiro/tree" = tree;
+          };
+        };
+        hm = (evalHm config).config;
+        devenv = (evalDevenv config).config;
+        notADirectory = builtins.tryEval (builtins.deepSeq
+          (evalDevenv {
+            ai.kiro = {
+              enable = true;
+              files.".kiro/leaf" =
+                tree
+                // {content.source = ./fixtures/probe-skill/SKILL.md;};
+            };
+          })
+          .config
+          .files
+          true);
+      in
+        hm.home.file.".kiro/tree"
+        == {
+          recursive = true;
+          source = ./fixtures/probe-skill;
+        }
+        && devenv.files.".kiro/tree/SKILL.md" == {source = ./fixtures/probe-skill/SKILL.md;}
+        && devenv.files.".kiro/tree/references/nested.md"
+        == {source = ./fixtures/probe-skill/references/nested.md;}
+        && !(devenv.files ? ".kiro/tree")
+        # `recursive` with a file source is a declaration error, not a file
+        # whose leaves silently never appear.
+        && !notADirectory.success
+    );
+
     # A corpus scan, not a changed-files scan: a gate that only looks at the
     # diff cannot notice that the tree behind it grew a new direct write.
     module-delivery-no-new-direct-sink-writes =

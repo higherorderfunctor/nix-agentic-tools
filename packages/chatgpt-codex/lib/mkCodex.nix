@@ -934,7 +934,12 @@ in
         inherit pkgs;
       };
       codexSkillNames = builtins.attrNames mergedSkills;
-      codexSkills = normalizeCodexSkills mergedSkills;
+      # An unsafe skill name is reported by `mkSkillNameAssertions`, and
+      # keeping it OUT of the file map is what lets that assertion be the
+      # diagnostic: a traversing name reaches the map's own path validation
+      # first otherwise, and that throw names neither the skill nor the option
+      # that set it.
+      codexSkills = normalizeCodexSkills (lib.filterAttrs (name: _source: skillNameSafe name) mergedSkills);
       skillBackupRoot = "\${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/codex-skill-layout-b";
     in {
       # Codex has no named Markdown rule surface, so context and rules are
@@ -942,27 +947,40 @@ in
       # as one replaceable default.
       ai.codex = {
         inherit (ownedSettings.ai.codex) _ownPlans;
-        files = lib.mkIf hasAgentsMdContent {
-          # The ONE generated entry whose priority stays on the whole entry
-          # rather than moving onto `content`. Deciding between "a file" and
-          # "no file" reads the COMPOSED body, and the body may come from a
-          # store source a consumer has already replaced — a replaced entry
-          # must never build it. A `mkDefault` wrapper defers that read until
-          # after `filterOverrides` has decided whether this definition
-          # survives at all; a definition whose value is an `if` on the body
-          # forces it the moment anything looks at the entry.
-          #
-          # The cost is the trap the rest of this migration removes: a
-          # consumer who defines only a SIBLING field here discards the
-          # generated content and gets a diagnostic from `validateFiles`
-          # naming the entry. Restate the content, or tombstone and declare
-          # the file.
-          ${agentsMdTarget} = lib.mkDefault (
-            if agentsMd == ""
-            then null
-            else {content.text = agentsMd;}
-          );
-        };
+        files = lib.mkMerge [
+          (lib.mkIf hasAgentsMdContent {
+            # The ONE generated entry whose priority stays on the whole entry
+            # rather than moving onto `content`. Deciding between "a file" and
+            # "no file" reads the COMPOSED body, and the body may come from a
+            # store source a consumer has already replaced — a replaced entry
+            # must never build it. A `mkDefault` wrapper defers that read until
+            # after `filterOverrides` has decided whether this definition
+            # survives at all; a definition whose value is an `if` on the body
+            # forces it the moment anything looks at the entry.
+            #
+            # The cost is the trap the rest of this migration removes: a
+            # consumer who defines only a SIBLING field here discards the
+            # generated content and gets a diagnostic from `validateFiles`
+            # naming the entry. Restate the content, or tombstone and declare
+            # the file.
+            ${agentsMdTarget} = lib.mkDefault (
+              if agentsMd == ""
+              then null
+              else {content.text = agentsMd;}
+            );
+          })
+          # Codex discovers a skill when the skill DIRECTORY is itself a
+          # symlink, and not when the backend creates a real directory of
+          # symlinked leaves — a measured consumer fact, and the whole reason
+          # this one runtime delivers a directory source with `recursive` off.
+          # `normalizeCodexSkills` has already wrapped a single-file skill into
+          # a directory, so every entry here has one.
+          (helpers.mkSkillFiles {
+            configDir = ".agents";
+            recursive = false;
+            skills = codexSkills;
+          })
+        ];
         internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter ["${config.xdg.cacheHome}/nix"]);
         nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
           model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
@@ -1024,7 +1042,6 @@ in
         # readable. A name that stops matching the helper's is an eval error.
         activation.codexSettingsReconcile = ownedSettings.home.activation.codexSettingsReconcile;
         file = lib.mkMerge [
-          (helpers.mkSkillDirectoryEntries ".agents" codexSkills)
           (mkAgentEntries cfg.configDir mergedAgents)
           (mkExecpolicyEntries cfg.configDir cfg.execpolicyRules)
           (lib.mkIf (effectiveHooks != {}) {
@@ -1082,16 +1099,34 @@ in
         else null;
       agentsMdRules = lib.mapAttrs mkRuleBody mergedRules;
       codexSkillTargets = skillTargets "${config.devenv.root}/.agents/skills" mergedSkills;
-      codexSkills = normalizeCodexSkills mergedSkills;
+      # An unsafe skill name is reported by `mkSkillNameAssertions`, and
+      # keeping it OUT of the file map is what lets that assertion be the
+      # diagnostic: a traversing name reaches the map's own path validation
+      # first otherwise, and that throw names neither the skill nor the option
+      # that set it.
+      codexSkills = normalizeCodexSkills (lib.filterAttrs (name: _source: skillNameSafe name) mergedSkills);
       skillBackupRoot = "${config.devenv.state}/nix-agentic-tools/codex-skill-layout-b";
     in {
       ai = {
-        codex.internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter (
-          lib.optional (nixCacheRoot != null) nixCacheRoot
-          ++ lib.optional (treefmtCacheRoot != null) treefmtCacheRoot
-        ));
-        codex.nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
-          model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
+        codex = {
+          # Codex discovers a skill when the skill DIRECTORY is itself a
+          # symlink, and not when the backend creates a real directory of
+          # symlinked leaves — a measured consumer fact, and the whole reason
+          # this one runtime delivers a directory source with `recursive` off.
+          # `normalizeCodexSkills` has already wrapped a single-file skill into
+          # a directory, so every entry here has one.
+          files = helpers.mkSkillFiles {
+            configDir = ".agents";
+            recursive = false;
+            skills = codexSkills;
+          };
+          internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter (
+            lib.optional (nixCacheRoot != null) nixCacheRoot
+            ++ lib.optional (treefmtCacheRoot != null) treefmtCacheRoot
+          ));
+          nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
+            model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
+          };
         };
         internal.agentsMd.${cfg.context.filename} =
           {
@@ -1129,7 +1164,6 @@ in
           }
         ];
       files = lib.mkMerge [
-        (helpers.mkSkillDirectoryEntries ".agents" codexSkills)
         (mkAgentEntries ".codex" mergedAgents)
         (mkExecpolicyEntries ".codex" cfg.execpolicyRules)
         (lib.mkIf (effectiveHooks != {}) {
