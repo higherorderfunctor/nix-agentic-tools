@@ -115,8 +115,24 @@ in
 
     # The backend's own store-symlink primitive, in the shape both file sinks
     # take. Home Manager recurses a directory source itself; devenv has no such
-    # primitive, which is what the walk in the next step is for.
-    symlinkEntries = lib.mapAttrs (_path: runtimeFiles.sinkEntry) (bucket "symlink");
+    # primitive, so the router walks the tree and emits one entry per leaf —
+    # the leaves are ordinary entries, so `recursive` is off for each of them.
+    symlinkEntries =
+      lib.concatMapAttrs (
+        path: entry:
+          if entry.recursive && backend == "devenv"
+          then
+            lib.mapAttrs (
+              _leaf: source:
+                runtimeFiles.sinkEntry (entry
+                  // {
+                    content = {inherit source;};
+                    recursive = false;
+                  })
+            ) (formats.walk path entry.content.source)
+          else {${path} = runtimeFiles.sinkEntry entry;}
+      )
+      (bucket "symlink");
 
     # A method the layer does not deliver yet must say so. Silently dropping
     # the file is the one outcome that looks like success.
