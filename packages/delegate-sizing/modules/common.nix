@@ -21,6 +21,16 @@
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
   present = builtins.filter (runtime: lib.hasAttrByPath ["ai" runtime "skills"] options) supportedRuntimes;
   settings = lib.genAttrs supportedRuntimes (runtime: config.ai.${runtime}.programs.delegate-sizing.settings);
+  textSourceOptions = import ../../../lib/mkTextSourceOptions.nix {inherit lib;};
+
+  whenToDelegateEntry = lib.types.submodule {
+    imports = [(textSourceOptions.submodule "the delegation guidance")];
+    options.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Whether to include this delegation guidance in the always-on rule.";
+    };
+  };
 
   # Declare runtime-only settings alongside the factory's enable override.
   runtimeOptions = runtime: {
@@ -50,13 +60,21 @@
     presets.${runtime};
   };
 in {
-  options.ai = lib.genAttrs supportedRuntimes (runtime: {
-    # This merges with lib/ai/program.nix's override submodule only because it
-    # declares no default, description or example; adding any throws "already declared".
-    programs.delegate-sizing = lib.mkOption {
-      type = lib.types.submodule {options = runtimeOptions runtime;};
+  options.ai =
+    lib.genAttrs supportedRuntimes (runtime: {
+      # This merges with lib/ai/program.nix's override submodule only because it
+      # declares no default, description or example; adding any throws "already declared".
+      programs.delegate-sizing = lib.mkOption {
+        type = lib.types.submodule {options = runtimeOptions runtime;};
+      };
+    })
+    // {
+      programs.delegate-sizing.whenToDelegate = lib.mkOption {
+        type = lib.types.attrsOf whenToDelegateEntry;
+        default = {};
+        description = "Always-on guidance describing when to delegate work.";
+      };
     };
-  });
 
   # Emit one portable enable option and skills/rules for each supported runtime.
   imports = [
@@ -74,7 +92,11 @@ in {
           inherit (config.ai.${runtime}.programs.delegate-sizing) extraRuntimes manualExternalDelegates;
         }}";
       };
-      rules = _: import ../router.nix;
+      rules = _:
+        import ../router.nix {
+          inherit lib;
+          entries = config.ai.programs.delegate-sizing.whenToDelegate;
+        };
     })
   ];
 
@@ -93,5 +115,8 @@ in {
       textSourceOptions.assertions
       ["ai" runtime "programs" "delegate-sizing" "settings"]
       settings.${runtime})
-    present;
+    present
+    ++ textSourceOptions.assertions
+    ["ai" "programs" "delegate-sizing" "whenToDelegate"]
+    config.ai.programs.delegate-sizing.whenToDelegate;
 }
