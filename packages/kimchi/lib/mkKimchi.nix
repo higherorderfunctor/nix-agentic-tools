@@ -282,7 +282,7 @@ in
 
           # harness/AGENTS.md — orientation context.
           (lib.mkIf hasMergedContext {
-            ai.kimchi.files."${cfg.configDir}/harness/${cfg.context.filename}" = lib.mkDefault contextEntry;
+            ai.kimchi.files."${cfg.configDir}/harness/${cfg.context.filename}" = contextEntry;
           })
 
           # harness/skills/ — Layout B via mkSkillEntries.
@@ -328,7 +328,7 @@ in
 
           # harness/AGENTS.md.
           (lib.mkIf hasMergedContext {
-            ai.kimchi.files."${cfg.configDir}/harness/${cfg.context.filename}" = lib.mkDefault contextEntry;
+            ai.kimchi.files."${cfg.configDir}/harness/${cfg.context.filename}" = contextEntry;
           })
 
           # harness/skills/ — devenv recursive walk.

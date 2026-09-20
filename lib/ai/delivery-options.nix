@@ -270,10 +270,31 @@
       };
     };
   });
+  # `null` suppresses a generated entry, and it has to beat a record at the
+  # SAME priority to keep doing so.
+  #
+  # Generated CONTENT is contributed at `mkDefault` while the entry around it
+  # stays at ordinary priority — that is what lets a consumer change how a
+  # generated file lands without restating its bytes. The cost is that the
+  # generated entry is no longer weaker than a consumer's definition, so a
+  # plain `null` tombstone would meet a record at priority 100 and the module
+  # system would report the option as defined both null and not null. Nothing
+  # about the tombstone was supposed to change, so `null` absorbs: a
+  # definition that suppresses the file wins over one that describes it, at
+  # equal priority, and `filterOverrides` still settles unequal ones first.
+  suppressible = elemType: let
+    base = lib.types.nullOr elemType;
+  in
+    base
+    // {
+      merge = loc: definitions:
+        if lib.any (definition: definition.value == null) definitions
+        then null
+        else base.merge loc definitions;
+      substSubModules = modules: suppressible (elemType.substSubModules modules);
+    };
 in {
   inherit formats;
-  # `null` is a tombstone that suppresses a generated entry, which is why the
-  # map is nullable rather than the entry being deleted by a filter.
-  fileMapType = lib.types.attrsOf (lib.types.nullOr fileEntry);
+  fileMapType = lib.types.attrsOf (suppressible fileEntry);
   writerMapType = lib.types.attrsOf writer;
 }
