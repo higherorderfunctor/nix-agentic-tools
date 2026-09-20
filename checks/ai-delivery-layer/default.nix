@@ -871,6 +871,30 @@ in {
         })
     );
 
+    # What the adapter puts in `tasks` is exactly the runtime's writers, and
+    # nothing when it declares none. The other half of the claim — that the
+    # DEFINITION is only made where the backend declares the option — is
+    # proven by `lib/testing/factory-harness.nix`, which declares neither
+    # `tasks` nor `enterTest` and used to need a stub for both.
+    module-delivery-adapter-adds-only-its-writers = mkTest "delivery-adapter-adds-only-its-writers" (
+      let
+        bare = (evalDevenv {ai.copilot.enable = true;}).config;
+        withWriter =
+          (evalDevenv {
+            ai.copilot = {
+              enable = true;
+              activation.probeWriter.command = "printf 'probe'";
+            };
+          })
+          .config;
+      in
+        !(bare.tasks ? probeWriter)
+        && withWriter.tasks ? probeWriter
+        && lib.attrNames (removeAttrs withWriter.tasks (lib.attrNames bare.tasks)) == ["probeWriter"]
+        # A command writer owns no files, so it contributes no verification.
+        && withWriter.enterTest == bare.enterTest
+    );
+
     # A corpus scan, not a changed-files scan: a gate that only looks at the
     # diff cannot notice that the tree behind it grew a new direct write.
     module-delivery-no-new-direct-sink-writes =
