@@ -247,6 +247,11 @@
           `shell` becomes devenv's `devenv:enterShell`, plus the conditional
           `devenv:files` edge the adapter adds when the project declares any
           files at all.
+
+          Read for a `command` writer only. A writer with `ledgers` is
+          positioned by the reconciler itself — which takes exactly the
+          default's two edges — so stating anything else there is an error
+          rather than a silent no-op.
         '';
       };
       command = lib.mkOption {
