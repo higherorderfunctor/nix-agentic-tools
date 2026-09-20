@@ -115,14 +115,23 @@ arrive as `state: COMMENTED` with zero threads — every mechanical signal reads
 ## Re-requesting
 
 Only ever after a significant change since the last run (the orientation
-fragment defines significant). Use the GitHub MCP server's request-a-Copilot-
-review operation — `request_copilot_review` on the server side, but the
-identifier your client shows is PREFIXED and varies by MCP client config, so
-match on the trailing segment rather than the full name. Do NOT use
-`gh api .../requested_reviewers`: it returns HTTP 200 and does nothing for
-Copilot, which is not addressable as an ordinary reviewer login there. The
-request is not the confirmation — poll for the check run on the head SHA. A
-request issued while a review is in flight is silently dropped.
+fragment defines significant). Request the review through REST with the real
+reviewer login:
+
+```bash
+gh api --method POST "repos/OWNER/REPO/pulls/N/requested_reviewers" \
+  -f 'reviewers[]=copilot-pull-request-reviewer[bot]'
+```
+
+The request is not the confirmation. The POST returns the entire pull request
+object on success, so HTTP 200 proves nothing on its own. Poll for the
+`copilot-pull-request-reviewer` check run on the head SHA. A request issued
+while a review is in flight is silently dropped.
+
+GraphQL has no `requestCopilotReview` mutation. In a session that actually has
+the GitHub MCP server configured, its `request_copilot_review` operation is an
+alternative. The identifier shown by the client is PREFIXED and varies by MCP
+client config, so match on the trailing segment rather than the full name.
 
 ## Separate-agent review
 
