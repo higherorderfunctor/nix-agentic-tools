@@ -9,6 +9,7 @@
   # no delegate primitive; Copilot's sizing controls are not established.
   supportedRuntimes = ["claude" "codex" "kiro"];
   inherit (pkgs.delegate-sizing-content) presets;
+  textSourceOptions = import ../../../lib/mkTextSourceOptions.nix {inherit lib;};
   enabled = runtime:
     config.ai.${runtime}.programs.delegate-sizing.enable
     or null;
@@ -35,9 +36,16 @@
     };
     settings = lib.mapAttrs (name: preset:
       lib.mkOption {
-        type = lib.types.either (lib.types.enum [false]) lib.types.str;
+        type = lib.types.submodule {
+          imports = [(textSourceOptions.submodule "the ${runtime} ${name} instruction block")];
+          options.enable = lib.mkOption {
+            type = lib.types.bool;
+            default = true;
+            description = "Whether to include the ${runtime} ${name} instruction block.";
+          };
+        };
         default = preset;
-        description = "${runtime} ${name} instruction block. A string replaces the package preset; false omits the block. launch is used when this runtime is an external delegate in another runtime's skill.";
+        description = "${runtime} ${name} instruction block. Set text or source to replace the package preset. launch is used when this runtime is an external delegate in another runtime's skill.";
       })
     presets.${runtime};
   };
@@ -71,13 +79,19 @@ in {
   ];
 
   # Reject automatic external delegates whose runtime is disabled.
-  config.assertions = lib.concatMap (runtime:
-    map (target: {
-      assertion = !(programEnabled runtime && runtimeEnabled runtime) || runtimeEnabled target;
-      message = "ai.${runtime}.programs.delegate-sizing.extraRuntimes includes `${target}`, but ai.${target}.enable is false. Enable that runtime or use manualExternalDelegates.";
-    })
-    (lib.subtractLists
-      config.ai.${runtime}.programs.delegate-sizing.manualExternalDelegates
-      config.ai.${runtime}.programs.delegate-sizing.extraRuntimes))
-  present;
+  config.assertions =
+    lib.concatMap (runtime:
+      map (target: {
+        assertion = !(programEnabled runtime && runtimeEnabled runtime) || runtimeEnabled target;
+        message = "ai.${runtime}.programs.delegate-sizing.extraRuntimes includes `${target}`, but ai.${target}.enable is false. Enable that runtime or use manualExternalDelegates.";
+      })
+      (lib.subtractLists
+        config.ai.${runtime}.programs.delegate-sizing.manualExternalDelegates
+        config.ai.${runtime}.programs.delegate-sizing.extraRuntimes))
+    present
+    ++ lib.concatMap (runtime:
+      textSourceOptions.assertions
+      ["ai" runtime "programs" "delegate-sizing" "settings"]
+      settings.${runtime})
+    present;
 }

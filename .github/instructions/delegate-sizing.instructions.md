@@ -30,11 +30,12 @@ pools and instruction overrides cannot be set at `ai.programs.delegate-sizing`.
 Instruction presets live in `lib/presets.nix`. The source runtime's settings
 control its external launch even when its skill is disabled: an enabled Codex
 CLI may still serve Claude delegates without installing its own sizing skill.
-`false` omits an instruction block; it does not remove models from the table.
-The consumer supplies the omitted instructions when needed. Kiro's default
-external launch is manual-only and pins Luna for fixture probes. Before adding
-Kiro to `extraRuntimes`, override its `settings.launch` with instructions that
-apply the selected model and effort.
+`settings.<block>.enable = false` omits an instruction block; it does not remove
+models from the table. Set `text` directly or use `source` to replace a block's
+package preset. The consumer supplies the omitted instructions when needed.
+Kiro's default external launch is manual-only and pins Luna for fixture probes.
+Before adding Kiro to `extraRuntimes`, override its `settings.launch.text` or
+`.source` with instructions that apply the selected model and effort.
 
 Usage commands run in the caller's shell. Claude requires `curl` and `jq`; the
 Codex helper requires GNU `timeout`, `jq`, Python 3 and `codex` on PATH. The
