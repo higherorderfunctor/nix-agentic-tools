@@ -216,12 +216,16 @@ on an error. Never `exit 0` for a cache-hit fast path.
 
 **Owned leaves, not a merge** (copilot-cli, kiro-cli): copilot's `settings.json`
 and kiro's `settings/cli.json` are not merged onto whatever is on disk. Each
-reconciles the leaves it owns through `helpers.mkOwnedDocument` →
-`lib/ai/own.nix` → `lib/ai/own.py`. Declared leaves are asserted, a leaf the
-previous generation declared and this one DROPPED is retracted, and every
-unowned sibling — a runtime-written `trusted_folders`, an oauth token — is left
-alone. A blind `jq -s '.[0] * .[1]'` cannot do the middle one: it has no way to
-tell a native key from a Nix key that was deleted.
+reconciles the leaves it owns. A factory says so by stating
+`facts.harnessWrites` on the file and naming the `ai.<runtime>.activation`
+writer whose ledger claims it; the rule resolves that to `shared` and
+`lib/ai/deliver.nix` builds the `lib/ai/own.nix` bundle that `lib/ai/own.py`
+runs. (Factories not yet migrated still call `helpers.mkOwnedDocument`, which
+builds the same bundle from the caller's side.) Declared leaves are asserted, a
+leaf the previous generation declared and this one DROPPED is retracted, and
+every unowned sibling — a runtime-written `trusted_folders`, an oauth token — is
+left alone. A blind `jq -s '.[0] * .[1]'` cannot do the middle one: it has no
+way to tell a native key from a Nix key that was deleted.
 
 **Mixed TOML ownership requires a leaf manifest, not a blind merge.** Codex's
 user `config.toml` contains Nix-declared settings and required native state: the
