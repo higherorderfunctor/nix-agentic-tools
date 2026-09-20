@@ -169,6 +169,51 @@ controls still reject malformed policy records; separate sink-corruption
 controls pin the body accessor for shapes the delivery types cannot emit. No
 behavioral control depends on a production row's guessed writer name.
 
+### Generated delivery matrix
+
+`config/ai-delivery.nix` remains a pure `{lib}` import. Its schema and consumer
+facts are hand-authored; physical writer records come from the committed
+`config/ai-delivery-generated.nix`. The partition requires every matrix cell
+exactly once across derived and hand-authored rows. Absence reasons, upstream
+contracts, package wrappers, input associations and behavioral probes remain
+independent of the observed delivery implementation.
+
+`checks/ai-delivery/generate.nix` evaluates populated specimens at default
+config directories. It reads typed files and activation ledgers, resolves
+methods with the runtime's rule, and uses the router's backend naming. Recursive
+skills use the real leaf walk. Shared devenv AGENTS.md currently comes from the
+typed `ai.internal.files` owner; Claude's native devenv MCP integration is
+observed at its existing upstream destination. Package wrappers have no file
+entry.
+
+The production gate compares live absence against hand-authored gaps in both
+directions and verifies upstream sink correspondence. Its three body arms stay;
+derived names make the first arm's name agreement a tautology, not a stronger
+check. Empty-declaration survival and body variation still discriminate. Kiro
+MCP's two strategies keep independent probes, including both HM phases.
+
+A factory that still lowers a file in its own `hm`/`devenv` callbacks is
+invisible to the observer, so its rows are hand-authored with an `offLayer`
+reason — today Kimchi's `config.json`, `harness/settings.json` and
+`harness/mcp.json`, until its port lands. Their writers still go through the
+gate's body arms. Correspondence requires an `offLayer` cell to stay absent from
+the layer: once the factory moves the file onto `ai.<runtime>.files`, the row is
+reported stale for deletion, so the escape cannot outlive the port.
+
+Regeneration evaluates the check set, and the check set asserts the committed
+matrix, so a change that moves a cell (a runtime joining the layer, say) cannot
+regenerate through the check attribute alone: bypass the `ai-delivery` and
+`ai-delivery-fixtures` asserts and the partition assertion in a scratch tree,
+build the observer, and restore them before committing.
+
+Regenerate the data with
+`nix build .#checks.x86_64-linux.ai-delivery-generated.generated --no-link --print-out-paths`,
+copy the printed output to `config/ai-delivery-generated.nix`, then run
+`treefmt config/ai-delivery-generated.nix`. The `ai-delivery-generated` check
+regenerates and requires byte identity. `file-warnings.nix` continues rebasing
+the matrix's default directories onto consumer configuration; neither warning
+reader imports an evaluator.
+
 ### Layer location map
 
 - L1 options and L1→L2 expansion → `lib/ai/sharedOptions.nix`
