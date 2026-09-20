@@ -42,16 +42,6 @@
       inherit cfg config options runtime;
       backend = mode;
     };
-    resolve = path: entry:
-      if entry.method != null
-      then entry.method
-      else
-        cfg.methodFor {
-          inherit path;
-          inherit (entry) facts;
-          backend = mode;
-          default = deliveryMethod.byRule;
-        };
     names = writerName: writer:
       [
         {
@@ -64,7 +54,11 @@
         name = router.nameFor "${writerName}.pruneEntry" writer.pruneEntry;
       };
     observe = path: entry: let
-      method = resolve path entry;
+      method = deliveryMethod.resolve {
+        inherit entry path;
+        inherit (cfg) methodFor;
+        backend = mode;
+      };
       upstream = method == "upstream" && builtins.head entry.sink != "files";
       primitive =
         if upstream
