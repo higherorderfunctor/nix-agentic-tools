@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-19 — Kiro describes both backends once, including
-> MCP mode handover, shared cli.json and enable-independent retirement.
+> **Last verified:** 2026-09-19 — delivery gate fixtures lower real writer
+> declarations through both adapters before testing populated and empty bodies.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -145,6 +145,16 @@
   the L2 key is `foo` (the helper strips known suffixes before emitting the key,
   and the per-CLI L4 emission re-appends). This is why the `.md.md` doubled-
   extension bug from 2026-04-21 is structurally impossible now.
+
+### Delivery gate controls
+
+`checks/ai-delivery/fixtures.nix` declares typed activation writers and lowers
+through the production adapters. Gated, absent and constant commands exercise
+the production gate's body observations. Exemption and declaration-independent
+claims remain independent policy evidence, checked in both directions. Schema
+controls still reject malformed policy records; separate sink-corruption
+controls pin the body accessor for shapes the delivery types cannot emit. No
+behavioral control depends on a production row's guessed writer name.
 
 ### Layer location map
 
