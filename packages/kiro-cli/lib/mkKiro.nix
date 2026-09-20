@@ -711,7 +711,7 @@
       if sharedAgentsMd
       then lib.filterAttrs (_name: rule: !(isSharedRule rule)) mergedRules
       else mergedRules;
-    mkEntry = text: lib.mkDefault {inherit text;};
+    mkEntry = text: lib.mkDefault {content = {inherit text;};};
   in [
     # Attrs-shape ai.rules / ai.kiro.rules → `<name>.md` entries,
     # translated through kiroTransformer (inclusion: +

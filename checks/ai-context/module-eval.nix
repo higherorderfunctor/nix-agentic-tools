@@ -7,7 +7,7 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
-  inherit (import ../../packages/kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringFiles;
+  inherit (import ../../packages/kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringContent;
 in {
   checks = {
     module-context-content-record-rejects-two-sources = mkTest "context-content-record-rejects-two-sources" (!(builtins.tryEval (let
@@ -325,7 +325,7 @@ in {
           };
         };
       in
-        (kiroSteeringFiles result) ? "alpha.md"
+        (kiroSteeringContent result) ? "alpha.md"
     );
 
     # Top-level `ai.skillsDir` fans out to every enabled CLI.
