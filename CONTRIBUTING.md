@@ -67,6 +67,7 @@ are a no-op.
 - `dev/generate.nix` — shared fragment composition logic consumed by both devenv
   tasks and flake derivations.
 - `packages/coding-standards/fragments/` — published coding standards.
+- `packages/delegate-sizing/fragments/` — published delegate-sizing rule.
 - `packages/stacked-workflows/fragments/` — published skill-routing rule.
 - `lib/ai/transformers/` — AI ecosystem renderers, exported through the `lib/ai`
   barrel.
@@ -208,6 +209,7 @@ Fragments are composable instruction blocks used to build AI instruction files
 | -------------------------------- | ------------------------------------------------ | --------- |
 | Dev-only (monorepo/tooling)      | `dev/fragments/<pkg>/<name>.md`                  | No        |
 | Published coding standards       | `packages/coding-standards/fragments/<name>.md`  | Yes       |
+| Published delegate-sizing rule   | `packages/delegate-sizing/fragments/<name>.md`   | Yes       |
 | Published SWS skill-routing rule | `packages/stacked-workflows/fragments/<name>.md` | Yes       |
 
 To add a dev-only fragment:

@@ -359,21 +359,24 @@ in {
         && devenv.config.ai.kiro.enable
     );
 
-    # Stacked Workflows consumes the generic program factory. One shared
-    # declaration therefore produces identical HM/devenv root and runtime option
-    # trees, and the package capability set covers every registered runtime.
+    # Skill packages consume the generic program factory. Shared declarations
+    # produce identical HM/devenv root and runtime option trees within each
+    # package's capability set, including nested runtime-only settings.
     # `gitPreset` deliberately stays out of this tree as an HM-only top-level
     # companion because it configures machine-wide Git, not a runtime.
     module-skill-packages-program-option-parity = mkTest "skill-packages-program-option-parity" (
       let
+        shape = declarations:
+          lib.mapAttrs (_: option:
+            if lib.isOption option
+            then option.type.description
+            else shape option)
+          (builtins.removeAttrs declarations ["_module"]);
         optionShape = evaluated: path:
-          lib.mapAttrs (_: option: option.type.description)
-          (lib.filterAttrs
-            (name: _: name != "_module")
-            ((lib.getAttrFromPath path evaluated.options).type.getSubOptions []));
+          shape ((lib.getAttrFromPath path evaluated.options).type.getSubOptions []);
         hm = evalHm {};
         devenv = evalDevenv {};
-        programParity = package:
+        programParity = package: runtimes:
           optionShape hm ["ai" "programs" package]
           == {enable = "boolean";}
           && optionShape hm ["ai" "programs" package]
@@ -382,9 +385,10 @@ in {
           (runtime:
             optionShape hm ["ai" runtime "programs" package]
             == optionShape devenv ["ai" runtime "programs" package])
-          harnessNames;
+          runtimes;
       in
-        programParity "stacked-workflows"
+        programParity "delegate-sizing" ["claude" "codex" "kiro"]
+        && programParity "stacked-workflows" harnessNames
         && hm.options.stacked-workflows ? gitPreset
         && !(devenv.options ? stacked-workflows)
     );

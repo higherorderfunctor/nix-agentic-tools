@@ -161,6 +161,7 @@ in {
     ./packages/chatgpt-codex/modules/devenv
     ./packages/claude-code/modules/devenv
     ./packages/copilot-cli/modules/devenv
+    ./packages/delegate-sizing/modules/devenv
     ./packages/kimchi/modules/devenv
     ./packages/kiro-cli/modules/devenv
     ./packages/semble/modules/devenv
@@ -246,7 +247,15 @@ in {
     # per runtime by `ai:shell:verify` — see the task below.
     shell = pkgs.bash;
 
-    claude.enable = true;
+    programs.delegate-sizing.enable = true;
+
+    claude = {
+      enable = true;
+      programs.delegate-sizing = {
+        extraRuntimes = ["codex"];
+        manualExternalDelegates = ["kiro"];
+      };
+    };
     codex = {
       enable = true;
       # Semble stays outside the manual diagnostic closure but is pinned by
