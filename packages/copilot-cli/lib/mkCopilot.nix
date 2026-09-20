@@ -170,127 +170,177 @@ in
         description = "Directory of `.md` agent files (expanded into `ai.copilot.agents`).";
       };
     };
-    hm = {
-      # Package installation. The wrapper itself — including the `\''${HOME}`
-      # escaping and the `@` file-path prefix, both of which shipped broken
-      # once — lives in ./wrapPackage.nix and is shared with devenv. Read that
-      # file before changing anything here; the two details it guards are not
-      # visible from the Nix side, and duplicating them is what let the same
-      # pair of defects ship twice.
-      #
-      # HM passes `environmentVariables` through because symlinkJoin is its
-      # only export mechanism. It therefore wraps when EITHER MCP servers or
-      # env vars are configured; the helper decides that from its arguments,
-      # so there is no `needsWrapper` predicate to keep in sync here.
-      installPackage = copilotInstallPackageFor "HOME";
-      options = {
-        # Personal config dir relative to HOME. Default `.copilot`
-        # matches Copilot CLI's canonical location (COPILOT_HOME).
-        # Override if the CLI is configured to read elsewhere.
-        configDir = lib.mkOption {
-          type = lib.types.str;
-          default = ".copilot";
-          description = "Personal config dir relative to HOME (Copilot CLI's canonical location).";
-        };
-      };
-      config = {
-        cfg,
-        mergedServers,
-        mergedSkills,
-        mergedLspServers,
-        mergedAgents,
-        ...
-      }: let
-        aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
-        helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-      in
-        lib.mkMerge [
-          # `projectDir` is shared for option-tree parity and discoverability, but
-          # HM cannot give a project-relative path honest semantics. Keep the
-          # native default inert and reject customization rather than silently
-          # writing a HOME-relative directory that Copilot would interpret as a
-          # different scope.
-          {
-            assertions = [
-              {
-                assertion = cfg.projectDir == ".github";
-                message = ''
-                  ai.copilot.projectDir is project-local and cannot be changed
-                  through Home Manager. Configure it through the devenv module.
-                '';
-              }
-            ];
-          }
-          # L2b → L3: expand `ai.copilot.agentsDir` into
-          # `ai.copilot.agents`. mkDefault lets an explicit per-runtime value
-          # win; the resulting entry replaces a same-key root agent.
-          (lib.mkIf (cfg.agentsDir != null) {
-            ai.copilot.agents = lib.mapAttrs (_: lib.mkDefault) (
-              dirHelpers.agentsFromDir cfg.agentsDir
-            );
-          })
-          # agents + agentsDir are no longer mutually exclusive — the
-          # Dir expansion feeds the same `ai.copilot.agents` pool via
-          # mkDefault priority, so explicit entries override Dir
-          # entries without a collision.
-          # lsp-config.json — typed LSP server definitions for the
-          # copilot CLI. Inlined via `text` so module-eval can assert
-          # on content and we don't pay for a store build per eval.
-          (lib.mkIf (mergedLspServers != {}) {
-            home.file."${cfg.configDir}/lsp-config.json".text =
-              builtins.toJSON (lib.mapAttrs aiCommon.mkCopilotLspConfig mergedLspServers);
-          })
-          # Inline agent .md files — one entry per agent, written under
-          # `${configDir}/agents/<name>.md`.
-          (lib.mkIf (mergedAgents != {}) {
-            home.file = lib.mapAttrs' (name: content:
-              lib.nameValuePair "${cfg.configDir}/agents/${name}.md" {
-                text = lib.ai.agent.renderCopilot name content;
+    # ONE delivery description for both backends.
+    #
+    # Read the PROVISIONAL note at the top of this file first: `backend` here
+    # is still standing in for PRODUCT, so the branches below say `isHm` where
+    # they mean "the CLI that reads $HOME" and its absence where they mean "the
+    # repository github.com reads". Collapsing the two callbacks does not
+    # resolve that conflation; it puts it in one place instead of two.
+    config = {
+      backend,
+      cfg,
+      hasMergedContext,
+      mergedAgents,
+      mergedContext,
+      mergedLspServers,
+      mergedRules,
+      mergedServers,
+      mergedSkills,
+      ...
+    }: let
+      aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
+      helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+      isHm = backend == "hm";
+      # The CLI keeps agents and skills beside the config it reads; github.com
+      # reads them out of the repository instead. One surface, two products.
+      nativeDir =
+        if isHm
+        then cfg.configDir
+        else cfg.projectDir;
+      # A LITERAL at the declaration site, hashed from the config directory so
+      # two configured roots never share ownership records.
+      settingsLedger = "json-settings/copilot-settings-${builtins.hashString "sha256" cfg.configDir}.json";
+    in
+      lib.mkMerge [
+        # `projectDir` is shared for option-tree parity and discoverability, but
+        # HM cannot give a project-relative path honest semantics. Keep the
+        # native default inert and reject customization rather than silently
+        # writing a HOME-relative directory Copilot would read as another scope.
+        (lib.optionalAttrs isHm {
+          assertions = [
+            {
+              assertion = cfg.projectDir == ".github";
+              message = ''
+                ai.copilot.projectDir is project-local and cannot be changed
+                through Home Manager. Configure it through the devenv module.
+              '';
+            }
+          ];
+        })
+
+        # L2b → L3: expand `ai.copilot.agentsDir` into `ai.copilot.agents`.
+        # mkDefault lets an explicit per-runtime value win, and the resulting
+        # entry replaces a same-key root agent — so `agents` and `agentsDir`
+        # are not mutually exclusive, they feed one pool.
+        (lib.mkIf (cfg.agentsDir != null) {
+          ai.copilot.agents = lib.mapAttrs (_: lib.mkDefault) (
+            dirHelpers.agentsFromDir cfg.agentsDir
+          );
+        })
+
+        # lsp-config.json — typed LSP server definitions.
+        #
+        # INERT at project scope: Copilot opens `$HOME/.copilot/lsp-config.json`
+        # and nothing project-local, and unlike MCP there is no
+        # `--additional-lsp-config` to point it here (verified against 1.0.78
+        # `--help`). Written anyway for option parity with Home Manager, and
+        # deliberately NOT an assertion: `ai.lspServers` is a shared pool, so
+        # failing here would break a project that legitimately targets Claude or
+        # Kiro with it. Non-empty requests receive the delivery policy's warning.
+        (lib.mkIf (mergedLspServers != {}) {
+          ai.copilot.files."${cfg.configDir}/lsp-config.json" = {
+            content = lib.mkDefault {value = lib.mapAttrs aiCommon.mkCopilotLspConfig mergedLspServers;};
+            format = "json";
+          };
+        })
+
+        # One file per agent. The CLI reads `<name>.md`; github.com requires the
+        # native `.agent.md` suffix. Other derivations may still contribute
+        # files to the same directory — it is never taken over wholesale.
+        (lib.mkIf (mergedAgents != {}) {
+          ai.copilot.files = lib.mapAttrs' (name: content:
+            lib.nameValuePair "${nativeDir}/agents/${name}${
+              if isHm
+              then ".md"
+              else ".agent.md"
+            }" {
+              content = lib.mkDefault {text = lib.ai.agent.renderCopilot name content;};
+            })
+          mergedAgents;
+        })
+
+        # mcp-config.json — the wrapper points `--additional-mcp-config` at this
+        # exact path on both backends, which is what makes it LIVE where
+        # lsp-config.json and settings.json are not.
+        (lib.mkIf (mergedServers != {}) {
+          ai.copilot.files."${cfg.configDir}/mcp-config.json" = {
+            content = lib.mkDefault {
+              value.mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+            };
+            format = "json";
+          };
+        })
+
+        # Skills — one entry per tree beside whichever config dir this product
+        # reads. Copilot has no upstream skills option on either backend.
+        {
+          ai.copilot.files = helpers.mkSkillFiles {
+            configDir = nativeDir;
+            skills = mergedSkills;
+          };
+        }
+
+        # Instruction files from the rules pool, and the repository context
+        # github.com's reviewer consumes. Both are project-scope surfaces the
+        # CLI has no equivalent for, so Home Manager stays deliberately inert
+        # rather than writing a HOME copy nothing reads.
+        (lib.optionalAttrs (!isHm) (lib.mkMerge [
+          (let
+            fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
+            inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
+          in {
+            ai.copilot.files = lib.mapAttrs' (name: rule:
+              lib.nameValuePair "${cfg.projectDir}/instructions/${name}.instructions.md" {
+                content = lib.mkDefault {
+                  text = fragmentsLib.mkRenderer copilotTransformer {} (rule
+                    // {
+                      paths = rule.matcher;
+                      text = aiCommon.readContent rule;
+                    });
+                };
               })
-            mergedAgents;
+            mergedRules;
           })
-          # External agents directory handled at L2b→L3 above —
-          # expansion runs through the existing per-file agents emission
-          # instead of a wholesale Layout B symlink. Other derivations
-          # may still contribute files to `${cfg.configDir}/agents/`.
-          # mcp-config.json — static write of the merged MCP server
-          # pool. The symlinkJoin wrapper above points
-          # `--additional-mcp-config` at this exact path so copilot
-          # loads these servers at runtime. Inlined as `text` so
-          # module-eval can assert on content without a store build.
-          (lib.mkIf (mergedServers != {}) {
-            home.file."${cfg.configDir}/mcp-config.json".text = builtins.toJSON {
-              mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
-            };
+          (lib.mkIf hasMergedContext {
+            ai.copilot.files."${cfg.projectDir}/${cfg.context.filename}" =
+              aiCommon.contentFileEntry mergedContext;
           })
-          # Skills fanout — copilot has no upstream HM skills option, so the
-          # tree is DESCRIBED as a delivery entry under
-          # `${configDir}/skills/<name>` and the adapter lowers it.
-          # `recursive = true` is Layout B (a real directory with per-file
-          # symlinks): Home Manager expands the directory source itself, and
-          # the router walks it for devenv.
-          {
-            ai.copilot.files = helpers.mkSkillFiles {
-              inherit (cfg) configDir;
-              skills = mergedSkills;
-            };
-          }
-          # Reconcile settings.json leaves while preserving native state such
-          # as trusted_folders. Always emit the writer so empty settings retract
-          # previously owned leaves. With no prior ownership, empty settings
-          # leave an externally managed settings.json untouched, including for
-          # consumers enabling Copilot only for MCP/skills fanout.
-          (helpers.mkOwnedDocument {
-            entry = "copilotSettingsMerge";
-            ledger = "json-settings/copilot-settings-${builtins.hashString "sha256" cfg.configDir}.json";
+        ]))
+
+        # settings.json — Copilot rewrites it while it runs (`trusted_folders`,
+        # the oauth record), so Home Manager owns only the leaves declared here
+        # and leaves every native sibling alone. The writer is declared whether
+        # or not there are leaves: an empty declaration RETRACTS what the
+        # previous generation owned, and with no prior ownership it leaves an
+        # externally managed file untouched — which is what a consumer enabling
+        # Copilot purely for MCP or skills fanout needs.
+        #
+        # The fact is keyed by backend because only Home Manager reconciles it
+        # today; the project copy is still a whole-file write, and flipping it
+        # is a behavior change of its own. The writer is declared on Home
+        # Manager for the same reason — a writer with ledgers and no claiming
+        # file lowers to a task that retracts nothing.
+        (lib.optionalAttrs isHm {
+          ai.copilot.activation.copilotSettingsMerge.ledgers.${settingsLedger} = {
+            codec = "json";
             path = "${cfg.configDir}/settings.json";
-            python = pkgs.python3;
-            runtime = "copilot";
-            value = cfg.nativeSettings;
-            inherit pkgs;
-          })
-        ];
-    };
+          };
+        })
+        {
+          ai.copilot.files."${cfg.configDir}/settings.json" = {
+            content.value = cfg.nativeSettings;
+            entry = "copilotSettingsMerge";
+            facts.harnessWrites = {
+              devenv = false;
+              hm = true;
+            };
+            format = "json";
+            ledger = settingsLedger;
+          };
+        }
+      ];
+
     devenv = {
       # Package installation. ENV wiring needs no wrapper — devenv has a
       # native `env` attrset. MCP config DOES, and that is why `cfg.package`
@@ -349,108 +399,29 @@ in
           '';
         };
       };
-      config = {
-        cfg,
-        mergedServers,
-        mergedSkills,
-        mergedRules,
-        mergedLspServers,
-        mergedAgents,
-        mergedContext,
-        hasMergedContext,
-        ...
-      }: let
-        aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
-        contextEntry = aiCommon.contentFileEntry mergedContext;
-      in
-        lib.mkMerge [
-          # L2b → L3: expand `ai.copilot.agentsDir` into
-          # `ai.copilot.agents` (parity with HM side).
-          (lib.mkIf (cfg.agentsDir != null) {
-            ai.copilot.agents = lib.mapAttrs (_: lib.mkDefault) (
-              dirHelpers.agentsFromDir cfg.agentsDir
-            );
-          })
-          # lsp-config.json — INERT at project scope. Copilot opens
-          # `$HOME/.copilot/lsp-config.json` and nothing project-local, and
-          # unlike MCP there is no `--additional-lsp-config` to point it here
-          # (verified against 1.0.78 `--help`). Written anyway for option
-          # parity with HM, and deliberately NOT an assertion: `ai.lspServers`
-          # is a shared pool, so failing here would break a project that
-          # legitimately targets Claude or Kiro with it. Non-empty requests
-          # now receive the delivery policy's eval warning.
-          (lib.mkIf (mergedLspServers != {}) {
-            files."${cfg.configDir}/lsp-config.json".text =
-              builtins.toJSON (lib.mapAttrs aiCommon.mkCopilotLspConfig mergedLspServers);
-          })
-          # Inline agent files — one devenv `files.*` entry per agent
-          # under `${projectDir}/agents/<name>.agent.md`. Copilot's
-          # native agent filename convention is `.agent.md` suffix.
-          (lib.mkIf (mergedAgents != {}) {
-            files = lib.mapAttrs' (name: content:
-              lib.nameValuePair "${cfg.projectDir}/agents/${name}.agent.md" {
-                text = lib.ai.agent.renderCopilot name content;
-              })
-            mergedAgents;
-          })
-          # agentsDir handled at L2b→L3 above — expansion runs
-          # through the existing per-file agents emission.
-          # Skills — the same declaration as Home Manager, against the
-          # project directory. devenv's `files.*.source` cannot walk a
-          # directory recursively (see the devenv files internals fragment),
-          # so the delivery router enumerates the leaves at eval time and
-          # emits one `files.<path>` entry per leaf under
-          # `${projectDir}/skills/<skill>/`.
-          (let
-            helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-          in {
-            ai.copilot.files = helpers.mkSkillFiles {
-              configDir = cfg.projectDir;
-              skills = mergedSkills;
-            };
-          })
-          # mcp-config.json — static write of the merged MCP server
-          # pool. Inlined as `text` for consistency with the HM side.
-          (lib.mkIf (mergedServers != {}) {
-            files."${cfg.configDir}/mcp-config.json".text = builtins.toJSON {
-              mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
-            };
-          })
-          # Attrs-shape ai.rules / ai.copilot.rules → instruction files (parity with HM).
-          (let
-            fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
-            inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
-          in {
-            ai.copilot.files = lib.mapAttrs' (name: rule:
-              lib.nameValuePair "${cfg.projectDir}/instructions/${name}.instructions.md" {
-                content = lib.mkDefault {
-                  text = fragmentsLib.mkRenderer copilotTransformer {} (rule
-                    // {
-                      paths = rule.matcher;
-                      text = aiCommon.readContent rule;
-                    });
-                };
-              })
-            mergedRules;
-          })
-          # Repository context consumed by github.com's Copilot reviewer.
-          (lib.mkIf hasMergedContext {
-            ai.copilot.files."${cfg.projectDir}/${cfg.context.filename}" = contextEntry;
-          })
-          # settings.json — devenv does NOT support HM-style activation
-          # scripts, so the runtime-merge story is different. Devenv
-          # projects are project-local (not a shared home dir), so
-          # there's no `trusted_folders` preservation problem to solve
-          # here. Static JSON write is sufficient.
-          #
-          # INERT at project scope, same as lsp-config.json above: Copilot
-          # reads its settings from `$HOME/.copilot/config.json` and never
-          # stats a project-local settings.json. Kept for option parity;
-          # non-empty requests receive the delivery policy's eval warning.
-          {
-            files."${cfg.configDir}/settings.json".text =
-              builtins.toJSON cfg.nativeSettings;
-          }
-        ];
+    };
+    hm = {
+      # Package installation. The wrapper itself — including the `\''${HOME}`
+      # escaping and the `@` file-path prefix, both of which shipped broken
+      # once — lives in ./wrapPackage.nix and is shared with devenv. Read that
+      # file before changing anything here; the two details it guards are not
+      # visible from the Nix side, and duplicating them is what let the same
+      # pair of defects ship twice.
+      #
+      # HM passes `environmentVariables` through because symlinkJoin is its
+      # only export mechanism. It therefore wraps when EITHER MCP servers or
+      # env vars are configured; the helper decides that from its arguments,
+      # so there is no `needsWrapper` predicate to keep in sync here.
+      installPackage = copilotInstallPackageFor "HOME";
+      options = {
+        # Personal config dir relative to HOME. Default `.copilot`
+        # matches Copilot CLI's canonical location (COPILOT_HOME).
+        # Override if the CLI is configured to read elsewhere.
+        configDir = lib.mkOption {
+          type = lib.types.str;
+          default = ".copilot";
+          description = "Personal config dir relative to HOME (Copilot CLI's canonical location).";
+        };
+      };
     };
   }
