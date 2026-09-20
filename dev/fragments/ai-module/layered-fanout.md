@@ -159,6 +159,16 @@
   and the per-CLI L4 emission re-appends). This is why the `.md.md` doubled-
   extension bug from 2026-04-21 is structurally impossible now.
 
+### Delivery gate controls
+
+`checks/ai-delivery/fixtures.nix` declares typed activation writers and lowers
+through the production adapters. Gated, absent and constant commands exercise
+the production gate's body observations. Exemption and declaration-independent
+claims remain independent policy evidence, checked in both directions. Schema
+controls still reject malformed policy records; separate sink-corruption
+controls pin the body accessor for shapes the delivery types cannot emit. No
+behavioral control depends on a production row's guessed writer name.
+
 ### Layer location map
 
 - L1 options and L1→L2 expansion → `lib/ai/sharedOptions.nix`

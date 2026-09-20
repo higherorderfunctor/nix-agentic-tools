@@ -1,15 +1,37 @@
 # A real evalModules fixture with the historical Shape A bug. Presence in the
 # populated config is a positive control; the empty config must be rejected.
-{lib}: let
+{
+  lib,
+  pkgs,
+}: let
   policy = import ../../config/ai-delivery.nix {inherit lib;};
-  # Stripped so the fixture does not depend on whether the production row
-  # happens to carry an exemption: proving the gate REJECTS a gated writer
-  # needs the un-exempted shape, and the exemption controls attach their own.
-  writer = builtins.removeAttrs (
-    lib.findFirst (row: row.surface == "mcpServers" && row.ecosystem == "kiro" && row.mode == "hm")
-    (throw "fixture needs the Kiro HM MCP contract")
-    policy.imperativeWriters
-  ) ["exemption"];
+  schema = import ../../lib/ai/delivery-options.nix {inherit lib;};
+  adapterLib = lib // {hm.dag = import ../../lib/hm-dag.nix {inherit lib;};};
+  adapters = import ../../lib/ai/adapters {
+    lib = adapterLib;
+    inherit pkgs;
+  };
+  # The declaration owns the name. No fixture guesses a production writer's
+  # attribute or changes a production policy row to simulate broken delivery.
+  entry = {
+    devenv = "ai:fixture:write";
+    hm = "fixtureWrite";
+  };
+  writer = {
+    ecosystem = "kiro";
+    mode = "hm";
+    primitive = "ownLeaves";
+    probe = {
+      base = {};
+      option = ["ai" "kiro" "mcpServers"];
+      nonEmpty.ai.kiro.mcpServers.probe.command = "true";
+      empty.ai.kiro.mcpServers = {};
+    };
+    pruneTrigger = "Fixture writer exercises the real delivery gate.";
+    surface = "mcpServers";
+    target = "$HOME/.kiro/fixture.json";
+    writerAttr = ["home" "activation" entry.hm];
+  };
   exempted =
     writer
     // {
@@ -37,36 +59,66 @@
   evaluatorsFor = {
     constant,
     gated,
+    missing ? false,
   }:
-    lib.genAttrs policy.modes (_: declaration:
+    lib.genAttrs policy.modes (backend: declaration:
       (lib.evalModules {
         modules = [
-          ({config, ...}: let
-            # getAttrFromPath, not `attrByPath ... {}`: both probes set the pool
-            # explicitly, so an absent path is a broken probe and must throw
-            # rather than read as an empty pool.
+          ({
+            config,
+            options,
+            ...
+          }: let
+            cfg = config.ai.kiro;
             pool = lib.getAttrFromPath writer.probe.option config;
+            attrs = lib.mkOption {
+              type = lib.types.attrsOf lib.types.anything;
+              default = {};
+            };
           in {
             options = {
-              ai = lib.mkOption {type = lib.types.attrsOf lib.types.anything;};
+              ai.kiro = {
+                _ownPlans = attrs;
+                activation = lib.mkOption {
+                  type = schema.writerMapType;
+                  default = {};
+                };
+                enable = lib.mkEnableOption "fixture";
+                files = lib.mkOption {
+                  type = schema.fileMapType;
+                  default = {};
+                };
+                mcpServers = attrs;
+                methodFor = lib.mkOption {default = args: args.default args;};
+              };
               assertions = lib.mkOption {
                 type = lib.types.listOf lib.types.anything;
                 default = [];
               };
-              home = lib.mkOption {
-                type = lib.types.attrsOf lib.types.anything;
-                default = {};
-              };
-              tasks = lib.mkOption {
-                type = lib.types.attrsOf lib.types.anything;
-                default = {};
+              home = attrs;
+              files = attrs;
+              tasks = attrs;
+              enterTest = lib.mkOption {
+                type = lib.types.lines;
+                default = "";
               };
             };
-            config =
-              lib.mkIf (!gated || pool != {})
-              (lib.setAttrByPath writer.writerAttr {
-                text = "fixture writer" + lib.optionalString (!constant) (builtins.toJSON pool);
-              });
+            config = lib.mkMerge [
+              {
+                ai.kiro.activation.fixture = lib.mkIf (!missing && (!gated || pool != {})) {
+                  inherit entry;
+                  command =
+                    "printf '%s' "
+                    + lib.escapeShellArg (
+                      "fixture writer" + lib.optionalString (!constant) (builtins.toJSON pool)
+                    );
+                };
+              }
+              (adapters.${backend} {
+                inherit cfg config options;
+                runtime = "kiro";
+              })
+            ];
           })
           {config = declaration;}
         ];
@@ -85,11 +137,12 @@
   gateOf = {
     constant ? false,
     gated ? false,
+    missing ? false,
     writers ? [writer],
   }:
     inspect {
       inherit writers;
-      evaluators = evaluatorsFor {inherit constant gated;};
+      evaluators = evaluatorsFor {inherit constant gated missing;};
     };
   gate = gated: gateOf {inherit gated;};
   overriding = {
@@ -112,14 +165,12 @@
   # The same absence, EXEMPTED. An exemption buys the empty-arm and
   # identical-body failures; it must not buy a writerAttr that resolves to
   # nothing, because then the gate is excusing an observation it never made.
-  exemptedAbsent = overriding {
-    override = lib.setAttrByPath writer.writerAttr {};
+  exemptedAbsent = gateOf {
+    missing = true;
     writers = [exempted];
   };
-  # An attested-absent writer records instead of failing, and its countdown
-  # runs the other way: the row errors as soon as the attribute exists.
-  attestedAbsent = overriding {
-    override = lib.setAttrByPath writer.writerAttr {};
+  attestedAbsent = gateOf {
+    missing = true;
     writers = [attested];
   };
   attestedPresent = gateOf {writers = [attested];};
@@ -153,10 +204,109 @@
   first = builtins.head policy.rows;
   rest = builtins.tail policy.rows;
   replaceFirst = fields: [(first // fields)] ++ rest;
+  # Schema controls remain independent: generated data must still satisfy the
+  # public policy schema. Malformed sink records below deliberately test the
+  # gate's body accessor, since typed delivery entries cannot emit those shapes.
+  schemaControls =
+    {
+      blank-absence-evidence = replaceFirst {absentWriter.evidence = "";};
+      blank-absence-reason = replaceFirst {
+        absentWriter = {
+          evidence = "probe";
+          reason = "";
+        };
+      };
+      blank-constant-evidence = replaceFirst {constantGate = "";};
+      blank-independent-reason = replaceFirst {declarationIndependent = "";};
+      dotted-input = replaceFirst {inputOptions = ["ai.rules"];};
+      doubled-absence = replaceFirst {
+        absentWriter = {
+          evidence = "probe";
+          reason = "probe";
+        };
+        exemption = {
+          evidence = "probe";
+          reason = "probe";
+        };
+      };
+      duplicate = policy.rows ++ [first];
+      empty-input = replaceFirst {inputOptions = [[]];};
+      missing-mode = rest;
+      unexplained-gap = replaceFirst {
+        primitive = "notApplicable";
+        target = null;
+        writerAttr = [];
+        reason = "";
+      };
+      unknown-primitive = replaceFirst {primitive = "typo";};
+      untested-additional = replaceFirst {additionalWriters = [(builtins.removeAttrs writer ["probe"])];};
+      upstream-command = replaceFirst {
+        primitive = "upstream";
+        target = "probe";
+        writerAttr = ["probe"];
+        reason = "delegation";
+        reverifyCommand = "";
+      };
+      upstream-reason = replaceFirst {
+        primitive = "upstream";
+        target = "probe";
+        writerAttr = ["probe"];
+        reason = "";
+        reverifyCommand = "true";
+      };
+    }
+    // lib.genAttrs ["ecosystem" "mode" "primitive" "pruneTrigger" "surface" "target" "writerAttr"]
+    (field: [(builtins.removeAttrs first [field])] ++ rest);
+  malformedControls = {
+    absent-body = {};
+    empty-body = {text = "";};
+    null-body = {text = null;};
+    number-body = {text = 42;};
+    whitespace-body = {text = " \n\t";};
+    wrong-backend = {exec = "wrong backend field";};
+  };
+  controls =
+    lib.mapAttrs (_: rows: {passed = builtins.deepSeq (policy.validateRows rows) true;}) schemaControls
+    // lib.mapAttrs (_: malformedWriter) malformedControls
+    // {
+      absent = gateOf {missing = true;};
+      assertion = rejectedAssertion;
+      inherit constant;
+      exempted-absent = exemptedAbsent;
+      gated = gate true;
+      independent-varying = independentVarying;
+      stale-absence = attestedPresent;
+      stale-exemption = stale;
+    };
 in {
+  inherit controls;
   broken = gate true;
   valid = gate false;
-  passed = assert lib.assertMsg (gate false).passed "ai-delivery fixture: unconditional writer rejected";
+  passed = assert lib.assertMsg (lib.all (control: !(builtins.tryEval control.passed).success) (builtins.attrValues controls))
+  "ai-delivery fixture: a negative control passed";
+  assert lib.assertMsg (lib.all (backend: let
+    backendWriter =
+      writer
+      // {
+        mode = backend;
+        writerAttr =
+          (
+            if backend == "hm"
+            then ["home" "activation"]
+            else ["tasks"]
+          )
+          ++ [entry.${backend}];
+      };
+    good = gateOf {writers = [backendWriter];};
+    bad = gateOf {
+      gated = true;
+      writers = [backendWriter];
+    };
+  in
+    good.passed && !(builtins.tryEval bad.passed).success)
+  policy.modes)
+  "ai-delivery fixture: real adapters must expose a gated writer on both backends";
+  assert lib.assertMsg (gate false).passed "ai-delivery fixture: unconditional writer rejected";
   assert lib.assertMsg (!(builtins.tryEval (gate true).passed).success) "ai-delivery fixture: gated writer accepted";
   assert lib.assertMsg (
     !(builtins.tryEval rejectedAssertion.passed).success
@@ -166,21 +316,13 @@ in {
   assert lib.assertMsg (lib.all (entry: let
     result = malformedWriter entry;
   in
-    !(builtins.tryEval result.passed).success && builtins.length result.errors == 2) [
-    {}
-    {exec = "wrong backend field";}
-    {text = "";}
-    {text = " \n\t";}
-    {text = null;}
-    {text = 42;}
-  ]) "ai-delivery fixture: missing, empty, or malformed writer body accepted";
+    !(builtins.tryEval result.passed).success && builtins.length result.errors == 2) (builtins.attrValues malformedControls)) "ai-delivery fixture: missing, empty, or malformed writer body accepted";
   assert lib.assertMsg (builtins.length (gate true).errors == 1 && lib.hasInfix "EMPTY declaration" (builtins.head (gate true).errors)) "ai-delivery fixture: rejection must be the empty writer, not an unrelated error";
   assert lib.assertMsg (!(builtins.tryEval constant.passed).success) "ai-delivery fixture: constant-bodied writer accepted";
   assert lib.assertMsg (builtins.length constant.errors == 1 && lib.hasInfix "IDENTICAL" (builtins.head constant.errors)) "ai-delivery fixture: rejection must name the identical-body arm, not an unrelated error";
   assert lib.assertMsg independentConstant.passed "ai-delivery fixture: declaration-independent writer with a constant body rejected";
   assert lib.assertMsg (!(builtins.tryEval independentVarying.passed).success) "ai-delivery fixture: declaration-independent claim accepted for a body that varies";
   assert lib.assertMsg (builtins.length independentVarying.errors == 1 && lib.hasInfix "declared declaration-independent" (builtins.head independentVarying.errors)) "ai-delivery fixture: rejection must name the refuted declaration-independent claim";
-  assert lib.assertMsg (rejects (replaceFirst {declarationIndependent = "";})) "ai-delivery fixture: blank declaration-independent reason accepted";
   assert lib.assertMsg (recorded.passed
     && recorded.errors == []
     && builtins.length (builtins.head recorded.results).exempted == 1) "ai-delivery fixture: an exempted failure must be recorded, not fatal";
@@ -200,53 +342,6 @@ in {
     && builtins.length attestedPresent.errors == 1
     && lib.hasInfix "absentWriter record is stale" (builtins.head attestedPresent.errors)
   ) "ai-delivery fixture: an absentWriter record survived the attribute appearing";
-  assert lib.assertMsg (lib.all (fields: rejects (replaceFirst fields)) [
-    {absentWriter.evidence = "";}
-    {
-      absentWriter = {
-        evidence = "probe";
-        reason = "";
-      };
-    }
-    {
-      absentWriter = {
-        evidence = "probe";
-        reason = "probe";
-      };
-      exemption = {
-        evidence = "probe";
-        reason = "probe";
-      };
-    }
-  ]) "ai-delivery fixture: incomplete or doubled absence record accepted";
-  assert lib.assertMsg (rejects (replaceFirst {constantGate = "";})) "ai-delivery fixture: blank constant-gate evidence accepted";
-  assert lib.assertMsg (rejects (replaceFirst {inputOptions = ["ai.rules"];})) "ai-delivery fixture: dotted-string input option accepted";
-  assert lib.assertMsg (rejects (replaceFirst {inputOptions = [[]];})) "ai-delivery fixture: empty input option path accepted";
-  assert lib.assertMsg (lib.all (field: rejects ([(builtins.removeAttrs first [field])] ++ rest)) ["ecosystem" "mode" "primitive" "pruneTrigger" "surface" "target" "writerAttr"]) "ai-delivery fixture: missing required field accepted";
-  assert lib.assertMsg (rejects rest) "ai-delivery fixture: missing mode accepted";
-  assert lib.assertMsg (rejects (policy.rows ++ [first])) "ai-delivery fixture: duplicate accepted";
-  assert lib.assertMsg (rejects (replaceFirst {primitive = "typo";})) "ai-delivery fixture: open primitive enum";
-  assert lib.assertMsg (rejects (replaceFirst {
-    primitive = "notApplicable";
-    target = null;
-    writerAttr = [];
-    reason = "";
-  })) "ai-delivery fixture: unexplained gap accepted";
-  assert lib.assertMsg (rejects (replaceFirst {
-    primitive = "upstream";
-    target = "probe";
-    writerAttr = ["probe"];
-    reason = "delegation";
-    reverifyCommand = "";
-  })) "ai-delivery fixture: upstream without command accepted";
-  assert lib.assertMsg (rejects (replaceFirst {
-    primitive = "upstream";
-    target = "probe";
-    writerAttr = ["probe"];
-    reason = "";
-    reverifyCommand = "true";
-  })) "ai-delivery fixture: upstream without reason accepted";
-  assert lib.assertMsg (rejects (replaceFirst {
-    additionalWriters = [(builtins.removeAttrs writer ["probe"])];
-  })) "ai-delivery fixture: untested additional imperative writer accepted"; true;
+  assert lib.assertMsg (lib.all (name: rejects schemaControls.${name}) (builtins.attrNames schemaControls))
+  "ai-delivery fixture: invalid policy schema accepted"; true;
 }
