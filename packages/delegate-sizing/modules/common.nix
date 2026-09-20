@@ -2,15 +2,17 @@
   config,
   lib,
   options,
+  pkgs,
   ...
 }: let
   # Resolve the supported runtimes and their instruction presets. Kimchi has
   # no delegate primitive; Copilot's sizing controls are not established.
   supportedRuntimes = ["claude" "codex" "kiro"];
-  presets = import ../lib/presets.nix;
+  inherit (pkgs.delegate-sizing-content) presets;
   enabled = runtime:
     config.ai.${runtime}.programs.delegate-sizing.enable
     or null;
+  # Mirror program.nix's B4 resolveOverride: null inherits the portable value; keep in sync.
   programEnabled = runtime:
     if enabled runtime == null
     then config.ai.programs.delegate-sizing.enable
@@ -41,6 +43,8 @@
   };
 in {
   options.ai = lib.genAttrs supportedRuntimes (runtime: {
+    # This merges with lib/ai/program.nix's override submodule only because it
+    # declares no default, description or example; adding any throws "already declared".
     programs.delegate-sizing = lib.mkOption {
       type = lib.types.submodule {options = runtimeOptions runtime;};
     };
