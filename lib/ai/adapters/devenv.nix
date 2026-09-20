@@ -2,12 +2,17 @@
 #
 # It is the only code in the delivery layer allowed to write `files` and
 # `tasks`, and it knows nothing about any runtime.
-{lib}: let
-  deliver = import ../deliver.nix {inherit lib;};
+{
+  lib,
+  pkgs,
+}: let
+  deliver = import ../deliver.nix {inherit lib pkgs;};
 in
   args: let
     delivery = deliver (args // {backend = "devenv";});
   in {
+    inherit (delivery) assertions;
+    files = delivery.symlinkEntries;
     # ONE literal attribute path; see the note in adapters/hm.nix for why a
     # fragment per writer recurses.
     tasks =

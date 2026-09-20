@@ -232,10 +232,12 @@ default until priority arbitration selects it.
 `hmTransform.nix` and `devenvTransform.nix` are thin backend selectors; do not
 duplicate pool logic into them.
 
-`lib/ai/runtime-files.nix` owns B7's atomic entry type, path/content validation,
-null filtering, and backend lowering. Package callbacks may render entries into
-the runtime map but must not read that map to define normalized inputs; keeping
-the edge one-way is what makes the module fixed point evaluable.
+B7's type lives in `lib/ai/delivery-options.nix`; `lib/ai/runtime-files.nix`
+owns path and content validation, null filtering, and the shape one entry takes
+in a native sink; `lib/ai/deliver.nix` and the two adapters own the lowering.
+Package callbacks may render entries into the runtime map but must not read that
+map to define normalized inputs; keeping the edge one-way is what makes the
+module fixed point evaluable.
 
 Repository-local Codex/Kiro `AGENTS.md` is the shared-target exception, not a B7
 exception. `sharedAgentsMd.nix` admits applicable public entries from enabled
