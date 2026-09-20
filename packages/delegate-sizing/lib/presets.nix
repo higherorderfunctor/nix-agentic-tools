@@ -4,7 +4,7 @@
   claude = {
     checkUsage = ''
       Read `five_hour.utilization` and `seven_day.utilization` with this command.
-      The token stays in a variable and is unset on exit.
+      Requires `curl` and `jq`. The token is unset on exit.
 
       ```bash
       #!/usr/bin/env bash
@@ -44,6 +44,7 @@
     checkUsage = ''
       Run `bash <skill-directory>/scripts/codex-usage.sh` from this installed
       skill to read `usedPercent`, `remainingPercent` and `resetsAt`.
+      Requires GNU `timeout`, `jq`, Python 3 and `codex` on PATH.
     '';
     delegateTools = ''
       Call `collaboration.spawn_agent` with `model: "<slug>"`,
