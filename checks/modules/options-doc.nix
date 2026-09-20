@@ -55,6 +55,7 @@
         "ai.codex.mcpServers"
         "ai.codex.methodFor"
         "ai.codex.native"
+        "ai.codex.normalized"
         "ai.codex.package"
         "ai.codex.programs"
         "ai.codex.projectDocMaxBytes"
