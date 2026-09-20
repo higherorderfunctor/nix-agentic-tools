@@ -1022,8 +1022,8 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-19 — L5 is the delivery router plus one adapter per
-> backend, and no factory writes a native sink itself.
+> **Last verified:** 2026-09-19 — Codex describes both backends' files and
+> skill-link migration commands through the delivery layer.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1060,9 +1060,9 @@ path types".
                              ▼  routing + native rendering
 ┌────────────────────────────────────────────────────────────┐
 │ L4: Final runtime output map                               │
-│   ai.<cli>.files = attrsOf (nullOr { text|source; ... })    │
-│   - generated whole entries use mkDefault                  │
-│   - ordinary entries replace; null suppresses              │
+│   ai.<cli>.files = attrsOf (nullOr { content; ... })       │
+│   - generated content uses mkDefault                      │
+│   - sibling fields compose; null suppresses entries       │
 └────────────────────────────────────────────────────────────┘
                              │
                              ▼  generic backend lowering
@@ -1081,6 +1081,17 @@ path types".
   proxy ownership: `sharedOptions.nix` aggregates proxy declaration scopes and
   emits unique active systemd units, while only lowered client entries traverse
   this five-stage pipeline.
+- **AGENTS.md keeps a whole-entry default.** Codex and the shared repository
+  writer decide whether a file exists by reading composed content. Deferring
+  that read until priority arbitration keeps replaced store sources lazy.
+- **Writers belong beside the file map.** Codex's user `config.toml` claims a
+  TOML ledger because the trust prompt writes native state there; project config
+  remains a generated source. Its skill-link migrator owns no ledger and uses
+  `activation.<name>.command`: HM needs `after = []` and
+  `before = ["linkCheck"]`, while devenv uses the default file/shell edges.
+  Commands omit a final newline because the router supplies it, along with
+  strict mode and a scoped subshell. Directory skill sources keep
+  `recursive = false` because Codex discovers directory symlinks.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
   entries replace same-key root entries wholesale; null suppresses an inherited
   entry after the shallow merge. Unsupported root fanout degrades before this
@@ -1152,8 +1163,8 @@ path types".
    The uniform normalized `settings` schema is the explicit exception: every
    runtime declares it, while each field's native lowering may be narrower.
 4. Add L4 routing/rendering into `ai.<runtime>.files` in each supporting per-CLI
-   factory's customConfig. Lifecycle-owned non-literal outputs remain explicit
-   exceptions rather than bypassing the static map silently.
+   factory's `config`. Declare owned outputs' ledgers under
+   `ai.<runtime>.activation`; work that owns no files uses `command`.
 5. Let the existing L5 router lower the surviving entry; change
    `lib/ai/deliver.nix` or an adapter only when the delivery contract itself
    changes, and never write `home.file`, `home.activation`, `files` or `tasks`
