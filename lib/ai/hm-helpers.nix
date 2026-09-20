@@ -151,7 +151,12 @@ in rec {
           assert lib.assertMsg recursive
           "mkSkillFiles: skill '${name}' must resolve to a directory";
             lib.nameValuePair "${configDir}/skills/${name}/SKILL.md" {
-              content = mkSourceEntry source;
+              # ALWAYS `source`, never a path-vs-string test. A skill that
+              # comes from a package is an interpolated STRING holding a store
+              # path, and routing that to `text` writes the PATH as the file's
+              # body — the same upstream bug the directory branch above avoids,
+              # reached through the single-file branch instead.
+              content.source = source;
               executable = null;
             }
     )
