@@ -1,10 +1,12 @@
 # A real evalModules fixture with the historical Shape A bug. Presence in the
 # populated config is a positive control; the empty config must be rejected.
 {
+  harness,
   lib,
   pkgs,
 }: let
   policy = import ../../config/ai-delivery.nix {inherit lib;};
+  owned = import ./owned-fixtures.nix {inherit harness lib;};
   schema = import ../../lib/ai/delivery-options.nix {inherit lib;};
   adapterLib = lib // {hm.dag = import ../../lib/hm-dag.nix {inherit lib;};};
   adapters = import ../../lib/ai/adapters {
@@ -304,11 +306,13 @@
       stale-exemption = stale;
     };
 in {
-  inherit controls;
+  inherit controls owned;
   broken = gate true;
   valid = gate false;
   passed = assert lib.assertMsg (correspondence writer [] == [] && correspondence absentRow [(policy.key writer)] == [])
   "ai-delivery fixture: valid absence correspondence rejected";
+  assert lib.assertMsg (lib.all (backend: lib.all (control: control.passed) (builtins.attrValues backend)) (builtins.attrValues owned))
+  "ai-delivery fixture: owned-entry diagnostic or healthy control failed";
   assert lib.assertMsg (lib.all (control: !(builtins.tryEval control.passed).success) (builtins.attrValues controls))
   "ai-delivery fixture: a negative control passed";
   assert lib.assertMsg (lib.all (backend: let
