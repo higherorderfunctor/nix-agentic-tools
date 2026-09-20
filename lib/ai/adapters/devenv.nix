@@ -30,8 +30,8 @@ in
     tasks =
       delivery.owned.tasks
       // lib.mapAttrs' (
-        _name: writer:
-          lib.nameValuePair (delivery.nameFor writer.entry) {
+        name: writer:
+          lib.nameValuePair (delivery.nameFor "${name}.entry" writer.entry) {
             after = delivery.afterEdges writer;
             # The `devenv:files` edge is added beside the `shell` token rather
             # than instead of it: `devenv:enterShell` is what unconditionally

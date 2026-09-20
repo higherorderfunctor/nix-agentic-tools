@@ -29,8 +29,8 @@ in
     home.activation =
       delivery.owned.activation
       // lib.mapAttrs' (
-        _name: writer:
-          lib.nameValuePair (delivery.nameFor writer.entry) (
+        name: writer:
+          lib.nameValuePair (delivery.nameFor "${name}.entry" writer.entry) (
             # `entryBetween` rather than `entryAfter`: a body that deletes a
             # real file has to run BEFORE `checkLinkTargets`, and one that
             # writes a new file after `linkGeneration`, so both ends of the
