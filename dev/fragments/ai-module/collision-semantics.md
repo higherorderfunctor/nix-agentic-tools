@@ -1,7 +1,7 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-20 — structured file leaves compose at ordinary
-> priority while text/source content keeps its generated default.
+> **Last verified:** 2026-09-20 — normalized keyed folds contribute per-key
+> defaults, preserving ordinary extensions and whole-pool forced replacement.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -196,8 +196,10 @@ and testing their distinct composition contracts.
 
 `lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
 filter. `lib/ai/app/mkBackendTransform.nix` calls it once for every supported
-pool as the default of `ai.<runtime>.normalized.<pool>`; transformer arguments
-read those public options, so a consumer can replace the merged input. For MCP,
+pool and contributes the result as per-key defaults beneath
+`ai.<runtime>.normalized.<pool>`, whose option default is `{}`. Ordinary
+extensions retain unrelated inherited keys; whole-pool `mkForce` replaces the
+merged input. Transformer arguments read those public options. For MCP,
 `lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy declarations at each
 scope while preserving null tombstones; only those client views cross the
 root/runtime merge. `lib/ai/sharedOptions.nix` separately aggregates explicit
