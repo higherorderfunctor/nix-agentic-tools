@@ -430,7 +430,8 @@
         });
       kiro = {
         devenv =
-          (declarative "devenv" ".kiro/settings/cli.json")
+          (leaves "devenv" "ai:kiro:settings-merge" "$DEVENV_ROOT/.kiro/settings/cli.json"
+            (probe ["ai" "kiro" "nativeSettings"] {chat.enableTangentMode = true;} {}))
           // {
             deliveryConstraint = "Only the pinned workspace-allowlisted setting keys are accepted; global-only settings fail module assertions.";
           };

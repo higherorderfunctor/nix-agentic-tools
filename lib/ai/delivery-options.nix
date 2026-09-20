@@ -206,7 +206,7 @@
     };
   };
 
-  # A writer's IDENTITY, declared under the runtime's `enable` gate and never
+  # A writer's IDENTITY, normally declared under the runtime's `enable` gate and never
   # inferred from the files that happen to exist this generation. That is
   # what makes taking a surface from N entries to zero correct by
   # construction: the writer, its ledgers and an EMPTY target all survive, and
@@ -324,6 +324,18 @@
           `checkLinkTargets`, and a new one may only appear after
           `linkGeneration`, so the two phases are two entries. devenv has one
           task and ignores this.
+        '';
+      };
+      runWhenDisabled = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Run this writer even when the runtime is disabled. Declare it outside
+          the runtime's enabled config, such as in `migrationConfig`, so an
+          upgrade that also disables the runtime can retire earlier ownership.
+          Files remain enable-gated: an owned writer receives empty targets
+          while disabled and can only retract its recorded units. Ordinary
+          writers keep the default and run only while the runtime is enabled.
         '';
       };
     };
