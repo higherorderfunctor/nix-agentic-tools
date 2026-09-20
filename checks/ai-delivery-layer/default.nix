@@ -48,6 +48,11 @@
     rules.probe.text = "SNAPSHOT-RULE";
     settings.reasoningEffort = "high";
     skills.probe = ./fixtures/probe-skill;
+    # A skill that comes from a PACKAGE: an interpolated string holding a
+    # store path, and a single file rather than a tree. Both properties are
+    # the branch the snapshot missed while `mkSkillFiles` routed it to
+    # `content.text`.
+    skills.probe-file = "${./fixtures/probe-skill}/SKILL.md";
   };
   snapshotConfig = runtimes: {
     ai = pools // lib.genAttrs runtimes (_runtime: {enable = true;});
@@ -689,6 +694,29 @@ in {
 
         echo "PASS: ${toString (lib.length (lib.attrNames sinkWriters))} recorded factories write a native sink directly; no others do" > "$out"
       '';
+
+    # A single-file skill whose source is a package-interpolated STRING. Both
+    # backends must deliver the file's CONTENTS; routing it to `content.text`
+    # writes the store PATH as the body of SKILL.md instead — the upstream
+    # helper's bug, reached through the single-file branch. Modelled on
+    # `module-kiro-path-agent-both-backends`, which pins the same property for
+    # a path-valued agent.
+    module-delivery-single-file-skill-is-a-source = mkTest "delivery-single-file-skill-is-a-source" (
+      let
+        source = "${./fixtures/probe-skill}/SKILL.md";
+        config = {
+          ai.kiro = {
+            enable = true;
+            skills.probe-file = source;
+          };
+        };
+        path = ".kiro/skills/probe-file/SKILL.md";
+        hm = (evalHm config).config.home.file.${path};
+        devenv = (evalDevenv config).config.files.${path};
+        delivers = entry: entry.source == source && !(entry ? text);
+      in
+        delivers hm && delivers devenv
+    );
 
     module-delivery-writers-reach-every-runtime = mkTest "delivery-writers-reach-every-runtime" (
       lib.all (runtime: let
