@@ -30,11 +30,17 @@
   #   - a consumer's `content.source` still replaces a defaulted
   #     `content.text`, so the tag never sees two definitions at once.
   #
-  # The `run` tag of the design — a program that WRITES the file at activation,
-  # for bytes that cannot exist in the store — lands with the reconciler that
-  # can run it. A tag the layer cannot yet deliver would be a promise, not a
-  # schema.
   contentType = lib.types.attrTag {
+    run = lib.mkOption {
+      type = lib.types.lines;
+      description = ''
+        A shell body that WRITES the file when the writer runs, for bytes that
+        cannot exist in the store — a credential substituted in at write time,
+        say. Owned copies and reconciled documents only: a symlink has no write
+        step to run it in. The reconciler executes it with the interpreter its
+        plan pins, never the one a PATH happens to resolve.
+      '';
+    };
     source = lib.mkOption {
       type = lib.types.path;
       description = "Store-backed bytes: a path whose contents become the file.";
