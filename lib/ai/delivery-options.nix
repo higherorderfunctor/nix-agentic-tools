@@ -171,6 +171,12 @@
           rule decide. An explicit value is the light per-file exception and
           beats the rule. It is resolved in the router, never at type level,
           so `lib.mkForce` on this field and on `methodFor` both work.
+
+          A resolved `symlink` destination must not remain the path of a
+          declared JSON/TOML ledger. Empty document retirement preserves a
+          regular file and native leaves, so it cannot hand the path to the
+          backend's symlink writer. Both override forms reject this combination
+          before activation; ordinary empty-document retirement remains valid.
         '';
       };
       mode = lib.mkOption {

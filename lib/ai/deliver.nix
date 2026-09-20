@@ -126,9 +126,10 @@ in
     # A writer that owns files is a bundle of TARGETS, one per ledger it has
     # ever declared — not one per file that exists this generation. A ledger no
     # file claims lowers to an EMPTY target, which is how the reconciler
-    # releases a path: the retirement of a surface, the last file leaving a
-    # directory, and a document handed between two write modes are all the same
-    # ordinary reconcile, with no retirement-specific code anywhere.
+    # retires ownership: the retirement of a surface, the last file leaving a
+    # directory, and a document handed between owned write modes use the same
+    # ordinary reconcile. Document retirement preserves native leaves and the
+    # regular file, so it cannot hand that path to a symlink writer.
     owningEntries =
       lib.filter (entry: entry.entry != null && entry.ledger != null)
       (lib.attrValues (lib.filterAttrs (_path: entry: lib.elem entry.method owningMethods) resolved));
@@ -343,6 +344,14 @@ in
         '';
       })
       resolved
+      # Check declared document paths even when no file claims their ledgers:
+      # the empty target still writes after retirement and can replace a link
+      # or obstruct the backend's link writer with a regular native document.
+      ++ lib.concatMap (claim:
+        lib.mapAttrsToList (path: _entry: {
+          assertion = path != claim.declaration.path;
+          message = ''ai.${runtime}.files."${path}" resolves to `symlink`, but ai.${runtime}.activation.${claim.name}.ledgers."${claim.ledger}" still declares this ${claim.declaration.codec} document path. Empty document retirement preserves a regular file and native leaves; it cannot hand this path to symlink delivery.'';
+        }) (bucket "symlink")) (lib.filter (claim: claim.declaration.codec != "dir") ledgerClaims)
       # `recursive` delivers the LEAVES of a directory source. Home Manager
       # takes the flag for anything and links a single file under a directory
       # name; only the devenv walk refuses it, and then only on that backend.
