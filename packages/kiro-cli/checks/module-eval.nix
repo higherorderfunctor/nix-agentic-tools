@@ -2242,6 +2242,27 @@ in {
         entry.source == ./fixtures/kiro-agents-dir && entry.recursive
     );
 
+    # The devenv half of the same declaration. devenv has no recursive symlink
+    # primitive, so the router walks the tree and emits one entry per leaf; the
+    # walker that used to live in this factory is gone, and nothing else covers
+    # this backend for `agentsDir`.
+    module-kiro-devenv-agents-dir-walks = mkTest "kiro-devenv-agents-dir-walks" (
+      let
+        files =
+          (evalDevenv {
+            ai.kiro = {
+              enable = true;
+              agentsDir = ./fixtures/kiro-agents-dir;
+            };
+          }).config.files;
+      in
+        files.".kiro/agents/dir-agent.json".source
+        == ./fixtures/kiro-agents-dir/dir-agent.json
+        # The directory itself is never an entry on devenv: that would be a
+        # single store symlink, and the leaves would never appear.
+        && !(files ? ".kiro/agents")
+    );
+
     # HM: hook JSON files written under configDir/hooks/.
     module-kiro-hm-writes-hook-files = mkTest "kiro-hm-writes-hook-files" (
       let
