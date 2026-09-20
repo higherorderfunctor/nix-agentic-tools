@@ -453,6 +453,28 @@ in
           the writer so that a ledger no file claims still releases its path.
         '';
       }) (lib.filter (entry: cfg.activation ? ${entry.entry}) owningEntries)
+      # The ledger selects the actual write path and codec. Accepting a
+      # contradictory file description would silently redirect its output or
+      # turn a requested read-only copy into writable leaf reconciliation.
+      ++ lib.concatMap (entry:
+        lib.concatMap (ledger:
+          [
+            {
+              assertion = entry.method != "copy-ro" || ledger.codec == "dir";
+              message = ''ai.${runtime}.files."${entry.path}" uses `copy-ro`, which requires a directory ledger; `${entry.ledger}` has codec `${ledger.codec}`. A document ledger reconciles leaves and cannot own a read-only copy.'';
+            }
+          ]
+          ++ lib.optionals (ledger.codec != "dir") [
+            {
+              assertion = entry.path == ledger.path;
+              message = ''ai.${runtime}.files."${entry.path}" claims document ledger `${entry.ledger}` at `${ledger.path}`. A document claimant must use its ledger's exact path.'';
+            }
+            {
+              assertion = entry.format == ledger.codec;
+              message = ''ai.${runtime}.files."${entry.path}" has format `${entry.format}`, but document ledger `${entry.ledger}` uses codec `${ledger.codec}`. The document format must match its ledger codec.'';
+            }
+          ]) (declaredLedger entry))
+      owningEntries
       ++ map (entry: {
         assertion = entry.method != "shared" || formats.table.${entry.format}.sharedOk;
         message = ''

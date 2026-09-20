@@ -19,7 +19,7 @@
       hm = config: (harness.evalHm config).config;
     };
   };
-  fixtures = import ./fixtures.nix {inherit lib pkgs;};
+  fixtures = import ./fixtures.nix {inherit harness lib pkgs;};
 in {
   checks = {
     ai-delivery = assert gate.passed;
