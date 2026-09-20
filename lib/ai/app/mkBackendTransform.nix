@@ -49,6 +49,7 @@
 }: let
   adapters = import ../adapters {inherit lib;};
   aiCommon = import ../ai-common.nix {inherit lib;};
+  deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
   dirHelpers = import ../dir-helpers.nix {inherit lib;};
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
@@ -278,6 +279,23 @@ in {
           store-backed `source`; `null` suppresses a generated default. Generated
           entries use whole-file `mkDefault` priority, so an ordinary consumer
           entry replaces the complete file.
+        '';
+      };
+      methodFor = lib.mkOption {
+        type = lib.types.functionTo (lib.types.enum deliveryMethod.methods);
+        default = deliveryMethod.byRule;
+        defaultText = lib.literalExpression "lib.ai.deliveryMethod.byRule";
+        description = ''
+          Resolves how a file lands for every entry of
+          `ai.${appRecord.name}.files` that states no `method` of its own. It
+          receives `{backend, path, facts, default}`, where `default` is the
+          standard rule, so a replacement can override one case and DELEGATE
+          the rest rather than restating the rule. Replacing it never means
+          reimplementing ownership, deletion or pruning: those live below it,
+          in the router and the reconciler, which this function never names.
+          Two definitions of a function cannot merge, so this option is
+          REPLACED with `lib.mkForce` and never added to; composing a
+          per-file exception is what `method` on the entry is for.
         '';
       };
       package = lib.mkOption {
