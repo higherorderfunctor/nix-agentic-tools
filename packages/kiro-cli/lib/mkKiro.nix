@@ -485,8 +485,8 @@
   # of orphaning them. The two are mutually exclusive (see `mkAssertions`), so
   # the branch never has to merge them.
   #
-  # These are REAL files at the module's declared mode, never symlinks, and
-  # there is deliberately no escape hatch: the v3 engine's hook scan keeps only
+  # Delivery defaults to REAL files at the module's declared mode: the v3
+  # engine's hook scan keeps only
   # `entry.isFile()` entries, so a symlinked hook silently never loads
   # (kirodotdev/Kiro#9787).
   mkHookUnits = cfg:
@@ -509,16 +509,20 @@
     units = {};
   };
 
-  # The hooks directory as ONE `own` dir target, identical on both backends:
-  # same ledger, same directory, same units — only the entry names differ.
-  mkHookTarget = cfg: {
-    codec = "dir";
-    # A LITERAL, as every ledger name is: every ownership record the previous
-    # generation wrote hangs off exactly this path, and a derived one would
-    # orphan all of them.
-    ledger = "materialize/kiro-hooks.manifest";
-    path = hookTargetDir cfg;
-    units = mkHookUnits cfg;
+  # Declared outside the product gate so upgrade+disable still drains the old
+  # copy ledger before Home Manager checks the replacement steering symlinks.
+  kiroMigrationConfig = {cfg, ...}: let
+    target = mkSteeringRetirementTarget cfg;
+  in {
+    ai.kiro.activation.retireSteering = {
+      entry = {
+        devenv = "ai:kiro:retire-steering-copies";
+        hm = "retire-materialize-kiro-steering-ledger";
+      };
+      ledgers.${target.ledger} = {inherit (target) codec path;};
+      pruneEntry.hm = "retire-materialize-kiro-steering";
+      runWhenDisabled = true;
+    };
   };
 
   hookNameAssertion = cfg: let
@@ -1048,78 +1052,6 @@
       ''}TARGET="${targetExpr}"
       ${assemble}
     '';
-
-  # BOTH mcp.json ownership modes as ONE bundle's targets, in a FIXED order:
-  # the directory that owns the whole file under `overwrite`, then the document
-  # whose leaves it owns under `merge`. The order is load-bearing, and it is
-  # what used to be hand-spliced as "retirement then write" in one mode and
-  # the reverse in the other: `own` retracts every target before asserting
-  # any, and flushes a target that declares nothing first.
-  #
-  # Every cell of the handover then follows from one rule — a stale whole-file
-  # unit whose path a live target in this plan still claims is FORGOTTEN, not
-  # removed — with no flag and no second builder:
-  #
-  #   overwrite -> merge          release the file, adopt its leaves
-  #   merge -> overwrite          retract the leaves, then adopt the file
-  #   overwrite -> empty merge    RELEASE: declaring the producer is the claim,
-  #                               even when it resolves to zero servers
-  #   overwrite -> empty overwrite  DELETE: nothing claims the path
-  #
-  # `merge` therefore declares `{run = …}` whenever the mode is merge, empty
-  # pool or not, while the dir unit exists only for a non-empty overwrite.
-  # `module-kiro-mcp-reconcile-runtime` is the acceptance gate for all four.
-  mkMcpTargets = backend: cfg: kiroSecrets: let
-    settingsDir = "${cfg.configDir}/settings";
-    render = mkMcpJsonScript {
-      # Only devenv's writer ever anchored on the project root.
-      anchorRoot = backend == "devenv";
-      targetExpr = "$NAT_OWN_ROOT/${settingsDir}/mcp.json";
-      templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
-      inherit (kiroSecrets) urlSecretEnv;
-    };
-  in [
-    {
-      codec = "dir";
-      # LITERALS, both of them: every ownership record either mode has ever
-      # written hangs off exactly these two paths, and Home Manager ROLLBACK
-      # runs an older generation's writer against today's ledgers.
-      ledger = "materialize/kiro-settings.manifest";
-      path = settingsDir;
-      units = lib.optionalAttrs (cfg.mcpWriteMode == "overwrite" && kiroSecrets.servers != {}) {
-        "mcp.json" = {
-          # A url credential is substituted in HERE, so the file holds a
-          # secret and nothing else may read it. The 0444 arm is the
-          # no-secret case, and the widening it implies when a secret is
-          # REMOVED is pinned by an assertion in checks/ai-own/runtime.py.
-          mode =
-            if kiroSecrets.urlSecretEnv != {}
-            then "0400"
-            else "0444";
-          run = render;
-        };
-      };
-    }
-    {
-      codec = "json";
-      ledger = "json-settings/kiro-mcp-${builtins.hashString "sha256" cfg.configDir}.json";
-      path = "${settingsDir}/mcp.json";
-      units = lib.optionalAttrs (cfg.mcpWriteMode == "merge") {
-        # The one document target in the tree that states a mode, because it
-        # is the one whose file a SIBLING target also writes. Without it the
-        # merge write would inherit whatever the overwrite generation left —
-        # 0444, group-readable and not hand-editable — and merge's whole
-        # contract (below, `mcpWriteMode`) is a file the user may still edit.
-        # Owner-only when a credential url is substituted into it. Both values
-        # are what the bash writer chmod'd on every run before `own`.
-        mode =
-          if kiroSecrets.urlSecretEnv != {}
-          then "0600"
-          else "0644";
-        run = render;
-      };
-    }
-  ];
 
   # `ai.shell` / `ai.kiro.shell` → `SHELL` in Kiro's own process
   # environment. Kiro's v3 engine selects its command shell with
@@ -1738,386 +1670,214 @@ in
         '';
       };
     };
-    hm = {
-      installPackage = kiroInstallPackage;
-      options = {};
-      migrationConfig = {cfg, ...}: let
-        helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-      in
-        # A retirement is not a mechanism: it is a target that declares
-        # NOTHING, so the ordinary retraction removes whatever the previous
-        # generation's ledger recorded and then drops the ledger. This one-shot
-        # intentionally lives outside the runtime enable gate — upgrade+disable
-        # must still remove only the steering copies an older generation
-        # recorded as owned.
-        #
-        # It needs BOTH entries, and the prune one is why: deleting a real file
-        # has to happen before `checkLinkTargets`, because `.kiro/steering` is
-        # exactly a copy→symlink flip and link generation aborts on an
-        # unexpected real file. The write phase then unlinks the ledger, which
-        # is all that is left to do — hence the name.
-        helpers.mkOwnBundle {
-          backend = "hm";
-          entryNames = {
-            prune = "retire-materialize-kiro-steering";
-            write = "retire-materialize-kiro-steering-ledger";
-          };
-          python = pkgs.python3;
-          runtime = "kiro";
-          targets = [(mkSteeringRetirementTarget cfg)];
-          inherit pkgs;
-        };
-      config = {
-        cfg,
-        mergedServers,
-        mergedSkills,
-        mergedRules,
-        mergedLspServers,
-        mergedContext,
-        hasMergedContext,
-        ...
-      }: let
-        helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-
-        steeringEmitters = mkSteeringEmitters {
-          inherit cfg mergedContext hasMergedContext mergedRules;
-          sharedAgentsMd = false;
-        };
-
-        filteredSettings = aiCommon.filterNulls cfg.nativeSettings;
-        # Kiro cli.json uses flat dot-notation keys ("chat.enableTangentMode")
-        # not nested JSON. Flatten so consumers can write clean Nix:
-        #   settings.chat.enableTangentMode = true;
-        flatSettings = flattenKiroSettings filteredSettings;
-
-        # Resolve credential http headers → `${env:VAR}` placeholders in
-        # mcp.json + the runtime secret-env exports (Kiro-only delivery).
-        kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
-
-        # Agent files, keyed by attr name. Shares `mkAgentEntry` with the devenv
-        # backend so a typed record, a raw JSON string, and a path all lower
-        # identically in both. (Replaces the old `mkJsonEntries`, which was
-        # named for agents *and* hooks but only ever served agents — hooks go
-        # through `mkAllHookFiles`.)
-        agentEntries = lib.mapAttrs' (name: value:
-          lib.nameValuePair "${cfg.configDir}/agents/${name}.json"
-          (mkAgentEntry name value))
-        cfg.agents;
-      in
-        lib.mkMerge ([
-            # Per-turn workflow reminder, contributed as an ordinary typed hook
-            # record so it rides the existing envelope writer rather than
-            # adding a second hook path. Defining `ai.kiro.hooks` here and
-            # reading it via `mkAllHookFiles` is not circular: the record
-            # depends only on `workflowReminder.*` and `unlockedRolloutFeatures`.
-            {ai.kiro.hooks = workflowReminderHooks cfg;}
-            # Second gate on the `workflows` rollout feature, implied with it so
-            # the pair cannot drift apart. HM-only by construction — see
-            # `workflowsSettingImplication`.
-            (workflowsSettingImplication cfg)
-            # Shared assertions (see mkAssertions): exclusive inline/dir pairs
-            # and hook-name/materializer guards.
-            {assertions = mkAssertions cfg;}
-            # settings/permissions.yaml — V3 capability rules (explicit
-            # `permissions` ++ translated `trustedMcpTools` under v3). Static
-            # declarative write; Kiro's "Always allow" is session-scoped and
-            # never mutates this file.
-            (let
-              permissionRules = mkPermissionRules cfg;
-            in
-              lib.mkIf (permissionRules != []) {
-                home.file."${cfg.configDir}/settings/permissions.yaml".source = (pkgs.formats.yaml {}).generate "kiro-permissions.yaml" {
-                  rules = permissionRules;
+    config = {
+      backend,
+      cfg,
+      mergedServers,
+      mergedSkills,
+      mergedRules,
+      mergedLspServers,
+      mergedContext,
+      hasMergedContext,
+      ...
+    }: let
+      helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+      isHm = backend == "hm";
+      settingsDir = "${cfg.configDir}/settings";
+      configHash = builtins.hashString "sha256" cfg.configDir;
+      settingsLedger = "json-settings/kiro-settings-${configHash}.json";
+      mcpLedger = "json-settings/kiro-mcp-${configHash}.json";
+      merging = cfg.mcpWriteMode == "merge";
+      kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
+      hasUrlSecret = kiroSecrets.urlSecretEnv != {};
+      mcpRender = mkMcpJsonScript {
+        # The task never changes cwd; only this renderer anchors relative
+        # secret readers to the project. HM retains its activation cwd.
+        anchorRoot = !isHm;
+        targetExpr = "$NAT_OWN_ROOT/${settingsDir}/mcp.json";
+        templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
+        inherit (kiroSecrets) urlSecretEnv;
+      };
+      flatSettings = flattenKiroSettings (aiCommon.filterNulls cfg.nativeSettings);
+      permissionRules = mkPermissionRules cfg;
+      sharedRules = lib.filterAttrs (_name: rule:
+        rule.matcher == null && ((rule.inclusion or null) == null || rule.inclusion == "always"))
+      mergedRules;
+      steeringEmitters = mkSteeringEmitters {
+        inherit cfg mergedContext hasMergedContext mergedRules;
+        sharedAgentsMd = !isHm;
+      };
+    in
+      lib.mkMerge ([
+          # Both backends contribute the same typed reminder; only HM implies
+          # the user-global workflows setting.
+          {ai.kiro.hooks = workflowReminderHooks cfg;}
+          (lib.mkIf isHm (workflowsSettingImplication cfg))
+          {assertions = mkAssertions cfg ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);}
+          (lib.mkIf (!isHm && (hasMergedContext || sharedRules != {})) {
+            ai.internal.agentsMd.${cfg.context.filename} =
+              {
+                hasContent = true;
+                rules = lib.mapAttrs (_name: aiCommon.readContent) sharedRules;
+              }
+              // lib.optionalAttrs hasMergedContext {
+                context = aiCommon.readContent mergedContext;
+              };
+          })
+          {
+            # Writer identities survive empty declarations: N→0 must retract
+            # earlier files and leaves, including when the final hook disappears.
+            ai.kiro.activation = {
+              kiroMcpJson = {
+                # URL credentials are read at activation, unlike launcher header
+                # secrets. Only this writer waits for the HM secret provider.
+                after = ["secrets"];
+                entry = {
+                  devenv = "ai:kiro:materialize-mcp";
+                  hm = "kiroMcpJson";
+                };
+                # Both historical ledgers remain in ONE bundle. The unclaimed
+                # target retracts before any target asserts, in either direction.
+                ledgers = {
+                  ${mcpLedger} = {
+                    codec = "json";
+                    path = "${settingsDir}/mcp.json";
+                  };
+                  "materialize/kiro-settings.manifest" = {
+                    codec = "dir";
+                    path = settingsDir;
+                  };
+                };
+                pruneEntry.hm = "materialize-kiro-settings-prune";
+              };
+              kiroSettingsMerge = {
+                entry = {
+                  devenv = "ai:kiro:settings-merge";
+                  hm = "kiroSettingsMerge";
+                };
+                ledgers.${settingsLedger} = {
+                  codec = "json";
+                  path = "${settingsDir}/cli.json";
+                };
+              };
+              materialize-kiro-hooks-write = {
+                entry = {
+                  devenv = "ai:kiro:materialize-hooks";
+                  hm = "materialize-kiro-hooks-write";
+                };
+                ledgers."materialize/kiro-hooks.manifest" = {
+                  codec = "dir";
+                  path = hookTargetDir cfg;
+                };
+                pruneEntry.hm = "materialize-kiro-hooks-prune";
+              };
+            };
+          }
+          {
+            ai.kiro.files = lib.mkMerge [
+              {
+                # Kiro writes model selections and toggles here. Flattening
+                # stops at each known dotted key, preserving object-valued keys.
+                "${settingsDir}/cli.json" = {
+                  content.value = flatSettings;
+                  entry = "kiroSettingsMerge";
+                  facts.harnessWrites = true;
+                  format = "json";
+                  ledger = settingsLedger;
+                };
+                "${settingsDir}/lsp.json" = lib.mkIf (mergedLspServers != {}) {
+                  content.value = lib.mapAttrs aiCommon.mkLspConfig mergedLspServers;
+                  executable = null;
+                  format = "json";
+                };
+                # A producer is a claim even with zero servers in merge mode;
+                # empty overwrite instead releases the whole-file claim.
+                "${settingsDir}/mcp.json" = lib.mkIf (merging || kiroSecrets.servers != {}) {
+                  content = lib.mkDefault {run = mcpRender;};
+                  entry = "kiroMcpJson";
+                  format = "json";
+                  ledger =
+                    if merging
+                    then mcpLedger
+                    else "materialize/kiro-settings.manifest";
+                  method =
+                    if merging
+                    then "shared"
+                    else "copy-ro";
+                  # URL secrets must remain owner-only. Merge must also undo
+                  # overwrite's read-only mode so the user can edit native leaves.
+                  mode =
+                    if hasUrlSecret
+                    then
+                      (
+                        if merging
+                        then "0600"
+                        else "0400"
+                      )
+                    else
+                      (
+                        if merging
+                        then "0644"
+                        else "0444"
+                      );
+                };
+                # Kiro reads permissions only from ~/.kiro/settings/ or
+                # ~/.kiro/workspace-roots/<hash>/, never project .kiro/. Its
+                # session-scoped Always allow action does not mutate this file.
+                "${settingsDir}/permissions.yaml" = lib.mkIf (isHm && permissionRules != []) {
+                  content = lib.mkDefault {
+                    source = (pkgs.formats.yaml {}).generate "kiro-permissions.yaml" {
+                      rules = permissionRules;
+                    };
+                  };
+                  executable = null;
+                };
+              }
+              (lib.mapAttrs' (name: value:
+                lib.nameValuePair "${cfg.configDir}/agents/${name}.json" {
+                  content = lib.mkDefault (mkAgentEntry name value);
+                  executable = null;
+                })
+              cfg.agents)
+              (lib.mkIf (cfg.agentsDir != null) {
+                "${cfg.configDir}/agents" = {
+                  content = lib.mkDefault {source = cfg.agentsDir;};
+                  executable = null;
+                  recursive = true;
                 };
               })
-            # settings/lsp.json — typed LSP server definitions.
-            (lib.mkIf (mergedLspServers != {}) {
-              home.file."${cfg.configDir}/settings/lsp.json".text =
-                builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
-            })
-            # settings/mcp.json — merged MCP server pool, delivered as a
-            # REAL file assembled at activation (never a store symlink) so
-            # a SOPS-injected secret url can be substituted in and
-            # `mcpWriteMode` can govern overwrite-vs-merge. Uniform
-            # real-file across both backends dodges the symlink<->real-file
-            # toggle + the devenv files.* silent skip. See mkMcpJsonScript.
-            #
-            # Ordered after `sops-nix` as well, because a credential url is
-            # `cat`ed HERE, at activation — unlike a header secret, which the
-            # launcher reads at LAUNCH, long after any secret provider has
-            # run. Without this the assembly can race sops and bake an empty
-            # url into a 0400 file that then looks authoritative. The dep is
-            # deliberately dangling-tolerant: home-manager's topoSort drops an
-            # unknown entry, so this stays secret-manager agnostic and is
-            # simply inert when sops-nix is not in use (same trick as
-            # `mcpRestartOnSecretRotation` in the mcp-services module).
-            # Unconditional while enabled: N→0 must still run the ledger
-            # prune. Keep kiroMcpJson as the write entry name so consumer
-            # secret-provider ordering continues to address the same entry.
-            # Both modes emit the SAME pair of entries against the same
-            # two-target plan, so there is no mode switch left to splice: the
-            # declaration decides which target owns the path, and the ordering
-            # the old code spliced by hand is `own`'s retract-then-assert.
-            (helpers.mkOwnBundle {
-              after = ["sops-nix"];
-              backend = "hm";
-              entryNames = {
-                prune = "materialize-kiro-settings-prune";
-                write = "kiroMcpJson";
-              };
-              python = pkgs.python3;
-              runtime = "kiro";
-              targets = mkMcpTargets "hm" cfg kiroSecrets;
-              inherit pkgs;
-            })
-            # Inline agent JSON files.
-            (lib.mkIf (cfg.agents != {}) {
-              home.file = agentEntries;
-            })
-            # External agents directory — one recursive entry on both
-            # backends: Home Manager expands it natively and the router walks
-            # it for devenv.
-            (lib.mkIf (cfg.agentsDir != null) {
-              ai.kiro.files."${cfg.configDir}/agents" = {
-                content.source = cfg.agentsDir;
-                executable = null;
-                recursive = true;
-              };
-            })
-            # Hook delivery — REAL files via `lib/ai/own.nix`, NOT home.file
-            # (which symlinks into /nix/store). Kiro v3 scans the hooks dir
-            # but does NOT follow store symlinks (verified live on 2.13.0:
-            # global scan fires real files, skips symlinks), so a symlinked
-            # hook never loads. THAT consumer fact is why this is a `dir`
-            # target and not `ai.kiro.files`. Covers BOTH hook surfaces
-            # (inline `hooks`/`hooksJson` and the external `hooksDir`)
-            # through one ledger.
-            #
-            # Emitted whenever the module is enabled — NOT gated on a
-            # non-empty hook set — so emptying the surface still prunes
-            # (N→0). That gate WAS the defect: the previous writer's prune
-            # sat inside `mkIf (cfg.hooks != {} || cfg.hooksJson != {})`, so
-            # removing the last hook never emitted the entry, the prune never
-            # ran, and every previously written hook file stayed on disk and
-            # kept firing. Removing the last hook is precisely when pruning
-            # matters most.
-            #
-            # OWNERSHIP — the explicit decision: this claims only the files
-            # it WROTE (tracked per-file in the ledger), not the whole
-            # directory. A hand-placed `~/.kiro/hooks/<name>.json` that this
-            # module never wrote survives activation untouched, where the old
-            # `rm -f "$HOOKS_DIR"/*.json` deleted it on every generation. An
-            # unmanaged file colliding with a declared name is backed up
-            # before being adopted (own.py's clobber guard).
-            (helpers.mkOwnBundle {
-              backend = "hm";
-              entryNames = {
-                prune = "materialize-kiro-hooks-prune";
-                write = "materialize-kiro-hooks-write";
-              };
-              python = pkgs.python3;
-              runtime = "kiro";
-              targets = [(mkHookTarget cfg)];
-              inherit pkgs;
-            })
-            # Skills fanout: one entry per skill with a directory source and
-            # `recursive`, which Home Manager expands natively into Layout B (a
-            # real directory of per-file symlinks).
-            {
-              ai.kiro.files = helpers.mkSkillFiles {
+              # Kiro v3's hook scan keeps only entry.isFile() (Kiro#9787), so
+              # hooks need real copies. The ledger claims individual files;
+              # unrelated hand-placed hooks survive, including at N→0.
+              # Filter unsafe names so mkAssertions retains the option-level
+              # diagnostic before the final file map validates its paths.
+              (lib.mapAttrs' (name: unit:
+                lib.nameValuePair "${hookTargetDir cfg}/${name}" {
+                  content = lib.mkDefault (
+                    if unit ? store
+                    then {source = unit.store;}
+                    else {inherit (unit) text;}
+                  );
+                  entry = "materialize-kiro-hooks-write";
+                  facts.symlinkReadable = false;
+                  ledger = "materialize/kiro-hooks.manifest";
+                }) (lib.filterAttrs (name: _unit: hookNameSafe name) (mkHookUnits cfg)))
+              (helpers.mkSkillFiles {
                 inherit (cfg) configDir;
                 skills = mergedSkills;
-              };
-            }
-            # Reconcile settings/cli.json leaves, including retirement when
-            # settings become empty. An empty first generation leaves externally
-            # managed cli.json untouched; later ones remove only recorded Nix
-            # leaves and preserve native model selections and toggles.
-            # `unlockedRolloutFeatures = ["workflows"]` implies a setting via
-            # workflowsSettingImplication; that leaf is owned and retracted by
-            # the same manifest without claiming other externally managed keys.
-            (helpers.mkOwnedDocument {
-              entry = "kiroSettingsMerge";
-              ledger = "json-settings/kiro-settings-${builtins.hashString "sha256" cfg.configDir}.json";
-              path = "${cfg.configDir}/settings/cli.json";
-              python = pkgs.python3;
-              runtime = "kiro";
-              # Already flattened: Kiro reads dotted keys, and the flattener's
-              # boundary stops AT a known key, so an object-valued setting
-              # stays nested under its dotted parent.
-              value = flatSettings;
-              inherit pkgs;
-            })
-          ]
-          ++ steeringEmitters);
-    };
+              })
+            ];
+          }
+        ]
+        ++ steeringEmitters);
     devenv = {
       installPackage = kiroInstallPackage;
+      migrationConfig = kiroMigrationConfig;
       options = {};
-      migrationConfig = {
-        cfg,
-        config,
-        ...
-      }: let
-        helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-      in
-        # Same enable-independent one-shot retirement as Home Manager, and
-        # inert in the same way: a target with no units and no ledger on disk
-        # is a strict no-op that creates neither directory.
-        helpers.mkOwnBundle {
-          backend = "devenv";
-          entryNames.write = "ai:kiro:retire-steering-copies";
-          hasFiles = config.files != {};
-          python = pkgs.python3;
-          runtime = "kiro";
-          targets = [(mkSteeringRetirementTarget cfg)];
-          inherit pkgs;
-        };
-      config = {
-        cfg,
-        config,
-        mergedServers,
-        mergedSkills,
-        mergedRules,
-        mergedLspServers,
-        mergedContext,
-        hasMergedContext,
-        ...
-      }: let
-        helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-
-        steeringEmitters = mkSteeringEmitters {
-          inherit cfg mergedContext hasMergedContext mergedRules;
-          sharedAgentsMd = true;
-        };
-
-        sharedRules = lib.filterAttrs (_name: rule:
-          rule.matcher
-          == null
-          && ((rule.inclusion or null) == null || rule.inclusion == "always"))
-        mergedRules;
-
-        filteredSettings = aiCommon.filterNulls cfg.nativeSettings;
-        flatSettings = flattenKiroSettings filteredSettings;
-
-        # Resolve credential http headers → `${env:VAR}` placeholders in
-        # mcp.json + the runtime secret-env exports (Kiro-only delivery).
-        kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
-      in
-        lib.mkMerge ([
-            # Per-turn workflow reminder — same contribution as the HM backend
-            # (config parity; the record itself is built by the shared
-            # `workflowReminderHooks`).
-            {ai.kiro.hooks = workflowReminderHooks cfg;}
-            # Shared assertions (see mkAssertions): exclusive inline/dir pairs
-            # and hook-name/materializer guards. The workspace-allowlist guard
-            # is devenv-ONLY and is appended here rather than merged into
-            # `mkAssertions`, because the same keys are correct under HM.
-            {assertions = mkAssertions cfg ++ mkDevenvWorkspaceSettingsAssertions cfg;}
-            (lib.mkIf (hasMergedContext || sharedRules != {}) {
-              ai.internal.agentsMd.${cfg.context.filename} =
-                {
-                  hasContent = true;
-                  rules = lib.mapAttrs (_name: aiCommon.readContent) sharedRules;
-                }
-                // lib.optionalAttrs hasMergedContext {
-                  context = aiCommon.readContent mergedContext;
-                };
-            })
-            # Environment variables ride the launcher wrapper above, exactly
-            # as they do under Home Manager. They used to be written into
-            # devenv's native `env` attrset instead ("no wrapper is
-            # required"), which was true of the mechanism and wrong about the
-            # scope: that exports into the project shell, so every variable
-            # here also reached the developer's interactive session. `SHELL`
-            # made the difference concrete — it changes what tmux, editors and
-            # anything else spawning `$SHELL` do — but the leak was never
-            # specific to it.
-            # settings/lsp.json — typed LSP server definitions.
-            (lib.mkIf (mergedLspServers != {}) {
-              files."${cfg.configDir}/settings/lsp.json".text =
-                builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
-            })
-            # ONE MCP writer for both modes, rooted at the project: the same
-            # two-target plan as Home Manager, applied in one process so
-            # devenv cannot race the retraction against the write.
-            (helpers.mkOwnBundle {
-              backend = "devenv";
-              entryNames.write = "ai:kiro:materialize-mcp";
-              hasFiles = config.files != {};
-              python = pkgs.python3;
-              runtime = "kiro";
-              targets = mkMcpTargets "devenv" cfg kiroSecrets;
-              inherit pkgs;
-            })
-            # Inline agent JSON files.
-            (lib.mkIf (cfg.agents != {}) {
-              files =
-                lib.concatMapAttrs (name: value: {
-                  "${cfg.configDir}/agents/${name}.json" = mkAgentEntry name value;
-                })
-                cfg.agents;
-            })
-            # External agents directory — the same recursive entry Home
-            # Manager gets. The walk that used to live here is the router's.
-            (lib.mkIf (cfg.agentsDir != null) {
-              ai.kiro.files."${cfg.configDir}/agents" = {
-                content.source = cfg.agentsDir;
-                executable = null;
-                recursive = true;
-              };
-            })
-            # Hook JSON files — written as REAL files, NOT devenv `files.*`
-            # (which symlinks into /nix/store). The 2.18.1 spike changed only
-            # steering evidence; hooks retain their measured real-file
-            # lifecycle and ownership-safe reconciliation.
-            #
-            # Emitted whenever the module is enabled — NOT gated on a
-            # non-empty hook set — so emptying the surface still prunes
-            # (N→0). That gate WAS the defect: the previous enterShell
-            # fragments carried their prune inside
-            # `mkIf (cfg.hooks != {} || cfg.hooksJson != {})` and
-            # `mkIf (cfg.hooksDir != null)`, so removing the last hook never
-            # emitted the fragment, the prune never ran, and every previously
-            # written hook file stayed in `.kiro/hooks/` and kept firing.
-            #
-            # OWNERSHIP — the explicit decision, matching HM: this claims
-            # only the files it WROTE (tracked per-file in the ledger under
-            # $DEVENV_STATE), not the whole directory. A hand-placed
-            # `.kiro/hooks/<name>.json` survives; the old
-            # `rm -f <dir>/*.json` deleted it on every shell entry.
-            #
-            # Nothing here depends on the shell's cwd, which matters because
-            # devenv runs a task in the CALLER's directory (direnv activates
-            # in subdirectories) and `own` does not `cd`: the target is
-            # $DEVENV_ROOT plus the target path, both from the plan.
-            (helpers.mkOwnBundle {
-              backend = "devenv";
-              entryNames.write = "ai:kiro:materialize-hooks";
-              hasFiles = config.files != {};
-              python = pkgs.python3;
-              runtime = "kiro";
-              targets = [(mkHookTarget cfg)];
-              inherit pkgs;
-            })
-            # Skills: the same declaration as Home Manager. devenv's
-            # `files.*.source` cannot recurse, so the router walks the tree and
-            # emits one entry per leaf.
-            {
-              ai.kiro.files = helpers.mkSkillFiles {
-                inherit (cfg) configDir;
-                skills = mergedSkills;
-              };
-            }
-            # settings/cli.json — devenv does NOT support HM-style
-            # activation scripts. Devenv projects are project-local, so
-            # there's no runtime-mutation preservation concern. Static
-            # JSON write is sufficient.
-            (lib.mkIf (filteredSettings != {}) {
-              files."${cfg.configDir}/settings/cli.json".text =
-                builtins.toJSON flatSettings;
-            })
-          ]
-          ++ steeringEmitters);
+    };
+    hm = {
+      installPackage = kiroInstallPackage;
+      migrationConfig = kiroMigrationConfig;
+      options = {};
     };
   }

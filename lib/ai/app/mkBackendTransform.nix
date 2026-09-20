@@ -279,7 +279,8 @@ in {
           ordering, and every ledger it has ever owned — so a surface that
           drops to zero files still emits the writer that retracts what the
           previous generation wrote. A writer that owns no files at all
-          declares a `command` instead.
+          declares a `command` instead. Writers run only while the runtime is
+          enabled, unless declared outside that gate with `runWhenDisabled`.
         '';
       };
       enable = lib.mkEnableOption appRecord.name;
@@ -468,18 +469,24 @@ in {
     (lib.mkIf cfg.enable (lib.mkMerge [
       packageInstallConfig
       customConfig
-      # The delivery layer's one lowering seam. Everything a runtime declares
-      # about how its files land is read HERE, by the backend's adapter, so no
-      # factory writes `home.file`, `home.activation`, `files` or `tasks`
-      # itself.
-      #
-      # The adapter reads `cfg.files`, so the shared-AGENTS.md arbitration
-      # hands it the stripped map rather than filtering behind its back.
-      (adapters.${backend} {
-        cfg = cfg // {files = runtimeSinkFiles;};
-        inherit config options;
-        runtime = appRecord.name;
-      })
     ]))
+    # Lower once, including retirement writers declared by migrationConfig.
+    # Disabling a runtime removes every file claim and every ordinary writer;
+    # only explicit runWhenDisabled writers can drain prior ownership.
+    # Keep the selection inside VALUES so collecting module keys never forces
+    # the file or writer definitions it is still collecting.
+    (adapters.${backend} {
+      cfg =
+        cfg
+        // {
+          activation = lib.filterAttrs (_name: writer: cfg.enable || writer.runWhenDisabled) cfg.activation;
+          files =
+            if cfg.enable
+            then runtimeSinkFiles
+            else {};
+        };
+      inherit config options;
+      runtime = appRecord.name;
+    })
   ];
 }
