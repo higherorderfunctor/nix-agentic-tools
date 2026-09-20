@@ -171,6 +171,60 @@
       inherit lib;
       renames = import ../lib/when-to-delegate-renames.nix;
     };
+    presetSource = ../fragments/skill-routing.md;
+    sourcePreset = packageWhenToDelegateOptions.mkPreset {source = presetSource;};
+    textPreset = packageWhenToDelegateOptions.mkPreset {text = "Delegate a preset task.";};
+    presetEvaluation = lib.evalModules {
+      modules = [
+        {
+          options.entries = lib.mkOption {
+            inherit (packageWhenToDelegateOptions) type;
+            default = {};
+          };
+          config.entries = {
+            Source = sourcePreset;
+            Text = textPreset;
+          };
+        }
+      ];
+    };
+    presetConstructorContract = let
+      defaultPriority = (lib.mkDefault null).priority;
+      enableDefaultChecked = assert lib.assertMsg
+      (
+        builtins.isAttrs sourcePreset.enable
+        && sourcePreset.enable.priority == defaultPriority
+        && presetEvaluation.config.entries.Source.enable == false
+      )
+      "delegate-sizing mkPreset enable must use mkDefault priority and resolve to false"; true;
+      neitherFailed = !(builtins.tryEval (packageWhenToDelegateOptions.mkPreset {})).success;
+      sourceDefaultChecked = assert lib.assertMsg
+      (
+        sourcePreset.source.priority
+        == defaultPriority
+        && sourcePreset.source.content == presetSource
+        && presetEvaluation.config.entries.Source.source == presetSource
+      )
+      "delegate-sizing mkPreset source must use mkDefault priority and preserve its value"; true;
+      textDefaultChecked = assert lib.assertMsg
+      (
+        textPreset.text.priority
+        == defaultPriority
+        && textPreset.text.content == "Delegate a preset task."
+        && presetEvaluation.config.entries.Text.text == "Delegate a preset task."
+      )
+      "delegate-sizing mkPreset text must use mkDefault priority and preserve its value"; true;
+      bothFailed =
+        !(builtins.tryEval (packageWhenToDelegateOptions.mkPreset {
+          source = presetSource;
+          text = "Conflicting preset task.";
+        })).success;
+    in
+      enableDefaultChecked
+      && sourceDefaultChecked
+      && textDefaultChecked
+      && bothFailed
+      && neitherFailed;
     packageRenamed = evaluateWarnings (lib.recursiveUpdate scenario {
       ai.programs.delegate-sizing.whenToDelegate."Old guidance".text = "Renamed consumer guidance.";
     });
@@ -325,6 +379,7 @@
       && !(lib.hasInfix "### Preset" (ruleText disabledPreset))
       && lib.hasInfix "### Preset\n\nDelegate a preset task." (ruleText enabledPreset)
     );
+    "module-delegate-sizing-${name}-when-to-delegate-preset-constructor" = mkTest "delegate-sizing-${name}-when-to-delegate-preset-constructor" presetConstructorContract;
     "module-delegate-sizing-${name}-when-to-delegate-protection" = mkTest "delegate-sizing-${name}-when-to-delegate-protection" protectionContract;
   };
 in {
