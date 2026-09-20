@@ -129,6 +129,7 @@
       fragments = import ./lib/fragments.nix {inherit lib;};
       devshellLib = import ./lib/devshell.nix {inherit lib;};
       mcpLib = import ./lib/mcp.nix {inherit lib;};
+      textSourceOptions = import ./lib/mkTextSourceOptions.nix {inherit lib;};
       aiBase = import ./lib/ai {inherit lib;};
 
       # Cross-package presets (compose fragments from multiple
@@ -153,6 +154,7 @@
       };
       # Shared AI primitives compose with the namespaces exported by owners.
       baseLib = {
+        mkTextSourceOptions = textSourceOptions;
         ai =
           aiBase
           // {

@@ -1,1 +1,6 @@
-{imports = [./factory-eval.nix];}
+{
+  imports = [
+    ./factory-eval.nix
+    ./text-source-options-eval.nix
+  ];
+}
