@@ -2,14 +2,13 @@
   lib,
   runtime,
   extraRuntimes ? [],
+  kiroModels ? (builtins.fromJSON (builtins.readFile ../../kiro-cli/extracted.json)).models,
   manualExternalDelegates ? [],
   presets,
   settings ? presets,
 }: let
   # Read model decisions and runtime routes before selecting table candidates.
   models = import ./models.nix;
-  # Public-catalog ids from the kiro-cli extractor; the skill still requires the live list because account availability differs.
-  kiroModels = (builtins.fromJSON (builtins.readFile ../../kiro-cli/extracted.json)).models;
   firstParty = {
     claude = ["anthropic"];
     codex = ["openai"];
@@ -72,7 +71,7 @@
   runtimeBlock = target:
     "### ${target} runtime\n\n"
     + joinBlocks [
-      (block target "delegateTools" "delegate tools")
+      (lib.optionalString (target == runtime) (block target "delegateTools" "delegate tools"))
       (block target "introspectModels" "models and effort")
       (block target "checkUsage" "usage")
       (lib.optionalString (target != runtime) (block target "launch" "launch"))

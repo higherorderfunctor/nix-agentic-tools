@@ -19,7 +19,25 @@
     programs.delegate-sizing.enable = true;
   };
   hasLoadInstruction = text: lib.hasInfix "load the `delegate-sizing` skill" (lib.replaceStrings ["\n"] [" "] text);
+  nativeDelegateTools = {
+    claude = "Use Workflow `agent(prompt, {model, effort})`";
+    codex = "Call `collaboration.spawn_agent`";
+    kiro = "Set `modelId` and `effortLevel`";
+  };
+  presets = import ../lib/presets.nix {codexUsageScript = "/nix/store/test-codex-usage.sh";};
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-sizing}/SKILL.md";
+  render = args: import ../lib/render.nix ({inherit lib presets;} // args);
+  renderKiro = kiroModels:
+    render {
+      inherit kiroModels;
+      runtime = "kiro";
+    };
+  renderedAllRuntimes = lib.genAttrs runtimes (runtime:
+    render {
+      inherit runtime;
+      extraRuntimes = lib.remove runtime runtimes;
+    });
+  sonnetRow = "Sonnet 5 (anthropic)";
   optionTree = result: path: (lib.getAttrFromPath path result.options).type.getSubOptions [];
   checkBackend = name: evaluate: let
     result = evaluate scenario;
@@ -77,6 +95,19 @@
       };
     });
     customizedClaude = readSkill customized "claude";
+    kiroWithSonnet = renderKiro ["claude-sonnet-5"];
+    kiroWithoutSonnet = renderKiro [];
+    catalogIntersectionChecked = assert lib.assertMsg
+    (lib.hasInfix sonnetRow kiroWithSonnet && !(lib.hasInfix sonnetRow kiroWithoutSonnet))
+    "delegate-sizing Kiro catalog intersection must include present models and exclude absent models"; true;
+    nativeDelegateToolsChecked = assert lib.assertMsg
+    (lib.all
+      (runtime:
+        lib.all
+        (other: other == runtime || !(lib.hasInfix nativeDelegateTools.${other} renderedAllRuntimes.${runtime}))
+        runtimes)
+      runtimes)
+    "delegate-sizing rendered skills must not contain another runtime's native delegate tools"; true;
   in {
     "module-delegate-sizing-${name}-content" = mkTest "delegate-sizing-${name}-content" (
       lib.hasInfix "codex exec --model <slug> --config 'model_reasoning_effort=\"<level>\"' --json --output-last-message <out>.md - < <prompt-file>" claude
@@ -92,8 +123,8 @@
       && lib.hasInfix "(openai)" kiro
       && !(lib.hasInfix "## manual-only" kiro)
       && !(lib.hasInfix "via `" kiro)
-      && !(lib.hasInfix "Astra (GPT-6)" kiro)
-      && !(lib.hasInfix "Fable 5.1" kiro)
+      && catalogIntersectionChecked
+      && nativeDelegateToolsChecked
       && builtins.pathExists "${result.config.ai.claude.skills.delegate-sizing}/scripts/codex-usage.sh"
     );
     "module-delegate-sizing-${name}-external-enable" = mkTest "delegate-sizing-${name}-external-enable" (
