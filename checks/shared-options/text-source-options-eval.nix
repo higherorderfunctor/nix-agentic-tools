@@ -42,6 +42,14 @@
     {entries.example.source = lib.mkDefault source;}
     {entries.example.text = "consumer prose";}
   ];
+  sameDefaultPriority = evaluate [
+    {
+      entries.example = {
+        source = lib.mkDefault source;
+        text = lib.mkDefault "authored prose";
+      };
+    }
+  ];
   samePriority = evaluate [
     {
       entries.example = {
@@ -67,6 +75,14 @@
     then throw "mkTextSourceOptions: same-priority definitions did not report a conflict"
     else if builtins.length samePriority.config.assertions != 1
     then throw "mkTextSourceOptions: same-priority definitions did not lift exactly one assertion"
+    else if (builtins.head samePriority.config.assertions).assertion
+    then throw "mkTextSourceOptions: same-priority conflict lifted a passing assertion"
+    else if sameDefaultPriority.config.entries.example._textSourceConflict == null
+    then throw "mkTextSourceOptions: same-default-priority definitions did not report a conflict"
+    else if builtins.length sameDefaultPriority.config.assertions != 1
+    then throw "mkTextSourceOptions: same-default-priority definitions did not lift exactly one assertion"
+    else if (builtins.head sameDefaultPriority.config.assertions).assertion
+    then throw "mkTextSourceOptions: same-default-priority conflict lifted a passing assertion"
     else if unset.config.entries.example.text != ""
     then throw "mkTextSourceOptions: unset text did not retain its empty default"
     else if unset.config.entries.example._textSourceConflict != null

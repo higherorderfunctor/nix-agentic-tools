@@ -38,7 +38,7 @@
 
     config = {
       _textSourceConflict = lib.mkIf (config.source != null && sameExplicitPriority) ''
-        `${lib.showOption options.text.loc}` and `${lib.showOption options.source.loc}` are defined at the same priority. `${lib.showOption options.text.loc}` wins if this assertion is ignored.
+        `${lib.showOption options.text.loc}` and `${lib.showOption options.source.loc}` are defined at the same priority. Set only one of these options.
       '';
       text = lib.mkIf (config.source != null) (lib.mkDefault (builtins.readFile config.source));
     };
