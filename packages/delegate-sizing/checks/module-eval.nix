@@ -136,7 +136,7 @@
     "module-delegate-sizing-${name}-stub" = mkTest "delegate-sizing-${name}-stub" (
       builtins.length (lib.splitString "\n" (lib.removeSuffix "\n" stub))
       <= 10
-      && lib.hasInfix "Load the delegate-sizing skill before delegating." stub
+      && lib.hasInfix "Load the delegate-sizing skill before delegating when your harness provides it." stub
       && lib.all (runtime: result.config.ai.${runtime}.rules.delegate-sizing-router.text == stub) runtimes
     );
   };
