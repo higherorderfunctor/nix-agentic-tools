@@ -12,7 +12,7 @@
       hm = config: (harness.evalHm config).config;
     };
   };
-  fixtures = import ./fixtures.nix {inherit lib;};
+  fixtures = import ./fixtures.nix {inherit lib pkgs;};
 in {
   checks = {
     ai-delivery = assert gate.passed;
@@ -22,7 +22,7 @@ in {
     ai-delivery-fixtures = assert fixtures.passed;
       pkgs.runCommandLocal "ai-delivery-fixtures-check" {} ''
         echo ${lib.escapeShellArg (lib.concatStringsSep "\n" fixtures.broken.errors)}
-        echo 'PASS: unconditional control and recorded exemption accepted; gated writer, stale exemption, and invalid policy fixtures rejected' > "$out"
+        echo 'PASS: real delivery writers and recorded exemptions accepted; broken writers, stale claims, malformed bodies and policy schemas rejected' > "$out"
       '';
   };
 }
