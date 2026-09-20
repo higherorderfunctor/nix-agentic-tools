@@ -1,4 +1,4 @@
-"""Exercise the shared JSON helper and real HM callers across generations."""
+"""Exercise the shared JSON helper and real HM/devenv callers across generations."""
 
 import copy
 import json
@@ -27,12 +27,18 @@ def snapshot(path):
 def exercise(case, bash, mode, use_xdg):
     root = Path.cwd() / f"{case['name']}-{mode:o}-{use_xdg}"
     home = root / "home"
-    state = root / "state" if use_xdg else home / ".local/state"
-    config = home / case["configFile"]
+    project = root / "project with spaces"
+    devenv = case.get("backend", "hm") == "devenv"
+    xdg_state = root / "state" if use_xdg else home / ".local/state"
+    state = project / ".devenv/state" if devenv else xdg_state
+    config_root = project if devenv else home
+    config = config_root / case["configFile"]
     environment = dict(os.environ, HOME=str(home))
     environment.pop("XDG_STATE_HOME", None)
     if use_xdg:
-        environment["XDG_STATE_HOME"] = str(state)
+        environment["XDG_STATE_HOME"] = str(xdg_state)
+    if devenv:
+        environment.update(DEVENV_ROOT=str(project), DEVENV_STATE=str(state))
     # A case whose writer STATES the mode its file must carry (kiro's merge
     # mcp.json, the one document a sibling target also writes) asserts
     # imposition instead of preservation: the stated mode on a new file, on a
@@ -66,11 +72,14 @@ def exercise(case, bash, mode, use_xdg):
         assert (result.returncode == 0) == succeeds, result.stderr
         if succeeds:
             assert "later-entry-ran" in result.stdout
+        if devenv:
+            assert not home.exists(), f"{case['name']}: task wrote to HOME"
+            assert not xdg_state.exists(), f"{case['name']}: task wrote to XDG state"
 
     # First empty generation creates neither config nor ownership state. It
     # must also leave an externally managed, even malformed, file byte-identical.
     activate(2)
-    assert not home.exists()
+    assert not config_root.exists()
     assert not state.exists()
     config.parent.mkdir(parents=True)
     config.write_text("externally managed, not JSON\n")
