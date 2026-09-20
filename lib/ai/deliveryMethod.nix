@@ -23,6 +23,23 @@
     then value.${backend}
     else value;
 
+  # Resolve only after option merging: the router, path arbitration and matrix
+  # observer must all give an explicit method the same precedence over a rule.
+  resolve = {
+    backend,
+    entry,
+    methodFor,
+    path,
+  }:
+    if entry.method != null
+    then entry.method
+    else
+      methodFor {
+        inherit backend path;
+        inherit (entry) facts;
+        default = byRule;
+      };
+
   # THE RULE: `shared` for a file the harness itself rewrites, otherwise a
   # symlink, otherwise — when the consumer cannot follow one — the read-only
   # copy. A runtime states only the FACT that forces a departure from the

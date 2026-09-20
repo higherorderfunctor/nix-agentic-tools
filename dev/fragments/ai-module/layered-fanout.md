@@ -70,8 +70,10 @@
   runtime claims; contributors are discovered from their context target and
   delivery options, without a runtime-name list. Public overrides and tombstones
   enter the aggregate before lowering, and claimants must agree with its symlink
-  method. Kimchi's current native context stays under its harness directory; an
-  explicit root AGENTS.md entry can participate as a third claimant.
+  method. All three readers use `deliveryMethod.resolve`, so an explicit method
+  beats `methodFor` consistently after option merging. Kimchi's current native
+  context stays under its harness directory; an explicit root AGENTS.md entry
+  can participate as a third claimant.
 - **AGENTS.md keeps a whole-entry default.** Codex and the shared repository
   writer decide whether a file exists by reading composed content. Deferring
   that read until priority arbitration keeps replaced store sources lazy.
