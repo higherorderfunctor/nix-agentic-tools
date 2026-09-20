@@ -276,6 +276,24 @@ in {
             inherit path;
           };
         standard = evalHm {ai.kiro.enable = true;};
+        # Two definitions at ORDINARY priority are not a merge error:
+        # `functionTo` merges the RESULTS, per call, through the enum. Two
+        # that agree answer; two that disagree fail where the router calls
+        # the function rather than where they were written.
+        agreeing = evalHm {
+          ai.kiro = lib.mkMerge [
+            {enable = true;}
+            {methodFor = _: "copy-ro";}
+            {methodFor = _: "copy-ro";}
+          ];
+        };
+        disagreeing = evalHm {
+          ai.kiro = lib.mkMerge [
+            {enable = true;}
+            {methodFor = _: "copy-ro";}
+            {methodFor = _: "shared";}
+          ];
+        };
         # The exotic case: replace the lambda, override ONE path, and hand
         # every other case back to the rule that was passed in.
         replaced = evalHm {
@@ -297,6 +315,8 @@ in {
         == "symlink"
         && ask replaced ".kiro/steering/orientation.md" == "copy-ro"
         && ask replaced ".kiro/settings/lsp.json" == "symlink"
+        && ask agreeing ".kiro/settings/lsp.json" == "copy-ro"
+        && !(builtins.tryEval (ask disagreeing ".kiro/settings/lsp.json")).success
     );
 
     ai-delivery-snapshot = pkgs.writeText "ai-delivery-snapshot" snapshot;
@@ -378,6 +398,43 @@ in {
         && kimchiContext.facts.symlinkReadable == false
         && lib.hasInfix "GENERATED-RULE" kiroRule.content.text
         && kiroRule.facts.symlinkReadable == false
+    );
+
+    # How a `value` document may be defaulted, and how it may NOT. Measured,
+    # not reasoned: the two shapes that look equivalent to the whole-entry
+    # `mkDefault` this layer replaced both lose every generated leaf as soon
+    # as a consumer adds one of its own.
+    module-delivery-value-content-merges-per-leaf = mkTest "delivery-value-content-merges-per-leaf" (
+      let
+        merged = generated:
+          (evalHm {
+            ai.kiro = lib.mkMerge [
+              {enable = true;}
+              {files.".kiro/probe.json" = {format = "json";} // generated;}
+              {files.".kiro/probe.json".content.value.consumer = true;}
+            ];
+          })
+          .config
+          .ai
+          .kiro
+          .files
+          .".kiro/probe.json"
+          .content
+          .value;
+        both = {
+          consumer = true;
+          generated = true;
+        };
+      in
+        # Ordinary priority and a per-LEAF default both merge leaf-wise.
+        merged {content.value.generated = true;}
+        == both
+        && merged {content.value.generated = lib.mkDefault true;} == both
+        # A default on the whole value, or on the whole content, is dropped
+        # outright: `filterOverrides` keeps the priority-100 definition, and
+        # every generated leaf leaves with the definition it discards.
+        && merged {content.value = lib.mkDefault {generated = true;};} == {consumer = true;}
+        && merged {content = lib.mkDefault {value.generated = true;};} == {consumer = true;}
     );
 
     # Structured content is rendered once, by the router, in whichever shape
