@@ -21,6 +21,13 @@
 #                                    # Same-named native options in `options` are independent.
 #     contextDescription ? null;     # runtime-specific option description override
 #     rulesDescription ? null;       # runtime-specific option description override
+#     config ? null;                 # ONE consumer callback for BOTH backends; it
+#                                    #   receives `backend` and describes delivery
+#                                    #   rather than lowering it, so a runtime with
+#                                    #   no per-backend lowering writes it once. A
+#                                    #   backend spec's own `config` still wins,
+#                                    #   which is how a runtime migrates one
+#                                    #   backend at a time.
 #     hm = {
 #       installPackage ? (_: cfg.package);
 #                              # callback (same args as `config`) returning the
@@ -69,6 +76,7 @@
   contextDescription ? null,
   ruleModule ? null,
   rulesDescription ? null,
+  config ? null,
   hm ? {},
   devenv ? {},
   # The package set the factory was built with, carried on the record so
@@ -94,6 +102,7 @@
 {
   inherit name transformers defaults options supportedPools hm devenv pkgs;
 }
+// lib.optionalAttrs (config != null) {inherit config;}
 // lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}
 // lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
 // lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}
