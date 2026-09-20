@@ -66,8 +66,8 @@
     '';
   # Emit only configured blocks; manual-only instructions follow the main table.
   block = target: key: title:
-    lib.optionalString (settings.${target}.${key} != false)
-    "#### ${target} ${title}\n\n${lib.removeSuffix "\n" settings.${target}.${key}}\n";
+    lib.optionalString (settings.${target}.${key}.enable or true)
+    "#### ${target} ${title}\n\n${lib.removeSuffix "\n" settings.${target}.${key}.text}\n";
   joinBlocks = blocks: lib.concatStringsSep "\n" (builtins.filter (text: text != "") blocks);
   runtimeBlock = target:
     "### ${target} runtime\n\n"

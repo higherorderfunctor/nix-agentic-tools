@@ -65,14 +65,14 @@
     customized = evaluate (lib.recursiveUpdate scenario {
       ai = {
         claude.programs.delegate-sizing.settings = {
-          checkUsage = false;
-          delegateTools = "CUSTOM CLAUDE DELEGATION";
-          introspectModels = false;
+          checkUsage.enable = false;
+          delegateTools.text = "CUSTOM CLAUDE DELEGATION";
+          introspectModels.enable = false;
         };
-        codex.programs.delegate-sizing.settings.launch = "CUSTOM CODEX LAUNCH";
+        codex.programs.delegate-sizing.settings.launch.text = "CUSTOM CODEX LAUNCH";
         kiro.programs.delegate-sizing.settings = {
-          introspectModels = false;
-          launch = false;
+          introspectModels.enable = false;
+          launch.enable = false;
         };
       };
     });
@@ -124,6 +124,7 @@
     "module-delegate-sizing-${name}-overrides" = mkTest "delegate-sizing-${name}-overrides" (
       lib.hasInfix "CUSTOM CLAUDE DELEGATION" customizedClaude
       && lib.hasInfix "CUSTOM CODEX LAUNCH" customizedClaude
+      && !(lib.hasInfix "#### claude usage" customizedClaude)
       && !(lib.hasInfix "api.anthropic.com/api/oauth/usage" customizedClaude)
       && !(lib.hasInfix "maxEffortLevel" customizedClaude)
       && !(lib.hasInfix "kiro-cli chat --no-interactive" customizedClaude)
