@@ -51,8 +51,8 @@
   # Bumped in place by `nix-update --generate-lockfile` (see the
   # the owner registry.nix row). Keep the literals on their own lines:
   # nix-update rewrites them by pattern.
-  version = "0.23.2";
-  srcHash = "sha256-nWKkQdzwm+jLoZYs25USsdbRwXj++aS1tif2ro4FsBI=";
+  version = "0.23.3";
+  srcHash = "sha256-LqnTcSu700XfDoBw5Lp18gZFBrOg6mXOBg3uc3RLV98=";
   npmDepsHash = "sha256-cUwSR+B1MA6wciAemCxevT1VrtSEGzPUpBKzZzMul2E=";
 in
   ourPkgs.markdownlint-cli2.override (_: {
