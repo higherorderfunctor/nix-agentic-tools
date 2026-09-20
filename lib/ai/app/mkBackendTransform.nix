@@ -51,10 +51,12 @@
     inherit lib;
     inherit (appRecord) pkgs;
   };
+  agent = import ../agent.nix {inherit lib;};
   aiCommon = import ../ai-common.nix {inherit lib;};
   deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
   dirHelpers = import ../dir-helpers.nix {inherit lib;};
+  hooks = import ../hooks.nix {inherit lib;};
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
   # `pkgs` comes off the RECORD, never from the module arguments. Naming
   # it in this function's formals makes the module system resolve it via
@@ -161,6 +163,65 @@
     then config.ai.hooks
     else {};
 
+  normalizedPools = {
+    agents = {
+      default = mergedAgents;
+      type = lib.types.attrsOf agent.agentType;
+    };
+    context = {
+      default = mergedContext;
+      type = lib.types.nullOr aiCommon.optionalContentModule;
+    };
+    environmentVariables = {
+      default = mergedEnvironmentVariables;
+      type = lib.types.attrsOf lib.types.str;
+    };
+    hooks = {
+      apply = lib.filterAttrs (_event: blocks: blocks != []);
+      default = topHooks;
+      type = hooks.hooksType;
+    };
+    lspServers = {
+      default = mergedLspServers;
+      type = lib.types.attrsOf aiCommon.lspServerModule;
+    };
+    # Proxy entries are already lowered here; applying the declaration schema
+    # again would add defaults to the credential-free client record.
+    mcpServers = {
+      default = mergedServers;
+      type = lib.types.attrsOf lib.types.raw;
+    };
+    rules = {
+      default = mergedRules;
+      type = lib.types.attrsOf (appRecord.ruleModule or aiCommon.ruleModule);
+    };
+    settings = {
+      default = resolvedSettings;
+      type = aiCommon.normalizedSettingsType;
+    };
+    shell = {
+      default = resolvedShell;
+      type = lib.types.nullOr lib.types.package;
+    };
+    skills = {
+      default = mergedSkills;
+      type = lib.types.attrsOf lib.types.path;
+    };
+  };
+  normalizedPool = name: neutral:
+    if supportsPool name
+    then cfg.normalized.${name}
+    else neutral;
+  # A default context can compose source bytes. Keep its presence structural
+  # until final-file priority arbitration has kept that generated content.
+  # An explicit normalized override instead supplies its own presence.
+  normalizedHasContext =
+    if !supportsPool "context"
+    then false
+    else if options.ai.${appRecord.name}.normalized.context.highestPrio == 1500
+    then hasMergedContext
+    else aiCommon.hasContent cfg.normalized.context;
+
   backendSpec = appRecord.${backend} or {};
   backendOptions = backendSpec.options or {};
   backendDefaults = backendSpec.defaults or {};
@@ -184,7 +245,19 @@
   # document only Home Manager reconciles, a path only the project tree has —
   # has to be able to say so.
   callbackArgs = {
-    inherit backend cfg config mergedServers mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables moduleEnvironmentVariables mergedAgents mergedContext hasMergedContext resolvedSettings resolvedShell topHooks;
+    inherit backend cfg config moduleEnvironmentVariables;
+    inherit (cfg) normalized;
+    hasMergedContext = normalizedHasContext;
+    mergedAgents = normalizedPool "agents" {};
+    mergedContext = normalizedPool "context" null;
+    mergedEnvironmentVariables = normalizedPool "environmentVariables" {};
+    mergedLspServers = normalizedPool "lspServers" {};
+    mergedRules = normalizedPool "rules" {};
+    mergedServers = normalizedPool "mcpServers" {};
+    mergedSkills = normalizedPool "skills" {};
+    resolvedSettings = normalizedPool "settings" {};
+    resolvedShell = normalizedPool "shell" null;
+    topHooks = normalizedPool "hooks" {};
   };
   customConfig = backendConfigFn callbackArgs;
   migrationConfig = migrationConfigFn callbackArgs;
@@ -325,6 +398,19 @@ in {
           they were written.
         '';
       };
+      normalized = lib.mapAttrs (pool: spec:
+        lib.mkOption (spec
+          // {
+            defaultText = lib.literalExpression "the root-to-runtime ${pool} fold";
+            internal = false;
+            readOnly = false;
+            description = ''
+              Merged ${pool} consumed by ${appRecord.name}'s transformer. The
+              default is the supported root-to-runtime fold, after replacement
+              and tombstone filtering for keyed pools. Override this ordinary
+              option with `lib.mkForce` to replace the transformer's input.
+            '';
+          })) (lib.filterAttrs (pool: _: supportsPool pool) normalizedPools);
       package = lib.mkOption {
         type = lib.types.package;
         default = package;
