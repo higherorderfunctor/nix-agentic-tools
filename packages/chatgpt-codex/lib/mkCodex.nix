@@ -967,6 +967,20 @@ in
       ai.codex = {
         inherit (ownedSettings.ai.codex) _ownPlans;
         files = lib.mkIf hasAgentsMdContent {
+          # The ONE generated entry whose priority stays on the whole entry
+          # rather than moving onto `content`. Deciding between "a file" and
+          # "no file" reads the COMPOSED body, and the body may come from a
+          # store source a consumer has already replaced — a replaced entry
+          # must never build it. A `mkDefault` wrapper defers that read until
+          # after `filterOverrides` has decided whether this definition
+          # survives at all; a definition whose value is an `if` on the body
+          # forces it the moment anything looks at the entry.
+          #
+          # The cost is the trap the rest of this migration removes: a
+          # consumer who defines only a SIBLING field here discards the
+          # generated content and gets a diagnostic from `validateFiles`
+          # naming the entry. Restate the content, or tombstone and declare
+          # the file.
           ${agentsMdTarget} = lib.mkDefault (
             if agentsMd == ""
             then null

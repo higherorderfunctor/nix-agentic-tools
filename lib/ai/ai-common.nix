@@ -176,12 +176,28 @@ in {
       then null
       else {text = lib.concatStringsSep "\n\n" bodies;};
 
-  contentFileEntry = value:
-    if value == null
-    then null
-    else if contentUsesSource value
-    then {content = {inherit (value) source;};}
-    else {content = {inherit (value) text;};};
+  # One generated file entry, with the generator's priority on the CONTENT
+  # option alone. `filterOverrides` runs before a type merges, so a whole-entry
+  # `mkDefault` is DISCARDED by any consumer definition at ordinary priority —
+  # including one that only sets a sibling field like `method`, which then
+  # survives with no bytes at all. Putting the priority one level down is what
+  # makes "change how this lands, keep what is in it" expressible.
+  #
+  # The empty case stays a whole-entry default, because a defaulted `null` is a
+  # tombstone for the WHOLE entry and there is no content option to put it on.
+  # Callers gate this on the STRUCTURAL `hasMergedContext`, and that is what
+  # lets the entry's shape be a constant: testing `value == null` here would
+  # force the composed body while the module system is only looking at the
+  # entry's shape, which builds a store source a consumer may have already
+  # replaced. Everything that depends on the value sits INSIDE the `mkDefault`,
+  # where `filterOverrides` can drop it unread.
+  contentFileEntry = value: {
+    content = lib.mkDefault (
+      if contentUsesSource value
+      then {inherit (value) source;}
+      else {inherit (value) text;}
+    );
+  };
 
   # ── Activation flag scoping ────────────────────────────────────────
   # Wrap a home.activation body in a subshell so its `set`/`shopt` flags
