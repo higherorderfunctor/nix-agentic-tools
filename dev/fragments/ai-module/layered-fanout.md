@@ -122,8 +122,10 @@
   single-owner map → `lib/ai/app/sharedAgentsMd.nix`
 - B7 public file-option declaration and runtime enable gate →
   `lib/ai/app/mkBackendTransform.nix`
-- L5 generic backend lowering → `lib/ai/runtime-files.nix`, called from
-  `lib/ai/app/mkBackendTransform.nix`
+- L5 generic backend lowering → `lib/ai/deliver.nix` (the router) and
+  `lib/ai/adapters/{hm,devenv}.nix`, called from
+  `lib/ai/app/mkBackendTransform.nix`. `lib/ai/runtime-files.nix` keeps the
+  map's validation and the shape one entry takes in a native file sink.
 
 ### Adding a new concern X
 
@@ -137,9 +139,10 @@
 4. Add L4 routing/rendering into `ai.<runtime>.files` in each supporting per-CLI
    factory's customConfig. Lifecycle-owned non-literal outputs remain explicit
    exceptions rather than bypassing the static map silently.
-5. Let the existing L5 sink lower the surviving entry; change
-   `runtime-files.nix` only when the common literal-file contract itself
-   changes.
+5. Let the existing L5 router lower the surviving entry; change
+   `lib/ai/deliver.nix` or an adapter only when the delivery contract itself
+   changes, and never write `home.file`, `home.activation`, `files` or `tasks`
+   from a factory — `module-delivery-no-new-direct-sink-writes` scans for it.
 6. Wire L2↔L3 through `mergePool`, add the pool to the package-provenance guard,
    or document and test the concern's intentional non-pool composition rule
    (hooks append per-event lists).

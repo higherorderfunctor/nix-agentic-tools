@@ -2,12 +2,19 @@
 #
 # It is the only code in the delivery layer allowed to write `home.file` and
 # `home.activation`, and it knows nothing about any runtime.
-{lib}: let
-  deliver = import ../deliver.nix {inherit lib;};
+{
+  lib,
+  pkgs,
+}: let
+  deliver = import ../deliver.nix {inherit lib pkgs;};
 in
   args: let
     delivery = deliver (args // {backend = "hm";});
   in {
+    inherit (delivery) assertions;
+    # Home Manager recurses a directory source natively, so a symlinked entry
+    # lowers one-to-one.
+    home.file = delivery.symlinkEntries;
     # ONE literal attribute path, carrying a value derived from the writer set
     # — never one fragment per writer. The module system walks a fragment's KEY
     # structure while it is still collecting definitions, so a fragment whose
