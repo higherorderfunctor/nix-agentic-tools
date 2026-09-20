@@ -27,8 +27,10 @@
     eval = evalModules {
       modules = [
         {
+          # Keep the internal assertion contract even if a server declares the same key.
           options =
-            {
+            serverDef.settingsOptions
+            // {
               assertions = lib.mkOption {
                 type = lib.types.listOf (lib.types.submodule {
                   options = {
@@ -40,8 +42,7 @@
                 internal = true;
                 description = "Settings validation, forced before any MCP renderer consumes settings.";
               };
-            }
-            // serverDef.settingsOptions;
+            };
         }
         {config = settings;}
       ];

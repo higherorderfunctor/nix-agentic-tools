@@ -6,9 +6,92 @@
   harness,
   ...
 }: let
-  inherit (harness) evalHm mkTest;
+  inherit (harness) evalHm mcpLib mkTest;
+
+  assertionSettings = passing: {
+    assertions = [
+      {
+        assertion = true;
+        message = "passing assertion must not appear";
+      }
+      {
+        assertion = passing;
+        message = "first caller assertion failed";
+      }
+      {
+        assertion = passing;
+        message = "second caller assertion failed";
+      }
+    ];
+    userAgent = "assertion-control";
+  };
+  expectedSettings = {
+    ignoreRobotsTxt = false;
+    proxyUrl = null;
+    userAgent = "assertion-control";
+  };
 in {
   checks = {
+    # tryEval cannot expose throw messages. Follow facet-mock-negative by
+    # evaluating a subprocess and checking its stderr, with a passing control.
+    module-mcp-settings-assertion-messages = let
+      source = lib.fileset.toSource {
+        root = ../../..;
+        fileset = lib.fileset.unions [
+          ../../../lib/credentials.nix
+          ../../../lib/mcp.nix
+          ../../../packages/fetch-mcp/modules/mcp-server.nix
+        ];
+      };
+      probe = pkgs.writeText "mcp-settings-assertions.nix" ''
+        { passing ? false }:
+        let
+          lib = import ${pkgs.path}/lib;
+          mcpLib = import ${source}/lib/mcp.nix { inherit lib; };
+          settings = builtins.fromJSON (
+            if passing
+            then ${builtins.toJSON (builtins.toJSON (assertionSettings true))}
+            else ${builtins.toJSON (builtins.toJSON (assertionSettings false))}
+          );
+          result = mcpLib.evalSettings "fetch-mcp" settings;
+        in
+          if passing
+          then assert result == builtins.fromJSON ${builtins.toJSON (builtins.toJSON expectedSettings)}; true
+          else result
+      '';
+    in
+      pkgs.runCommandLocal "module-test-mcp-settings-assertion-messages" {
+        nativeBuildInputs = [pkgs.nix];
+      } ''
+        export NIX_STATE_DIR="$TMPDIR/nix-state"
+        mkdir -p "$NIX_STATE_DIR/profiles/per-user/$USER"
+        nix-instantiate --eval --strict ${probe} --arg passing true
+        if nix-instantiate --eval --strict ${probe} --arg passing false >actual.stdout 2>actual.stderr; then
+          echo "FAIL: failing MCP assertions unexpectedly succeeded" >&2
+          exit 1
+        fi
+        ${lib.concatMapStringsSep "\n" (message: ''
+          if ! grep -F -- ${lib.escapeShellArg message} actual.stderr; then
+            cat actual.stderr >&2
+            exit 1
+          fi
+        '') (["MCP server fetch-mcp settings assertions failed:"] ++ map (entry: entry.message) (builtins.filter (entry: !entry.assertion) (assertionSettings false).assertions))}
+        if grep -F -- "passing assertion must not appear" actual.stderr; then
+          echo "FAIL: diagnostic includes a passing assertion" >&2
+          exit 1
+        fi
+        echo "PASS: MCP assertion diagnostics contain both failing messages" > "$out"
+      '';
+
+    # Exercise the same settings in both arms; equality also rejects leaked metadata.
+    module-mcp-settings-assertions = mkTest "mcp-settings-assertions" (
+      let
+        passing = builtins.tryEval (mcpLib.evalSettings "fetch-mcp" (assertionSettings true) == expectedSettings);
+        failing = builtins.tryEval (builtins.deepSeq (mcpLib.evalSettings "fetch-mcp" (assertionSettings false)) true);
+      in
+        passing.success && passing.value && !failing.success
+    );
+
     # ── services.mcp-servers module ──────────────────────────────────
 
     # Default: all servers are disabled.
