@@ -4,6 +4,10 @@
 in {
   agent = import ./agent.nix {inherit lib;};
   app = import ./app {inherit lib;};
+  # The delivery method vocabulary and the rule that picks one from a file's
+  # stated consumer facts. Exported because `ai.<runtime>.methodFor` documents
+  # it as its default and a replacement delegates back to it.
+  deliveryMethod = import ./deliveryMethod.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
   mcpServer = import ./mcpServer {inherit lib;};
   # ONE reconciler for everything a generation owns: whole files in a
