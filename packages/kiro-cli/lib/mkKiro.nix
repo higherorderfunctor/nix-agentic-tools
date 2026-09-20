@@ -436,8 +436,7 @@
   # by BOTH backends. Typed wins on a key collision. A raw `hooksJson` value may
   # be a PATH (read its contents) or a string; resolve to string CONTENT here so
   # both backends write the file body — devenv's `writeText` would otherwise embed
-  # the path string, and HM's `mkSourceEntry` handles paths but resolving keeps
-  # them identical.
+  # the path string, and resolving keeps the two backends identical.
   mkAllHookFiles = cfg:
     lib.mapAttrs (_: c:
       if builtins.isPath c
