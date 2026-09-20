@@ -1,8 +1,7 @@
 # Delegate sizing package
 
-> **Last verified:** 2026-09-20 — Kiro candidates use the public-catalog ids
-> from the kiro-cli extractor; account availability still requires live
-> discovery.
+> **Last verified:** 2026-09-20 — the always-on stub is one sentence under its
+> own heading; the five rules live only in the generated skills.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,
@@ -38,9 +37,10 @@ its absolute store path, avoiding a dependency cycle with skills that include
 the command. Skill derivations format their Markdown with Prettier; the preview
 functions read those built files.
 
-`fragments/skill-routing.md` contains only the five rules. `router.nix` appends
-the load instruction, qualified for harnesses that provide the skill, and
-supplies the always-on rule to both the factory and repository projections. This
+`fragments/skill-routing.md` contains a one-sentence always-on stub under its
+own heading. `router.nix` supplies that file unchanged to both the factory and
+repository projections. `lib/rules.md` holds the five rules; `lib/render.nix`
+places them at the top of each runtime's skill, before the preamble. This
 repository includes that rule in `dev/generate.nix`'s root composition, which
 reaches AGENTS.md even with Codex CLI instructions disabled. Repository devenv
 config suppresses the native Claude, Codex and Kiro rule copies: Codex rules
