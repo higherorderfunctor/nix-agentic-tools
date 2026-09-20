@@ -8,7 +8,8 @@
 }: let
   # Read model decisions and runtime routes before selecting table candidates.
   models = import ./models.nix;
-  kiroModels = builtins.fromJSON (builtins.readFile ../../kiro-cli/models.json);
+  # Public-catalog ids from the kiro-cli extractor; the skill still requires the live list because account availability differs.
+  kiroModels = (builtins.fromJSON (builtins.readFile ../../kiro-cli/extracted.json)).models;
   firstParty = {
     claude = ["anthropic"];
     codex = ["openai"];
