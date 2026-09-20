@@ -845,7 +845,7 @@ in
           # and tombstone boundary.
           (lib.mkIf hasMergedContext {
             ai.claude.files.".claude/${cfg.context.filename}" =
-              lib.mkDefault (aiCommon.contentFileEntry mergedContext);
+              aiCommon.contentFileEntry mergedContext;
           })
           # Attrs-shape ai.rules / ai.claude.rules → .claude/rules/<name>.md.
           # Each entry becomes one file, translated through claudeTransformer
@@ -855,13 +855,15 @@ in
             inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
           in {
             ai.claude.files = lib.mapAttrs' (name: rule:
-              lib.nameValuePair ".claude/rules/${name}.md" (lib.mkDefault {
-                content.text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
-                  // {
-                    text = resolveRuleText rule;
-                    paths = rule.matcher;
-                  });
-              }))
+              lib.nameValuePair ".claude/rules/${name}.md" {
+                content = lib.mkDefault {
+                  text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
+                    // {
+                      text = resolveRuleText rule;
+                      paths = rule.matcher;
+                    });
+                };
+              })
             mergedRules;
           })
           # Auto-set ENABLE_LSP_TOOL=1 when MCP servers are present.
@@ -1019,7 +1021,7 @@ in
             files.".claude/settings.json".json = gapSettings;
           })
           (lib.mkIf hasMergedContext {
-            ai.claude.files.".claude/${cfg.context.filename}" = lib.mkDefault contextEntry;
+            ai.claude.files.".claude/${cfg.context.filename}" = contextEntry;
           })
           # Attrs-shape ai.rules / ai.claude.rules → .claude/rules/<name>.md.
           (let
@@ -1027,13 +1029,15 @@ in
             inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
           in {
             ai.claude.files = lib.mapAttrs' (name: rule:
-              lib.nameValuePair ".claude/rules/${name}.md" (lib.mkDefault {
-                content.text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
-                  // {
-                    text = resolveRuleText rule;
-                    paths = rule.matcher;
-                  });
-              }))
+              lib.nameValuePair ".claude/rules/${name}.md" {
+                content = lib.mkDefault {
+                  text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
+                    // {
+                      text = resolveRuleText rule;
+                      paths = rule.matcher;
+                    });
+                };
+              })
             mergedRules;
           })
           # Skills — devenv has no upstream skills option on
