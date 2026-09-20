@@ -7,10 +7,10 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/adapters/*
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-18 — the delivery diagnostics are silent for a root
-> pool an incapable runtime excludes, and report per-runtime requests a backend
-> cannot deliver; the `migrationConfig` exception is an `own` target that
-> declares no units, not a generated retirement script.
+> **Last verified:** 2026-09-20 — the final seam is a DELIVERY description, not
+> a literal-file map: `content` is a tagged sum defaulted on its own, the method
+> comes from consumer facts, and the router plus two adapters are the only
+> writers of a native sink.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -423,38 +423,68 @@ one typed surface, with HM linking its user-global files and devenv
 materializing the same whole-file layers from repository declarations into the
 native user lookup location.
 
-### Final literal-file seam
+### Final delivery seam
 
 Every runtime declares `ai.<runtime>.files`; there is deliberately no root
 `ai.files`. Keys are non-empty normalized relative paths interpreted against the
-backend root (HOME for Home Manager, project root for devenv). Each non-null
-entry sets exactly one of `text` or `source`, plus optional `executable` intent.
-Generators contribute whole entries with `mkDefault`; an ordinary consumer entry
-replaces the complete generated file, and null suppresses it. Divergent
-same-priority definitions fail rather than field-merging or concatenating.
+backend root (HOME for Home Manager, project root for devenv). An entry
+DESCRIBES a file rather than lowering one: `content` carries the bytes,
+`facts.{harnessWrites,symlinkReadable}` carry what the CLI does with the path,
+and `entry` / `ledger` name the writer that materializes it when it is not a
+symlink. `null` suppresses a generated entry, and it absorbs at equal priority
+so a tombstone still wins over a description.
+
+`content` is a TAGGED sum (`lib.types.attrTag`), not a pair of nullable
+siblings: exactly one of `text`, `source`, `value` (structured, rendered by
+`format`) or `run` (a body that writes the file when the writer runs). The tag
+is what makes the text/source exclusion a type rather than a hand-rolled check,
+and what lets priority apply to the bytes ALONE.
+
+That is the part most likely to be remembered wrongly, because it replaced a
+whole-entry contract:
+
+- a generator contributes `content = lib.mkDefault {text = …;}` and leaves every
+  sibling field at ordinary priority, so a consumer changes HOW a file lands
+  (`method`, `facts`, `mode`) without restating WHAT is in it;
+- a whole-entry `mkDefault` is the opposite and was the bug: `filterOverrides`
+  runs before `type.merge`, so any consumer definition at priority 100 discards
+  the generated entry outright and the survivor has no content at all;
+- a `value` document must NOT be defaulted as a whole either.
+  `content = mkDefault {value = …;}` and `content.value = mkDefault {…}` both
+  lose every generated leaf the moment a consumer defines one of its own —
+  measured on the real type. A document contributes its leaves at ordinary
+  priority, or one `mkDefault` per LEAF.
+
+How a file lands is a METHOD — `symlink`, `copy-ro`, `shared`, `upstream` —
+resolved by `ai.<runtime>.methodFor` from the facts, or stated per file as the
+light exception. A runtime states facts, never a method and never a reason.
 
 The graph is one-way: normalized pools compose, runtime routing chooses a
 target, the target renderer emits final bytes into `ai.<runtime>.files`, and the
-shared backend transform lowers surviving entries to `home.file` or devenv
-`files`. Claude context/rules, Codex user AGENTS.md, Copilot's repository
-context/instructions, Kimchi harness AGENTS.md, and Kiro Home Manager
-context/steering all use the runtime maps. Repository-local Codex/Kiro AGENTS.md
-retains one divergence-checking owner and enters the same architecture through
-hidden `ai.internal.files`, never through competing runtime writers. Public
-Codex/Kiro entries for a shared target arbitrate inside that owner before its
-single native sink: equal entries deduplicate, divergence fails, an ordinary
-entry replaces the generated default, and null suppresses it.
+delivery router (`lib/ai/deliver.nix`) plus one adapter per backend
+(`lib/ai/adapters/`) lower surviving entries — the only code allowed to write
+`home.file`, `home.activation`, devenv `files`, `tasks` or `enterTest`. Claude
+context/rules, Codex user AGENTS.md, Copilot's repository context/instructions,
+Kimchi harness AGENTS.md, and Kiro Home Manager context/steering all use the
+runtime maps. Repository-local Codex/Kiro AGENTS.md retains one
+divergence-checking owner and enters the same architecture through hidden
+`ai.internal.files`, never through competing runtime writers. Public Codex/Kiro
+entries for a shared target arbitrate inside that owner before its single native
+sink: equal entries deduplicate, divergence fails, an ordinary entry replaces
+the generated default, and null suppresses it.
 
-This is a static literal seam, not a universal file abstraction. Secret-bearing
-or merge/reconciliation-owned settings, agents, skills, hooks, and runtime state
-keep their existing typed lifecycle owners. Kiro steering uses ordinary symlinks
-after live 2.18.1 spikes confirmed startup discovery and same-session
-replacement reload in both global and project layouts; Kiro hooks stay real-file
-reconciled (`lib/ai/own.nix`, a `dir` target) because hook symlink behavior was
-not part of that result — the v3 scan keeps only `isFile()` entries. An
-enable-independent one-shot retirement, the same reconciler with a target that
-declares nothing, drains only the steering copies a legacy ledger records and
-then removes it.
+It is a delivery description, not a universal file abstraction. Secret-bearing
+values and runtime state keep their existing typed lifecycle owners, and a
+surface another module owns is DESCRIBED here — `method = "upstream"` plus the
+`sink` that owns it — rather than written here. Skills go through the map now:
+one entry per tree, expanded by Home Manager natively and walked by the router
+for devenv. Kiro steering uses ordinary symlinks after live 2.18.1 spikes
+confirmed startup discovery and same-session replacement reload in both global
+and project layouts; Kiro hooks stay real-file reconciled (`lib/ai/own.nix`, a
+`dir` target) because hook symlink behavior was not part of that result — the v3
+scan keeps only `isFile()` entries. An enable-independent one-shot retirement,
+the same reconciler with a target that declares nothing, drains only the
+steering copies a legacy ledger records and then removes it.
 
 ### Documentation parity is capability parity
 
@@ -995,8 +1025,8 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-12 — package modules own consumer checks; the
-> shared harness discovers backend imports and owner activation probes.
+> **Last verified:** 2026-09-19 — L5 is the delivery router plus one adapter per
+> backend, and no factory writes a native sink itself.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 

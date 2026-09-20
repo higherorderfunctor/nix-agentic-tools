@@ -1,7 +1,8 @@
 ## ai.skills Fanout Delegation Pattern
 
-> **Last verified:** 2026-08-19 — the retired generated-skill exception is
-> removed; Stacked Workflows remains the sole skill-package program consumer.
+> **Last verified:** 2026-09-19 — every branch reaches its backend through
+> `helpers.mkSkillFiles` and the delivery router's one walk; Stacked Workflows
+> remains the sole skill-package program consumer.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
