@@ -46,6 +46,7 @@
         "ai.codex.files"
         "ai.codex.hooks"
         "ai.codex.mcpServers"
+        "ai.codex.methodFor"
         "ai.codex.nativeSettings"
         "ai.codex.package"
         "ai.codex.programs"
