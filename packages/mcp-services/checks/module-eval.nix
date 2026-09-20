@@ -140,14 +140,14 @@ in {
         in
           hits != [] && lib.all runWrapped hits;
       in
-        # LINUX-GATED, deliberately. The module emits this entry only under
-        # `pkgs.stdenv.isLinux` (systemd user units), so on darwin the entry does
+        # LINUX-GATED, deliberately. The module emits systemd user units only
+        # on Linux, so on darwin the entry does
         # not exist, `text` is empty and every assertion below would be false --
         # a check that fails by construction on one required platform. The
         # sibling rotation test lacks this guard and is a recorded aarch64-darwin
         # failure blocking `--all-systems`; adding a second one would deepen that
         # blocker rather than merely inherit it.
-        !pkgs.stdenv.isLinux
+        !pkgs.stdenv.hostPlatform.isLinux
         || (
           everyOccurrenceWrapped "/bin/mkdir -p"
           && everyOccurrenceWrapped "/bin/chmod 700"
