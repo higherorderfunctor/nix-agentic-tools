@@ -1,16 +1,19 @@
 # Delegate sizing package
 
-> **Last verified:** 2026-09-19 (commit 1a3fe521) — generated skills use
-> formatted content and a concrete script store path; the always-on load
-> instruction stays outside the skill.
+> **Last verified:** 2026-09-20 — Kiro candidates use the public-catalog ids
+> from the kiro-cli extractor; account availability still requires live
+> discovery.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,
-then enabled external pools. Kiro candidates intersect
-`packages/kiro-cli/models.json` at build time and still require live discovery
-before a workflow pins an id. Manual external entries add instructions, never
-candidate rows; manual-only wins if a consumer lists a runtime in both external
-lists.
+then enabled external pools. Kiro candidates intersect the `models` array in
+`packages/kiro-cli/extracted.json` at build time. The kiro-cli extractor
+generates these ids from the public catalog; the skill still requires the live
+list before a workflow pins an id because account availability differs. For
+example, `claude-fable-5.1` is in the public catalog but has no Kiro id in
+`lib/models.nix`, so no Fable row renders. Manual external entries add
+instructions, never candidate rows; manual-only wins if a consumer lists a
+runtime in both external lists.
 
 Both backends import `modules/common.nix`. It imports `mkSkillPackageModule`
 once with all three supported runtimes. The factory passes `runtime` to its
