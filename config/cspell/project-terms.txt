@@ -411,6 +411,7 @@ statix
 stdenv
 stopword
 streamable
+strflocaltime
 strictdoc
 strs
 subdirs
@@ -448,6 +449,7 @@ ultracode
 unapprove
 unbuildable
 uncacheable
+underspecified
 undimensioned
 undmg
 unexecutable

@@ -56,6 +56,7 @@ ai = {
   };
   copilot.enable = true;
   kiro.enable = true;
+  programs.delegate-sizing.enable = true;
   programs.stacked-workflows.enable = true;
   settings.reasoningEffort = "high";
 };
@@ -279,6 +280,7 @@ nix build .#dns-root-hints
 | Package | Description |
 |---------|-------------|
 | `coding-standards` | Reusable coding standard fragments (DRY, conventional commits, etc.) |
+| `delegate-sizing-content` | Per-runtime model/effort sizing skills and a short routing rule |
 | `stacked-workflows-content` | Skills, references, and skill-routing fragment |
 
 Content packages are derivations with `passthru.fragments` for composable
@@ -291,6 +293,7 @@ instruction building.
 <!-- prettier-ignore -->
 | Feature | Without Nix | Home-Manager | DevEnv |
 |---------|-------------|--------------|--------|
+| Delegate sizing | Copy a generated runtime skill | `ai.programs.delegate-sizing.enable` (Claude + Codex + Kiro) | Same; project-native paths |
 | Stacked workflow skills | Copy skills/ | `ai.programs.stacked-workflows.enable` | `ai.programs.stacked-workflows.enable` |
 | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
 | Unified MCP config | Manual native config | `ai.mcpServers.*` (all five CLIs) | `ai.mcpServers.*` (all five CLIs) |
@@ -568,6 +571,32 @@ services.mcp-servers.servers = {
   context7-mcp.enable = true;
 };
 ```
+
+</details>
+
+<details>
+<summary><strong>Delegate Sizing</strong></summary>
+
+```nix
+ai.programs.delegate-sizing.enable = true;
+ai.claude.programs.delegate-sizing = {
+  extraRuntimes = ["codex"];
+  manualExternalDelegates = ["kiro"];
+};
+```
+
+Enable each auto-selectable external runtime with `ai.<runtime>.enable`.
+Manual-only entries require an explicit user request and do not require that
+runtime's module to be enabled. Codex and Kiro default to their own models.
+Kimchi and Copilot are excluded because supported delegation controls are absent
+or unestablished.
+
+Runtime-only overrides include `settings.delegateTools`,
+`settings.introspectModels`, `settings.checkUsage` and `settings.launch`:
+strings replace the presets, and `false` omits a block. Launch instructions are
+used when that runtime appears as an external delegate in another skill. The
+package intersects Kiro models with its catalog and requires a live list before
+pinning. Both Home Manager and devenv expose the same options.
 
 </details>
 
