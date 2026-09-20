@@ -375,6 +375,65 @@ in {
         && kiroRule.facts.symlinkReadable == false
     );
 
+    # Structured content is rendered once, by the router, in whichever shape
+    # the sink takes: literal bytes for json, a generated store path for toml
+    # and yaml — reading one of those back at evaluation would be
+    # import-from-derivation, which this repository does not do.
+    module-delivery-renders-structured-content = mkTest "delivery-renders-structured-content" (
+      let
+        value.probe = {
+          enabled = true;
+          name = "probe";
+        };
+        entryFor = format:
+          (evalHm {
+            ai.kiro = {
+              enable = true;
+              files.".kiro/rendered" = {
+                inherit format;
+                content = {inherit value;};
+              };
+            };
+          })
+          .config
+          .home
+          .file
+          .".kiro/rendered";
+        json = entryFor "json";
+        toml = entryFor "toml";
+        withoutRenderer = builtins.tryEval (builtins.deepSeq (entryFor "markdown") true);
+      in
+        json.text
+        == builtins.toJSON value
+        && !(json ? source)
+        && lib.hasPrefix builtins.storeDir (toString toml.source)
+        && !(toml ? text)
+        # A format with no renderer says so instead of delivering nothing.
+        && !withoutRenderer.success
+    );
+
+    # A method the layer does not route yet must fail loudly. Dropping the file
+    # is the one outcome that looks like success.
+    module-delivery-unsupported-method-asserts = mkTest "delivery-unsupported-method-asserts" (
+      let
+        evaluated = evalHm {
+          ai.kiro = {
+            enable = true;
+            files.".kiro/settings/probe.json" = {
+              # The harness rewrites it, so the rule answers `shared`.
+              content.text = "{}";
+              facts.harnessWrites = true;
+            };
+          };
+        };
+        failed = lib.filter (assertion: !assertion.assertion) evaluated.config.assertions;
+      in
+        lib.length failed
+        == 1
+        && lib.hasInfix ''ai.kiro.files.".kiro/settings/probe.json"'' (lib.head failed).message
+        && lib.hasInfix "`shared`" (lib.head failed).message
+    );
+
     # A corpus scan, not a changed-files scan: a gate that only looks at the
     # diff cannot notice that the tree behind it grew a new direct write.
     module-delivery-no-new-direct-sink-writes =
