@@ -131,6 +131,39 @@
     && !lib.any usesExit (lib.splitString "\n" body);
 in {
   checks = {
+    module-delivery-normalized-rules-reach-files = mkTest "delivery-normalized-rules-reach-files" (
+      lib.all (
+        evaluate: let
+          evaluated = evaluate {
+            ai.rules.inherited.text = "INHERITED-RULE";
+            ai.kiro = {
+              enable = true;
+              rules.local.text = "LOCAL-RULE";
+              normalized.rules = lib.mkForce {
+                forced = {
+                  text = "FORCED-RULE";
+                  matcher = ["src/**"];
+                };
+              };
+            };
+          };
+          cfg = evaluated.config;
+          files =
+            if cfg ? home
+            then cfg.home.file
+            else cfg.files;
+          option = evaluated.options.ai.kiro.normalized.rules;
+        in
+          builtins.attrNames cfg.ai.kiro.normalized.rules
+          == ["forced"]
+          && lib.hasInfix "FORCED-RULE" files.".kiro/steering/forced.md".text
+          && !(files ? ".kiro/steering/inherited.md")
+          && !(files ? ".kiro/steering/local.md")
+          && !option.internal
+          && !option.readOnly
+      ) [evalHm evalDevenv]
+    );
+
     module-delivery-command-writer-lowers-to-both-backends = mkTest "delivery-command-writer-lowers-to-both-backends" (
       let
         # Kiro declares no devenv files when bare-enabled, so the task's edge

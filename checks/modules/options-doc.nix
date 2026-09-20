@@ -48,6 +48,7 @@
         "ai.codex.mcpServers"
         "ai.codex.methodFor"
         "ai.codex.nativeSettings"
+        "ai.codex.normalized"
         "ai.codex.package"
         "ai.codex.programs"
         "ai.codex.projectDocMaxBytes"
