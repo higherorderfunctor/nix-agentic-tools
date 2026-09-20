@@ -488,11 +488,12 @@ This matters when passing values to options that gate on `lib.isPath` or
 **How to apply.** For **skills** on a modern HM pin either form works (path
 literal OR store-path string), so the skill packages deliberately use strings.
 But the type distinction still bites for values flowing into sinks that gate on
-the STRICT `lib.isPath` — `mkSourceEntry` (e.g. rule/instruction `source =`) and
-`cfg.context` both write a string as **text**, not a symlink — and for older HM
-pins. When the sink's tolerance is unknown, the safe form is a `./` path literal
-(introduce a module-relative one in the `let` block so filtering doesn't coerce
-it to a string):
+the STRICT `lib.isPath` — `cfg.context` writes a string as **text**, not a
+symlink — and for older HM pins. (`mkSourceEntry`, the helper this used to name
+first, is deleted: its last caller was the single-file skill branch, which now
+states `content.source` unconditionally.) When the sink's tolerance is unknown,
+the safe form is a `./` path literal (introduce a module-relative one in the
+`let` block so filtering doesn't coerce it to a string):
 
 ```nix
 { ... }: let
