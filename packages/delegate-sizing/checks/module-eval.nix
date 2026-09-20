@@ -4,8 +4,26 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest;
+  inherit (harness) evalDevenv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs hmLib mkTest;
   runtimes = ["claude" "codex" "kiro"];
+  testRenames."Old guidance" = "New guidance";
+  warningMarker = "delegate-sizing fallback warning: ";
+  evalDevenvWarnings = evalDevenvWithSpecialArgs {
+    delegateSizingRenames = testRenames;
+    lib =
+      hmLib
+      // {
+        warn = warning: value:
+          value
+          ++ [
+            {
+              assertion = true;
+              message = "${warningMarker}${warning}";
+            }
+          ];
+      };
+  };
+  evalHmWarnings = evalHmWithSpecialArgs {delegateSizingRenames = testRenames;};
   scenario.ai = {
     claude = {
       enable = true;
@@ -21,7 +39,11 @@
   hasLoadInstruction = text: lib.hasInfix "load the `delegate-sizing` skill" (lib.replaceStrings ["\n"] [" "] text);
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-sizing}/SKILL.md";
   optionTree = result: path: (lib.getAttrFromPath path result.options).type.getSubOptions [];
-  checkBackend = name: evaluate: let
+  checkBackend = {
+    name,
+    evaluate,
+    evaluateWarnings ? evaluate,
+  }: let
     result = evaluate scenario;
     claude = readSkill result "claude";
     codex = readSkill result "codex";
@@ -104,6 +126,7 @@
         ];
       };
     });
+    collisionWarning = "ai.programs.delegate-sizing.whenToDelegate.Collision collides with a package preset that defaults to off; choose a different name or set enable = true.";
     explicitlyDisabled = evaluate (lib.recursiveUpdate scenario {
       ai.programs.delegate-sizing.whenToDelegate.Intentional = {
         enable = lib.mkMerge [(lib.mkDefault false) false];
@@ -114,6 +137,10 @@
       inherit lib;
       renames = import ../lib/when-to-delegate-renames.nix;
     };
+    packageRenamed = evaluateWarnings (lib.recursiveUpdate scenario {
+      ai.programs.delegate-sizing.whenToDelegate."Old guidance".text = "Renamed consumer guidance.";
+    });
+    packageRenameWarning = "ai.programs.delegate-sizing.whenToDelegate.Old guidance has been renamed to ai.programs.delegate-sizing.whenToDelegate.New guidance; update the attribute name.";
     testWhenToDelegateOptions = import ../lib/when-to-delegate.nix {
       inherit lib;
       renames."Old guidance" = "New guidance";
@@ -139,10 +166,35 @@
     renamedWarnings = testWhenToDelegateOptions.warnings renamedEntries;
     ruleText = value: value.config.ai.claude.rules.delegate-sizing-router.text;
     whenToDelegateWarnings = value: packageWhenToDelegateOptions.warnings value.config.ai.programs.delegate-sizing.whenToDelegate;
+    collisionWarnings = evaluateWarnings (lib.recursiveUpdate scenario {
+      ai.programs.delegate-sizing.whenToDelegate.Collision = {
+        enable = lib.mkDefault false;
+        text = lib.mkMerge [
+          (lib.mkDefault "Package guidance.")
+          "Consumer guidance."
+        ];
+      };
+    });
+    warningDeliveryContract = label: evaluation: warning:
+      if evaluation.options ? warnings
+      then
+        if evaluation.config.warnings == [warning]
+        then true
+        else throw "delegate-sizing-${name}: ${label} warning was not exposed through config.warnings"
+      else let
+        captured = map (item: lib.removePrefix warningMarker item.message) (
+          builtins.filter
+          (item: lib.hasPrefix warningMarker item.message)
+          evaluation.config.assertions
+        );
+      in
+        if captured == [warning]
+        then true
+        else throw "delegate-sizing-${name}: ${label} warning did not use the lib.warn fallback";
     protectionContract =
       if builtins.length (whenToDelegateWarnings collision) != 1
       then throw "delegate-sizing-${name}: collision did not produce exactly one warning"
-      else if builtins.head (whenToDelegateWarnings collision) != "ai.programs.delegate-sizing.whenToDelegate.Collision collides with a package preset that defaults to off; choose a different name or set enable = true."
+      else if builtins.head (whenToDelegateWarnings collision) != collisionWarning
       then throw "delegate-sizing-${name}: collision warning text changed"
       else if whenToDelegateWarnings explicitlyDisabled != []
       then throw "delegate-sizing-${name}: explicitly disabled consumer entry unexpectedly warned"
@@ -152,6 +204,10 @@
       then throw "delegate-sizing-${name}: renamed entry still rendered under the old key"
       else if renamedWarnings != ["ai.programs.delegate-sizing.whenToDelegate.Old guidance has been renamed to ai.programs.delegate-sizing.whenToDelegate.New guidance; update the attribute name."]
       then throw "delegate-sizing-${name}: rename did not produce exactly one warning"
+      else if !(warningDeliveryContract "collision" collisionWarnings collisionWarning)
+      then false
+      else if !(warningDeliveryContract "rename" packageRenamed packageRenameWarning)
+      then false
       else true;
   in {
     "module-delegate-sizing-${name}-content" = mkTest "delegate-sizing-${name}-content" (
@@ -236,5 +292,15 @@
     "module-delegate-sizing-${name}-when-to-delegate-protection" = mkTest "delegate-sizing-${name}-when-to-delegate-protection" protectionContract;
   };
 in {
-  checks = checkBackend "devenv" evalDevenv // checkBackend "hm" evalHm;
+  checks =
+    checkBackend {
+      name = "devenv";
+      evaluate = evalDevenv;
+      evaluateWarnings = evalDevenvWarnings;
+    }
+    // checkBackend {
+      name = "hm";
+      evaluate = evalHm;
+      evaluateWarnings = evalHmWarnings;
+    };
 }
