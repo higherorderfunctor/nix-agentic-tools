@@ -423,8 +423,8 @@ validation.
 
 ## Generation Architecture
 
-> **Last verified:** 2026-09-12 — document generation reads the same owner
-> metadata registry as flake assembly.
+> **Last verified:** 2026-09-19 — the root instruction composition includes the
+> delegate-sizing stub alongside the published coding and workflow rules.
 
 Content is generated via Nix derivations wrapped in devenv tasks, organized by
 scope:
@@ -453,6 +453,7 @@ are a no-op.
 - `dev/generate.nix` — shared fragment composition logic consumed by both devenv
   tasks and flake derivations.
 - `packages/coding-standards/fragments/` — published coding standards.
+- `packages/delegate-sizing/fragments/` — published delegate-sizing rule.
 - `packages/stacked-workflows/fragments/` — published skill-routing rule.
 - `lib/ai/transformers/` — AI ecosystem renderers, exported through the `lib/ai`
   barrel.
