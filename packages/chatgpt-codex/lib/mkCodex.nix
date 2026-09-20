@@ -1122,7 +1122,9 @@ in
           ai.codex.files = lib.mkMerge [
             {
               ${configFile} = {
-                content = lib.mkDefault {value = settings;};
+                # Ordinary leaves retain generated siblings when a consumer
+                # extends this document; a whole-content default discards them.
+                content.value = settings;
                 entry = "codexSettingsReconcile";
                 facts.harnessWrites = true;
                 format = "toml";
