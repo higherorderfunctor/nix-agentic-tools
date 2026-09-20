@@ -1,8 +1,9 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-18 — both runtime-writable documents reconcile
+> **Last verified:** 2026-09-19 — both runtime-writable documents reconcile
 > their owned leaves through `lib/ai/own.py`, one bundle and one activation
-> entry each. Full lineage:
+> entry each, and the context entry defaults its `content` option rather than
+> the whole entry. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
@@ -35,8 +36,10 @@ symlink-to-store. The two are separate bundles on purpose: nothing orders them
 against each other, and each entry name is a consumer-visible contract.
 Immutable artifacts ultimately use static `home.file` / `files.*`, but
 normalized context first renders into the final `ai.kimchi.files` map and only
-then reaches that generic sink. This makes `harness/AGENTS.md` a whole-entry
-consumer replacement/tombstone point; `mcp.json` and skills retain their
+then reaches that generic sink. This makes `harness/AGENTS.md` a consumer
+replacement point: the generated body is a default on the entry's `content`
+option alone, so a consumer replaces the bytes, changes how the file lands, or
+suppresses it with `null`, independently; `mcp.json` and skills retain their
 existing typed owners. When both root and Kimchi-specific context are
 configured, their bodies concatenate root-first; `ai.kimchi.context.filename`
 controls the artifact name.
