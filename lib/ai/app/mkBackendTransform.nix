@@ -164,7 +164,11 @@
   backendSpec = appRecord.${backend} or {};
   backendOptions = backendSpec.options or {};
   backendDefaults = backendSpec.defaults or {};
-  backendConfigFn = backendSpec.config or (_: {});
+  # A runtime that describes its delivery rather than lowering it needs ONE
+  # callback, so the record may carry it directly. A backend spec's own
+  # `config` still wins, which is what lets a runtime move one backend at a
+  # time while the other keeps its existing body.
+  backendConfigFn = backendSpec.config or appRecord.config or (_: {});
   migrationConfigFn = backendSpec.migrationConfig or (_: {});
 
   defaults = appRecord.defaults or {};
@@ -173,8 +177,14 @@
   # `config` rides along so callbacks can observe sibling backend
   # options — e.g. the devenv materializer's conditional `devenv:files`
   # task edge needs `config.files != {}`.
+  #
+  # `backend` rides along for the one callback shared by both: a runtime whose
+  # delivery differs only in a consumer FACT states the fact per backend and
+  # never reads this, but a surface one backend genuinely does not have — a
+  # document only Home Manager reconciles, a path only the project tree has —
+  # has to be able to say so.
   callbackArgs = {
-    inherit cfg config mergedServers mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables moduleEnvironmentVariables mergedAgents mergedContext hasMergedContext resolvedSettings resolvedShell topHooks;
+    inherit backend cfg config mergedServers mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables moduleEnvironmentVariables mergedAgents mergedContext hasMergedContext resolvedSettings resolvedShell topHooks;
   };
   customConfig = backendConfigFn callbackArgs;
   migrationConfig = migrationConfigFn callbackArgs;
