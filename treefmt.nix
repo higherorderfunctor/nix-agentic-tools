@@ -101,10 +101,9 @@
     # formatter: these are regenerated verbatim by
     # `npm install --package-lock-only` when the package is bumped, so
     # letting biome restyle them makes every regeneration a ~600-line
-    # phantom diff on a 145 KB file. The `<pkg>-package-lock.json` glob
-    # matches devenv.nix's existing cspell exclusion, so the naming
-    # convention is keyed on once and honoured by both.
-    "*-package-lock.json"
+    # phantom diff on a 145 KB file. Include both standard package-lock.json
+    # and prefixed lockfiles, matching config/repo-validation.nix's cspell exclusion.
+    "*package-lock.json"
     ".devenv/**"
     ".direnv/**"
     ".pre-commit-config.yaml"
