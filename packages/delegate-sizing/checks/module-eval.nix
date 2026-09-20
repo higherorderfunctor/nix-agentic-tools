@@ -108,6 +108,25 @@
         runtimes)
       runtimes)
     "delegate-sizing rendered skills must not contain another runtime's native delegate tools"; true;
+    noEntries = evaluate scenario;
+    consumerEntry = evaluate (lib.recursiveUpdate scenario {
+      ai.programs.delegate-sizing.whenToDelegate.Consumer = {
+        text = "Delegate when the task is independently verifiable.";
+      };
+    });
+    disabledPreset = evaluate (lib.recursiveUpdate scenario {
+      ai.programs.delegate-sizing.whenToDelegate.Preset = {
+        enable = lib.mkDefault false;
+        text = lib.mkDefault "Delegate a preset task.";
+      };
+    });
+    enabledPreset = evaluate (lib.recursiveUpdate scenario {
+      ai.programs.delegate-sizing.whenToDelegate.Preset = {
+        enable = true;
+        text = lib.mkDefault "Delegate a preset task.";
+      };
+    });
+    ruleText = value: value.config.ai.claude.rules.delegate-sizing-router.text;
   in {
     "module-delegate-sizing-${name}-content" = mkTest "delegate-sizing-${name}-content" (
       lib.hasInfix "codex exec --model <slug> --config 'model_reasoning_effort=\"<level>\"' --json --output-last-message <out>.md - < <prompt-file>" claude
@@ -143,6 +162,7 @@
         perRuntime = optionTree result ["ai" "claude" "programs" "delegate-sizing"];
       in
         portable ? enable
+        && portable ? whenToDelegate
         && !(portable ? extraRuntimes)
         && !(portable ? manualExternalDelegates)
         && !(portable ? settings)
@@ -180,6 +200,13 @@
         && !(hasLoadInstruction skill))
       runtimes
       && lib.all (runtime: result.config.ai.${runtime}.rules.delegate-sizing-router.text == stub) runtimes
+    );
+    "module-delegate-sizing-${name}-when-to-delegate" = mkTest "delegate-sizing-${name}-when-to-delegate" (
+      ruleText noEntries
+      == builtins.readFile ../fragments/skill-routing.md
+      && lib.hasInfix "### Consumer\n\nDelegate when the task is independently verifiable." (ruleText consumerEntry)
+      && !(lib.hasInfix "### Preset" (ruleText disabledPreset))
+      && lib.hasInfix "### Preset\n\nDelegate a preset task." (ruleText enabledPreset)
     );
   };
 in {
