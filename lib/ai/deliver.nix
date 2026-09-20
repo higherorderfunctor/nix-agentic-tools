@@ -239,10 +239,19 @@ in
     # VALUE travels, never the rendered bytes: the option that owns the file
     # owns how it is written, which is the whole point of delegating it.
     sunk = lib.attrValues (bucket "upstream");
-    upstreamValue = entry:
-      entry.content.value
-      or entry.content.source
-      or entry.content.text;
+    upstreamValue = entry: let
+      contentOption = options.ai.${runtime}.files.valueMeta.attrs.${entry.path}.configuration.options.content;
+      tag = lib.head (lib.attrNames entry.content);
+    in
+      # Moving the evaluated VALUE makes defaults ordinary definitions in the
+      # host module. Alias the surviving definitions instead, retaining both
+      # content-level priority and nested leaf/list properties for its merge.
+      builtins.seq entry.content.${tag} (
+        lib.modules.mkAliasAndWrapDefsWithPriority lib.id (contentOption
+          // {
+            definitions = map (content: content.${tag}) contentOption.definitions;
+          })
+      );
     # Merged into CONSTANT attribute paths: a list of fragments whose length
     # comes from `cfg.activation` forces that option while the module system is
     # still collecting the definitions it is made of.
@@ -317,8 +326,7 @@ in
     # `upstreamRoots` table above for what happens otherwise.
     upstreamRoots = upstreamRoots.${backend};
     upstreamUnder = root:
-      lib.foldl' lib.recursiveUpdate {}
-      (map (entry: lib.setAttrByPath (lib.tail entry.sink) (upstreamValue entry))
+      lib.mkMerge (map (entry: lib.setAttrByPath (lib.tail entry.sink) (upstreamValue entry))
         (lib.filter (entry: entry.sink != [] && lib.head entry.sink == root) sunk));
 
     owned = {
