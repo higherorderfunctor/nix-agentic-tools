@@ -1055,8 +1055,8 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-20 — normalized keyed pools retain folded entries
-> under ordinary extension and still permit whole-pool replacement.
+> **Last verified:** 2026-09-20 — owned delivery enforces ledger method, path
+> and format agreement with paired diagnostic controls on both backends.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1178,6 +1178,10 @@ path types".
   claimant. Empty retirement preserves the regular document and native siblings;
   it cannot safely hand that path to a link writer. Ordinary empty retirement
   and Kiro's transitions between owned MCP modes remain supported.
+- **Owned entries must agree with their ledgers.** `copy-ro` requires a
+  directory ledger. A document claimant's path and format must exactly match its
+  JSON/TOML ledger: the ledger controls the actual destination and codec, so a
+  mismatch would redirect output or silently change its ownership semantics.
 - **Kiro keeps one MCP writer for both modes.** Both historical ledgers are
   declared together; the selected file claims one and the other retracts. Merge
   keeps `content.run` even with zero servers; empty overwrite has no claimant.
@@ -1250,6 +1254,13 @@ claims remain independent policy evidence, checked in both directions. Schema
 controls still reject malformed policy records; separate sink-corruption
 controls pin the body accessor for shapes the delivery types cannot emit. No
 behavioral control depends on a production row's guessed writer name.
+
+`owned-fixtures.nix`, included by that fixture suite and the delivery-layer
+checks, evaluates real runtime entries on both backends. Shared files without
+ledgers, undeclared writers, conflicting methods, copy-ro/document pairings and
+document path/format mismatches require exact diagnostics and corrected healthy
+declarations. These complement the command-body controls; they do not replace
+them or retroactively establish the order of historical matrix derivation.
 
 ### Generated delivery matrix
 
