@@ -1,7 +1,7 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-19 — both runtime-writable documents reconcile on
-> HM activation and devenv shell entry, including empty declarations. Full
+> **Last verified:** 2026-09-19 — one delivery transformer serves both backends;
+> backend config callbacks and document compatibility helpers are removed. Full
 > lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
@@ -9,13 +9,12 @@ closest in shape to `mkKiro` (dual config trees + activation-merge for the
 mutable tree). The HM and devenv modules are thin shims that apply `hmTransform`
 / `devenvTransform` to the record.
 
-It is the first runtime to carry ONE record-level `config` callback instead of
-an `hm.config` and a `devenv.config`. The two it replaced were near-duplicates
-that differed only in which native sink each wrote into, and that choice is now
-the delivery layer's: the callback DESCRIBES each file — its bytes, the consumer
-facts, and the writer that owns it if it is not a symlink — and
-`lib/ai/deliver.nix` decides how it lands. Kimchi needs no backend split in its
-delivery description.
+Its one record-level `config` transformer describes each file: its bytes,
+consumer facts, and writer if it is not a symlink. It reads the ordinary
+`ai.kimchi.normalized` options, and `lib/ai/deliver.nix` decides how each entry
+lands. Backend config callbacks are rejected; the public backend selectors share
+one implementation directly. Kimchi needs no backend split in its delivery
+description.
 
 The factory consumes Kimchi-shaped JSON from `ai.kimchi.nativeSettings`. The
 closed `ai.kimchi.settings` submodule is the shared normalized surface; a field

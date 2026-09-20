@@ -497,29 +497,20 @@
         lib.nameValuePair "${name}.json" {text = content;})
       (mkAllHookFiles cfg);
 
-  # The legacy steering copies an OLDER generation owned, as a target that
-  # declares nothing. Steering is delivered through the ordinary runtime-file
-  # symlink sink now (the pinned Kiro follows steering symlinks), so there is
-  # nothing left to write here and the only job is retracting what a manifest
-  # from before that change still records.
-  mkSteeringRetirementTarget = cfg: {
-    codec = "dir";
-    ledger = "materialize/kiro-steering.manifest";
-    path = "${cfg.configDir}/steering";
-    units = {};
-  };
-
   # Declared outside the product gate so upgrade+disable still drains the old
   # copy ledger before Home Manager checks the replacement steering symlinks.
-  kiroMigrationConfig = {cfg, ...}: let
-    target = mkSteeringRetirementTarget cfg;
-  in {
+  kiroMigrationConfig = {cfg, ...}: {
     ai.kiro.activation.retireSteering = {
       entry = {
         devenv = "ai:kiro:retire-steering-copies";
         hm = "retire-materialize-kiro-steering-ledger";
       };
-      ledgers.${target.ledger} = {inherit (target) codec path;};
+      # No file claims this historical ledger: the router emits an empty
+      # target, retracting old steering copies before replacement symlinks.
+      ledgers."materialize/kiro-steering.manifest" = {
+        codec = "dir";
+        path = "${cfg.configDir}/steering";
+      };
       pruneEntry.hm = "retire-materialize-kiro-steering";
       runWhenDisabled = true;
     };
@@ -1283,9 +1274,8 @@ in
         description = "Config directory relative to HOME / devenv root.";
       };
       # Kiro-specific freeform settings with typed subkeys for known
-      # knobs. Consumed by the settings/cli.json leaf reconciler in
-      # `hm.config` (retire Nix leaves and preserve native siblings) and by
-      # the static write in `devenv.config`.
+      # knobs. The settings/cli.json delivery writer reconciles these leaves
+      # on both backends, retiring Nix leaves and preserving native siblings.
       nativeSettings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;

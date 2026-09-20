@@ -7,14 +7,19 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-19 — Kiro uses the delivery layer; explicit
-> retirement writers survive runtime disable without enabling product output.
+> **Last verified:** 2026-09-19 — backend config callbacks and compatibility
+> helpers are removed; every runtime uses one delivery transformer.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
 > wrongly. Full lineage:
 > `git show d1c28a21:dev/fragments/ai-module/ai-module-fanout.md`.
 >
+> - **No generic backend config escape hatch on the runtime record.**
+>   `mkBackendTransform` correctly removed duplication until an untyped callback
+>   accumulated about 1,400 lines of backend-specific delivery. One record-level
+>   transformer describes typed files and writers; backend specs retain only
+>   options, defaults, installation and bounded migration hooks.
 > - **Don't hardcode Copilot's instructions/rules destination to
 >   `.github/instructions/`.** That resolves to `$HOME/.github/instructions/` on
 >   Home Manager, a directory copilot-cli never reads — every named instruction
@@ -370,10 +375,10 @@ hooks retain their documented composition semantics.
 ### Per-pool capability gate
 
 Every app record carries one `supportedPools` list. The shared transformer uses
-it for the per-runtime option schema, keyed-pool merge, callback fanout, and
-shell resolution. A per-runtime pool write that the runtime cannot consume is
-therefore an unknown-option error. A ROOT pool value stays portable and degrades
-to the neutral value for an incapable runtime.
+it for the per-runtime option schema, keyed-pool merge, delivery transformation,
+and shell resolution. A per-runtime pool write that the runtime cannot consume
+is therefore an unknown-option error. A ROOT pool value stays portable and
+degrades to the neutral value for an incapable runtime.
 
 Kimchi is the sharp example: it supports `context`, `environmentVariables`,
 `mcpServers`, `settings`, and `skills`, but not `rules`. Consequently root
@@ -529,8 +534,8 @@ broken — fix the module, not the consumer.
 
 `lib/ai/sharedOptions.nix` declares cross-app pools (`ai.skills`, `ai.rules`,
 `ai.mcpServers`, `ai.lspServers`, `ai.environmentVariables`, `ai.agents`,
-`ai.hooks`, `ai.context`). It's imported by BOTH `hmTransform.nix` and
-`devenvTransform.nix`.
+`ai.hooks`, `ai.context`). Both backend module trees import it; the public
+backend selectors share `mkBackendTransform.nix` directly.
 
 **The option declarations are shared. The values are NOT.**
 
@@ -548,10 +553,12 @@ Contributing in one and expecting the other to pick it up will silently fail —
 the contribution just doesn't land in the other eval. A program option tree can
 make enablement structural without changing that per-evaluation ownership.
 
-AI CLI factories (`mkAiApp`) instead share one record-level `config` callback,
-which receives `backend` for intentional scope differences. Backend specs retain
-package installation and migration callbacks. Each backend still evaluates that
-configuration independently; sharing code never shares option values.
+AI CLI factories (`mkAiApp`) share one record-level `config` delivery
+transformer, which reads the public normalized options and receives `backend`
+for intentional scope differences. Backend config callbacks are rejected by the
+record factory; backend specs retain package installation and bounded migration
+hooks. Each backend still evaluates that configuration independently; sharing
+code never shares option values.
 
 Portable program integrations use `lib.ai.program.mkProgram`. One specification
 declares the program name, its runtime capability set, and its nested option
@@ -866,7 +873,8 @@ and testing their distinct composition contracts.
 
 `lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
 filter. `lib/ai/app/mkBackendTransform.nix` calls it once for every supported
-pool and hands only the filtered `merged*` values to package callbacks. For MCP,
+pool as the default of `ai.<runtime>.normalized.<pool>`; transformer arguments
+read those public options, so a consumer can replace the merged input. For MCP,
 `lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy declarations at each
 scope while preserving null tombstones; only those client views cross the
 root/runtime merge. `lib/ai/sharedOptions.nix` separately aggregates explicit
@@ -875,20 +883,20 @@ emits only unique active units.
 
 Context is the lazy exception: `mkBackendTransform.nix` derives
 `hasMergedContext` structurally from the two raw content records before calling
-`composeContent`. Package callbacks use that boolean to decide whether to
+`composeContent`. Runtime transformers use that boolean to decide whether to
 contribute a generated default; they must not probe `mergedContext != null`,
 because two-part composition reads source bytes and would force a default that
 B7 later replaces or tombstones. The composed value stays inside the lazy
 default until priority arbitration selects it.
 
-`hmTransform.nix` and `devenvTransform.nix` are thin backend selectors; do not
-duplicate pool logic into them.
+The public backend selectors are defined in `lib/ai/app/default.nix` and share
+`mkBackendTransform.nix`; do not duplicate pool logic between backends.
 
 B7's type lives in `lib/ai/delivery-options.nix`; `lib/ai/runtime-files.nix`
 owns path and content validation, null filtering, and the shape one entry takes
 in a native sink; `lib/ai/deliver.nix` and the two adapters own the lowering.
-Package callbacks may render entries into the runtime map but must not read that
-map to define normalized inputs; keeping the edge one-way is what makes the
+Runtime transformers may render entries into the runtime map but must not read
+that map to define normalized inputs; keeping the edge one-way is what makes the
 module fixed point evaluable.
 
 Runtime delivery options, including downstream app records, define the path
@@ -924,7 +932,7 @@ remains lazy and is not size-checked at eval, avoiding IFD.
 
 ### Debugging
 
-For a missing emitted entry, inspect both levels before the callback:
+For a missing emitted entry, inspect both levels before the transformer:
 
 ```bash
 nix eval .#homeConfigurations.<host>.config.ai.<pool>
@@ -1037,8 +1045,8 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-19 — shared context arbitration discovers runtime
-> claimants by path; other contested paths and differing methods fail.
+> **Last verified:** 2026-09-19 — one runtime transformer describes delivery;
+> adapters own all native sink writes and the corpus permits zero direct writes.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1247,8 +1255,8 @@ reader imports an evaluator.
 
 - L1 options and L1→L2 expansion → `lib/ai/sharedOptions.nix`
 - L2b options (CLI-generic) and L2b→L3 expansion →
-  `lib/ai/app/mkBackendTransform.nix` (the HM/devenv transform files are thin
-  selectors)
+  `lib/ai/app/mkBackendTransform.nix` (public backend selectors share it
+  directly through `lib/ai/app/default.nix`)
 - L2b options (CLI-specific, like Claude's `agentsDir` or `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/null filtering → transform (`aiCommon.mergePool`)
@@ -1272,8 +1280,8 @@ reader imports an evaluator.
 2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline (if every
    supported CLI handles it the same way) or in each per-CLI factory (if the
    shape differs).
-3. Add `X` to `supportedPools` only on app records whose callbacks consume it.
-   The uniform normalized `settings` schema is the explicit exception: every
+3. Add `X` to `supportedPools` only on app records whose transformers consume
+   it. The uniform normalized `settings` schema is the explicit exception: every
    runtime declares it, while each field's native lowering may be narrower.
 4. Add L4 routing/rendering into `ai.<runtime>.files` in each supporting per-CLI
    factory's `config`. Declare owned outputs' ledgers under
@@ -1281,7 +1289,8 @@ reader imports an evaluator.
 5. Let the existing L5 router lower the surviving entry; change
    `lib/ai/deliver.nix` or an adapter only when the delivery contract itself
    changes, and never write `home.file`, `home.activation`, `files` or `tasks`
-   from a factory — `module-delivery-no-new-direct-sink-writes` scans for it.
+   from a factory — `module-delivery-no-new-direct-sink-writes` requires zero
+   direct writes across the full corpus, with no exemptions.
 6. Wire L2↔L3 through `mergePool`, add the pool to the package-provenance guard,
    or document and test the concern's intentional non-pool composition rule
    (hooks append per-event lists).
@@ -1316,22 +1325,20 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-08-16 — resolves #877: Kiro's FHS root supplies bash
-> but hides a host zsh, and that does not justify a runtime-specific implicit
-> shell default. `ai.shell` stays null; see below for the standing decision and
-> the override rule it shares with normalized `settings`.
+> **Last verified:** 2026-09-19 — the supported fold defaults ordinary
+> normalized options consumed by one runtime delivery transformer.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
 ### One record is the capability source
 
 Every `mkAiApp` record declares the normalized pools its runtime exposes in
-`supportedPools`. `mkBackendTransform.nix` reads that build-time list in four
-places:
+`supportedPools`. `mkBackendTransform.nix` uses that build-time list to
+determine:
 
 - only supported per-runtime pool options are declared;
 - only supported pools participate in shared/per-runtime merging;
-- only supported root pools reach the backend callback; and
+- only supported merged pools reach the runtime transformer; and
 - `shell` resolution runs only when `shell` is in the list.
 
 An unsupported per-runtime write is therefore an "option does not exist" eval
