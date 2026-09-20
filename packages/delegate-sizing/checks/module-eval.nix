@@ -143,7 +143,7 @@
       (runtime: let
         skill = readSkill result runtime;
       in
-        builtins.length (lib.splitString "1. Never inherit" skill)
+        builtins.length (lib.splitString "Never inherit" skill)
         == 2
         && !(hasLoadInstruction skill))
       runtimes
