@@ -13,7 +13,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm harnessNames mkTest;
+  inherit (harness) evalDevenv evalHm harnessNames hasLiteral mkTest ownPlan;
   deliveryMethod = import ../../lib/ai/deliveryMethod.nix {inherit lib;};
 
   # A file that states no fact at all takes both defaults, which is the shape
@@ -478,6 +478,169 @@ in {
         # `recursive` with a file source is a declaration error, not a file
         # whose leaves silently never appear.
         && !notADirectory.success
+    );
+
+    # The router builds the reconciler's input and never its behavior: one
+    # bundle per writer, one TARGET per declared ledger — not per file that
+    # exists this generation, which is what makes releasing a path ordinary.
+    module-delivery-owned-methods-build-one-bundle-per-writer = mkTest "delivery-owned-methods-build-one-bundle-per-writer" (
+      let
+        config = {
+          ai.kiro = {
+            enable = true;
+            activation.probeMaterialize = {
+              entry = {
+                devenv = "ai:probe:materialize";
+                hm = "probeMaterialize";
+              };
+              ledgers = {
+                # Claimed by the document below.
+                "json-settings/probe-doc.json" = {
+                  codec = "json";
+                  path = ".kiro/probe-doc.json";
+                };
+                # Claimed by two files.
+                "materialize/probe.manifest" = {
+                  codec = "dir";
+                  path = ".kiro/probe";
+                };
+                # Claimed by NOTHING this generation: a previous one owned it.
+                "materialize/probe-retired.manifest" = {
+                  codec = "dir";
+                  path = ".kiro/probe-retired";
+                };
+              };
+              pruneEntry.hm = "probeMaterializePrune";
+            };
+            files = {
+              # The scanner keeps only regular files, so the rule answers
+              # copy-ro and the writer above owns both.
+              ".kiro/probe/alpha.json" = {
+                content.text = "{}";
+                entry = "probeMaterialize";
+                facts.symlinkReadable = false;
+                ledger = "materialize/probe.manifest";
+                mode = "0400";
+              };
+              ".kiro/probe/beta.json" = {
+                content.source = ./fixtures/probe-skill/SKILL.md;
+                entry = "probeMaterialize";
+                facts.symlinkReadable = false;
+                ledger = "materialize/probe.manifest";
+              };
+              # The harness rewrites this one, so the rule answers shared and
+              # the declaration travels as JSON whatever the container is.
+              ".kiro/probe-doc.json" = {
+                content.value.probe = true;
+                entry = "probeMaterialize";
+                facts.harnessWrites = true;
+                format = "json";
+                ledger = "json-settings/probe-doc.json";
+              };
+            };
+          };
+        };
+        hm = evalHm config;
+        devenv = evalDevenv config;
+        plan = ownPlan "kiro" "probeMaterialize" hm;
+        targetOf = ledger: lib.head (lib.filter (target: target.ledger == ledger) plan.targets);
+        task = devenv.config.tasks."ai:probe:materialize";
+      in
+        lib.length plan.targets
+        == 3
+        && (targetOf "materialize/probe.manifest").units
+        == {
+          "alpha.json" = {
+            mode = "0400";
+            text = "{}";
+          };
+          "beta.json".store = ./fixtures/probe-skill/SKILL.md;
+        }
+        && (targetOf "json-settings/probe-doc.json").units
+        == {text = builtins.toJSON {probe = true;};}
+        # The release: a declared ledger nothing claims lowers to an EMPTY
+        # target, which is what retracts whatever the last generation wrote.
+        && (targetOf "materialize/probe-retired.manifest").units == {}
+        && (targetOf "materialize/probe-retired.manifest").path == ".kiro/probe-retired"
+        # The value the document declares cannot be read back out of the plan,
+        # so it rides beside it.
+        && hm.config.ai.kiro._ownPlans.probeMaterialize.declared.".kiro/probe-doc.json"
+        == {probe = true;}
+        # A directory target needs both phases on Home Manager: a real file has
+        # to be gone before checkLinkTargets, and a new one may only appear
+        # after linkGeneration.
+        && hm.config.home.activation ? probeMaterialize
+        && hm.config.home.activation ? probeMaterializePrune
+        && devenv.config.tasks ? "ai:probe:materialize"
+        && !(devenv.config.tasks ? probeMaterializePrune)
+        # Every owned file is written by the writer, not linked beside it.
+        && !(hm.config.home.file ? ".kiro/probe/alpha.json")
+        && !(devenv.config.files ? ".kiro/probe-doc.json")
+        # devenv's backstop verifies THIS plan at shell entry. The needle is a
+        # regex to `hasLiteral`, and a regex may not carry string context, so
+        # the plan path the task names is stripped of it before the search.
+        && hasLiteral (builtins.unsafeDiscardStringContext (lib.head (
+          lib.filter (argument: lib.hasPrefix builtins.storeDir argument)
+          (lib.splitString " " task.exec)
+        )))
+        devenv.config.enterTest
+    );
+
+    # Every way an owned file can be described wrongly, said where the option
+    # path is still known rather than as a reconciler error about a target.
+    module-delivery-owned-file-descriptions-are-checked = mkTest "delivery-owned-file-descriptions-are-checked" (
+      let
+        base = {
+          ai.kiro = {
+            enable = true;
+            activation.probeMaterialize.ledgers."materialize/probe.manifest" = {
+              codec = "dir";
+              path = ".kiro/probe";
+            };
+            activation.probeMaterialize.pruneEntry.hm = "probeMaterializePrune";
+          };
+        };
+        owned = {
+          content.text = "{}";
+          entry = "probeMaterialize";
+          facts.symlinkReadable = false;
+          ledger = "materialize/probe.manifest";
+        };
+        failures = overlay: let
+          evaluated = evalHm (lib.recursiveUpdate base overlay);
+        in
+          map (assertion: assertion.message)
+          (lib.filter (assertion: !assertion.assertion) evaluated.config.assertions);
+        says = needle: messages: lib.any (message: lib.hasInfix needle message) messages;
+        noWriter = failures {
+          ai.kiro.files.".kiro/probe/alpha.json" = removeAttrs owned ["entry"];
+        };
+        unknownLedger = failures {
+          ai.kiro.files.".kiro/probe/alpha.json" = owned // {ledger = "materialize/absent.manifest";};
+        };
+        outsideContainer = failures {
+          ai.kiro.files.".kiro/elsewhere/alpha.json" = owned;
+        };
+        sharedYaml = failures {
+          ai.kiro.files.".kiro/probe/alpha.json" =
+            owned
+            // {
+              facts.harnessWrites = true;
+              format = "yaml";
+            };
+        };
+        emptyWriter = failures {
+          ai.kiro.activation.probeNothing = {};
+        };
+      in
+        says "needs the writer that materializes it" noWriter
+        && says "which does not declare it" unknownLedger
+        && says "whose container is `.kiro/probe`" outsideContainer
+        && says "names no container leaves can be owned in" sharedYaml
+        && says "declares neither a `command` nor a" emptyWriter
+        # The control: the same declaration, described correctly, asserts
+        # nothing at all.
+        && failures {ai.kiro.files.".kiro/probe/alpha.json" = owned;} == []
     );
 
     # A corpus scan, not a changed-files scan: a gate that only looks at the
