@@ -105,7 +105,6 @@
   sinkWriters = {
     "packages/chatgpt-codex/lib/mkCodex.nix" = "skill/agent/execpolicy/hooks entries and the two skill-link migrators";
     "packages/claude-code/lib/mkClaude.nix" = "the devenv settings.json deep merges and the skill walker";
-    "packages/copilot-cli/lib/mkCopilot.nix" = "lsp, mcp and settings documents, rules, agents and skills";
     "packages/kiro-cli/lib/mkKiro.nix" = "permissions, lsp, cli.json, agents, the agents-dir walker and skills";
   };
 
