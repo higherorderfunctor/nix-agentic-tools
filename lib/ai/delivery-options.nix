@@ -7,6 +7,152 @@
 # whole description out of the option tree and override any field of it with
 # the ordinary module-system priorities.
 {lib}: let
+  deliveryMethod = import ./deliveryMethod.nix {inherit lib;};
+
+  # Which renderer turns a structured `content.value` into bytes, and — for a
+  # document the harness also writes — which container the reconciler owns
+  # leaves inside. `raw` is the default because most files carry their bytes
+  # directly.
+  formats = ["json" "markdown" "raw" "toml" "yaml"];
+
+  # A consumer fact usually holds on both backends. When it does not, the
+  # exception is keyed by backend; `either` keeps the common case a bare bool
+  # and adds no type a home-manager reader has not met.
+  factType = lib.types.either lib.types.bool (lib.types.attrsOf lib.types.bool);
+
+  # The bytes, as a TAGGED sum rather than a pair of nullable siblings. Three
+  # things follow, and each one is load-bearing:
+  #   - the text/source exclusion becomes the type instead of a hand-rolled
+  #     check that had to be repeated in the option's `apply`;
+  #   - `content = lib.mkDefault {text = …;}` from a generator survives a
+  #     consumer's definition of a SIBLING field, because priority now applies
+  #     to the content option alone rather than to the whole entry;
+  #   - a consumer's `content.source` still replaces a defaulted
+  #     `content.text`, so the tag never sees two definitions at once.
+  #
+  # The `value` and `run` tags of the design land with the renderer and the
+  # reconciler that consume them. A tag the layer cannot yet deliver would be
+  # a promise, not a schema.
+  contentType = lib.types.attrTag {
+    source = lib.mkOption {
+      type = lib.types.path;
+      description = "Store-backed bytes: a path whose contents become the file.";
+    };
+    text = lib.mkOption {
+      type = lib.types.str;
+      description = "Literal bytes.";
+    };
+  };
+
+  fileEntry = lib.types.submodule {
+    options = {
+      content = lib.mkOption {
+        type = lib.types.nullOr contentType;
+        default = null;
+        description = ''
+          The bytes this file carries, tagged with where they come from.
+          Generators contribute it at `mkDefault` priority and leave every
+          sibling field at ordinary priority, so a consumer can change HOW a
+          generated file lands without restating WHAT is in it.
+        '';
+      };
+      entry = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Which writer of `ai.<runtime>.activation` materializes this file.
+          Required for a file that is copied or reconciled rather than
+          symlinked, because those need something that also retracts it.
+        '';
+      };
+      executable = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Whether the materialized file should be executable. Symlinked files only; an owned copy states `mode` instead.";
+      };
+      facts = {
+        harnessWrites = lib.mkOption {
+          type = factType;
+          default = false;
+          description = ''
+            The CLI itself rewrites this file while it runs, so the only way to
+            keep both sides' edits is to own the declared leaves inside it.
+            Stated only where it is true.
+          '';
+        };
+        symlinkReadable = lib.mkOption {
+          type = factType;
+          default = true;
+          description = ''
+            The CLI follows a store symlink at this path. Stated only where it
+            is false — a scan that keeps only regular files, or a consumer that
+            reads a project-local path it will not follow out of the tree.
+          '';
+        };
+      };
+      format = lib.mkOption {
+        type = lib.types.enum formats;
+        default = "raw";
+        description = ''
+          Which renderer turns structured content into bytes. For a file whose
+          leaves are reconciled it also names the on-disk container, which is
+          why only `json` and `toml` can carry one.
+        '';
+      };
+      ledger = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Which of that writer's declared ledgers claims this file. The
+          ledger's own codec and path live on the writer, so a ledger no file
+          claims still produces a valid empty target — which is how a path is
+          released rather than abandoned.
+        '';
+      };
+      method = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum deliveryMethod.methods);
+        default = null;
+        description = ''
+          How this file lands. `null` asks `ai.<runtime>.methodFor`, which is
+          the normal case: a runtime states the consumer FACTS and lets the
+          rule decide. An explicit value is the light per-file exception and
+          beats the rule. It is resolved in the router, never at type level,
+          so `lib.mkForce` on this field and on `methodFor` both work.
+        '';
+      };
+      mode = lib.mkOption {
+        type = lib.types.nullOr (lib.types.strMatching "0?[0-7]{3}");
+        default = null;
+        description = ''
+          Octal permissions imposed on every write. Owned copies and
+          reconciled documents only; absent, an existing file keeps the mode it
+          has and a new one is created private to the user.
+        '';
+      };
+      recursive = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          `content.source` is a directory whose leaves land individually. FALSE
+          with a directory source means the DIRECTORY itself becomes the
+          symlink, which is what a CLI that discovers a skill by following one
+          needs.
+        '';
+      };
+      sink = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        example = ["files" ".claude/settings.json" "json"];
+        description = ''
+          For a file handed upstream instead of written here, the attribute
+          path of the option that owns it. That is how a surface delegated to
+          another module still appears in this runtime's delivery description
+          rather than vanishing from it.
+        '';
+      };
+    };
+  };
+
   # A writer's IDENTITY, declared under the runtime's `enable` gate and never
   # inferred from the files that happen to exist this generation. That is
   # what makes taking a surface from N entries to zero correct by
@@ -125,5 +271,9 @@
     };
   });
 in {
+  inherit formats;
+  # `null` is a tombstone that suppresses a generated entry, which is why the
+  # map is nullable rather than the entry being deleted by a filter.
+  fileMapType = lib.types.attrsOf (lib.types.nullOr fileEntry);
   writerMapType = lib.types.attrsOf writer;
 }

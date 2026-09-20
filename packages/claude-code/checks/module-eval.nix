@@ -126,10 +126,10 @@ in {
         ruleFile = evaluated.config.home.file.".claude/rules/named-rule.md" or null;
       in
         aggregate.text
-        == evaluated.config.ai.claude.files.".claude/CLAUDE.md".text
+        == evaluated.config.ai.claude.files.".claude/CLAUDE.md".content.text
         && aggregate.text == "CONTEXT-BASELINE-TOKEN."
         && ruleFile != null
-        && ruleFile.text == evaluated.config.ai.claude.files.".claude/rules/named-rule.md".text
+        && ruleFile.text == evaluated.config.ai.claude.files.".claude/rules/named-rule.md".content.text
         && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (ruleFile.text or "")
         && evaluated.config.home.file ? ".claude/rules/unnamed.md"
     );
