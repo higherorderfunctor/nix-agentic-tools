@@ -670,6 +670,9 @@ in {
         commandAndLedgers = failures {
           ai.kiro.activation.probeMaterialize.command = "printf 'probe'";
         };
+        ledgerWriterBefore = failures {
+          ai.kiro.activation.probeMaterialize.before = ["linkCheck"];
+        };
         recursiveFile = failures {
           ai.kiro.files.".kiro/tree" = {
             content.source = ./fixtures/probe-skill/SKILL.md;
@@ -696,6 +699,7 @@ in {
         && says "names no container leaves can be owned in" sharedYaml
         && says "declares neither a `command` nor a" emptyWriter
         && says "declares both a `command` and" commandAndLedgers
+        && says "so this value would be ignored" ledgerWriterBefore
         && says "delivers the\nleaves of a DIRECTORY" recursiveFile
         && says "has a write step" runWithoutOwner
         && says "literal bytes name no leaves to own" documentText
@@ -753,6 +757,61 @@ in {
         # An entry name keyed by backend, on the backend it names.
         && (builtins.tryEval (builtins.deepSeq (evalHm writer).config.home.activation true)).success
         && !(builtins.tryEval (builtins.deepSeq (evalDevenv writer).config.tasks true)).success
+    );
+
+    # `upstream` hands the bytes to the option `sink` names and delivers no
+    # file for them. The path stays in the delivery description — with its
+    # facts, its tombstone and its override boundary — while another module
+    # does the writing.
+    module-delivery-upstream-lowers-to-its-sink = mkTest "delivery-upstream-lowers-to-its-sink" (
+      let
+        delegated = sink: {
+          ai.kiro = {
+            enable = true;
+            files.".kiro/delegated.json" = {
+              content.value.probe = true;
+              format = "json";
+              method = "upstream";
+              inherit sink;
+            };
+          };
+        };
+        hm = (evalHm (delegated ["programs" "claude-code" "probeDelegated"])).config;
+        devenv = (evalDevenv (delegated ["files" ".kiro/delegated.json" "json"])).config;
+        # A sink is read by `upstream` and by nothing else, and an upstream
+        # entry with no sink has nowhere to put its bytes.
+        failures = overlay:
+          map (assertion: assertion.message)
+          (lib.filter (assertion: !assertion.assertion) (evalHm overlay).config.assertions);
+        says = needle: messages: lib.any (message: lib.hasInfix needle message) messages;
+      in
+        # The VALUE reaches the option, not the rendered bytes: the sink owns
+        # the rendering from here.
+        hm.programs.claude-code.probeDelegated
+        == {probe = true;}
+        && !(hm.home.file ? ".kiro/delegated.json")
+        # devenv's deep-merge sink: the same path, handed to devenv's own
+        # JSON merge instead of written as a store symlink.
+        && devenv.files.".kiro/delegated.json" == {json = {probe = true;};}
+        && failures (delegated ["programs" "claude-code" "probeDelegated"]) == []
+        && says "it needs the `sink`" (failures {
+          ai.kiro = {
+            enable = true;
+            files.".kiro/delegated.json" = {
+              content.text = "{}";
+              method = "upstream";
+            };
+          };
+        })
+        && says "which only `method = \"upstream\"` reads" (failures {
+          ai.kiro = {
+            enable = true;
+            files.".kiro/delegated.json" = {
+              content.text = "{}";
+              sink = ["programs" "claude-code" "probeDelegated"];
+            };
+          };
+        })
     );
 
     # A corpus scan, not a changed-files scan: a gate that only looks at the
