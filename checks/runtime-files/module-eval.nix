@@ -30,10 +30,10 @@ in {
               enable = true;
               files = {
                 ${textTarget} = {
+                  content.text = "${runtime}-TEXT";
                   executable = true;
-                  text = "${runtime}-TEXT";
                 };
-                ${sourceTarget}.source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
+                ${sourceTarget}.content.source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
               };
             };
           };
@@ -41,8 +41,8 @@ in {
           devenv = (evalDevenv config).config;
         in
           hm.home.file.${textTarget}.text
-          == hm.ai.${runtime}.files.${textTarget}.text
-          && devenv.files.${textTarget}.text == devenv.ai.${runtime}.files.${textTarget}.text
+          == hm.ai.${runtime}.files.${textTarget}.content.text
+          && devenv.files.${textTarget}.text == devenv.ai.${runtime}.files.${textTarget}.content.text
           && hm.home.file.${textTarget}.executable
           && devenv.files.${textTarget}.executable
           && hm.home.file.${sourceTarget}.source == ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
@@ -56,11 +56,11 @@ in {
     module-runtime-files-disabled-runtime-does-not-emit = mkTest "runtime-files-disabled-runtime-does-not-emit" (
       let
         target = "literal/disabled.txt";
-        config.ai.claude.files.${target}.text = "DECLARED-BUT-DISABLED";
+        config.ai.claude.files.${target}.content.text = "DECLARED-BUT-DISABLED";
         hm = (evalHm config).config;
         devenv = (evalDevenv config).config;
       in
-        hm.ai.claude.files.${target}.text
+        hm.ai.claude.files.${target}.content.text
         == "DECLARED-BUT-DISABLED"
         && !(hm.home.file ? ${target})
         && !(devenv.files ? ${target})
@@ -71,7 +71,7 @@ in {
         rejected = target: let
           attempt = builtins.tryEval (let
             evaluated = evalHm {
-              ai.claude.files.${target}.text = "invalid";
+              ai.claude.files.${target}.content.text = "invalid";
             };
           in
             builtins.deepSeq evaluated.config.ai.claude.files true);
@@ -93,11 +93,21 @@ in {
         in
           !attempt.success;
       in
+        # No content at all: the shape a consumer gets by defining only a
+        # sibling field on a generated file.
         rejected {}
+        # Two tags at once. The text/source exclusion is the TYPE now, not a
+        # hand-rolled check the option's `apply` had to repeat.
         && rejected {
-          source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
-          text = "both";
+          content = {
+            source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
+            text = "both";
+          };
         }
+        # The retired flat shape must not quietly keep working: an entry that
+        # still says `text` at the top level has not been migrated, and
+        # accepting it would deliver a file with no bytes.
+        && rejected {text = "flat";}
     );
 
     module-runtime-files-generated-default-tombstone = mkTest "runtime-files-generated-default-tombstone" (
@@ -154,7 +164,7 @@ in {
         && devenvConfig.ai.kimchi.files ? ".config/kimchi/harness/AGENTS.md"
         && devenvConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
         && devenvConfig.ai.internal.files ? "AGENTS.md"
-        && devenvConfig.ai.internal.files."AGENTS.md".text == devenvConfig.files."AGENTS.md".text
+        && devenvConfig.ai.internal.files."AGENTS.md".content.text == devenvConfig.files."AGENTS.md".text
         && !(devenvConfig.files."AGENTS.md" ? source)
     );
 
@@ -168,29 +178,29 @@ in {
           };
         };
         replaced = evalDevenv (lib.recursiveUpdate base {
-          ai.codex.files."AGENTS.md".text = "CONSUMER-REPLACEMENT";
+          ai.codex.files."AGENTS.md".content.text = "CONSUMER-REPLACEMENT";
         });
         suppressed = evalDevenv (lib.recursiveUpdate base {
           ai.kiro.files."AGENTS.md" = null;
         });
         deduplicated = evalDevenv (lib.recursiveUpdate base {
-          ai.codex.files."AGENTS.md".text = "SHARED-CONSUMER";
-          ai.kiro.files."AGENTS.md".text = "SHARED-CONSUMER";
+          ai.codex.files."AGENTS.md".content.text = "SHARED-CONSUMER";
+          ai.kiro.files."AGENTS.md".content.text = "SHARED-CONSUMER";
         });
         divergent = builtins.tryEval (let
           evaluated = evalDevenv (lib.recursiveUpdate base {
-            ai.codex.files."AGENTS.md".text = "CODEX-CONSUMER";
-            ai.kiro.files."AGENTS.md".text = "KIRO-CONSUMER";
+            ai.codex.files."AGENTS.md".content.text = "CODEX-CONSUMER";
+            ai.kiro.files."AGENTS.md".content.text = "KIRO-CONSUMER";
           });
         in
           builtins.deepSeq evaluated.config.ai.internal.files."AGENTS.md" true);
       in
-        replaced.config.ai.internal.files."AGENTS.md".text
+        replaced.config.ai.internal.files."AGENTS.md".content.text
         == "CONSUMER-REPLACEMENT"
         && replaced.config.files."AGENTS.md".text == "CONSUMER-REPLACEMENT"
         && suppressed.config.ai.internal.files."AGENTS.md" == null
         && !(suppressed.config.files ? "AGENTS.md")
-        && deduplicated.config.ai.internal.files."AGENTS.md".text == "SHARED-CONSUMER"
+        && deduplicated.config.ai.internal.files."AGENTS.md".content.text == "SHARED-CONSUMER"
         && deduplicated.config.files."AGENTS.md".text == "SHARED-CONSUMER"
         && !divergent.success
     );
@@ -213,7 +223,7 @@ in {
           (withDormantEntry {
             activeRuntime = "codex";
             dormantRuntime = "kiro";
-            entry.text = "DORMANT-KIRO";
+            entry.content.text = "DORMANT-KIRO";
           })
           (withDormantEntry {
             activeRuntime = "codex";
@@ -223,7 +233,7 @@ in {
           (withDormantEntry {
             activeRuntime = "kiro";
             dormantRuntime = "codex";
-            entry.text = "DORMANT-CODEX";
+            entry.content.text = "DORMANT-CODEX";
           })
           (withDormantEntry {
             activeRuntime = "kiro";
@@ -246,7 +256,7 @@ in {
           ai.codex = {
             context.text = oversized;
             enable = true;
-            files.".codex/AGENTS.md".text = "short";
+            files.".codex/AGENTS.md".content.text = "short";
             projectDocMaxBytes = 8;
           };
         };
@@ -262,7 +272,7 @@ in {
           ai = {
             codex = {
               enable = true;
-              files."AGENTS.md".text = "short";
+              files."AGENTS.md".content.text = "short";
               projectDocMaxBytes = 8;
             };
             context.text = oversized;
@@ -300,7 +310,7 @@ in {
             codex = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".codex/AGENTS.md".text = "HM-REPLACEMENT";
+              files.".codex/AGENTS.md".content.text = "HM-REPLACEMENT";
             };
           };
         };
@@ -320,7 +330,7 @@ in {
             codex = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files."AGENTS.md".text = "DEVENV-REPLACEMENT";
+              files."AGENTS.md".content.text = "DEVENV-REPLACEMENT";
             };
           };
         };
@@ -388,7 +398,7 @@ in {
         explicitEmpty = evalDevenv {
           ai.codex = {
             enable = true;
-            files."AGENTS.md".text = "";
+            files."AGENTS.md".content.text = "";
           };
         };
       in
@@ -409,7 +419,7 @@ in {
             claude = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".claude/CLAUDE.md".text = "CLAUDE-REPLACEMENT";
+              files.".claude/CLAUDE.md".content.text = "CLAUDE-REPLACEMENT";
             };
           };
         };
@@ -419,7 +429,7 @@ in {
             claude = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".claude/CLAUDE.md".text = "CLAUDE-REPLACEMENT";
+              files.".claude/CLAUDE.md".content.text = "CLAUDE-REPLACEMENT";
             };
           };
         };
@@ -429,7 +439,7 @@ in {
             copilot = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".github/copilot-instructions.md".text = "COPILOT-REPLACEMENT";
+              files.".github/copilot-instructions.md".content.text = "COPILOT-REPLACEMENT";
             };
           };
         };
@@ -439,7 +449,7 @@ in {
             kimchi = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".config/kimchi/harness/AGENTS.md".text = "KIMCHI-REPLACEMENT";
+              files.".config/kimchi/harness/AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
             };
           };
         };
@@ -449,7 +459,7 @@ in {
             kimchi = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".config/kimchi/harness/AGENTS.md".text = "KIMCHI-REPLACEMENT";
+              files.".config/kimchi/harness/AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
             };
           };
         };

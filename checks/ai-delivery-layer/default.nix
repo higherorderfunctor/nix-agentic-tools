@@ -24,6 +24,58 @@
   };
   resolve = args: deliveryMethod.byRule ({facts = plainFacts;} // args);
 
+  # ── The delivered-surface snapshot ──────────────────────────────────
+  # Everything the delivery layer puts on disk, rendered as sorted text. It is
+  # not an assertion: it is the EVIDENCE that a refactor of the layer changed
+  # nothing. Build it before and after the change and diff the two outputs —
+  # `nix build .#checks.x86_64-linux.ai-delivery-snapshot --print-out-paths`.
+  # A committed golden would be a merge conflict on every content change and
+  # would say nothing the diff does not.
+  #
+  # One eval per runtime attributes a change to its runtime; the combined one
+  # covers the cross-runtime AGENTS.md arbitration, which only happens when
+  # two AGENTS.md-standard runtimes are enabled together.
+  pools = {
+    agents.probe = {
+      description = "probe";
+      instructions = "probe";
+    };
+    context.text = "SNAPSHOT-CONTEXT";
+    environmentVariables.PROBE = "value";
+    hooks.PreToolUse = [{hooks = [{command = "true";}];}];
+    lspServers.probe.command = "probe";
+    mcpServers.probe.command = "probe";
+    rules.probe.text = "SNAPSHOT-RULE";
+    settings.reasoningEffort = "high";
+    skills.probe = ./fixtures/probe-skill;
+  };
+  snapshotConfig = runtimes: {
+    ai = pools // lib.genAttrs runtimes (_runtime: {enable = true;});
+  };
+  renderEntry = label: value: "${label} ${builtins.toJSON value}\n";
+  renderSink = backend: evaluated: let
+    inherit (evaluated) config;
+  in
+    if backend == "hm"
+    then
+      lib.concatStrings (lib.mapAttrsToList (path: entry: renderEntry "home.file ${builtins.toJSON path}" entry) config.home.file)
+      + lib.concatStrings (lib.mapAttrsToList (name: entry: renderEntry "home.activation ${builtins.toJSON name}" entry) config.home.activation)
+    else
+      lib.concatStrings (lib.mapAttrsToList (path: entry: renderEntry "files ${builtins.toJSON path}" entry) config.files)
+      + lib.concatStrings (lib.mapAttrsToList (name: task: renderEntry "tasks ${builtins.toJSON name}" task) config.tasks)
+      + renderEntry "enterTest" config.enterTest;
+  snapshotSection = backend: label: runtimes:
+    "== ${backend} ${label} ==\n"
+    + renderSink backend ((
+      if backend == "hm"
+      then evalHm
+      else evalDevenv
+    ) (snapshotConfig runtimes));
+  snapshot = lib.concatStrings (lib.concatMap (backend:
+    map (runtime: snapshotSection backend runtime [runtime]) harnessNames
+    ++ [(snapshotSection backend "<all>" harnessNames)])
+  ["devenv" "hm"]);
+
   # The factories that still write a native sink themselves, with the step of
   # the migration that takes each one off the list. This is keyed by PATH and
   # not by a count: the anchored patterns below see 33 of today's 36 sites, and
@@ -132,7 +184,7 @@ in {
         };
         withFiles =
           (evalDevenv (lib.recursiveUpdate base {
-            ai.kiro.files."probe.txt".text = "probe";
+            ai.kiro.files."probe.txt".content.text = "probe";
           })).config;
         withoutFiles = (evalDevenv base).config;
       in
@@ -241,6 +293,8 @@ in {
         && ask replaced ".kiro/steering/orientation.md" == "copy-ro"
         && ask replaced ".kiro/settings/lsp.json" == "symlink"
     );
+
+    ai-delivery-snapshot = pkgs.writeText "ai-delivery-snapshot" snapshot;
 
     # A corpus scan, not a changed-files scan: a gate that only looks at the
     # diff cannot notice that the tree behind it grew a new direct write.
