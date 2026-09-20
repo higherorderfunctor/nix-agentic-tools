@@ -105,9 +105,8 @@
 
   # The factories that still write a native sink themselves, with the step of
   # the migration that takes each one off the list. This is keyed by PATH and
-  # not by a count: the anchored patterns below see 33 of today's 36 sites, and
-  # the other three live inside codex's nested `home = {` block, which the
-  # second pattern flags as a whole rather than line by line.
+  # not by a count: anchored assignments and nested `home = {` blocks both
+  # count as direct writes, even when several sinks share one factory.
   #
   # An entry is removed when its factory stops writing sinks directly, and the
   # check fails in BOTH directions — a new writer anywhere under
@@ -125,7 +124,6 @@
   # leaves this list it has stopped calling `own` directly too, and
   # `ai.<runtime>._ownPlans` is where a check reads what its writers do.
   sinkWriters = {
-    "packages/chatgpt-codex/lib/mkCodex.nix" = "skill/agent/execpolicy/hooks entries and the two skill-link migrators";
     "packages/claude-code/lib/mkClaude.nix" = "the devenv settings.json deep merges and the skill walker";
     "packages/kimchi/lib/mkKimchi.nix" = "config.json, harness settings and mcp.json, and skills";
     "packages/kiro-cli/lib/mkKiro.nix" = "permissions, lsp, cli.json, agents, the agents-dir walker and skills";
