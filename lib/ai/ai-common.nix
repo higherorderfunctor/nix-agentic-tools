@@ -197,8 +197,8 @@ in {
     if value == null
     then null
     else if (value.source or null) != null
-    then {inherit (value) source;}
-    else {inherit (value) text;};
+    then {content = {inherit (value) source;};}
+    else {content = {inherit (value) text;};};
 
   # ── Activation flag scoping ────────────────────────────────────────
   # Wrap a home.activation body in a subshell so its `set`/`shopt` flags

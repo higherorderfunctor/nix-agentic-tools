@@ -43,11 +43,19 @@
   # `matLib = aiBase.materialize;` used to sit here. Its only consumer was the
   # kiro auto-memory suite, removed with that subsystem on 2026-09-01, and
   # deadnix caught it as an unused binding.
-  kiroSteeringFiles = evaluated: let
+  # The CONTENT of each steering entry, keyed by its logical filename. Content
+  # rather than the whole entry because that is what every caller asserts on,
+  # and it is one option deeper since the file map became a description of how
+  # a file lands rather than the bytes alone. An entry a consumer suppressed with `null` stays null.
+  kiroSteeringContent = evaluated: let
     prefix = "${evaluated.config.ai.kiro.configDir}/steering/";
   in
     lib.mapAttrs' (target: entry:
-      lib.nameValuePair (lib.removePrefix prefix target) entry)
+      lib.nameValuePair (lib.removePrefix prefix target) (
+        if entry == null
+        then null
+        else entry.content
+      ))
     (lib.filterAttrs (target: _entry: lib.hasPrefix prefix target) evaluated.config.ai.kiro.files);
   requireBody = path: ev: let
     label = "Kiro check requires config.${lib.showOption path}";
@@ -110,5 +118,5 @@
   # of its own.
   hmRetirementLedgerScript = requireBody ["home" "activation" "retire-materialize-kiro-steering-ledger" "text"];
 in {
-  inherit dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringFiles kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
+  inherit dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
 }

@@ -15,6 +15,7 @@
     lib.hasAttrByPath ["devenv" "root"] options
     && lib.hasAttrByPath ["files"] options;
   agentsmd = import ../transformers/agentsmd.nix {inherit lib;};
+  deliveryOptions = import ../delivery-options.nix {inherit lib;};
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
   deduplicatingType = {
     name,
@@ -88,7 +89,7 @@
       finalText =
         if finalEntry == null
         then null
-        else finalEntry.text or null;
+        else (finalEntry.content or {}).text or null;
       size =
         if finalText == null
         then null
@@ -125,7 +126,7 @@ in {
     description = "Repository-local keyed AGENTS.md compositions shared across runtimes.";
   };
   options.ai.internal.files = lib.mkOption {
-    type = runtimeFiles.fileMapType;
+    type = deliveryOptions.fileMapType;
     default = {};
     apply = runtimeFiles.validateFiles "internal";
     internal = true;
@@ -144,7 +145,7 @@ in {
           lib.mkDefault (
             if text == ""
             then null
-            else {inherit text;}
+            else {content = {inherit text;};}
           ))
         generatedRendered;
       })
