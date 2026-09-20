@@ -18,6 +18,7 @@
     kiro.enable = true;
     programs.delegate-sizing.enable = true;
   };
+  hasLoadInstruction = text: lib.hasInfix "load the `delegate-sizing` skill" (lib.replaceStrings ["\n"] [" "] text);
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-sizing}/SKILL.md";
   optionTree = result: path: (lib.getAttrFromPath path result.options).type.getSubOptions [];
   checkBackend = name: evaluate: let
@@ -136,7 +137,16 @@
     "module-delegate-sizing-${name}-stub" = mkTest "delegate-sizing-${name}-stub" (
       builtins.length (lib.splitString "\n" (lib.removeSuffix "\n" stub))
       <= 10
-      && lib.hasInfix "Load the delegate-sizing skill before delegating when your harness provides it." stub
+      && hasLoadInstruction stub
+      && !(lib.hasInfix "Never inherit" stub)
+      && lib.all
+      (runtime: let
+        skill = readSkill result runtime;
+      in
+        builtins.length (lib.splitString "1. Never inherit" skill)
+        == 2
+        && !(hasLoadInstruction skill))
+      runtimes
       && lib.all (runtime: result.config.ai.${runtime}.rules.delegate-sizing-router.text == stub) runtimes
     );
   };
