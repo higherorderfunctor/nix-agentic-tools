@@ -1,0 +1,405 @@
+diff --git a/git-branchless-lib/src/core/config.rs b/git-branchless-lib/src/core/config.rs
+--- a/git-branchless-lib/src/core/config.rs
++++ b/git-branchless-lib/src/core/config.rs
+@@ -221,6 +221,13 @@
+         .get_or("branchless.undo.createSnapshots", true)
+ }
+
++/// If `true`, refuse to move branches checked out in another worktree.
++#[instrument]
++pub fn get_protect_checked_out_branches(repo: &Repo) -> eyre::Result<bool> {
++    repo.get_readonly_config()?
++        .get_or("branchless.core.protectCheckedOutBranches", true)
++}
++
+ /// If `true`, when restacking a commit, do not update its timestamp to the
+ /// current time.
+ #[instrument]
+diff --git a/git-branchless-lib/src/core/rewrite/execute.rs b/git-branchless-lib/src/core/rewrite/execute.rs
+--- a/git-branchless-lib/src/core/rewrite/execute.rs
++++ b/git-branchless-lib/src/core/rewrite/execute.rs
+@@ -13,6 +13,7 @@
+ use crate::core::eventlog::{EventLogDb, EventTransactionId};
+ use crate::core::formatting::Pluralize;
+ use crate::core::repo_ext::RepoExt;
++use crate::core::worktree::check_branches_not_checked_out;
+ use crate::git::{
+     BranchType, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName,
+     Repo, ResolvedReferenceInfo,
+@@ -34,6 +35,17 @@
+     let main_branch = repo.get_main_branch()?;
+     let main_branch_name = main_branch.get_reference_name()?;
+     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
++
++    // Validate the entire batch before changing any refs, including deletions.
++    let mut branch_names = HashSet::new();
++    for (old_oid, names) in &branch_oid_to_names {
++        if let Some(new_oid) = rewritten_oids_map.get(old_oid) {
++            if *new_oid != MaybeZeroOid::NonZero(*old_oid) {
++                branch_names.extend(names.iter().cloned());
++            }
++        }
++    }
++    check_branches_not_checked_out(repo, &branch_names)?;
+
+     // We may experience an error in the case of a branch move. Ideally, we
+     // would use `git2::Transaction::commit`, which stops the transaction at the
+@@ -963,15 +975,18 @@
+ }
+
+ mod on_disk {
++    use std::collections::HashSet;
+     use std::fmt::Write;
+
+     use eyre::Context;
+     use tracing::instrument;
+
+     use crate::core::effects::{Effects, OperationType};
++    use crate::core::repo_ext::RepoExt;
+     use crate::core::rewrite::plan::RebaseCommand;
+     use crate::core::rewrite::plan::RebasePlan;
+     use crate::core::rewrite::rewrite_hooks::save_original_head_info;
++    use crate::core::worktree::check_branches_not_checked_out;
+     use crate::git::{GitRunInfo, Repo};
+
+     use crate::util::ExitCode;
+@@ -1178,6 +1193,31 @@
+             check_out_commit_options: _, // Checkout happens after rebase has concluded.
+         } = options;
+
++        // Git ignores post-rewrite hook failures. Refuse protected branches before
++        // starting an on-disk rebase, and check again in move_branches at the end.
++        let branch_oid_to_names = repo.get_branch_oid_to_names()?;
++        let mut branch_names = HashSet::new();
++        for command in &rebase_plan.commands {
++            let commit_oid = match command {
++                RebaseCommand::Pick {
++                    original_commit_oid,
++                    ..
++                } => original_commit_oid,
++                RebaseCommand::Merge { commit_oid, .. }
++                | RebaseCommand::Replace { commit_oid, .. }
++                | RebaseCommand::DetectEmptyCommit { commit_oid }
++                | RebaseCommand::SkipUpstreamAppliedCommit { commit_oid } => commit_oid,
++                RebaseCommand::Break
++                | RebaseCommand::CreateLabel { .. }
++                | RebaseCommand::RegisterExtraPostRewriteHook
++                | RebaseCommand::Reset { .. } => continue,
++            };
++            if let Some(names) = branch_oid_to_names.get(commit_oid) {
++                branch_names.extend(names.iter().cloned());
++            }
++        }
++        check_branches_not_checked_out(repo, &branch_names)?;
++
+         match write_rebase_state_to_disk(effects, git_run_info, repo, rebase_plan, options)? {
+             Ok(()) => {}
+             Err(err) => return Ok(Err(err)),
+diff --git a/git-branchless-lib/src/core/worktree.rs b/git-branchless-lib/src/core/worktree.rs
+--- a/git-branchless-lib/src/core/worktree.rs
++++ b/git-branchless-lib/src/core/worktree.rs
+@@ -9,7 +9,48 @@
+
+ use eyre::Context;
+
+-use crate::git::{GitRunInfo, GitRunOpts, NonZeroOid, ReferenceName, Repo};
++use crate::core::config::get_protect_checked_out_branches;
++use crate::git::{
++    CategorizedReferenceName, GitRunInfo, GitRunOpts, NonZeroOid, ReferenceName, Repo,
++};
++
++/// Refuse a batch of branch changes if any branch is checked out in another worktree.
++/// Worktree discovery errors propagate so that an incomplete scan cannot authorize a move.
++pub fn check_branches_not_checked_out(
++    repo: &Repo,
++    branch_names: &HashSet<ReferenceName>,
++) -> eyre::Result<()> {
++    if branch_names.is_empty() || !get_protect_checked_out_branches(repo)? {
++        return Ok(());
++    }
++
++    let current_git_dir = std::fs::canonicalize(repo.get_path())
++        .wrap_err("Resolving the current worktree Git directory")?;
++    for worktree_repo in repo.get_worktree_repos()? {
++        let git_dir = std::fs::canonicalize(worktree_repo.get_path())
++            .wrap_err("Resolving a worktree Git directory")?;
++        if git_dir == current_git_dir {
++            continue;
++        }
++        let head_info = worktree_repo.get_head_info()?;
++        if let Some(branch_name) = head_info.reference_name {
++            if branch_names.contains(&branch_name) {
++                let path = worktree_repo.get_working_copy_path().ok_or_else(|| {
++                    eyre::eyre!(
++                        "Could not determine worktree path for {}",
++                        branch_name.as_str()
++                    )
++                })?;
++                eyre::bail!(
++                    "cannot force update the branch '{}' used by worktree at '{}'",
++                    CategorizedReferenceName::new(&branch_name).render_suffix(),
++                    path.display(),
++                );
++            }
++        }
++    }
++    Ok(())
++}
+
+ /// Information about a linked worktree.
+ #[derive(Clone, Debug, PartialEq, Eq)]
+diff --git a/git-branchless-lib/src/git/repo.rs b/git-branchless-lib/src/git/repo.rs
+--- a/git-branchless-lib/src/git/repo.rs
++++ b/git-branchless-lib/src/git/repo.rs
+@@ -56,6 +56,9 @@
+
+     #[error("could not open repository: {0}")]
+     UnsupportedExtensionWorktreeConfig(#[source] git2::Error),
++
++    #[error("could not read worktrees: {0}")]
++    ReadWorktrees(#[source] git2::Error),
+
+     #[error("could not read index: {0}")]
+     ReadIndex(#[source] git2::Error),
+@@ -582,6 +585,30 @@
+         let parent_repo_path = self.inner.commondir();
+         let parent_repo = Self::from_dir(parent_repo_path)?;
+         Ok(Some(parent_repo))
++    }
++
++    /// Open every linked worktree and the main repository if it has a working copy.
++    #[instrument]
++    pub fn get_worktree_repos(&self) -> Result<Vec<Self>> {
++        let parent_repo = self.open_worktree_parent_repo()?;
++        let main_repo = parent_repo.as_ref().unwrap_or(self);
++        let mut repos = Vec::new();
++        if !main_repo.inner.is_bare() {
++            repos.push(main_repo.try_clone()?);
++        }
++        let names = main_repo.inner.worktrees().map_err(Error::ReadWorktrees)?;
++        for name in names.iter() {
++            let name = name.ok_or(Error::DecodeUtf8 {
++                item: "worktree name",
++            })?;
++            let worktree = main_repo
++                .inner
++                .find_worktree(name)
++                .map_err(Error::ReadWorktrees)?;
++            let inner = git2::Repository::open_from_worktree(&worktree).map_err(Error::OpenRepo)?;
++            repos.push(Self { inner });
++        }
++        Ok(repos)
+     }
+
+     /// Get the configuration object for the repository.
+diff --git a/git-branchless-lib/tests/test_worktree_guard.rs b/git-branchless-lib/tests/test_worktree_guard.rs
+new file mode 100644
+--- /dev/null
++++ b/git-branchless-lib/tests/test_worktree_guard.rs
+@@ -0,0 +1,173 @@
++use std::collections::{HashMap, HashSet};
++use std::time::SystemTime;
++
++use branchless::core::effects::Effects;
++use branchless::core::eventlog::EventLogDb;
++use branchless::core::formatting::Glyphs;
++use branchless::core::repo_ext::RepoExt;
++use branchless::core::rewrite::{
++    ExecuteRebasePlanOptions, RebaseCommand, RebasePlan, execute_rebase_plan, move_branches,
++};
++use branchless::core::worktree::check_branches_not_checked_out;
++use branchless::git::{MaybeZeroOid, NonZeroOid};
++use branchless::testing::{Git, make_git, make_git_worktree};
++
++fn move_branches_for_test(
++    git: &Git,
++    rewritten_oids: &HashMap<NonZeroOid, MaybeZeroOid>,
++) -> eyre::Result<()> {
++    let repo = git.get_repo()?;
++    let conn = repo.get_db_conn()?;
++    let event_log_db = EventLogDb::new(&conn)?;
++    let event_tx_id = event_log_db.make_transaction_id(SystemTime::now(), "test move branches")?;
++    move_branches(
++        &Effects::new_suppress_for_test(Glyphs::text()),
++        &git.get_git_run_info(),
++        &repo,
++        event_tx_id,
++        rewritten_oids,
++    )
++}
++
++#[test]
++fn test_move_branches_worktree_guard_preflights_whole_batch() -> eyre::Result<()> {
++    let git = make_git()?;
++    git.init_repo()?;
++    let old_oid = git.commit_file("topic", 1)?;
++    git.run(&["branch", "a-free"])?;
++    git.run(&["branch", "z-busy"])?;
++    let new_oid = git.commit_file("destination", 2)?;
++    let worktree = make_git_worktree(&git, "linked")?;
++    worktree.worktree.run(&["checkout", "z-busy"])?;
++    let refs_before = git.get_repo()?.get_branch_oid_to_names()?;
++    let status_before = worktree.worktree.run(&["status", "--porcelain"])?;
++    let worktree_path = worktree
++        .worktree
++        .get_repo()?
++        .get_working_copy_path()
++        .unwrap();
++
++    for target in [MaybeZeroOid::NonZero(new_oid), MaybeZeroOid::Zero] {
++        let rewritten_oids = HashMap::from([(old_oid, target)]);
++        let err = move_branches_for_test(&git, &rewritten_oids).unwrap_err();
++        assert_eq!(
++            err.to_string(),
++            format!(
++                "cannot force update the branch 'z-busy' used by worktree at '{}'",
++                worktree_path.display(),
++            ),
++        );
++        assert_eq!(git.get_repo()?.get_branch_oid_to_names()?, refs_before);
++        assert_eq!(
++            worktree.worktree.run(&["status", "--porcelain"])?,
++            status_before
++        );
++    }
++
++    // Rewriting an OID to itself does not move the protected branch.
++    move_branches_for_test(&git, &HashMap::from([(old_oid, old_oid.into())]))?;
++    assert_eq!(git.get_repo()?.get_branch_oid_to_names()?, refs_before);
++
++    git.run(&[
++        "config",
++        "branchless.core.protectCheckedOutBranches",
++        "false",
++    ])?;
++    move_branches_for_test(&git, &HashMap::from([(old_oid, new_oid.into())]))?;
++    for name in ["refs/heads/a-free", "refs/heads/z-busy"] {
++        assert_eq!(
++            git.get_repo()?.reference_name_to_oid(&name.into())?,
++            new_oid.into()
++        );
++    }
++    Ok(())
++}
++
++#[test]
++fn test_worktree_guard_main_sibling_current_and_detached() -> eyre::Result<()> {
++    let git = make_git()?;
++    git.init_repo()?;
++    git.run(&["branch", "topic"])?;
++    git.run(&["branch", "sibling"])?;
++    let linked = make_git_worktree(&git, "linked")?;
++    linked.worktree.run(&["checkout", "topic"])?;
++    let sibling = make_git_worktree(&git, "sibling")?;
++    sibling.worktree.run(&["checkout", "sibling"])?;
++    let repo = linked.worktree.get_repo()?;
++
++    // The current worktree is allowed, from either kind of checkout.
++    check_branches_not_checked_out(&repo, &HashSet::from(["refs/heads/topic".into()]))?;
++    check_branches_not_checked_out(
++        &git.get_repo()?,
++        &HashSet::from(["refs/heads/master".into()]),
++    )?;
++
++    for (name, worktree) in [("master", &*git), ("sibling", &sibling.worktree)] {
++        let err = check_branches_not_checked_out(
++            &repo,
++            &HashSet::from([format!("refs/heads/{name}").into()]),
++        )
++        .unwrap_err();
++        let path = worktree.get_repo()?.get_working_copy_path().unwrap();
++        assert_eq!(
++            err.to_string(),
++            format!(
++                "cannot force update the branch '{name}' used by worktree at '{}'",
++                path.display(),
++            )
++        );
++    }
++
++    sibling.worktree.detach_head()?;
++    check_branches_not_checked_out(&repo, &HashSet::from(["refs/heads/sibling".into()]))?;
++    Ok(())
++}
++
++#[test]
++fn test_on_disk_rebase_refuses_before_starting_git() -> eyre::Result<()> {
++    let git = make_git()?;
++    git.init_repo()?;
++    let topic_oid = git.commit_file("topic", 1)?;
++    git.run(&["branch", "topic"])?;
++    let destination_oid = git.commit_file("destination", 2)?;
++    let worktree = make_git_worktree(&git, "linked")?;
++    worktree.worktree.run(&["checkout", "topic"])?;
++    let repo = git.get_repo()?;
++    let head_before = repo.get_head_info()?;
++    let conn = repo.get_db_conn()?;
++    let event_log_db = EventLogDb::new(&conn)?;
++    let now = SystemTime::now();
++    let options = ExecuteRebasePlanOptions {
++        now,
++        event_tx_id: event_log_db.make_transaction_id(now, "test on-disk guard")?,
++        preserve_timestamps: true,
++        force_in_memory: false,
++        force_on_disk: true,
++        dry_run: false,
++        resolve_merge_conflicts: false,
++        check_out_commit_options: Default::default(),
++    };
++    let plan = RebasePlan {
++        first_dest_oid: destination_oid,
++        commands: vec![RebaseCommand::Pick {
++            original_commit_oid: topic_oid,
++            commits_to_apply_oids: vec![topic_oid],
++        }],
++    };
++    let err = execute_rebase_plan(
++        &Effects::new_suppress_for_test(Glyphs::text()),
++        &git.get_git_run_info(),
++        &repo,
++        &event_log_db,
++        &plan,
++        &options,
++    )
++    .unwrap_err();
++    assert!(
++        err.to_string()
++            .starts_with("cannot force update the branch 'topic'")
++    );
++    assert_eq!(repo.get_head_info()?, head_before);
++    assert!(!repo.get_rebase_state_dir_path().exists());
++    Ok(())
++}
+diff --git a/git-branchless/src/commands/sync.rs b/git-branchless/src/commands/sync.rs
+--- a/git-branchless/src/commands/sync.rs
++++ b/git-branchless/src/commands/sync.rs
+@@ -2,6 +2,7 @@
+
+ use cursive_core::theme::BaseColor;
+ use lib::try_exit_code;
++use std::collections::HashSet;
+ use std::fmt::Write;
+ use std::time::SystemTime;
+
+@@ -24,6 +25,7 @@
+     RepoPool, RepoResource, execute_rebase_plan,
+ };
+ use lib::core::task::ResourcePool;
++use lib::core::worktree::check_branches_not_checked_out;
+ use lib::git::{
+     CategorizedReferenceName, Commit, GitRunInfo, NonZeroOid, Repo, ResolvedReferenceInfo,
+ };
+@@ -234,6 +236,13 @@
+                 &["rebase", &upstream_main_branch_oid.to_string()],
+             )?);
+         } else {
++            // This fast-forward bypasses move_branches, so apply the same guard.
++            if local_main_branch_oid != Some(upstream_main_branch_oid) {
++                check_branches_not_checked_out(
++                    repo,
++                    &HashSet::from([local_main_branch_reference_name.clone()]),
++                )?;
++            }
+             repo.create_reference(
+                 &local_main_branch_reference_name,
+                 upstream_main_branch_oid,
