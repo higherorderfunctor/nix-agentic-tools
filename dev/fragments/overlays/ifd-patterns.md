@@ -1,8 +1,7 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-09-19 — Kiro's extracted sidecar also includes public
-> model suggestions; extraction still reads committed sources without
-> evaluation-time network access.
+> **Last verified:** 2026-09-19 — Oxlint uses a name-only pnpm patch with
+> behavioral verification; version and calendar gates are retired.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -467,48 +466,39 @@ feature maturities, and config-key extraction fail closed.
   dependency selections. Make the minimal lock edit, then prove it with
   `pnpm install --frozen-lockfile` using the exact pnpm selected by the Nix
   fetcher. Oxlint's `@napi-rs/cli` patch is the reference implementation.
-- **Regenerating the patch when upstream repins the dependency** — the one
-  change the awk deliberately fails loud on. Do it with real pnpm, in a
-  throwaway project depending on the new version, rather than by hand-editing
-  hunks: `pnpm patch <pkg>@<ver> --edit-dir <dir>`, edit,
-  `pnpm patch-commit <dir>`. Three mechanics are not guessable from the result:
-  - **`patchHash` is a plain `sha256sum` of the pnpm patch file's bytes.**
-    Nothing derives it from the dependency; it moves only when that file does,
-    which is why the awk can stamp it by key. Verify against the current pin
-    before trusting a regenerated one — at the 3.9.1 pin the stripped file
-    hashes to the committed `cd0ec720…`. Hash the INNER pnpm patch, not the
-    outer git patch that adds it: those two differ, and only the inner one is
-    what pnpm records.
-  - **`patch-commit` emits content-free stanzas that must be stripped.** For
-    `@napi-rs/cli@3.8.6` it produced 37 `deleted file mode` entries for
-    `__tests__` paths that exist in both the tarball and the edit dir, alongside
-    the 2 real file diffs. Keep only stanzas containing an `@@` hunk. Left in,
-    they are 37 more positional things to break on the next repin, for no
-    behavioral change.
-  - **Prove it end to end, not by eye.** Point the scratch lock at the stripped
-    file's hash, `pnpm install --frozen-lockfile`, and read the patched line out
-    of `node_modules/.pnpm/<pkg>@<ver>_patch_hash=…/`. A patch that parses is
-    not a patch that applied.
-
-    **Never pass `--ignore-workspace` to that proof.** `patchedDependencies`
-    lives in `pnpm-workspace.yaml`, so the flag discards the patch config
-    itself: the install succeeds, the lockfile resolves, and NOTHING is patched.
-    Measured 2026-09-08 while regenerating for 3.9.0 — the store path came back
-    as plain `@napi-rs+cli@3.9.0_<peers>` with no `patch_hash=` segment and an
-    unpatched `dist/cli.js`, every exit code 0. The `patch_hash=` segment in the
-    directory name is the load-bearing tell. Reaching for the flag is natural
-    when the throwaway project sits near another checkout; put the scratch
-    project outside any workspace instead of suppressing the file that carries
-    the patch.
+- **Repins are not patch conflicts.** Oxlint registers its patch under the
+  name-only `"@napi-rs/cli"` key, so pnpm tries the same diff against each newly
+  resolved version. Pnpm 11 fails incompatible patches; the package's behavioral
+  probe also requires every installed peer variant to handle a synchronous
+  `execFile` exception and preserve normal callback results. The probe runs
+  after dependency fetching and after cached dependencies are materialized,
+  before Rust compilation. Missing variants, a changed function shape, or an
+  ineffective patch fail loudly.
+- **Regenerate only when the content needs changing.** Use a throwaway project
+  depending on the new version: `pnpm patch <pkg>@<ver> --edit-dir <dir>`, edit,
+  then `pnpm patch-commit <dir>`. Keep only diff stanzas containing real `@@`
+  hunks: pnpm has emitted content-free `deleted file mode` entries for unchanged
+  test paths. Commit the inner diff directly as
+  `packages/oxlint/patches/oxlint-napi-rs-cli.patch`; the recipe copies those
+  exact bytes to the metadata path and derives the SHA-256 with
+  `builtins.hashFile`. There is no outer patch, independent hash literal, or
+  versioned filename to keep in sync.
+- **Prove patching with the selected pnpm.** Run
+  `pnpm install --frozen-lockfile` without `--ignore-workspace` (which discards
+  the patch configuration), then inspect the installed peer variants.
+  `checks.oxlint-napi-patch` applies the same diff to real 3.10.1 and 3.10.4
+  tarballs, verifies behavior, and rejects pristine, partially patched, and
+  empty peer sets. Full dependency fetching additionally validates pnpm's own
+  application. If upstream implements the fallback, inspect and retire the patch
+  when it conflicts; do not automatically skip a failed patch.
 
 <!-- cspell:ignore andrewbranch Funtar -->
 
 - **The pnpm MAJOR is a second, unguarded pin — and upstream moving it does NOT
   oblige this repo to follow.** Upstream's `packageManager` is the authority for
   what upstream uses: oxc went `pnpm@11.25.0` -> `pnpm@12.3.2` in the same
-  window that moved the `@napi-rs/cli` catalog pin. The awk asserts on the
-  catalog pin and says nothing about pnpm, so a major move surfaces only as a
-  build failure downstream of an unrelated assertion.
+  window that moved the `@napi-rs/cli` catalog pin. Patch compatibility says
+  nothing about the pnpm major; validate that independently.
 
   **Do not chase it reflexively.** As of 2026-09-08 pnpm 12 CANNOT drive
   `fetchPnpmDeps` at this nixpkgs pin, and the reason is a nixpkgs defect rather
@@ -572,46 +562,24 @@ feature maturities, and config-key extraction fail closed.
   `pnpm_<major>` the flake exposes, discovering them by name so a future major
   is covered the day it is added.
 
-- **Apply that metadata BY KEY in `postPatch`, never as lock hunks.** The patch
-  FILE is a new file and never conflicts, but the workspace and lock entries
-  pointing pnpm at it track upstream's peer resolution, which reshuffles on its
-  own schedule — oxc collapsed five `@napi-rs/cli@3.8.2(…)` snapshot keys to two
-  between two revs, and the six dead hunks held oxlint back in EVERY sweep until
-  someone realigned them by hand. The edit carries no judgement: it inserts one
-  identical `(patch_hash=…)` token wherever pnpm names the resolved dependency,
-  so encoding it positionally buys nothing and costs a held-back target per
-  reshuffle. `packages/oxlint/src/oxlint-pnpm-patch-meta.awk` does it by key,
-  and asserts loudly on the change that IS a judgement call — the dependency
-  moving off the pinned version, which invalidates both the patch target and the
-  patch hash.
+- **Apply patch metadata by key, not as lockfile hunks.** Upstream can reshuffle
+  peer variants without changing the patched code.
+  `packages/oxlint/src/oxlint-pnpm-patch-meta.awk` inserts the name-only patch
+  key, then stamps the patch hash on resolved importer versions and snapshot
+  keys. It scopes importers separately from catalog metadata, covers peerless
+  resolutions, and rejects missing coverage or an existing top-level
+  `patchedDependencies` block. The source copier also rejects an upstream file
+  at our patch destination. Pnpm's frozen install validates the resulting lock.
 
-  **But it is a VERSION-KEY check, not a content check, and it cannot be
-  otherwise.** Every key it builds comes from `ver`, so it compares upstream's
-  catalog pin against `napi.version` and never reads the patch file or verifies
-  `patchHash`. Measured: old rev + `napi.version = "3.8.6"` + the NEW 3.9.0
-  patch file and hash builds green and emits a tree reading
-  `"@napi-rs/cli@3.8.6": patches/@napi-rs__cli@3.9.0.patch`. Its error message
-  used to say "the patch file and its hash both need regenerating", which
-  described a check it was not performing.
+  **Settled — do not restore a version or calendar gate.** The September 18–20
+  sweeps were held back by the 3.10.1 catalog guard even though the unchanged
+  diff applied to 3.10.4. The old `assertPatchTargetsPin` kept a versioned outer
+  patch filename consistent with a separate version literal; copying a plain
+  patch to its derived basename and hashing those bytes removes that
+  disagreement by construction. Behavioral verification replaces both that gate
+  and `config/oxlint-napi-patch-tripwire.json`. An upstream version change alone
+  is not evidence of a broken patch.
 
-  Two things close that, both in `oxlint.nix` because the awk cannot see the
-  filesystem. `napi.patchPath` is **derived** from `napi.version`, so those two
-  can no longer disagree; and an eval-time assertion requires the committed
-  outer patch to create exactly that path, so a version bump without a
-  regenerated patch throws instead of stamping a path pnpm will never find. That
-  last case is the dangerous one — pnpm applies nothing and says nothing.
-
-- **A patch that is still CORRECT may no longer be NEEDED, and nothing notices
-  on its own.** The oxlint overlay says to re-read
-  `executeProcessIncarnationCommand` on each repin rather than assuming, and
-  that instruction had no enforcement: a repin carries the patch forward
-  untouched, and the sweep never opens it.
-  `config/oxlint-napi-patch-tripwire.json` plus a `ci.yml` step gated on
-  `github.head_ref == 'update/oxlint'` now fails the update PR when the review
-  date passes, or when the pinned dependency version has moved away from the one
-  the patch was last justified against — regenerating a patch is not the same as
-  re-verifying it is still required. Same shape as the heron-brook tripwire;
-  that one is the reference implementation.
 - **An `applyPatches` src needs `--no-src` on its nix-update row, or the sweep
   can never bump it.** nix-update re-derives a src hash by rebuilding `pkg.src`
   with `outputHash = ""`, which forces FLAT hashing; an `applyPatches` output is
