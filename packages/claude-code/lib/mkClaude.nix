@@ -1041,7 +1041,10 @@ in
           (let
             helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
           in {
-            files = helpers.mkDevenvSkillEntries ".claude" mergedSkills;
+            ai.claude.files = helpers.mkSkillFiles {
+              configDir = ".claude";
+              skills = mergedSkills;
+            };
           })
         ];
     };
