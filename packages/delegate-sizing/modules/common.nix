@@ -1,10 +1,12 @@
-{
+# cspell:ignore foldr
+args @ {
   config,
   lib,
   options,
   pkgs,
   ...
 }: let
+  delegateSizingRenames = args.delegateSizingRenames or (import ../lib/when-to-delegate-renames.nix);
   # Resolve the supported runtimes and their instruction presets. Kimchi has
   # no delegate primitive; Copilot's sizing controls are not established.
   supportedRuntimes = ["claude" "codex" "kiro"];
@@ -21,6 +23,14 @@
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
   present = builtins.filter (runtime: lib.hasAttrByPath ["ai" runtime "skills"] options) supportedRuntimes;
   settings = lib.genAttrs supportedRuntimes (runtime: config.ai.${runtime}.programs.delegate-sizing.settings);
+  whenToDelegateOptions = import ../lib/when-to-delegate.nix {
+    inherit lib;
+    renames = delegateSizingRenames;
+  };
+  whenToDelegate = config.ai.programs.delegate-sizing.whenToDelegate;
+  warningMessages = whenToDelegateOptions.warnings whenToDelegate;
+  emitWarnings = value:
+    lib.foldr (warning: result: lib.warn warning result) value warningMessages;
 
   # Declare runtime-only settings alongside the factory's enable override.
   runtimeOptions = runtime: {
@@ -50,13 +60,22 @@
     presets.${runtime};
   };
 in {
-  options.ai = lib.genAttrs supportedRuntimes (runtime: {
-    # This merges with lib/ai/program.nix's override submodule only because it
-    # declares no default, description or example; adding any throws "already declared".
-    programs.delegate-sizing = lib.mkOption {
-      type = lib.types.submodule {options = runtimeOptions runtime;};
+  options.ai =
+    lib.genAttrs supportedRuntimes (runtime: {
+      # This merges with lib/ai/program.nix's override submodule only because it
+      # declares no default, description or example; adding any throws "already declared".
+      programs.delegate-sizing = lib.mkOption {
+        type = lib.types.submodule {options = runtimeOptions runtime;};
+      };
+    })
+    // {
+      programs.delegate-sizing.whenToDelegate = lib.mkOption {
+        inherit (whenToDelegateOptions) type;
+        default = {};
+        apply = whenToDelegateOptions.rename;
+        description = "Always-on guidance describing when to delegate work.";
+      };
     };
-  });
 
   # Emit one portable enable option and skills/rules for each supported runtime.
   imports = [
@@ -74,24 +93,44 @@ in {
           inherit (config.ai.${runtime}.programs.delegate-sizing) extraRuntimes manualExternalDelegates;
         }}";
       };
-      rules = _: import ../router.nix;
+      rules = _:
+        import ../router.nix {
+          inherit lib;
+          entries = config.ai.programs.delegate-sizing.whenToDelegate;
+        };
     })
   ];
 
-  # Reject automatic external delegates whose runtime is disabled.
-  config.assertions =
-    lib.concatMap (runtime:
-      map (target: {
-        assertion = !(programEnabled runtime && runtimeEnabled runtime) || runtimeEnabled target;
-        message = "ai.${runtime}.programs.delegate-sizing.extraRuntimes includes `${target}`, but ai.${target}.enable is false. Enable that runtime or use manualExternalDelegates.";
-      })
-      (lib.subtractLists
-        config.ai.${runtime}.programs.delegate-sizing.manualExternalDelegates
-        config.ai.${runtime}.programs.delegate-sizing.extraRuntimes))
-    present
-    ++ lib.concatMap (runtime:
-      textSourceOptions.assertions
-      ["ai" runtime "programs" "delegate-sizing" "settings"]
-      settings.${runtime})
-    present;
+  config =
+    {
+      assertions =
+        (
+          if options ? warnings
+          then lib.id
+          else emitWarnings
+        )
+        (
+          # Reject automatic external delegates whose runtime is disabled.
+          lib.concatMap (runtime:
+            map (target: {
+              assertion = !(programEnabled runtime && runtimeEnabled runtime) || runtimeEnabled target;
+              message = "ai.${runtime}.programs.delegate-sizing.extraRuntimes includes `${target}`, but ai.${target}.enable is false. Enable that runtime or use manualExternalDelegates.";
+            })
+            (lib.subtractLists
+              config.ai.${runtime}.programs.delegate-sizing.manualExternalDelegates
+              config.ai.${runtime}.programs.delegate-sizing.extraRuntimes))
+          present
+          ++ lib.concatMap (runtime:
+            textSourceOptions.assertions
+            ["ai" runtime "programs" "delegate-sizing" "settings"]
+            settings.${runtime})
+          present
+          ++ whenToDelegateOptions.assertions
+          ["ai" "programs" "delegate-sizing" "whenToDelegate"]
+          whenToDelegate
+        );
+    }
+    // lib.optionalAttrs (options ? warnings) {
+      warnings = warningMessages;
+    };
 }
