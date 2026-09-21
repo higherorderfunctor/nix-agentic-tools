@@ -28,14 +28,17 @@
 #   supportedRuntimes : runtime capability set. OPTIONAL; defaults to every
 #                       registered runtime.
 #   skills            : moduleArgs -> attrsOf (path | str). The skill dirs to
-#                       fan out. Values may be `./` path literals (static skill
+#                       fan out. moduleArgs includes `runtime`, the runtime
+#                       being written, for per-runtime content. Callers that
+#                       ignore it are unaffected. Values may be `./` path literals (static skill
 #                       trees) OR generated store-path strings — the ai.skills
 #                       fanout helpers materialize both forms. Most
 #                       runtimes use recursive per-file links; Codex uses a
 #                       whole-directory link because that is the layout its
 #                       discovery scanner recognizes.
 #   rules             : moduleArgs -> attrsOf rule. OPTIONAL router entries for
-#                       ai.rules. These are ALWAYS-LOADED in every
+#                       ai.rules; moduleArgs also includes `runtime`.
+#                       These are ALWAYS-LOADED in every
 #                       ecosystem, so they are a per-turn tax on every session
 #                       and the bar is high: provide one only for a rule that
 #                       must hold BEFORE the model considers a skill at all,
@@ -89,8 +92,8 @@ spec: {
     options.enable = lib.mkEnableOption spec.enableDescription;
   };
 
-  skillEntries = lib.mapAttrs (_: lib.mkDefault) (spec.skills moduleArgs);
-  ruleEntries = lib.mapAttrs (_: lib.mkDefault) ((spec.rules or (_: {})) moduleArgs);
+  skillEntries = runtime: lib.mapAttrs (_: lib.mkDefault) (spec.skills (moduleArgs // {inherit runtime;}));
+  ruleEntries = runtime: lib.mapAttrs (_: lib.mkDefault) ((spec.rules or (_: {})) (moduleArgs // {inherit runtime;}));
 
   # Runtimes whose per-runtime pools exist in THIS evaluation. Probing
   # `options` rather than a hardcoded list keeps the module honest about what
@@ -115,11 +118,11 @@ in {
   config.ai = lib.mkMerge [
     (lib.genAttrs presentSkillRuntimes (runtime:
       lib.mkIf (program.resolve config runtime).enable {
-        skills = skillEntries;
+        skills = skillEntries runtime;
       }))
     (lib.genAttrs presentRuleRuntimes (runtime:
       lib.mkIf (program.resolve config runtime).enable {
-        rules = ruleEntries;
+        rules = ruleEntries runtime;
       }))
   ];
 }

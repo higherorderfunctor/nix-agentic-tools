@@ -46,6 +46,10 @@ packages/
       lspServers/agnix-lsp/package.nix
       mcpServers/agnix-mcp/package.nix
     registry.nix
+  delegate-sizing/
+    packages/delegate-sizing-content/package.nix
+    modules/, lib/, checks.nix, checks/
+    fragments/, scripts/             Runtime-generated sizing skills
   stacked-workflows/
     packages/stacked-workflows-content/package.nix
     modules/, lib/, checks.nix, checks/
