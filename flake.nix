@@ -129,8 +129,8 @@
       fragments = import ./lib/fragments.nix {inherit lib;};
       devshellLib = import ./lib/devshell.nix {inherit lib;};
       mcpLib = import ./lib/mcp.nix {inherit lib;};
-      textSourceOptions = import ./lib/mkTextSourceOptions.nix {inherit lib;};
       aiBase = import ./lib/ai {inherit lib;};
+      aiTypes = import ./lib/ai/types.nix {inherit lib;};
 
       # Cross-package presets (compose fragments from multiple
       # packages). Individual packages expose their own presets in
@@ -156,11 +156,11 @@
       };
       # Shared AI primitives compose with the namespaces exported by owners.
       baseLib = {
-        mkTextSourceOptions = textSourceOptions;
         ai =
           aiBase
           // {
             inherit fragments presets;
+            types = aiTypes;
             inherit (devshellLib) mkAgenticShell;
             inherit (fragments) compose mkFragment mkFrontmatter render;
             inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig renderServer;
