@@ -864,7 +864,7 @@ in {
       in
         rule.text
         == "Consumer rule."
-        && rule.source == null
+        && rule.source == ../cli-instructions.md
     );
 
     module-semble-rules-use-native-files = mkTest "semble-rules-use-native-files" (

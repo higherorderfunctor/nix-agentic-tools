@@ -7,10 +7,9 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/agent.nix,
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-20 — `ai.codex.profiles` and its HM/devenv
-> materializer were removed as unreachable dead code; the delivery-path and
-> config-parity passages below that used it as their worked example now use
-> `ai.codex.execpolicyRules` instead.
+> **Last verified:** 2026-09-21 — Markdown content sources resolve through the
+> shared text-source type, so package defaults and consumer overrides arbitrate
+> by module priority.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -301,9 +300,11 @@ enabled ecosystem whose native model preserves the option's semantics):
   a `meta.mainProgram` or conventional `pname` resolve to their package
   executable; bare-file derivations remain direct output paths. Kiro's v3
   trigger records remain native-only.
-- `ai.context` — a typed `text`-XOR-`source` global baseline. Each runtime has
-  the same content record plus `filename`; root content precedes runtime content
-  when both are present. Claude defaults to `CLAUDE.md`; Codex, Kiro, and Kimchi
+- `ai.context` — a typed `text`/`source` global baseline. Each runtime has the
+  same content record plus `filename`; root content precedes runtime content
+  when both are present. Module priority selects the effective content, so a
+  consumer's `text` can override a package's default `source`; setting both at
+  one priority fails. Claude defaults to `CLAUDE.md`; Codex, Kiro, and Kimchi
   default to `AGENTS.md`; Copilot defaults to `copilot-instructions.md`. Copilot
   emits normalized context only on devenv because its live surface is the
   repository consumed by github.com, not copilot-cli's user home. The transform
@@ -623,8 +624,8 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-12 — package modules own consumer checks; the
-> shared harness discovers backend imports and owner activation probes.
+> **Last verified:** 2026-09-21 — Semble's CLI rule is the deliberate
+> leaf-default exception for text-source priority arbitration.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -770,6 +771,11 @@ module-system priority before root/runtime composition happens. Do not put
 recursive defaults only on fields below a `nullOr` entry boundary: Nix must
 choose the null or record branch before those leaf priorities can arbitrate, and
 reports the option as both null and non-null instead of honoring the tombstone.
+
+Semble's generated CLI rule is the deliberate exception: it defaults the rule
+fields so a consumer's inline text can override the packaged source while the
+source remains visible. Its runtime `instructions.cli` feature flag is the
+retraction mechanism; do not use a null tombstone for that generated rule.
 
 Always-on process defaults such as the sandbox-safe SSH command still use the
 internal callback channel instead of writing a hidden normalized-pool
@@ -958,8 +964,8 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-12 — package modules own consumer checks; the
-> shared harness discovers backend imports and owner activation probes.
+> **Last verified:** 2026-09-21 — context content uses the shared text-source
+> type and arbitrates `text` against `source` by module priority.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1030,10 +1036,11 @@ path types".
   an attrset-entry collision; only the exact portable Claude/Codex event
   vocabulary is accepted at L2.
 - **Context content concatenates.** `ai.context` and `ai.<cli>.context` are
-  typed `text`-XOR-`source` records, not pool entries. Their content composes
-  root-first into the runtime's `context.filename`. A structural
-  `hasMergedContext` bit gates the generated default without reading composed
-  sources; rendered bytes remain lazy until that default survives B7.
+  typed `text`/`source` records, not pool entries. Different priorities
+  arbitrate the effective text; one priority setting both fields fails. Their
+  content composes root-first into the runtime's `context.filename`. A
+  structural `hasMergedContext` bit gates the generated default without reading
+  composed sources; rendered bytes remain lazy until that default survives B7.
 - **Rule matchers lower only before L4.** `matcher = null` is always-on; a
   non-empty glob list becomes native routing metadata where one exists and
   explicit prose for flat AGENTS.md consumers. In the shared devenv AGENTS.md,

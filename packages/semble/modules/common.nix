@@ -232,7 +232,7 @@
   in
     lib.mkMerge [
       (lib.mkIf (state.selected "instructions") {
-        ai.${runtime}.rules.semble = lib.mkDefault (recordsFor state).rule;
+        ai.${runtime}.rules.semble = lib.mapAttrs (_: lib.mkDefault) (recordsFor state).rule;
       })
       (lib.mkIf (state.selected "mcp" && state.cfg.mcp.rootExposure) {
         ai.${runtime}.mcpServers.semble = lib.mkDefault (mcpEntry state);

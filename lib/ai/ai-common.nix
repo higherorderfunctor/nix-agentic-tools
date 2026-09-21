@@ -1,45 +1,42 @@
 # Shared content generation logic for AI CLI modules.
+# cspell:ignore highestPrio
 #
 # Consumed by:
 # - packages/*/lib/mk*.nix (factory-built HM + devenv modules)
 # - lib/hm-helpers.nix (filterNulls re-export)
 {lib}: let
-  contentOptions = {
-    source = lib.mkOption {
-      type = lib.types.nullOr lib.types.path;
-      default = null;
-      description = "Path to a Markdown source file. Mutually exclusive with `text`.";
-    };
-    text = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      default = null;
-      description = "Inline Markdown content. Mutually exclusive with `source`.";
-    };
-  };
+  aiTypes = import ./types.nix {inherit lib;};
+  contentType = aiTypes.textSource {description = "Markdown content";};
+  contentModules =
+    contentType.getSubModules
+    ++ [
+      ({options, ...}: {
+        options._sourceWins = lib.mkOption {
+          type = lib.types.bool;
+          default = options.source.highestPrio < options.text.highestPrio;
+          description = "Whether source supplies the effective Markdown content.";
+          internal = true;
+          readOnly = true;
+        };
+      })
+    ];
+  contentUsesSource = value:
+    value._sourceWins or (!(value ? text) && (value.source or null) != null);
   hasContent = value:
     value
     != null
-    && ((value.text or null) != null || (value.source or null) != null);
-  contentFieldsAreValid = requireContent: value: let
-    count =
-      lib.count
-      (field: (value.${field} or null) != null)
-      ["source" "text"];
-  in
-    count <= 1 && (!requireContent || count == 1);
-  validateContent = requireContent: value:
-    if contentFieldsAreValid requireContent value
-    then value
-    else
-      throw
-      "Markdown content must set ${lib.optionalString (!requireContent) "at most "}one of `text` or `source`";
-  ruleIsValid = contentFieldsAreValid true;
+    && (
+      if contentUsesSource value
+      then value.source != null
+      else value.text != ""
+    );
+  ruleIsValid = hasContent;
   mkContentModule = {defaultFilename ? null}:
-    lib.types.submodule {
-      options =
-        contentOptions
-        // lib.optionalAttrs (defaultFilename != null) {
-          filename = lib.mkOption {
+    lib.types.submoduleWith {
+      modules =
+        contentModules
+        ++ lib.optional (defaultFilename != null) {
+          options.filename = lib.mkOption {
             type = lib.types.addCheck lib.types.str (value:
               value
               != ""
@@ -80,20 +77,25 @@
     '';
   };
   mkRuleModule = {kiroNative ? false}:
-    lib.types.submodule {
-      options =
-        contentOptions
-        // {
-          description = lib.mkOption {
-            type = lib.types.str;
-            default = "";
-            description = "Short description forwarded to runtime renderers.";
-          };
-          matcher = matcherOption;
-        }
-        // lib.optionalAttrs kiroNative {
-          inclusion = kiroInclusionOption;
-        };
+    lib.types.submoduleWith {
+      modules =
+        contentModules
+        ++ [
+          {
+            options =
+              {
+                description = lib.mkOption {
+                  type = lib.types.str;
+                  default = "";
+                  description = "Short description forwarded to runtime renderers.";
+                };
+                matcher = matcherOption;
+              }
+              // lib.optionalAttrs kiroNative {
+                inclusion = kiroInclusionOption;
+              };
+          }
+        ];
     };
   # Flatten nested Nix attrsets into dot-notation keys for CLIs that
   # expect flat JSON (e.g., Kiro's cli.json uses `"chat.enableTangentMode"`
@@ -137,21 +139,21 @@
     go "";
 in {
   # ── Markdown content records ───────────────────────────────────────
-  # Context and rules share one home.file-shaped content record. Keeping paths
-  # as `source` data avoids writeText/IFD and preserves direct symlink emission
-  # when a single source is not being concatenated with another contribution.
+  # Context and rules share one text-source record. The type resolves source
+  # contents and higher-priority inline overrides into the effective `text`,
+  # while `_sourceWins` lets file emission keep a source-only winner lazy.
   inherit flattenDotKeysUntil;
 
   contentModule = mkContentModule {};
   optionalContentModule = mkContentModule {};
-  validateOptionalContent = validateContent false;
+  validateOptionalContent = lib.id;
   validateRules = rules:
     lib.mapAttrs (name: rule:
       if rule == null || ruleIsValid rule
       then rule
       else
         throw
-        "Rule `${name}` must set exactly one of `text` or `source`")
+        "Rule `${name}` must set `text` or `source`")
     rules;
   runtimeContextModule = defaultFilename:
     mkContentModule {inherit defaultFilename;};
@@ -161,17 +163,15 @@ in {
   readContent = value:
     if value == null
     then ""
-    else if (value.text or null) != null
-    then value.text
-    else if (value.source or null) != null
-    then builtins.readFile value.source
-    else "";
+    else
+      value.text or (
+        if (value.source or null) != null
+        then builtins.readFile value.source
+        else ""
+      );
 
   composeContent = values: let
-    present = builtins.filter (value:
-      hasContent value
-      && ((value.text or null) == null || value.text != ""))
-    values;
+    present = builtins.filter hasContent values;
   in
     if present == []
     then null
@@ -179,15 +179,11 @@ in {
     then let
       value = builtins.head present;
     in
-      if (value.text or null) != null
-      then {inherit (value) text;}
-      else {inherit (value) source;}
+      if contentUsesSource value
+      then {inherit (value) source;}
+      else {inherit (value) text;}
     else let
-      bodies = builtins.filter (body: body != "") (map (value:
-        if (value.text or null) != null
-        then value.text
-        else builtins.readFile value.source)
-      present);
+      bodies = map (value: value.text) present;
     in
       if bodies == []
       then null
@@ -196,7 +192,7 @@ in {
   contentFileEntry = value:
     if value == null
     then null
-    else if (value.source or null) != null
+    else if contentUsesSource value
     then {inherit (value) source;}
     else {inherit (value) text;};
 

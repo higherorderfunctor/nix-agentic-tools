@@ -135,11 +135,7 @@
   # arbitration.
   hasMergedContext =
     if supportsPool "context"
-    then
-      lib.any (value:
-        aiCommon.hasContent value
-        && ((value.text or null) == null || value.text != ""))
-      contextValues
+    then lib.any aiCommon.hasContent contextValues
     else false;
   mergedContext =
     if supportsPool "context"

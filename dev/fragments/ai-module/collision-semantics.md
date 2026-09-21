@@ -1,7 +1,7 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-12 — package modules own consumer checks; the
-> shared harness discovers backend imports and owner activation probes.
+> **Last verified:** 2026-09-21 — Semble's CLI rule is the deliberate
+> leaf-default exception for text-source priority arbitration.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -147,6 +147,11 @@ module-system priority before root/runtime composition happens. Do not put
 recursive defaults only on fields below a `nullOr` entry boundary: Nix must
 choose the null or record branch before those leaf priorities can arbitrate, and
 reports the option as both null and non-null instead of honoring the tombstone.
+
+Semble's generated CLI rule is the deliberate exception: it defaults the rule
+fields so a consumer's inline text can override the packaged source while the
+source remains visible. Its runtime `instructions.cli` feature flag is the
+retraction mechanism; do not use a null tombstone for that generated rule.
 
 Always-on process defaults such as the sandbox-safe SSH command still use the
 internal callback channel instead of writing a hidden normalized-pool

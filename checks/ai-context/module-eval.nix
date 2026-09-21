@@ -30,11 +30,11 @@ in {
     in
       builtins.deepSeq result.config.ai.codex.context true)).success);
 
-    module-content-record-competing-writers-conflict = mkTest "content-record-competing-writers-conflict" (
+    module-content-record-text-writers-concatenate = mkTest "content-record-text-writers-concatenate" (
       let
         aiCommon = import ../../lib/ai/ai-common.nix {inherit lib;};
-        contextAttempt = builtins.tryEval (let
-          result = lib.evalModules {
+        context =
+          (lib.evalModules {
             modules = [
               {
                 options.context = lib.mkOption {
@@ -46,11 +46,9 @@ in {
               {context.text = "first writer";}
               {context.text = "second writer";}
             ];
-          };
-        in
-          builtins.deepSeq result.config.context true);
-        ruleAttempt = builtins.tryEval (let
-          result = lib.evalModules {
+          }).config.context;
+        rules =
+          (lib.evalModules {
             modules = [
               {
                 options.rules = lib.mkOption {
@@ -62,12 +60,53 @@ in {
               {rules.same.text = "first writer";}
               {rules.same.text = "second writer";}
             ];
-          };
-        in
-          builtins.deepSeq result.config.rules true);
+          }).config.rules;
       in
-        !contextAttempt.success && !ruleAttempt.success
+        context.text
+        == "first writer\nsecond writer"
+        && rules.same.text == "first writer\nsecond writer"
     );
+
+    module-rule-content-priority-arbitrates = mkTest "rule-content-priority-arbitrates" (
+      let
+        aiCommon = import ../../lib/ai/ai-common.nix {inherit lib;};
+        result = lib.evalModules {
+          modules = [
+            {
+              options.rules = lib.mkOption {
+                type = lib.types.attrsOf aiCommon.ruleModule;
+                default = {};
+                apply = aiCommon.validateRules;
+              };
+            }
+            {rules.example.source = lib.mkDefault ../../lib/ai/types.nix;}
+            {rules.example.text = "Consumer rule.";}
+          ];
+        };
+        rule = result.config.rules.example;
+      in
+        rule.source
+        == ../../lib/ai/types.nix
+        && rule.text == "Consumer rule."
+        && aiCommon.contentFileEntry rule == {text = "Consumer rule.";}
+    );
+
+    module-rule-rejects-empty-content = mkTest "rule-rejects-empty-content" (!(builtins.tryEval (let
+      aiCommon = import ../../lib/ai/ai-common.nix {inherit lib;};
+      result = lib.evalModules {
+        modules = [
+          {
+            options.rules = lib.mkOption {
+              type = lib.types.attrsOf aiCommon.ruleModule;
+              default = {};
+              apply = aiCommon.validateRules;
+            };
+          }
+          {rules.example = {};}
+        ];
+      };
+    in
+      builtins.deepSeq result.config.rules.example true)).success);
 
     module-single-context-source-does-not-trigger-ifd = mkTest "single-context-source-does-not-trigger-ifd" (
       let

@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-12 — package modules own consumer checks; the
-> shared harness discovers backend imports and owner activation probes.
+> **Last verified:** 2026-09-21 — context content uses the shared text-source
+> type and arbitrates `text` against `source` by module priority.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -72,10 +72,11 @@
   an attrset-entry collision; only the exact portable Claude/Codex event
   vocabulary is accepted at L2.
 - **Context content concatenates.** `ai.context` and `ai.<cli>.context` are
-  typed `text`-XOR-`source` records, not pool entries. Their content composes
-  root-first into the runtime's `context.filename`. A structural
-  `hasMergedContext` bit gates the generated default without reading composed
-  sources; rendered bytes remain lazy until that default survives B7.
+  typed `text`/`source` records, not pool entries. Different priorities
+  arbitrate the effective text; one priority setting both fields fails. Their
+  content composes root-first into the runtime's `context.filename`. A
+  structural `hasMergedContext` bit gates the generated default without reading
+  composed sources; rendered bytes remain lazy until that default survives B7.
 - **Rule matchers lower only before L4.** `matcher = null` is always-on; a
   non-empty glob list becomes native routing metadata where one exists and
   explicit prose for flat AGENTS.md consumers. In the shared devenv AGENTS.md,
