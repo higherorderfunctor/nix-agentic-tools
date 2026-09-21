@@ -98,8 +98,8 @@ Three things follow, and each of them is a trap if you assume the old shape:
 
 ## heron_brook Delegation Clamp — the opt-in mitigation
 
-> **Last verified:** 2026-09-21 — `delegationClamp.text` accepts inline or
-> source-backed prose through the shared text-source shape.
+> **Last verified:** 2026-09-21 — the renamed mitigation now uses the shared
+> optional text-source shape and its standard enable switch.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 3510a5db:packages/claude-code/docs/heron-brook-clamp.md`.
@@ -117,9 +117,9 @@ Three things follow, and each of them is a trap if you assume the old shape:
 >   red the moment a second tripwire added its own. The guard couples to the
 >   STEP NAME by design — rename the step and it throws.
 >
-> If you change `ai.claude.delegationClamp`, the hook script, the injected text,
-> or the reminder and this fragment isn't updated in the same commit, stop and
-> fix it.
+> If you change `ai.claude.delegationClampMitigation`, the hook script, the
+> injected text, or the reminder and this fragment isn't updated in the same
+> commit, stop and fix it.
 
 Claude Code injects a system-prompt section — internally `heron_brook` —
 instructing the model not to call the Agent tool and not to use workflows or
@@ -129,9 +129,10 @@ disables it, and it **never appears in the transcript** — so a session with
 delegation suppressed looks identical to a normal one. It also contradicts
 `ai.claude.ultracodeOnLaunch`, which asks for the opposite.
 
-Set `ai.claude.delegationClamp.mitigate = true` to enable it. Override the
-request with `delegationClamp.text.text`, or package it in a file with
-`delegationClamp.text.source`.
+Set `ai.claude.delegationClampMitigation.enable = true` to enable it. Override
+the request with `delegationClampMitigation.text`, or package it in a file with
+`delegationClampMitigation.source`. Defining either content option also enables
+the mitigation automatically.
 
 ### Why the mitigation is user-side context, not a patch
 
@@ -208,6 +209,15 @@ mitigation for exactly the consumers who use hooks most. As a definition it
 list-merges with consumer entries;
 `module-claude-delegation-clamp-composes-with-consumer-hook` pins that down.
 
+The default prose follows the same rule inside
+`ai.claude.delegationClampMitigation`: it is a `lib.mkDefault` definition in the
+shared optional-text-source submodule, not `default = { text = <prose>; };` on
+the outer option. Otherwise the common `delegationClampMitigation.enable = true`
+definition would discard the complete outer default, leave `text = ""`, and
+install an enabled mitigation that injects nothing. Default-priority prose does
+not auto-enable; explicit `text` or `source` content does, and an explicit
+source wins over the prose.
+
 Config parity is structural — both backends already lower `ai.claude.hooks` to
 `settings.json`, so one write serves HM and devenv. Claude-only, no `ai.*`
 fanout: `heron_brook` belongs to the Claude Code client's own system prompt,
@@ -221,7 +231,7 @@ diverge; then whichever runs first supplies the payload.
 
 ### The injected text is load-bearing
 
-`ai.claude.delegationClamp.text.text` resolves to a first-person standing
+`ai.claude.delegationClampMitigation.text` resolves to a first-person standing
 request. Re-derive all four properties before rewording it:
 
 1. It **satisfies** the escape clause rather than contradicting it. A

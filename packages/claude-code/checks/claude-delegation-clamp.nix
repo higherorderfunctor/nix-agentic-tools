@@ -22,7 +22,7 @@
 
       export XDG_RUNTIME_DIR="$PWD/run"
       mkdir -p "$XDG_RUNTIME_DIR"
-      # Stub payload in its own file, mirroring how delegationClamp.nix bakes the real
+      # Stub payload in its own file, mirroring how delegationClampMitigation.nix bakes the real
       # one — the script reads a PATH, never an inlined JSON string.
       printf '%s' '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"STANDING REQUEST"}}' > payload.json
       export DELEGATION_CLAMP_PAYLOAD_FILE="$PWD/payload.json"

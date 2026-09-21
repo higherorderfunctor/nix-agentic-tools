@@ -857,8 +857,8 @@
     per turn.
 
     ```nix
-    ai.claude.delegationClamp = {
-      mitigate = true;        # off by default; set true to enable
+    ai.claude.delegationClampMitigation = {
+      enable = true;          # off by default; set true to enable
       text = "…";             # the standing request — wording is load-bearing
     };
     ```

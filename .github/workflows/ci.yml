@@ -527,7 +527,7 @@ jobs:
         run: nix flake check
 
       # ~90-day reminder to re-check the heron_brook delegation clamp
-      # (ai.claude.delegationClamp, opt-in). A CALENDAR, not a gate on content:
+      # (ai.claude.delegationClampMitigation, opt-in). A CALENDAR, not a gate on content:
       # it fires only past `reviewBy`, and only on the claude-code update PR.
       # The sweep opens one of those several times a week, so the reminder
       # surfaces within days of the date passing while never touching any other
@@ -556,7 +556,7 @@ jobs:
       # bundle is minified, so counts drift with no behavior change.
       #
       # Then EITHER bump `reviewBy` ~90 days, OR — if upstream fixed it — delete
-      # ai.claude.delegationClamp, this step, and packages/claude-code/checks/claude-heron-brook.nix.
+      # ai.claude.delegationClampMitigation, this step, and packages/claude-code/checks/claude-heron-brook.nix.
       - name: Heron-brook mitigation review tripwire
         if: github.head_ref == 'update/claude-code'
         run: |
@@ -568,7 +568,7 @@ jobs:
           today="$(date -u +%F)"
           # Lexicographic compare is correct for ISO-8601 dates.
           if [[ "$today" > "$review_by" ]]; then
-            echo "::error file=${tripwire}::heron_brook mitigation is past its ${review_by} review date (today ${today}). Re-check whether Claude Code still ships the delegation clamp — the grep procedure is in the comment above this step, and ${issue} tracks it upstream. Then EITHER bump reviewBy in ${tripwire}, OR delete ai.claude.delegationClamp, this step, and packages/claude-code/checks/claude-heron-brook.nix if upstream fixed it. An expired justification is a finding, not a formality."
+            echo "::error file=${tripwire}::heron_brook mitigation is past its ${review_by} review date (today ${today}). Re-check whether Claude Code still ships the delegation clamp — the grep procedure is in the comment above this step, and ${issue} tracks it upstream. Then EITHER bump reviewBy in ${tripwire}, OR delete ai.claude.delegationClampMitigation, this step, and packages/claude-code/checks/claude-heron-brook.nix if upstream fixed it. An expired justification is a finding, not a formality."
             exit 1
           fi
           echo "heron_brook mitigation review due ${review_by} (today ${today}) — OK."

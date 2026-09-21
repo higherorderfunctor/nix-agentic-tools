@@ -2,7 +2,7 @@
 # See ./memory-collision-guard.sh for what it does and which of the two candidate
 # instrumentations was chosen (deny-once) over the other (allow + additionalContext).
 #
-# Unlike delegationClamp.nix, the payload CANNOT be serialized at eval time: the
+# Unlike delegationClampMitigation.nix, the payload CANNOT be serialized at eval time: the
 # denial reason embeds a directory listing that only exists at hook-run time. So jq
 # is on the output path here, used as `jq -n --arg` — the text is passed as an
 # ARGUMENT and jq does the escaping. Never string-concatenate JSON in the script;
