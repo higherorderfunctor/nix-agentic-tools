@@ -2,6 +2,26 @@
 
 > **Last verified:** 2026-09-21 — `delegationClamp.text` accepts inline or
 > source-backed prose through the shared text-source shape.
+>
+> **Settled — do not relitigate.** Full lineage:
+> `git show 3510a5db:packages/claude-code/docs/heron-brook-clamp.md`.
+>
+> - **A per-update version tripwire was TRIED and REJECTED.** It compared the
+>   pinned claude-code version against a recorded `verifiedClaudeVersion`, so it
+>   went red on every release and was right on none of them — three discharges,
+>   all clean. What replaced it is a ~90-day dated reminder scoped to the
+>   claude-code update PR, plus an eval-only guard that the two agree on the
+>   branch name.
+> - **`packages/claude-code/checks/claude-heron-brook.nix` anchors on the
+>   reminder step's `- name:` line**, and reads its gate from within that step's
+>   line range. It used to require exactly ONE `head_ref == 'update/…'` gate in
+>   the whole file, which was correct while this was the only such step and went
+>   red the moment a second tripwire added its own. The guard couples to the
+>   STEP NAME by design — rename the step and it throws.
+>
+> If you change `ai.claude.delegationClamp`, the hook script, the injected text,
+> or the reminder and this fragment isn't updated in the same commit, stop and
+> fix it.
 
 Claude Code injects a system-prompt section — internally `heron_brook` —
 instructing the model not to call the Agent tool and not to use workflows or
