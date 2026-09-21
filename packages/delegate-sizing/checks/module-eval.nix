@@ -1,3 +1,4 @@
+# cspell:ignore Prio
 # Exercise the generated files as delivered through both consumer backends.
 {
   lib,
@@ -134,6 +135,35 @@
       runtimes)
     "delegate-sizing rendered skills must not contain another runtime's native delegate tools"; true;
     noEntries = evaluate scenario;
+    shippedPresets = noEntries.config.ai.programs.delegate-sizing.whenToDelegate;
+    shippedPresetNames = builtins.attrNames shippedPresets;
+    shippedPresetFieldDefinitions = preset:
+      lib.modules.mergeAttrDefinitionsWithPrio {
+        type = lib.types.attrsOf lib.types.raw;
+        definitionsWithLocations =
+          map
+          (definition: {
+            inherit (definition) file;
+            value = definition.value.whenToDelegate.${preset};
+          })
+          (builtins.filter
+            (definition:
+              definition.value ? whenToDelegate
+              && builtins.hasAttr preset definition.value.whenToDelegate)
+            noEntries.options.ai.programs.delegate-sizing.definitionsWithLocations);
+      };
+    shippedPresetPrioritiesChecked = assert lib.assertMsg
+    (lib.all
+      (preset:
+        lib.all
+        (field: field.highestPrio == (lib.mkDefault null).priority)
+        (builtins.attrValues (shippedPresetFieldDefinitions preset)))
+      shippedPresetNames)
+    "delegate-sizing-${name}: every field defined by package whenToDelegate presets must use lib.mkDefault"; true;
+    enabledShippedPresets = lib.genAttrs shippedPresetNames (preset:
+      evaluate (lib.recursiveUpdate scenario {
+        ai.programs.delegate-sizing.whenToDelegate.${preset}.enable = true;
+      }));
     consumerEntry = evaluate (lib.recursiveUpdate scenario {
       ai.programs.delegate-sizing.whenToDelegate.Consumer = {
         text = "Delegate when the task is independently verifiable.";
@@ -357,6 +387,7 @@
       && !(result.config.ai.skills ? delegate-sizing)
       && !(result.config.ai.rules ? delegate-sizing-router)
     );
+    "module-delegate-sizing-${name}-preset-priorities" = mkTest "delegate-sizing-${name}-preset-priorities" shippedPresetPrioritiesChecked;
     "module-delegate-sizing-${name}-stub" = mkTest "delegate-sizing-${name}-stub" (
       builtins.length (lib.splitString "\n" (lib.removeSuffix "\n" stub))
       <= 10
@@ -378,6 +409,21 @@
       && lib.hasInfix "### Consumer\n\nDelegate when the task is independently verifiable." (ruleText consumerEntry)
       && !(lib.hasInfix "### Preset" (ruleText disabledPreset))
       && lib.hasInfix "### Preset\n\nDelegate a preset task." (ruleText enabledPreset)
+      && lib.all
+      (preset: let
+        declaredSource = shippedPresets.${preset}.source;
+        text = ruleText enabledShippedPresets.${preset};
+      in
+        lib.hasInfix
+        "### ${preset}\n\n${lib.removeSuffix "\n" (builtins.readFile declaredSource)}"
+        text
+        && lib.all
+        (other:
+          other
+          == preset
+          || !(lib.hasInfix (lib.removeSuffix "\n" (builtins.readFile shippedPresets.${other}.source)) text))
+        shippedPresetNames)
+      shippedPresetNames
     );
     "module-delegate-sizing-${name}-when-to-delegate-preset-constructor" = mkTest "delegate-sizing-${name}-when-to-delegate-preset-constructor" presetConstructorContract;
     "module-delegate-sizing-${name}-when-to-delegate-protection" = mkTest "delegate-sizing-${name}-when-to-delegate-protection" protectionContract;
