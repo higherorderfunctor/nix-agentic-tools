@@ -1,11 +1,11 @@
 {
-  "version": "1.0.86",
+  "version": "1.0.87",
   "aarch64-darwin": {
-    "url": "https://github.com/github/copilot-cli/releases/download/v1.0.86/copilot-darwin-arm64.tar.gz",
-    "hash": "sha256-okKhBrm0fyPPAvNUETqGxe/G9ppOF1Jl98m8UJ2qd4k="
+    "url": "https://github.com/github/copilot-cli/releases/download/v1.0.87/copilot-darwin-arm64.tar.gz",
+    "hash": "sha256-Xvz3YWcNDLs9oO3Yb7b9FM+JAlTVjNuAxa1s/UtTlNQ="
   },
   "x86_64-linux": {
-    "url": "https://github.com/github/copilot-cli/releases/download/v1.0.86/copilot-linux-x64.tar.gz",
-    "hash": "sha256-6kpRnXsv9U6cfRCumSHPSrP1BBSJ7DQIUvR/T2P8U1s="
+    "url": "https://github.com/github/copilot-cli/releases/download/v1.0.87/copilot-linux-x64.tar.gz",
+    "hash": "sha256-SdgbGE8aGzWK9nYVX+l+NBudnwvI3SUZDf4XCHZptbk="
   }
 }
