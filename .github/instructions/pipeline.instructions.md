@@ -423,8 +423,10 @@ validation.
 
 ## Generation Architecture
 
-> **Last verified:** 2026-09-19 — the root instruction composition includes the
-> delegate-sizing stub alongside the published coding and workflow rules.
+> **Last verified:** 2026-09-20 — the root instruction composition includes the
+> delegate-sizing stub alongside the published coding and workflow rules. The
+> Codex named-profile materializer cited below was removed as unreachable dead
+> code.
 
 Content is generated via Nix derivations wrapped in devenv tasks, organized by
 scope:
@@ -464,15 +466,11 @@ Skills and immutable CLI configuration generally use `files.*` (devenv) or
 `home.file` (HM), producing symlinks to store paths with no repository
 generation step. Runtime-writable files are an intentional exception: for
 example, Codex's user `config.toml` is reconciled by Home Manager activation,
-while project config remains statically owned by devenv. Codex named profile
-files are immutable whole-file layers: Home Manager links them directly, while a
-devenv pre-shell task safely materializes repository declarations into the user
-CODEX_HOME where native `--profile` lookup requires them. That path is currently
-unreachable — `ai.codex.profiles` is LOCKED OUT and fails evaluation (see the
-lockout comment in `packages/chatgpt-codex/lib/mkCodex.nix`) — so no repository
-here drives the materializer; it is described because the code is retained for
-re-enablement. These app-level materialization tasks are separate from the
-repository instruction generator described here.
+while project config remains statically owned by devenv. (Codex's separate
+whole-file `--profile` layer and its devenv `CODEX_HOME` materializer were
+removed 2026-09-19 as unreachable dead code; see the Settled bullet in
+`dev/fragments/ai-module/ai-module-fanout.md`.) These app-level materialization
+tasks are separate from the repository instruction generator described here.
 
 Repository-generated instruction projections are the exception: they are
 **copies**, not symlinks, materialized on every shell entry by
