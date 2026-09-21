@@ -1,0 +1,33 @@
+diff --git a/src/kiro_crew/cli_server.py b/src/kiro_crew/cli_server.py
+index a4eed88..617137a 100644
+--- a/src/kiro_crew/cli_server.py
++++ b/src/kiro_crew/cli_server.py
+@@ -1391,6 +1391,11 @@ def _update(force: bool = False) -> None:
+     * **externally managed** (desktop app, Docker) — print guidance on how
+       to update via the correct surface instead of failing with an opaque error.
+     """
++    # Packaging policy also covers the manual CLI dispatcher: both git and
++    # wheel/provider branches below would replace externally managed bytes.
++    print("Kiro Crew self-update disabled by packaging; update through Nix configuration.")
++    return
++
+     from kiro_crew.platform.update_layout import InstallLayout
+ 
+     print("👻 Updating Kiro Crew…\n")
+diff --git a/src/kiro_crew/slack/gateway.py b/src/kiro_crew/slack/gateway.py
+index f57e091..944d3aa 100644
+--- a/src/kiro_crew/slack/gateway.py
++++ b/src/kiro_crew/slack/gateway.py
+@@ -2117,6 +2117,12 @@ class GatewayOrchestrator:
+         mandatory_key: str = "",
+     ) -> bool:
+         """Pause admission and reach an idle boundary before automatic apply."""
++        # Packaging policy: keep checks and availability state, but never let
++        # an automatic or policy-mandated apply replace the packaged runtime.
++        logger.info("Kiro Crew self-update disabled by packaging; update through Nix configuration")
++        if self.dashboard_state:
++            self.dashboard_state.push_refresh("update_available")
++        return False
+         if not mandatory:
+             self._mandatory_update_deferred_at = None
+             self._mandatory_update_deferred_key = None
