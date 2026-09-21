@@ -1,0 +1,14 @@
+{
+  "bun": "1.4.2",
+  "sdk": "1.10.0",
+  "status": "pass",
+  "loadMs": 9.377624999999998,
+  "twentyRunMedianMs": 0.29890600000000234,
+  "controls": [
+    "same Rego compiled to Wasm",
+    "ten base truth rows",
+    "boundary open and close",
+    "snapshot protection"
+  ],
+  "limitations": "warm in-process evaluation, full input each time; no Scribe integration, no incremental algorithm"
+}

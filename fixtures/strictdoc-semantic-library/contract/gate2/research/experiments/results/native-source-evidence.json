@@ -1,0 +1,22 @@
+[
+  {
+    "file": "strictdoc/core/traceability_index_builder.py",
+    "main": "87d4b68643547fb0c749b3f35aa228fe60c1f9195960f656c40f875e7dc14dea",
+    "pinned": "87d4b68643547fb0c749b3f35aa228fe60c1f9195960f656c40f875e7dc14dea"
+  },
+  {
+    "file": "strictdoc/core/tree_cycle_detector.py",
+    "main": "5f985eaf2f4b6593713cc379112cd13831e15c73e479b84874ec85fc27615311",
+    "pinned": "5f985eaf2f4b6593713cc379112cd13831e15c73e479b84874ec85fc27615311"
+  },
+  {
+    "file": "strictdoc/core/graph_database.py",
+    "main": "2ff077b24518108e5807a37b3990089a824f4a94b13310c7b1f1ba7ed82fbfd9",
+    "pinned": "2ff077b24518108e5807a37b3990089a824f4a94b13310c7b1f1ba7ed82fbfd9"
+  },
+  {
+    "file": "strictdoc/core/graph/many_to_many_set.py",
+    "main": "c63fb2436d3e9259aeff52441668c4c2c30dc8900f9263cd2c5c18e5b6839355",
+    "pinned": "c63fb2436d3e9259aeff52441668c4c2c30dc8900f9263cd2c5c18e5b6839355"
+  }
+]

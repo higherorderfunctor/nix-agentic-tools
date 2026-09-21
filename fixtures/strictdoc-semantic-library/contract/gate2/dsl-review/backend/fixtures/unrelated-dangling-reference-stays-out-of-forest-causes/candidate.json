@@ -1,0 +1,59 @@
+{
+  "model": "reference",
+  "records": [
+    {
+      "uid": "F0",
+      "element": "FOO",
+      "fields": {
+        "UID": ["F0"],
+        "FLAG": ["false"]
+      },
+      "relations": []
+    },
+    {
+      "uid": "F1",
+      "element": "FOO",
+      "fields": {
+        "UID": ["F1"],
+        "FLAG": ["false"]
+      },
+      "relations": [
+        {
+          "role": "H",
+          "direction": "parent",
+          "target": "GHOST-H"
+        }
+      ]
+    },
+    {
+      "uid": "G0",
+      "element": "FOO",
+      "fields": {
+        "UID": ["G0"],
+        "FLAG": ["false"]
+      },
+      "relations": []
+    },
+    {
+      "uid": "G1",
+      "element": "FOO",
+      "fields": {
+        "UID": ["G1"],
+        "FLAG": ["false"]
+      },
+      "relations": [
+        {
+          "role": "H",
+          "direction": "parent",
+          "target": "G0"
+        },
+        {
+          "role": "R",
+          "direction": "parent",
+          "target": "GHOST-R"
+        }
+      ]
+    }
+  ],
+  "created": []
+}

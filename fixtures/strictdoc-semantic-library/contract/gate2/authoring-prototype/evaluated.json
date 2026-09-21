@@ -1,0 +1,545 @@
+{
+  "normalized": {
+    "bundle": {
+      "declarations": [
+        {
+          "id": "reference/element/BAR",
+          "kind": "element-declaration",
+          "native": {
+            "fields": [
+              {
+                "string": {
+                  "humanTitle": null,
+                  "required": true,
+                  "title": "UID"
+                }
+              }
+            ],
+            "isComposite": null,
+            "prefix": null,
+            "relations": [
+              {
+                "parent": {
+                  "reverseRole": "P_back",
+                  "role": "P",
+                  "type": "Parent"
+                }
+              },
+              {
+                "child": {
+                  "reverseRole": "Q_back",
+                  "role": "Q",
+                  "type": "Child"
+                }
+              }
+            ],
+            "tag": "BAR",
+            "viewStyle": null
+          },
+          "semanticFields": []
+        },
+        {
+          "id": "reference/element/BAZ",
+          "kind": "element-declaration",
+          "native": {
+            "fields": [
+              {
+                "string": {
+                  "humanTitle": null,
+                  "required": true,
+                  "title": "UID"
+                }
+              }
+            ],
+            "isComposite": null,
+            "prefix": null,
+            "relations": [
+              {
+                "child": {
+                  "reverseRole": "Q_back",
+                  "role": "Q",
+                  "type": "Child"
+                }
+              },
+              {
+                "parent": {
+                  "reverseRole": "R_back",
+                  "role": "R",
+                  "type": "Parent"
+                }
+              }
+            ],
+            "tag": "BAZ",
+            "viewStyle": null
+          },
+          "semanticFields": []
+        },
+        {
+          "id": "reference/element/FOO",
+          "kind": "element-declaration",
+          "native": {
+            "fields": [
+              {
+                "string": {
+                  "humanTitle": null,
+                  "required": true,
+                  "title": "UID"
+                }
+              },
+              {
+                "singleChoice": {
+                  "choices": ["false", "true"],
+                  "humanTitle": null,
+                  "required": true,
+                  "title": "FLAG"
+                }
+              }
+            ],
+            "isComposite": null,
+            "prefix": null,
+            "relations": [
+              {
+                "parent": {
+                  "reverseRole": "H_back",
+                  "role": "H",
+                  "type": "Parent"
+                }
+              },
+              {
+                "parent": {
+                  "reverseRole": "R_back",
+                  "role": "R",
+                  "type": "Parent"
+                }
+              }
+            ],
+            "tag": "FOO",
+            "viewStyle": null
+          },
+          "semanticFields": [
+            {
+              "default": { "literal": false },
+              "field": {
+                "element": "FOO",
+                "grammar": "reference",
+                "name": "FLAG"
+              },
+              "native": {
+                "singleChoice": {
+                  "choices": ["false", "true"],
+                  "required": true,
+                  "title": "FLAG"
+                }
+              },
+              "semantic": {
+                "decode": { "false": false, "true": true },
+                "encode": { "false": "false", "true": "true" },
+                "invalid": "error",
+                "multiplicity": "single",
+                "presence": "required",
+                "type": "boolean"
+              }
+            }
+          ]
+        }
+      ],
+      "rules": [
+        {
+          "after": [
+            "reference/view/H/valid",
+            "reference/element/BAR/relation/Parent/P/cardinality",
+            "reference/element/BAR/relation/Child/Q/cardinality"
+          ],
+          "config": {
+            "boundary": {
+              "closed": ["true"],
+              "field": {
+                "element": "FOO",
+                "grammar": "reference",
+                "name": "FLAG"
+              },
+              "open": ["false"],
+              "semanticType": "boolean"
+            },
+            "lower": {
+              "grammar": "reference",
+              "nativeType": "Child",
+              "ownerElement": "BAR",
+              "role": "Q"
+            },
+            "records": { "element": "BAR", "grammar": "reference" },
+            "upper": {
+              "grammar": "reference",
+              "nativeType": "Parent",
+              "ownerElement": "BAR",
+              "role": "P"
+            }
+          },
+          "contract": "sdoc-policy.endpoint-path/v1",
+          "id": "reference/element/BAR/constraint/endpointPath",
+          "inputs": {
+            "candidate": {
+              "from": "candidate",
+              "schema": "sdoc-policy.model/v1"
+            },
+            "hierarchy": {
+              "from": "view:reference/view/H",
+              "schema": "sdoc-policy.forest/v1"
+            }
+          },
+          "needs": [],
+          "scope": "model"
+        },
+        {
+          "after": [],
+          "config": {
+            "allowed": [{ "element": "FOO", "grammar": "reference" }],
+            "select": {
+              "grammar": "reference",
+              "nativeType": "Parent",
+              "ownerElement": "BAR",
+              "role": "P"
+            }
+          },
+          "contract": "sdoc-policy.targets/v1",
+          "id": "reference/element/BAR/relation/Parent/P/constraint/targetType",
+          "inputs": {
+            "candidate": {
+              "from": "candidate",
+              "schema": "sdoc-policy.model/v1"
+            }
+          },
+          "needs": ["model.resolved-endpoints/v1"],
+          "scope": "model"
+        },
+        {
+          "after": [],
+          "config": {
+            "max": 1,
+            "min": 1,
+            "records": { "element": "BAR", "grammar": "reference" },
+            "select": {
+              "grammar": "reference",
+              "nativeType": "Parent",
+              "ownerElement": "BAR",
+              "role": "P"
+            }
+          },
+          "contract": "sdoc-policy.count/v1",
+          "id": "reference/element/BAR/relation/Parent/P/cardinality",
+          "inputs": {
+            "candidate": {
+              "from": "candidate",
+              "schema": "sdoc-policy.model/v1"
+            }
+          },
+          "needs": [],
+          "scope": "model"
+        },
+        {
+          "after": [],
+          "config": {
+            "allowed": [{ "element": "FOO", "grammar": "reference" }],
+            "select": {
+              "grammar": "reference",
+              "nativeType": "Child",
+              "ownerElement": "BAR",
+              "role": "Q"
+            }
+          },
+          "contract": "sdoc-policy.targets/v1",
+          "id": "reference/element/BAR/relation/Child/Q/constraint/targetType",
+          "inputs": {
+            "candidate": {
+              "from": "candidate",
+              "schema": "sdoc-policy.model/v1"
+            }
+          },
+          "needs": ["model.resolved-endpoints/v1"],
+          "scope": "model"
+        },
+        {
+          "after": [],
+          "config": {
+            "max": 1,
+            "min": 1,
+            "records": { "element": "BAR", "grammar": "reference" },
+            "select": {
+              "grammar": "reference",
+              "nativeType": "Child",
+              "ownerElement": "BAR",
+              "role": "Q"
+            }
+          },
+          "contract": "sdoc-policy.count/v1",
+          "id": "reference/element/BAR/relation/Child/Q/cardinality",
+          "inputs": {
+            "candidate": {
+              "from": "candidate",
+              "schema": "sdoc-policy.model/v1"
+            }
+          },
+          "needs": [],
+          "scope": "model"
+        },
+        {
+          "after": [],
+          "config": {
+            "allowed": [{ "element": "FOO", "grammar": "reference" }],
+            "select": {
+              "grammar": "reference",
+              "nativeType": "Parent",
+              "ownerElement": "FOO",
+              "role": "H"
+            }
+          },
+          "contract": "sdoc-policy.targets/v1",
+          "id": "reference/element/FOO/relation/Parent/H/constraint/targetType",
+          "inputs": {
+            "candidate": {
+              "from": "candidate",
+              "schema": "sdoc-policy.model/v1"
+            }
+          },
+          "needs": ["model.resolved-endpoints/v1"],
+          "scope": "model"
+        },
+        {
+          "after": [],
+          "config": {
+            "allowed": [{ "element": "FOO", "grammar": "reference" }],
+            "select": {
+              "grammar": "reference",
+              "nativeType": "Parent",
+              "ownerElement": "FOO",
+              "role": "R"
+            }
+          },
+          "contract": "sdoc-policy.targets/v1",
+          "id": "reference/element/FOO/relation/Parent/R/constraint/targetType",
+          "inputs": {
+            "candidate": {
+              "from": "candidate",
+              "schema": "sdoc-policy.model/v1"
+            }
+          },
+          "needs": ["model.resolved-endpoints/v1"],
+          "scope": "model"
+        },
+        {
+          "after": ["reference/view/H/valid"],
+          "config": {
+            "boundary": {
+              "closed": ["true"],
+              "field": {
+                "element": "FOO",
+                "grammar": "reference",
+                "name": "FLAG"
+              },
+              "open": ["false"],
+              "semanticType": "boolean"
+            },
+            "select": {
+              "grammar": "reference",
+              "nativeType": "Parent",
+              "ownerElement": "FOO",
+              "role": "R"
+            }
+          },
+          "contract": "sdoc-policy.visible/v1",
+          "id": "reference/element/FOO/relation/Parent/R/constraint/visibleTarget",
+          "inputs": {
+            "candidate": {
+              "from": "candidate",
+              "schema": "sdoc-policy.model/v1"
+            },
+            "hierarchy": {
+              "from": "view:reference/view/H",
+              "schema": "sdoc-policy.forest/v1"
+            }
+          },
+          "needs": [],
+          "scope": "model"
+        },
+        {
+          "after": [],
+          "config": {
+            "nodes": { "element": "FOO", "grammar": "reference" },
+            "select": [
+              {
+                "grammar": "reference",
+                "nativeType": "Parent",
+                "ownerElement": "FOO",
+                "role": "H"
+              }
+            ]
+          },
+          "contract": "sdoc-policy.forest-valid/v1",
+          "id": "reference/view/H/valid",
+          "inputs": {
+            "candidate": {
+              "from": "candidate",
+              "schema": "sdoc-policy.model/v1"
+            }
+          },
+          "needs": [],
+          "scope": "model"
+        },
+        {
+          "after": [],
+          "config": {},
+          "contract": "sdoc-policy.native-dag/v1",
+          "id": "reference/constraint/nativeDag",
+          "inputs": {
+            "candidate": {
+              "from": "candidate",
+              "schema": "sdoc-policy.model/v1"
+            }
+          },
+          "needs": ["model.resolved-parent-child/v1", "native.all-role-dag/v1"],
+          "scope": "model"
+        },
+        {
+          "after": [],
+          "config": {
+            "projection": {
+              "elementType": true,
+              "fieldsWhenPresent": [
+                { "element": "FOO", "grammar": "reference", "name": "FLAG" }
+              ],
+              "id": "authored-record/v1",
+              "ownedRelations": "set"
+            }
+          },
+          "contract": "sdoc-policy.preserve/v1",
+          "id": "reference/constraint/preserve",
+          "inputs": {
+            "baseline": {
+              "from": "fact:protected",
+              "schema": "sdoc-policy.baseline/v1"
+            },
+            "candidate": {
+              "from": "candidate",
+              "schema": "sdoc-policy.model/v1"
+            }
+          },
+          "needs": [],
+          "scope": "model"
+        }
+      ],
+      "views": [
+        {
+          "after": ["reference/view/H/valid"],
+          "config": {
+            "nodes": { "element": "FOO", "grammar": "reference" },
+            "select": [
+              {
+                "grammar": "reference",
+                "nativeType": "Parent",
+                "ownerElement": "FOO",
+                "role": "H"
+              }
+            ]
+          },
+          "contract": "sdoc-policy.forest-view/v1",
+          "id": "reference/view/H",
+          "inputs": {
+            "candidate": {
+              "from": "candidate",
+              "schema": "sdoc-policy.model/v1"
+            }
+          },
+          "needs": [],
+          "schema": "sdoc-policy.forest/v1"
+        }
+      ]
+    },
+    "grammar": [
+      {
+        "fields": [
+          { "string": { "humanTitle": null, "required": true, "title": "UID" } }
+        ],
+        "isComposite": null,
+        "prefix": null,
+        "relations": [
+          {
+            "parent": { "reverseRole": "P_back", "role": "P", "type": "Parent" }
+          },
+          { "child": { "reverseRole": "Q_back", "role": "Q", "type": "Child" } }
+        ],
+        "tag": "BAR",
+        "viewStyle": null
+      },
+      {
+        "fields": [
+          { "string": { "humanTitle": null, "required": true, "title": "UID" } }
+        ],
+        "isComposite": null,
+        "prefix": null,
+        "relations": [
+          {
+            "child": { "reverseRole": "Q_back", "role": "Q", "type": "Child" }
+          },
+          {
+            "parent": { "reverseRole": "R_back", "role": "R", "type": "Parent" }
+          }
+        ],
+        "tag": "BAZ",
+        "viewStyle": null
+      },
+      {
+        "fields": [
+          {
+            "string": { "humanTitle": null, "required": true, "title": "UID" }
+          },
+          {
+            "singleChoice": {
+              "choices": ["false", "true"],
+              "humanTitle": null,
+              "required": true,
+              "title": "FLAG"
+            }
+          }
+        ],
+        "isComposite": null,
+        "prefix": null,
+        "relations": [
+          {
+            "parent": { "reverseRole": "H_back", "role": "H", "type": "Parent" }
+          },
+          {
+            "parent": { "reverseRole": "R_back", "role": "R", "type": "Parent" }
+          }
+        ],
+        "tag": "FOO",
+        "viewStyle": null
+      }
+    ],
+    "semanticTypes": {
+      "digest": "53105024dc5388061b092820b7245bc988770f1367d64ece63ae5fa5e5ae5e13",
+      "fields": [
+        {
+          "default": { "literal": false },
+          "field": { "element": "FOO", "grammar": "reference", "name": "FLAG" },
+          "native": {
+            "singleChoice": {
+              "choices": ["false", "true"],
+              "required": true,
+              "title": "FLAG"
+            }
+          },
+          "semantic": {
+            "decode": { "false": false, "true": true },
+            "encode": { "false": "false", "true": "true" },
+            "invalid": "error",
+            "multiplicity": "single",
+            "presence": "required",
+            "type": "boolean"
+          }
+        }
+      ],
+      "schema": "sdoc-policy.semantic-types/v1"
+    }
+  },
+  "rendered": "[GRAMMAR]\nELEMENTS:\n- TAG: BAR\n  FIELDS:\n  - TITLE: UID\n    TYPE: String\n    REQUIRED: True\n  RELATIONS:\n  - TYPE: Parent\n    ROLE: P\n    REVERSE_ROLE: P_back\n  - TYPE: Child\n    ROLE: Q\n    REVERSE_ROLE: Q_back\n- TAG: BAZ\n  FIELDS:\n  - TITLE: UID\n    TYPE: String\n    REQUIRED: True\n  RELATIONS:\n  - TYPE: Child\n    ROLE: Q\n    REVERSE_ROLE: Q_back\n  - TYPE: Parent\n    ROLE: R\n    REVERSE_ROLE: R_back\n- TAG: FOO\n  FIELDS:\n  - TITLE: UID\n    TYPE: String\n    REQUIRED: True\n  - TITLE: FLAG\n    TYPE: SingleChoice(false, true)\n    REQUIRED: True\n  RELATIONS:\n  - TYPE: Parent\n    ROLE: H\n    REVERSE_ROLE: H_back\n  - TYPE: Parent\n    ROLE: R\n    REVERSE_ROLE: R_back\n"
+}

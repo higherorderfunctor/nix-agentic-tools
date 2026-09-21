@@ -39,8 +39,7 @@
 #
 # ONE PACKAGE IS SPLICED ONTO PYTHONPATH, because that venv does not carry it.
 # `ast_grep_py`, because the normalizer matches over the faithful surface's Nix
-# source in process. The repository's `dev/scripts/sdoc_semantics/` interpreter
-# is standard-library-only and is supplied only to the install check below.
+# source in process.
 # The extension module is a version coupling: it
 # built for `pkgs.python3` is only importable by upstream's interpreter while
 # the two agree on the Python MINOR version. MEASURED 2026-08-27 against this
@@ -115,18 +114,6 @@
     })
   ];
 
-  # Only the interpreter participates in this build-time import check. Other
-  # dev scripts, test fixtures and local bytecode must not invalidate the wrap.
-  semanticsSource = lib.fileset.toSource {
-    root = ../../../dev/scripts;
-    fileset =
-      lib.fileset.difference
-      (lib.fileset.fileFilter
-        (file: file.hasExt "py" || file.name == "model.json")
-        ../../../dev/scripts/sdoc_semantics)
-      ../../../dev/scripts/sdoc_semantics/tests;
-  };
-
   # The one grammar registry. Shared with devenv.nix, which needs the same
   # paths in the dev shell's env for a hand-run `strictdoc export`; see that
   # file's header for why the list may not be written twice.
@@ -178,9 +165,8 @@ in
     '';
 
     # The whole point of the package asserted at build time: strictdoc's grammar
-    # builder imports, and so does the matcher library. The repository
-    # interpreter is also imported from its source path below, so a broken
-    # delivery fails here rather than in a session.
+    # builder imports, and so does the matcher library. Project semantics are
+    # not a dependency of the installed toolchain or this environment check.
     #
     # `pjrpc.server.validators.pydantic` is the ONE import that proves the
     # spliced package and the venv's own pydantic resolve in the SAME
@@ -191,15 +177,13 @@ in
     doInstallCheck = true;
     installCheckPhase = ''
       runHook preInstallCheck
-      PYTHONPATH="${semanticsSource}:''${PYTHONPATH-}" \
-        "$out/bin/strictdoc-grammar-extract" -c '
-      import ast_grep_py, arpeggio, textx, sdoc_semantics
+      "$out/bin/strictdoc-grammar-extract" -c '
+      import ast_grep_py, arpeggio, textx
       import pjrpc, pydantic
       from pjrpc.server import Dispatcher, MethodRegistry
       from pjrpc.server.validators.pydantic import PydanticValidatorFactory
       from strictdoc.backend.sdoc.grammar.grammar_builder import SDocGrammarBuilder
       assert SDocGrammarBuilder.create_grammar_grammar()
-      assert sdoc_semantics.load_model()
       assert Dispatcher(max_batch_size=1) and MethodRegistry(PydanticValidatorFactory())
       '
 

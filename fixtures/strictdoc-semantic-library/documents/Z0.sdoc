@@ -1,0 +1,11 @@
+[DOCUMENT]
+TITLE: Z0
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[BAZ]
+AUTHORED_BY: >>>
+llm
+<<<
+UID: Z0

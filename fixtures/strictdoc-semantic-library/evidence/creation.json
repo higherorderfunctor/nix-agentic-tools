@@ -1,0 +1,354 @@
+[
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "new",
+      "FOO",
+      "--uid",
+      "F0",
+      "--flag",
+      "false",
+      "--path",
+      "documents/F0.sdoc"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/F0.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "new",
+      "FOO",
+      "--uid",
+      "F1",
+      "--flag",
+      "false",
+      "--path",
+      "documents/F1.sdoc",
+      "--relate",
+      "H=F0"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/F1.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "new",
+      "FOO",
+      "--uid",
+      "F1a",
+      "--flag",
+      "false",
+      "--path",
+      "documents/F1a.sdoc",
+      "--relate",
+      "H=F1"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/F1a.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "new",
+      "FOO",
+      "--uid",
+      "F2",
+      "--flag",
+      "true",
+      "--path",
+      "documents/F2.sdoc",
+      "--relate",
+      "H=F0"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/F2.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "new",
+      "FOO",
+      "--uid",
+      "F2a",
+      "--flag",
+      "false",
+      "--path",
+      "documents/F2a.sdoc",
+      "--relate",
+      "H=F2"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/F2a.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "new",
+      "FOO",
+      "--uid",
+      "F2b",
+      "--flag",
+      "false",
+      "--path",
+      "documents/F2b.sdoc",
+      "--relate",
+      "H=F2"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/F2b.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "new",
+      "FOO",
+      "--uid",
+      "G0",
+      "--flag",
+      "false",
+      "--path",
+      "documents/G0.sdoc"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/G0.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "new",
+      "FOO",
+      "--uid",
+      "G1",
+      "--flag",
+      "false",
+      "--path",
+      "documents/G1.sdoc",
+      "--relate",
+      "H=G0"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/G1.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "new",
+      "FOO",
+      "--uid",
+      "I0",
+      "--flag",
+      "false",
+      "--path",
+      "documents/I0.sdoc"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/I0.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "new",
+      "BAZ",
+      "--uid",
+      "Z0",
+      "--path",
+      "documents/Z0.sdoc"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/Z0.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "new",
+      "BAR",
+      "--uid",
+      "M",
+      "--path",
+      "documents/M.sdoc",
+      "--relate",
+      "P=F0",
+      "--relate",
+      "Q=F2"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/M.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "relate",
+      "F1a",
+      "--role",
+      "R",
+      "--target",
+      "F2"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/F1a.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "check"
+    ],
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "11 nodes, 0 finding(s)\n"
+  },
+  {
+    "argv": [
+      "scribe-client",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "reload"
+    ],
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "{\n  \"dirty\": false,\n  \"documents\": 12,\n  \"generation\": 16,\n  \"nodes\": 11,\n  \"root\": \"/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library\"\n}\n"
+  },
+  {
+    "argv": [
+      "scribe-client",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "info"
+    ],
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "{\n  \"dirty\": false,\n  \"documents\": 12,\n  \"generation\": 16,\n  \"nodes\": 11,\n  \"root\": \"/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library\"\n}\n"
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "unrelate",
+      "M",
+      "--role",
+      "Q",
+      "--target",
+      "F2"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/M.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "unrelate",
+      "M",
+      "--role",
+      "P",
+      "--target",
+      "F0"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/M.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "delete",
+      "M"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/M.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "unrelate",
+      "F1a",
+      "--role",
+      "R",
+      "--target",
+      "F2"
+    ],
+    "returncode": 0,
+    "stderr": "wrote documents/F1a.sdoc\n",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "scribe",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "check"
+    ],
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "10 nodes, 0 finding(s)\n"
+  },
+  {
+    "argv": [
+      "scribe-client",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "reload"
+    ],
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "{\n  \"dirty\": false,\n  \"documents\": 11,\n  \"generation\": 23,\n  \"nodes\": 10,\n  \"root\": \"/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library\"\n}\n"
+  },
+  {
+    "argv": [
+      "scribe-client",
+      "--root",
+      "/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library",
+      "info"
+    ],
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "{\n  \"dirty\": false,\n  \"documents\": 11,\n  \"generation\": 23,\n  \"nodes\": 10,\n  \"root\": \"/home/caubut/Documents/projects/nix-agentic-tools-worktrees/strictdoc-semantic-gate1/fixtures/strictdoc-semantic-library\"\n}\n"
+  }
+]

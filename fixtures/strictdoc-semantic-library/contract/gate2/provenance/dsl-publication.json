@@ -1,0 +1,305 @@
+{
+  "algorithm": "sha256",
+  "base": "6f529c7eef3650a14b6f8d56ff1bc3ceaa914d7f",
+  "changes": [
+    "Markdown links adapted to publication destinations",
+    "Producer default response example qualified as payload fragment and linked to full proposed envelope",
+    "deadnix removed or prefixed unused lambda binders; normalized outputs must remain identical",
+    "P02 nativeDag and H-validity rule IDs synchronized to evaluated canonical bundle",
+    "Unpublished runtime finding path linked to authoring-prototype/source-audit.txt",
+    "14 statix inherit substitutions in dsl/compose/controls/recommended; forced normalized/rendered/control JSON identical to frozen producer"
+  ],
+  "files": [
+    {
+      "byteIdentical": true,
+      "producer": "contracts/outputs/contract/decisions.md",
+      "producerSha256": "d6f1c218ebcf1c18592814f391ecc2201c8c26feb178e6ab2d7a88026e045776",
+      "published": "contract/decisions.md",
+      "publishedSha256": "d6f1c218ebcf1c18592814f391ecc2201c8c26feb178e6ab2d7a88026e045776"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "docs/outputs/README.md",
+      "producerSha256": "258ad07c304faedcc5f94a6f56684239afca5bc33e6b7df515993cd53ac8605d",
+      "published": "contract/gate2/README.md",
+      "publishedSha256": "258ad07c304faedcc5f94a6f56684239afca5bc33e6b7df515993cd53ac8605d"
+    },
+    {
+      "byteIdentical": false,
+      "producer": "dsl/outputs/prototype/compose.nix",
+      "producerSha256": "f1c91c399f25a4cca351846a032878ea7b40b722163ac9fe68eaa4f961b811c4",
+      "published": "contract/gate2/authoring-prototype/compose.nix",
+      "publishedSha256": "fe16ca10c658716df3cdfae86e78d1bafd3f0d010d5a68de08ba3c54e41faf8e"
+    },
+    {
+      "byteIdentical": true,
+      "jsonValueIdentical": true,
+      "producer": "dsl/outputs/prototype/control-results.json",
+      "producerSha256": "4094822c6a79bec200e5e28bffc00c43e601525c63b65f85a1223b57ac060cc3",
+      "published": "contract/gate2/authoring-prototype/control-results.json",
+      "publishedSha256": "4094822c6a79bec200e5e28bffc00c43e601525c63b65f85a1223b57ac060cc3"
+    },
+    {
+      "byteIdentical": false,
+      "producer": "dsl/outputs/prototype/controls.nix",
+      "producerSha256": "f415aa2970e9cbefc6ac70fd16e2aecbb8798743df89927f5a0f005c1131e882",
+      "published": "contract/gate2/authoring-prototype/controls.nix",
+      "publishedSha256": "01dc9b47fde0dd1821ec19adacab5a542a33821baa2e1f7ab9dfe30d82df7b93"
+    },
+    {
+      "byteIdentical": false,
+      "producer": "dsl/outputs/design.md",
+      "producerSha256": "da85d4653f6c7389b0e228fe4134c6a0f2dc460d76338d9f041b0ce874ab473e",
+      "published": "contract/gate2/authoring-prototype/design.md",
+      "publishedSha256": "e49fa28061d3f4b29883b4b7bc371745c65fe1dd801a318cd616973e490dea5e"
+    },
+    {
+      "byteIdentical": false,
+      "producer": "dsl/outputs/prototype/dsl.nix",
+      "producerSha256": "cc833f76f4a52ce90d5c3b67305954c6664aaead186fd2ca1d465ca0e10d6a8e",
+      "published": "contract/gate2/authoring-prototype/dsl.nix",
+      "publishedSha256": "6787eebd65a3cdd4687e44791f461ab825672f6ee41879f18b0891f23fa1f5eb"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "dsl/outputs/prototype/evaluate.nix",
+      "producerSha256": "d55bbb0144ebe907ed5e83c3b0a9c200f11dd723d883b4e5b22c64851290dc61",
+      "published": "contract/gate2/authoring-prototype/evaluate.nix",
+      "publishedSha256": "d55bbb0144ebe907ed5e83c3b0a9c200f11dd723d883b4e5b22c64851290dc61"
+    },
+    {
+      "byteIdentical": true,
+      "jsonValueIdentical": true,
+      "producer": "dsl/outputs/prototype/evaluated.json",
+      "producerSha256": "073eb5ec20465a7a28cb3d165b2bffb5ac02d42a8a56922a46ef2102c9c698a5",
+      "published": "contract/gate2/authoring-prototype/evaluated.json",
+      "publishedSha256": "073eb5ec20465a7a28cb3d165b2bffb5ac02d42a8a56922a46ef2102c9c698a5"
+    },
+    {
+      "byteIdentical": false,
+      "producer": "dsl/outputs/evidence.md",
+      "producerSha256": "0fbc48095aa2092eac6289ace3cecc00c14467f9d83dd01e7b393c85aef1653e",
+      "published": "contract/gate2/authoring-prototype/evidence.md",
+      "publishedSha256": "c97d9208c7f752f53741f969469560fc600d96a32de935a99d44d1fdca27e05c"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "dsl/outputs/prototype/probe.py",
+      "producerSha256": "fec5f611893978dd6cd4b93b614e8552444ada6349b7b07faafac4ae3ad32a5d",
+      "published": "contract/gate2/authoring-prototype/probe.py",
+      "publishedSha256": "fec5f611893978dd6cd4b93b614e8552444ada6349b7b07faafac4ae3ad32a5d"
+    },
+    {
+      "byteIdentical": true,
+      "jsonValueIdentical": true,
+      "producer": "dsl/outputs/input-hashes.json",
+      "producerSha256": "d5b72a9f2e2c163c8138a5be6f1c184b1bd0dd87ab479d4023523404a366d736",
+      "published": "contract/gate2/authoring-prototype/producer-inputs.json",
+      "publishedSha256": "d5b72a9f2e2c163c8138a5be6f1c184b1bd0dd87ab479d4023523404a366d736"
+    },
+    {
+      "byteIdentical": true,
+      "jsonValueIdentical": true,
+      "producer": "dsl/outputs/output-hashes.json",
+      "producerSha256": "e5f7bc60602986e792e2ba73c855a4fb507d7f701a285d2e5576ca62385bda54",
+      "published": "contract/gate2/authoring-prototype/producer-outputs.json",
+      "publishedSha256": "e5f7bc60602986e792e2ba73c855a4fb507d7f701a285d2e5576ca62385bda54"
+    },
+    {
+      "byteIdentical": false,
+      "producer": "dsl/outputs/public-shape.md",
+      "producerSha256": "e2cae31e0c1c0de57f53f2c865fead834ee81287d17516b6bf9721c7793b8ddf",
+      "published": "contract/gate2/authoring-prototype/public-shape.md",
+      "publishedSha256": "974a6fd530c1ab0d644c53b4afcdd8bf4e362e7c610c276128075648fec6d27c"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "dsl/outputs/prototype/rendered.sgra",
+      "producerSha256": "8845114bc965a539a2c2130b2b6968aa55287fe6a9cb92bcd05f1600e1e36d98",
+      "published": "contract/gate2/authoring-prototype/rendered.sgra",
+      "publishedSha256": "8845114bc965a539a2c2130b2b6968aa55287fe6a9cb92bcd05f1600e1e36d98"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "dsl/outputs/review-disposition.md",
+      "producerSha256": "13260255e06e6915a15402ce018b6919f5c550d300032d9920879b8036ab9dd6",
+      "published": "contract/gate2/authoring-prototype/review-disposition.md",
+      "publishedSha256": "13260255e06e6915a15402ce018b6919f5c550d300032d9920879b8036ab9dd6"
+    },
+    {
+      "byteIdentical": true,
+      "jsonValueIdentical": true,
+      "producer": "dsl/outputs/prototype/review-regressions.json",
+      "producerSha256": "e619723ff9d7180bbd377b3b10d041868b3ce7b55112498a6421ec66e42cc482",
+      "published": "contract/gate2/authoring-prototype/review-regressions.json",
+      "publishedSha256": "e619723ff9d7180bbd377b3b10d041868b3ce7b55112498a6421ec66e42cc482"
+    },
+    {
+      "byteIdentical": true,
+      "jsonValueIdentical": true,
+      "producer": "dsl/outputs/prototype/runtime-results.json",
+      "producerSha256": "9d22630cb8679d5d3d4c3e623ebf6d78549f9d4f05a8a355692f75afb84e14aa",
+      "published": "contract/gate2/authoring-prototype/runtime-results.json",
+      "publishedSha256": "9d22630cb8679d5d3d4c3e623ebf6d78549f9d4f05a8a355692f75afb84e14aa"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "dsl/outputs/prototype/runtime.py",
+      "producerSha256": "85fd9e7621c0f1dcde8709dc7d1811e1a9caa6629af0ea9e5e41eae2ac1f5c07",
+      "published": "contract/gate2/authoring-prototype/runtime.py",
+      "publishedSha256": "85fd9e7621c0f1dcde8709dc7d1811e1a9caa6629af0ea9e5e41eae2ac1f5c07"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "recon/findings.txt",
+      "producerSha256": "226d6670267317485992c11f3eaf189defb213b452e60990b10e2211da5a634f",
+      "published": "contract/gate2/authoring-prototype/source-audit.txt",
+      "publishedSha256": "226d6670267317485992c11f3eaf189defb213b452e60990b10e2211da5a634f"
+    },
+    {
+      "byteIdentical": true,
+      "jsonValueIdentical": true,
+      "producer": "dsl/outputs/source-regions.json",
+      "producerSha256": "114d5b1e59aba0cdcb0025e82257522fb082c35370dc90f6a438fb3c32957bbe",
+      "published": "contract/gate2/authoring-prototype/source-regions.json",
+      "publishedSha256": "114d5b1e59aba0cdcb0025e82257522fb082c35370dc90f6a438fb3c32957bbe"
+    },
+    {
+      "byteIdentical": false,
+      "producer": "contracts/outputs/contract/gate2/closing-plan.md",
+      "producerSha256": "dafe7de28c6405a2c14bc6b176c1b7ba98367b70531475f957f437edce61c10f",
+      "published": "contract/gate2/closing-plan.md",
+      "publishedSha256": "08862040c75fbfd6d66730b53b0ea844b8b57c32225caf6fae3bcba25dc89cb4"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "dsl/outputs/composition.nix",
+      "producerSha256": "8d36bcce6f6732302d9349829bd9c65e1f2bc0a2c95e355edda967ba46df9e78",
+      "published": "contract/gate2/composition.nix",
+      "publishedSha256": "8d36bcce6f6732302d9349829bd9c65e1f2bc0a2c95e355edda967ba46df9e78"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "dsl/outputs/field-alternative.nix",
+      "producerSha256": "7bf3c2d77c88005e9b51e4dadf689f9deeb2c0894d3928f47e23b60d973aa1b2",
+      "published": "contract/gate2/field-alternative.nix",
+      "publishedSha256": "7bf3c2d77c88005e9b51e4dadf689f9deeb2c0894d3928f47e23b60d973aa1b2"
+    },
+    {
+      "byteIdentical": false,
+      "producer": "contracts/outputs/contract/gate2/findings.md",
+      "producerSha256": "3675ee775f6d6751f7d3b69f885476043e8f9f651d319425a2a6688b77785b43",
+      "published": "contract/gate2/findings.md",
+      "publishedSha256": "ed950a4acf6308b025ec3b604e83820ac30ebee5cfd8cfefd225dffe37916de6"
+    },
+    {
+      "byteIdentical": false,
+      "producer": "contracts/outputs/contract/gate2/interface.md",
+      "producerSha256": "c623cfe0531b5fad6566d024453cac29643375bbedba12d5562dbb501861e63d",
+      "published": "contract/gate2/interface.md",
+      "publishedSha256": "31c040f8f965cedae85d3d7d2ea0cfc292a56ef7ea13c8e0135b56e969c04226"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "dsl/outputs/native-tailoring.nix",
+      "producerSha256": "d3984e2c8c982d2daa750b5f2bedfa7ad2f234d6f2f50ca79df2611f311f7e85",
+      "published": "contract/gate2/native-tailoring.nix",
+      "publishedSha256": "d3984e2c8c982d2daa750b5f2bedfa7ad2f234d6f2f50ca79df2611f311f7e85"
+    },
+    {
+      "byteIdentical": false,
+      "producer": "contracts/outputs/contract/gate2/playbooks.md",
+      "producerSha256": "bb113ce41e8f4d247cfbe8ae4b4a440e88a3289de27b55c96cecdd62286967fc",
+      "published": "contract/gate2/playbooks.md",
+      "publishedSha256": "18b968d5a126531329f20652c2c51c36bc593fc971021e3d92297cc89191be45"
+    },
+    {
+      "byteIdentical": true,
+      "jsonValueIdentical": true,
+      "producer": "docs/outputs/verification.json",
+      "producerSha256": "bc942761c9cecbcb89e31dce985bcd8043d2ca6eb894ff839f50f1a61ee6ebe3",
+      "published": "contract/gate2/provenance/dsl-documentation-checks.json",
+      "publishedSha256": "bc942761c9cecbcb89e31dce985bcd8043d2ca6eb894ff839f50f1a61ee6ebe3"
+    },
+    {
+      "byteIdentical": true,
+      "jsonValueIdentical": true,
+      "producer": "docs/outputs/freeze-hashes.json",
+      "producerSha256": "c98d27d3317f775cd674c8ece69f1e2daa8219228afda0db1759ca0aa56133fe",
+      "published": "contract/gate2/provenance/dsl-documentation-producer.json",
+      "publishedSha256": "c98d27d3317f775cd674c8ece69f1e2daa8219228afda0db1759ca0aa56133fe"
+    },
+    {
+      "byteIdentical": false,
+      "jsonValueIdentical": false,
+      "producer": "docs/outputs/snippet-map.json",
+      "producerSha256": "c4cc093d82b0ce520d7d09181ca6f1079b0e3cd561b86749aedb2f6bd6d1be9b",
+      "published": "contract/gate2/provenance/dsl-snippet-map.json",
+      "publishedSha256": "79adb71b8f536768513df3654fcca5e2bcedac8d42892098288d3758d8d43b1e"
+    },
+    {
+      "byteIdentical": false,
+      "producer": "contracts/outputs/contract/gate2/recommendation.md",
+      "producerSha256": "0af1aa19e9aed5935e5e49c7b517c75ae64015ba0e6564ef096626c1f94d7b16",
+      "published": "contract/gate2/recommendation.md",
+      "publishedSha256": "ea38aa7025e2f183cae5f3c999972d0f777fcb17321f893982f26cd04e7d05d6"
+    },
+    {
+      "byteIdentical": false,
+      "producer": "dsl/outputs/recommended.nix",
+      "producerSha256": "63919d39704dac21e9ed672d606ea83dad25778e13dcf709ebae0ddfab75bb78",
+      "published": "contract/gate2/recommended.nix",
+      "publishedSha256": "6db360e7d40fd60d328b6d8c2e124c516e635abe4d2874e84192d1b577dad5af"
+    },
+    {
+      "byteIdentical": false,
+      "producer": "contracts/outputs/contract/gate2/reviewed-requirements.md",
+      "producerSha256": "f695762ab4c93db6d590abd3bd438988da4122d3593127a96701fdc377a63cc2",
+      "published": "contract/gate2/reviewed-requirements.md",
+      "publishedSha256": "ef3225c2804d24145c37ba460c166bd45319e7d203bf54b9d113d02b61d1f802"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "contracts/outputs/scope-reconciliation.md",
+      "producerSha256": "3f0f8739b67c4135909bdec1bc6bd6c751fabf666413237966f77d97854ed7bf",
+      "published": "contract/gate2/scope-reconciliation.md",
+      "publishedSha256": "3f0f8739b67c4135909bdec1bc6bd6c751fabf666413237966f77d97854ed7bf"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "docs/outputs/setup.md",
+      "producerSha256": "5097b3e6a3e2035d2759b89894a09e309fa06fe4160f63381f4e494169a3a4e9",
+      "published": "contract/gate2/setup.md",
+      "publishedSha256": "5097b3e6a3e2035d2759b89894a09e309fa06fe4160f63381f4e494169a3a4e9"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "docs/outputs/tutorial-dsl.md",
+      "producerSha256": "c1d46dff6d652c9b10bbea92cfcca1bc94358231f706f6b4efab20894a8c523a",
+      "published": "contract/gate2/tutorial-dsl.md",
+      "publishedSha256": "c1d46dff6d652c9b10bbea92cfcca1bc94358231f706f6b4efab20894a8c523a"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "contracts/outputs/contract/model.md",
+      "producerSha256": "347b5a5335648978524ee7755864cb8964bd7ec910dfd81889edb189d7458f7b",
+      "published": "contract/model.md",
+      "publishedSha256": "347b5a5335648978524ee7755864cb8964bd7ec910dfd81889edb189d7458f7b"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "contracts/outputs/contract/scenarios.md",
+      "producerSha256": "11682b29bbad1bdcf8f4ee3e32af1cfb6477447cfd35ac99ec6b8471f22518d8",
+      "published": "contract/scenarios.md",
+      "publishedSha256": "11682b29bbad1bdcf8f4ee3e32af1cfb6477447cfd35ac99ec6b8471f22518d8"
+    },
+    {
+      "byteIdentical": true,
+      "producer": "contracts/outputs/contract/surfaces.md",
+      "producerSha256": "026cd56a38c3a608f95fe74c28a9019b0717fae989f3d29adffff1e08ee4e9e3",
+      "published": "contract/surfaces.md",
+      "publishedSha256": "026cd56a38c3a608f95fe74c28a9019b0717fae989f3d29adffff1e08ee4e9e3"
+    }
+  ],
+  "scope": "Producer artifacts mapped into fixture-relative publication layout; coordinator summaries/manifests are separate. Original frozen sources remain in durable session backup."
+}

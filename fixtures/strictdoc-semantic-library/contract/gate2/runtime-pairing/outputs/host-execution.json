@@ -1,0 +1,18 @@
+{
+  "build_exit_code": 0,
+  "build_timeout_seconds": 480,
+  "max_jobs": 1,
+  "cores": 2,
+  "closure": "/nix/store/6cy53r1c3lj260drvpz6g82dqr1wq405-gate2-runtime-probe-closure",
+  "probe_argv": [
+    "/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/bin/python3.14",
+    "-s",
+    "outputs/probe.py"
+  ],
+  "probe_exit_code": 0,
+  "environment_overrides": {
+    "PYTHONNOUSERSITE": "1",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONPATH": "/nix/store/6cy53r1c3lj260drvpz6g82dqr1wq405-gate2-runtime-probe-closure/lib/python3.14/site-packages"
+  }
+}

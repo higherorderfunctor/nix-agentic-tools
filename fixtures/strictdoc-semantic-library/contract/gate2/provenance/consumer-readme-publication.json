@@ -1,0 +1,92 @@
+{
+  "date": "2026-09-14",
+  "files": {
+    "fixtures/strictdoc-semantic-library/README.md": {
+      "previousSha256": "055ff70516db4d2e10209c37a8197bbf40df14f4d91a722d4da9229dd62b15ae",
+      "publishedSha256": "5a59b4f267049633e3dc4f28025b10106f2617a03d7f868a7f650976cab63a58"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/README.md": {
+      "previousSha256": "004dfbdf09df9c2eb8458d534f7697c50b3e5e5d19e2fe28dfbcdbca8d921cce",
+      "publishedSha256": "aeb5b6195da244702c39f6ab6c44847ce0a596725d9ff351c197439c4d2522e1"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/closing-plan.md": {
+      "previousSha256": "5c465a65ef22fffa03162df13784c3114150a35442cc6c1702e039ece30a4f3c",
+      "publishedSha256": "b4d96cc2089b2537cda50e0bf7f6ad5f3248bebdf2a35a8b04adb8ae0fef03cc"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/interface.md": {
+      "previousSha256": "8ab8c5e38408b92506a26d8d276d9221eb53248960acb54184d43b9de52dc4e6",
+      "publishedSha256": "66e939828f42268bd89095276d73f9a02515d8c5cf4702bacc4dffa6cf604be4"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/normalized-authoring/README.md": {
+      "previousSha256": null,
+      "publishedSha256": "fb6a549c0fde9d9762dfb7fb18897abda4a4aea6225baabd4fad45b78259e870"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/normalized-authoring/comparison.json": {
+      "previousSha256": null,
+      "publishedSha256": "6ee0cc551022fead6048a5e585c2b124b0e9bf7af2c7d5223582afd11e429013"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/normalized-authoring/gate1.json": {
+      "previousSha256": null,
+      "publishedSha256": "0d5fc312248a16c696be75d34cc20941627472e8ab996507b9ee1578a0f70c4d"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/normalized-authoring/probe.nix": {
+      "previousSha256": null,
+      "publishedSha256": "0a15ce6fe8ab201a2b71dbd25debd4f1d2b618c8684f771533d9e857f767243d"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/normalized-authoring/publication.json": {
+      "previousSha256": null,
+      "publishedSha256": "9dcb99e7ed5bdff275ce3cf65cb63586b1f57c528f8cee4592f0f6508b748252"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/normalized-authoring/rendered.sgra": {
+      "previousSha256": null,
+      "publishedSha256": "060c0c69bf1e52d835a06f9fe791c96cf64c30a60d70231e961aaaf9cbc38bf9"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/normalized-authoring/trial.json": {
+      "previousSha256": null,
+      "publishedSha256": "6fce833954b2a638c0350e8816de3cdd42d450463557c28a5c9bb68e7e6a8294"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/normalized-authoring/verification.txt": {
+      "previousSha256": null,
+      "publishedSha256": "42fc25c85fbe701c7624e022c4030b2006e9d958375da558f5ab6b452643635b"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/provenance/README.md": {
+      "previousSha256": "12b86fad4657a084a40b432bfcf38975a408331d94ac4b7ad8325840dc531d9c",
+      "publishedSha256": "07caa9f082eab5cf0846fbb8c8263253ff3de06e4bdc316b3911812992dd9863"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/provenance/consumer-readme-checks.json": {
+      "previousSha256": null,
+      "publishedSha256": "0c16281027b56782749f331ab13d9e7dd8aa3b70267ec291700630256e4c4ccd"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/provenance/consumer-readme-review-initial.md": {
+      "previousSha256": null,
+      "publishedSha256": "8d803ab37942838a56dc01e3c44d6b526a91b4131bc7511401196d187e20e028"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/provenance/consumer-readme-review.md": {
+      "previousSha256": null,
+      "publishedSha256": "476363db0346e7346adefe953eaa5ed5aad46496d691d0f5b2a2ae67c4c057ce"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/public-toolchain.md": {
+      "previousSha256": "96a72196926f68b74fb6a855de2b8efadebc4b0b55df47781595788f6055efa9",
+      "publishedSha256": "9053acd1cc4eb14806231401383eac999ac7f94267fba6998e053f490552041b"
+    },
+    "fixtures/strictdoc-semantic-library/contract/gate2/recommendation.md": {
+      "previousSha256": null,
+      "publishedSha256": "004dfbdf09df9c2eb8458d534f7697c50b3e5e5d19e2fe28dfbcdbca8d921cce"
+    }
+  },
+  "newImplementation": false,
+  "notes": [
+    "Earlier freeze/publication maps describe the previous review commit.",
+    "Reviewer prose publication repairs one local link and clarifies wording; its conclusions are unchanged.",
+    "Boolean document-field declaration, codec and typed snapshot remain unresolved; existing grammar booleans are not that capability.",
+    "Optional backend packaging must include only enabled runtimes and their dependencies."
+  ],
+  "originalReadmePreservedAs": "fixtures/strictdoc-semantic-library/contract/gate2/recommendation.md",
+  "originalReadmePreservedByteIdentical": true,
+  "previousReviewCommit": "46d20688c0a1dae79c5b3068a4bf3e53e85f69d5",
+  "productionRuntimeChanged": false,
+  "readmeProducerSha256": "aeb5b6195da244702c39f6ab6c44847ce0a596725d9ff351c197439c4d2522e1",
+  "readmePublishedEqualsProducer": true,
+  "researchMeasurementsChanged": false,
+  "status": "gate2-human-review-open"
+}

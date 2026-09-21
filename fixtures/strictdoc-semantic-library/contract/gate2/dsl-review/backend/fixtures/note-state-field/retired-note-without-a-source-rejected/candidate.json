@@ -1,0 +1,15 @@
+{
+  "created": [],
+  "model": "notes",
+  "records": [
+    {
+      "element": "NOTE",
+      "fields": {
+        "STATE": ["retired"],
+        "UID": ["report"]
+      },
+      "relations": [],
+      "uid": "report"
+    }
+  ]
+}

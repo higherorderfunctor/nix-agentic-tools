@@ -1,0 +1,30 @@
+{
+  "created": [],
+  "model": "notes",
+  "records": [
+    {
+      "element": "NOTE",
+      "fields": {
+        "STATE": ["retired"],
+        "UID": ["report"]
+      },
+      "relations": [
+        {
+          "direction": "parent",
+          "role": "SOURCE",
+          "target": "outline"
+        }
+      ],
+      "uid": "report"
+    },
+    {
+      "element": "NOTE",
+      "fields": {
+        "STATE": ["final"],
+        "UID": ["outline"]
+      },
+      "relations": [],
+      "uid": "outline"
+    }
+  ]
+}

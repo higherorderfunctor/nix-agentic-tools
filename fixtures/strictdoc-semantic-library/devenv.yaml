@@ -1,0 +1,7 @@
+inputs:
+  devenv:
+    url: github:cachix/devenv/190959a9a4bb52d4802f076a90c3c4e3aa2e6fa2
+  library:
+    url: path:./.toolchain
+  nixpkgs:
+    url: github:NixOS/nixpkgs/c043004d1c6985732bcc1cbc5a9c9aecbbb4e0f0

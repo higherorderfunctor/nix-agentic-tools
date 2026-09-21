@@ -1,0 +1,13 @@
+Parallelization: Disabled
+Step 'Parse SDoc project tree' start.
+Step 'Find and read SDoc files' start.
+Completed finding SDoc and assets ........................... 0.00s
+Reading SDOC: 1 tasks
+.
+Completed parsing all documents ............................. 0.00s
+Completed building document tree ............................ 0.00s
+Step 'Find and read SDoc files' took: 0.01 sec.
+Step 'Build traceability graph' start.
+error: (SDocNode(node_type = "REQUIREMENT", fields = [2 elements], relations = [1 elements], _tx_position = 325, _tx_position_end = 406, parent = SDocDocument(...), is_composite = False, section_contents = [], has_meta = True, fields_as_parsed = [2 elements], ordered_fields_lookup = {2 elements}, ng_document_reference = DocumentReference(...), ng_including_document_reference = DocumentReference(...), ng_line_start = 24, ng_line_end = 31, ng_col_start = 1, ng_col_end = 1, ng_byte_start = 325, ng_byte_end = 406, context = SDocNodeContext(...), reserved_mid = "848025f255f34cda9eae57e7394105c8", mid_permanent = False, ng_resolved_custom_level = "None", custom_level = NoneType(...), ng_has_requirements = False, autogen = False), SDocNode(node_type = "REQUIREMENT", fields = [2 elements], relations = [1 elements], _tx_position = 325, _tx_position_end = 406, parent = SDocDocument(...), is_composite = False, section_contents = [], has_meta = True, fields_as_parsed = [2 elements], ordered_fields_lookup = {2 elements}, ng_document_reference = DocumentReference(...), ng_including_document_reference = DocumentReference(...), ng_line_start = 24, ng_line_end = 31, ng_col_start = 1, ng_col_end = 1, ng_byte_start = 325, ng_byte_end = 406, context = SDocNodeContext(...), reserved_mid = "848025f255f34cda9eae57e7394105c8", mid_permanent = False, ng_resolved_custom_level = "None", custom_level = NoneType(...), ng_has_requirements = False, autogen = False))
+error source: /nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/lib/python3.14/site-packages/strictdoc/core/graph/many_to_many_set.py:97, function: create_link()
+Rerun with strictdoc --debug <...> to enable stack trace printing.

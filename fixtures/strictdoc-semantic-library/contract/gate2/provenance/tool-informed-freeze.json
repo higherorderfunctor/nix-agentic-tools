@@ -1,0 +1,34 @@
+{
+  "frozen_utc": "2026-09-13T09:00:08.389755+00:00",
+  "worker": "native Codex thread01a099ea-4c16-76d2-a6fe-0c5ed534b240",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "basis": "Independent research v1, then explicit factual research-v2 correction; no ideal context",
+  "files": [
+    {
+      "path": "coverage.md",
+      "sha256": "5f75744eae7b1cf4378ac3d9dd141597321c14165265fe7c8210f0419b8cc73d",
+      "bytes": 35982
+    },
+    {
+      "path": "design.md",
+      "sha256": "f620d9f279e23fb4552244460618c0ee7be90bce5fe09793e5d7050f233f7177",
+      "bytes": 42591
+    },
+    {
+      "path": "examples.nix",
+      "sha256": "daf3b3a3075a5031ef7647ad3012341d6b7562c7122e8b70336bb02c55af00c8",
+      "bytes": 17290
+    },
+    {
+      "path": "progress.json",
+      "sha256": "bd873fcdb45d25c216696094f495107f4c8e66e9ef9eca7a74b23ac0c2ac88fc",
+      "bytes": 8624
+    },
+    {
+      "path": "recipes.md",
+      "sha256": "94c110b759552a8d61e117b9ec4d9498e692e245f2bcc9245a7fcb18e9748dce",
+      "bytes": 26839
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+[formatter.alejandra]
+command = "/home/caubut/.nix-profile/bin/alejandra"
+includes = ["*.nix"]
+
+[formatter.prettier]
+command = "/nix/store/n91qdph36zlx3cafbck2nqc6mi4nbaqs-prettier-3.9.6/bin/prettier"
+includes = ["*.json", "*.md"]
+options = ["--write", "--prose-wrap", "always", "--ignore-path", "/dev/null"]

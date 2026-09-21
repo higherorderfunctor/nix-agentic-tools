@@ -1,0 +1,160 @@
+{
+  "readmeSha256": "aeb5b6195da244702c39f6ab6c44847ce0a596725d9ff351c197439c4d2522e1",
+  "checks": [
+    {
+      "fence": 5,
+      "line": 90,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 7,
+      "line": 134,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 7,
+      "line": 134,
+      "kind": "current-normalized-grammar-render",
+      "exit": 0,
+      "stderr": "",
+      "rendered": "[GRAMMAR]\nELEMENTS:\n- TAG: TASK\n  FIELDS:\n  - TITLE: UID\n    TYPE: String\n    REQUIRED: True\n  - TITLE: STATUS\n    TYPE: SingleChoice(pending, complete)\n    REQUIRED: True\n"
+    },
+    {
+      "fence": 10,
+      "line": 219,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 11,
+      "line": 242,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 12,
+      "line": 298,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 14,
+      "line": 340,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 15,
+      "line": 366,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 17,
+      "line": 466,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 17,
+      "line": 466,
+      "kind": "current-normalized-grammar-render",
+      "exit": 0,
+      "stderr": "",
+      "rendered": "[GRAMMAR]\nELEMENTS:\n- TAG: REQUIREMENT\n  FIELDS:\n  - TITLE: UID\n    TYPE: String\n    REQUIRED: True\n  - TITLE: STATEMENT\n    TYPE: String\n    REQUIRED: False\n- TAG: ADAPTATION\n  FIELDS:\n  - TITLE: UID\n    TYPE: String\n    REQUIRED: True\n  - TITLE: STATEMENT\n    TYPE: String\n    REQUIRED: False\n  RELATIONS:\n  - TYPE: Parent\n    ROLE: Adapts\n    REVERSE_ROLE: AdaptedBy\n  - TYPE: Child\n    ROLE: AppliesTo\n    REVERSE_ROLE: AppliedBy\n"
+    },
+    {
+      "fence": 18,
+      "line": 495,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 20,
+      "line": 573,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 21,
+      "line": 628,
+      "kind": "standalone-python",
+      "exit": 0,
+      "matchesExpected": true,
+      "stdout": "[]\n[{'owner': 'F1a', 'target': 'Z0', 'selector': ('reference', 'FOO', 'Parent', 'R'), 'expected': [('reference', 'FOO')], 'actual': ('reference', 'BAZ')}]\n[]\n",
+      "stderr": ""
+    },
+    {
+      "fence": 23,
+      "line": 685,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 27,
+      "line": 843,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 29,
+      "line": 931,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 31,
+      "line": 1000,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 32,
+      "line": 1066,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "fence": 33,
+      "line": 1088,
+      "kind": "nix-syntax-only",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "kind": "standalone-rego",
+      "exit": 0,
+      "matchesExpected": true,
+      "value": {
+        "answers": {
+          "endpoint": true,
+          "inside": true,
+          "interior": false
+        },
+        "protected_changes": [],
+        "snapshot": "S0"
+      },
+      "stderr": ""
+    }
+  ],
+  "jsonFencesParsed": 2,
+  "localLinksChecked": 73,
+  "brokenLinks": []
+}

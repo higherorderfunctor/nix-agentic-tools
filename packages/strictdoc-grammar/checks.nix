@@ -5,7 +5,7 @@
 }: let
   inherit (import ./checks/helpers.nix {inherit lib pkgs;}) strictdocGrammarExtract;
 in {
-  imports = [./checks/module-eval.nix];
+  imports = [./checks/module-eval.nix ./checks/strictdoc-runtime-installation.nix];
   checks = {
     strictdoc-grammar-foreign-roundtrip = import ./checks/strictdoc-grammar-foreign-roundtrip.nix {inherit lib pkgs strictdocGrammarExtract;};
     strictdoc-grammar-negative-fixtures = import ./checks/strictdoc-grammar-negative-fixtures.nix {inherit lib pkgs strictdocGrammarExtract;};

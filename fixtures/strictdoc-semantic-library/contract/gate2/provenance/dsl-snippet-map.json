@@ -1,0 +1,148 @@
+{
+  "publicationBase": "contract/gate2",
+  "status": "synchronized-to-corrected-canonical-freeze",
+  "regions": {
+    "bridge": {
+      "source": "recommended.nix",
+      "startLine": 17,
+      "endLine": 33
+    },
+    "scopeControl": {
+      "source": "recommended.nix",
+      "startLine": 34,
+      "endLine": 39
+    },
+    "fieldsAndTargets": {
+      "source": "recommended.nix",
+      "startLine": 40,
+      "endLine": 61
+    },
+    "forestAndVisibility": {
+      "source": "recommended.nix",
+      "startLine": 62,
+      "endLine": 72
+    },
+    "preservation": {
+      "source": "recommended.nix",
+      "startLine": 76,
+      "endLine": 86
+    },
+    "composition": {
+      "source": "composition.nix",
+      "startLine": 2,
+      "endLine": 56
+    },
+    "nativeTailoring": {
+      "source": "native-tailoring.nix",
+      "startLine": 2,
+      "endLine": 28
+    },
+    "fieldGrammar": {
+      "source": "field-alternative.nix",
+      "startLine": 11,
+      "endLine": 29
+    },
+    "fieldCustomRule": {
+      "source": "field-alternative.nix",
+      "startLine": 30,
+      "endLine": 62
+    }
+  },
+  "lessons": [
+    {
+      "lesson": 1,
+      "regions": ["fieldsAndTargets", "scopeControl"],
+      "variation": "Independently complete minimal teaching grammar: UID and R only, plus nativeDag; deliberately omits later reference rules. Not separately evaluated."
+    },
+    {
+      "lesson": 2,
+      "regions": ["bridge"],
+      "variation": "Introductory BAR P-only fragment; lesson 5 provides canonical complete BAR."
+    },
+    {
+      "lesson": 3,
+      "regions": ["fieldsAndTargets", "forestAndVisibility"],
+      "variation": "H declaration and view fragments; model controls authored expectations."
+    },
+    {
+      "lesson": 4,
+      "regions": ["fieldsAndTargets", "forestAndVisibility"],
+      "variation": "Ordered Boolean field, visibility and R-constraint fragments; required H root shared by origin and target."
+    },
+    {
+      "lesson": 5,
+      "regions": ["bridge"],
+      "variation": "Complete canonical BAR element fragment with both counts and checked path."
+    },
+    {
+      "lesson": 6,
+      "regions": ["preservation"],
+      "variation": "Canonical preservation fragment; readable baseline notation deliberately not wire JSON."
+    },
+    {
+      "lesson": 7,
+      "regions": [
+        "composition",
+        "nativeTailoring",
+        "fieldGrammar",
+        "fieldCustomRule"
+      ],
+      "variation": "Independently complete composition expression uses actual prototype compose API with two canonical contributions; third direct form remains in linked source. Native tailoring is exact complete canonical expression. Field grammar and descriptor config are labeled fragments."
+    }
+  ],
+  "independentlyCompleteTeachingExpressions": [
+    {
+      "document": "tutorial-dsl.md",
+      "expression": "Lesson 1 minimal target grammar",
+      "basis": "recommended.nix fieldsAndTargets/scopeControl; same s/c spellings, reduced rule set",
+      "evidence": "source correspondence only"
+    },
+    {
+      "document": "tutorial-dsl.md",
+      "expression": "Lesson 7 external composition",
+      "basis": "composition.nix external and adjacent contributions plus authoring-prototype/compose.nix API",
+      "evidence": "source correspondence; canonical composer controls supplied, this assembled expression not separately evaluated"
+    },
+    {
+      "document": "setup.md",
+      "expression": "Prototype loading expression",
+      "basis": "authoring-prototype/evaluate.nix imports and finite serialization",
+      "evidence": "source correspondence"
+    },
+    {
+      "document": "setup.md",
+      "expression": "Independent NOTE consumer with UID and AUTHOR_LABEL typed script default",
+      "basis": "authoring-prototype/public-shape.md semantic string/script options and interface.md creation-time-defaults",
+      "evidence": "teaching expression, not runtime default integration"
+    },
+    {
+      "document": "setup.md",
+      "expression": "Git identity JSON provider",
+      "basis": "interface.md sdoc-default/v1 request/response",
+      "evidence": "Python syntax inspected via ast.parse; no Git or provider execution"
+    }
+  ],
+  "canonicalSourceSha256": {
+    "recommended.nix": "6db360e7d40fd60d328b6d8c2e124c516e635abe4d2874e84192d1b577dad5af",
+    "composition.nix": "8d36bcce6f6732302d9349829bd9c65e1f2bc0a2c95e355edda967ba46df9e78",
+    "native-tailoring.nix": "d3984e2c8c982d2daa750b5f2bedfa7ad2f234d6f2f50ca79df2611f311f7e85",
+    "field-alternative.nix": "7bf3c2d77c88005e9b51e4dadf689f9deeb2c0894d3928f47e23b60d973aa1b2"
+  },
+  "correctedEvidence": {
+    "producerHashManifest": "authoring-prototype/output-hashes.json",
+    "producerHashManifestSha256": "e5f7bc60602986e792e2ba73c855a4fb507d7f701a285d2e5576ca62385bda54",
+    "constructorAndReferenceArtifactsUnchanged": true,
+    "completeTutorialSnippetsUnchanged": true
+  },
+  "prototypeCommands": {
+    "document": "setup.md",
+    "workingDirectory": "repository root",
+    "entrypoints": [
+      "authoring-prototype/evaluate.nix",
+      "authoring-prototype/controls.nix"
+    ],
+    "explicitArguments": ["libPath", "grammarPath"],
+    "execution": "Not run here; shell syntax and supplied entrypoint/path correspondence checked"
+  },
+  "publicationNote": "One statix inherit spelling change in recommended.nix after producer freeze; same line mapping and evaluated meaning. See dsl-publication.json."
+}

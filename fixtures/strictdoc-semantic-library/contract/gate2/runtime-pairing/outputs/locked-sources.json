@@ -1,0 +1,9 @@
+{
+  "flake-utils_3": "/nix/store/01x5k4nlxcpyd85nnr0b9gm89rm8ff4x-source",
+  "nixpkgs_4": "/nix/store/cc7ff4ysismx0c3778v8gc6b14plrz3z-source",
+  "pyproject-build-systems_2": "/nix/store/0bj0vkgq6rh04bq07zg20a0nj7m16zxf-source",
+  "pyproject-nix_2": "/nix/store/6i5rzc2f36gbckkfnryilfanpr3jxvh8-source",
+  "strictdoc": "/nix/store/ja15hkfp0pdgjs5l9pinj84zmgc1ww11-source",
+  "systems_4": "/nix/store/yj1wxm9hh8610iyzqnz75kvs6xl8j3my-source",
+  "uv2nix_2": "/nix/store/bxc7iay9ja1dg3a0m1rsq2qpvay3yqms-source"
+}

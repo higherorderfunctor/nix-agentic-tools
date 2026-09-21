@@ -1,0 +1,16 @@
+[DOCUMENT]
+TITLE: G1
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @repo
+
+[FOO]
+AUTHORED_BY: >>>
+llm
+<<<
+UID: G1
+FLAG: false
+RELATIONS:
+- TYPE: Parent
+  VALUE: G0
+  ROLE: H

@@ -1,0 +1,12 @@
+{"backend": "rustworkx", "nodes": 1000, "shape": "deep", "three_full_runs_ms": [2.2526599932461977, 1.8056669505313039, 1.9592030439525843], "median_ms": 1.9592030439525843, "json_bytes": 135821, "deep_boundary_control": true}
+{"backend": "cozo", "nodes": 1000, "shape": "deep", "status": "8-second process budget exceeded; no timing claim"}
+{"backend": "opa", "nodes": 1000, "shape": "deep", "three_full_runs_ms": [48.66874299477786, 47.01057693455368, 46.440245932899415], "median_ms": 47.01057693455368, "json_bytes": 135821, "deep_boundary_control": true}
+{"backend": "rustworkx", "nodes": 1000, "shape": "wide", "three_full_runs_ms": [1.1720970505848527, 0.859225052408874, 0.832236954011023], "median_ms": 0.859225052408874, "json_bytes": 135601, "deep_boundary_control": false}
+{"backend": "cozo", "nodes": 1000, "shape": "wide", "three_full_runs_ms": [21.458325907588005, 20.06652601994574, 19.789521931670606], "median_ms": 20.06652601994574, "json_bytes": 135601, "deep_boundary_control": false}
+{"backend": "opa", "nodes": 1000, "shape": "wide", "three_full_runs_ms": [1425.9833310497925, 1415.7020288985223, 1428.7675670348108], "median_ms": 1425.9833310497925, "json_bytes": 135601, "deep_boundary_control": false}
+{"backend": "rustworkx", "nodes": 10000, "shape": "deep", "three_full_runs_ms": [77.60544400662184, 75.13871404808015, 75.02709305845201], "median_ms": 75.13871404808015, "json_bytes": 1386821, "deep_boundary_control": true}
+{"backend": "cozo", "nodes": 10000, "shape": "deep", "status": "8-second process budget exceeded; no timing claim"}
+{"backend": "opa", "nodes": 10000, "shape": "deep", "three_full_runs_ms": [371.97129894047976, 369.15768997278064, 368.90500399749726], "median_ms": 369.15768997278064, "json_bytes": 1386821, "deep_boundary_control": true}
+{"backend": "rustworkx", "nodes": 10000, "shape": "wide", "three_full_runs_ms": [11.003860970959067, 10.03431505523622, 9.840992977842689], "median_ms": 10.03431505523622, "json_bytes": 1384601, "deep_boundary_control": false}
+{"backend": "cozo", "nodes": 10000, "shape": "wide", "three_full_runs_ms": [244.75707195233554, 242.0255660545081, 237.43296996690333], "median_ms": 242.0255660545081, "json_bytes": 1384601, "deep_boundary_control": false}
+{"backend": "opa", "nodes": 10000, "shape": "wide", "status": "8-second process budget exceeded; no timing claim"}

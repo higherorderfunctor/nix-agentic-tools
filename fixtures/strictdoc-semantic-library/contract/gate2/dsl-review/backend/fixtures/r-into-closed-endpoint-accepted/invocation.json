@@ -1,0 +1,8 @@
+{
+  "inputs": {
+    "model:reference/input:baseline": {
+      "command": ["cat", "baseline.json"],
+      "timeoutSeconds": 10
+    }
+  }
+}

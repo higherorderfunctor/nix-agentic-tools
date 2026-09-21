@@ -1,0 +1,59 @@
+[GRAMMAR]
+ELEMENTS:
+- TAG: BAR
+  FIELDS:
+  - TITLE: AUTHORED_BY
+    TYPE: String
+    REQUIRED: True
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: P
+    REVERSE_ROLE: P_back
+  - TYPE: Child
+    ROLE: Q
+    REVERSE_ROLE: Q_back
+- TAG: BAZ
+  FIELDS:
+  - TITLE: AUTHORED_BY
+    TYPE: String
+    REQUIRED: True
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  RELATIONS:
+  - TYPE: Child
+    ROLE: Q
+    REVERSE_ROLE: Q_back
+  - TYPE: Parent
+    ROLE: R
+    REVERSE_ROLE: R_back
+- TAG: FOO
+  FIELDS:
+  - TITLE: AUTHORED_BY
+    TYPE: String
+    REQUIRED: True
+  - TITLE: PARENT_FP
+    TYPE: String
+    REQUIRED: False
+  - TITLE: UID
+    TYPE: String
+    REQUIRED: True
+  - TITLE: FLAG
+    TYPE: SingleChoice(false, true)
+    REQUIRED: True
+  RELATIONS:
+  - TYPE: Parent
+    ROLE: H
+    REVERSE_ROLE: H_back
+  - TYPE: Parent
+    ROLE: R
+    REVERSE_ROLE: R_back

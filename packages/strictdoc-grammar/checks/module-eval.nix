@@ -15,11 +15,28 @@ in {
       let
         evaluated = evalDevenv {ai.strictdoc.enable = true;};
         names = map (p: p.name or "") evaluated.config.packages;
-        boardExec = evaluated.config.processes.board.exec;
       in
         lib.any (n: lib.hasPrefix "strictdoc-0" n || n == "strictdoc") names
         && lib.any (lib.hasPrefix "strictdoc-grammar-extract-") names
-        && lib.any (n: lib.hasPrefix "sdoc-board-" n || n == "sdoc-board") names
+        && builtins.elem "scribe" names
+        && builtins.elem "scribe-client" names
+        && builtins.elem "scribe-daemon" names
+        && !(evaluated.config.processes ? board)
+        && lib.hasInfix "/bin/scribe-daemon --root" evaluated.config.processes.scribe.exec
+    );
+
+    module-strictdoc-project-source-retains-board = mkTest "strictdoc-project-source-retains-board" (
+      let
+        evaluated = evalDevenv {
+          ai.strictdoc = {
+            enable = true;
+            scribeSource = "project";
+          };
+        };
+        names = map (p: p.name or "") evaluated.config.packages;
+        boardExec = evaluated.config.processes.board.exec;
+      in
+        builtins.elem "sdoc-board" names
         && lib.hasPrefix "/nix/store/" boardExec
         && lib.hasInfix "/bin/sdoc-board --root" boardExec
     );

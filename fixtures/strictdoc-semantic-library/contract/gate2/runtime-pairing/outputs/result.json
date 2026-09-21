@@ -1,0 +1,238 @@
+{
+  "status": "qualified_bounded_pairing",
+  "reason": "Authorized host acquired the unchanged exact closure and passed every probe assertion; subsequent worker read-only confirmation matched the host result.",
+  "system": "x86_64-linux",
+  "pairing": {
+    "python": "3.14.6",
+    "strictdoc": "0.28.3",
+    "rustworkx": "0.17.1"
+  },
+  "research_reference": {
+    "python": "3.13.15",
+    "rustworkx": "0.18.1",
+    "executed": false
+  },
+  "toolchain_source": "/nix/store/121pk8i5nzhrpm34fv97f7mywin6k1r0-strictdoc-toolchain-source",
+  "toolchain_lock_sha256": "8425315961dc0424d57eced1de04869893a6c4ee30754fd52fe7111bf1453179",
+  "upstream_uv_lock_sha256": "637ee36cd5fd96eb042b3fe63d94e80ab94d11d538c1fab2db93c3a1be4eaa23",
+  "locked_inputs": {
+    "flake-utils_3": {
+      "lastModified": 1731533236,
+      "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
+      "owner": "numtide",
+      "repo": "flake-utils",
+      "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+      "type": "github"
+    },
+    "nixpkgs_4": {
+      "lastModified": 1786106723,
+      "narHash": "sha256-zDSUbpoeo/9ZmD2+wXnzxoo1+uhL8vxc0b8yuYMKYq0=",
+      "owner": "NixOS",
+      "repo": "nixpkgs",
+      "rev": "f13ff45afd1bb73e640eaa08a7066dbed07e3238",
+      "type": "github"
+    },
+    "pyproject-build-systems_2": {
+      "lastModified": 1786936886,
+      "narHash": "sha256-8SFyOdmcG6Nsh/JzlH812lTI/v+ur06fpQhj/acNn8k=",
+      "owner": "pyproject-nix",
+      "repo": "build-system-pkgs",
+      "rev": "90ffdeee1a4929b231913df067448cd9803d3e07",
+      "type": "github"
+    },
+    "pyproject-nix_2": {
+      "lastModified": 1786031528,
+      "narHash": "sha256-cROiHKO3UbIKqF5FG5NikvydzlfIj4EcR1Cty9qOVt4=",
+      "owner": "pyproject-nix",
+      "repo": "pyproject.nix",
+      "rev": "1b1485546d85f6f6c7aadb10c4923dbc09633263",
+      "type": "github"
+    },
+    "strictdoc": {
+      "lastModified": 1787684924,
+      "narHash": "sha256-6bFwV0+pEF1aw9HABlmBDagHK4GfJqdhf2aGa8f5lGI=",
+      "owner": "strictdoc-project",
+      "repo": "strictdoc",
+      "rev": "7cf8183498ec87be531499230602df33523ed058",
+      "type": "github"
+    },
+    "systems_4": {
+      "lastModified": 1681028828,
+      "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+      "owner": "nix-systems",
+      "repo": "default",
+      "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+      "type": "github"
+    },
+    "uv2nix_2": {
+      "lastModified": 1786615403,
+      "narHash": "sha256-U++y7nM/6xiEcWI7q4fQoPZjPvRaTwkSqzBOVoEBjUE=",
+      "owner": "pyproject-nix",
+      "repo": "uv2nix",
+      "rev": "4b59abb2ae1896d2a0e1abfc47fbc9bf985ea730",
+      "type": "github"
+    }
+  },
+  "artifacts": {
+    "nixpkgsSource": "/nix/store/cc7ff4ysismx0c3778v8gc6b14plrz3z-source",
+    "python": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6",
+    "pythonVersion": "3.14.6",
+    "rustworkx": "/nix/store/zlwbwsaaihzsvmiyyl2yspb368n1m9hz-python3.14-rustworkx-0.17.1",
+    "rustworkxDrv": "/nix/store/sf4crlkr3fhvdi2kda93438zf8lkp9r8-python3.14-rustworkx-0.17.1.drv",
+    "rustworkxVersion": "0.17.1",
+    "strictdoc": "/nix/store/qc5w0rnlr2pl8zvaaq5gi6jfhm7h50im-strictdoc",
+    "strictdocDrv": "/nix/store/y51kgnhb2q2lhwr6cn9zvlpxrzf5y8nd-strictdoc.drv",
+    "strictdocSource": "/nix/store/ja15hkfp0pdgjs5l9pinj84zmgc1ww11-source",
+    "closure": "/nix/store/6cy53r1c3lj260drvpz6g82dqr1wq405-gate2-runtime-probe-closure",
+    "closureDrv": "/nix/store/9gi0f4wi977y330ji2aqi0j6qxxr2dy7-gate2-runtime-probe-closure.drv",
+    "strictdocInterpreter": "/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/bin/python3.14"
+  },
+  "checks": {
+    "combined_import": "passed",
+    "strictdoc_cli_import": "passed",
+    "synthetic_parent_child_normalization": "passed",
+    "rustworkx_acyclic_control": "passed",
+    "rustworkx_cycle_detection": "passed",
+    "rustworkx_reachable_path": "passed",
+    "rustworkx_reverse_unreachable_control": "passed",
+    "rustworkx_isolated_unreachable_control": "passed",
+    "native_strictdoc_parser_validator_integration": "not_tested"
+  },
+  "acquisition": {
+    "total_build_attempts": 2,
+    "worker_build_attempts": 1,
+    "host_build_attempts": 1,
+    "host": {
+      "build_exit_code": 0,
+      "build_timeout_seconds": 480,
+      "max_jobs": 1,
+      "cores": 2,
+      "closure": "/nix/store/6cy53r1c3lj260drvpz6g82dqr1wq405-gate2-runtime-probe-closure",
+      "probe_argv": [
+        "/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/bin/python3.14",
+        "-s",
+        "outputs/probe.py"
+      ],
+      "probe_exit_code": 0,
+      "environment_overrides": {
+        "PYTHONNOUSERSITE": "1",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONPATH": "/nix/store/6cy53r1c3lj260drvpz6g82dqr1wq405-gate2-runtime-probe-closure/lib/python3.14/site-packages"
+      }
+    },
+    "host_result": "success",
+    "host_log": "outputs/host-build.log",
+    "host_fetches": 12,
+    "host_built_derivations": 2,
+    "rustworkx_acquired_from": "https://cache.nixos.org",
+    "follow_up_build_or_acquisition_attempts": 0
+  },
+  "validation": {
+    "python_syntax": "passed",
+    "shell_syntax": "passed",
+    "nix_syntax": "passed",
+    "format": "passed; requested treefmt with cache under /tmp",
+    "existing_closure_runner": "passed",
+    "replay_build_branch": "not rerun; retains original build expression and resource bounds",
+    "host_probe_stderr_bytes": 0
+  },
+  "publish_files": [
+    "outputs/qualification.md",
+    "outputs/result.json",
+    "outputs/progress.json",
+    "outputs/identities.json",
+    "outputs/locked-sources.json",
+    "outputs/probe.nix",
+    "outputs/probe.py",
+    "outputs/run-probe.sh",
+    "outputs/host-build.out",
+    "outputs/host-build.log",
+    "outputs/host-execution.json",
+    "outputs/host-probe-result.json",
+    "outputs/confirmation-result.json",
+    "outputs/build.log",
+    "outputs/resolve.log",
+    "outputs/import-control.json",
+    "outputs/validation.log",
+    "treefmt.toml"
+  ],
+  "rustworkx_package": {
+    "definition": "/nix/store/cc7ff4ysismx0c3778v8gc6b14plrz3z-source/pkgs/development/python-modules/rustworkx/default.nix",
+    "source": "Qiskit/rustworkx tag 0.17.1",
+    "source_hash": "sha256-aBKGJwm9EmGwLOhIx6qTuDco5uNcnwUlZf3ztFzmIGs=",
+    "cargo_hash": "sha256-2jqyXk6xWpSGdpaVGu7YW9643MBYDfl3A6InFw/cCUM=",
+    "patch_commit": "04780a59005d0a80bdc3e22427566aea86783eb8",
+    "patch_hash": "sha256-oUosh1pu/I6Zpg2Di/Gnp5SCwetgs9HDY96Q2bQ7R6M="
+  },
+  "initial_sandbox_attempt": {
+    "status": "unqualified_at_that_time",
+    "reason": "Pinned rustworkx output absent; Nix daemon socket access denied by sandbox. Single acquisition attempt failed before build/import. No package incompatibility established.",
+    "acquisition": {
+      "build_attempts": 1,
+      "max_jobs": 1,
+      "cores": 2,
+      "budget_seconds": 480,
+      "build_timeout_seconds": 475,
+      "kill_grace_seconds": 5,
+      "exit_code": 1,
+      "budget_exhausted": false,
+      "stopped_on": "sandbox_access_failure",
+      "downloaded_or_built_outputs": false
+    },
+    "import_control": {
+      "python": "3.14.6",
+      "executable": "/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/bin/python3.14",
+      "base_prefix": "/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6",
+      "strictdoc": "0.28.3",
+      "strictdoc_module": "/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/lib/python3.14/site-packages/strictdoc/__init__.py",
+      "cli_import": "passed",
+      "rustworkx": {
+        "status": "unavailable",
+        "error": "No module named 'rustworkx'"
+      }
+    },
+    "evidence": [
+      "outputs/build.log",
+      "outputs/resolve.log",
+      "outputs/import-control.json"
+    ],
+    "private_report_archive": "outputs/initial-sandbox-attempt (excluded from publication)"
+  },
+  "scope": "x86_64-linux CPython 3.14.6 / StrictDoc 0.28.3 / rustworkx 0.17.1 with the installed StrictDoc interpreter and temporary closure site-packages PYTHONPATH",
+  "actual_probe": {
+    "status": "passed",
+    "python": "3.14.6",
+    "executable": "/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/bin/python3.14",
+    "strictdoc": "0.28.3",
+    "strictdoc_module": "/nix/store/cck3q51nd32dpbmpkwv5xpkxxhpnr2ak-strictdoc-env/lib/python3.14/site-packages/strictdoc/__init__.py",
+    "rustworkx": "0.17.1",
+    "rustworkx_module": "/nix/store/6cy53r1c3lj260drvpz6g82dqr1wq405-gate2-runtime-probe-closure/lib/python3.14/site-packages/rustworkx/__init__.py",
+    "normalized_edges": [["A", "B"], ["B", "C"]],
+    "path": ["A", "B", "C"],
+    "controls": [
+      "acyclic graph",
+      "reverse unreachable",
+      "isolated unreachable",
+      "cycle detected"
+    ]
+  },
+  "confirmation": {
+    "mode": "read_only_existing_immutable_closure",
+    "result": "passed",
+    "matches_host_result": true,
+    "evidence": "outputs/confirmation-result.json",
+    "command": "bash outputs/run-probe.sh /nix/store/6cy53r1c3lj260drvpz6g82dqr1wq405-gate2-runtime-probe-closure"
+  },
+  "remaining_limits": [
+    "Synthetic Parent/Child normalization is implemented in the probe, not by a native StrictDoc parser or validator.",
+    "Temporary combined Python search path only; no production packaging/integration qualification.",
+    "No other platform coverage, benchmark or earlier timing validation.",
+    "No Scribe daemon/fixture access, refusal/reload validation or Gate 3 advance.",
+    "Replay requires the supplied immutable filtered toolchain source and its locked upstream inputs; the expression is not a standalone source archive."
+  ],
+  "reproduction_source_sha256": {
+    "outputs/probe.nix": "c4520a2607cfcde37bf696f8cbf85af2deda36622e44dc56f5f089f714281fdd",
+    "outputs/probe.py": "5a4ab054dc826a4a8cf664808c349bcc87c1fc641f843a7b8da29a3497250e3a",
+    "outputs/run-probe.sh": "ec99b4edb43b24b62124139d2ceb569c982dcbab5aee21718b063c7f8e5c1d58"
+  }
+}

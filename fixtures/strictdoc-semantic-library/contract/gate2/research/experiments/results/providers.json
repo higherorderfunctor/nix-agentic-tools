@@ -1,0 +1,50 @@
+[
+  {
+    "case": "empty",
+    "status": "ok",
+    "snapshot": {
+      "complete": true,
+      "id": "empty-1",
+      "records": {}
+    }
+  },
+  {
+    "case": "protected",
+    "status": "ok",
+    "snapshot": {
+      "complete": true,
+      "id": "protected-1",
+      "records": {
+        "I0": {
+          "closed": false
+        }
+      }
+    }
+  },
+  {
+    "case": "nonzero",
+    "status": "process-error",
+    "exit": 7
+  },
+  {
+    "case": "timeout",
+    "status": "timeout"
+  },
+  {
+    "case": "malformed",
+    "status": "malformed"
+  },
+  {
+    "case": "incomplete",
+    "status": "incomplete-or-invalid"
+  },
+  {
+    "case": "missing_id",
+    "status": "incomplete-or-invalid"
+  },
+  {
+    "case": "snapshot_change",
+    "old": "protected-1",
+    "new": "empty-1"
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "complete": false,
+  "identity": "baseline-partial",
+  "model": "reference",
+  "records": [
+    {
+      "element": "FOO",
+      "fields": {
+        "FLAG": ["false"],
+        "UID": ["I0"]
+      },
+      "relations": [],
+      "uid": "I0"
+    }
+  ]
+}
