@@ -247,16 +247,23 @@ in {
     # per runtime by `ai:shell:verify` — see the task below.
     shell = pkgs.bash;
 
-    programs.delegate-sizing.enable = true;
+    programs.delegate-sizing = {
+      enable = true;
+      # Enable the package's own presets here because this repository is its primary consumer.
+      whenToDelegate = {
+        "Launch independent work together".enable = true;
+        "Orchestrator session".enable = true;
+        "Prefer the flat-rate pool".enable = true;
+        "Verify by the artifact".enable = true;
+      };
+    };
 
-    # dev/generate.nix owns this repo's stub; suppress native rule copies.
     claude = {
       enable = true;
       programs.delegate-sizing = {
         extraRuntimes = ["codex"];
         manualExternalDelegates = ["kiro"];
       };
-      rules.delegate-sizing-router = null;
     };
     codex = {
       enable = true;
@@ -314,8 +321,6 @@ in {
         # to replace that tracked real file with the redundant module projection.
         instructions.cli.enable = false;
       };
-      # Codex rules compose into AGENTS.md, conflicting with the tracked projection.
-      rules.delegate-sizing-router = null;
       # Temporarily disable Codex's OS sandbox for project sessions. The Home
       # Manager layer has already migrated to named permissions, but this
       # project override deliberately takes precedence while unrestricted
@@ -335,7 +340,6 @@ in {
     kimchi.enable = true;
     kiro = {
       enable = true;
-      rules.delegate-sizing-router = null;
       # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,
       # a launcher-global option, so it reaches every subcommand including
       # `acp`. Without it devenv's kiro-cli ran the legacy engine and

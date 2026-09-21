@@ -25,9 +25,69 @@
   };
   fragmentCategories = registry.config.fragments.categories;
 
+  # Evaluate this repository's delegate-sizing config so generated instructions
+  # consume the same rendered rule as the runtime modules. Importing devenv.nix
+  # here reads the preset selection instead of restating it.
+  configuredAi =
+    (import ../devenv.nix {
+      config = {};
+      inputs = {};
+      inherit lib pkgs;
+    }).ai;
+  delegateSizingModule = lib.evalModules {
+    modules = [
+      ../lib/ai/sharedOptions.nix
+      ../packages/delegate-sizing/modules/devenv
+      {
+        options = {
+          ai = lib.genAttrs ["claude" "codex" "kiro"] (_: {
+            enable = lib.mkOption {
+              type = lib.types.bool;
+              default = false;
+            };
+            rules = lib.mkOption {
+              type = lib.types.attrsOf (lib.types.nullOr lib.types.anything);
+              default = {};
+            };
+            skills = lib.mkOption {
+              type = lib.types.attrsOf lib.types.anything;
+              default = {};
+            };
+          });
+          assertions = lib.mkOption {
+            type = lib.types.listOf (lib.types.submodule {
+              options = {
+                assertion = lib.mkOption {type = lib.types.bool;};
+                message = lib.mkOption {type = lib.types.str;};
+              };
+            });
+            default = [];
+          };
+        };
+        config.ai = {
+          inherit (configuredAi) programs;
+          claude = {
+            inherit (configuredAi.claude) enable programs;
+          };
+          codex.enable = configuredAi.codex.enable;
+          kiro.enable = configuredAi.kiro.enable;
+        };
+      }
+    ];
+    specialArgs = {
+      inherit pkgs;
+      inputs = {};
+    };
+  };
+  delegateSizingRule = delegateSizingModule.config.ai.claude.rules.delegate-sizing-router;
+
   # ── Fragments from content packages (via overlay) ────────────────────
   commonFragments = builtins.attrValues pkgs.coding-standards.passthru.fragments;
-  delegateSizingFragments = builtins.attrValues pkgs.delegate-sizing-content.passthru.fragments;
+  delegateSizingFragment = fragments.mkFragment {
+    inherit (delegateSizingRule) description text;
+    priority = 5;
+    source = "devenv.nix";
+  };
   swsFragments = builtins.attrValues pkgs.stacked-workflows-content.passthru.fragments;
 
   # ── Dev-only fragment reader ─────────────────────────────────────────
@@ -103,7 +163,7 @@
 
   # ── Extra published fragments per package (beyond commonFragments) ───
   extraPublishedFragments = {
-    monorepo = delegateSizingFragments ++ swsFragments;
+    monorepo = [delegateSizingFragment] ++ swsFragments;
     stacked-workflows = swsFragments;
   };
 
