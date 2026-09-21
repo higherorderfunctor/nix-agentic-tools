@@ -12,6 +12,7 @@
 #   meta.honorsServiceHost? — required bool for native HTTP modes
 #   meta.credentialVars? — { optionName = { envVar; required; }; }
 #   meta.tools         — list of tool names advertised by the server
+#   settingsModule?    — Nix module contributing config defaults and assertions
 #   settingsOptions    — attrset of NixOS module options for typed config
 #   settingsToEnv      — cfg → mode → env attrset
 #   settingsToArgs     — cfg → mode → args list

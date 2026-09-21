@@ -6,9 +6,153 @@
   harness,
   ...
 }: let
-  inherit (harness) evalHm mkTest;
+  inherit (harness) evalHm mcpLib mkTest;
+
+  assertionSettings = passing: {
+    assertions = [
+      {
+        assertion = true;
+        message = "passing assertion must not appear";
+      }
+      {
+        assertion = passing;
+        message = "first caller assertion failed";
+      }
+      {
+        assertion = passing;
+        message = "second caller assertion failed";
+      }
+    ];
+    userAgent = "assertion-control";
+  };
+  expectedSettings = {
+    ignoreRobotsTxt = false;
+    proxyUrl = null;
+    userAgent = "assertion-control";
+  };
 in {
   checks = {
+    # Evaluate settings directly so a renderer-local throw cannot satisfy this test.
+    module-mcp-gitlab-settings-mutex = let
+      source = lib.fileset.toSource {
+        root = ../../..;
+        fileset = lib.fileset.unions [
+          ../../../lib/credentials.nix
+          ../../../lib/mcp.nix
+          ../../../packages/gitlab-mcp/modules/mcp-server.nix
+        ];
+      };
+      probe = pkgs.writeText "gitlab-settings-mutex.nix" ''
+        { credential ? "none", instance ? false, callerPassing ? true }:
+        let
+          lib = import ${pkgs.path}/lib;
+          mcpLib = import ${source}/lib/mcp.nix { inherit lib; };
+          settings = {
+            assertions = [{ assertion = callerPassing; message = "gitlab caller assertion failed"; }];
+            instanceUrl = if instance then "https://gitlab.example.com" else null;
+          } // lib.optionalAttrs (credential != "none") {
+            apiUrl.''${credential} = "/run/secrets/gitlab-url";
+          };
+          result = mcpLib.evalSettings "gitlab-mcp" settings;
+        in
+          builtins.deepSeq result (
+            assert !(result ? assertions);
+            assert result.instanceUrl == settings.instanceUrl;
+            assert credential == "none" || result.apiUrl.''${credential} == "/run/secrets/gitlab-url";
+            true
+          )
+      '';
+    in
+      pkgs.runCommandLocal "module-test-mcp-gitlab-settings-mutex" {
+        nativeBuildInputs = [pkgs.nix];
+      } ''
+        export NIX_STATE_DIR="$TMPDIR/nix-state"
+        mkdir -p "$NIX_STATE_DIR/profiles/per-user/$USER"
+        for credential in none file helper; do
+          nix-instantiate --eval --strict ${probe} --argstr credential "$credential"
+        done
+        nix-instantiate --eval --strict ${probe} --arg instance true
+        for credential in file helper; do
+          if nix-instantiate --eval --strict ${probe} --argstr credential "$credential" --arg instance true >actual.stdout 2>actual.stderr; then
+            echo "FAIL: gitlab instanceUrl + apiUrl.$credential unexpectedly succeeded" >&2
+            exit 1
+          fi
+          grep -F 'MCP server gitlab-mcp settings assertions failed:' actual.stderr
+          grep -F 'settings.instanceUrl and settings.apiUrl.file/helper are mutually exclusive' actual.stderr
+        done
+        # The server's passing assertion must not hide a failing caller assertion.
+        if nix-instantiate --eval --strict ${probe} --arg callerPassing false >actual.stdout 2>actual.stderr; then
+          echo "FAIL: gitlab caller assertion unexpectedly succeeded" >&2
+          exit 1
+        fi
+        grep -F 'gitlab caller assertion failed' actual.stderr
+        if grep -F 'mutually exclusive' actual.stderr; then
+          echo "FAIL: diagnostic includes a passing server assertion" >&2
+          exit 1
+        fi
+        echo "PASS: gitlab mutex rejects file/helper conflicts; valid settings and caller assertions verified" | tee "$out"
+      '';
+
+    # tryEval cannot expose throw messages. Follow facet-mock-negative by
+    # evaluating a subprocess and checking its stderr, with a passing control.
+    module-mcp-settings-assertion-messages = let
+      source = lib.fileset.toSource {
+        root = ../../..;
+        fileset = lib.fileset.unions [
+          ../../../lib/credentials.nix
+          ../../../lib/mcp.nix
+          ../../../packages/fetch-mcp/modules/mcp-server.nix
+        ];
+      };
+      probe = pkgs.writeText "mcp-settings-assertions.nix" ''
+        { passing ? false }:
+        let
+          lib = import ${pkgs.path}/lib;
+          mcpLib = import ${source}/lib/mcp.nix { inherit lib; };
+          settings = builtins.fromJSON (
+            if passing
+            then ${builtins.toJSON (builtins.toJSON (assertionSettings true))}
+            else ${builtins.toJSON (builtins.toJSON (assertionSettings false))}
+          );
+          result = mcpLib.evalSettings "fetch-mcp" settings;
+        in
+          if passing
+          then assert result == builtins.fromJSON ${builtins.toJSON (builtins.toJSON expectedSettings)}; true
+          else result
+      '';
+    in
+      pkgs.runCommandLocal "module-test-mcp-settings-assertion-messages" {
+        nativeBuildInputs = [pkgs.nix];
+      } ''
+        export NIX_STATE_DIR="$TMPDIR/nix-state"
+        mkdir -p "$NIX_STATE_DIR/profiles/per-user/$USER"
+        nix-instantiate --eval --strict ${probe} --arg passing true
+        if nix-instantiate --eval --strict ${probe} --arg passing false >actual.stdout 2>actual.stderr; then
+          echo "FAIL: failing MCP assertions unexpectedly succeeded" >&2
+          exit 1
+        fi
+        ${lib.concatMapStringsSep "\n" (message: ''
+          if ! grep -F -- ${lib.escapeShellArg message} actual.stderr; then
+            cat actual.stderr >&2
+            exit 1
+          fi
+        '') (["MCP server fetch-mcp settings assertions failed:"] ++ map (entry: entry.message) (builtins.filter (entry: !entry.assertion) (assertionSettings false).assertions))}
+        if grep -F -- "passing assertion must not appear" actual.stderr; then
+          echo "FAIL: diagnostic includes a passing assertion" >&2
+          exit 1
+        fi
+        echo "PASS: MCP assertion diagnostics contain both failing messages" > "$out"
+      '';
+
+    # Exercise the same settings in both arms; equality also rejects leaked metadata.
+    module-mcp-settings-assertions = mkTest "mcp-settings-assertions" (
+      let
+        passing = builtins.tryEval (mcpLib.evalSettings "fetch-mcp" (assertionSettings true) == expectedSettings);
+        failing = builtins.tryEval (builtins.deepSeq (mcpLib.evalSettings "fetch-mcp" (assertionSettings false)) true);
+      in
+        passing.success && passing.value && !failing.success
+    );
+
     # ── services.mcp-servers module ──────────────────────────────────
 
     # Default: all servers are disabled.

@@ -52,12 +52,9 @@
   #
   # A THREE-BRANCH `attrTag` rather than a `plain` string option beside a
   # nullable credential, because the two-option spelling can express the
-  # invalid state — both set at once — and can then only reject it with a
-  # runtime `throw`. `packages/gitlab-mcp/modules/mcp-server.nix` carries
-  # exactly that `throw` today, and its own comment calls it UNVERIFIED
-  # and asks for "a discriminated union so the invalid state can't be
-  # constructed". This is that union. Retrofitting gitlab-mcp onto it is
-  # deliberately NOT part of this change.
+  # invalid state — both set at once — and needs a separate assertion.
+  # gitlab-mcp retains that two-option interface and enforces its mutex
+  # through settingsModule.config.assertions.
   #
   # `plain` is offered because not every configurable value is a secret:
   # a public GitLab host is ordinary configuration, and forcing it through
