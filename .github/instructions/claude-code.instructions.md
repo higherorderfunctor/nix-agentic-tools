@@ -98,24 +98,8 @@ Three things follow, and each of them is a trap if you assume the old shape:
 
 ## heron_brook Delegation Clamp — the opt-in mitigation
 
-> **Last verified:** 2026-09-08 (commit pending —
-> `packages/claude-code/checks/claude-heron-brook.nix` now anchors on the
-> reminder step's `- name:` line and reads its gate from within that step's line
-> range. It used to require exactly ONE `head_ref == 'update/…'` gate in the
-> whole file, which was correct while this was the only such step and went red
-> the moment a second tripwire added its own. The guard now couples to the STEP
-> NAME — rename the step and it throws, by design.) Prior: 2026-08-06 (commit
-> pending — `delegationClamp.mitigate` is now **opt-in**, and the per-update
-> version tripwire is gone. It compared the pinned claude-code version against a
-> recorded `verifiedClaudeVersion`, so it went red on every release and was
-> right on none of them; three discharges, all clean. What replaced it is a
-> ~90-day dated reminder scoped to the claude-code update PR, plus an eval-only
-> guard that the two agree on the branch name. Prior 2026-08-04: binary
-> re-verification against 2.1.222. Prior 2026-07-29: confirmed end-to-end
-> against two LIVE sessions on 2.1.220, which turned the model gate into a
-> measurement.) If you change `ai.claude.delegationClamp`, the hook script, the
-> injected text, or the reminder and this fragment isn't updated in the same
-> commit, stop and fix it.
+> **Last verified:** 2026-09-21 — `delegationClamp.text` accepts inline or
+> source-backed prose through the shared text-source shape.
 
 Claude Code injects a system-prompt section — internally `heron_brook` —
 instructing the model not to call the Agent tool and not to use workflows or
@@ -125,7 +109,9 @@ disables it, and it **never appears in the transcript** — so a session with
 delegation suppressed looks identical to a normal one. It also contradicts
 `ai.claude.ultracodeOnLaunch`, which asks for the opposite.
 
-Set `ai.claude.delegationClamp.mitigate = true` to enable it.
+Set `ai.claude.delegationClamp.mitigate = true` to enable it. Override the
+request with `delegationClamp.text.text`, or package it in a file with
+`delegationClamp.text.source`.
 
 ### Why the mitigation is user-side context, not a patch
 
@@ -215,8 +201,8 @@ diverge; then whichever runs first supplies the payload.
 
 ### The injected text is load-bearing
 
-`ai.claude.delegationClamp.text` is a first-person standing request. Re-derive
-all four properties before rewording it:
+`ai.claude.delegationClamp.text.text` resolves to a first-person standing
+request. Re-derive all four properties before rewording it:
 
 1. It **satisfies** the escape clause rather than contradicting it. A
    contradiction pits a user-message line against a system-prompt line, which

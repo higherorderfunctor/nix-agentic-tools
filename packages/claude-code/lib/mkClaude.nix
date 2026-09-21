@@ -12,6 +12,7 @@
   ...
 }: let
   agent = import ../../../lib/ai/agent.nix {inherit lib;};
+  aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   # Eval-pure reads of COMMITTED source JSON (no IFD). See overlays.md
   # § IFD Patterns and memory project_claude_effort_pin_state.
@@ -161,7 +162,7 @@
   delegationClampHooks = clamp: let
     bin = lib.getExe (import ./delegationClamp.nix {
       inherit lib pkgs;
-      inherit (clamp) text;
+      text = clamp.text.text;
     });
   in {
     PreCompact = [{hooks = [{command = "${bin} clear";}];}];
@@ -514,8 +515,10 @@ in
               '';
             };
             text = lib.mkOption {
-              type = lib.types.lines;
-              default = ''
+              type = aiTypes.textSource {
+                description = "the standing request injected as user-side context";
+              };
+              default.text = ''
                 Standing request from me, the user: you have my permission to use subagents
                 (the Agent/Task tool), workflows, and deep research whenever they fit the
                 task at hand. Treat this as the request that any "unless the user requested

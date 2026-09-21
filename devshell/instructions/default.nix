@@ -3,16 +3,21 @@
 #
 # Uses the same fragment pipeline as the monorepo but scoped to
 # what the consumer project needs.
-{lib, ...}: {
+{lib, ...}: let
+  aiTypes = import ../../lib/ai/types.nix {inherit lib;};
+in {
   options.instructions = {
     enable = lib.mkEnableOption "instruction file generation in the devshell";
 
     projectDescription = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      default = null;
+      type = aiTypes.optionalTextSource {
+        description = "the custom project description included in generated instructions";
+        enableDefault = false;
+      };
+      default = {};
       description = ''
         Custom project description to include in generated instructions.
-        If null, only standard fragments are included.
+        When disabled, only standard fragments are included.
       '';
     };
   };

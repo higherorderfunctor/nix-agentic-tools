@@ -7,8 +7,8 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/agent.nix,
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-21 — semantic-agent `instructions` and Kiro typed
-> agent `prompt` use the shared `text`/`source` content shape.
+> **Last verified:** 2026-09-21 — authored scalar prose options use the shared
+> required or optional `text`/`source` content shape.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -245,12 +245,12 @@ The ai module fans out TWO kinds of configuration:
   the typed `ai.codex.nativeSettings.agents` table.
 - `ai.codex.hooks.<Event>` — Codex-native matcher groups and command handlers,
   appended after portable `ai.hooks` groups and emitted in adjacent
-  `hooks.json`. Typed native additions include `commandWindows`,
-  `statusMessage`, and `additionalContextLimit`; a JSON-compatible tail remains
-  for forward compatibility. Typed hooks cannot coexist with inline
-  `ai.codex.nativeSettings.hooks` at one layer because Codex loads both
-  additively and warns rather than applying normal config precedence. Nix
-  ownership does not make these native-policy hooks: Codex still requires
+  `hooks.json`. Typed native additions include `commandWindows`, optional
+  `statusMessage = { text | source; }`, and `additionalContextLimit`; a
+  JSON-compatible tail remains for forward compatibility. Typed hooks cannot
+  coexist with inline `ai.codex.nativeSettings.hooks` at one layer because Codex
+  loads both additively and warns rather than applying normal config precedence.
+  Nix ownership does not make these native-policy hooks: Codex still requires
   `/hooks` review and hash-based trust before user/project handlers run.
 - `ai.copilot.projectDir` — the project-native `.github` root used by devenv for
   context, rules, agents, and skills. It is declared identically in both
@@ -287,11 +287,12 @@ enabled ecosystem whose native model preserves the option's semantics):
   config. Legacy Nix paths stay path-valued for Claude's native option but are
   read into text for Copilot's file writer. Kiro remains excluded, but NOT
   because its agents are untyped JSON — `ai.kiro.agents` is a typed record
-  modelling Kiro's v3 agent schema, and its `prompt` uses the same
-  `text`/`source` content shape. The blocker is the tool VOCABULARY: this pool's
-  `tools` carries Claude/Copilot tool names (`Bash`, `Read`) while Kiro takes
-  capability tags (`shell`, `read`, `@mcp`), so lowering needs a translation
-  table, not a pass-through. Add one and the exclusion can be revisited.
+  modelling Kiro's v3 agent schema, and its optional `prompt` uses the same
+  `text`/`source` content shape plus `enable = false` for omission. The blocker
+  is the tool VOCABULARY: this pool's `tools` carries Claude/Copilot tool names
+  (`Bash`, `Read`) while Kiro takes capability tags (`shell`, `read`, `@mcp`),
+  so lowering needs a translation table, not a pass-through. Add one and the
+  exclusion can be revisited.
 - `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
   lifecycle event set. Shared groups run before per-runtime groups for the same
   event. Matcher strings pass through, so consumers must stay within the regex

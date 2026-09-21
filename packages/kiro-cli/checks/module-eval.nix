@@ -1168,7 +1168,7 @@ in {
             ai.kiro = {
               enable = true;
               v3 = true;
-              identity = "You are Atlas, a senior systems engineer.";
+              identity.text = "You are Atlas, a senior systems engineer.";
             };
           })
         .config
@@ -1200,7 +1200,7 @@ in {
             ai.kiro = {
               enable = true;
               v3 = true;
-              identity = "You are Atlas, a senior systems engineer.";
+              identity.text = "You are Atlas, a senior systems engineer.";
             };
           })
         .config
@@ -1232,7 +1232,7 @@ in {
             ai.kiro = {
               enable = true;
               v3 = true;
-              identity = null;
+              identity.enable = false;
             };
           })
         .config
@@ -1255,7 +1255,7 @@ in {
           ai.kiro = {
             enable = true;
             v3 = true;
-            identity = "You are Atlas, a senior systems engineer";
+            identity.text = "You are Atlas, a senior systems engineer";
           };
         };
         asserts =
@@ -1275,7 +1275,7 @@ in {
             ai.kiro = {
               enable = true;
               v3 = true;
-              identity = ident;
+              identity.text = ident;
             };
           };
         in
@@ -1313,7 +1313,8 @@ in {
         # `agent` is the no-subprocess action: the short reminder is a static
         # string, so it needs no script and ignores timeout.
         && hooks.workflow-reminder.action.type == "agent"
-        && hooks.workflow-reminder.action.prompt != null
+        && hooks.workflow-reminder.action.prompt.enable
+        && hooks.workflow-reminder.action.prompt.text != ""
     );
 
     module-kiro-workflow-reminder-absent-without-workflows =
@@ -1864,6 +1865,10 @@ in {
                     effect = "deny";
                   }
                 ];
+                prompt = {
+                  enable = false;
+                  text = "This disabled prompt must not be emitted.";
+                };
                 resources = [
                   {
                     type = "knowledgeBase";

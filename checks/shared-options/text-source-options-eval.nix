@@ -6,6 +6,7 @@
   ...
 }: let
   inherit (import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) mkTest;
+  agent = import ../../lib/ai/agent.nix {inherit lib;};
   inherit (harness) evalDevenv evalHm;
   aiTypes = import ../../lib/ai/types.nix {inherit lib;};
   source = builtins.toFile "text-source-options-source" "packaged prose\n";
@@ -28,6 +29,20 @@
     };
   evaluate = evaluateWith (aiTypes.optionalTextSource {description = "entry prose";});
 
+  bareStringInstructions = lib.evalModules {
+    modules = [
+      {
+        options.agent = lib.mkOption {
+          type = agent.semanticAgentType;
+        };
+        config.agent = {
+          description = "Bare-string rejection probe";
+          instructions = "untyped instructions";
+        };
+      }
+    ];
+  };
+  bareStringInstructionsFailed = !(builtins.tryEval (builtins.deepSeq bareStringInstructions.config.agent true)).success;
   defaultContentType = aiTypes.optionalTextSource {
     defaultContent.text = "package prose";
     description = "defaulted prose";
@@ -199,7 +214,9 @@
     && checkTextSourceDefaults (evalDevenv {});
 
   contract =
-    if !badDirectRejected
+    if !bareStringInstructionsFailed
+    then throw "lib.ai.agent: semantic instructions accepted a bare string"
+    else if !badDirectRejected
     then throw "lib.ai.types: outer default guard accepted a direct text-source declaration"
     else if !badRequiredRejected
     then throw "lib.ai.types: outer default guard accepted a textSource declaration"

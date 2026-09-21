@@ -1524,7 +1524,7 @@ in {
                     additionalContextLimit = 0;
                     command = "review-patch";
                     commandWindows = "review-patch.exe";
-                    statusMessage = "Reviewing patch";
+                    statusMessage.text = "Reviewing patch";
                     timeout = 30;
                   }
                 ];
