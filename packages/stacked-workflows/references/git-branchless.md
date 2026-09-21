@@ -298,14 +298,19 @@ git restack <hash>        # restack only children of specific abandoned commit
 
 ### Stack Management
 
-**`git sync`** — Rebase all stacks onto updated main.
+**`git sync`** — Rebase selected stacks onto updated main.
 
 ```bash
-git sync                  # rebase all draft stacks (local only)
-git sync --pull           # fetch remote first, then rebase
-git sync 'stack()'        # rebase only current stack
-git sync --merge          # resolve conflicts for all stacks
+git sync 'stack()'                # rebase only current stack
+git sync --pull 'stack()'         # fetch remote first, then rebase current stack
+git sync --merge 'stack()'        # resolve conflicts for current stack
 ```
+
+A bare `git sync` rebases every local draft stack, including branches checked
+out in other worktrees. git-branchless bypasses Git's checked-out-branch guard,
+so those worktrees keep a stale index and can show phantom staged changes that a
+broad `git add` turns into unrelated reverts. Always pass an explicit revset;
+use `stack()` for the current stack.
 
 Conflict handling: skips conflicting stacks by default, prints summary. Fix
 individually: `git move -b <hash> -d main --merge`.
@@ -715,11 +720,11 @@ git move -F -x <src> -d <dest>
 git rebase -i main             # mark commits as fixup/squash
 ```
 
-### 8. Sync all stacks with remote main
+### 8. Sync the current stack with remote main
 
 ```bash
-git sync --pull                # fetch + rebase all stacks
-# If some stacks conflict:
+git sync --pull 'stack()'      # fetch + rebase the current stack
+# If the stack conflicts:
 git move -b <conflicting-root> -d main --merge   # resolve individually
 ```
 
@@ -807,7 +812,7 @@ See arxanas/git-branchless#988 for background on unexpected public status.
 ### 17. Clean up stale commits after squash-merge
 
 ```bash
-git sync --pull                # auto-cleans linearly merged stacks
+git sync --pull 'stack()'      # auto-cleans linearly merged commits
 git hide -r <hash>             # manually hide squash-merged stacks
 git hide "draft() & message('substr:WIP')"  # bulk hide by pattern
 ```
@@ -945,7 +950,7 @@ has equivalents (`reword`, `split`, `move`), prefer those.
 2. Push: `git submit -c` (creates remote branches)
 3. Create PRs via `gh pr create --base <prev-branch> --head <branch>`
 4. After amend/restack: `git submit` to force-push updates
-5. After merge: `git sync --pull` auto-cleans merged commits
+5. After merge: `git sync --pull 'stack()'` auto-cleans merged commits
 
 Set PR base to the previous branch in the stack; GitHub auto-updates dependent
 PRs on merge (arxanas/git-branchless#716).

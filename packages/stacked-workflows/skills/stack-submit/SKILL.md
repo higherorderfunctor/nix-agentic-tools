@@ -52,12 +52,15 @@ as a revset to select which commits to submit. Default is the current stack.
 
    ```bash
    # If $ARGUMENTS is a revset (use git sl or git branchless log, not git log):
+   SELECTED="$ARGUMENTS"
    git sl
 
    # If $ARGUMENTS is empty, try stack():
+   SELECTED='stack()'
    git sl
 
    # If on main with no stack, use draft():
+   SELECTED='draft()'
    git query 'draft()'
 
    # If all commits are public (on main), the user needs to specify
@@ -67,15 +70,22 @@ as a revset to select which commits to submit. Default is the current stack.
 3. **Sync with main** to ensure the stack is up to date:
 
    ```bash
-   git sync --pull
+   git sync --pull "$SELECTED"
    ```
+
+   A bare `git sync` rebases every local stack, including branches checked out
+   in other worktrees. Those worktrees keep a stale index and show phantom
+   staged changes, so a broad `git add` there can commit unrelated reverts.
+   git-branchless bypasses the guard Git itself enforces, so nothing stops the
+   rewrite.
 
    If this is the first push (remote main doesn't exist or has fewer commits),
    sync may be a no-op — that's fine.
 
    If conflicts are reported (without `--merge`), stop and inform the user which
-   commits conflict. Ask if they want to resolve with `git sync --merge` or
-   handle individually with `git move -b <hash> -d main --merge`.
+   commits conflict. Ask if they want to resolve with
+   `git sync --merge "$SELECTED"` or handle individually with
+   `git move -b <hash> -d main --merge`.
 
 4. **Run tests across the stack** to validate each commit independently. This is
    the one case where `stack()` is unambiguously right: every commit here is
@@ -231,7 +241,7 @@ changes main, and all downstream branches need rebasing onto it.
 
 ```bash
 # 1. Sync: rebases stack onto the new squash-merged main
-git sync --pull
+git sync --pull 'stack()'
 
 # 2. Update the next PR/MR's base to main (it was pointing at the merged branch)
 #    See platform-specific commands below
@@ -257,7 +267,7 @@ contains both changes. After merging:
 
 ```bash
 git fetch origin && git branch -f main origin/main
-git sync --pull     # may only skip one of the two commits
+git sync --pull 'stack()'     # may only skip one of the two commits
 ```
 
 If `git sync` doesn't skip the already-merged commit, move the remaining stack
