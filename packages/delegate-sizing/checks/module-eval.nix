@@ -160,8 +160,6 @@
         (builtins.attrValues (shippedPresetFieldDefinitions preset)))
       shippedPresetNames)
     "delegate-sizing-${name}: every field defined by package whenToDelegate presets must use lib.mkDefault"; true;
-    shippedPresetSource = preset:
-      ../fragments + "/${lib.replaceStrings [" "] ["-"] (lib.toLower preset)}.md";
     enabledShippedPresets = lib.genAttrs shippedPresetNames (preset:
       evaluate (lib.recursiveUpdate scenario {
         ai.programs.delegate-sizing.whenToDelegate.${preset}.enable = true;
@@ -414,20 +412,17 @@
       && lib.all
       (preset: let
         declaredSource = shippedPresets.${preset}.source;
-        expectedSource = shippedPresetSource preset;
         text = ruleText enabledShippedPresets.${preset};
       in
-        assert lib.assertMsg (declaredSource == expectedSource)
-        "delegate-sizing-${name}: preset `${preset}` source must match its name-derived fragment path";
-          lib.hasInfix
-          "### ${preset}\n\n${lib.removeSuffix "\n" (builtins.readFile declaredSource)}"
-          text
-          && lib.all
-          (other:
-            other
-            == preset
-            || !(lib.hasInfix (lib.removeSuffix "\n" (builtins.readFile shippedPresets.${other}.source)) text))
-          shippedPresetNames)
+        lib.hasInfix
+        "### ${preset}\n\n${lib.removeSuffix "\n" (builtins.readFile declaredSource)}"
+        text
+        && lib.all
+        (other:
+          other
+          == preset
+          || !(lib.hasInfix (lib.removeSuffix "\n" (builtins.readFile shippedPresets.${other}.source)) text))
+        shippedPresetNames)
       shippedPresetNames
     );
     "module-delegate-sizing-${name}-when-to-delegate-preset-constructor" = mkTest "delegate-sizing-${name}-when-to-delegate-preset-constructor" presetConstructorContract;

@@ -27,6 +27,7 @@ args @ {
     inherit lib;
     renames = delegateSizingRenames;
   };
+  inherit (whenToDelegateOptions) mkPreset;
   whenToDelegate = config.ai.programs.delegate-sizing.whenToDelegate;
   warningMessages = whenToDelegateOptions.warnings whenToDelegate;
   emitWarnings = value:
@@ -104,22 +105,10 @@ in {
   config =
     {
       ai.programs.delegate-sizing.whenToDelegate = {
-        "Launch independent work together" = {
-          enable = lib.mkDefault false;
-          source = lib.mkDefault ../fragments/launch-independent-work-together.md;
-        };
-        "Orchestrator session" = {
-          enable = lib.mkDefault false;
-          source = lib.mkDefault ../fragments/orchestrator-session.md;
-        };
-        "Prefer the flat-rate pool" = {
-          enable = lib.mkDefault false;
-          source = lib.mkDefault ../fragments/prefer-the-flat-rate-pool.md;
-        };
-        "Verify by the artifact" = {
-          enable = lib.mkDefault false;
-          source = lib.mkDefault ../fragments/verify-by-the-artifact.md;
-        };
+        "Launch independent work together" = mkPreset {source = ../fragments/launch-independent-work-together.md;};
+        "Orchestrator session" = mkPreset {source = ../fragments/orchestrator-session.md;};
+        "Prefer the flat-rate pool" = mkPreset {source = ../fragments/prefer-the-flat-rate-pool.md;};
+        "Verify by the artifact" = mkPreset {source = ../fragments/verify-by-the-artifact.md;};
       };
       assertions =
         (
