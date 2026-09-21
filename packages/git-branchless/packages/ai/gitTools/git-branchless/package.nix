@@ -36,6 +36,7 @@ in
     cargoDeps = ourPkgs.rustPlatform.importCargoLock {
       lockFile = gbSrc + "/Cargo.lock";
     };
+    patches = (prev.patches or []) ++ [../../../../patches/protect-checked-out-branches.patch];
     postPatch = "";
     nativeInstallCheckInputs =
       builtins.filter
