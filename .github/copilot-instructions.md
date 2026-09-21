@@ -166,14 +166,6 @@ After editing any file — regardless of how it was modified (Edit, Write, Bash,
 sed, etc.) — run `treefmt <file>` on the changed file. treefmt handles Nix (via
 alejandra) and markdown (via prettier).
 
-<!-- Fragment: packages/delegate-sizing/fragments/skill-routing.md -->
-
-## Delegate Sizing
-
-Before calling a subagent, spawning a delegate, or building a workflow, load the
-`delegate-sizing` skill when your harness provides it and size the model and
-effort explicitly; a delegate never inherits the session's model and effort.
-
 <!-- Fragment: packages/stacked-workflows/fragments/skill-routing.md -->
 
 ## Skill Routing — MANDATORY
@@ -184,6 +176,55 @@ pre-flight checks, dry-run previews, conflict guidance, and post-operation
 verification that the equivalent hand-run commands miss.
 
 Each skill's own description states which operations it covers.
+
+<!-- Fragment: devenv.nix -->
+
+## Delegate Sizing
+
+Before calling a subagent, spawning a delegate, or building a workflow, load the
+`delegate-sizing` skill when your harness provides it and size the model and
+effort explicitly; a delegate never inherits the session's model and effort.
+
+### Launch independent work together
+
+Before launching a delegate, ask what else is ready to run now. Briefs that
+share no state go out in one message, not in consecutive turns.
+
+A dependency graph deeper than two steps belongs in a workflow script, so stages
+overlap instead of queueing.
+
+Concurrency is still bounded: at most two external CLI delegates on one machine,
+and never two against the same working tree before the first has committed.
+
+### Orchestrator session
+
+Keep the main session conversational. It reasons with the operator, decides, and
+delegates the doing.
+
+Delegate bulk reading, searching and measurement, every edit-verify loop, and
+any run longer than a few minutes. Keep the decision, the brief, and the
+verification of what came back.
+
+Read a file into the session only to reason about it with the operator. Bulk
+output goes to disk and the delegate reports the conclusion.
+
+### Prefer the flat-rate pool
+
+When one pool bills per token and another is flat-rate, send long, iterative or
+context-heavy work to the flat-rate pool. Offloading there is not a budget
+trade-off.
+
+An unused allowance does not carry over. Spending it is free; hoarding it is a
+loss.
+
+### Verify by the artifact
+
+A delegate's exit code reports whether its process ended, not whether it did the
+work. Verify by the tree, the diff or the artifact it was asked to produce.
+
+Ask what else in the repository is derived from or gated on the files it
+touched, and check those too. Reviewing the diff proves the diff is good; it
+does not prove the tree is consistent.
 
 <!-- Fragment: dev/fragments/monorepo/architecture-fragments.md -->
 
