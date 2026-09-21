@@ -7,9 +7,8 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/agent.nix,
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-21 — shared text-source types enforce enabled and
-> required content while preserving lazy source-backed emission, inner
-> `defaultContent`, `enable` suppression, and priority arbitration.
+> **Last verified:** 2026-09-21 — semantic-agent `instructions` and Kiro typed
+> agent `prompt` use the shared `text`/`source` content shape.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -239,8 +238,9 @@ The ai module fans out TWO kinds of configuration:
 - `ai.codex.agents.<name>` — the semantic agent record plus a freeform `codex`
   TOML extension. Home Manager emits `${configDir}/agents/<name>.toml`; devenv
   emits trusted-project `.codex/agents/<name>.toml`. The filename stem supplies
-  native `name`, while `description` and `instructions` lower to the two other
-  required native fields. Reserved core fields cannot be redefined in `codex`.
+  native `name`, while `description` and resolved `instructions.text` lower to
+  the two other required native fields. `instructions.source` reads a packaged
+  file into that text. Reserved core fields cannot be redefined in `codex`.
   Global concurrency, model/effort defaults, and interruption behavior live in
   the typed `ai.codex.nativeSettings.agents` table.
 - `ai.codex.hooks.<Event>` — Codex-native matcher groups and command handlers,
@@ -277,21 +277,21 @@ enabled ecosystem whose native model preserves the option's semantics):
   and repository-local `.agents/skills` in devenv; Claude, Copilot, Kimchi, and
   Kiro use their established native directories.
 - `ai.agents` — either legacy Markdown/path entries for Claude and Copilot or a
-  portable `{ description, instructions, tools?, codex? }` record. Semantic
-  records render Claude/Copilot frontmatter plus body and Codex standalone TOML.
-  The optional `tools` list uses Claude and Copilot's shared tool names and
-  renders a non-empty value as their comma-separated frontmatter allowlist;
-  `null` and `[]` both omit the header. Codex deliberately omits it because its
-  standalone agent format has no equivalent field. Codex fails loudly on a
-  legacy raw entry instead of pretending Markdown is a valid agent config.
-  Legacy Nix paths stay path-valued for Claude's native option but are read into
-  text for Copilot's file writer. Kiro remains excluded, but NOT because its
-  agents are untyped JSON — `ai.kiro.agents` is a typed record modelling Kiro's
-  v3 agent schema, and its shape overlaps this intersection fine. The blocker is
-  the tool VOCABULARY: this pool's `tools` carries Claude/Copilot tool names
-  (`Bash`, `Read`) while Kiro takes capability tags (`shell`, `read`, `@mcp`),
-  so lowering needs a translation table, not a pass-through. Add one and the
-  exclusion can be revisited.
+  portable `{ description, instructions = { text | source; }; tools?; codex?; }`
+  record. Semantic records render Claude/Copilot frontmatter plus body and Codex
+  standalone TOML. The optional `tools` list uses Claude and Copilot's shared
+  tool names and renders a non-empty value as their comma-separated frontmatter
+  allowlist; `null` and `[]` both omit the header. Codex deliberately omits it
+  because its standalone agent format has no equivalent field. Codex fails
+  loudly on a legacy raw entry instead of pretending Markdown is a valid agent
+  config. Legacy Nix paths stay path-valued for Claude's native option but are
+  read into text for Copilot's file writer. Kiro remains excluded, but NOT
+  because its agents are untyped JSON — `ai.kiro.agents` is a typed record
+  modelling Kiro's v3 agent schema, and its `prompt` uses the same
+  `text`/`source` content shape. The blocker is the tool VOCABULARY: this pool's
+  `tools` carries Claude/Copilot tool names (`Bash`, `Read`) while Kiro takes
+  capability tags (`shell`, `read`, `@mcp`), so lowering needs a translation
+  table, not a pass-through. Add one and the exclusion can be revisited.
 - `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
   lifecycle event set. Shared groups run before per-runtime groups for the same
   event. Matcher strings pass through, so consumers must stay within the regex
@@ -300,47 +300,26 @@ enabled ecosystem whose native model preserves the option's semantics):
   a `meta.mainProgram` or conventional `pname` resolve to their package
   executable; bare-file derivations remain direct output paths. Kiro's v3
   trigger records remain native-only.
-- `ai.context` — a typed `text`/`source` global baseline. Each runtime has the
-  same content record plus `filename`; root content precedes runtime content
-  when both are present. The strictly higher-priority definition supplies the
-  effective content whichever field it targets, so a consumer `text` can
-  override a package-default `source` and a forced `source` can override
-  ordinary `text`; setting both at one priority fails. Same-priority `text`
-  definitions concatenate, explicit content auto-enables the record, and
-  `enable = false` omits it. Required records and enabled optional records must
-  resolve to non-empty inline text or a source path; disabled records may retain
-  content or remain empty without emitting an artifact. Auto-enable checks the
-  priority-filtered inline definitions before `text.apply`, while a winning
-  source is present without reading its contents; this avoids an enable/text
-  evaluation cycle and preserves source-only IFD laziness. An explicit empty
-  text definition can override a lower-priority default source, but the
-  resulting empty record fails when it is enabled. Package prose belongs in the
-  text-source factory's `defaultContent` argument, which installs each supplied
-  field as an inner `mkDefault` definition; the enclosing `mkOption` default
-  stays `{}` so a consumer definition cannot discard the package prose or make
-  dormant prose explicit. The shared evaluation check rejects non-empty outer
-  defaults on direct text-source submodule declarations reachable through the
-  repository HM/devenv harnesses. Claude defaults to `CLAUDE.md`; Codex, Kiro,
-  and Kimchi default to `AGENTS.md`; Copilot defaults to
-  `copilot-instructions.md`. Copilot emits normalized context only on devenv
-  because its live surface is the repository consumed by github.com, not
-  copilot-cli's user home. The transform derives structural `hasMergedContext`
-  metadata before composition, so a final-file replacement or tombstone does not
-  read discarded source-backed root/runtime context.
+- `ai.context` — a typed `text`-XOR-`source` global baseline. Each runtime has
+  the same content record plus `filename`; root content precedes runtime content
+  when both are present. Claude defaults to `CLAUDE.md`; Codex, Kiro, and Kimchi
+  default to `AGENTS.md`; Copilot defaults to `copilot-instructions.md`. Copilot
+  emits normalized context only on devenv because its live surface is the
+  repository consumed by github.com, not copilot-cli's user home. The transform
+  derives structural `hasMergedContext` metadata before composition, so a
+  final-file replacement or tombstone does not read discarded source-backed
+  root/runtime context.
 - `ai.rules` — named Markdown rules. Codex appends these alphabetically to its
   AGENTS.md after context with trace comments. `matcher = null` means always-on;
   non-empty glob lists lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot
-  `applyTo`, and a Codex prose scope preamble. Rules default enabled; a
-  per-runtime same-key rule with `enable = false` suppresses an inherited root
-  rule. Same-priority `text` definitions concatenate, and enabled rules require
-  non-empty text or a source path. Kiro alone retains native `manual`/`auto`
-  inclusion overrides. After B7 arbitration, a surviving inline Codex AGENTS.md
-  must fit `ai.codex.projectDocMaxBytes` (32 KiB by default), or evaluation
-  fails with a final-file diagnostic. A replacement or tombstone suppresses the
-  generated bytes before they are read; a surviving store-backed `source` stays
-  lazy and is therefore not size-checked at eval. Codex also rejects
-  `matcher = []` as ambiguous; use `null` for always-on content or a non-empty
-  list for scoped content.
+  `applyTo`, and a Codex prose scope preamble. Kiro alone retains native
+  `manual`/`auto` inclusion overrides. After B7 arbitration, a surviving inline
+  Codex AGENTS.md must fit `ai.codex.projectDocMaxBytes` (32 KiB by default), or
+  evaluation fails with a final-file diagnostic. A replacement or tombstone
+  suppresses the generated bytes before they are read; a surviving store-backed
+  `source` stays lazy and is therefore not size-checked at eval. Codex also
+  rejects `matcher = []` as ambiguous; use `null` for always-on content or a
+  non-empty list for scoped content.
 - `ai.mcpServers` — typed MCP definitions merged with
   `ai.<ecosystem>.mcpServers`. Codex lowers the merged pool to native
   `[mcp_servers.<name>]` TOML tables in both backends. It reuses the common MCP
@@ -381,9 +360,8 @@ enabled ecosystem whose native model preserves the option's semantics):
 
 Cross-ecosystem scalar defaults and package-generated per-entry fanouts use
 `mkDefault` so explicit values at the same scope take precedence. Keyed pools
-then apply per-runtime replacement across scopes; nullable pools use null
-negation, while rules use `enable = false`. Context and hooks retain their
-documented composition semantics.
+then apply per-runtime replacement/null negation across scopes; context and
+hooks retain their documented composition semantics.
 
 ### Per-pool capability gate
 
@@ -436,11 +414,10 @@ file into the user-global `${configDir}` and devenv writing the project-local
 Every runtime declares `ai.<runtime>.files`; there is deliberately no root
 `ai.files`. Keys are non-empty normalized relative paths interpreted against the
 backend root (HOME for Home Manager, project root for devenv). Each non-null
-entry must set exactly one of inline `text` or a store-backed `source`, plus
-optional `executable` intent. Generators contribute whole entries with
-`mkDefault`; an ordinary consumer entry replaces the complete generated file,
-and null suppresses it. Divergent same-priority definitions fail rather than
-field-merging or concatenating.
+entry sets exactly one of `text` or `source`, plus optional `executable` intent.
+Generators contribute whole entries with `mkDefault`; an ordinary consumer entry
+replaces the complete generated file, and null suppresses it. Divergent
+same-priority definitions fail rather than field-merging or concatenating.
 
 The graph is one-way: normalized pools compose, runtime routing chooses a
 target, the target renderer emits final bytes into `ai.<runtime>.files`, and the
@@ -636,18 +613,17 @@ option's `definitionsWithLocations`. The declaring module is exempt, which lets
 
 Two consequences to know before changing it. Consumer override keys are
 `ai.<runtime>.skills.<name>` and `ai.<runtime>.rules.<name>`; package entries
-use `mkDefault`, so an ordinary per-runtime consumer definition wins. Null
-retracts a skill; `enable = false` retracts a rule. A same-key root entry
-remains a portable default and is atomically replaced by the package's
-per-runtime value. Two packages claiming that per-runtime key fail the
+use `mkDefault`, so an ordinary per-runtime consumer definition or null wins. A
+same-key root entry remains a portable default and is atomically replaced by the
+package's per-runtime value. Two packages claiming that per-runtime key fail the
 package-provenance guard (see `collision-semantics.md`).
 
 <!-- Fragment: dev/fragments/ai-module/collision-semantics.md -->
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-21 — rules and context use entry-local `enable`
-> suppression, and Semble's CLI rule uses text-source priority arbitration.
+> **Last verified:** 2026-09-12 — package modules own consumer checks; the
+> shared harness discovers backend imports and owner activation probes.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -677,7 +653,7 @@ commit.
 | B7  | generated native file ↔ runtime file entry        | file    | Generator uses whole-entry `mkDefault`; ordinary entry replaces, null suppresses, divergent same-priority entries fail. |
 | B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                          |
 | B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                  |
-| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops a nullable-pool entry; `enable = false` drops a rule after the shallow merge.                      |
+| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops the entry after the shallow merge.                                                                 |
 
 B3 is why `//` is correct and `recursiveUpdate` is wrong. B7's unit is the
 complete rendered native file, not a key inside it. Its null is a final-output
@@ -695,9 +671,8 @@ The six normalized keyed pools are:
 - `rules`
 - `skills`
 
-Five pools use `attrsOf (nullOr <valueType>)`; rules use `attrsOf <ruleModule>`,
-whose entries default `enable = true`. For a capable runtime, nullable-pool
-composition is:
+Every root and per-runtime declaration uses `attrsOf (nullOr <valueType>)`. For
+a capable runtime, composition is:
 
 ```nix
 lib.filterAttrs (_: value: value != null) (rootPool // runtimePool)
@@ -710,11 +685,6 @@ This ordering is load-bearing:
 3. a same-key runtime null is a tombstone that suppresses the inherited entry;
 4. null is filtered only after precedence, so it cannot disappear before doing
    that work.
-
-Rules preserve the same shallow `rootPool // runtimePool` precedence, then
-filter entries whose `enable` is false. Filtering after precedence is equally
-load-bearing: a disabled runtime rule must survive long enough to replace and
-suppress its inherited root rule.
 
 Entries are atomic across levels. Records are never recursively merged. A second
 runtime with no same-key entry continues to inherit the root value; keep that
@@ -789,28 +759,16 @@ runtime replacement for two owners.
 Repo modules write `ai.<runtime>.<pool>`, never the root `ai.<pool>`. The root
 level belongs to consumers as the portable default surface. A separate
 `rootPoolViolations` provenance guard enforces that boundary. Per-runtime null
-on nullable pools and `enable = false` on rules let a consumer undo an inherited
-root entry, but consumers should not have to retract package wiring that
-silently fanned out beyond the package's runtime ownership.
+now lets a consumer undo an inherited root entry, but consumers should not have
+to retract package wiring that silently fanned out beyond the package's runtime
+ownership.
 
-Package-generated entries in nullable pools normally use a whole-entry
-`mkDefault`, so an explicit consumer value or null at that same per-runtime key
-wins through ordinary module-system priority before root/runtime composition
-happens. Do not put recursive defaults only on fields below those `nullOr` entry
-boundaries: Nix must choose the null or record branch before leaf priorities can
-arbitrate. Rules are the exception: their entries are non-null submodules, and
-`enable = false` retracts an inherited rule after root/runtime replacement. That
-shape lets package rule fields use recursive defaults and arbitrate with
-consumer fields directly.
-
-Within the shared text-source type, `text` and `source` arbitrate as one pair: a
-strictly higher-priority definition wins whichever field it targets, while
-same-priority definitions of both fields fail. Semble's generated CLI rule is
-the deliberate package pattern that relies on this contract: it defaults the
-rule fields so a consumer's inline text can override the packaged source while
-the source remains visible. Consumers can retract that generated rule with
-`ai.<runtime>.rules.semble.enable = false`; its runtime `instructions.cli`
-feature flag remains the package-level gate.
+Package-generated entries normally use a whole-entry `mkDefault`, so an explicit
+consumer value or null at that same per-runtime key wins through ordinary
+module-system priority before root/runtime composition happens. Do not put
+recursive defaults only on fields below a `nullOr` entry boundary: Nix must
+choose the null or record branch before those leaf priorities can arbitrate, and
+reports the option as both null and non-null instead of honoring the tombstone.
 
 Always-on process defaults such as the sandbox-safe SSH command still use the
 internal callback channel instead of writing a hidden normalized-pool
@@ -837,9 +795,8 @@ and testing their distinct composition contracts.
 ### Implementation
 
 `lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
-filter for nullable pools. `lib/ai/app/mkBackendTransform.nix` calls it once for
-every supported pool, then additionally filters disabled rules, and hands only
-the surviving `merged*` values to package callbacks. For MCP,
+filter. `lib/ai/app/mkBackendTransform.nix` calls it once for every supported
+pool and hands only the filtered `merged*` values to package callbacks. For MCP,
 `lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy declarations at each
 scope while preserving null tombstones; only those client views cross the
 root/runtime merge. `lib/ai/sharedOptions.nix` separately aggregates explicit
@@ -874,18 +831,16 @@ size-checked at eval, avoiding IFD.
 
 ### Adding a normalized pool
 
-1. Declare root and per-runtime values as `attrsOf (nullOr <valueType>)`, or use
-   a non-null submodule with an entry-local suppression flag when leaf merging
-   is part of the pool's explicit contract.
+1. Declare root and per-runtime values as `attrsOf (nullOr <valueType>)`.
 2. Add the capability to each consuming app record's `supportedPools`.
 3. Route root and runtime values through `mergePool` before any translation or
    emission.
 4. Add the pool to `normalizedPoolNames` in
    `checks/module-provenance/helpers.nix` so package ownership is checked at
    root and every runtime scope.
-5. Test the pool's suppression value with a second-runtime inheritance control,
-   wholesale same-key replacement, package collision diagnostics via
-   `lib.hasInfix`, and a different-key package control.
+5. Test null-drop with a second-runtime inheritance control, wholesale same-key
+   replacement, package collision diagnostics via `lib.hasInfix`, and a
+   different-key package control.
 
 ### Debugging
 
@@ -896,11 +851,10 @@ nix eval .#homeConfigurations.<host>.config.ai.<pool>
 nix eval .#homeConfigurations.<host>.config.ai.<runtime>.<pool>
 ```
 
-A runtime null at a nullable-pool key, or `enable = false` at a rule key, is an
-intentional deletion. For a package collision, the check diagnostic names the
-exact option path and all contributing module files; move one contribution to a
-distinct key or establish a single package owner rather than changing
-root/runtime precedence.
+A runtime null at the key is an intentional deletion. For a package collision,
+the check diagnostic names the exact option path and all contributing module
+files; move one contribution to a distinct key or establish a single package
+owner rather than changing root/runtime precedence.
 
 <!-- Fragment: dev/fragments/ai-module/dir-helpers.md -->
 
@@ -1003,8 +957,8 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-21 — context and rules use shared text-source
-> `enable` gates and arbitrate `text` against `source` by module priority.
+> **Last verified:** 2026-09-12 — package modules own consumer checks; the
+> shared harness discovers backend imports and owner activation probes.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1019,10 +973,8 @@ path types".
                              ▼  fanout via lib.ai.<X>FromDir
 ┌────────────────────────────────────────────────────────────┐
 │ L2: Top-level singles                                      │
-│   ai.<X> = attrsOf (<itemModule>)                          │
+│   ai.<X> = attrsOf (nullOr <itemModule>)                   │
 │   - cross-ecosystem pool                                   │
-│   - nullable pools wrap itemModule in nullOr               │
-│   - rules use itemModule.enable                            │
 └────────────────────────────────────────────────────────────┘
                              │
                              ▼  fanout to each enabled CLI
@@ -1034,10 +986,10 @@ path types".
                              ▼  fanout via lib.ai.<X>FromDir
 ┌────────────────────────────────────────────────────────────┐
 │ L3: Per-CLI singles                                        │
-│   ai.<cli>.<X> = attrsOf (<itemModule>)                    │
+│   ai.<cli>.<X> = attrsOf (nullOr <itemModule>)             │
 │   - exists only when the app record supports pool X        │
 │   - same-key value atomically replaces L2                  │
-│   - null or itemModule.enable suppresses by pool contract   │
+│   - same-key null suppresses the inherited L2 entry        │
 └────────────────────────────────────────────────────────────┘
                              │
                              ▼  routing + native rendering
@@ -1065,12 +1017,10 @@ path types".
   emits unique active systemd units, while only lowered client entries traverse
   this five-stage pipeline.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
-  entries replace same-key root entries wholesale. Nullable pools use null to
-  suppress an inherited entry after the shallow merge; rules use
-  `enable = false` on the replacement entry. Unsupported root fanout degrades
-  before this boundary and has no L3 option. L1→L2 and L2b→L3 use `mkDefault` so
-  explicit entries within the same layer still win before cross-level
-  composition.
+  entries replace same-key root entries wholesale; null suppresses an inherited
+  entry after the shallow merge. Unsupported root fanout degrades before this
+  boundary and has no L3 option. L1→L2 and L2b→L3 use `mkDefault` so explicit
+  entries within the same layer still win before cross-level composition.
 - **One package owner per key and scope.** Definition-provenance checks reject
   two packages claiming one root key or one per-runtime key. A root key and its
   runtime replacement are different scopes and do not collide.
@@ -1079,12 +1029,10 @@ path types".
   an attrset-entry collision; only the exact portable Claude/Codex event
   vocabulary is accepted at L2.
 - **Context content concatenates.** `ai.context` and `ai.<cli>.context` are
-  typed `text`/`source` records, not pool entries. The strictly higher-priority
-  definition supplies the effective content whichever field it targets; one
-  priority setting both fields fails. Their content composes root-first into the
-  runtime's `context.filename`; `enable = false` omits either record. A
-  structural `hasMergedContext` bit gates the generated default without reading
-  composed sources; rendered bytes remain lazy until that default survives B7.
+  typed `text`-XOR-`source` records, not pool entries. Their content composes
+  root-first into the runtime's `context.filename`. A structural
+  `hasMergedContext` bit gates the generated default without reading composed
+  sources; rendered bytes remain lazy until that default survives B7.
 - **Rule matchers lower only before L4.** `matcher = null` is always-on; a
   non-empty glob list becomes native routing metadata where one exists and
   explicit prose for flat AGENTS.md consumers. In the shared devenv AGENTS.md,
@@ -1114,8 +1062,7 @@ path types".
   selectors)
 - L2b options (CLI-specific, like Claude's `agentsDir` or `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
-- L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus
-  the rule enable filter)
+- L2↔L3 replacement/null filtering → transform (`aiCommon.mergePool`)
 - managed MCP proxy ownership, validation, and systemd unit aggregation →
   `lib/ai/sharedOptions.nix` + `lib/ai/mcpProxy.nix`
 - per-scope package ownership guard → `checks/module-provenance/helpers.nix`

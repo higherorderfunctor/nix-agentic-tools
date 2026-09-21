@@ -1823,7 +1823,7 @@ in {
               enable = true;
               agents.reviewer = {
                 description = "Reviews diffs";
-                prompt = "You review diffs.";
+                prompt.text = "You review diffs.";
                 tools = ["read" "shell"];
               };
             };
@@ -1834,6 +1834,7 @@ in {
           j.name
           == "reviewer"
           && j.description == "Reviews diffs"
+          && j.prompt == "You review diffs."
           && j.tools == ["read" "shell"]
           # null/empty optionals must not reach the file
           && !(j ? model)
@@ -1883,6 +1884,7 @@ in {
         rule.capability
         == "shell"
         && rule.effect == "deny"
+        && !(emitted ? prompt)
         && !(rule ? match)
         && !(rule ? exclude)
         && resource.source == "file:///docs"

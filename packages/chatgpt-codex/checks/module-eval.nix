@@ -1354,7 +1354,7 @@ in {
           agents = {
             emptyTools = {
               description = "Review with an explicitly empty tool restriction.";
-              instructions = "Report concrete findings.";
+              instructions.text = "Report concrete findings.";
               tools = [];
             };
             reviewer = {
@@ -1363,12 +1363,12 @@ in {
                 sandbox_mode = "read-only";
               };
               description = "Review changes for correctness.";
-              instructions = "Read first, then report concrete findings.";
+              instructions.text = "Read first, then report concrete findings.";
               tools = ["Bash" "Read"];
             };
             unrestricted = {
               description = "Review without a portable tool restriction.";
-              instructions = "Report concrete findings.";
+              instructions.text = "Report concrete findings.";
             };
           };
           claude.enable = true;
@@ -1419,7 +1419,7 @@ in {
               sandbox_mode = "read-only";
             };
             description = "Review changes.";
-            instructions = "Report concrete findings.";
+            instructions.text = "Report concrete findings.";
           };
         };
       };
@@ -1438,13 +1438,13 @@ in {
           ai = {
             agents.reviewer = {
               description = "Root review.";
-              instructions = "Use root instructions.";
+              instructions.text = "Use root instructions.";
             };
             codex = {
               enable = true;
               agents.reviewer = {
                 description = "Codex review.";
-                instructions = "Use Codex instructions.";
+                instructions.text = "Use Codex instructions.";
               };
             };
           };
@@ -1475,7 +1475,7 @@ in {
             enable = true;
             agents.reviewer = {
               description = "Review.";
-              instructions = "Review carefully.";
+              instructions.text = "Review carefully.";
               codex.name = "different-name";
             };
           };

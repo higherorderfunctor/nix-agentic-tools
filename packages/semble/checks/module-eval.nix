@@ -985,19 +985,19 @@ in {
         && !duplicate.success
         && !empty.success
         && records.rule.source == ../cli-instructions.md
-        && records.semanticAgent.instructions == ../cli-instructions.md
+        && records.semanticAgent.instructions.source == ../cli-instructions.md
         && records.semanticAgent.tools == ["Bash" "Read"]
-        && records.mcp.semanticAgent.instructions == ../mcp-agent-instructions.md
+        && records.mcp.semanticAgent.instructions.source == ../mcp-agent-instructions.md
         && records.mcp.semanticAgent.tools
         == ["mcp__semble__find_related" "mcp__semble__search"]
         # `kiroAgent` is a typed record, not pre-rendered JSON. It deliberately
         # carries NO `name`: the typed `ai.kiro.agents` option defaults that from
         # the attr key, which keeps the id and the filename a single source of
-        # truth. `prompt` stays a path here and is readFile-coerced at emission.
+        # truth. `prompt.source` stays a path here and resolves at emission.
         && records.kiroAgent.tools == ["shell" "read"]
         && !(records.kiroAgent ? name)
-        && records.kiroAgent.prompt == ../cli-instructions.md
-        && records.mcp.kiroAgent.prompt == ../mcp-agent-instructions.md
+        && records.kiroAgent.prompt.source == ../cli-instructions.md
+        && records.mcp.kiroAgent.prompt.source == ../mcp-agent-instructions.md
         && records.mcp.kiroAgent.tools == ["@semble"]
     );
 
