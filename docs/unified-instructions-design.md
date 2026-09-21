@@ -217,7 +217,7 @@ Symmetric top-level and per-ecosystem shape:
 
 ```nix
 # Top-level (fans to every enabled ecosystem)
-ai.context = { text = "..."; }; # exactly one of text/source
+ai.context = { text = "..."; }; # higher-priority text/source definition wins
 ai.rules.<name> = { text = "..."; matcher = ["src/**"]; };
 
 # Per-ecosystem (additive; wins on name collision)
@@ -231,14 +231,14 @@ ai.<cli>.rules.<name> = { source = ./rule.md; matcher = null; };
 rules.<name> = lib.types.submodule {
   options = {
     text = lib.mkOption {
-      type = lib.types.nullOr lib.types.lines;
-      default = null;
-      description = "Inline Markdown content; mutually exclusive with source.";
+      type = lib.types.lines;
+      default = "";
+      description = "Inline Markdown content.";
     };
     source = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
       default = null;
-      description = "Markdown file source; mutually exclusive with text.";
+      description = "Markdown file source.";
     };
     matcher = lib.mkOption {
       type = lib.types.nullOr (lib.types.listOf lib.types.str);
@@ -256,6 +256,10 @@ rules.<name> = lib.types.submodule {
   };
 };
 ```
+
+`text` and `source` arbitrate as one pair: the strictly higher-priority
+definition supplies the content whichever field it targets, while definitions of
+both fields at the same priority conflict.
 
 **Effective value per ecosystem:** root and per-runtime context concatenate
 root-first into one runtime-named artifact. Top-level and per-CLI `rules` are

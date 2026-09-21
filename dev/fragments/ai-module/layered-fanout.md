@@ -72,11 +72,12 @@
   an attrset-entry collision; only the exact portable Claude/Codex event
   vocabulary is accepted at L2.
 - **Context content concatenates.** `ai.context` and `ai.<cli>.context` are
-  typed `text`/`source` records, not pool entries. Different priorities
-  arbitrate the effective text; one priority setting both fields fails. Their
-  content composes root-first into the runtime's `context.filename`. A
-  structural `hasMergedContext` bit gates the generated default without reading
-  composed sources; rendered bytes remain lazy until that default survives B7.
+  typed `text`/`source` records, not pool entries. The strictly higher-priority
+  definition supplies the effective content whichever field it targets; one
+  priority setting both fields fails. Their content composes root-first into the
+  runtime's `context.filename`. A structural `hasMergedContext` bit gates the
+  generated default without reading composed sources; rendered bytes remain lazy
+  until that default survives B7.
 - **Rule matchers lower only before L4.** `matcher = null` is always-on; a
   non-empty glob list becomes native routing metadata where one exists and
   explicit prose for flat AGENTS.md consumers. In the shared devenv AGENTS.md,

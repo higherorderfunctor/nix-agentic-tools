@@ -10,7 +10,7 @@
       options,
       ...
     }: let
-      sameExplicitPriority =
+      samePriority =
         options.text.highestPrio
         == options.source.highestPrio;
       contentIsExplicit =
@@ -34,9 +34,9 @@
             apply = value:
               if config.source == null
               then value
-              else if sameExplicitPriority
+              else if samePriority
               then throw "`${lib.showOption options.text.loc}` and `${lib.showOption options.source.loc}` are defined at the same priority. Set only one of these options."
-              else if options.text.highestPrio < defaultPriority
+              else if options.text.highestPrio < options.source.highestPrio
               then value
               else builtins.readFile config.source;
           };

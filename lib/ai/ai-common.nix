@@ -163,12 +163,7 @@ in {
   readContent = value:
     if value == null
     then ""
-    else
-      value.text or (
-        if (value.source or null) != null
-        then builtins.readFile value.source
-        else ""
-      );
+    else value.text;
 
   composeContent = values: let
     present = builtins.filter hasContent values;
@@ -176,12 +171,7 @@ in {
     if present == []
     then null
     else if builtins.length present == 1
-    then let
-      value = builtins.head present;
-    in
-      if contentUsesSource value
-      then {inherit (value) source;}
-      else {inherit (value) text;}
+    then builtins.head present
     else let
       bodies = map (value: value.text) present;
     in

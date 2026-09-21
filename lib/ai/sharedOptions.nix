@@ -145,9 +145,11 @@ in {
       description = ''
         Cross-app context fanned out to Claude, Codex, Kiro, Kimchi, and the
         Copilot devenv backend; Copilot Home Manager intentionally degrades.
-        Set exactly one of `text` or `source`. Runtime-specific context appends
-        after this root content in the runtime's single always-on file; its
-        `filename` controls that native artifact.
+        When `text` and `source` are defined at different module priorities,
+        the higher-priority definition supplies the content whichever field it
+        targets; definitions at the same priority conflict. Runtime-specific
+        context appends after this root content in the runtime's single
+        always-on file; its `filename` controls that native artifact.
       '';
       example = lib.literalExpression ''{ source = ./ai-context.md; }'';
     };
@@ -184,9 +186,11 @@ in {
         to its single AGENTS.md, translating `matcher` to a prose scope note.
         Kimchi has no rules pool, so root rules silently degrade for it.
         Per-app entries replace root entries at the same key; null suppresses
-        an inherited rule for that runtime. Set exactly one of `text` or
-        `source` for each non-null rule. Kiro's native `inclusion` override
-        exists only on `ai.kiro.rules`.
+        an inherited rule for that runtime. For each non-null rule, `text` and
+        `source` definitions at different module priorities resolve to the
+        higher-priority definition whichever field it targets; definitions at
+        the same priority conflict. Kiro's native `inclusion` override exists
+        only on `ai.kiro.rules`.
       '';
       example = lib.literalExpression ''
         {

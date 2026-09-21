@@ -215,9 +215,10 @@ in {
         description = ''
           Final static files owned by ${appRecord.name}, keyed by a path relative
           to the active backend root (HOME for Home Manager, project root for
-          devenv). Set exactly one of `text` or `source`; `null` suppresses a
-          generated default. Generated entries use whole-file `mkDefault`
-          priority, so an ordinary consumer entry replaces the complete file.
+          devenv). Each non-null entry carries inline `text` or a store-backed
+          `source`; `null` suppresses a generated default. Generated entries use
+          whole-file `mkDefault` priority, so an ordinary consumer entry replaces
+          the complete file.
         '';
       };
       package = lib.mkOption {
@@ -281,8 +282,10 @@ in {
           appRecord.contextDescription or ''
             ${appRecord.name}-specific context appended after `ai.context` in
             the runtime's single always-on `${appRecord.contextFilename}` file.
-            Set exactly one of `text` or `source`; `filename` controls the native
-            artifact name.
+            When `text` and `source` are defined at different module priorities,
+            the higher-priority definition supplies the content whichever field
+            it targets; definitions at the same priority conflict. `filename`
+            controls the native artifact name.
           '';
       };
     }

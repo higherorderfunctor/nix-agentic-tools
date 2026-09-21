@@ -27,6 +27,22 @@
     };
   evaluate = evaluateWith (aiTypes.optionalTextSource {description = "entry prose";});
 
+  forcedSource = evaluate [
+    {
+      entries.example = {
+        source = lib.mkForce source;
+        text = "consumer prose";
+      };
+    }
+  ];
+  defaultText = evaluate [
+    {
+      entries.example = {
+        inherit source;
+        text = lib.mkDefault "default prose";
+      };
+    }
+  ];
   packageSource = evaluate [
     {entries.example.source = lib.mkDefault source;}
   ];
@@ -72,7 +88,9 @@
   unset = evaluate [{entries.example = {};}];
 
   contract =
-    if packageSource.config.entries.example.text != "packaged prose\n"
+    if forcedSource.config.entries.example.text != "packaged prose\n"
+    then throw "lib.ai.types: forced source did not override ordinary text"
+    else if packageSource.config.entries.example.text != "packaged prose\n"
     then throw "lib.ai.types: package source did not derive text"
     else if packageSource.config.entries.example.enable
     then throw "lib.ai.types: package source changed enableDefault false"
@@ -80,6 +98,8 @@
     then throw "lib.ai.types: package source changed enableDefault true"
     else if consumerText.config.entries.example.text != "consumer prose"
     then throw "lib.ai.types: consumer text did not override package source"
+    else if defaultText.config.entries.example.text != "packaged prose\n"
+    then throw "lib.ai.types: ordinary source did not override default text"
     else if !consumerText.config.entries.example.enable
     then throw "lib.ai.types: consumer override did not auto-enable entry"
     else if consumerSourceNull.config.entries.example.text != ""

@@ -295,15 +295,16 @@ enabled ecosystem whose native model preserves the option's semantics):
   trigger records remain native-only.
 - `ai.context` — a typed `text`/`source` global baseline. Each runtime has the
   same content record plus `filename`; root content precedes runtime content
-  when both are present. Module priority selects the effective content, so a
-  consumer's `text` can override a package's default `source`; setting both at
-  one priority fails. Claude defaults to `CLAUDE.md`; Codex, Kiro, and Kimchi
-  default to `AGENTS.md`; Copilot defaults to `copilot-instructions.md`. Copilot
-  emits normalized context only on devenv because its live surface is the
-  repository consumed by github.com, not copilot-cli's user home. The transform
-  derives structural `hasMergedContext` metadata before composition, so a
-  final-file replacement or tombstone does not read discarded source-backed
-  root/runtime context.
+  when both are present. The strictly higher-priority definition supplies the
+  effective content whichever field it targets, so a consumer `text` can
+  override a package-default `source` and a forced `source` can override
+  ordinary `text`; setting both at one priority fails. Claude defaults to
+  `CLAUDE.md`; Codex, Kiro, and Kimchi default to `AGENTS.md`; Copilot defaults
+  to `copilot-instructions.md`. Copilot emits normalized context only on devenv
+  because its live surface is the repository consumed by github.com, not
+  copilot-cli's user home. The transform derives structural `hasMergedContext`
+  metadata before composition, so a final-file replacement or tombstone does not
+  read discarded source-backed root/runtime context.
 - `ai.rules` — named Markdown rules. Codex appends these alphabetically to its
   AGENTS.md after context with trace comments. `matcher = null` means always-on;
   non-empty glob lists lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot
@@ -409,10 +410,11 @@ file into the user-global `${configDir}` and devenv writing the project-local
 Every runtime declares `ai.<runtime>.files`; there is deliberately no root
 `ai.files`. Keys are non-empty normalized relative paths interpreted against the
 backend root (HOME for Home Manager, project root for devenv). Each non-null
-entry sets exactly one of `text` or `source`, plus optional `executable` intent.
-Generators contribute whole entries with `mkDefault`; an ordinary consumer entry
-replaces the complete generated file, and null suppresses it. Divergent
-same-priority definitions fail rather than field-merging or concatenating.
+entry carries inline `text` or a store-backed `source`, plus optional
+`executable` intent. Generators contribute whole entries with `mkDefault`; an
+ordinary consumer entry replaces the complete generated file, and null
+suppresses it. Divergent same-priority definitions fail rather than
+field-merging or concatenating.
 
 The graph is one-way: normalized pools compose, runtime routing chooses a
 target, the target renderer emits final bytes into `ai.<runtime>.files`, and the

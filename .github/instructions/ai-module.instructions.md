@@ -302,15 +302,16 @@ enabled ecosystem whose native model preserves the option's semantics):
   trigger records remain native-only.
 - `ai.context` — a typed `text`/`source` global baseline. Each runtime has the
   same content record plus `filename`; root content precedes runtime content
-  when both are present. Module priority selects the effective content, so a
-  consumer's `text` can override a package's default `source`; setting both at
-  one priority fails. Claude defaults to `CLAUDE.md`; Codex, Kiro, and Kimchi
-  default to `AGENTS.md`; Copilot defaults to `copilot-instructions.md`. Copilot
-  emits normalized context only on devenv because its live surface is the
-  repository consumed by github.com, not copilot-cli's user home. The transform
-  derives structural `hasMergedContext` metadata before composition, so a
-  final-file replacement or tombstone does not read discarded source-backed
-  root/runtime context.
+  when both are present. The strictly higher-priority definition supplies the
+  effective content whichever field it targets, so a consumer `text` can
+  override a package-default `source` and a forced `source` can override
+  ordinary `text`; setting both at one priority fails. Claude defaults to
+  `CLAUDE.md`; Codex, Kiro, and Kimchi default to `AGENTS.md`; Copilot defaults
+  to `copilot-instructions.md`. Copilot emits normalized context only on devenv
+  because its live surface is the repository consumed by github.com, not
+  copilot-cli's user home. The transform derives structural `hasMergedContext`
+  metadata before composition, so a final-file replacement or tombstone does not
+  read discarded source-backed root/runtime context.
 - `ai.rules` — named Markdown rules. Codex appends these alphabetically to its
   AGENTS.md after context with trace comments. `matcher = null` means always-on;
   non-empty glob lists lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot
@@ -416,10 +417,11 @@ file into the user-global `${configDir}` and devenv writing the project-local
 Every runtime declares `ai.<runtime>.files`; there is deliberately no root
 `ai.files`. Keys are non-empty normalized relative paths interpreted against the
 backend root (HOME for Home Manager, project root for devenv). Each non-null
-entry sets exactly one of `text` or `source`, plus optional `executable` intent.
-Generators contribute whole entries with `mkDefault`; an ordinary consumer entry
-replaces the complete generated file, and null suppresses it. Divergent
-same-priority definitions fail rather than field-merging or concatenating.
+entry carries inline `text` or a store-backed `source`, plus optional
+`executable` intent. Generators contribute whole entries with `mkDefault`; an
+ordinary consumer entry replaces the complete generated file, and null
+suppresses it. Divergent same-priority definitions fail rather than
+field-merging or concatenating.
 
 The graph is one-way: normalized pools compose, runtime routing chooses a
 target, the target renderer emits final bytes into `ai.<runtime>.files`, and the
@@ -772,9 +774,12 @@ recursive defaults only on fields below a `nullOr` entry boundary: Nix must
 choose the null or record branch before those leaf priorities can arbitrate, and
 reports the option as both null and non-null instead of honoring the tombstone.
 
-Semble's generated CLI rule is the deliberate exception: it defaults the rule
-fields so a consumer's inline text can override the packaged source while the
-source remains visible. Its runtime `instructions.cli` feature flag is the
+Within the shared text-source type, `text` and `source` arbitrate as one pair: a
+strictly higher-priority definition wins whichever field it targets, while
+same-priority definitions of both fields fail. Semble's generated CLI rule is
+the deliberate package pattern that relies on this contract: it defaults the
+rule fields so a consumer's inline text can override the packaged source while
+the source remains visible. Its runtime `instructions.cli` feature flag is the
 retraction mechanism; do not use a null tombstone for that generated rule.
 
 Always-on process defaults such as the sandbox-safe SSH command still use the
@@ -1036,11 +1041,12 @@ path types".
   an attrset-entry collision; only the exact portable Claude/Codex event
   vocabulary is accepted at L2.
 - **Context content concatenates.** `ai.context` and `ai.<cli>.context` are
-  typed `text`/`source` records, not pool entries. Different priorities
-  arbitrate the effective text; one priority setting both fields fails. Their
-  content composes root-first into the runtime's `context.filename`. A
-  structural `hasMergedContext` bit gates the generated default without reading
-  composed sources; rendered bytes remain lazy until that default survives B7.
+  typed `text`/`source` records, not pool entries. The strictly higher-priority
+  definition supplies the effective content whichever field it targets; one
+  priority setting both fields fails. Their content composes root-first into the
+  runtime's `context.filename`. A structural `hasMergedContext` bit gates the
+  generated default without reading composed sources; rendered bytes remain lazy
+  until that default survives B7.
 - **Rule matchers lower only before L4.** `matcher = null` is always-on; a
   non-empty glob list becomes native routing metadata where one exists and
   explicit prose for flat AGENTS.md consumers. In the shared devenv AGENTS.md,
