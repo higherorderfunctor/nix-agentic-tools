@@ -134,6 +134,16 @@
         runtimes)
       runtimes)
     "delegate-sizing rendered skills must not contain another runtime's native delegate tools"; true;
+    settingsDefaultsChecked = assert lib.assertMsg
+    (lib.all
+      (runtime:
+        lib.all
+        (setting:
+          result.config.ai.${runtime}.programs.delegate-sizing.settings.${setting}.enable
+          == !(runtime == "kiro" && setting == "checkUsage"))
+        (builtins.attrNames presets.${runtime}))
+      runtimes)
+    "delegate-sizing-${name}: settings blocks must default enabled except kiro.checkUsage"; true;
     noEntries = evaluate scenario;
     shippedPresets = noEntries.config.ai.programs.delegate-sizing.whenToDelegate;
     shippedPresetNames = builtins.attrNames shippedPresets;
@@ -160,6 +170,9 @@
         (builtins.attrValues (shippedPresetFieldDefinitions preset)))
       shippedPresetNames)
     "delegate-sizing-${name}: every field defined by package whenToDelegate presets must use lib.mkDefault"; true;
+    shippedPresetsDisabledChecked = assert lib.assertMsg
+    (lib.all (preset: !shippedPresets.${preset}.enable) shippedPresetNames)
+    "delegate-sizing-${name}: package whenToDelegate presets must remain disabled until consumer content overrides them"; true;
     enabledShippedPresets = lib.genAttrs shippedPresetNames (preset:
       evaluate (lib.recursiveUpdate scenario {
         ai.programs.delegate-sizing.whenToDelegate.${preset}.enable = true;
@@ -168,6 +181,11 @@
       ai.programs.delegate-sizing.whenToDelegate.Consumer = {
         text = "Delegate when the task is independently verifiable.";
       };
+    });
+    overriddenShippedPresetName = builtins.head shippedPresetNames;
+    overriddenShippedPresetText = "Consumer replacement guidance.";
+    overriddenShippedPreset = evaluate (lib.recursiveUpdate scenario {
+      ai.programs.delegate-sizing.whenToDelegate.${overriddenShippedPresetName}.text = overriddenShippedPresetText;
     });
     disabledPreset = evaluate (lib.recursiveUpdate scenario {
       ai.programs.delegate-sizing.whenToDelegate.Preset = {
@@ -181,16 +199,6 @@
         text = lib.mkDefault "Delegate a preset task.";
       };
     });
-    collision = evaluate (lib.recursiveUpdate scenario {
-      ai.programs.delegate-sizing.whenToDelegate.Collision = {
-        enable = lib.mkDefault false;
-        text = lib.mkMerge [
-          (lib.mkDefault "Package guidance.")
-          "Consumer guidance."
-        ];
-      };
-    });
-    collisionWarning = "ai.programs.delegate-sizing.whenToDelegate.Collision collides with a package preset that defaults to off; choose a different name or set enable = true.";
     explicitlyDisabled = evaluate (lib.recursiveUpdate scenario {
       ai.programs.delegate-sizing.whenToDelegate.Intentional = {
         enable = lib.mkMerge [(lib.mkDefault false) false];
@@ -220,13 +228,9 @@
     };
     presetConstructorContract = let
       defaultPriority = (lib.mkDefault null).priority;
-      enableDefaultChecked = assert lib.assertMsg
-      (
-        builtins.isAttrs sourcePreset.enable
-        && sourcePreset.enable.priority == defaultPriority
-        && presetEvaluation.config.entries.Source.enable == false
-      )
-      "delegate-sizing mkPreset enable must use mkDefault priority and resolve to false"; true;
+      entriesDisabledChecked = assert lib.assertMsg
+      (!presetEvaluation.config.entries.Source.enable && !presetEvaluation.config.entries.Text.enable)
+      "delegate-sizing mkPreset content must not auto-enable preset entries"; true;
       neitherFailed = !(builtins.tryEval (packageWhenToDelegateOptions.mkPreset {})).success;
       sourceDefaultChecked = assert lib.assertMsg
       (
@@ -250,7 +254,7 @@
           text = "Conflicting preset task.";
         })).success;
     in
-      enableDefaultChecked
+      entriesDisabledChecked
       && sourceDefaultChecked
       && textDefaultChecked
       && bothFailed
@@ -284,15 +288,6 @@
     renamedWarnings = testWhenToDelegateOptions.warnings renamedEntries;
     ruleText = value: value.config.ai.claude.rules.delegate-sizing-router.text;
     whenToDelegateWarnings = value: packageWhenToDelegateOptions.warnings value.config.ai.programs.delegate-sizing.whenToDelegate;
-    collisionWarnings = evaluateWarnings (lib.recursiveUpdate scenario {
-      ai.programs.delegate-sizing.whenToDelegate.Collision = {
-        enable = lib.mkDefault false;
-        text = lib.mkMerge [
-          (lib.mkDefault "Package guidance.")
-          "Consumer guidance."
-        ];
-      };
-    });
     warningDeliveryContract = label: evaluation: warning:
       if evaluation.options ? warnings
       then
@@ -310,20 +305,16 @@
         then true
         else throw "delegate-sizing-${name}: ${label} warning did not use the lib.warn fallback";
     protectionContract =
-      if builtins.length (whenToDelegateWarnings collision) != 1
-      then throw "delegate-sizing-${name}: collision did not produce exactly one warning"
-      else if builtins.head (whenToDelegateWarnings collision) != collisionWarning
-      then throw "delegate-sizing-${name}: collision warning text changed"
-      else if whenToDelegateWarnings explicitlyDisabled != []
+      if whenToDelegateWarnings explicitlyDisabled != []
       then throw "delegate-sizing-${name}: explicitly disabled consumer entry unexpectedly warned"
+      else if lib.hasInfix "### Intentional" (ruleText explicitlyDisabled)
+      then throw "delegate-sizing-${name}: explicitly disabled consumer entry rendered"
       else if !(lib.hasInfix "### New guidance\n\nRenamed consumer guidance." renamedRuleText)
       then throw "delegate-sizing-${name}: renamed entry did not render under the new key"
       else if lib.hasInfix "### Old guidance" renamedRuleText
       then throw "delegate-sizing-${name}: renamed entry still rendered under the old key"
       else if renamedWarnings != ["ai.programs.delegate-sizing.whenToDelegate.Old guidance has been renamed to ai.programs.delegate-sizing.whenToDelegate.New guidance; update the attribute name."]
       then throw "delegate-sizing-${name}: rename did not produce exactly one warning"
-      else if !(warningDeliveryContract "collision" collisionWarnings collisionWarning)
-      then false
       else if !(warningDeliveryContract "rename" packageRenamed packageRenameWarning)
       then false
       else true;
@@ -344,8 +335,10 @@
       && !(lib.hasInfix "via `" kiro)
       && catalogIntersectionChecked
       && nativeDelegateToolsChecked
+      && settingsDefaultsChecked
       && lib.hasInfix "/bin/claude-usage`" claude
       && lib.hasInfix "/bin/codex-usage`" codex
+      && !(lib.hasInfix "#### kiro usage" kiro)
     );
     "module-delegate-sizing-${name}-external-enable" = mkTest "delegate-sizing-${name}-external-enable" (
       !(builtins.tryEval invalidChecked).success
@@ -387,7 +380,9 @@
       && !(result.config.ai.skills ? delegate-sizing)
       && !(result.config.ai.rules ? delegate-sizing-router)
     );
-    "module-delegate-sizing-${name}-preset-priorities" = mkTest "delegate-sizing-${name}-preset-priorities" shippedPresetPrioritiesChecked;
+    "module-delegate-sizing-${name}-preset-priorities" = mkTest "delegate-sizing-${name}-preset-priorities" (
+      shippedPresetsDisabledChecked && shippedPresetPrioritiesChecked
+    );
     "module-delegate-sizing-${name}-stub" = mkTest "delegate-sizing-${name}-stub" (
       builtins.length (lib.splitString "\n" (lib.removeSuffix "\n" stub))
       <= 10
@@ -407,6 +402,8 @@
       ruleText noEntries
       == builtins.readFile ../fragments/skill-routing.md
       && lib.hasInfix "### Consumer\n\nDelegate when the task is independently verifiable." (ruleText consumerEntry)
+      && lib.hasInfix "### ${overriddenShippedPresetName}\n\n${overriddenShippedPresetText}" (ruleText overriddenShippedPreset)
+      && !(lib.hasInfix (lib.removeSuffix "\n" (builtins.readFile shippedPresets.${overriddenShippedPresetName}.source)) (ruleText overriddenShippedPreset))
       && !(lib.hasInfix "### Preset" (ruleText disabledPreset))
       && lib.hasInfix "### Preset\n\nDelegate a preset task." (ruleText enabledPreset)
       && lib.all

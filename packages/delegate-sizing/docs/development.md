@@ -1,7 +1,7 @@
 # Delegate sizing package
 
-> **Last verified:** 2026-09-20 — the always-on stub is one sentence under its
-> own heading; the six rules live only in the generated skills.
+> **Last verified:** 2026-09-21 — shared text/source types auto-enable consumer
+> content while package presets remain dormant.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,
@@ -21,27 +21,28 @@ Runtime-only options extend the factory's program override submodule; external
 pools and instruction overrides cannot be set at `ai.programs.delegate-sizing`.
 The portable `whenToDelegate` attribute set is the exception: each entry adds
 always-on guidance under a heading taken from its attribute name. Entries use
-the shared text/source option contract and default to enabled so consumer text
-renders without a separate toggle. Packages must declare presets with
-`lib/when-to-delegate.nix`'s `mkPreset`, passing exactly one independent
-`source` path or `text` value. The constructor applies `mkDefault` to both the
-content and `enable = false`, keeping the preset dormant until a consumer
-explicitly enables it. Consumer entries must NOT use `mkPreset`: their fields
-must remain at normal priority so preset collisions can be detected. Consumer
-content that accidentally reuses a dormant preset name produces a warning; an
-explicit `enable = false` does not. Attribute-key renames live in
-`lib/when-to-delegate-renames.nix`; old-key definitions merge into the new key
-and warn until consumers update their configuration.
+`lib.ai.types.optionalTextSource`; consumer `text` or `source` automatically
+enables an entry, while an explicit `enable = false` still wins. Packages must
+declare presets with `lib/when-to-delegate.nix`'s `mkPreset`, passing exactly
+one independent `source` path or `text` value. The constructor applies
+`mkDefault` to the content so the preset stays dormant and consumer content can
+replace it. A consumer definition on a preset key replaces its content and
+enables it, just like a brand-new key. Consumer entries must NOT use `mkPreset`:
+normal-priority content is what triggers auto-enable. Attribute-key renames live
+in `lib/when-to-delegate-renames.nix`; old-key definitions merge into the new
+key and warn until consumers update their configuration.
 
-Instruction presets live in `lib/presets.nix`. The source runtime's settings
-control its external launch even when its skill is disabled: an enabled Codex
-CLI may still serve Claude delegates without installing its own sizing skill.
-`settings.<block>.enable = false` omits an instruction block; it does not remove
-models from the table. Set `text` directly or use `source` to replace a block's
-package preset. The consumer supplies the omitted instructions when needed.
-Kiro's default external launch is manual-only and pins Luna for fixture probes.
-Before adding Kiro to `extraRuntimes`, override its `settings.launch.text` or
-`.source` with instructions that apply the selected model and effort.
+Instruction presets live in `lib/presets.nix` and use
+`lib.ai.types.optionalTextSource` with `enableDefault = true`. The source
+runtime's settings control its external launch even when its skill is disabled:
+an enabled Codex CLI may still serve Claude delegates without installing its own
+sizing skill. `settings.<block>.enable = false` omits an instruction block; it
+does not remove models from the table. Set `text` directly or use `source` to
+replace a block's package preset. The consumer supplies the omitted instructions
+when needed. Kiro's default external launch is manual-only and pins Luna for
+fixture probes. Before adding Kiro to `extraRuntimes`, override its
+`settings.launch.text` or `.source` with instructions that apply the selected
+model and effort.
 
 Usage helpers are packaged applications with their own runtime closures. The
 Claude helper carries `curl` and `jq`; the Codex helper carries GNU `timeout`,
