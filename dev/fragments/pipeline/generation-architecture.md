@@ -1,9 +1,7 @@
 ## Generation Architecture
 
-> **Last verified:** 2026-09-20 — the root instruction composition includes the
-> delegate-sizing stub alongside the published coding and workflow rules. The
-> Codex named-profile materializer cited below was removed as unreachable dead
-> code.
+> **Last verified:** 2026-09-21 — model package descriptions join the
+> owner-provided README tables.
 
 Content is generated via Nix derivations wrapped in devenv tasks, organized by
 scope:
@@ -26,7 +24,9 @@ are a no-op.
   document generation. Workspace categories come from
   `config/fragment-categories.nix`; package categories and descriptions come
   from owner `registry.nix` files. Options live in `lib/fragments-registry.nix`
-  and `lib/documentation.nix`.
+  and `lib/documentation.nix`. Model package rows use
+  `documentation.modelDescriptions`; this documentation metadata does not create
+  an `ai.models` configuration surface.
 - `dev/fragments/` — dev-only instruction fragments. Composed into instruction
   files and CLAUDE.md.
 - `dev/generate.nix` — shared fragment composition logic consumed by both devenv

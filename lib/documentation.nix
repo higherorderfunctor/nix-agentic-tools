@@ -6,6 +6,7 @@
       "devToolDescriptions"
       "genericDescriptions"
       "gitToolDescriptions"
+      "modelDescriptions"
       "skillDescriptions"
     ] (_:
       mkOption {

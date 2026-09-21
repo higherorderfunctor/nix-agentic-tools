@@ -287,14 +287,13 @@
 
   # Descriptions are authored alongside their packages.
   data = registry.config.documentation;
-  inherit (data) aiCliDescriptions devToolDescriptions genericDescriptions gitToolDescriptions mcpServerMeta skillDescriptions;
+  inherit (data) aiCliDescriptions devToolDescriptions genericDescriptions gitToolDescriptions mcpServerMeta modelDescriptions skillDescriptions;
   mcpServerCount = builtins.length (builtins.attrNames mcpServerMeta);
 
   # ── Table generators ─────────────────────────────────────────────────
-  # Four of the README package tables are the same two-column
+  # The README package tables share the same two-column
   # `| `name` | description |` shape over a name → description attrset,
-  # name-sorted. One generator serves all four so a fifth package group
-  # is a one-line call rather than a fourth copy of the same three lines.
+  # name-sorted. One generator serves every such package group.
   # The MCP-server table (extra Credentials column) and the skill table
   # (`/name` in the first cell) have their own shapes below.
   mkDescriptionRows = descriptions:
@@ -306,6 +305,7 @@
   devToolRows = mkDescriptionRows devToolDescriptions;
   genericRows = mkDescriptionRows genericDescriptions;
   gitToolRows = mkDescriptionRows gitToolDescriptions;
+  modelRows = mkDescriptionRows modelDescriptions;
 
   mcpServerNames = lib.sort lib.lessThan (builtins.attrNames mcpServerMeta);
   mcpServerRows = lib.concatMapStringsSep "\n" (name: let
@@ -547,6 +547,28 @@
     </details>
 
     <details>
+    <summary><strong>Model Weights</strong></summary>
+
+    Publisher-owned model artifacts are exposed as `pkgs.models.*`, with their
+    licence and attribution. Weights are symlinked into each package so the store
+    keeps one copy; the binary cache carries the full artifact in its closure.
+
+    <!-- prettier-ignore -->
+    | Package | Description |
+    |---------|-------------|
+    ${modelRows}
+
+    ```bash
+    nix build '.#"qwen3-embedding-0.6b-q8_0"'
+    ```
+
+    Use `''${model}/''${model.modelFile}` for the installed artifact.
+    Model selection through an `ai.models` option is deferred until a consumer
+    needs configuration-time selection. See [Qwen model updates](packages/qwen/README.md).
+
+    </details>
+
+    <details>
     <summary><strong>AI CLIs</strong></summary>
 
     <!-- prettier-ignore -->
@@ -576,6 +598,7 @@
     <!-- prettier-ignore -->
     | Feature | Without Nix | Home-Manager | DevEnv |
     |---------|-------------|--------------|--------|
+    | Model weights | Download weights and licence | `pkgs.models.*` via overlay | Same overlay packages |
     | Delegate sizing | Copy a generated runtime skill | `ai.programs.delegate-sizing.enable` (Claude + Codex + Kiro) | Same; project-native paths |
     | Stacked workflow skills | Copy skills/ | `ai.programs.stacked-workflows.enable` | `ai.programs.stacked-workflows.enable` |
     | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |

@@ -15,7 +15,7 @@ def discover(lock, targets, requested=""):
         raise ValueError("input and package update branch names collide")
     rows = [{"kind": "input", "name": name} for name in sorted(inputs)]
     rows += [{"kind": "package", "name": name, **config} for name, config in sorted(targets.items())]
-    if any(not re.fullmatch(r"[a-zA-Z0-9_-]+", row["name"]) for row in rows):
+    if any(not re.fullmatch(r"[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*", row["name"]) for row in rows):
         raise ValueError("unexpected update target name")
     if requested:
         names = requested.split(",")

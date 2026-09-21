@@ -23,7 +23,7 @@ EXCLUDED = {
 def partition(names, index, count):
     if not isinstance(names, list) or not names or len(names) != len(set(names)):
         raise ValueError("package enumeration must be a nonempty unique list")
-    if any(not re.fullmatch(r"[a-zA-Z0-9_+-]+", name) for name in names):
+    if any(not re.fullmatch(r"[a-zA-Z0-9_+-]+(?:\.[a-zA-Z0-9_+-]+)*", name) for name in names):
         raise ValueError("unexpected package attribute name")
     if not 0 <= index < count:
         raise ValueError("invalid shard index/count")
@@ -51,7 +51,10 @@ def validate_result_coverage(packages, results):
     evaluations = [row for row in results if row.get("type") == "EVAL"]
     if any(not isinstance(row.get("attr"), str) or not isinstance(row.get("success"), bool) or row.get("skipped") for row in evaluations):
         raise ValueError("malformed nix-fast-build evaluation result")
-    names = [row["attr"] for row in evaluations]
+    # nix-eval-jobs renders Nix attribute paths: a dotted flat name arrives
+    # quoted as one component. Enumeration returns the original name. Decode
+    # that component before comparison; nested paths must still be rejected.
+    names = [json.loads(row["attr"]) if row["attr"].startswith('"') else row["attr"] for row in evaluations]
     if sorted(names) != sorted(packages):
         raise ValueError("evaluated package set differs from the expected package set")
 

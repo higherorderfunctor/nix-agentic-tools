@@ -346,20 +346,20 @@ changes mechanism away from the universal-node layout we forked against.
 
 <!-- Fragment: dev/fragments/overlays/overlay-pattern.md -->
 
-## Overlay Grouping under `pkgs.ai`
+## Native package overlays
 
-> **Last verified:** 2026-09-19 — Kiro refreshes its public model snapshot
-> outside the binary version check; pinned build identity and consumer guards
-> are preserved.
+> **Last verified:** 2026-09-21 — publisher-owned model artifacts use the native
+> `pkgs.models` namespace and shared `fetchModel` helper.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
 `lib/facets/repository.nix` discovers native package trees below
 `packages/<owner>/packages/` and exposes them through `overlays.default`. AI
 CLIs live directly below `pkgs.ai`; supporting categories are `devTools`,
-`generic`, `gitTools`, `lspServers`, and `mcpServers`. Content packages keep
-their existing top-level names. Flat flake outputs come from leaf basenames with
-collision validation; adding a recipe requires no root import entry.
+`generic`, `gitTools`, `lspServers`, and `mcpServers`. Model artifacts live
+below `pkgs.models`. Content packages keep their existing top-level names. Flat
+flake outputs come from leaf basenames with collision validation; adding a
+recipe requires no root import entry.
 
 The outer directory is ownership; the inner tree is the public namespace.
 `generic` remains a temporary category for supporting packages awaiting a
@@ -372,6 +372,15 @@ registrations with the owner. `registry.nix` declares update/cache/doc entries;
 `repoPath ./relative/path` derives mutable paths from their actual location. The
 shared composer owns consumer unfree policy. See the package-ownership fragment
 for the native composition boundaries.
+
+Model recipes call `packageLib.fetchModel` from `lib/packaging.nix`. The helper
+requires licence metadata, a licence file, and attribution because the fetched
+weights alone can omit redistribution notices. It exposes the fetched path,
+installed filename, hex digest, and format through passthru; consumers must use
+those properties rather than repeat filenames or convert the digest
+independently. The format is metadata and does not select an installer. Model
+ownership follows the publisher, independent of hosting mirrors; no `ai.models`
+option or configuration registry is implied.
 
 ### Absorption is about CADENCE. Never re-open it on a version comparison
 

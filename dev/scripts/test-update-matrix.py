@@ -43,6 +43,15 @@ class MatrixTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             matrix.discover(lock, {"nixpkgs": {}})
 
+    def test_dotted_package_name_is_one_target(self):
+        lock = {"root": "root", "nodes": {"root": {"inputs": {}}}}
+        name = "qwen3-embedding-0.6b-q8_0"
+        targets = {name: {"flags": ["--use-update-script"], "git": None}}
+        self.assertEqual(matrix.discover(lock, targets, name)["include"][0]["name"], name)
+        for invalid in ("../model", "model..weights", ".model"):
+            with self.assertRaises(ValueError):
+                matrix.discover(lock, {invalid: {}})
+
     def test_reports_require_normal_target_completion(self):
         for report, status in (
             ("UPDATED: demo | 1 -> 2", "UPDATED"),
@@ -937,7 +946,7 @@ if args[:1] == ['eval']:
     if 'builtins.currentSystem' in joined: print('x86_64-linux')
     elif 'builtins.attrNames' in joined:
         print(json.dumps(['alpha', 'beta'] if mode == 'input-partial' else ['oxlint'] if mode.startswith('input-') else ['demo']))
-    elif 'updateTargets.demo.file' in joined: print('packages/demo/package.nix')
+    elif 'updateTargets."demo".file' in joined: print('packages/demo/package.nix')
     elif 'formatter.x86_64-linux.outPath' in joined: print('/fixture/formatter')
     elif 'generate-devenv-yaml.nix' in joined: print('inputs: {}')
     raise SystemExit(0)
@@ -1048,6 +1057,22 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
         report = (self.repo / ".update-report.txt").read_text()
         self.assertIn("UPDATED: demo", report)
         self.assertIn("build verification failed, PR opens red", result.stdout)
+
+    def test_dotted_package_name_is_quoted_for_nix(self):
+        name = "qwen3-embedding-0.6b-q8_0"
+        result = subprocess.run(
+            ["bash", str(SCRIPTS / "update-pkg.sh"), name, "--use-update-script"],
+            cwd=self.repo,
+            env=dict(self.env, NIX_MODE="package-red"),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = list(map(json.loads, (self.root / "nix-calls").read_text().splitlines()))
+        updater = next(call for call in calls if call[:1] == ["run"])
+        self.assertEqual(updater[updater.index("--flake") + 1], json.dumps(name))
+        build = next(call for call in calls if call[:1] == ["build"])
+        self.assertEqual(build[1], ".#" + json.dumps(name))
 
     def test_default_four_jobs_on_eight_gib_starts_the_verifier(self):
         command = 'source "$1"; verify_all_packages'

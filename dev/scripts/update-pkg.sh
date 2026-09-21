@@ -9,6 +9,9 @@ source "$(dirname "$0")/update-common.sh"
 
 name="$1"
 shift
+# Registry keys are flat package names, even when a model version contains a
+# dot. Quote one Nix attribute component before passing it to Nix/nix-update.
+attribute=$(printf '%s' "$name" | jq -Rs .)
 
 # Parse args: flags are everything except a trailing .git URL
 git_url=""
@@ -52,7 +55,7 @@ if [ -n "$git_url" ]; then
     # to resolve_recipe_file's output, so the two paths agree.
     # cwd is still the main tree here (before the Phase 1 subshell `cd`), so
     # `.#updateTargets` resolves against the checked-out flake.
-    declared_file=$(nix eval --raw ".#updateTargets.${name}.file" 2>/dev/null || true)
+    declared_file=$(nix eval --raw ".#updateTargets.${attribute}.file" 2>/dev/null || true)
     if [ -n "$declared_file" ]; then
       target_file="$wt/$declared_file"
       log_info "Target from config.update.targets: $declared_file"
@@ -261,14 +264,14 @@ set +e
   # context-realization needs the drv registered. A single
   # `nix eval` on drvPath instantiates the derivation file without
   # building the output, which is enough to unblock nix-update.
-  nix eval --raw ".#$name.src.drvPath" >/dev/null 2>&1 || true
+  nix eval --raw ".#$attribute.src.drvPath" >/dev/null 2>&1 || true
 
   # `if !` rather than a bare pipeline plus a PIPESTATUS test: `pipefail`
   # already makes the pipeline's status nix-update's, and with errexit armed
   # a bare pipeline would abort before any status check ran, losing this
   # message.
   # shellcheck disable=SC2086
-  if ! nix run --inputs-from . nix-update -- --flake "$name" --system "$system" $extra_flags 2>&1 | tee "$version_file"; then
+  if ! nix run --inputs-from . nix-update -- --flake "$attribute" --system "$system" $extra_flags 2>&1 | tee "$version_file"; then
     # PIPESTATUS survives into this block — measured, including the real
     # exit code and which side failed:
     #   $ if ! bash -c 'exit 42' | tee /dev/null; then echo "${PIPESTATUS[*]}"; fi
@@ -362,7 +365,7 @@ set +e
   # Local Ninja retains its informational build and all resource safeguards.
   if [ "${NAT_UPDATE_VERIFY_PACKAGES:-1}" = "0" ]; then
     log_info "Prepared update — native PR CI will verify the build"
-  elif ! run_build nix build ".#$name" --no-link --log-format bar-with-logs; then
+  elif ! run_build nix build ".#$attribute" --no-link --log-format bar-with-logs; then
     log_info "Build failed — opening the PR; branch CI is the gate"
     echo "::warning::${name}: build verification failed, PR opens red"
   fi

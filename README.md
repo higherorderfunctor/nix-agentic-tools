@@ -260,6 +260,28 @@ nix build .#dns-root-hints
 </details>
 
 <details>
+<summary><strong>Model Weights</strong></summary>
+
+Publisher-owned model artifacts are exposed as `pkgs.models.*`, with their
+licence and attribution. Weights are symlinked into each package so the store
+keeps one copy; the binary cache carries the full artifact in its closure.
+
+<!-- prettier-ignore -->
+| Package | Description |
+|---------|-------------|
+| `qwen3-embedding-0.6b-q8_0` | Qwen3-Embedding-0.6B Q8_0 GGUF embedding weights (about 610 MiB) |
+
+```bash
+nix build '.#"qwen3-embedding-0.6b-q8_0"'
+```
+
+Use `${model}/${model.modelFile}` for the installed artifact. Model selection
+through an `ai.models` option is deferred until a consumer needs
+configuration-time selection. See [Qwen model updates](packages/qwen/README.md).
+
+</details>
+
+<details>
 <summary><strong>AI CLIs</strong></summary>
 
 <!-- prettier-ignore -->
@@ -295,6 +317,7 @@ instruction building.
 <!-- prettier-ignore -->
 | Feature | Without Nix | Home-Manager | DevEnv |
 |---------|-------------|--------------|--------|
+| Model weights | Download weights and licence | `pkgs.models.*` via overlay | Same overlay packages |
 | Delegate sizing | Copy a generated runtime skill | `ai.programs.delegate-sizing.enable` (Claude + Codex + Kiro) | Same; project-native paths |
 | Stacked workflow skills | Copy skills/ | `ai.programs.stacked-workflows.enable` | `ai.programs.stacked-workflows.enable` |
 | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |

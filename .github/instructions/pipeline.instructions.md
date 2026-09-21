@@ -423,10 +423,8 @@ validation.
 
 ## Generation Architecture
 
-> **Last verified:** 2026-09-20 — the root instruction composition includes the
-> delegate-sizing stub alongside the published coding and workflow rules. The
-> Codex named-profile materializer cited below was removed as unreachable dead
-> code.
+> **Last verified:** 2026-09-21 — model package descriptions join the
+> owner-provided README tables.
 
 Content is generated via Nix derivations wrapped in devenv tasks, organized by
 scope:
@@ -449,7 +447,9 @@ are a no-op.
   document generation. Workspace categories come from
   `config/fragment-categories.nix`; package categories and descriptions come
   from owner `registry.nix` files. Options live in `lib/fragments-registry.nix`
-  and `lib/documentation.nix`.
+  and `lib/documentation.nix`. Model package rows use
+  `documentation.modelDescriptions`; this documentation metadata does not create
+  an `ai.models` configuration surface.
 - `dev/fragments/` — dev-only instruction fragments. Composed into instruction
   files and CLAUDE.md.
 - `dev/generate.nix` — shared fragment composition logic consumed by both devenv
@@ -502,8 +502,8 @@ aggregate but skips its dependency leaves.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-09-14 — verifier status precedence retains hash repair
-> when incomplete coverage accompanies a fixed-output mismatch.
+> **Last verified:** 2026-09-21 — flat model package names may contain dots; the
+> package worker quotes them as one Nix attribute component.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -554,6 +554,14 @@ depends on that initialization plus its explicit `dependsOn` predecessors. It
 does not depend on the separate nixpkgs or nix-update input targets: their
 branches never feed state into the package worktree, so those edges would only
 serialize independent work.
+
+The CI package and update validators accept single dots within package names,
+including model versions. Registry keys remain flat names; `update-pkg.sh`
+quotes the entire name as one Nix attribute for evaluations, builds, and
+nix-update. An unquoted name containing a dot would select a nested path
+instead. Conversely, nix-eval-jobs quotes dotted flat names in result receipts;
+the shared package coverage validator decodes that single component before
+comparing it with enumeration.
 
 Targets fall into three categories:
 

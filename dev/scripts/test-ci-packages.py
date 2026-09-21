@@ -3,6 +3,7 @@
 
 import copy
 import importlib.util
+import json
 import os
 import subprocess
 import tempfile
@@ -71,7 +72,7 @@ curl() {
 
 class CoverageTest(unittest.TestCase):
     def setUp(self):
-        self.names = ["alpha", "beta", "delta", "epsilon", "gamma", "new-package", "kiro-cli-workflows"]
+        self.names = ["alpha", "beta", "delta", "epsilon", "gamma", "new-package", "qwen3-embedding-0.6b-q8_0", "kiro-cli-workflows"]
         self.plans = [ci.partition(self.names, i, 5) for i in range(5)]
 
     def test_added_package_is_covered_and_patched_kiro_excluded(self):
@@ -79,6 +80,16 @@ class CoverageTest(unittest.TestCase):
         names = [n for p in self.plans for n in p["packages"]]
         self.assertEqual(names.count("new-package"), 1)
         self.assertNotIn("kiro-cli-workflows", names)
+        self.assertEqual(names.count("qwen3-embedding-0.6b-q8_0"), 1)
+
+    def test_quoted_flat_attribute_receipt_matches_enumeration(self):
+        name = "qwen3-embedding-0.6b-q8_0"
+        results = {"results": [{"type": "EVAL", "attr": json.dumps(name),
+                                "success": True, "cacheStatus": "local"}]}
+        ci.validate_result_coverage([name], results)
+        results["results"][0]["attr"] = '"qwen3-embedding-0"."6b-q8_0"'
+        with self.assertRaises(ValueError):
+            ci.validate_result_coverage([name], results)
 
     def test_missing_duplicate_or_different_source_shards_fail(self):
         changed = copy.deepcopy(self.plans)
