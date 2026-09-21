@@ -16,6 +16,7 @@
   lib,
   pkgs,
 }: let
+  aiCommon = import ../lib/ai/ai-common.nix {inherit lib;};
   fragments = import ../lib/fragments.nix {inherit lib;};
 
   # Owner metadata uses the same registry as the public flake assembly.
@@ -46,11 +47,11 @@
               default = false;
             };
             rules = lib.mkOption {
-              type = lib.types.attrsOf (lib.types.nullOr lib.types.anything);
+              type = lib.types.attrsOf (lib.types.nullOr aiCommon.ruleModule);
               default = {};
             };
             skills = lib.mkOption {
-              type = lib.types.attrsOf lib.types.anything;
+              type = lib.types.attrsOf (lib.types.nullOr lib.types.path);
               default = {};
             };
           });
