@@ -11,7 +11,7 @@ args @ {
   # no delegate primitive; Copilot's sizing controls are not established.
   supportedRuntimes = ["claude" "codex" "kiro"];
   inherit (pkgs.delegate-sizing-content) presets;
-  textSourceOptions = import ../../../lib/mkTextSourceOptions.nix {inherit lib;};
+  aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   enabled = runtime:
     config.ai.${runtime}.programs.delegate-sizing.enable
     or null;
@@ -47,13 +47,9 @@ args @ {
     };
     settings = lib.mapAttrs (name: preset:
       lib.mkOption {
-        type = lib.types.submodule {
-          imports = [(textSourceOptions.submodule "the ${runtime} ${name} instruction block")];
-          options.enable = lib.mkOption {
-            type = lib.types.bool;
-            default = true;
-            description = "Whether to include the ${runtime} ${name} instruction block.";
-          };
+        type = aiTypes.optionalTextSource {
+          description = "the ${runtime} ${name} instruction block";
+          enableDefault = true;
         };
         default = preset;
         description = "${runtime} ${name} instruction block. Set text or source to replace the package preset. launch is used when this runtime is an external delegate in another runtime's skill.";
@@ -127,14 +123,6 @@ in {
               config.ai.${runtime}.programs.delegate-sizing.manualExternalDelegates
               config.ai.${runtime}.programs.delegate-sizing.extraRuntimes))
           present
-          ++ lib.concatMap (runtime:
-            textSourceOptions.assertions
-            ["ai" runtime "programs" "delegate-sizing" "settings"]
-            settings.${runtime})
-          present
-          ++ whenToDelegateOptions.assertions
-          ["ai" "programs" "delegate-sizing" "whenToDelegate"]
-          whenToDelegate
         );
     }
     // lib.optionalAttrs (options ? warnings) {
