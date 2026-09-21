@@ -320,57 +320,38 @@ in {
     };
   };
 
-  # `evalSettings` DOES force `assertions` now (lib/mcp.nix:26-52) and throws
-  # on a failing one — but only for assertions a CALLER passed in `settings`.
-  # A server definition contributes `settingsOptions` and nothing else: the
-  # eval it builds has no `config` seam through which this file could produce
-  # an assertion, so a module-level `assertions` block here still reaches
-  # nothing. Building that seam is separate work.
-  # Until it exists, encode the instanceUrl ⊕ apiUrl mutex as an `if/throw`
-  # at the top — it fires every time `renderServer` evaluates the config.
-  #
-  # UNVERIFIED — REVISIT. `nix flake check` only exercises this with
-  # valid inputs (one side set, not both). The throw path is shipped
-  # but never confirmed to fire. Deferred: this pattern likely wants
-  # a more principled design (e.g. discriminated union so the
-  # invalid state can't be constructed, or an eval test in
-  # checks/mcp-server/factory-eval.nix) rather than a runtime throw. Revisit
-  # when the credential-naming normalization sweep happens — both
-  # are cross-MCP design questions, not gitlab-mcp-specific.
+  # Both inputs target GITLAB_API_URL; reject conflicts before rendering settings.
+  settingsModule = {config, ...}: {
+    config.assertions = [
+      {
+        assertion = config.instanceUrl == null || ((config.apiUrl.file or null) == null && (config.apiUrl.helper or null) == null);
+        message = "gitlab-mcp: settings.instanceUrl and settings.apiUrl.file/helper are mutually exclusive";
+      }
+    ];
+  };
+
   settingsToEnv = cfg: _mode: let
     s = cfg.settings;
-    instanceUrlSet = s.instanceUrl != null;
-    apiUrlCredSet =
-      (s.apiUrl.file or null)
-      != null
-      || (s.apiUrl.helper or null) != null;
   in
-    if instanceUrlSet && apiUrlCredSet
-    then
-      throw ''
-        gitlab-mcp: set either `settings.instanceUrl` (plain URL, in
-        Nix store) or `settings.apiUrl.file`/`helper` (kept out of
-        store) — not both.''
-    else
-      optionalAttrs (s.instanceUrl != null) {GITLAB_API_URL = s.instanceUrl;}
-      // optionalAttrs (s.caCertPath != null) {GITLAB_CA_CERT_PATH = s.caCertPath;}
-      // optionalAttrs (s.defaultProjectId != null) {GITLAB_PROJECT_ID = s.defaultProjectId;}
-      // optionalAttrs (s.allowedProjectIds != []) {
-        GITLAB_ALLOWED_PROJECT_IDS = concatStringsSep "," s.allowedProjectIds;
-      }
-      // optionalAttrs s.readOnly {GITLAB_READ_ONLY_MODE = "true";}
-      // optionalAttrs (s.toolsets != []) {
-        GITLAB_TOOLSETS = concatStringsSep "," s.toolsets;
-      }
-      // optionalAttrs (s.tools != []) {
-        GITLAB_TOOLS = concatStringsSep "," s.tools;
-      }
-      // optionalAttrs (s.deniedToolsRegex != null) {
-        GITLAB_DENIED_TOOLS_REGEX = s.deniedToolsRegex;
-      }
-      // optionalAttrs s.useWiki {USE_GITLAB_WIKI = "true";}
-      // optionalAttrs s.useMilestone {USE_MILESTONE = "true";}
-      // optionalAttrs s.usePipeline {USE_PIPELINE = "true";};
+    optionalAttrs (s.instanceUrl != null) {GITLAB_API_URL = s.instanceUrl;}
+    // optionalAttrs (s.caCertPath != null) {GITLAB_CA_CERT_PATH = s.caCertPath;}
+    // optionalAttrs (s.defaultProjectId != null) {GITLAB_PROJECT_ID = s.defaultProjectId;}
+    // optionalAttrs (s.allowedProjectIds != []) {
+      GITLAB_ALLOWED_PROJECT_IDS = concatStringsSep "," s.allowedProjectIds;
+    }
+    // optionalAttrs s.readOnly {GITLAB_READ_ONLY_MODE = "true";}
+    // optionalAttrs (s.toolsets != []) {
+      GITLAB_TOOLSETS = concatStringsSep "," s.toolsets;
+    }
+    // optionalAttrs (s.tools != []) {
+      GITLAB_TOOLS = concatStringsSep "," s.tools;
+    }
+    // optionalAttrs (s.deniedToolsRegex != null) {
+      GITLAB_DENIED_TOOLS_REGEX = s.deniedToolsRegex;
+    }
+    // optionalAttrs s.useWiki {USE_GITLAB_WIKI = "true";}
+    // optionalAttrs s.useMilestone {USE_MILESTONE = "true";}
+    // optionalAttrs s.usePipeline {USE_PIPELINE = "true";};
 
   # gitlab-mcp takes all configuration via env vars; no CLI args.
   settingsToArgs = _cfg: _mode: [];

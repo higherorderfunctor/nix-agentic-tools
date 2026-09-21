@@ -16,6 +16,9 @@
   # Resolve the per-package typed MCP server module. Each MCP package
   # under packages/<name>/ owns its typed settings schema at
   # packages/<name>/modules/mcp-server.nix.
+  # settingsOptions declares the public options; optional settingsModule is an
+  # ordinary Nix module for config defaults and config.assertions over settings.
+  # Assertion values merge with caller values; the internal option is reserved.
   loadServer = name: import ../packages/${name}/modules/mcp-server.nix {inherit lib mcpLib;};
   mcpLib = {inherit mkCredentialsOption;};
 
@@ -44,6 +47,7 @@
               };
             };
         }
+        (serverDef.settingsModule or {})
         {config = settings;}
       ];
     };
