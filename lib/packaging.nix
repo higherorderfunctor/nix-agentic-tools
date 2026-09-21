@@ -1,4 +1,4 @@
-# lib/packaging.nix — DRY version extraction + smoke test helpers.
+# lib/packaging.nix — shared fetch, build, version, and update helpers.
 #
 # Each helper reads a manifest from a Nix store path (src) at eval
 # time and returns the upstream version string. Callers combine it
@@ -10,6 +10,65 @@
 # body to avoid the self-reference would be the DRY loss this file
 # exists to prevent. Same shape as lib/ai/transformers/*.nix.
 rec {
+  # A model is a licensed distribution, not just a bare fetchurl output.
+  # Apache-2.0 section 4(a) requires the licence to travel with the work;
+  # Qwen's embedding repositories omit LICENSE, whose canonical text lives
+  # in the base-model repository. Required license, licenseFile and attribution
+  # keep public binary-cache redistribution from silently omitting the notice.
+  fetchModel = {
+    attribution,
+    description,
+    file,
+    format,
+    homepage ? "https://huggingface.co/${publisher}/${repo}",
+    license,
+    licenseFile,
+    mirrors ? [],
+    pkgs,
+    publisher,
+    repo,
+    rev,
+    sha256Hex,
+  }: let
+    inherit (pkgs) lib;
+    modelFile = builtins.baseNameOf file;
+    # A commit pin is mandatory: resolve/main/ is mutable and can silently
+    # serve different bytes. Extra mirrors share the same fixed-output hash.
+    model = pkgs.fetchurl {
+      name = lib.toLower modelFile;
+      urls = ["https://huggingface.co/${publisher}/${repo}/resolve/${rev}/${file}"] ++ mirrors;
+      # Hex is the single source of truth for downstream upstream-digest gates;
+      # accepting SRI instead would make callers record the same hash twice.
+      hash = builtins.convertHash {
+        hash = "sha256:${sha256Hex}";
+        toHashFormat = "sri";
+      };
+    };
+    attributionFile = pkgs.writeText "model-attribution" (attribution + "\nsha256:   ${sha256Hex}\n");
+  in
+    assert lib.assertMsg (builtins.match "[0-9a-f]{40}" rev != null) "fetchModel: rev must be a full commit hash";
+    assert lib.assertMsg (builtins.match "[0-9a-f]{64}" sha256Hex != null) "fetchModel: sha256Hex must be a lowercase SHA-256 hex digest";
+    assert lib.assertMsg (!(builtins.elem modelFile ["" "." ".." "LICENSE" "ATTRIBUTION"])) "fetchModel: file must name a model artifact";
+      pkgs.runCommand "${lib.toLower repo}-${builtins.substring 0 7 rev}" {
+        inherit model modelFile;
+        version = rev;
+        # Consumers use these without repeating filenames or parsing extensions.
+        # format is metadata only; the file extension does not control the layout.
+        passthru = {inherit file format model modelFile publisher repo rev sha256Hex;};
+        meta = {
+          inherit description homepage license;
+          # Trained weights are neither source nor native code.
+          sourceProvenance = [lib.sourceTypes.binaryBytecode];
+        };
+      } ''
+        mkdir -p "$out" # bare-commands: ok
+        # One copy of large weights (about 610 MiB for Qwen), not two. The
+        # symlink is a store reference, retaining the fetched path against GC.
+        ln -s "$model" "$out/$modelFile"
+        cp ${lib.escapeShellArg "${licenseFile}"} "$out/LICENSE" # bare-commands: ok
+        cp ${attributionFile} "$out/ATTRIBUTION" # bare-commands: ok
+      '';
+
   # Format: "{upstream}+{shortrev}"
   mkVersion = {
     upstream,
