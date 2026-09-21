@@ -55,8 +55,17 @@ def update(args):
     updated = original
     for key, value in candidate.items():
         updated = re.sub(patterns[key], lambda match: match[1] + value + match[3], updated)
-    # Keep rev + digest atomic, including on failures. Never overwrite a recipe
-    # another editor changed while the large artifact was downloading.
+    # Keep rev + digest atomic, including on failures: both go through one
+    # os.replace, so a crash never leaves the recipe holding a rev whose digest
+    # belongs to a different revision.
+    #
+    # The re-read below closes the window that MATTERS — the minutes spent
+    # prefetching a ~610 MB artifact, during which a concurrent edit is
+    # plausible. It is deliberately NOT a compare-and-swap: a write landing
+    # between this check and the os.replace could still be lost. That residual
+    # window is a temp-file write plus a rename, and this updater runs in CI
+    # against a fresh checkout, so no other editor holds the recipe there.
+    # Locking would be machinery for a risk that shape of run does not have.
     if recipe.read_text() != original:
         raise RuntimeError("Recipe changed during prefetch")
     temporary = None
