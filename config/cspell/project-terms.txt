@@ -147,6 +147,7 @@ getconf
 getdents
 getkimchi
 getpid
+gguf
 gitbook
 gitdir
 gitfile
@@ -368,6 +369,7 @@ revertibility
 revset
 revsets
 revwalk
+rfilename
 rnix
 rodata
 rollup
