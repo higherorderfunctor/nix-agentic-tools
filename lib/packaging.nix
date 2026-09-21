@@ -1,8 +1,12 @@
 # lib/packaging.nix — shared fetch, build, version, and update helpers.
 #
-# Each helper reads a manifest from a Nix store path (src) at eval
-# time and returns the upstream version string. Callers combine it
-# with `builtins.substring 0 7 rev` to produce "x.y.z+abc1234".
+# NOT one shape. The VERSION helpers (mkVersion and friends) read a manifest
+# from a Nix store path (src) at eval time and return the upstream version
+# string; callers combine that with `builtins.substring 0 7 rev` to produce
+# "x.y.z+abc1234". Other helpers here do different things — `fetchModel`
+# produces a derivation and returns no version at all, and the update helpers
+# emit scripts. Read the helper you are calling rather than assuming this
+# header describes it.
 #
 # `rec` so a composed helper can call a sibling —
 # `ghArchiveUpdateScript` is `mkUpdateScript` + `ghLatestVersionCmd`
