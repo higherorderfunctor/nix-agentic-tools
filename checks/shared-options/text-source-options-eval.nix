@@ -54,6 +54,10 @@
       };
     }
   ];
+  consumerSourceNull = evaluate [
+    {entries.example.source = lib.mkDefault source;}
+    {entries.example.source = null;}
+  ];
   newConsumerText = evaluate [{entries.new.text = "new consumer prose";}];
   sameDefaultPriority = evaluate [
     {
@@ -78,6 +82,10 @@
     then throw "lib.ai.types: consumer text did not override package source"
     else if !consumerText.config.entries.example.enable
     then throw "lib.ai.types: consumer override did not auto-enable entry"
+    else if consumerSourceNull.config.entries.example.text != ""
+    then throw "lib.ai.types: explicit null source did not leave text empty"
+    else if consumerSourceNull.config.entries.example.enable
+    then throw "lib.ai.types: explicit null source auto-enabled entry"
     else if !samePriorityFailed
     then throw "lib.ai.types: same-priority definitions did not fail evaluation"
     else if !sameDefaultPriorityFailed

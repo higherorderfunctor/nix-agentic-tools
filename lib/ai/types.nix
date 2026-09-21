@@ -17,6 +17,7 @@
         options.text.highestPrio
         < defaultPriority
         || options.source.highestPrio < defaultPriority;
+      contentIsPresent = config.text != "" || config.source != null;
     in {
       options =
         {
@@ -49,7 +50,7 @@
         };
 
       config = lib.optionalAttrs (enableDefault != null) {
-        enable = lib.mkIf contentIsExplicit (lib.mkDefault true);
+        enable = lib.mkIf (contentIsExplicit && contentIsPresent) (lib.mkDefault true);
       };
     });
 in {
