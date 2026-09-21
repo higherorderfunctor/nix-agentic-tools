@@ -32,6 +32,67 @@
   };
 in {
   checks = {
+    # Evaluate settings directly so a renderer-local throw cannot satisfy this test.
+    module-mcp-gitlab-settings-mutex = let
+      source = lib.fileset.toSource {
+        root = ../../..;
+        fileset = lib.fileset.unions [
+          ../../../lib/credentials.nix
+          ../../../lib/mcp.nix
+          ../../../packages/gitlab-mcp/modules/mcp-server.nix
+        ];
+      };
+      probe = pkgs.writeText "gitlab-settings-mutex.nix" ''
+        { credential ? "none", instance ? false, callerPassing ? true }:
+        let
+          lib = import ${pkgs.path}/lib;
+          mcpLib = import ${source}/lib/mcp.nix { inherit lib; };
+          settings = {
+            assertions = [{ assertion = callerPassing; message = "gitlab caller assertion failed"; }];
+            instanceUrl = if instance then "https://gitlab.example.com" else null;
+          } // lib.optionalAttrs (credential != "none") {
+            apiUrl.''${credential} = "/run/secrets/gitlab-url";
+          };
+          result = mcpLib.evalSettings "gitlab-mcp" settings;
+        in
+          builtins.deepSeq result (
+            assert !(result ? assertions);
+            assert result.instanceUrl == settings.instanceUrl;
+            assert credential == "none" || result.apiUrl.''${credential} == "/run/secrets/gitlab-url";
+            true
+          )
+      '';
+    in
+      pkgs.runCommandLocal "module-test-mcp-gitlab-settings-mutex" {
+        nativeBuildInputs = [pkgs.nix];
+      } ''
+        export NIX_STATE_DIR="$TMPDIR/nix-state"
+        mkdir -p "$NIX_STATE_DIR/profiles/per-user/$USER"
+        for credential in none file helper; do
+          nix-instantiate --eval --strict ${probe} --argstr credential "$credential"
+        done
+        nix-instantiate --eval --strict ${probe} --arg instance true
+        for credential in file helper; do
+          if nix-instantiate --eval --strict ${probe} --argstr credential "$credential" --arg instance true >actual.stdout 2>actual.stderr; then
+            echo "FAIL: gitlab instanceUrl + apiUrl.$credential unexpectedly succeeded" >&2
+            exit 1
+          fi
+          grep -F 'MCP server gitlab-mcp settings assertions failed:' actual.stderr
+          grep -F 'settings.instanceUrl and settings.apiUrl.file/helper are mutually exclusive' actual.stderr
+        done
+        # The server's passing assertion must not hide a failing caller assertion.
+        if nix-instantiate --eval --strict ${probe} --arg callerPassing false >actual.stdout 2>actual.stderr; then
+          echo "FAIL: gitlab caller assertion unexpectedly succeeded" >&2
+          exit 1
+        fi
+        grep -F 'gitlab caller assertion failed' actual.stderr
+        if grep -F 'mutually exclusive' actual.stderr; then
+          echo "FAIL: diagnostic includes a passing server assertion" >&2
+          exit 1
+        fi
+        echo "PASS: gitlab mutex rejects file/helper conflicts; valid settings and caller assertions verified" | tee "$out"
+      '';
+
     # tryEval cannot expose throw messages. Follow facet-mock-negative by
     # evaluating a subprocess and checking its stderr, with a passing control.
     module-mcp-settings-assertion-messages = let
