@@ -86,9 +86,10 @@ def classify_link(url: str) -> tuple[str, str]:
 def links_from(index_url: str, body: bytes) -> list[tuple[str, str]]:
     links = []
     for target in MARKDOWN_LINK.findall(body.decode("utf-8")):
-        parsed = urllib.parse.urlsplit(target)
+        resolved = urllib.parse.urljoin(index_url, target)
+        parsed = urllib.parse.urlsplit(resolved)
         if parsed.netloc == "docs.kimchi.dev":
-            links.append(classify_link(target))
+            links.append(classify_link(resolved))
     if not links:
         raise RuntimeError(f"documentation index contains no same-site links: {index_url}")
     return sorted(set(links))
