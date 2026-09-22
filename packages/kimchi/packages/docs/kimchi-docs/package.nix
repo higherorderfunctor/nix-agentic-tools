@@ -81,7 +81,9 @@ in
     pname = "kimchi-docs";
     version = snapshotDate;
 
-    nativeBuildInputs = [fetchDocs];
+    nativeBuildInputs = [pkgs.cacert fetchDocs];
+    NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+    SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
     phases = ["buildPhase"];
 
     buildPhase = ''
