@@ -443,13 +443,20 @@ function extractConfig(sourceFile, declarations, annotations, checker, ts) {
   const keys = { ...extras };
   keys.api_key = structuredClone(keys.apiKey);
   keys.device_id = structuredClone(keys.deviceId);
+  // These objects are read behind presence/type guards rather than declared in
+  // readConfigExtras, so absence is a valid state even though their nested
+  // interfaces describe required fields once the object exists.
   keys.telemetry = {
+    ...keys.telemetry,
+    optional: true,
     type: "object",
     typeExpression: "TelemetryConfig",
     properties: interfaceMembers("TelemetryConfig"),
   };
   delete keys.telemetry.properties.apiKey;
   keys.surveys = {
+    ...keys.surveys,
+    optional: true,
     type: "object",
     typeExpression: "Record<string, SurveyConfig>",
     additionalProperties: {
@@ -460,6 +467,8 @@ function extractConfig(sourceFile, declarations, annotations, checker, ts) {
   };
   const booleanType = checker.getBooleanType();
   keys.teleport = {
+    ...keys.teleport,
+    optional: true,
     type: "object",
     typeExpression: "{ compactHint?: { enabled?: boolean } }",
     properties: {
@@ -477,6 +486,8 @@ function extractConfig(sourceFile, declarations, annotations, checker, ts) {
     },
   };
   keys.gitTokens = {
+    ...keys.gitTokens,
+    optional: true,
     type: "object",
     typeExpression: "Record<string, string>",
     additionalProperties: descriptorForType(
@@ -602,16 +613,50 @@ function typeBoxDescriptor(initializer, declarations, ts) {
   return convert(initializer);
 }
 
-function extractHarness(declarations, checker, ts) {
+function extractDefaultProjectTrust(sourceFile, declarations, ts) {
+  let settingsManager;
+  function findClass(node) {
+    if (ts.isClassDeclaration(node) && node.name?.text === "SettingsManager") {
+      settingsManager = node;
+      return;
+    }
+    ts.forEachChild(node, findClass);
+  }
+  findClass(sourceFile);
+  if (!settingsManager) fail("pi SettingsManager class was not found");
+  const method = settingsManager.members.find(
+    (member) =>
+      ts.isMethodDeclaration(member) &&
+      syntaxName(member.name, ts) === "getDefaultProjectTrust",
+  );
+  if (!method?.body)
+    fail("pi getDefaultProjectTrust method was not found in the expected form");
+  const returnStatement = method.body.statements.find(ts.isReturnStatement);
+  const expression = returnStatement?.expression;
+  if (!expression || !ts.isConditionalExpression(expression)) {
+    fail("pi getDefaultProjectTrust no longer returns a conditional fallback");
+  }
+  const fallback = literalValue(expression.whenFalse, ts, declarations);
+  if (typeof fallback !== "string")
+    fail("pi getDefaultProjectTrust fallback is no longer a string literal");
+  return fallback;
+}
+
+function extractHarness(declarations, settingsManagerSource, checker, ts) {
   const settings = requireDeclaration(
     declarations,
     "Settings",
     ts.isInterfaceDeclaration,
   );
   const baseKeys = membersOfDeclaration(settings, checker, ts);
-  if (!baseKeys.defaultProjectTrust?.enum?.includes("ask"))
-    fail("pi DefaultProjectTrust values changed");
-  baseKeys.defaultProjectTrust.default = "ask";
+  const defaultProjectTrust = extractDefaultProjectTrust(
+    settingsManagerSource,
+    declarations,
+    ts,
+  );
+  if (!baseKeys.defaultProjectTrust?.enum?.includes(defaultProjectTrust))
+    fail("pi default project trust is outside DefaultProjectTrust");
+  baseKeys.defaultProjectTrust.default = defaultProjectTrust;
   const definitions = {};
   for (const name of [
     "BranchSummarySettings",
@@ -715,6 +760,9 @@ function extractHarness(declarations, checker, ts) {
     ),
     statusLine: descriptorForNode(statusLine.type, checker, ts, true),
   };
+  // Kimchi's harness settings readers accept an absent top-level key and
+  // either return undefined or apply a fallback; none is required in the file.
+  for (const descriptor of Object.values(additions)) descriptor.optional = true;
   if (additions.modelRoles.properties.orchestrator?.type !== "string") {
     fail(
       "harness/settings.json Kimchi additions validation shape changed: modelRoles.orchestrator is no longer a string",
@@ -1490,7 +1538,12 @@ async function main() {
       ts,
       declarations,
     ),
-    harness: extractHarness(declarations, checker, ts),
+    harness: extractHarness(
+      declarations,
+      requireSource(join(piRoot, "dist/core/settings-manager.js")),
+      checker,
+      ts,
+    ),
     provenance: {
       extractorSchema: EXTRACTOR_SCHEMA,
       kimchiVersion: args["kimchi-version"],
