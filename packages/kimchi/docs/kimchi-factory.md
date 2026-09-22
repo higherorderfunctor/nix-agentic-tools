@@ -63,7 +63,10 @@ purpose: nothing orders them against each other, and each entry name is a
 consumer-visible contract. Devenv requires namespaced task names, so each writer
 uses backend-keyed `entry`: `ai:kimchi:config-merge` and
 `ai:kimchi:harness-settings-merge` on devenv, with the existing
-`kimchiConfigMerge` and `kimchiHarnessSettingsMerge` names on HM.
+`kimchiConfigMerge` and `kimchiHarnessSettingsMerge` names on HM. Home Manager
+ledger names continue to hash `configDir`, preserving ownership from generations
+before project-path delivery; devenv's new ledgers hash their actual project
+document paths.
 
 Both files state `facts.harnessWrites = true`, and both writers survive an empty
 declaration on either backend. HM uses `$HOME` and XDG state; devenv uses
