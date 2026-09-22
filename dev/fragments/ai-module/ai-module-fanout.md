@@ -194,7 +194,7 @@ The ai module fans out TWO kinds of configuration:
   rejects the configuration instead of silently losing the grant. Direct payload
   packages may declare `passthru.kiroFhsSandbox = false`; the overlay does this
   for darwin and pre-split nixpkgs.
-- `ai.codex.nativeSettings` — typed stable keys plus a TOML-compatible native
+- `ai.codex.native.settings` — typed stable keys plus a TOML-compatible native
   freeform tail. Its model defaults to `gpt-6-astra` and reasoning effort to
   `xhigh` on both backends. Explicit native values override these defaults;
   normalized reasoning effort also overrides the native option default. Setting
@@ -246,13 +246,13 @@ The ai module fans out TWO kinds of configuration:
   the two other required native fields. `instructions.source` reads a packaged
   file into that text. Reserved core fields cannot be redefined in `codex`.
   Global concurrency, model/effort defaults, and interruption behavior live in
-  the typed `ai.codex.nativeSettings.agents` table.
+  the typed `ai.codex.native.settings.agents` table.
 - `ai.codex.hooks.<Event>` — Codex-native matcher groups and command handlers,
   appended after portable `ai.hooks` groups and emitted in adjacent
   `hooks.json`. Typed native additions include `commandWindows`,
   `statusMessage`, and `additionalContextLimit`; a JSON-compatible tail remains
   for forward compatibility. Typed hooks cannot coexist with inline
-  `ai.codex.nativeSettings.hooks` at one layer because Codex loads both
+  `ai.codex.native.settings.hooks` at one layer because Codex loads both
   additively and warns rather than applying normal config precedence. Nix
   ownership does not make these native-policy hooks: Codex still requires
   `/hooks` review and hash-based trust before user/project handlers run.
@@ -273,7 +273,7 @@ enabled ecosystem whose native model preserves the option's semantics):
   Claude and Codex lower the resolved value to native `effortLevel` and
   `model_reasoning_effort`; runtimes without a lossless lowering retain the
   normalized value without emitting a native key. Values that only one runtime
-  persists remain under that runtime's `nativeSettings`. An explicit native
+  persists remain under that runtime's `native.settings`. An explicit native
   Claude/Codex effort key still has normal option priority over the derived
   normalized default, and a native null excludes that runtime from emission.
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
@@ -355,7 +355,7 @@ enabled ecosystem whose native model preserves the option's semantics):
   case to native snake case. Literal `httpHeaders` are store-visible;
   `envHttpHeaders` and `bearerTokenEnvVar` name environment variables so secret
   values never enter generated TOML. Direct
-  `ai.codex.nativeSettings.mcp_servers` cannot be combined with either typed
+  `ai.codex.native.settings.mcp_servers` cannot be combined with either typed
   pool because their table ownership would be ambiguous. Credential-injecting
   `proxy.enable` entries lower at their declaration scope before pool merging: a
   used top-level declaration owns one shared managed proxy and only its
@@ -372,7 +372,7 @@ enabled ecosystem whose native model preserves the option's semantics):
   joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
   is a different thing and still is — that filters what SPAWNED commands
   inherit, while this pool configures the CLI process itself. Claude is the one
-  exclusion: it has no wrapper here, and `ai.claude.nativeSettings.env` is its
+  exclusion: it has no wrapper here, and `ai.claude.native.settings.env` is its
   native equivalent.
 
   **Never reach for Home Manager session variables or devenv `env` to deliver a

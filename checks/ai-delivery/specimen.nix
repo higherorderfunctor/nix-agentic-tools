@@ -27,26 +27,26 @@
           // {
             claude = {
               hookScripts.probe = "true";
-              nativeSettings.model = "probe";
+              native.settings.model = "probe";
               unpinLaunchEffort.probe = true;
             };
             codex = {
-              nativeSettings.model = "probe";
+              native.settings.model = "probe";
               execpolicyRules.probe = "prefix_rule(pattern = [\"probe\"], decision = \"allow\")";
             };
-            copilot.nativeSettings.model = "probe";
+            copilot.native.settings.model = "probe";
             kimchi = {
-              nativeSettings = {
+              native.settings = {
                 llmEndpoint = "https://example.invalid";
                 skillPaths = ["probe"];
               };
-              harnessSettings.resources.probe = true;
+              native.harnessSettings.resources.probe = true;
             };
             kiro = {
               agents.probe.prompt = "probe";
               hooksJson.probe = ''{"event":"pre-commit"}'';
               mcpWriteMode = strategy;
-              nativeSettings =
+              native.settings =
                 if mode == "hm"
                 then {chat.defaultModel = "probe";}
                 else {chat.enableTangentMode = true;};

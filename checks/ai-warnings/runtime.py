@@ -187,7 +187,7 @@ def wiring(script):
     manifest = next(word for word in words if word.endswith("-ai-delivery-files.json"))
     desired = json.loads(Path(manifest).read_text())
     assert "ai.kiro.lspServers" in desired[".custom-kiro/settings/lsp.json"]["option"]
-    assert "ai.codex.nativeSettings" in desired[".codex/config.toml"]["option"]
+    assert "ai.codex.native.settings" in desired[".codex/config.toml"]["option"]
     assert 'ai.codex.files."probe"' in desired["probe"]["option"]
     # Provenance is exact: a consumer file under a runtime config directory is
     # not an ai.* delivery and must not be observed as one.
