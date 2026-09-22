@@ -4,6 +4,7 @@
   ...
 }: {
   checks.cacheHitParity.kimchi = {consumerPath = ["ai" "kimchi"];};
+  checks.cacheHitParity.kimchi-docs = {consumerPath = ["docs" "kimchi-docs"];};
   documentation.aiCliDescriptions.kimchi = "Kimchi CLI";
   # kimchi: two-tree factory (config.json + harness/), runtime SOPS
   # credential, wrapProgram separator + flattenDotKeys gotchas.
@@ -20,4 +21,5 @@
     ];
   };
   update.targets.kimchi = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/ai/kimchi/package.nix)];};
+  update.targets.kimchi-docs = {flags = ["--use-update-script"];};
 }
