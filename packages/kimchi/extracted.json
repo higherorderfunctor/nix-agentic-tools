@@ -213,7 +213,7 @@
         "names": ["--allow-tool"],
         "optionalValue": false,
         "origin": ["kimchi"],
-        "valueName": "<rule>"
+        "valueName": "rule"
       },
       {
         "help": "API key (defaults to env vars)",
@@ -261,7 +261,7 @@
         "names": ["--deny-tool"],
         "optionalValue": false,
         "origin": ["kimchi"],
-        "valueName": "<rule>"
+        "valueName": "rule"
       },
       {
         "help": "Enable experimental features, including the kimchi-dev/auto model",
@@ -285,7 +285,7 @@
         "names": ["--export"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
-        "valueName": "<file>"
+        "valueName": "file"
       },
       {
         "help": "Load an extension file (can be used multiple times)",
@@ -317,7 +317,7 @@
         "names": ["--list-models"],
         "optionalValue": true,
         "origin": ["kimchi", "pi"],
-        "valueName": "[search]"
+        "valueName": "search"
       },
       {
         "help": "Use a specific MCP configuration file",
@@ -325,7 +325,7 @@
         "names": ["--mcp-config"],
         "optionalValue": false,
         "origin": ["kimchi"],
-        "valueName": "<path>"
+        "valueName": "path"
       },
       {
         "help": "Output mode: text (default), json, rpc, acp",
@@ -333,7 +333,7 @@
         "names": ["--mode"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
-        "valueName": "<mode>"
+        "valueName": "mode"
       },
       {
         "help": "Model id or pattern, optionally `provider/id` and/or `:<thinking>`. Use `multi-model` for orchestrated multi-model mode.",
@@ -341,7 +341,7 @@
         "names": ["--model"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
-        "valueName": "<pattern>"
+        "valueName": "pattern"
       },
       {
         "help": "Comma-separated model patterns for Ctrl+P cycling Supports globs (anthropic/*, *sonnet*) and fuzzy matching",
@@ -453,7 +453,7 @@
         "names": ["--permissions-config"],
         "optionalValue": false,
         "origin": ["kimchi"],
-        "valueName": "<path>"
+        "valueName": "path"
       },
       {
         "help": "Start in plan mode (read-only)",
@@ -485,7 +485,7 @@
         "names": ["--provider"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
-        "valueName": "<name>"
+        "valueName": "name"
       },
       {
         "help": "Resume by id, or pick a previous session interactively when omitted",
@@ -493,7 +493,7 @@
         "names": ["--resume", "-r"],
         "optionalValue": true,
         "origin": ["kimchi", "pi"],
-        "valueName": "[id]"
+        "valueName": "id"
       },
       {
         "help": "Resume a specific session file (full path or partial UUID)",
@@ -501,7 +501,7 @@
         "names": ["--session"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
-        "valueName": "<path>"
+        "valueName": "path"
       },
       {
         "help": "Directory for session storage and lookup",
@@ -549,7 +549,7 @@
         "names": ["--thinking"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
-        "valueName": "<level>"
+        "valueName": "level"
       },
       {
         "help": "Comma-separated allowlist of tool names to enable Applies to built-in, extension, and custom tools",
@@ -622,6 +622,9 @@
         "type": "string"
       },
       "gitTokens": {
+        "additionalProperties": {
+          "type": "string"
+        },
         "project": false,
         "type": "object"
       },
@@ -722,6 +725,14 @@
         "type": "array"
       },
       "surveys": {
+        "additionalProperties": {
+          "properties": {
+            "seenAt": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "project": false,
         "type": "object"
       },
@@ -829,7 +840,7 @@
       "KIMCHI_DISABLE_BUILTIN_PROVIDERS": {
         "consumerOverridable": false,
         "controls": "suppression of pi built-in providers",
-        "readBy": ["kimchi"],
+        "readBy": ["pi"],
         "reason": "entry.ts overwrites it with 1"
       },
       "KIMCHI_FERMENTS_DIR": {
@@ -1057,7 +1068,7 @@
       "PI_SKIP_VERSION_CHECK": {
         "consumerOverridable": false,
         "controls": "pi version check",
-        "readBy": ["kimchi", "pi"],
+        "readBy": ["pi"],
         "reason": "entry.ts overwrites it with 1"
       },
       "PI_STARTUP_BENCHMARK": {
