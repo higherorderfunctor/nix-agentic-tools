@@ -9,7 +9,17 @@
     package = self.packages.${system}.kimchi;
     inherit (package.passthru) extracted extractionSources;
     committed = ../extracted.json;
-    extractor = ../extract/extract.py;
+    extractor = ../extract/extract.mjs;
+
+    runExtractor = source: output: ''
+      ${pkgs.nodejs}/bin/node ${extractor} \
+        --annotations ${../extract/annotations.json} \
+        --kimchi-source ${source} \
+        --kimchi-version ${package.version} \
+        --out ${output} \
+        --pi-package ${extractionSources.pi} \
+        --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js
+    '';
   in {
     kimchi-extracted = pkgs.runCommand "kimchi-extracted-drift" {} ''
       jq="${pkgs.jq}/bin/jq"
@@ -31,7 +41,7 @@
 
     kimchi-extracted-harness-guard =
       pkgs.runCommand "kimchi-extracted-harness-guard" {
-        nativeBuildInputs = [pkgs.python3];
+        nativeBuildInputs = [pkgs.nodejs pkgs.typescript_5];
       } ''
         cp -r ${extractionSources.kimchi} "$TMPDIR/collision-source"
         cp -r ${extractionSources.kimchi} "$TMPDIR/config-shape-source"
@@ -49,11 +59,11 @@
           label="$1"
           source="$2"
           expected="$3"
-          if rejected_output=$(${pkgs.python3}/bin/python3 ${extractor} \
-            --kimchi-source "$source" \
-            --kimchi-version ${package.version} \
-            --out "$TMPDIR/$label.json" \
-            --pi-package ${extractionSources.pi} 2>&1); then
+          if rejected_output=$(
+            {
+              ${runExtractor "$source" ''"$TMPDIR/$label.json"''}
+            } 2>&1
+          ); then
             echo "FAIL: extraction accepted the $label mutation" >&2
             exit 1
           else
@@ -77,11 +87,7 @@
         expect_rejection harness-shape "$TMPDIR/harness-shape-source" \
           "harness/settings.json Kimchi additions validation shape changed" >> "$TMPDIR/proof"
 
-        ${pkgs.python3}/bin/python3 ${extractor} \
-          --kimchi-source ${extractionSources.kimchi} \
-          --kimchi-version ${package.version} \
-          --out "$TMPDIR/real.json" \
-          --pi-package ${extractionSources.pi}
+        ${runExtractor extractionSources.kimchi ''"$TMPDIR/real.json"''}
         {
           ${pkgs.coreutils}/bin/cat "$TMPDIR/proof"
           echo "real (exit 0): kimchi-extract: config.json harness guard passed"
