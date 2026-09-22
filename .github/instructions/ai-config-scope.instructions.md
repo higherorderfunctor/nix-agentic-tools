@@ -7,13 +7,11 @@ applyTo: "devenv.nix,packages/chatgpt-codex/lib/mkCodex.nix,packages/claude-code
 
 ## Devenv runtimes merge with host config — the reason is auth, not tidiness
 
-> **Last verified:** 2026-09-19 — `ai.codex.profiles` (the whole-file
-> `--profile` layer and its devenv `CODEX_HOME` materializer) was removed as
-> unreachable dead code (see the Settled bullet in
-> `dev/fragments/ai-module/ai-module-fanout.md`). Codex's devenv facet no longer
-> writes into the host config root at all: it now merges project and user config
-> natively, the same shape as Claude and Kiro. Copilot is the only remaining
-> runtime that needs an additive flag instead of native merge.
+> **Last verified:** 2026-09-22 — Kimchi's devenv facet writes native project
+> paths and guards the three exact-cwd readers. Kimchi keeps reading user
+> config, and `ai.kimchi.configDir` remains a Home Manager output option.
+> Copilot is the only runtime that needs an additive flag instead of native
+> project merge.
 >
 > States as one cross-runtime rule what previously had to be inferred by reading
 > three factories side by side: no `ai.*` runtime redirects its config root, on
@@ -69,12 +67,13 @@ different mechanism from the rest.
 
 ### Per-runtime mechanism
 
-| runtime   | host root read | what devenv adds                                         | mechanism                                                   |
-| --------- | -------------- | -------------------------------------------------------- | ----------------------------------------------------------- |
-| `claude`  | `~/.claude/`   | `<repo>/.claude/settings.json`, `.mcp.json`, `CLAUDE.md` | native project scope — the CLI merges user + project itself |
-| `codex`   | `~/.codex/`    | `<repo>/.codex/config.toml`                              | native project scope — the CLI merges user + project itself |
-| `copilot` | `~/.copilot/`  | project `mcp-config.json`                                | additive wrapper flag `--additional-mcp-config @<path>`     |
-| `kiro`    | `~/.kiro/`     | `<repo>/.kiro/{steering,hooks,agents,settings}/`         | native project scope via a repo-relative `configDir`        |
+| runtime   | host root read      | what devenv adds                                                                                                       | mechanism                                                   |
+| --------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `claude`  | `~/.claude/`        | `<repo>/.claude/settings.json`, `.mcp.json`, `CLAUDE.md`                                                               | native project scope — the CLI merges user + project itself |
+| `codex`   | `~/.codex/`         | `<repo>/.codex/config.toml`                                                                                            | native project scope — the CLI merges user + project itself |
+| `copilot` | `~/.copilot/`       | project `mcp-config.json`                                                                                              | additive wrapper flag `--additional-mcp-config @<path>`     |
+| `kimchi`  | `~/.config/kimchi/` | root `AGENTS.md`, `.kimchi/config.json`, `.kimchi/mcp.json`, `.kimchi/skills/`, `.config/kimchi/harness/settings.json` | native project scope; see trust boundary below              |
+| `kiro`    | `~/.kiro/`          | `<repo>/.kiro/{steering,hooks,agents,settings}/`                                                                       | native project scope via a repo-relative `configDir`        |
 
 Codex used to be the one that needed explaining: `ai.codex.profiles` had no
 additive-flag equivalent, so adding a named profile meant writing a whole extra
@@ -95,13 +94,25 @@ the developer's interactive session and everything else running in it. That is
 process-scope containment and it is orthogonal to config scope — do not cite one
 as evidence about the other.
 
-**Kimchi is outside the table on purpose.** Its BINARY is repo-sourced like
-every other runtime, but it has no config row because its config fanout does not
-currently reach the binary: `configDir` is HOME-shaped while the writes land at
-a project path Kimchi never reads, so `.config/kimchi/**` is
-materialized-but-inert. Binary delivery and config delivery are separate
-problems for that runtime, and fixing one did not fix the other. Do not read its
-presence on PATH as evidence that this rule has been applied to it.
+**Kimchi's project trust is a delivery dependency.** pi derives its project
+`CONFIG_DIR_NAME` from Kimchi's packaged
+`piConfig.configDir = ".config/kimchi/harness"`, independent of the consumer's
+Home Manager `ai.kimchi.configDir` output option. Project config, MCP, skills,
+and harness settings stay inert until explicit or persisted trust; unattended
+use can set user-scope `harnessSettings.defaultProjectTrust = "always"` through
+Home Manager. A project cannot grant itself trust.
+
+Project-root `AGENTS.md` is the upstream exception. Kimchi's prompt-enrichment
+extension walks ancestor context files without consulting the project-scope
+gate.
+
+Kimchi also has two path-lookup modes. Project config, MCP servers, and harness
+settings resolve only below the process's exact working directory; project
+context and skills walk ancestors. When devenv delivers any exact-cwd surface,
+the wrapper rejects launches below the devenv root instead of silently missing
+the file. The typed native settings include a default `skillPaths = []`, so
+every enabled devenv Kimchi currently owns project config and receives this
+root-only guard.
 
 ### What would change this decision
 
