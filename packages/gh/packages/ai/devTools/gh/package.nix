@@ -18,9 +18,10 @@
 # the `or` covers exactly the window between the two.
 #
 # The Go TOOLCHAIN is derived from the go.mod floor, via `vu.mkGoBuilder`.
-# That needs `.override` rather than `overrideAttrs` — it is a builder
-# argument, not an attr — so this file uses both seams: `.override` for
-# the builder, `overrideAttrs` for version/src/vendorHash.
+# The upstream recipe now chooses a versioned Go builder on some nixpkgs
+# pins. Use its actual override argument and preserve that builder's Go as
+# the floor selector's baseline; passing `buildGoModule` blindly either
+# fails evaluation or silently downgrades a versioned builder.
 #
 # This header used to say "No Go toolchain override", on the reasoning
 # that threading one through "would perturb the byte-identical-to-nixpkgs
@@ -91,13 +92,16 @@ in
   # reads off `finalAttrs`, so they compose on the output with
   # `overrideAttrs`. See the overlays fragment's `.override`-vs-
   # -`overrideAttrs` rule.
-  (ourPkgs.gh.override {
-    buildGoModule = vu.mkGoBuilder {
+  (ourPkgs.gh.override (ghArgs: let
+    builderName = vu.goBuilderArgName ghArgs;
+  in {
+    ${builderName} = vu.mkGoBuilder {
+      builder = ghArgs.${builderName};
       floor = goFloor;
       pkgs = ourPkgs;
       pname = "gh";
     };
-  })
+  }))
   .overrideAttrs (prev: {
     inherit (sources) version;
     # fetchzip, so the recorded hash is over the UNPACKED NAR — which is
