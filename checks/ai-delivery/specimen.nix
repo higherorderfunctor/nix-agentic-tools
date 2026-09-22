@@ -7,7 +7,7 @@
       {
         agents.probe = {
           description = "probe";
-          instructions = "probe";
+          instructions = {text = "probe";};
         };
         context.text = "probe";
         environmentVariables.PROBE = "value";
@@ -43,7 +43,7 @@
               harnessSettings.resources.probe = true;
             };
             kiro = {
-              agents.probe.prompt = "probe";
+              agents.probe.prompt = {text = "probe";};
               hooksJson.probe = ''{"event":"pre-commit"}'';
               mcpWriteMode = strategy;
               nativeSettings =
