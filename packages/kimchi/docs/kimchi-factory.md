@@ -41,8 +41,10 @@ deliver effort at project scope.
 `packages/kimchi/extracted.json` measures the two native settings surfaces, the
 Kimchi and pi CLI layers, and the `KIMCHI_*` / `PI_*` environment namespaces. It
 uses the TypeScript compiler's checker for declared keys and types and syntax
-tree queries for CLI and environment access sites. The extractor also checks
-that the hash-pinned source URL names the same release tag recorded in
+tree queries for CLI and environment access sites. CLI queries follow
+argument-derived switch cases and called imported helpers, while config queries
+cross-check compiler types against runtime validation guards. The extractor also
+checks that the hash-pinned source URL names the same release tag recorded in
 provenance; Kimchi's source `package.json` intentionally retains the `0.0.0`
 development placeholder. It is deliberately not consumed by this factory yet:
 the nesting of the two native settings files is an open option-shape decision.
