@@ -38,7 +38,7 @@
   pools = {
     agents.probe = {
       description = "probe";
-      instructions = "probe";
+      instructions.text = "probe";
     };
     context.text = "SNAPSHOT-CONTEXT";
     environmentVariables.PROBE = "value";
@@ -828,7 +828,7 @@ in {
 
     # `upstream` hands the bytes to the option `sink` names and delivers no
     # file for them. The path stays in the delivery description — with its
-    # facts, its tombstone and its override boundary — while another module
+    # facts, its enable gate and its override boundary — while another module
     # does the writing.
     module-delivery-upstream-lowers-to-its-sink = mkTest "delivery-upstream-lowers-to-its-sink" (
       let

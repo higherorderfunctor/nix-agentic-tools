@@ -146,7 +146,7 @@
   contextValues = [config.ai.context cfg.context];
   # Presence must stay structural. `composeContent` reads source-backed bytes
   # when two values compose, so using `mergedContext != null` as a generator
-  # gate would force a discarded default before B7 replacement or tombstone
+  # gate would force a discarded default before B7 replacement or disable
   # arbitration.
   hasMergedContext =
     if supportsPool "context"
@@ -181,7 +181,7 @@
   # Repository AGENTS.md targets have one cross-runtime owner. Codex and Kiro
   # public file entries for those paths arbitrate inside sharedAgentsMd.nix;
   # letting their ordinary sinks lower the same target independently would
-  # bypass whole-entry replacement and null tombstones at B7.
+  # bypass whole-entry replacement and explicit disable at B7.
   sharedAgentsMdTargets =
     if backend == "devenv" && builtins.elem appRecord.name ["codex" "kiro"]
     then
@@ -280,8 +280,9 @@ in {
           to the active backend root (HOME for Home Manager, project root for
           devenv), and described rather than lowered: each entry says what
           bytes it carries, the consumer facts that decide how it lands, and
-          which writer owns it if it is not a symlink. `null` suppresses a
-          generated entry.
+          which writer owns it if it is not a symlink. Setting
+          `content.enable = false` suppresses generated text/source bytes while
+          retaining the record for inspection and later overrides.
 
           Generated `content.text` and `content.source` are contributed at
           `mkDefault` priority with every sibling field at ordinary priority,
