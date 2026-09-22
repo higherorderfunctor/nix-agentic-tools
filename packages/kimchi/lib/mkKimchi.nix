@@ -192,7 +192,12 @@
     }: {
       ai.kimchi.files.${path} = {
         inherit entry ledger;
-        content.value = value;
+        # `value` IS the content form for this entry, so the text/source form
+        # must be off: an entry may enable exactly one.
+        content = {
+          enable = false;
+          inherit value;
+        };
         facts.harnessWrites = true;
         format = "json";
       };
@@ -255,8 +260,12 @@
       # are the defaults and neither is stated.
       (lib.mkIf (mergedServers != {}) {
         ai.kimchi.files.${mcpPath} = {
-          content.value = {
-            mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+          # Structured value, so the text/source form stays disabled.
+          content = {
+            enable = false;
+            value = {
+              mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+            };
           };
           format = "json";
         };
