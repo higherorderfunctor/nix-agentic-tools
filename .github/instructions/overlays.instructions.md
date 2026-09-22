@@ -348,9 +348,8 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-09-19 — Kiro refreshes its public model snapshot
-> outside the binary version check; pinned build identity and consumer guards
-> are preserved.
+> **Last verified:** 2026-09-22 — the Go floor override follows the builder
+> supplied by each nixpkgs recipe and preserves that builder's own Go baseline.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -927,8 +926,8 @@ Two traps, both measured on `oh-my-posh` while landing it:
 ### Go toolchains are DERIVED from a floor, never pinned
 
 `vu.goToolchainForFloor` takes the package's own go.mod `go` directive (or a
-higher `toolchain` directive) as a FLOOR and returns `ourPkgs.go` whenever our
-pin satisfies it, otherwise the lowest `go-bin` RELEASE that does
+higher `toolchain` directive) as a FLOOR and returns the selected builder's Go
+whenever it satisfies the floor, otherwise the lowest `go-bin` RELEASE that does
 (`purpleclay/go-overlay`, applied inside `ourPkgs` the way `rust-overlay`
 already is), otherwise a throw naming package, floor and newest available.
 
@@ -952,21 +951,25 @@ Scoping it to "whatever broke most recently" is how the same defect gets
 rediscovered per package: when `glab` broke, `gh` had ALREADY silently required
 Go >= 1.26.5 and would have been next.
 
-Reach it through **`vu.mkGoBuilder`**, which composes floor -> toolchain ->
-`buildGoModule.override` in one call. Do not re-expand that chain per package;
-that three-line repeat across three sites is what the helper replaced. `glab` is
-the one legitimate exception — it needs the TOOLCHAIN itself a second time, for
-its schema-dump extract (which compiles upstream's `internal/config` and is
-subject to the same floor), so it calls `goToolchainForFloor` directly and binds
-the result once.
+Reach it through **`vu.mkGoBuilder`**, which composes floor -> toolchain -> the
+selected builder's `.override` in one call. Its callback reads the builder's
+original `go` argument, so a versioned builder newer than `pkgs.go` is not
+downgraded. Do not re-expand that chain per package; that three-line repeat
+across three sites is what the helper replaced. `glab` is the one legitimate
+exception — it needs the TOOLCHAIN itself a second time, for its schema-dump
+extract (which compiles upstream's `internal/config` and is subject to the same
+floor), so it calls `goToolchainForFloor` directly and binds the result once.
 
 **The toolchain is a BUILDER argument, so `.override` is the only seam that
 reaches it.** `overrideAttrs` cannot: `version`/`src`/`vendorHash` are attrs
 `buildGoModule` reads off `finalAttrs`, but `go` is consumed when the builder is
 called. Packages needing both do
 `(pkgs.<name>.override { buildGoModule = …; }).overrideAttrs (…)`, in that
-order. `gh`, `glab` and `otel-tui` all gained the `.override` layer for exactly
-this reason.
+order. For `gh`, nixpkgs may pass `buildGoModule` or a versioned builder such as
+`buildGo127Module`; `vu.goBuilderArgName` selects the actual recipe argument
+from the `.override` callback. Passing the old name to a changed constructor
+fails evaluation and holds back the nixpkgs update. `gh`, `glab` and `otel-tui`
+all gained the `.override` layer for exactly this reason.
 
 #### The floor itself is DERIVED, never hand-written
 

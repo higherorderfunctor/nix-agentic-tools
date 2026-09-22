@@ -315,7 +315,7 @@ rec {
   #   floor: bare version string from go.mod, e.g. "1.25.0"
   #   goBin: `go-bin` from an ourPkgs carrying go-overlay's overlay
   #   lib:   nixpkgs lib (for the version comparators)
-  #   ourGo: `ourPkgs.go` — this repo's pinned toolchain
+  #   ourGo: selected builder's pinned Go (often `ourPkgs.go`)
   #   pname: package name, for the throw message
   goToolchainForFloor = {
     floor,
@@ -486,7 +486,17 @@ rec {
       echo "${pname}: goFloor = $floor"
     '';
 
-  # `buildGoModule` with its toolchain derived from `floor`. The one
+  # Pick the builder argument actually supplied to a nixpkgs Go recipe.
+  # Versioned builders (e.g. buildGo127Module) cannot be replaced by
+  # passing buildGoModule: makeOverridable forwards only the recipe's args.
+  goBuilderArgName = args: let
+    names = builtins.filter (name: builtins.match "buildGo[0-9]*Module" name != null) (builtins.attrNames args);
+  in
+    if builtins.length names == 1
+    then builtins.head names
+    else throw "expected one Go builder argument, found ${builtins.toString names}";
+
+  # A Go module builder with its toolchain derived from `floor`. The one
   # composition every Go overlay here uses, so the floor -> toolchain ->
   # builder chain is written once instead of once per package.
   #
@@ -494,20 +504,22 @@ rec {
   # additive — `pkgs.go` is byte-identical with and without it — so
   # adding it to a package's `ourPkgs` moves no derivation, and every Go
   # package sharing one overlay list collapses to a single nixpkgs
-  # instantiation rather than one apiece.
+  # instantiation rather than one apiece. Preserve the selected builder's
+  # own Go as the baseline: a versioned builder can be newer than pkgs.go.
   mkGoBuilder = {
+    builder ? pkgs.buildGoModule,
     floor,
     pkgs,
     pname,
   }:
-    pkgs.buildGoModule.override {
+    builder.override (builderArgs: {
       go = goToolchainForFloor {
         inherit floor pname;
         goBin = pkgs.go-bin;
         inherit (pkgs) lib;
-        ourGo = pkgs.go;
+        ourGo = builderArgs.go;
       };
-    };
+    });
 
   # The (attrPath, drvPattern, key) triples that the sidecar hash fixers
   # below compose. Declared once and named, so the derivation-name

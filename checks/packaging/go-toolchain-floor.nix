@@ -95,6 +95,32 @@
       ourGo = goBin.versions.${v1};
     };
 
+    # Exercise the same nested makeOverridable callbacks as gh. The old
+    # constructor takes buildGoModule; the new one takes buildGo127Module.
+    # The builder carries its own Go, which need not equal pkgs.go.
+    recipeWithBuilder = recipeFn: name: baseGo: floor: let
+      builder = lib.makeOverridable ({go}: {inherit go;}) {go = baseGo;};
+      recipe = lib.makeOverridable recipeFn {${name} = builder;};
+    in
+      recipe.override (recipeArgs: let
+        builderName = vu.goBuilderArgName recipeArgs;
+      in {
+        ${builderName} = vu.mkGoBuilder {
+          builder = recipeArgs.${builderName};
+          inherit floor;
+          pkgs = goPkgs;
+          pname = "go-toolchain-floor-check";
+        };
+      });
+
+    futureRecipeFn = {buildGo134Module}: buildGo134Module;
+    newRecipeFn = {buildGo127Module}: buildGo127Module;
+    oldRecipeFn = {buildGoModule}: buildGoModule;
+    futureRecipe = recipeWithBuilder futureRecipeFn "buildGo134Module" goBin.versions.${v4} "1.17";
+    newRecipe = recipeWithBuilder newRecipeFn "buildGo127Module" goBin.versions.${v4} "1.17";
+    oldRecipe = recipeWithBuilder oldRecipeFn "buildGoModule" ourGo "1.17";
+    raisedRecipe = recipeWithBuilder newRecipeFn "buildGo127Module" goBin.versions.${v3} v4;
+
     # The lowest-satisfying property, stated independently of how the helper
     # computes it: no release older than what came back also clears the
     # floor.
@@ -145,6 +171,29 @@
     .outPath
         == ourGo.outPath
       );
+
+    go-builder-ambiguous-rejected = mkTest "ambiguous-rejected" (!(builtins.tryEval (vu.goBuilderArgName {
+      buildGoModule = null;
+      buildGo127Module = null;
+    })).success);
+
+    go-builder-future-constructor = mkTest "future-constructor" (
+      futureRecipe.go.outPath == goBin.versions.${v4}.outPath
+    );
+
+    go-builder-missing-rejected = mkTest "missing-rejected" (!(builtins.tryEval (vu.goBuilderArgName {other = null;})).success);
+
+    go-builder-old-constructor = mkTest "old-constructor" (
+      oldRecipe.go.outPath == ourGo.outPath
+    );
+
+    go-builder-versioned-preserves-newer-go = mkTest "versioned-preserves-newer-go" (
+      newRecipe.go.outPath == goBin.versions.${v4}.outPath
+    );
+
+    go-builder-versioned-raises-low-go = mkTest "versioned-raises-low-go" (
+      raisedRecipe.go.outPath == goBin.versions.${v4}.outPath
+    );
 
     # ── Branch 2: the gap is real, go-bin fills it ──────────────────────
     go-toolchain-floor-gap-single = mkTest "gap-single" (
