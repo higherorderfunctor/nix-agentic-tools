@@ -1015,6 +1015,8 @@ path types".
 
 > **Last verified:** 2026-09-21 — context and rules use shared text-source
 > `enable` gates and arbitrate `text` against `source` by module priority.
+> Repository-local `AGENTS.md` targets route through a hidden shared owner at L4
+> before their single devenv sink.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1052,8 +1054,9 @@ path types".
                              │
                              ▼  routing + native rendering
 ┌────────────────────────────────────────────────────────────┐
-│ L4: Final runtime output map                               │
-│   ai.<cli>.files = attrsOf (nullOr { text|source; ... })    │
+│ L4: Final output ownership                                 │
+│   ordinary: ai.<cli>.files                                 │
+│   shared AGENTS.md: ai.internal.{agentsMd,files}            │
 │   - generated whole entries use mkDefault                  │
 │   - ordinary entries replace; null suppresses              │
 └────────────────────────────────────────────────────────────┘
@@ -1070,10 +1073,14 @@ path types".
 
 - **Artifact routing/rendering lives at L4; physical emission lives at L5.**
   L1/L2/L2b are pure fanout — they never touch `ai.<runtime>.files`,
-  `home.file.*`, or devenv `files.*`. The one sidecar exception is managed MCP
-  proxy ownership: `sharedOptions.nix` aggregates proxy declaration scopes and
-  emits unique active systemd units, while only lowered client entries traverse
-  this five-stage pipeline.
+  `ai.internal.{agentsMd,files}`, `home.file.*`, or devenv `files.*`.
+  Repository-local Codex/Kimchi/Kiro `AGENTS.md` contributions use the hidden
+  shared L4 owner so one target reaches one L5 sink; Kimchi's project target is
+  fixed to root `AGENTS.md` even when its Home Manager context filename is
+  customized. The one sidecar exception is managed MCP proxy ownership:
+  `sharedOptions.nix` aggregates proxy declaration scopes and emits unique
+  active systemd units, while only lowered client entries traverse this
+  five-stage pipeline.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
   entries replace same-key root entries wholesale. Nullable pools use null to
   suppress an inherited entry after the shallow merge; rules use
@@ -1095,6 +1102,9 @@ path types".
   runtime's `context.filename`; `enable = false` omits either record. A
   structural `hasMergedContext` bit gates the generated default without reading
   composed sources; rendered bytes remain lazy until that default survives B7.
+  For a shared repository target, the factory contributes to
+  `ai.internal.agentsMd.<filename>` instead of creating a competing runtime
+  writer.
 - **Rule matchers lower only before L4.** `matcher = null` is always-on; a
   non-empty glob list becomes native routing metadata where one exists and
   explicit prose for flat AGENTS.md consumers. In the shared devenv AGENTS.md,
@@ -1132,7 +1142,8 @@ path types".
 - L4 per-runtime routing/rendering into `ai.<runtime>.files` →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L4 shared AGENTS.md rendering and public-entry arbitration into the hidden
-  single-owner map → `lib/ai/app/sharedAgentsMd.nix`
+  `ai.internal.{agentsMd,files}` single-owner maps →
+  `lib/ai/app/sharedAgentsMd.nix`
 - B7 public file-option declaration and runtime enable gate →
   `lib/ai/app/mkBackendTransform.nix`
 - L5 generic backend lowering → `lib/ai/runtime-files.nix`, called from
@@ -1148,8 +1159,9 @@ path types".
    The uniform normalized `settings` schema is the explicit exception: every
    runtime declares it, while each field's native lowering may be narrower.
 4. Add L4 routing/rendering into `ai.<runtime>.files` in each supporting per-CLI
-   factory's customConfig. Lifecycle-owned non-literal outputs remain explicit
-   exceptions rather than bypassing the static map silently.
+   factory's customConfig. A repository-local AGENTS.md target instead joins the
+   shared `ai.internal.agentsMd` owner. Lifecycle-owned non-literal outputs
+   remain explicit exceptions rather than bypassing the static map silently.
 5. Let the existing L5 sink lower the surviving entry; change
    `runtime-files.nix` only when the common literal-file contract itself
    changes.
