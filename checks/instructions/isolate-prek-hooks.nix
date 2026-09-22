@@ -3,14 +3,12 @@
   isolator,
   pkgs,
   ...
-}: {
-  checks.isolate-prek-hooks =
-    pkgs.runCommandLocal "isolate-prek-hooks-check" {
-      nativeBuildInputs = [pkgs.coreutils pkgs.git pkgs.gnugrep];
-    } ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-
+}: let
+  mkLintedCheck = import ../../lib/mk-linted-check.nix {inherit pkgs;};
+in {
+  checks.isolate-prek-hooks = mkLintedCheck "isolate-prek-hooks-check" {
+    runtimeInputs = [pkgs.coreutils pkgs.git pkgs.gnugrep];
+    text = ''
       export HOME="$PWD/home"
       mkdir -p "$HOME" primary stub
       git config --global user.email validation@example.invalid
@@ -34,8 +32,13 @@
       cp "$hooks_dir/post-commit" post-commit.before
 
       ( cd worktree; ${pkgs.lib.getExe isolator} )
+      # These patterns assert literal shell syntax in the generated hook, so
+      # expansion in this check is intentionally disabled.
+      # shellcheck disable=SC2016
       grep -Fq 'PREK_HOME="$(git rev-parse --show-toplevel)/.devenv/state/prek"' "$hooks_dir/pre-commit"
+      # shellcheck disable=SC2016
       grep -Fq '_devenv_primary="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"' "$hooks_dir/pre-commit"
+      # shellcheck disable=SC2016
       grep -Fq -- '--config="$_devenv_config"' "$hooks_dir/pre-commit"
       cmp post-commit.before "$hooks_dir/post-commit"
       test "$(stat --format=%a "$hooks_dir/pre-commit")" = 755
@@ -74,4 +77,5 @@
       mkdir -p "$out"
       touch "$out/ok"
     '';
+  };
 }
