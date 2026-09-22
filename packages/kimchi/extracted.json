@@ -1911,7 +1911,8 @@
           },
           "command": {
             "typeExpression": "string",
-            "type": "string"
+            "type": "string",
+            "optional": true
           }
         },
         "optional": true
