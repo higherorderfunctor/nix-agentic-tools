@@ -1,7 +1,7 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-09-21 — Kimchi version bumps refresh its pinned source
-> inputs and compiler-extracted sidecar alongside the release binaries.
+> **Last verified:** 2026-09-22 — Kimchi version bumps refresh its pinned source
+> and declaration inputs alongside the compiler-extracted sidecar.
 
 ### Overview
 
@@ -62,8 +62,9 @@ These packages pin versions inline (binary CLIs via a per-platform
   GitHub release and prefetches per-platform binaries
 - `kimchi` — per-platform `sources.json` + `mkUpdateScript` fetches the latest
   GitHub release tag and prefetches per-platform tarballs; the same update pins
-  the matching release source and exact pi npm package, then regenerates
-  `extracted.json` with nixpkgs' TypeScript compiler API
+  the matching release source, exact pi npm package, and pi declaration
+  dependencies, then regenerates `extracted.json` with nixpkgs' TypeScript
+  compiler API
 - `kiro-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   version from AWS manifest endpoint
 - `kiro-gateway` — inline `rev` + `hash` with `mkGitRevUpdateScript` for
