@@ -1575,8 +1575,9 @@
       },
       "defaultThinkingLevel": {
         "source": "pi",
-        "typeExpression": "ThinkingLevel",
-        "type": "named",
+        "typeExpression": "\"off\" | \"minimal\" | \"low\" | \"medium\" | \"high\" | \"xhigh\" | \"max\"",
+        "type": "enum",
+        "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
         "optional": true
       },
       "defaultTools": {
@@ -1641,23 +1642,28 @@
         "properties": {
           "autoResume": {
             "typeExpression": "boolean",
-            "type": "boolean"
+            "type": "boolean",
+            "optional": true
           },
           "defaultTokenBudget": {
             "typeExpression": "number",
-            "type": "number"
+            "type": "number",
+            "optional": true
           },
           "evaluationTimeoutMs": {
             "typeExpression": "number",
-            "type": "number"
+            "type": "number",
+            "optional": true
           },
           "maxConsecutiveErrors": {
             "typeExpression": "number",
-            "type": "number"
+            "type": "number",
+            "optional": true
           },
           "maxUnchangedContinuations": {
             "typeExpression": "number",
-            "type": "number"
+            "type": "number",
+            "optional": true
           }
         },
         "optional": true
@@ -1684,8 +1690,9 @@
       },
       "fullscreenScrollbar": {
         "source": "pi",
-        "typeExpression": "ScrollViewScrollbar",
-        "type": "named",
+        "typeExpression": "\"auto\" | \"always\" | \"hidden\"",
+        "type": "enum",
+        "enum": ["auto", "always", "hidden"],
         "optional": true
       },
       "hidePhaseChanges": {
@@ -1781,6 +1788,7 @@
           "builder": {
             "typeExpression": "string | string[]",
             "type": "union",
+            "optional": true,
             "description": "Code implementation model(s)."
           },
           "compactor": {
@@ -1792,31 +1800,37 @@
           "explorer": {
             "typeExpression": "string | string[]",
             "type": "union",
+            "optional": true,
             "description": "Codebase exploration model(s)."
           },
           "judge": {
             "typeExpression": "string | string[]",
             "type": "union",
+            "optional": true,
             "description": "Ferment judge model(s): verification triage and final grading calls."
           },
           "orchestrator": {
             "typeExpression": "string",
             "type": "string",
+            "optional": true,
             "description": "Main model: runs the orchestrator loop, delegates work to other roles."
           },
           "planner": {
             "typeExpression": "string | string[]",
             "type": "union",
+            "optional": true,
             "description": "Planning model(s): designs the approach, writes specs."
           },
           "researcher": {
             "typeExpression": "string | string[]",
             "type": "union",
+            "optional": true,
             "description": "Research model(s): research beyond codebase — web search, documentation lookup, external sources."
           },
           "reviewer": {
             "typeExpression": "string | string[]",
             "type": "union",
+            "optional": true,
             "description": "Code review model(s)."
           }
         },
@@ -1826,6 +1840,11 @@
         "source": "pi",
         "typeExpression": "{ [x: string]: ThinkingLevel; }",
         "type": "object",
+        "additionalProperties": {
+          "typeExpression": "\"off\" | \"minimal\" | \"low\" | \"medium\" | \"high\" | \"xhigh\" | \"max\"",
+          "type": "enum",
+          "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
+        },
         "optional": true
       },
       "multiModel": {
@@ -1948,7 +1967,8 @@
                 "credits",
                 "budget"
               ]
-            }
+            },
+            "optional": true
           },
           "command": {
             "typeExpression": "string",
@@ -1997,8 +2017,9 @@
       },
       "transport": {
         "source": "pi",
-        "typeExpression": "Transport",
-        "type": "named",
+        "typeExpression": "\"sse\" | \"websocket\" | \"websocket-cached\" | \"auto\"",
+        "type": "enum",
+        "enum": ["sse", "websocket", "websocket-cached", "auto"],
         "optional": true
       },
       "treeFilterMode": {
@@ -2010,8 +2031,9 @@
       },
       "tuiMode": {
         "source": "pi",
-        "typeExpression": "RendererTuiMode",
-        "type": "named",
+        "typeExpression": "\"regular\" | \"fullscreen\"",
+        "type": "enum",
+        "enum": ["regular", "fullscreen"],
         "optional": true
       },
       "warnings": {
