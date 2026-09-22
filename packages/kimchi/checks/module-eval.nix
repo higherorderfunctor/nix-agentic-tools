@@ -48,7 +48,7 @@ in {
             nativeSettings.telemetry.enabled = false;
           };
         };
-        text = result.config.files.".config/kimchi/config.json".text;
+        text = builtins.toJSON (configDocument result).value;
       in
         lib.hasInfix ''"telemetry":{"enabled":false}'' text
         && !lib.hasInfix "telemetry.enabled" text
@@ -100,7 +100,9 @@ in {
           };
         };
       in
-        result.config.files ? ".config/kimchi/harness/settings.json"
+        result.config.tasks ? "ai:kimchi:harness-settings-merge"
+        && (harnessDocument result).value.resources."tools.web_search"
+        && !(result.config.files ? ".config/kimchi/harness/settings.json")
     );
 
     # The Cast AI key is a runtime credential ({file|helper}); setting

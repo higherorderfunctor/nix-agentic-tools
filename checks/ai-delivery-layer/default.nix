@@ -91,7 +91,8 @@
   # check fails in BOTH directions — a new writer anywhere under
   # `packages/*/lib/` fails it, and so does an entry the scan can no longer
   # reproduce. The list is empty when the migration is done, and then this
-  # check is what keeps it empty.
+  # capstone replaces this transitional census when the list would become
+  # empty; an explicit guard below makes that handoff self-retiring.
   #
   # What the scan CANNOT see is a bundle a helper returns —
   # `lib.mkMerge [(helpers.mkOwnedDocument …)]` writes `home.activation`,
@@ -106,7 +107,6 @@
     "packages/chatgpt-codex/lib/mkCodex.nix" = "skill/agent/execpolicy/hooks entries and the two skill-link migrators";
     "packages/claude-code/lib/mkClaude.nix" = "the devenv settings.json deep merges and the skill walker";
     "packages/copilot-cli/lib/mkCopilot.nix" = "lsp, mcp and settings documents, rules, agents and skills";
-    "packages/kimchi/lib/mkKimchi.nix" = "config.json, harness settings and mcp.json, and skills";
     "packages/kiro-cli/lib/mkKiro.nix" = "permissions, lsp, cli.json, agents, the agents-dir walker and skills";
   };
 
@@ -938,10 +938,25 @@ in {
         test -s "$work/corpus"
         echo "scanned $(tr -d -c '\0' < "$work/corpus" | wc -c) factory library files"
 
-        xargs -0 -r grep -lE -e "$anchored" -e "$nested" < "$work/corpus" | sort > "$work/actual" || true
+        : > "$work/actual"
+        while IFS= read -r -d $'\0' path; do
+          if grep -lE -e "$anchored" -e "$nested" "$path" >> "$work/actual"; then
+            :
+          else
+            rc=$?
+            test "$rc" -eq 1 || exit "$rc"
+          fi
+        done < "$work/corpus"
+        sort -o "$work/actual" "$work/actual"
         {
+          :
           ${lib.concatMapStringsSep "\n          " (path: "echo ${lib.escapeShellArg path}") (lib.attrNames sinkWriters)}
         } | sort > "$work/allowed"
+
+        if test ! -s "$work/allowed"; then
+          echo "delivery: the transitional direct-sink census is empty; land the capstone zero-writer contract instead of carrying this migration check." >&2
+          exit 1
+        fi
 
         if ! diff -u "$work/allowed" "$work/actual" > "$work/sink-writers.diff"; then
           echo "delivery: the set of files writing a native sink directly has changed." >&2
