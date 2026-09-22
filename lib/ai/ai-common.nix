@@ -7,29 +7,11 @@
 {lib}: let
   aiTypes = import ./types.nix {inherit lib;};
   contentType = enableDefault:
-    aiTypes.extendSubmodule
-    (aiTypes.optionalTextSource {
+    aiTypes.optionalTextSource {
       description = "Markdown content";
       inherit enableDefault;
-    })
-    ({
-      config,
-      options,
-      ...
-    }: {
-      options._sourceWins = lib.mkOption {
-        type = lib.types.bool;
-        default =
-          config.source
-          != null
-          && options.source.highestPrio < options.text.highestPrio;
-        description = "Whether source supplies the effective Markdown content.";
-        internal = true;
-        readOnly = true;
-      };
-    });
-  contentUsesSource = value:
-    value._sourceWins or (!(value ? text) && (value.source or null) != null);
+    };
+  contentUsesSource = aiTypes.textSourceUsesSource;
   hasContent = value:
     value
     != null
@@ -183,20 +165,12 @@ in {
   # survives with no bytes at all. Putting the priority one level down is what
   # makes "change how this lands, keep what is in it" expressible.
   #
-  # The empty case stays a whole-entry default, because a defaulted `null` is a
-  # tombstone for the WHOLE entry and there is no content option to put it on.
-  # Callers gate this on the STRUCTURAL `hasMergedContext`, and that is what
-  # lets the entry's shape be a constant: testing `value == null` here would
-  # force the composed body while the module system is only looking at the
-  # entry's shape, which builds a store source a consumer may have already
-  # replaced. Everything that depends on the value sits INSIDE the `mkDefault`,
-  # where `filterOverrides` can drop it unread.
+  # Callers gate this on the STRUCTURAL `hasMergedContext`, so the entry shape
+  # does not inspect rendered bytes. Everything that depends on the value sits
+  # INSIDE `mkDefault`, where `filterOverrides` can drop a discarded source
+  # unread. Generated content explicitly enables its shared text-source record.
   contentFileEntry = value: {
-    content = lib.mkDefault (
-      if contentUsesSource value
-      then {inherit (value) source;}
-      else {inherit (value) text;}
-    );
+    content = lib.mkDefault (aiTypes.textSourceFile value // {enable = true;});
   };
 
   # ── Activation flag scoping ────────────────────────────────────────

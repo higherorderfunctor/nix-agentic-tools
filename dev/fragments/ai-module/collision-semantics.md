@@ -17,27 +17,27 @@ This matrix is the authoritative cross-runtime merge and fanout contract. Any
 change to one of these boundaries must update the corresponding row in the same
 commit.
 
-| ID  | Boundary                                          | Unit    | Behavior                                                                                                                                                       |
-| --- | ------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B0  | root pool → runtime lacking that pool             | pool    | Degrade to the neutral value; the corresponding per-runtime option does not exist.                                                                             |
-| B1  | root pool ↔ runtime pool, same key                | entry   | The runtime entry replaces the root entry wholesale.                                                                                                           |
-| B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                                            |
-| B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                                 |
-| B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                                 |
-| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                                          |
-| B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                                          |
-| B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                              |
-| B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                              |
-| B6a | normalized rule matcher → native scope            | field   | Null is always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex routing prose.                                          |
-| B7  | generated native file ↔ runtime file entry        | field   | Generator defaults `content` alone; a consumer replaces the bytes, changes a sibling field, or suppresses the entry with `null`, which wins at equal priority. |
-| B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                                                                 |
-| B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                                                         |
-| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops a nullable-pool entry; `enable = false` drops a rule after the shallow merge.                                                             |
+| ID  | Boundary                                          | Unit    | Behavior                                                                                                                                                   |
+| --- | ------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B0  | root pool → runtime lacking that pool             | pool    | Degrade to the neutral value; the corresponding per-runtime option does not exist.                                                                         |
+| B1  | root pool ↔ runtime pool, same key                | entry   | The runtime entry replaces the root entry wholesale.                                                                                                       |
+| B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                                        |
+| B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                             |
+| B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                             |
+| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                                      |
+| B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                                      |
+| B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                          |
+| B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                          |
+| B6a | normalized rule matcher → native scope            | field   | Null is always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex routing prose.                                      |
+| B7  | generated native file ↔ runtime file entry        | field   | Generator defaults `content` alone; a consumer replaces the bytes, changes a sibling field, or suppresses text/source bytes with `content.enable = false`. |
+| B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                                                             |
+| B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                                                     |
+| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops a nullable-pool entry; `enable = false` drops a rule after the shallow merge.                                                         |
 
 B3 is why `//` is correct and `recursiveUpdate` is wrong. B7's unit used to be
 the complete rendered native file; it is now the delivery entry's fields, and
-its null is still a final-output tombstone, separate from keyed-pool B10.
-Neither changes the nullable-scalar inheritance contract in B4 or B5.
+its text/source content uses the same explicit enable gate as authored prose.
+That does not change the nullable-scalar inheritance contract in B4 or B5.
 
 ### Keyed-pool rule
 
@@ -174,12 +174,9 @@ runs before a type merges: a whole-entry `mkDefault` is discarded outright by a
 consumer who sets only `method` or a fact, and the survivor has no bytes at all.
 Two consequences follow.
 
-- Pushing the default below a `nullOr` boundary normally breaks the tombstone —
-  Nix must choose the null or record branch before leaf priorities arbitrate,
-  and reports the option as defined both null and not null. `null` therefore
-  ABSORBS in this map's merge: a definition that suppresses the file beats one
-  that describes it at equal priority, and `filterOverrides` still settles
-  unequal ones first. It is the only custom merge in the delivery layer.
+- The map has no nullable entry branch. A consumer suppresses generated
+  text/source bytes with `content.enable = false`, so ordinary submodule
+  priority arbitration remains available and the final record stays inspectable.
 - An entry whose content decision reads its own rendered body cannot move its
   priority down at all: the module system forces the entry's shape long before
   it knows whether the definition survives, so the read would build a source the
@@ -226,24 +223,24 @@ Context is the lazy exception: `mkBackendTransform.nix` derives
 `composeContent`. Package callbacks use that boolean to decide whether to
 contribute a generated default; they must not probe `mergedContext != null`,
 because two-part composition reads source bytes and would force a default that
-B7 later replaces or tombstones. The composed value stays inside the lazy
-default until priority arbitration selects it.
+B7 later replaces or disables. The composed value stays inside the lazy default
+until priority arbitration selects it.
 
 `hmTransform.nix` and `devenvTransform.nix` are thin backend selectors; do not
 duplicate pool logic into them.
 
 B7's type lives in `lib/ai/delivery-options.nix`; `lib/ai/runtime-files.nix`
-owns path and content validation, null filtering, and the shape one entry takes
-in a native sink; `lib/ai/deliver.nix` and the two adapters own the lowering.
-Package callbacks may render entries into the runtime map but must not read that
-map to define normalized inputs; keeping the edge one-way is what makes the
-module fixed point evaluable.
+owns path and content validation, enable filtering, and the shape one entry
+takes in a native sink; `lib/ai/deliver.nix` and the two adapters own the
+lowering. Package callbacks may render entries into the runtime map but must not
+read that map to define normalized inputs; keeping the edge one-way is what
+makes the module fixed point evaluable.
 
 Repository-local Codex/Kiro `AGENTS.md` is the shared-target exception, not a B7
 exception. `sharedAgentsMd.nix` admits applicable public entries from enabled
 runtimes into its hidden final map before the one native sink; a disabled
 runtime's declared map remains inert. The generated composition is a lazy
-default there, so ordinary replacements and null tombstones arbitrate at B7
+default there, so ordinary replacements and disabled records arbitrate at B7
 without reading discarded source-backed generator content; equal runtime entries
 deduplicate and divergent ones fail. Size guards read only the surviving inline
 final entry. A surviving store-backed `source` remains lazy and is not

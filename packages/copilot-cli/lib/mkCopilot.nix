@@ -429,6 +429,7 @@ in
             ai.copilot.files = lib.mapAttrs' (name: rule:
               lib.nameValuePair "${cfg.projectDir}/instructions/${name}.instructions.md" {
                 content = lib.mkDefault {
+                  enable = true;
                   text = fragmentsLib.mkRenderer copilotTransformer {} (rule
                     // {
                       paths = rule.matcher;
