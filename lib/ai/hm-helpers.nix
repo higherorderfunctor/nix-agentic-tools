@@ -159,11 +159,22 @@ in rec {
   #               Kiro flattens dot-keys first).
   # jq:           absolute jq binary path ("${pkgs.jq}/bin/jq").
   # coreutils:    coreutils package (absolute paths for every command).
+  # mode:         octal mode for the reconciled file. Defaults to 0600 because
+  #               every current caller targets a per-user config that the
+  #               runtime itself writes credentials into — `.claude.json` holds
+  #               account tokens, kimchi's `config.json` holds `apiKey` and
+  #               `gitTokens`. This used to be a hardcoded 0644, which ACTIVELY
+  #               WIDENED those files: `mktemp` creates at 0600 and `mv`
+  #               preserves it, so the chmod was the only thing making a
+  #               credential file group- and world-readable, on every
+  #               activation, with no failure to notice. Pass an explicit mode
+  #               only for a file that genuinely must be broader.
   mkSettingsActivationScript = {
     configFile,
     settingsJson,
     jq,
     coreutils,
+    mode ? "0600",
   }: let
     parentDir = builtins.dirOf configFile;
   in
@@ -187,7 +198,7 @@ in rec {
         ${coreutils}/bin/mv "$TMP" "$CONFIG_FILE"
       fi
       ${coreutils}/bin/rm -f "$NIX_SETTINGS"
-      ${coreutils}/bin/chmod 644 "$CONFIG_FILE"
+      ${coreutils}/bin/chmod ${mode} "$CONFIG_FILE"
     '';
 
   # Reconcile Nix-declared TOML leaves into a runtime-writable file without
