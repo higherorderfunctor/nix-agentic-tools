@@ -7,9 +7,12 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/agent.nix,
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-21 — shared text-source types enforce enabled and
-> required content while preserving lazy source-backed emission, inner
-> `defaultContent`, `enable` suppression, and priority arbitration.
+> **Last verified:** 2026-09-21 — the shared text-source types carry every
+> authored prose surface, semantic-agent `instructions` and Kiro typed-agent
+> `prompt` included. They arbitrate `text` against `source` by priority, enforce
+> content on enabled and required sources, preserve lazy source-backed emission,
+> take package prose through `defaultContent`, and suppress with
+> `enable = false`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -239,8 +242,9 @@ The ai module fans out TWO kinds of configuration:
 - `ai.codex.agents.<name>` — the semantic agent record plus a freeform `codex`
   TOML extension. Home Manager emits `${configDir}/agents/<name>.toml`; devenv
   emits trusted-project `.codex/agents/<name>.toml`. The filename stem supplies
-  native `name`, while `description` and `instructions` lower to the two other
-  required native fields. Reserved core fields cannot be redefined in `codex`.
+  native `name`, while `description` and resolved `instructions.text` lower to
+  the two other required native fields. `instructions.source` reads a packaged
+  file into that text. Reserved core fields cannot be redefined in `codex`.
   Global concurrency, model/effort defaults, and interruption behavior live in
   the typed `ai.codex.nativeSettings.agents` table.
 - `ai.codex.hooks.<Event>` — Codex-native matcher groups and command handlers,
@@ -277,21 +281,21 @@ enabled ecosystem whose native model preserves the option's semantics):
   and repository-local `.agents/skills` in devenv; Claude, Copilot, Kimchi, and
   Kiro use their established native directories.
 - `ai.agents` — either legacy Markdown/path entries for Claude and Copilot or a
-  portable `{ description, instructions, tools?, codex? }` record. Semantic
-  records render Claude/Copilot frontmatter plus body and Codex standalone TOML.
-  The optional `tools` list uses Claude and Copilot's shared tool names and
-  renders a non-empty value as their comma-separated frontmatter allowlist;
-  `null` and `[]` both omit the header. Codex deliberately omits it because its
-  standalone agent format has no equivalent field. Codex fails loudly on a
-  legacy raw entry instead of pretending Markdown is a valid agent config.
-  Legacy Nix paths stay path-valued for Claude's native option but are read into
-  text for Copilot's file writer. Kiro remains excluded, but NOT because its
-  agents are untyped JSON — `ai.kiro.agents` is a typed record modelling Kiro's
-  v3 agent schema, and its shape overlaps this intersection fine. The blocker is
-  the tool VOCABULARY: this pool's `tools` carries Claude/Copilot tool names
-  (`Bash`, `Read`) while Kiro takes capability tags (`shell`, `read`, `@mcp`),
-  so lowering needs a translation table, not a pass-through. Add one and the
-  exclusion can be revisited.
+  portable `{ description, instructions = { text | source; }; tools?; codex?; }`
+  record. Semantic records render Claude/Copilot frontmatter plus body and Codex
+  standalone TOML. The optional `tools` list uses Claude and Copilot's shared
+  tool names and renders a non-empty value as their comma-separated frontmatter
+  allowlist; `null` and `[]` both omit the header. Codex deliberately omits it
+  because its standalone agent format has no equivalent field. Codex fails
+  loudly on a legacy raw entry instead of pretending Markdown is a valid agent
+  config. Legacy Nix paths stay path-valued for Claude's native option but are
+  read into text for Copilot's file writer. Kiro remains excluded, but NOT
+  because its agents are untyped JSON — `ai.kiro.agents` is a typed record
+  modelling Kiro's v3 agent schema, and its `prompt` uses the same
+  `text`/`source` content shape. The blocker is the tool VOCABULARY: this pool's
+  `tools` carries Claude/Copilot tool names (`Bash`, `Read`) while Kiro takes
+  capability tags (`shell`, `read`, `@mcp`), so lowering needs a translation
+  table, not a pass-through. Add one and the exclusion can be revisited.
 - `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
   lifecycle event set. Shared groups run before per-runtime groups for the same
   event. Matcher strings pass through, so consumers must stay within the regex

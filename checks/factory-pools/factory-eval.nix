@@ -12,12 +12,12 @@ in {
       poolName = "agents";
       rootValue = {
         description = "root";
-        instructions = "root";
+        instructions.text = "root";
         tools = ["Read"];
       };
       runtimeValue = {
         description = "runtime";
-        instructions = "runtime";
+        instructions.text = "runtime";
       };
       checkRoot = value:
         value.description == "root" && value.tools == ["Read"];

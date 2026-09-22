@@ -8,6 +8,10 @@ let
     search = ["content" "max_snippet_lines" "query" "repo" "top_k"];
   };
   claudeMcpTools = map (tool: "mcp__semble__${tool}") (builtins.attrNames mcpTools);
+  mkTextSource = value:
+    if builtins.isPath value
+    then {source = value;}
+    else {text = value;};
 
   mkCliRecords = command: let
     renderedInstructions =
@@ -25,12 +29,12 @@ let
       else {text = renderedInstructions;};
     kiroAgent = {
       description = baseDescription;
-      prompt = renderedInstructions;
+      prompt = mkTextSource renderedInstructions;
       tools = ["shell" "read"];
     };
     semanticAgent = {
       description = baseDescription;
-      instructions = renderedInstructions;
+      instructions = mkTextSource renderedInstructions;
       tools = ["Bash" "Read"];
     };
   };
@@ -39,12 +43,12 @@ let
   mcp = {
     kiroAgent = {
       description = baseDescription;
-      prompt = mcpInstructions;
+      prompt = mkTextSource mcpInstructions;
       tools = ["@semble"];
     };
     semanticAgent = {
       description = baseDescription;
-      instructions = mcpInstructions;
+      instructions = mkTextSource mcpInstructions;
       tools = claudeMcpTools;
     };
   };

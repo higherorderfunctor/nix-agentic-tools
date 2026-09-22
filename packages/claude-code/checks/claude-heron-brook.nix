@@ -1,5 +1,5 @@
 # Integrity guard for the heron_brook reminder step in .github/workflows/ci.yml
-# (the ~90-day re-check for ai.claude.delegationClamp, which is opt-in).
+# (the ~90-day re-check for ai.claude.delegationClampMitigation, which is opt-in).
 #
 # That step is gated on `if: github.head_ref == 'update/<key>'`. The branch is
 # generated as `update/<key>` from the attribute key in config.update.targets,
@@ -22,7 +22,7 @@
 # reports before anything is built. Scoped to this attribute, so the rest of
 # `nix flake check` still evaluates and reports normally.
 #
-# Delete this file together with ai.claude.delegationClamp and the ci.yml step.
+# Delete this file together with ai.claude.delegationClampMitigation and the ci.yml step.
 {
   lib,
   pkgs,
@@ -101,7 +101,7 @@
           This guard anchors on that step name to find the reminder's `if:` gate.
           If the step was renamed, update `stepName` in
           packages/claude-code/checks/claude-heron-brook.nix to match. If it was deleted on purpose,
-          delete this file and ai.claude.delegationClamp with it.
+          delete this file and ai.claude.delegationClampMitigation with it.
         ''
       else if gateCount > 1
       then
@@ -128,7 +128,7 @@
           it no longer tracks the update branch. Restore
           `if: github.head_ref == 'update/<key>'` on that step. If the mitigation
           was removed on purpose, delete packages/claude-code/checks/claude-heron-brook.nix and
-          ai.claude.delegationClamp along with it.
+          ai.claude.delegationClampMitigation along with it.
         ''
       else if captured == null
       then
@@ -149,7 +149,7 @@
           config.update.targets.
 
           The bot never opens that branch, so the ~90-day reminder for
-          ai.claude.delegationClamp will never fire again. Point the `if:` in
+          ai.claude.delegationClampMitigation will never fire again. Point the `if:` in
           .github/workflows/ci.yml at the current target key.
         ''
       else

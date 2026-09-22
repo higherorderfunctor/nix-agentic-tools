@@ -1168,7 +1168,7 @@ in {
             ai.kiro = {
               enable = true;
               v3 = true;
-              identity = "You are Atlas, a senior systems engineer.";
+              identity.text = "You are Atlas, a senior systems engineer.";
             };
           })
         .config
@@ -1200,7 +1200,7 @@ in {
             ai.kiro = {
               enable = true;
               v3 = true;
-              identity = "You are Atlas, a senior systems engineer.";
+              identity.text = "You are Atlas, a senior systems engineer.";
             };
           })
         .config
@@ -1232,7 +1232,7 @@ in {
             ai.kiro = {
               enable = true;
               v3 = true;
-              identity = null;
+              identity.enable = false;
             };
           })
         .config
@@ -1255,7 +1255,7 @@ in {
           ai.kiro = {
             enable = true;
             v3 = true;
-            identity = "You are Atlas, a senior systems engineer";
+            identity.text = "You are Atlas, a senior systems engineer";
           };
         };
         asserts =
@@ -1275,7 +1275,7 @@ in {
             ai.kiro = {
               enable = true;
               v3 = true;
-              identity = ident;
+              identity.text = ident;
             };
           };
         in
@@ -1313,7 +1313,8 @@ in {
         # `agent` is the no-subprocess action: the short reminder is a static
         # string, so it needs no script and ignores timeout.
         && hooks.workflow-reminder.action.type == "agent"
-        && hooks.workflow-reminder.action.prompt != null
+        && hooks.workflow-reminder.action.prompt.enable
+        && hooks.workflow-reminder.action.prompt.text != ""
     );
 
     module-kiro-workflow-reminder-absent-without-workflows =
@@ -1823,7 +1824,7 @@ in {
               enable = true;
               agents.reviewer = {
                 description = "Reviews diffs";
-                prompt = "You review diffs.";
+                prompt.text = "You review diffs.";
                 tools = ["read" "shell"];
               };
             };
@@ -1834,6 +1835,7 @@ in {
           j.name
           == "reviewer"
           && j.description == "Reviews diffs"
+          && j.prompt == "You review diffs."
           && j.tools == ["read" "shell"]
           # null/empty optionals must not reach the file
           && !(j ? model)
@@ -1863,6 +1865,10 @@ in {
                     effect = "deny";
                   }
                 ];
+                prompt = {
+                  enable = false;
+                  text = "This disabled prompt must not be emitted.";
+                };
                 resources = [
                   {
                     type = "knowledgeBase";
@@ -1883,12 +1889,31 @@ in {
         rule.capability
         == "shell"
         && rule.effect == "deny"
+        && !(emitted ? prompt)
+        && !(emitted ? welcomeMessage)
         && !(rule ? match)
         && !(rule ? exclude)
         && resource.source == "file:///docs"
         && !(resource ? include)
         && !(resource ? exclude)
         && !(resource ? name)
+    );
+
+    # Enabled optional text must carry content. Force the typed agent record so
+    # the shared scalar text-source validation runs during module evaluation.
+    module-kiro-typed-agent-enabled-empty-welcome-message-rejected = mkTest "kiro-typed-agent-enabled-empty-welcome-message-rejected" (
+      let
+        attempt = builtins.tryEval (let
+          result = evalHm {
+            ai.kiro = {
+              enable = true;
+              agents.empty-welcome.welcomeMessage.enable = true;
+            };
+          };
+        in
+          builtins.deepSeq result.config.ai.kiro.agents.empty-welcome.welcomeMessage true);
+      in
+        !attempt.success
     );
 
     # An explicit `name` overrides the attr-key default — Kiro keys the agent on

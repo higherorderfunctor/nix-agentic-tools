@@ -12,6 +12,7 @@
   ...
 }: let
   agent = import ../../../lib/ai/agent.nix {inherit lib;};
+  aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   # Eval-pure reads of COMMITTED source JSON (no IFD). See overlays.md
   # § IFD Patterns and memory project_claude_effort_pin_state.
@@ -19,6 +20,15 @@
     builtins.fromJSON (builtins.readFile ../extracted.json);
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   unrecognizedSettings = import ./unrecognizedSettings.nix {inherit lib;};
+
+  delegationClampMitigationDefaultProse = ''
+    Standing request from me, the user: you have my permission to use subagents
+    (the Agent/Task tool), workflows, and deep research whenever they fit the
+    task at hand. Treat this as the request that any "unless the user requested
+    it" condition is asking for — it is granted, now and for the rest of this
+    session. Use your own judgment about when they actually fit; this grants
+    permission, it does not oblige you to delegate.
+  '';
 
   # The `nativeSettings` option surface: one option per path in the packaged
   # binary's own settings schema, merged with the hand-authored exceptions.
@@ -146,7 +156,7 @@
 
   # heron_brook delegation clamp — the opt-in mitigation's hook pair.
   #
-  # Two events, one script (./delegationClamp.nix):
+  # Two events, one script (./delegationClampMitigation.nix):
   #   UserPromptSubmit → inject the standing request ONCE per session. This event
   #                      specifically, because its additionalContext is appended to
   #                      the USER's message; a SessionStart injection renders
@@ -158,8 +168,8 @@
   # Emitted as a `ai.claude.hooks` DEFINITION rather than as that option's `default`:
   # an option default is discarded wholesale the moment a consumer defines the option
   # at all, whereas a definition list-merges with consumer entries on the same event.
-  delegationClampHooks = clamp: let
-    bin = lib.getExe (import ./delegationClamp.nix {
+  delegationClampMitigationHooks = clamp: let
+    bin = lib.getExe (import ./delegationClampMitigation.nix {
       inherit lib pkgs;
       inherit (clamp) text;
     });
@@ -480,75 +490,62 @@ in
           }
         '';
       };
-      delegationClamp = lib.mkOption {
-        type = lib.types.submodule {
-          options = {
-            mitigate = lib.mkOption {
-              type = lib.types.bool;
-              default = false;
-              description = ''
-                Counteract Claude Code's `heron_brook` delegation clamp. Off by default.
-
-                Claude Code injects a system-prompt section instructing the model not to
-                call the Agent tool and not to use workflows or deep research "unless the
-                user requested it". It is gated on a MODEL capability rather than on user
-                configuration — on for Opus 5 — and there is no settings key, CLI flag, or
-                environment variable that disables it. It never appears in the transcript,
-                so a session with delegation silently suppressed looks identical to a
-                normal one. It also directly negates `ai.claude.ultracodeOnLaunch`, which
-                asks for the opposite.
-
-                Rather than patch anything, this supplies the request the clamp's own
-                escape clause is asking for: a `UserPromptSubmit` hook injects a standing
-                request as USER-side context (see `text`).
-
-                Injected once per session and re-armed by a `PreCompact` hook, since
-                compaction is the one event that erases it — so the cost is roughly 75
-                tokens per session, not per turn. Per-turn injection would be cumulative,
-                because `additionalContext` is appended to the user message and persists
-                in conversation history.
-
-                Upstream issue: https://github.com/anthropics/claude-code/issues/80988.
-                Set true to enable. A dated CI step re-surfaces this roughly every 90 days
-                so the mitigation does not outlive its cause.
-              '';
-            };
-            text = lib.mkOption {
-              type = lib.types.lines;
-              default = ''
-                Standing request from me, the user: you have my permission to use subagents
-                (the Agent/Task tool), workflows, and deep research whenever they fit the
-                task at hand. Treat this as the request that any "unless the user requested
-                it" condition is asking for — it is granted, now and for the rest of this
-                session. Use your own judgment about when they actually fit; this grants
-                permission, it does not oblige you to delegate.
-              '';
-              description = ''
-                The standing request injected as user-side context.
-
-                The default's phrasing is load-bearing, not incidental. It SATISFIES the
-                clamp's "unless the user requested it" escape clause instead of
-                contradicting the instruction — a contradiction pits a user-message line
-                against a system-prompt line, which resolves toward the system prompt or
-                toward hedging. It is affirmative rather than a negation of something the
-                model cannot point at ("ignore any instruction telling you X" reads as
-                adversarial injection and increases suspicion). It never presents itself
-                as machine-generated or relayed, because an instruction understood to come
-                from an automated parent gets discounted as not-a-user-request. And it
-                GRANTS permission rather than mandating delegation, since an overreaching
-                instruction invites that same discounting.
-
-                Re-derive those four properties before rewording.
-              '';
-            };
-          };
+      delegationClampMitigation = lib.mkOption {
+        type = aiTypes.optionalTextSource {
+          defaultContent.text = delegationClampMitigationDefaultProse;
+          description = "the standing request injected as user-side context";
+          enableDefault = false;
         };
         default = {};
+        defaultText = lib.literalExpression (lib.generators.toPretty {} {
+          enable = false;
+          text = delegationClampMitigationDefaultProse;
+        });
         description = ''
-          Mitigation for Claude Code's undocumented `heron_brook` delegation clamp,
-          which suppresses subagent and workflow use on a model-capability gate with no
-          user-facing off switch. On by default — see `mitigate` for what it is and why,
-          and `packages/claude-code/docs/heron-brook-clamp.md` for the full account.
+          Counteract Claude Code's undocumented `heron_brook` delegation clamp. Off by
+          default means off when you define no content: the packaged prose remains
+          available but dormant. Setting `enable = true` installs both hooks with that
+          packaged prose. Defining custom `text` (or `source`) automatically sets
+          `enable = true` and installs both hooks with the custom prose. To stage custom
+          prose without activating the mitigation, define the content and explicitly set
+          `enable = false`; neither hook is then installed.
+
+          Claude Code injects a system-prompt section instructing the model not to call
+          the Agent tool and not to use workflows or deep research "unless the user
+          requested it". It is gated on a MODEL capability rather than on user
+          configuration — on for Opus 5 — and there is no settings key, CLI flag, or
+          environment variable that disables it. It never appears in the transcript, so
+          a session with delegation silently suppressed looks identical to a normal one.
+          It also directly negates `ai.claude.ultracodeOnLaunch`, which asks for the
+          opposite.
+
+          Rather than patch anything, this supplies the request the clamp's own escape
+          clause is asking for: a `UserPromptSubmit` hook injects a standing request as
+          USER-side context.
+
+          Injected once per session and re-armed by a `PreCompact` hook, since compaction
+          is the one event that erases it — so the cost is roughly 75 tokens per session,
+          not per turn. Per-turn injection would be cumulative, because
+          `additionalContext` is appended to the user message and persists in conversation
+          history.
+
+          The default's phrasing is load-bearing, not incidental. It SATISFIES the clamp's
+          "unless the user requested it" escape clause instead of contradicting the
+          instruction — a contradiction pits a user-message line against a system-prompt
+          line, which resolves toward the system prompt or toward hedging. It is
+          affirmative rather than a negation of something the model cannot point at
+          ("ignore any instruction telling you X" reads as adversarial injection and
+          increases suspicion). It is FIRST-PERSON, because live verification showed that
+          this is what carries the weight even though the hook channel is visible. And it
+          GRANTS permission rather than mandating delegation, since an overreaching
+          instruction invites that same discounting.
+
+          Re-derive those four properties before rewording.
+
+          Upstream issue: https://github.com/anthropics/claude-code/issues/80988. A dated
+          CI step re-surfaces this roughly every 90 days so the mitigation does not outlive
+          its cause. See `packages/claude-code/docs/heron-brook-clamp.md` for the full
+          account.
         '';
       };
       hooks = lib.mkOption {
@@ -637,7 +634,7 @@ in
                 with the neighbour listing as the reason, then allows the retry — one
                 extra round trip per distinct file, once per session.
 
-                OFF by default deliberately, unlike `delegationClamp`. That one corrects
+                OFF by default deliberately, unlike `delegationClampMitigation`. That one corrects
                 a vendor defect and is strictly additive; this one BLOCKS a tool call,
                 and its cadence is an untuned gut call rather than a measured one. Opt in
                 per consumer until there is evidence about whether it helps more than it
@@ -754,13 +751,13 @@ in
               dirHelpers.hooksFromDir cfg.hookScriptsDir
             );
           })
-          # heron_brook delegation-clamp mitigation (default on). Writes into
+          # heron_brook delegation-clamp mitigation (default off). Writes into
           # `ai.claude.hooks` so it list-merges with any consumer entries on the
           # same two events rather than clobbering them. Paired with the identical
           # devenv-side write below — config parity is structural here, riding the
           # existing hooks fanout rather than adding a module axis.
-          (lib.mkIf cfg.delegationClamp.mitigate {
-            ai.claude.hooks = delegationClampHooks cfg.delegationClamp;
+          (lib.mkIf cfg.delegationClampMitigation.enable {
+            ai.claude.hooks = delegationClampMitigationHooks cfg.delegationClampMitigation;
           })
           # Agent-memory collision guard (default OFF). Same `ai.claude.hooks`
           # definition write as the clamp, so it list-merges onto PreToolUse with
@@ -947,8 +944,8 @@ in
           # `ai.claude.hooks` write, so the pair flows through the typed event map
           # → settings.json lowering below and concatenates with devenv's own
           # git-hooks-run entry instead of replacing it.
-          (lib.mkIf cfg.delegationClamp.mitigate {
-            ai.claude.hooks = delegationClampHooks cfg.delegationClamp;
+          (lib.mkIf cfg.delegationClampMitigation.enable {
+            ai.claude.hooks = delegationClampMitigationHooks cfg.delegationClampMitigation;
           })
           # Agent-memory collision guard (parity with HM side). Same
           # `ai.claude.hooks` write, so it flows through the typed event map →

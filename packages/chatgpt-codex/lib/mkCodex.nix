@@ -8,6 +8,7 @@
 }: let
   agent = import ../../../lib/ai/agent.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
+  aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   codexExtracted = builtins.fromJSON (builtins.readFile ../extracted.json);
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
@@ -213,8 +214,11 @@
         description = "Optional Windows-only command override.";
       };
       statusMessage = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
+        type = aiTypes.optionalTextSource {
+          description = "the status text displayed while the hook runs";
+          enableDefault = false;
+        };
+        default = {};
         description = "Optional status text displayed while the hook runs.";
       };
       timeout = lib.mkOption {
@@ -739,7 +743,27 @@
       map (block:
         lib.optionalAttrs (block.matcher != null) {inherit (block) matcher;}
         // {
-          hooks = map (handler: lib.filterAttrs (_: value: value != null) handler) block.hooks;
+          hooks =
+            map (
+              handler:
+                lib.filterAttrs (_: value: value != null) (
+                  handler
+                  // {
+                    # Keep the presence guard for portable handlers that omit
+                    # this Codex-only typed field. The shared type rejects
+                    # enabled empty text, so this lowering only checks whether
+                    # it is enabled.
+                    statusMessage =
+                      if
+                        handler
+                        ? statusMessage
+                        && handler.statusMessage.enable
+                      then handler.statusMessage.text
+                      else null;
+                  }
+                )
+            )
+            block.hooks;
         })
       blocks)
     hooks;

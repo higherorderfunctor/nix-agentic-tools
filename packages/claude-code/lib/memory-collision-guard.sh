@@ -12,7 +12,7 @@
 # wikilink graph resolves by name.
 #
 # ── Why a hook and not an instruction ───────────────────────────────────────────
-# Same argument delegationClamp.nix's header makes for a different surface: a
+# Same argument delegationClampMitigation.nix's header makes for a different surface: a
 # standing instruction lands once, near the top, and loses position to everything
 # said since. What decays is ATTENTION, not content. A hook fires at the point of
 # action, which is the only place this check is worth anything — the model has to be
@@ -35,7 +35,7 @@
 #      denial reason, then allow the retry. Costs one extra round trip per distinct
 #      file and needs marker state to terminate. Chosen because the failure it
 #      prevents is silent and permanent while the cost is one retry, and because
-#      delegationClamp.nix already proves the session-keyed marker shape works here.
+#      delegationClampMitigation.nix already proves the session-keyed marker shape works here.
 #
 # `permissionDecisionReason` was picked over `additionalContext` as the CHANNEL for
 # a second reason worth keeping: on a deny, the reason is documented to be fed back
@@ -49,7 +49,7 @@
 # If evidence later says B nags more than it helps, A is a small edit: swap the
 # decision to "allow", move the text to `additionalContext`, and drop the marker.
 #
-# ── Fail-open, and note this INVERTS delegationClamp's bias ─────────────────────
+# ── Fail-open, and note this INVERTS the delegation clamp's bias ───────────────
 # The clamp degrades toward injecting, because losing its injection loses the
 # mitigation. This degrades toward ALLOWING, and the asymmetry is load-bearing: a
 # deny we failed to record repeats forever, so the model would retry into the same

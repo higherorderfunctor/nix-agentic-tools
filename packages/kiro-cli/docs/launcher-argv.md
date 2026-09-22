@@ -1,7 +1,7 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-09-12 — source paths and ownership guidance follow
-> native package assembly.
+> **Last verified:** 2026-09-21 — identity uses the optional text-source shape
+> and materializes only while enabled.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -100,17 +100,20 @@ Two different rules, for two different reasons — do not "make them consistent"
 `ai.kiro.identity` adds a third thing the wrapper does. It is deliberately not
 in the table above, because it is not argv at all:
 
-| Binary                         | Variable               | When               |
-| ------------------------------ | ---------------------- | ------------------ |
-| `kiro-cli` AND `kiro-cli-chat` | `KIRO_KAS_SERVER_PATH` | `identity != null` |
+| Binary                         | Variable               | When              |
+| ------------------------------ | ---------------------- | ----------------- |
+| `kiro-cli` AND `kiro-cli-chat` | `KIRO_KAS_SERVER_PATH` | `identity.enable` |
 
-Three properties worth knowing before touching it:
+Four properties worth knowing before touching it:
 
 - **It is exported in BOTH wrappers.** The launcher resolves `kiro-cli-chat`
   through PATH, so the variable would normally be inherited down the chain — but
   `kiro-cli-chat` invoked directly is a supported entry point, and it is the
   binary that actually spawns node. Exporting in one place only patches the
   composed path and silently misses the direct one.
+- **Its prose may be inline or source-backed.** `identity.text` supplies inline
+  text and `identity.source` reads a packaged file. `identity.enable = false`
+  disables either form explicitly.
 - **It is computed at LAUNCH, not at eval.** The value is the stdout of a
   materializer that resolves the installed engine bundle, splices the identity
   sentence into a mirrored copy, and caches the result. The engine bundle is
