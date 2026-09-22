@@ -753,7 +753,11 @@
                     # converted optional scalar: `filterAttrs` then drops the
                     # key rather than emitting `""`.
                     statusMessage =
-                      if handler.statusMessage.enable && handler.statusMessage.text != ""
+                      if
+                        handler
+                        ? statusMessage
+                        && handler.statusMessage.enable
+                        && handler.statusMessage.text != ""
                       then handler.statusMessage.text
                       else null;
                   }
