@@ -195,10 +195,42 @@ in {
             settings.reasoningEffort = "high";
           };
         };
+        nulledHm = evalHm {
+          ai = {
+            copilot = {
+              enable = true;
+              nativeSettings.effortLevel = null;
+            };
+            settings.reasoningEffort = "high";
+          };
+        };
+        nulledDevenv = evalDevenv {
+          ai = {
+            copilot = {
+              enable = true;
+              nativeSettings.effortLevel = null;
+            };
+            settings.reasoningEffort = "high";
+          };
+        };
+        unsupportedDevenv = evalDevenv {
+          ai.copilot = {
+            enable = true;
+            nativeSettings.theme = "github";
+          };
+        };
       in
         lib.hasInfix ''"effortLevel":"high"'' hm.config.home.activation.copilotSettingsMerge.text
-        && lib.hasInfix ''"effortLevel":"high"'' devenv.config.files.".config/github-copilot/settings.json".text
-        && lib.hasInfix ''"effortLevel":"low"'' overridden.config.files.".config/github-copilot/settings.json".text
+        && lib.hasInfix ''"effortLevel":"high"'' devenv.config.files.".github/copilot/settings.json".text
+        && lib.hasInfix ''"effortLevel":"low"'' overridden.config.files.".github/copilot/settings.json".text
+        && !(devenv.config.files ? ".config/github-copilot/settings.json")
+        && !(nulledHm.config.home.activation ? copilotSettingsMerge)
+        && !(nulledDevenv.config.files ? ".github/copilot/settings.json")
+        && builtins.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "repository settings" assertion.message
+          && lib.hasInfix "theme" assertion.message)
+        unsupportedDevenv.config.assertions
     );
 
     module-copilot-hm-writes-mcp-config-json = mkTest "copilot-hm-writes-mcp-config-json" (
