@@ -52,7 +52,17 @@
             "reason": "Kimchi's top-level dispatcher handles this command first"
           }
         ],
-        "path": ["kimchi", "config"]
+        "path": ["kimchi", "config"],
+        "flags": [
+          {
+            "names": ["--help"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["-h"],
+            "scope": "subcommand"
+          }
+        ]
       },
       "kimchi cursor": {
         "help": "Configure Cursor to use Kimchi",
@@ -110,7 +120,13 @@
             "reachable": true
           }
         ],
-        "path": ["kimchi", "mcp"]
+        "path": ["kimchi", "mcp"],
+        "flags": [
+          {
+            "names": ["--json"],
+            "scope": "subcommand"
+          }
+        ]
       },
       "kimchi openclaw": {
         "help": "Configure OpenClaw to use Kimchi",
@@ -169,7 +185,13 @@
             "reachable": true
           }
         ],
-        "path": ["kimchi", "setup-tools"]
+        "path": ["kimchi", "setup-tools"],
+        "flags": [
+          {
+            "names": ["--inject"],
+            "scope": "subcommand"
+          }
+        ]
       },
       "kimchi uninstall": {
         "implementations": [
@@ -193,7 +215,45 @@
             "reason": "Kimchi's top-level dispatcher handles this command first"
           }
         ],
-        "path": ["kimchi", "update"]
+        "path": ["kimchi", "update"],
+        "flags": [
+          {
+            "names": ["--canary"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--dry-run"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--extension"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--extensions"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--force"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--help"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--self"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["-f"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["-h"],
+            "scope": "subcommand"
+          }
+        ]
       },
       "kimchi version": {
         "help": "Print the kimchi version",
@@ -208,11 +268,21 @@
     },
     "globalFlags": [
       {
+        "help": "End option parsing; treat remaining arguments as messages/files",
+        "multiple": false,
+        "names": ["--"],
+        "optionalValue": false,
+        "origin": ["pi"],
+        "scope": "launcher-global",
+        "valueName": null
+      },
+      {
         "help": "Add session permission allow rules (comma-separated)",
         "multiple": true,
         "names": ["--allow-tool"],
         "optionalValue": false,
         "origin": ["kimchi"],
+        "scope": "launcher-global",
         "valueName": "rule"
       },
       {
@@ -221,6 +291,7 @@
         "names": ["--api-key"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "key"
       },
       {
@@ -229,6 +300,7 @@
         "names": ["--append-system-prompt"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "text"
       },
       {
@@ -237,6 +309,7 @@
         "names": ["--approve", "-a"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -245,6 +318,7 @@
         "names": ["--auto"],
         "optionalValue": false,
         "origin": ["kimchi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -253,6 +327,7 @@
         "names": ["--continue", "-c"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -261,6 +336,7 @@
         "names": ["--deny-tool"],
         "optionalValue": false,
         "origin": ["kimchi"],
+        "scope": "launcher-global",
         "valueName": "rule"
       },
       {
@@ -269,6 +345,7 @@
         "names": ["--enable-experimental-features"],
         "optionalValue": false,
         "origin": ["kimchi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -277,6 +354,7 @@
         "names": ["--exclude-tools", "-xt"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "tools"
       },
       {
@@ -285,6 +363,7 @@
         "names": ["--export"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": "file"
       },
       {
@@ -293,6 +372,7 @@
         "names": ["--extension", "-e"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "path"
       },
       {
@@ -301,6 +381,7 @@
         "names": ["--fork"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "path|id"
       },
       {
@@ -309,6 +390,7 @@
         "names": ["--help", "-h"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -317,6 +399,7 @@
         "names": ["--list-models"],
         "optionalValue": true,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": "search"
       },
       {
@@ -325,6 +408,7 @@
         "names": ["--mcp-config"],
         "optionalValue": false,
         "origin": ["kimchi"],
+        "scope": "launcher-global",
         "valueName": "path"
       },
       {
@@ -333,6 +417,7 @@
         "names": ["--mode"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": "mode"
       },
       {
@@ -341,6 +426,7 @@
         "names": ["--model"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": "pattern"
       },
       {
@@ -349,6 +435,7 @@
         "names": ["--models"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "patterns"
       },
       {
@@ -357,6 +444,7 @@
         "names": ["--multi-model"],
         "optionalValue": false,
         "origin": ["kimchi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -365,6 +453,7 @@
         "names": ["--name", "-n"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "name"
       },
       {
@@ -373,6 +462,7 @@
         "names": ["--no-approve"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -381,6 +471,7 @@
         "names": ["--no-builtin-tools", "-nbt"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -389,6 +480,7 @@
         "names": ["--no-context-files", "-nc"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -397,6 +489,7 @@
         "names": ["--no-extensions", "-ne"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -405,6 +498,7 @@
         "names": ["--no-prompt-templates", "-np"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -413,6 +507,7 @@
         "names": ["--no-session"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -421,6 +516,7 @@
         "names": ["--no-skills", "-ns"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -429,6 +525,7 @@
         "names": ["--no-themes"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -437,6 +534,7 @@
         "names": ["--no-tools", "-nt"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -445,6 +543,7 @@
         "names": ["--offline"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -453,6 +552,7 @@
         "names": ["--permissions-config"],
         "optionalValue": false,
         "origin": ["kimchi"],
+        "scope": "launcher-global",
         "valueName": "path"
       },
       {
@@ -461,6 +561,7 @@
         "names": ["--plan"],
         "optionalValue": false,
         "origin": ["kimchi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -469,6 +570,7 @@
         "names": ["--print", "-p"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -477,6 +579,7 @@
         "names": ["--prompt-template"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "path"
       },
       {
@@ -485,6 +588,7 @@
         "names": ["--provider"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": "name"
       },
       {
@@ -493,6 +597,7 @@
         "names": ["--resume", "-r"],
         "optionalValue": true,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": "id"
       },
       {
@@ -501,6 +606,7 @@
         "names": ["--session"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": "path"
       },
       {
@@ -509,6 +615,7 @@
         "names": ["--session-dir"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "dir"
       },
       {
@@ -517,6 +624,7 @@
         "names": ["--session-id"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "id"
       },
       {
@@ -525,6 +633,7 @@
         "names": ["--skill"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "path"
       },
       {
@@ -533,6 +642,7 @@
         "names": ["--system-prompt"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "text"
       },
       {
@@ -541,6 +651,7 @@
         "names": ["--theme"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "path"
       },
       {
@@ -549,6 +660,7 @@
         "names": ["--thinking"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": "level"
       },
       {
@@ -557,6 +669,7 @@
         "names": ["--tools", "-t"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "tools"
       },
       {
@@ -565,6 +678,7 @@
         "names": ["--tui-mode"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "mode"
       },
       {
@@ -573,6 +687,7 @@
         "names": ["--use-theme"],
         "optionalValue": false,
         "origin": ["pi"],
+        "scope": "launcher-global",
         "valueName": "name[/name]"
       },
       {
@@ -581,6 +696,7 @@
         "names": ["--verbose"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -589,6 +705,7 @@
         "names": ["--version", "-v"],
         "optionalValue": false,
         "origin": ["kimchi", "pi"],
+        "scope": "launcher-global",
         "valueName": null
       },
       {
@@ -597,179 +714,247 @@
         "names": ["--yolo"],
         "optionalValue": false,
         "origin": ["kimchi"],
+        "scope": "launcher-global",
         "valueName": null
       }
     ]
   },
   "config": {
     "keys": {
-      "apiKey": {
-        "project": true,
-        "type": "string"
-      },
       "api_key": {
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
         "aliasFor": "apiKey",
-        "project": true,
-        "type": "string"
+        "project": true
       },
-      "deviceId": {
-        "project": true,
-        "type": "string"
+      "apiKey": {
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
       },
       "device_id": {
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
         "aliasFor": "deviceId",
-        "project": true,
-        "type": "string"
+        "project": true
+      },
+      "deviceId": {
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
       },
       "gitTokens": {
+        "type": "object",
+        "typeExpression": "Record<string, string>",
         "additionalProperties": {
+          "typeExpression": "string",
           "type": "string"
         },
-        "project": false,
-        "type": "object"
+        "project": false
       },
       "llmEndpoint": {
-        "project": true,
-        "type": "string"
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
       },
       "maxToolResultChars": {
+        "typeExpression": "number",
+        "type": "number",
+        "optional": true,
         "inert": true,
         "project": true,
-        "type": "number",
         "warning": "read only to detect obsolete configuration; it has no runtime effect"
       },
       "mcpSearch": {
-        "inert": true,
-        "project": true,
+        "typeExpression": "{ strategy?: \"bm25\" | \"regex\"; bm25K1?: number; bm25B?: number; fieldWeights?: { name: number; description: number; schemaKey: number; }; }",
+        "type": "object",
         "properties": {
           "bm25B": {
-            "type": "number"
+            "typeExpression": "number",
+            "type": "number",
+            "optional": true
           },
           "bm25K1": {
-            "type": "number"
+            "typeExpression": "number",
+            "type": "number",
+            "optional": true
           },
           "fieldWeights": {
+            "typeExpression": "{ name: number; description: number; schemaKey: number; }",
+            "type": "object",
             "properties": {
               "description": {
+                "typeExpression": "number",
                 "type": "number"
               },
               "name": {
+                "typeExpression": "number",
                 "type": "number"
               },
               "schemaKey": {
+                "typeExpression": "number",
                 "type": "number"
               }
             },
-            "type": "object"
+            "optional": true
           },
           "strategy": {
+            "typeExpression": "\"bm25\" | \"regex\"",
+            "type": "enum",
             "enum": ["bm25", "regex"],
-            "type": "enum"
+            "optional": true
           }
         },
-        "type": "object",
+        "optional": true,
+        "inert": true,
+        "project": true,
         "warning": "read only to detect obsolete configuration; it has no runtime effect"
       },
       "mcpSearchLimit": {
+        "typeExpression": "number",
+        "type": "number",
+        "optional": true,
         "inert": true,
         "project": true,
-        "type": "number",
         "warning": "read only to detect obsolete configuration; it has no runtime effect"
       },
       "migrationState": {
+        "typeExpression": "\"done\" | \"skip-forever\"",
+        "type": "enum",
         "enum": ["done", "skip-forever"],
-        "project": true,
-        "type": "enum"
+        "optional": true,
+        "project": true
       },
       "onboarding": {
-        "project": false,
+        "typeExpression": "OnboardingConfig",
+        "type": "object",
         "properties": {
           "hideSessionModeDialog": {
-            "type": "boolean"
+            "typeExpression": "boolean",
+            "type": "boolean",
+            "optional": true
           },
           "sessionModeWizardSeenAt": {
-            "type": "string"
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true
           },
           "studioOnboardingSeenAt": {
-            "type": "string"
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true
           },
           "teleportHelpSeenAt": {
-            "type": "string"
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true
           }
         },
-        "type": "object"
+        "optional": true,
+        "project": false
       },
       "preferences": {
-        "project": false,
+        "typeExpression": "PreferencesConfig",
+        "type": "object",
         "properties": {
           "hideTips": {
-            "type": "boolean"
+            "typeExpression": "boolean",
+            "type": "boolean",
+            "optional": true
           }
         },
-        "type": "object"
+        "optional": true,
+        "project": false
       },
       "redaction": {
-        "project": true,
+        "typeExpression": "{ enabled?: boolean; }",
+        "type": "object",
         "properties": {
           "enabled": {
-            "type": "boolean"
+            "typeExpression": "boolean",
+            "type": "boolean",
+            "optional": true
           }
         },
-        "type": "object"
+        "optional": true,
+        "project": true
       },
       "skillPaths": {
+        "typeExpression": "string[]",
+        "type": "array",
         "items": {
+          "typeExpression": "string",
           "type": "string"
         },
-        "project": true,
-        "type": "array"
+        "optional": true,
+        "project": true
       },
       "surveys": {
+        "type": "object",
+        "typeExpression": "Record<string, SurveyConfig>",
         "additionalProperties": {
+          "type": "object",
+          "typeExpression": "SurveyConfig",
           "properties": {
             "seenAt": {
-              "type": "string"
+              "typeExpression": "string",
+              "type": "string",
+              "optional": true
             }
-          },
-          "type": "object"
+          }
         },
-        "project": false,
-        "type": "object"
+        "project": false
       },
       "telemetry": {
-        "project": false,
+        "type": "object",
+        "typeExpression": "TelemetryConfig",
         "properties": {
           "enabled": {
+            "typeExpression": "boolean",
             "type": "boolean"
           },
           "endpoint": {
+            "typeExpression": "string",
             "type": "string"
           },
           "headers": {
+            "typeExpression": "{ [x: string]: string; }",
+            "type": "object",
             "additionalProperties": {
+              "typeExpression": "string",
               "type": "string"
-            },
-            "type": "object"
+            }
           },
           "metricsEndpoint": {
+            "typeExpression": "string",
             "type": "string"
           }
         },
-        "type": "object"
+        "project": false
       },
       "teleport": {
-        "project": false,
+        "type": "object",
+        "typeExpression": "{ compactHint?: { enabled?: boolean } }",
         "properties": {
           "compactHint": {
+            "optional": true,
+            "type": "object",
+            "typeExpression": "{ enabled?: boolean }",
             "properties": {
               "enabled": {
-                "type": "boolean"
+                "typeExpression": "boolean",
+                "type": "boolean",
+                "optional": true
               }
-            },
-            "type": "object"
+            }
           }
         },
-        "type": "object"
+        "project": false
       }
     },
     "projectTier": {
@@ -793,328 +978,343 @@
     "variables": {
       "KIMCHI_ACTIVE_FERMENT": {
         "consumerOverridable": true,
-        "controls": "active ferment identifier inherited by worker processes",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "active ferment identifier inherited by worker processes"
       },
       "KIMCHI_AGENT_PERSONA": {
         "consumerOverridable": true,
-        "controls": "persona selected for an agent worker",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "persona selected for an agent worker"
       },
       "KIMCHI_API_KEY": {
         "consumerOverridable": true,
-        "controls": "Kimchi API authentication; overrides config.json",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "Kimchi API authentication; overrides config.json"
       },
       "KIMCHI_AUTO_GIT_INIT": {
         "consumerOverridable": true,
-        "controls": "automatic git initialization for ferment work",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "automatic git initialization for ferment work"
       },
       "KIMCHI_CLIPBOARD_FORCE": {
         "consumerOverridable": true,
-        "controls": "clipboard backend override",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "clipboard backend override"
       },
       "KIMCHI_CODING_AGENT_DIR": {
         "consumerOverridable": false,
-        "controls": "Kimchi harness configuration directory",
         "readBy": ["kimchi"],
+        "controls": "Kimchi harness configuration directory",
         "reason": "entry.ts overwrites it with ~/.config/kimchi/harness"
       },
       "KIMCHI_DAP_BINARIES": {
         "consumerOverridable": true,
-        "controls": "DAP adapter binary overrides",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "DAP adapter binary overrides"
       },
       "KIMCHI_DEBUG_PROMPTS": {
         "consumerOverridable": true,
-        "controls": "prompt debugging output",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "prompt debugging output"
       },
       "KIMCHI_DEBUG_SESSION": {
         "consumerOverridable": true,
-        "controls": "session debugging output",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "session debugging output"
       },
       "KIMCHI_DISABLE_BUILTIN_PROVIDERS": {
         "consumerOverridable": false,
-        "controls": "suppression of pi built-in providers",
         "readBy": ["pi"],
+        "controls": "suppression of pi built-in providers",
         "reason": "entry.ts overwrites it with 1"
-      },
-      "KIMCHI_FERMENTS_DIR": {
-        "consumerOverridable": true,
-        "controls": "ferment state directory",
-        "readBy": ["kimchi"]
       },
       "KIMCHI_FERMENT_DISABLE_PARALLEL": {
         "consumerOverridable": true,
-        "controls": "parallel ferment execution",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "parallel ferment execution"
       },
       "KIMCHI_FERMENT_LOCK_DIR": {
         "consumerOverridable": true,
-        "controls": "ferment lock directory",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "ferment lock directory"
       },
       "KIMCHI_FERMENT_LOCK_MAX_AGE_MS": {
         "consumerOverridable": true,
-        "controls": "ferment stale-lock age",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "ferment stale-lock age"
+      },
+      "KIMCHI_FERMENTS_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "ferment state directory"
       },
       "KIMCHI_IDE_LOCKFILE_DIR": {
         "consumerOverridable": true,
-        "controls": "IDE lock-file directory",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "IDE lock-file directory"
+      },
+      "KIMCHI_INFRA_BREAKER_THRESHOLD": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "infrastructure circuit-breaker failure threshold"
       },
       "KIMCHI_LSP_BINARIES": {
         "consumerOverridable": true,
-        "controls": "LSP server binary overrides",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "LSP server binary overrides"
       },
       "KIMCHI_MCP_E2E_KEYRING_DIR": {
         "consumerOverridable": true,
-        "controls": "MCP end-to-end test keyring directory",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "MCP end-to-end test keyring directory"
       },
       "KIMCHI_NO_PROXY": {
         "consumerOverridable": true,
-        "controls": "explicit proxy bypass list",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "explicit proxy bypass list"
       },
       "KIMCHI_NO_UPDATE_CHECK": {
         "consumerOverridable": true,
-        "controls": "background Kimchi update check",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "background Kimchi update check"
       },
       "KIMCHI_OAUTH_TEMPLATE_DIR": {
         "consumerOverridable": false,
-        "controls": "OAuth result-page template directory",
         "readBy": ["kimchi"],
+        "controls": "OAuth result-page template directory",
         "reason": "entry.ts derives and overwrites it from PI_PACKAGE_DIR"
       },
       "KIMCHI_OLLAMA_HOST": {
         "consumerOverridable": true,
-        "controls": "Ollama host URL",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "Ollama host URL"
       },
       "KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR": {
         "consumerOverridable": true,
-        "controls": "preserved inherited pi agent directory",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "preserved inherited pi agent directory"
       },
       "KIMCHI_PARENT_SESSION_ID": {
         "consumerOverridable": true,
-        "controls": "parent session identity for subagents",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "parent session identity for subagents"
       },
       "KIMCHI_PERMISSIONS": {
         "consumerOverridable": true,
-        "controls": "initial permission mode",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "initial permission mode"
       },
       "KIMCHI_PROXY": {
         "consumerOverridable": true,
-        "controls": "HTTP and HTTPS proxy override",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "HTTP and HTTPS proxy override"
       },
       "KIMCHI_PROXY_HELPER": {
         "consumerOverridable": true,
-        "controls": "SSH proxy helper executable",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "SSH proxy helper executable"
       },
       "KIMCHI_REDACTION_ENABLED": {
         "consumerOverridable": true,
-        "controls": "PII redaction override",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "PII redaction override"
       },
       "KIMCHI_REMOTE_ENDPOINT": {
         "consumerOverridable": true,
-        "controls": "remote execution endpoint",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "remote execution endpoint"
       },
       "KIMCHI_REMOTE_RUN": {
         "consumerOverridable": true,
-        "controls": "remote execution mode",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "remote execution mode"
       },
       "KIMCHI_REVIEW_LOG": {
         "consumerOverridable": true,
-        "controls": "session-review log path",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "session-review log path"
       },
       "KIMCHI_REVIEW_THRESHOLD": {
         "consumerOverridable": true,
-        "controls": "session-review threshold",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "session-review threshold"
       },
       "KIMCHI_ROUTER_ENDPOINT": {
         "consumerOverridable": true,
-        "controls": "model router endpoint",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "model router endpoint"
       },
       "KIMCHI_SANDBOX": {
         "consumerOverridable": true,
-        "controls": "sandbox detection override",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "sandbox detection override"
       },
       "KIMCHI_SESSION_REVIEW": {
         "consumerOverridable": true,
-        "controls": "session-review enablement",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "session-review enablement"
       },
       "KIMCHI_STREAM_IDLE_TIMEOUT_MS": {
         "consumerOverridable": true,
-        "controls": "outbound HTTP stream idle timeout",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "outbound HTTP stream idle timeout"
       },
       "KIMCHI_SUBAGENT": {
         "consumerOverridable": true,
-        "controls": "subagent process marker",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "subagent process marker"
       },
       "KIMCHI_TAGS": {
         "consumerOverridable": true,
-        "controls": "tags attached to LLM requests",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "tags attached to LLM requests"
       },
       "KIMCHI_TELEMETRY_DEBUG": {
         "consumerOverridable": true,
-        "controls": "telemetry debugging output",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "telemetry debugging output"
       },
       "KIMCHI_TELEMETRY_ENABLED": {
         "consumerOverridable": true,
-        "controls": "telemetry enablement override",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "telemetry enablement override"
       },
       "KIMCHI_WEB_APP_URL": {
         "consumerOverridable": true,
-        "controls": "Kimchi web application base URL",
-        "readBy": ["kimchi"]
+        "readBy": ["kimchi"],
+        "controls": "Kimchi web application base URL"
       },
       "PI_CACHE_RETENTION": {
         "consumerOverridable": true,
-        "controls": "provider prompt-cache retention",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "provider prompt-cache retention"
       },
       "PI_CLEAR_ON_SHRINK": {
         "consumerOverridable": true,
-        "controls": "terminal clearing when content shrinks",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "terminal clearing when content shrinks"
       },
       "PI_CODING_AGENT_DIR": {
         "consumerOverridable": false,
+        "readBy": ["kimchi"],
         "controls": "pi agent configuration directory",
-        "readBy": ["kimchi", "pi"],
         "reason": "entry.ts overwrites it with ~/.config/kimchi/harness"
       },
       "PI_CODING_AGENT_SESSION_DIR": {
         "consumerOverridable": true,
-        "controls": "pi session storage directory",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "pi session storage directory"
       },
       "PI_EXPERIMENTAL": {
         "consumerOverridable": true,
-        "controls": "pi experimental features",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "pi experimental features"
       },
       "PI_HARDWARE_CURSOR": {
         "consumerOverridable": true,
-        "controls": "terminal hardware cursor",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "terminal hardware cursor"
       },
       "PI_HYPERLINKS": {
         "consumerOverridable": true,
-        "controls": "terminal hyperlink capability",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "terminal hyperlink capability"
       },
       "PI_IMAGE_PROTOCOL": {
         "consumerOverridable": true,
-        "controls": "terminal image protocol",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "terminal image protocol"
       },
       "PI_INSTALLER_API_BASE": {
         "consumerOverridable": true,
-        "controls": "managed installer API base URL",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "managed installer API base URL"
       },
       "PI_MANAGED_INSTALL_ROOT": {
         "consumerOverridable": true,
-        "controls": "managed pi installation root",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "managed pi installation root"
+      },
+      "PI_MCP_ADAPTER_KEYRING_RECOVERY_HELPER": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "MCP keyring recovery helper executable"
+      },
+      "PI_MCP_ADAPTER_KEYRING_RECOVERY_NODE": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "MCP keyring recovery Node.js executable"
       },
       "PI_OAUTH_CALLBACK_HOST": {
         "consumerOverridable": true,
-        "controls": "OAuth callback bind host",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "OAuth callback bind host"
       },
       "PI_OFFLINE": {
         "consumerOverridable": true,
-        "controls": "pi startup network operations",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "pi startup network operations"
       },
       "PI_PACKAGE_DIR": {
         "consumerOverridable": true,
-        "controls": "pi package and runtime asset directory",
-        "readBy": ["kimchi", "pi"]
+        "readBy": ["kimchi", "pi"],
+        "controls": "pi package and runtime asset directory"
       },
       "PI_SHARE_VIEWER_URL": {
         "consumerOverridable": true,
-        "controls": "shared-session viewer base URL",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "shared-session viewer base URL"
       },
       "PI_SKIP_VERSION_CHECK": {
         "consumerOverridable": false,
-        "controls": "pi version check",
         "readBy": ["pi"],
+        "controls": "pi version check",
         "reason": "entry.ts overwrites it with 1"
       },
       "PI_STARTUP_BENCHMARK": {
         "consumerOverridable": true,
-        "controls": "interactive startup benchmark",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "interactive startup benchmark"
       },
       "PI_TELEMETRY": {
         "consumerOverridable": true,
-        "controls": "pi install telemetry",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "pi install telemetry"
       },
       "PI_TIMING": {
         "consumerOverridable": true,
-        "controls": "startup timing instrumentation",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "startup timing instrumentation"
       },
       "PI_TRUE_COLOR": {
         "consumerOverridable": true,
-        "controls": "terminal true-color capability",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "terminal true-color capability"
       },
       "PI_TUI_DEBUG": {
         "consumerOverridable": true,
-        "controls": "TUI debug logging",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "TUI debug logging"
       },
       "PI_TUI_DEBUG_REDRAW": {
         "consumerOverridable": true,
-        "controls": "TUI redraw logging",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "TUI redraw logging"
       },
       "PI_TUI_ESC_TIMEOUT": {
         "consumerOverridable": true,
-        "controls": "TUI escape-sequence timeout",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "TUI escape-sequence timeout"
       },
       "PI_TUI_NO_CLEAR_SCROLLBACK": {
         "consumerOverridable": true,
-        "controls": "scrollback clearing in Kimchi's pi-tui patch",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "scrollback clearing in Kimchi's pi-tui patch"
       },
       "PI_TUI_WRITE_LOG": {
         "consumerOverridable": true,
-        "controls": "raw TUI ANSI output log path",
-        "readBy": ["pi"]
+        "readBy": ["pi"],
+        "controls": "raw TUI ANSI output log path"
       }
     }
   },
@@ -1122,596 +1322,655 @@
     "definitions": {
       "BranchSummarySettings": {
         "reserveTokens": {
-          "optional": true,
+          "typeExpression": "number",
           "type": "number",
-          "typeExpression": "number"
+          "optional": true
         },
         "skipPrompt": {
-          "optional": true,
+          "typeExpression": "boolean",
           "type": "boolean",
-          "typeExpression": "boolean"
+          "optional": true
         }
       },
       "CompactionSettings": {
         "enabled": {
-          "optional": true,
+          "typeExpression": "boolean",
           "type": "boolean",
-          "typeExpression": "boolean"
+          "optional": true
         },
         "keepRecentTokens": {
-          "optional": true,
+          "typeExpression": "number",
           "type": "number",
-          "typeExpression": "number"
+          "optional": true
         },
         "reserveTokens": {
-          "optional": true,
+          "typeExpression": "number",
           "type": "number",
-          "typeExpression": "number"
+          "optional": true
         }
       },
       "ImageSettings": {
         "autoResize": {
-          "optional": true,
+          "typeExpression": "boolean",
           "type": "boolean",
-          "typeExpression": "boolean"
+          "optional": true
         },
         "blockImages": {
-          "optional": true,
+          "typeExpression": "boolean",
           "type": "boolean",
-          "typeExpression": "boolean"
+          "optional": true
         }
       },
       "MarkdownSettings": {
         "codeBlockIndent": {
-          "optional": true,
+          "typeExpression": "string",
           "type": "string",
-          "typeExpression": "string"
+          "optional": true
         },
         "mermaid": {
-          "optional": true,
-          "type": "named",
-          "typeExpression": "MermaidRenderingMode"
+          "typeExpression": "\"off\" | \"final\" | \"streaming\"",
+          "type": "enum",
+          "enum": ["off", "final", "streaming"],
+          "optional": true
         }
       },
       "ProviderRetrySettings": {
         "maxRetries": {
-          "optional": true,
+          "typeExpression": "number",
           "type": "number",
-          "typeExpression": "number"
+          "optional": true
         },
         "maxRetryDelayMs": {
-          "optional": true,
+          "typeExpression": "number",
           "type": "number",
-          "typeExpression": "number"
+          "optional": true
         },
         "timeoutMs": {
-          "optional": true,
+          "typeExpression": "number",
           "type": "number",
-          "typeExpression": "number"
+          "optional": true
         }
       },
       "RetrySettings": {
         "baseDelayMs": {
-          "optional": true,
+          "typeExpression": "number",
           "type": "number",
-          "typeExpression": "number"
+          "optional": true
         },
         "enabled": {
-          "optional": true,
+          "typeExpression": "boolean",
           "type": "boolean",
-          "typeExpression": "boolean"
+          "optional": true
         },
         "maxRetries": {
-          "optional": true,
+          "typeExpression": "number",
           "type": "number",
-          "typeExpression": "number"
+          "optional": true
         },
         "provider": {
-          "optional": true,
-          "type": "named",
-          "typeExpression": "ProviderRetrySettings"
+          "typeExpression": "ProviderRetrySettings",
+          "type": "object",
+          "optional": true
         }
       },
       "TerminalSettings": {
         "clearOnShrink": {
-          "optional": true,
+          "typeExpression": "boolean",
           "type": "boolean",
-          "typeExpression": "boolean"
+          "optional": true
         },
         "hyperlinks": {
-          "enum": ["auto"],
-          "optional": true,
-          "type": "union",
-          "typeExpression": "boolean | \"auto\""
-        },
-        "imageWidthCells": {
-          "optional": true,
-          "type": "number",
-          "typeExpression": "number"
+          "typeExpression": "boolean | \"auto\"",
+          "type": "enum",
+          "enum": [false, true, "auto"],
+          "optional": true
         },
         "images": {
-          "enum": ["kitty", "iterm2", "auto"],
-          "optional": true,
-          "type": "union",
-          "typeExpression": "\"kitty\" | \"iterm2\" | \"auto\" | false"
+          "typeExpression": "false | \"auto\" | \"kitty\" | \"iterm2\"",
+          "type": "enum",
+          "enum": [false, "auto", "kitty", "iterm2"],
+          "optional": true
+        },
+        "imageWidthCells": {
+          "typeExpression": "number",
+          "type": "number",
+          "optional": true
         },
         "showImages": {
-          "optional": true,
+          "typeExpression": "boolean",
           "type": "boolean",
-          "typeExpression": "boolean"
+          "optional": true
         },
         "showTerminalProgress": {
-          "optional": true,
+          "typeExpression": "boolean",
           "type": "boolean",
-          "typeExpression": "boolean"
+          "optional": true
         },
         "trueColor": {
-          "enum": ["auto"],
-          "optional": true,
-          "type": "union",
-          "typeExpression": "boolean | \"auto\""
+          "typeExpression": "boolean | \"auto\"",
+          "type": "enum",
+          "enum": [false, true, "auto"],
+          "optional": true
         }
       },
       "ThinkingBudgetsSettings": {
         "high": {
-          "optional": true,
+          "typeExpression": "number",
           "type": "number",
-          "typeExpression": "number"
+          "optional": true
         },
         "low": {
-          "optional": true,
+          "typeExpression": "number",
           "type": "number",
-          "typeExpression": "number"
+          "optional": true
         },
         "medium": {
-          "optional": true,
+          "typeExpression": "number",
           "type": "number",
-          "typeExpression": "number"
+          "optional": true
         },
         "minimal": {
-          "optional": true,
+          "typeExpression": "number",
           "type": "number",
-          "typeExpression": "number"
+          "optional": true
         }
       },
       "WarningSettings": {
         "anthropicExtraUsage": {
-          "optional": true,
+          "typeExpression": "boolean",
           "type": "boolean",
-          "typeExpression": "boolean"
+          "optional": true
         }
       }
     },
     "keys": {
       "autocompleteMaxVisible": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "number",
         "type": "number",
-        "typeExpression": "number"
+        "optional": true
       },
       "branchSummary": {
-        "optional": true,
         "source": "pi",
-        "type": "named",
-        "typeExpression": "BranchSummarySettings"
+        "typeExpression": "BranchSummarySettings",
+        "type": "object",
+        "optional": true
       },
       "collapseChangelog": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "boolean",
         "type": "boolean",
-        "typeExpression": "boolean"
+        "optional": true
       },
       "compaction": {
-        "optional": true,
         "source": "pi",
-        "type": "named",
-        "typeExpression": "CompactionSettings"
+        "typeExpression": "CompactionSettings",
+        "type": "object",
+        "optional": true
       },
       "defaultModel": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string",
         "type": "string",
-        "typeExpression": "string"
+        "optional": true
       },
       "defaultProjectTrust": {
-        "default": "ask",
+        "source": "pi",
+        "typeExpression": "\"ask\" | \"always\" | \"never\"",
+        "type": "enum",
         "enum": ["ask", "always", "never"],
         "optional": true,
-        "source": "pi",
-        "type": "enum",
-        "typeExpression": "\"ask\" | \"always\" | \"never\""
+        "default": "ask"
       },
       "defaultProvider": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string",
         "type": "string",
-        "typeExpression": "string"
+        "optional": true
       },
       "defaultThinkingLevel": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "ThinkingLevel",
         "type": "named",
-        "typeExpression": "ThinkingLevel"
+        "optional": true
       },
       "defaultTools": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string[]",
         "type": "array",
-        "typeExpression": "string[]"
+        "optional": true
       },
       "doubleEscapeAction": {
-        "enum": ["fork", "tree", "none"],
-        "optional": true,
         "source": "pi",
+        "typeExpression": "\"fork\" | \"tree\" | \"none\"",
         "type": "enum",
-        "typeExpression": "\"fork\" | \"tree\" | \"none\""
+        "enum": ["fork", "tree", "none"],
+        "optional": true
       },
       "editorPaddingX": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "number",
         "type": "number",
-        "typeExpression": "number"
+        "optional": true
       },
       "enableAnalytics": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "boolean",
         "type": "boolean",
-        "typeExpression": "boolean"
-      },
-      "enableInstallTelemetry": {
-        "optional": true,
-        "source": "pi",
-        "type": "boolean",
-        "typeExpression": "boolean"
-      },
-      "enableSkillCommands": {
-        "optional": true,
-        "source": "pi",
-        "type": "boolean",
-        "typeExpression": "boolean"
+        "optional": true
       },
       "enabledModels": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string[]",
         "type": "array",
-        "typeExpression": "string[]"
+        "optional": true
+      },
+      "enableInstallTelemetry": {
+        "source": "pi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true
+      },
+      "enableSkillCommands": {
+        "source": "pi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true
       },
       "extensions": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string[]",
         "type": "array",
-        "typeExpression": "string[]"
+        "optional": true
       },
       "externalEditor": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string",
         "type": "string",
-        "typeExpression": "string"
+        "optional": true
       },
       "fermentV2": {
+        "source": "kimchi",
+        "type": "object",
+        "typeExpression": "FermentV2Settings",
         "properties": {
           "autoResume": {
+            "typeExpression": "boolean",
             "type": "boolean"
           },
           "defaultTokenBudget": {
-            "type": "integer"
+            "typeExpression": "number",
+            "type": "number"
           },
           "evaluationTimeoutMs": {
-            "type": "integer"
+            "typeExpression": "number",
+            "type": "number"
           },
           "maxConsecutiveErrors": {
-            "type": "integer"
+            "typeExpression": "number",
+            "type": "number"
           },
           "maxUnchangedContinuations": {
-            "type": "integer"
+            "typeExpression": "number",
+            "type": "number"
           }
-        },
-        "source": "kimchi",
-        "type": "object"
+        }
       },
       "followUpMode": {
-        "enum": ["all", "one-at-a-time"],
-        "optional": true,
         "source": "pi",
+        "typeExpression": "\"all\" | \"one-at-a-time\"",
         "type": "enum",
-        "typeExpression": "\"all\" | \"one-at-a-time\""
+        "enum": ["all", "one-at-a-time"],
+        "optional": true
       },
       "fullscreenCopyOnSelect": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "boolean",
         "type": "boolean",
-        "typeExpression": "boolean"
+        "optional": true
       },
       "fullscreenExitOutput": {
-        "optional": true,
         "source": "pi",
-        "type": "named",
-        "typeExpression": "FullscreenExitOutput"
+        "typeExpression": "\"transcript\" | \"resume-hint\"",
+        "type": "enum",
+        "enum": ["transcript", "resume-hint"],
+        "optional": true
       },
       "fullscreenScrollbar": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "ScrollViewScrollbar",
         "type": "named",
-        "typeExpression": "ScrollViewScrollbar"
+        "optional": true
       },
       "hidePhaseChanges": {
         "source": "kimchi",
+        "typeExpression": "boolean",
         "type": "boolean"
       },
       "hideThinkingBlock": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "boolean",
         "type": "boolean",
-        "typeExpression": "boolean"
+        "optional": true
       },
       "httpIdleTimeoutMs": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "number",
         "type": "number",
-        "typeExpression": "number"
+        "optional": true
       },
       "httpProxy": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string",
         "type": "string",
-        "typeExpression": "string"
+        "optional": true
       },
       "images": {
-        "optional": true,
         "source": "pi",
-        "type": "named",
-        "typeExpression": "ImageSettings"
+        "typeExpression": "ImageSettings",
+        "type": "object",
+        "optional": true
       },
       "lastChangelogVersion": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string",
         "type": "string",
-        "typeExpression": "string"
+        "optional": true
+      },
+      "lastTerminalWarnings": {
+        "source": "kimchi",
+        "typeExpression": "{ [x: string]: string; }",
+        "type": "object",
+        "additionalProperties": {
+          "typeExpression": "string",
+          "type": "string"
+        },
+        "optional": true
       },
       "markdown": {
-        "optional": true,
         "source": "pi",
-        "type": "named",
-        "typeExpression": "MarkdownSettings"
+        "typeExpression": "MarkdownSettings",
+        "type": "object",
+        "optional": true
       },
       "modelMetadata": {
+        "source": "kimchi",
         "additionalProperties": {
           "properties": {
             "description": {
-              "type": "string"
+              "type": "string",
+              "typeExpression": "string",
+              "optional": true
             },
             "reasoning": {
-              "type": "boolean"
+              "type": "boolean",
+              "typeExpression": "boolean",
+              "optional": true
             },
             "tier": {
-              "enum": ["heavy", "light", "standard"],
-              "type": "enum"
+              "enum": ["light", "standard", "heavy"],
+              "type": "enum",
+              "typeExpression": "\"light\" | \"standard\" | \"heavy\"",
+              "optional": true
             },
             "vision": {
-              "type": "boolean"
+              "type": "boolean",
+              "typeExpression": "boolean",
+              "optional": true
             }
           },
-          "type": "object"
+          "type": "object",
+          "typeExpression": "object"
         },
-        "source": "kimchi",
-        "type": "object"
+        "type": "object",
+        "typeExpression": "Record<string, ModelCustomMetadata>"
       },
       "modelRoles": {
+        "source": "kimchi",
+        "type": "object",
+        "typeExpression": "ModelRoles",
         "properties": {
           "builder": {
+            "typeExpression": "string | string[]",
             "type": "union",
-            "typeExpression": "string | string[]"
+            "description": "Code implementation model(s)."
           },
           "compactor": {
-            "type": "string"
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true,
+            "description": "Context summarization model."
           },
           "explorer": {
+            "typeExpression": "string | string[]",
             "type": "union",
-            "typeExpression": "string | string[]"
+            "description": "Codebase exploration model(s)."
           },
           "judge": {
+            "typeExpression": "string | string[]",
             "type": "union",
-            "typeExpression": "string | string[]"
+            "description": "Ferment judge model(s): verification triage and final grading calls."
           },
           "orchestrator": {
-            "type": "string"
+            "typeExpression": "string",
+            "type": "string",
+            "description": "Main model: runs the orchestrator loop, delegates work to other roles."
           },
           "planner": {
+            "typeExpression": "string | string[]",
             "type": "union",
-            "typeExpression": "string | string[]"
+            "description": "Planning model(s): designs the approach, writes specs."
           },
           "researcher": {
+            "typeExpression": "string | string[]",
             "type": "union",
-            "typeExpression": "string | string[]"
+            "description": "Research model(s): research beyond codebase — web search, documentation lookup, external sources."
           },
           "reviewer": {
+            "typeExpression": "string | string[]",
             "type": "union",
-            "typeExpression": "string | string[]"
+            "description": "Code review model(s)."
           }
-        },
-        "source": "kimchi",
-        "type": "object"
+        }
       },
       "modelThinkingLevels": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "{ [x: string]: ThinkingLevel; }",
         "type": "object",
-        "typeExpression": "Record<string, ThinkingLevel>"
+        "optional": true
       },
       "multiModel": {
         "source": "kimchi",
+        "typeExpression": "boolean",
         "type": "boolean"
       },
       "npmCommand": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string[]",
         "type": "array",
-        "typeExpression": "string[]"
+        "optional": true
       },
       "outputPad": {
-        "enum": [0, 1],
-        "optional": true,
         "source": "pi",
+        "typeExpression": "0 | 1",
         "type": "enum",
-        "typeExpression": "0 | 1"
+        "enum": [0, 1],
+        "optional": true
       },
       "packages": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "PackageSource[]",
         "type": "array",
-        "typeExpression": "PackageSource[]"
+        "optional": true
       },
       "prompts": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string[]",
         "type": "array",
-        "typeExpression": "string[]"
+        "optional": true
       },
       "quietStartup": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "boolean",
         "type": "boolean",
-        "typeExpression": "boolean"
+        "optional": true
       },
       "resources": {
-        "additionalProperties": {
-          "type": "boolean"
-        },
         "source": "kimchi",
-        "type": "object"
+        "typeExpression": "{ [x: `hooks.${string}`]: boolean; [x: `extensions.${string}`]: boolean; [x: `tools.${string}`]: boolean; [x: `plugins.${string}`]: boolean; }",
+        "type": "object",
+        "additionalProperties": {
+          "typeExpression": "boolean",
+          "type": "boolean"
+        }
       },
       "retry": {
-        "optional": true,
         "source": "pi",
-        "type": "named",
-        "typeExpression": "RetrySettings"
+        "typeExpression": "RetrySettings",
+        "type": "object",
+        "optional": true
       },
       "sessionDir": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string",
         "type": "string",
-        "typeExpression": "string"
+        "optional": true
       },
       "shellCommandPrefix": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string",
         "type": "string",
-        "typeExpression": "string"
+        "optional": true
       },
       "shellPath": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string",
         "type": "string",
-        "typeExpression": "string"
+        "optional": true
       },
       "shellProfileApiKeyMigrationDismissed": {
         "source": "kimchi",
+        "typeExpression": "boolean",
         "type": "boolean"
       },
       "showCacheMissNotices": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "boolean",
         "type": "boolean",
-        "typeExpression": "boolean"
+        "optional": true
       },
       "showHardwareCursor": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "boolean",
         "type": "boolean",
-        "typeExpression": "boolean"
+        "optional": true
       },
       "skills": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string[]",
         "type": "array",
-        "typeExpression": "string[]"
+        "optional": true
       },
       "statusLine": {
-        "properties": {
-          "command": {
-            "type": "string"
-          },
-          "pinned": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
         "source": "kimchi",
-        "type": "object"
+        "typeExpression": "{ pinned: StatusLineElementId[]; }",
+        "type": "object",
+        "properties": {
+          "pinned": {
+            "typeExpression": "StatusLineElementId[]",
+            "type": "array",
+            "items": {
+              "typeExpression": "\"permissions\" | \"model\" | \"thinking\" | \"ferment\" | \"agents\" | \"context\" | \"usage\" | \"phase\" | \"tags\" | \"team\" | \"credits\" | \"budget\"",
+              "type": "enum",
+              "enum": [
+                "permissions",
+                "model",
+                "thinking",
+                "ferment",
+                "agents",
+                "context",
+                "usage",
+                "phase",
+                "tags",
+                "team",
+                "credits",
+                "budget"
+              ]
+            }
+          },
+          "command": {
+            "typeExpression": "string",
+            "type": "string"
+          }
+        }
       },
       "steeringMode": {
-        "enum": ["all", "one-at-a-time"],
-        "optional": true,
         "source": "pi",
+        "typeExpression": "\"all\" | \"one-at-a-time\"",
         "type": "enum",
-        "typeExpression": "\"all\" | \"one-at-a-time\""
+        "enum": ["all", "one-at-a-time"],
+        "optional": true
       },
       "terminal": {
-        "optional": true,
         "source": "pi",
-        "type": "named",
-        "typeExpression": "TerminalSettings"
+        "typeExpression": "TerminalSettings",
+        "type": "object",
+        "optional": true
       },
       "theme": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string",
         "type": "string",
-        "typeExpression": "string"
-      },
-      "themeAdaptive": {
-        "source": "kimchi",
-        "type": "boolean"
+        "optional": true
       },
       "themes": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string[]",
         "type": "array",
-        "typeExpression": "string[]"
+        "optional": true
       },
       "thinkingBudgets": {
-        "optional": true,
         "source": "pi",
-        "type": "named",
-        "typeExpression": "ThinkingBudgetsSettings"
+        "typeExpression": "ThinkingBudgetsSettings",
+        "type": "object",
+        "optional": true
       },
       "trackingId": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "string",
         "type": "string",
-        "typeExpression": "string"
+        "optional": true
       },
       "transport": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "Transport",
         "type": "named",
-        "typeExpression": "TransportSetting"
+        "optional": true
       },
       "treeFilterMode": {
-        "enum": ["default", "no-tools", "user-only", "labeled-only", "all"],
-        "optional": true,
         "source": "pi",
+        "typeExpression": "\"all\" | \"default\" | \"no-tools\" | \"user-only\" | \"labeled-only\"",
         "type": "enum",
-        "typeExpression": "\"default\" | \"no-tools\" | \"user-only\" | \"labeled-only\" | \"all\""
+        "enum": ["all", "default", "no-tools", "user-only", "labeled-only"],
+        "optional": true
       },
       "tuiMode": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "RendererTuiMode",
         "type": "named",
-        "typeExpression": "TuiMode"
+        "optional": true
       },
       "warnings": {
-        "optional": true,
         "source": "pi",
-        "type": "named",
-        "typeExpression": "WarningSettings"
+        "typeExpression": "WarningSettings",
+        "type": "object",
+        "optional": true
       },
       "websocketConnectTimeoutMs": {
-        "optional": true,
         "source": "pi",
+        "typeExpression": "number",
         "type": "number",
-        "typeExpression": "number"
+        "optional": true
       }
     },
     "projectTier": {
@@ -1720,7 +1979,7 @@
     }
   },
   "provenance": {
-    "extractorSchema": 1,
+    "extractorSchema": 2,
     "kimchiVersion": "1.1.27",
     "piVersion": "0.85.1"
   }

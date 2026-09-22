@@ -40,13 +40,15 @@
 
   extracted =
     ourPkgs.runCommand "kimchi-extracted.json" {
-      nativeBuildInputs = [ourPkgs.python3];
+      nativeBuildInputs = [ourPkgs.nodejs ourPkgs.typescript_5];
     } ''
-      ${ourPkgs.python3}/bin/python3 ${../../../extract/extract.py} \
+      ${ourPkgs.nodejs}/bin/node ${../../../extract/extract.mjs} \
+        --annotations ${../../../extract/annotations.json} \
         --kimchi-source ${kimchiSource} \
         --kimchi-version ${sources.version} \
         --out "$out" \
-        --pi-package ${piPackage}
+        --pi-package ${piPackage} \
+        --typescript ${ourPkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js
     '';
 
   # The release binary does not contain dependable source metadata. Refresh
