@@ -7,9 +7,9 @@ applyTo: "lib/ai/hm-helpers.nix,lib/ai/mkSkillPackageModule.nix,packages/chatgpt
 
 ## ai.skills Fanout Delegation Pattern
 
-> **Last verified:** 2026-09-21 — runtime-aware skill-package callbacks reach
-> each backend through `helpers.mkSkillFiles` and the delivery router's one
-> walk.
+> **Last verified:** 2026-09-22 — Kimchi's Layout B directory is
+> backend-specific: Home Manager uses the user harness, while devenv uses
+> Kimchi's native project root.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -22,13 +22,13 @@ its scanner discovers Layout A, where the skill directory itself is a symlink.
 
 ### Backend pattern
 
-| Branch  | HM route                             | Native directory  | Layout |
-| ------- | ------------------------------------ | ----------------- | ------ |
-| Claude  | `programs.claude-code.skills`        | `.claude/skills`  | B      |
-| Codex   | `mkSkillFiles` (`recursive = false`) | `.agents/skills`  | A      |
-| Copilot | `mkSkillFiles`                       | `.copilot/skills` | B      |
-| Kimchi  | `mkSkillFiles`                       | `harness/skills`  | B      |
-| Kiro    | `mkSkillFiles`                       | `.kiro/skills`    | B      |
+| Branch  | HM route                             | Native directories                           | Layout |
+| ------- | ------------------------------------ | -------------------------------------------- | ------ |
+| Claude  | `programs.claude-code.skills`        | `.claude/skills`                             | B      |
+| Codex   | `mkSkillFiles` (`recursive = false`) | `.agents/skills`                             | A      |
+| Copilot | `mkSkillFiles`                       | `.copilot/skills`                            | B      |
+| Kimchi  | `mkSkillFiles`                       | HM `harness/skills`; devenv `.kimchi/skills` | B      |
+| Kiro    | `mkSkillFiles`                       | `.kiro/skills`                               | B      |
 
 Codex 0.147.0 was probed with both shapes: a whole-directory symlink appeared in
 `skills/list`, while a real directory whose `SKILL.md` was a symlink did not.
@@ -90,6 +90,9 @@ of the same recursion, so a factory declares the tree once and both backends
 expand it. Codex instead relies on devenv's identity behavior: one directory
 source creates the exact Layout A link its scanner requires at project-root
 `.agents/skills/<name>`.
+
+Kimchi gives the recursive entry a `.kimchi/skills/<name>` project path on
+devenv and a `<configDir>/harness/skills/<name>` user path on Home Manager.
 
 A skill entry states `executable = null`, which reaches the sink as an absent
 attribute and leaves every file's mode alone. Stating a mode there would clear
