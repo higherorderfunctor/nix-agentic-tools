@@ -7,6 +7,7 @@
 # whole description out of the option tree and override any field of it with
 # the ordinary module-system priorities.
 {lib}: let
+  aiTypes = import ./types.nix {inherit lib;};
   deliveryMethod = import ./deliveryMethod.nix {inherit lib;};
 
   # Which renderer turns a structured `content.value` into bytes, and — for a
@@ -38,54 +39,53 @@
     };
   });
 
-  # The bytes, as a TAGGED sum rather than a pair of nullable siblings. Three
-  # things follow, and each one is load-bearing:
-  #   - the text/source exclusion becomes the type instead of a hand-rolled
-  #     check that had to be repeated in the option's `apply`;
-  #   - `content = lib.mkDefault {text = …;}` from a generator survives a
-  #     consumer's definition of a SIBLING field, because priority now applies
-  #     to the content option alone rather than to the whole entry;
-  #   - a consumer's `content.source` still replaces a defaulted
-  #     `content.text`, so the tag never sees two definitions at once.
-  #
-  contentType = lib.types.attrTag {
-    run = lib.mkOption {
-      type = lib.types.lines;
-      description = ''
-        A shell body that WRITES the file when the writer runs, for bytes that
-        cannot exist in the store — a credential substituted in at write time,
-        say. Owned copies and reconciled documents only: a symlink has no write
-        step to run it in. The reconciler executes it with the interpreter its
-        plan pins, never the one a PATH happens to resolve.
-      '';
+  # Text and source use the repository's ONE shared representation. Its
+  # priority-aware arbitration is load-bearing: an ordinary `source` replaces
+  # a generated `mkDefault` `text`, which `types.attrTag` rejects as two tags.
+  # `run` and `value` are delivery-specific alternatives, retained on this
+  # record because runtime-written bytes and mergeable structured documents
+  # are real behavior rather than text/source encodings.
+  contentType =
+    aiTypes.extendSubmodule
+    (aiTypes.optionalTextSource {
+      description = "file content";
+      textType = lib.types.str;
+    })
+    {
+      options = {
+        run = lib.mkOption {
+          type = lib.types.nullOr lib.types.lines;
+          default = null;
+          description = ''
+            A shell body that WRITES the file when the writer runs, for bytes
+            that cannot exist in the store — a credential substituted at write
+            time, say. Owned copies and reconciled documents only: a symlink has
+            no write step to run it in. The reconciler executes it with the
+            interpreter its plan pins, never one resolved through PATH.
+          '';
+        };
+        value = lib.mkOption {
+          type = lib.types.nullOr (lib.types.attrsOf lib.types.anything);
+          default = null;
+          description = ''
+            Structured content, rendered into bytes by `format`. Two
+            definitions at equal priority merge leaf-wise and a divergent leaf
+            conflicts naming the option path, which is the contract a document
+            several modules contribute to needs.
+          '';
+        };
+      };
     };
-    source = lib.mkOption {
-      type = lib.types.path;
-      description = "Store-backed bytes: a path whose contents become the file.";
-    };
-    text = lib.mkOption {
-      type = lib.types.str;
-      description = "Literal bytes.";
-    };
-    value = lib.mkOption {
-      type = lib.types.attrsOf lib.types.anything;
-      description = ''
-        Structured content, rendered into bytes by `format`. Two definitions at
-        equal priority merge leaf-wise and a divergent leaf conflicts naming
-        the option path, which is exactly the contract a document several
-        modules contribute to needs — and the reason content is one tagged
-        option rather than one opaque value.
-      '';
-    };
-  };
 
   fileEntry = lib.types.submodule {
     options = {
       content = lib.mkOption {
-        type = lib.types.nullOr contentType;
-        default = null;
+        type = contentType;
+        default = {};
         description = ''
-          The bytes this file carries, tagged with where they come from.
+          The bytes this file carries. `text`, `source`, and `enable` use the
+          shared priority-aware text-source record; `run` and `value` are
+          delivery-specific alternatives.
 
           `text` and `source` are contributed WHOLE by a generator, at
           `mkDefault`, with every sibling field left at ordinary priority:
@@ -100,7 +100,8 @@
           leave with the definition it drops. A document contributes its
           leaves at ordinary priority, or one `mkDefault` per LEAF
           (`content.value.<leaf> = lib.mkDefault …`) — that is the shape that
-          merges leaf-wise and survives.
+          merges leaf-wise and survives. Exactly one of enabled text/source,
+          `run`, or `value` may supply a live entry's bytes.
         '';
       };
       entry = lib.mkOption {
@@ -327,31 +328,8 @@
       };
     };
   });
-  # `null` suppresses a generated entry, and it has to beat a record at the
-  # SAME priority to keep doing so.
-  #
-  # Generated CONTENT is contributed at `mkDefault` while the entry around it
-  # stays at ordinary priority — that is what lets a consumer change how a
-  # generated file lands without restating its bytes. The cost is that the
-  # generated entry is no longer weaker than a consumer's definition, so a
-  # plain `null` tombstone would meet a record at priority 100 and the module
-  # system would report the option as defined both null and not null. Nothing
-  # about the tombstone was supposed to change, so `null` absorbs: a
-  # definition that suppresses the file wins over one that describes it, at
-  # equal priority, and `filterOverrides` still settles unequal ones first.
-  suppressible = elemType: let
-    base = lib.types.nullOr elemType;
-  in
-    base
-    // {
-      merge = loc: definitions:
-        if lib.any (definition: definition.value == null) definitions
-        then null
-        else base.merge loc definitions;
-      substSubModules = modules: suppressible (elemType.substSubModules modules);
-    };
 in {
   inherit formats;
-  fileMapType = lib.types.attrsOf (suppressible fileEntry);
+  fileMapType = lib.types.attrsOf fileEntry;
   writerMapType = lib.types.attrsOf writer;
 }
