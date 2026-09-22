@@ -18,6 +18,7 @@
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   mcpLib = import ../../../lib/mcp.nix {inherit lib;};
+  userScopeOnlyHarnessSettingKeys = import ./user-scope-only-harness-settings.nix;
 
   # pi 0.85.1 dist/config.js:403 derives CONFIG_DIR_NAME from Kimchi's
   # package.json piConfig.configDir. That fixed project namespace is independent
@@ -318,13 +319,27 @@ in
       }: let
         prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
         inherit (prep) filteredSettings filteredHarnessSettings;
+        userScopeOnlyHarnessSettings = lib.intersectLists userScopeOnlyHarnessSettingKeys (builtins.attrNames filteredHarnessSettings);
       in
         lib.mkMerge [
+          {
+            assertions = [
+              {
+                assertion = userScopeOnlyHarnessSettings == [];
+                message = ''
+                  ai.kimchi.harnessSettings contains settings Kimchi reads only from user scope: ${lib.concatStringsSep ", " userScopeOnlyHarnessSettings}.
+                  Under devenv, either set with HM, or configure inside the harness so it writes to user global.
+                  Home Manager delivers these declaratively by activation-merging config.json and harness/settings.json; a /nix/store symlink would break Kimchi's runtime writes. Configuring inside Kimchi persists the decision or setting in its user-global harness files.
+                '';
+              }
+            ];
+          }
+
           # Project-scoped Kimchi configuration below is ignored until the
           # project is explicitly or persistently trusted. For unattended runs,
-          # set harnessSettings.defaultProjectTrust = "always" in USER scope
-          # through Home Manager; a project cannot grant itself trust. Kimchi's
-          # direct AGENTS.md discovery is currently the exception to this gate.
+          # set harnessSettings.defaultProjectTrust = "always" at user scope
+          # through Home Manager. Kimchi's direct AGENTS.md discovery is
+          # currently the exception to this gate.
 
           # Project config is a fixed Kimchi namespace, independent of the
           # HOME-relative configDir used by Home Manager.

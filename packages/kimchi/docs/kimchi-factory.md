@@ -1,10 +1,10 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-21 (commit pending — Home Manager retains Kimchi's
-> user paths while devenv lowers each pool to the project path Kimchi discovers,
-> including pi's fixed project harness directory). Home Manager context renders
-> into `ai.kimchi.files` before the generic backend sink; devenv contributes
-> directly to the shared repository `AGENTS.md` owner. Full lineage:
+> **Last verified:** 2026-09-21 (commit pending — devenv rejects settings that
+> Kimchi reads only from user scope while lowering project-capable pools to the
+> paths Kimchi discovers). Home Manager context renders into `ai.kimchi.files`
+> before the generic backend sink; devenv contributes directly to the shared
+> repository `AGENTS.md` owner. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
@@ -43,8 +43,8 @@ unchanged (and needs a compatible package override before pinned Kimchi will
 read the relocated user files).
 
 Kimchi settings are ordinary **nested** JSON (`telemetry`, `llmEndpoint`,
-`skillPaths`, `preferences`). The user harness contains runtime settings
-(`modelRoles`, `resources`), MCP, context, and skills.
+`skillPaths`, `preferences`). The user harness contains runtime settings, MCP,
+context, and skills.
 
 The `harness/` tree is **mutable at runtime** — Kimchi rewrites `settings.json`
 (`/multi-model`, `kimchi resources`) and downloads vendor content into it. So
@@ -66,11 +66,22 @@ Kimchi discovers.
 
 Kimchi's project config, MCP, skills, and harness settings remain inert until
 project trust is established. Interactive trust is persisted in the user's
-harness `trust.json`; headless and ACP sessions honor that decision or the
-user-global `defaultProjectTrust`. A project cannot grant itself trust. The
-`harnessSettings` JSON submodule has a freeform tail, so a Home Manager consumer
-can already set `ai.kimchi.harnessSettings.defaultProjectTrust = "always";` to
-write the user-scope setting; this PR does not add a new option.
+harness `trust.json`; lookup walks ancestors, and headless and ACP sessions
+honor that decision before consulting the user-global `defaultProjectTrust`.
+`--approve` supplies a run-scoped override to CLI and TUI, but not ACP, which
+resolves trust again for each session without the CLI override.
+
+The devenv module rejects every `harnessSettings` key that Kimchi reads only
+from user scope: `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`,
+`modelMetadata`, `modelRoles`, `multiModel`, `resources`,
+`shellProfileApiKeyMigrationDismissed`, and `statusLine`. pi deliberately reads
+`defaultProjectTrust` from its global settings manager so a project cannot grant
+itself trust. Kimchi's implementations of the other eight read
+`~/.config/kimchi/harness/settings.json` directly rather than pi's merged
+project settings. Set them through Home Manager or through Kimchi's own UI and
+commands, which persist to user-global files. Home Manager activation-merges the
+two mutable settings files rather than symlinking them into the read-only Nix
+store.
 
 Root `AGENTS.md` is the upstream exception: Kimchi's prompt-enrichment extension
 currently walks ancestor context files directly without consulting

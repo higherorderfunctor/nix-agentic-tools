@@ -657,6 +657,32 @@
     | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / `ai.<cli>.shell` (Claude + Codex + Kiro) | Same; takes a package. Copilot and Kimchi are explicit exclusions |
     | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
+    ### Kimchi project delivery
+
+    | Pool | devenv delivery | Boundary |
+    | ---- | --------------- | -------- |
+    | Context | root `AGENTS.md` | Available without project trust |
+    | MCP servers | `.kimchi/mcp.json` | Requires project trust |
+    | Kimchi settings | `.kimchi/config.json` | Requires project trust |
+    | Skills | `.kimchi/skills` | Requires project trust |
+    | Project harness settings | `.config/kimchi/harness/settings.json` | Requires project trust; user-scope-only keys are rejected during evaluation |
+
+    devenv cannot deliver Kimchi's user-scope-only harness settings:
+    `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`, `modelMetadata`,
+    `modelRoles`, `multiModel`, `resources`,
+    `shellProfileApiKeyMigrationDismissed`, or `statusLine`. Set those with Home
+    Manager, or configure them inside Kimchi so it writes its user-global files.
+    Home Manager activation-merges `config.json` and `harness/settings.json`
+    because Kimchi writes both at runtime; making either a read-only store
+    symlink would break those writes.
+
+    Trust gates every project-scope reader except root `AGENTS.md`, so a
+    devenv-only setup initially supplies instructions and nothing else. Grant
+    trust by answering the interactive prompt (the persisted decision applies
+    to that path and its descendants), setting `defaultProjectTrust = "always"`
+    at user scope, or passing `--approve`. The flag works for CLI and TUI runs,
+    but not ACP: ACP resolves trust again per session without the CLI override.
+
     ## Configuration
 
     <details>

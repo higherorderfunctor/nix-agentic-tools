@@ -7,7 +7,80 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
+  userScopeOnlyHarnessSettingKeys = import ../lib/user-scope-only-harness-settings.nix;
+  userScopeOnlyHarnessSettingValues = {
+    defaultProjectTrust = "always";
+    fermentV2 = true;
+    hidePhaseChanges = true;
+    modelMetadata.example.description = "Example model";
+    modelRoles.example.provider = "example";
+    multiModel = true;
+    resources."tools.web_search" = true;
+    shellProfileApiKeyMigrationDismissed = true;
+    statusLine.pinned = ["model"];
+  };
+
+  # lib.evalModules exposes assertions as data; the real HM/devenv callers
+  # reject failed entries. Reproduce that boundary so every negative control
+  # must actually throw, while the matching project-safe control must pass.
+  checkModuleAssertions = evaluated: let
+    failed = builtins.filter (entry: !entry.assertion) evaluated.config.assertions;
+  in
+    if failed == []
+    then evaluated.config.files
+    else throw (lib.concatMapStringsSep "\n" (entry: entry.message) failed);
+
+  userScopeOnlyHarnessSettingChecks = lib.listToAttrs (map (key: {
+      name = "module-kimchi-devenv-rejects-user-scope-${key}";
+      value = let
+        rejected = evalDevenv {
+          ai.kimchi = {
+            enable = true;
+            harnessSettings = lib.setAttrByPath [key] userScopeOnlyHarnessSettingValues.${key};
+          };
+        };
+        failed = builtins.filter (entry: !entry.assertion) rejected.config.assertions;
+        failureMessage =
+          if builtins.length failed == 1
+          then (builtins.head failed).message
+          else null;
+        rejectedAttempt = builtins.tryEval (builtins.deepSeq (checkModuleAssertions rejected) true);
+        hmAcceptedAttempt = builtins.tryEval (builtins.deepSeq
+          (evalHm {
+            ai.kimchi = {
+              enable = true;
+              harnessSettings = lib.setAttrByPath [key] userScopeOnlyHarnessSettingValues.${key};
+            };
+          }).config.home.activation.kimchiHarnessSettingsMerge
+          true);
+        acceptedAttempt = builtins.tryEval (builtins.deepSeq (checkModuleAssertions (evalDevenv {
+            ai.kimchi = {
+              enable = true;
+              harnessSettings.hideThinkingBlock = true;
+            };
+          }))
+          true);
+        assertion =
+          !rejectedAttempt.success
+          && hmAcceptedAttempt.success
+          && acceptedAttempt.success
+          && failureMessage != null
+          && lib.hasInfix key failureMessage
+          && lib.hasInfix "either set with HM, or configure inside the harness so it writes to user global" failureMessage;
+      in
+        (mkTest "kimchi-devenv-rejects-user-scope-${key}" assertion).overrideAttrs (_: {
+          passthru.proof = {
+            devenvAcceptedAfterRemoval = acceptedAttempt.success;
+            devenvRejected = !rejectedAttempt.success;
+            homeManagerAccepted = hmAcceptedAttempt.success;
+            message = failureMessage;
+          };
+        });
+    })
+    userScopeOnlyHarnessSettingKeys);
 in {
+  imports = [{checks = userScopeOnlyHarnessSettingChecks;}];
+
   checks = {
     # `supportedPools` now owns every normalized per-runtime option gate, not
     # shell alone. Each failure has an identical supported-runtime control so an
@@ -102,13 +175,13 @@ in {
           ai.kimchi = {
             configDir = "custom/kimchi";
             enable = true;
-            harnessSettings.resources."tools.web_search" = true;
+            harnessSettings.hideThinkingBlock = true;
           };
         };
         files = result.config.files;
         text = files.".config/kimchi/harness/settings.json".text;
       in
-        lib.hasInfix ''"tools.web_search":true'' text
+        lib.hasInfix ''"hideThinkingBlock":true'' text
         && !(files ? ".pi/settings.json")
         && !(lib.any (lib.hasPrefix "custom/kimchi") (builtins.attrNames files))
     );
