@@ -1168,7 +1168,6 @@ in
       "lspServers"
       "mcpServers"
       "rules"
-      "settings"
       "shell"
       "skills"
     ];

@@ -1,6 +1,8 @@
 ## Kiro settings: a flat format with object values, and where the key stops
 
-> **Last verified:** 2026-09-19 — model suggestions join the extracted sidecar
+> **Last verified:** 2026-09-22 — the normalized reasoning-effort pool is
+> explicitly excluded because Kiro persists effort only inside per-model
+> `chat.modelDefaults` records. Model suggestions join the extracted sidecar
 > from a public documentation snapshot, independently of CLI releases.
 
 ### Model suggestions are a public catalog, not an account entitlement list
@@ -94,6 +96,15 @@ regex, and a second pass would be a second place for it to drift.
 `flattenDotKeys` is now `flattenDotKeysUntil []` — the historical
 flatten-everything behavior, unchanged for anything that does not pass a
 boundary.
+
+This per-model object is also why `ai.kiro.settings.reasoningEffort` does not
+exist. Kiro has no global persisted effort key: lowering one portable scalar
+would require either choosing a model or applying it to every model record. Both
+change the user's request, so the factory excludes the normalized settings pool
+instead of accepting a value it cannot lower losslessly. Use
+`ai.kiro.nativeSettings.chat.modelDefaults.<model>.effort` for the native
+per-model setting, or Kiro's session-only `--effort` flag when persistence is
+not wanted.
 
 ### What this does and does not fix
 

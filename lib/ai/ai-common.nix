@@ -360,8 +360,8 @@ in {
 
   # ── Settings utilities ──────────────────────────────────────────────
 
-  # Closed normalized settings shared by the root and every runtime scope.
-  # Native settings live in each factory's separate `nativeSettings` option.
+  # Closed normalized settings shared by the root and each capable runtime.
+  # Native settings live in each factory's runtime-specific settings option.
   normalizedSettingsType = lib.types.submodule {
     options.reasoningEffort = lib.mkOption {
       type = lib.types.nullOr (lib.types.enum ["high" "low" "medium" "xhigh"]);

@@ -237,12 +237,16 @@ in
         moduleEnvironmentVariables,
         mergedContext,
         hasMergedContext,
+        resolvedSettings,
         ...
       }: let
         prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
         inherit (prep) contextEntry filteredSettings filteredHarnessSettings;
       in
         lib.mkMerge [
+          (lib.mkIf (resolvedSettings.reasoningEffort != null) {
+            ai.kimchi.harnessSettings.defaultThinkingLevel = lib.mkDefault resolvedSettings.reasoningEffort;
+          })
           # config.json activation merge.
           (lib.mkIf (filteredSettings != {}) {
             home.activation.kimchiConfigMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
@@ -294,12 +298,16 @@ in
         moduleEnvironmentVariables,
         mergedContext,
         hasMergedContext,
+        resolvedSettings,
         ...
       }: let
         prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
         inherit (prep) contextEntry filteredSettings filteredHarnessSettings;
       in
         lib.mkMerge [
+          (lib.mkIf (resolvedSettings.reasoningEffort != null) {
+            ai.kimchi.harnessSettings.defaultThinkingLevel = lib.mkDefault resolvedSettings.reasoningEffort;
+          })
           # config.json static write.
           (lib.mkIf (filteredSettings != {}) {
             files."${cfg.configDir}/config.json".text = builtins.toJSON filteredSettings;

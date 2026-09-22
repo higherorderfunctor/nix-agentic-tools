@@ -175,6 +175,32 @@ in {
         && lib.hasInfix "jq" (activation.text or "")
     );
 
+    # The normalized setting must reach Copilot's persisted `effortLevel` key
+    # on both backends. The native override is the priority control: the
+    # derived mkDefault must not replace a consumer-authored native value.
+    module-copilot-normalized-reasoning-effort = mkTest "copilot-normalized-reasoning-effort" (
+      let
+        config.ai = {
+          copilot.enable = true;
+          settings.reasoningEffort = "high";
+        };
+        hm = evalHm config;
+        devenv = evalDevenv config;
+        overridden = evalDevenv {
+          ai = {
+            copilot = {
+              enable = true;
+              nativeSettings.effortLevel = "low";
+            };
+            settings.reasoningEffort = "high";
+          };
+        };
+      in
+        lib.hasInfix ''"effortLevel":"high"'' hm.config.home.activation.copilotSettingsMerge.text
+        && lib.hasInfix ''"effortLevel":"high"'' devenv.config.files.".config/github-copilot/settings.json".text
+        && lib.hasInfix ''"effortLevel":"low"'' overridden.config.files.".config/github-copilot/settings.json".text
+    );
+
     module-copilot-hm-writes-mcp-config-json = mkTest "copilot-hm-writes-mcp-config-json" (
       let
         result = evalHm {

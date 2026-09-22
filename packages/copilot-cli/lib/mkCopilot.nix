@@ -202,6 +202,7 @@ in
         mergedSkills,
         mergedLspServers,
         mergedAgents,
+        resolvedSettings,
         ...
       }: let
         aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
@@ -224,6 +225,9 @@ in
               }
             ];
           }
+          (lib.mkIf (resolvedSettings.reasoningEffort != null) {
+            ai.copilot.nativeSettings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
+          })
           # L2b → L3: expand `ai.copilot.agentsDir` into
           # `ai.copilot.agents`. mkDefault lets an explicit per-runtime value
           # win; the resulting entry replaces a same-key root agent.
@@ -371,12 +375,16 @@ in
         mergedAgents,
         mergedContext,
         hasMergedContext,
+        resolvedSettings,
         ...
       }: let
         aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
         contextEntry = aiCommon.contentFileEntry mergedContext;
       in
         lib.mkMerge [
+          (lib.mkIf (resolvedSettings.reasoningEffort != null) {
+            ai.copilot.nativeSettings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
+          })
           # L2b → L3: expand `ai.copilot.agentsDir` into
           # `ai.copilot.agents` (parity with HM side).
           (lib.mkIf (cfg.agentsDir != null) {
