@@ -5,6 +5,13 @@
   ...
 }: let
   materializeInstructions = import ../../lib/materialize-repo-instructions.nix {inherit instr pkgs;};
+
+  # The Kimchi surface diagrams' render arguments. Shared verbatim with
+  # checks/references/kimchi-surface-diagrams.nix, which re-renders the
+  # same two files and fails on drift — so the task that fixes a drift
+  # failure and the check that raises it cannot disagree about the
+  # arguments. That file carries the reasoning.
+  kimchiSurfaceRenders = import ../references/kimchi-surface/renders.nix {inherit (pkgs) lib;};
   materialize = group: ''
     ${bashPreamble}
     exec ${pkgs.lib.getExe materializeInstructions} ${group} "$DEVENV_ROOT"
@@ -62,6 +69,36 @@ in {
         nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}' > "$tmp"
         mv "$tmp" devenv.yaml
         log "devenv.yaml updated"
+      '';
+    };
+
+    # Re-render the two SVGs beside dev/references/kimchi-surface/*.md.
+    #
+    # Deliberately NOT wired into `generate:all`. That aggregate's contract
+    # is the instruction and repo-document projections, which every
+    # contributor regenerates; this is one dev reference, and it moves only
+    # when someone runs a fresh scan of a single CLI. checks/references/kimchi-surface-diagrams.nix
+    # names this task by hand in its failure message, so the path from a
+    # red check to the fix is explicit rather than implied by an aggregate.
+    #
+    # Writes in place rather than copying out of the store: it runs the
+    # WORKING TREE's generator against the WORKING TREE's markdown, which
+    # is what someone iterating on either one wants. The check is the half
+    # that renders from tracked content.
+    "generate:references:kimchi-surface" = {
+      description = "Re-render the Kimchi surface reference diagrams";
+      exec = ''
+        ${bashPreamble}
+        ${log}
+        cd "$DEVENV_ROOT"
+        log "Rendering Kimchi surface diagrams"
+        ${kimchiSurfaceRenders.invocations {
+          python3 = "${pkgs.python3}/bin/python3";
+          script = "dev/skills/kimchi-surface-scan/scripts/surface-tables.py";
+          markdown = "dev/references/kimchi-surface/kimchi-server-surface.md";
+          outDir = "dev/references/kimchi-surface";
+        }}
+        log "Kimchi surface diagrams updated"
       '';
     };
 

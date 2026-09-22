@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
 """Render the capability tables in a surface reference as text or SVG.
 
-The markdown is the single source of truth. Both renderers read its GFM
-tables, so a table and its image cannot drift apart: regenerate after every
-edit to the reference.
+The markdown is the single source of truth: both renderers read its GFM
+tables, and neither SVG is ever edited by hand. Keeping a table and its
+image in step takes two further mechanisms, because reading the markdown
+is not on its own enough to guarantee it:
+
+  - Table selection is by HEADER SIGNATURE, so a section whose header
+    wording drifts stops matching the matrix and would otherwise vanish
+    from the image with nothing said. `dominant` therefore reports every
+    table it drops, and hard-fails when a dropped table carries the
+    elected column count — read that function before widening it.
+  - Nothing here can notice that a COMMITTED SVG predates the markdown.
+    checks/references/kimchi-surface-diagrams.nix re-renders both and
+    fails on any byte difference; that check, not this script, is what
+    makes a stale image unmergeable.
 
   preview  wrapped box-drawn tables, for reading in a terminal
   svg      dark-theme SVG, sized for a 1080p display
@@ -12,6 +23,7 @@ edit to the reference.
 import argparse
 import html
 import re
+import sys
 from pathlib import Path
 
 FONT = "ui-monospace, 'JetBrains Mono', 'DejaVu Sans Mono', Menlo, Consolas, monospace"
@@ -109,7 +121,15 @@ def strip_citations(text):
 
 
 def wrap(text, width):
-    """Wrap to width, breaking over-long URL-ish tokens on path separators."""
+    """Wrap to width, breaking over-long URL-ish tokens on path separators.
+
+    A width below 1 is clamped rather than honoured. The inner loop below
+    advances by slicing `part[width:]`, which at width 0 is the identity,
+    so an unclamped 0 appends empty tokens forever instead of raising.
+    Callers that take a width from the user range-check it as well; this
+    clamp is the one that makes the loop itself incapable of hanging.
+    """
+    width = max(1, width)
     tokens = []
     for word in text.split():
         if len(word) <= width:
@@ -144,19 +164,15 @@ def wrap(text, width):
     return lines or [""]
 
 
-def cell(text, keep_citations=False):
-    text = clean(text)
-    return text if keep_citations else strip_citations(text)
+def cell(text):
+    return strip_citations(clean(text))
 
 
-def column_widths(header, rows, budget, keep_citations=False):
+def column_widths(header, rows, budget):
     """Natural widths when they fit the budget, else an even split grown by need."""
     n = len(header)
     natural = [
-        max(
-            [len(cell(header[c], keep_citations))]
-            + [len(cell(r[c], keep_citations)) for r in rows if c < len(r)]
-        )
+        max([len(cell(header[c]))] + [len(cell(r[c])) for r in rows if c < len(r)])
         for c in range(n)
     ]
     available = budget - (3 * n + 1)
@@ -206,12 +222,62 @@ def dominant(tables):
     a handful of unrelated tables (hosts, counts, vendored-SDK notes). They
     share no columns, so rendering them on one sheet produces a sheet with no
     columns. The repeated header is the matrix; everything else is prose.
+
+    SELECTION IS BY HEADER SIGNATURE, AND THAT IS A TRAP WORTH NARRATING.
+    An author who rewords one section's header — "What comes back" to "What
+    is returned" — has not written a new kind of table, but the signature no
+    longer matches and the whole section leaves the sheet. Measured on the
+    Kimchi reference: that one edit took the render from 9 tables to 8 and
+    the capabilities SVG from 37179 to 30638 bytes, silently dropping the
+    entire Account/billing group, exit 0, empty stderr.
+
+    The drift check cannot catch it either. Regenerating after the reword
+    produces a committed/regenerated pair that agree with each other while
+    both omit the section, so the guard has to live here:
+
+      - every discarded table is named on stderr with its signature, so a
+        silent drop is no longer possible;
+      - a discarded table with the SAME COLUMN COUNT as the elected shape
+        is a hard failure. A genuine aside differs in shape, not in one
+        word of one header, so an equal column count is nearly always a
+        wording typo. The Kimchi reference's 12 real asides have 2, 3 or 4
+        columns against the matrix's 6, and none of them trips this.
     """
     signatures = [tuple(cell(c) for c in header) for _, header, _ in tables]
     if not signatures:
         return []
     shape = max(dict.fromkeys(signatures), key=signatures.count)
-    return [t for t, sig in zip(tables, signatures) if sig == shape]
+    kept, suspect = [], []
+    for table, sig in zip(tables, signatures):
+        if sig == shape:
+            kept.append(table)
+        elif len(sig) == len(shape):
+            suspect.append((table[0], sig))
+        else:
+            print(
+                f"skipped aside ({len(sig)} cols, matrix has {len(shape)}): "
+                f"{table[0]} [{' | '.join(sig)}]",
+                file=sys.stderr,
+            )
+    if suspect:
+        report = "\n".join(
+            f"  {heading}\n    has:      {' | '.join(sig)}" for heading, sig in suspect
+        )
+        raise SystemExit(
+            f"{len(suspect)} table(s) have the matrix's {len(shape)} columns but a "
+            "header that does not match it, so they would be dropped from the "
+            "render without appearing anywhere:\n"
+            f"{report}\n"
+            f"    expected: {' | '.join(shape)}\n"
+            "Reword the header back to the matrix's, or give the table a "
+            "genuinely different column count if it is a one-off aside."
+        )
+    print(
+        f"matrix: kept {len(kept)} of {len(tables)} tables "
+        f"({len(shape)} columns: {' | '.join(shape)})",
+        file=sys.stderr,
+    )
+    return kept
 
 
 def keep_matching(tables, needle):
@@ -227,7 +293,7 @@ def keep_matching(tables, needle):
     return out
 
 
-def layout(tables, widths, keep_citations=False):
+def layout(tables, widths):
     """Clean and wrap every cell once, so both renderers measure the same text.
 
     A laid-out row is a list of (joined text, wrapped lines) pairs. The joined
@@ -238,12 +304,9 @@ def layout(tables, widths, keep_citations=False):
     for heading, header, rows in tables:
         laid = []
         for row in rows:
-            texts = [
-                cell(row[c] if c < len(row) else "", keep_citations)
-                for c in range(len(header))
-            ]
+            texts = [cell(row[c] if c < len(row) else "") for c in range(len(header))]
             laid.append([(t, wrap(t, widths[c])) for c, t in enumerate(texts)])
-        out.append((section(heading), [cell(h, keep_citations) for h in header], laid))
+        out.append((section(heading), [cell(h) for h in header], laid))
     return out
 
 
@@ -439,6 +502,11 @@ def main():
         raise SystemExit(
             f"--widths needs {len(tables[0][1])} counts, got {len(widths)}"
         )
+    # `wrap` clamps a non-positive width so it cannot hang, but silently
+    # rendering a 1-character column is not what the caller asked for, and a
+    # zero here is a typo in a comma list every time. Say so instead.
+    if any(w < 1 for w in widths):
+        raise SystemExit(f"--widths counts must each be >= 1, got {args.widths!r}")
     Path(args.out).write_text(
         render_svg(layout(tables, widths), args.title, args.subtitle, widths)
     )

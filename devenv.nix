@@ -525,7 +525,10 @@ in {
           "wc *"
         ];
       };
-      Read.allow = ["dev/references/*"];
+      # `**`, not `*`: the references are namespaced one directory deep
+      # (dev/references/kimchi-surface/), and a single `*` stops at the
+      # separator, so it would silently allow nothing there.
+      Read.allow = ["dev/references/**"];
     };
 
     env.ENABLE_LSP_TOOL = "1";

@@ -10,7 +10,8 @@ description: >-
 disable-model-invocation: false
 ---
 
-Re-run the extraction that produced `dev/references/kimchi-server-surface.md`.
+Re-run the extraction that produced
+`dev/references/kimchi-surface/kimchi-server-surface.md`.
 
 ## Cost, so you size this correctly
 
@@ -22,11 +23,13 @@ vendored SDK could also own.
 
 ## Output
 
-| Artifact                                  | What it is                              |
-| ----------------------------------------- | --------------------------------------- |
-| `dev/references/kimchi-server-surface.md` | The census. Authoritative; edit this.   |
-| `dev/references/kimchi-capabilities.svg`  | Rendered from it. Never edited by hand. |
-| `dev/references/kimchi-endpoints.svg`     | Rendered from it. Never edited by hand. |
+All three live in `dev/references/kimchi-surface/`.
+
+| Artifact                   | What it is                              |
+| -------------------------- | --------------------------------------- |
+| `kimchi-server-surface.md` | The census. Authoritative; edit this.   |
+| `kimchi-capabilities.svg`  | Rendered from it. Never edited by hand. |
+| `kimchi-endpoints.svg`     | Rendered from it. Never edited by hand. |
 
 ## 1. Find every version's source tree, then identify it by hash
 
@@ -39,12 +42,45 @@ for p in /nix/store/*-source; do
   [ -f "$p/package.json" ] && grep -q '@kimchi-dev/cli' "$p/package.json" \
     && echo "$p  $(nix hash path --type sha256 --sri "$p")"
 done
+```
 
+That enumerates the trees. To put a VERSION on one, map its NAR hash against the
+`src.hash` each branch pinned. Guard the JSON read. Only the
+`build/kimchi-from-source` line of branches carries a `src` key at all; on every
+other ref this reads either non-JSON or a `sources.json` of per-platform release
+tarballs with no `src` in it. Unguarded, the ~180 refs in a working clone bury
+the handful of real lines under a couple of hundred tracebacks, and
+`2>/dev/null` silences git but not Python.
+
+```bash
 git for-each-ref --format='%(refname:short)' refs/heads refs/remotes | while read -r br; do
-  git show "$br:packages/kimchi/sources.json" 2>/dev/null \
-    | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["version"], d["src"]["hash"])'
+  git show "$br:packages/kimchi/sources.json" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    print(d["version"], d["src"]["hash"])
+except (KeyError, TypeError, ValueError):
+    pass
+'
 done | sort -u
 ```
+
+Run against this clone on 2026-09-22, that is the whole of its output:
+
+```text
+1.1.21 sha256-46UKL5Wxh+aaJFH6/yWacg+FhXBzO27duo/70tfIj08=
+1.1.25 sha256-5dTaqgZbuppRQbd6rpA822mX1hyLatXEwxONM4p8zos=
+1.1.26 sha256-dcq7CE5YpXx7DN/pxfrO0dOzzq7mG3FR4tcWVcY0oJ4=
+1.1.27 sha256-DAzjhZPML0ujQkTommNgvhWOLTQBbOUdAHTvsn1UINc=
+```
+
+**Four versions against nine source trees, so the hash map is not a complete
+method.** It resolves only the versions some ref still pins, and on that run
+neither 1.1.29 nor 1.1.30 was among them — which are the two you are most likely
+to care about. The other five trees were identified by content instead. 1.1.30
+was settled by finding three strings unique to it present in the 1.1.30 binary
+(section 2). Treat the hash map as the cheap first pass and a content probe as
+the ordinary fallback, not as an exception.
 
 **Never trust a `.drv` label, a directory name, or which branch pinned a tree.**
 Two misidentifications happened during discovery and both looked authoritative:
@@ -53,10 +89,24 @@ version; the orchestrator inferred a tree's version from the PR branch that
 pinned it. Both were wrong. Only `nix hash path` against `sources.json` settled
 it.
 
-At the time of writing the method found 1.1.21, 1.1.25, 1.1.26, 1.1.27, 1.1.29
-and 1.1.30, plus 1.1.22 through 1.1.24 for bisecting. **That list is a snapshot
-of what the method returned once, not a lookup table** — re-run the loop rather
-than assuming it.
+At the time of writing the store held nine trees, covering 1.1.21, 1.1.25,
+1.1.26, 1.1.27, 1.1.29 and 1.1.30, plus 1.1.22 through 1.1.24 for bisecting.
+**That list is a snapshot of what the method returned once, not a lookup table**
+— re-run the loops rather than assuming it.
+
+### When no tree exists for the version you want
+
+A rescan normally starts on a version nobody has built from source, which is
+exactly the case neither loop above can help with. Realize one:
+
+1. Check out the `build/kimchi-from-source` branch.
+2. Set `version` and `src.hash` in `packages/kimchi/sources.json` to the release
+   you want.
+3. Build it. The realized `-source` path is then both the tree to read and its
+   own identification — you supplied the hash, so no inference is involved.
+
+This is the only way to get a tree for an unrealized version, and it beats the
+binary route in section 2 for anything more than a couple of call sites.
 
 ## 2. With no source tree, read the binary
 
@@ -138,40 +188,42 @@ landed in. That table, not the matrix, is what a reader needs on a bump.
 
 ## 7. Regenerate the diagrams
 
-`scripts/surface-tables.py` reads the reference's GFM tables, so a table and its
-image cannot drift. It is stdlib-only Python; run it from the repo root after
-every edit to the markdown.
+`scripts/surface-tables.py` reads the reference's GFM tables, so the SVGs are
+never edited by hand. It is stdlib-only Python, but run it through the task:
 
 ```bash
-scripts=dev/skills/kimchi-surface-scan/scripts
-
-python3 "$scripts/surface-tables.py" svg dev/references/kimchi-server-surface.md \
-  dev/references/kimchi-capabilities.svg \
-  --title 'Kimchi CLI — server-side capabilities' --subtitle 'kimchi 1.1.30' \
-  --cols 0,1,2 --widths 46,90,80
-
-python3 "$scripts/surface-tables.py" svg dev/references/kimchi-server-surface.md \
-  dev/references/kimchi-endpoints.svg \
-  --title 'Kimchi CLI — endpoints and repointing' --subtitle 'kimchi 1.1.30' \
-  --cols 0,3,4,5 --widths 40,82,30,63
+devenv tasks run --mode before generate:references:kimchi-surface
 ```
 
-Bump `--subtitle` to the version you scanned. The committed pair renders at
-1834x3418 and 1849x4278; an unchanged reference must reproduce those exactly.
+**The render arguments live in `dev/references/kimchi-surface/renders.nix` and
+nowhere else** — title, subtitle, which columns each sheet projects, and the
+per-column widths. That task and `checks/references/kimchi-surface-diagrams.nix`
+both read it, so the command that fixes a drift failure cannot disagree with the
+check that raised it. Bump the version in `subtitle` THERE; a hand-typed
+`--subtitle` renders an SVG the check then rejects.
+
+That check re-renders both SVGs from the tracked markdown and fails on any byte
+difference, so a markdown edit committed without regenerating cannot reach main.
+The committed pair renders at 1834x3418 and 1849x4278; an unchanged reference
+must reproduce those exactly.
 
 To read a projection in a terminal instead, or to check one capability without
 opening the whole sheet:
 
 ```bash
-python3 "$scripts/surface-tables.py" preview dev/references/kimchi-server-surface.md \
+python3 dev/skills/kimchi-surface-scan/scripts/surface-tables.py preview \
+  dev/references/kimchi-surface/kimchi-server-surface.md \
   --width 150 --cols 0,3,4 --filter search
 ```
 
 The renderer keeps the table shape that recurs — the six-column capability
-matrix — and drops the one-off tables around it, so new sections need no
-registration. The `--widths` numbers come from each column's length distribution
-rather than its maximum, which is why they are not round; the script's own
-comment explains the arithmetic.
+matrix — and drops the one-off tables around it. **A new section needs no
+registration, but its header has to match the matrix word for word.** Reword one
+cell of one header and that section stops being the matrix and leaves the sheet.
+`dominant()` is what makes that loud: it names every table it drops on stderr,
+and hard-fails when a dropped one still carries six columns. The drift check
+cannot see it — re-rendering after a reword produces a committed and a
+re-rendered SVG that agree with each other and both omit the section.
 
 ## Local validation
 
