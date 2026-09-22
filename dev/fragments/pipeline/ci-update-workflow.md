@@ -1,9 +1,9 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-09-16 — a target held back on two consecutive
-> scheduled sweeps now fails the cleanup job; one hold-back still warns on a
-> green sweep. Newer Update sweeps cancel older sweeps; main CI remains
-> independent and cancelled sweeps skip stale PR cleanup.
+> **Last verified:** 2026-09-21 — publication retries briefly when a newly
+> pushed App branch has no queryable activity row or its PR view is unavailable.
+> Identity mismatches still fail immediately, and auto-merge intent is rechecked
+> before arming.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -110,13 +110,16 @@ block merging remain allowed. Immediately before arming, publication rechecks
 the current PR's repository, target base, App ownership, exact expected head,
 push actor, and commit identities. A changed or unverified head blocks the arm,
 preserves the ref, and fails the worker without changing an existing auto-merge
-request. The same final read validates `autoMergeRequest`; an existing request
-is retained without a redundant enable/rollback attempt, while a newly attempted
-request may still be disabled after an ambiguous enable failure. A human or
-unverifiable pusher discovered before patch comparison also preserves and
-touches the branch without changing its merge state. Pusher and commit identity
-authorize destructive ref updates; only an explicit human auto-merge disable
-expresses a merge-state hold. The merge command also receives
+request. An unavailable PR view or an empty repository activity result gets up
+to five reads, two seconds apart; a visible wrong identity, head, or pusher
+fails immediately. The final PR read validates `autoMergeRequest`, and the
+latest auto-merge event is checked again before a new enable. An existing
+request is retained without a redundant enable/rollback attempt, while a newly
+attempted request may still be disabled after an ambiguous enable failure. A
+human or unverifiable pusher discovered before patch comparison also preserves
+and touches the branch without changing its merge state. Pusher and commit
+identity authorize destructive ref updates; only an explicit human auto-merge
+disable expresses a merge-state hold. The merge command also receives
 `--match-head-commit`.
 
 Before creating an absent open proposal, publication inspects the most recent

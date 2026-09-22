@@ -80,31 +80,74 @@ fi
 # Arming failure fails only this target. Matrix siblings still finish, and no
 # successful receipt is emitted for a PR that still needs an automation retry.
 arm_auto_merge() {
-  local arm_pr=$1 arm_branch=$2 expected_head=$3 current_pr human_commits
+  local arm_pr=$1 arm_branch=$2 expected_head=$3 current_pr human_commits reason push_status retry_status attempt
   # Recheck after publication as well as before an unchanged PR is re-armed.
   # Commit identities are immutable at this SHA; GitHub separately records
   # who pushed it. A validation failure blocks this arming attempt without
   # treating pusher or commit identity as a request to change merge state.
-  if ! current_pr=$(gh pr view "$arm_pr" --json author,autoMergeRequest,baseRefName,headRefName,headRefOid,headRepository,isCrossRepository) ||
-    ! jq -e --arg branch "$arm_branch" --arg repo "$GITHUB_REPOSITORY" --arg head "$expected_head" --arg base "$BRANCH_NAME" \
-      '.isCrossRepository == false and .headRepository.nameWithOwner == $repo
-       and .baseRefName == $base
-       and .headRefName == $branch and .headRefOid == $head
-       and ((.autoMergeRequest == null) or
-         (.autoMergeRequest | type == "object" and (.enabledAt | type == "string")))
-       and (.author.login == "app/nix-agentic-tools-bot" or .author.login == "nix-agentic-tools-bot[bot]")' \
-      <<<"$current_pr" >/dev/null ||
-    ! human_commits=$(git log --format='%H %ae %ce' "$base_head..$expected_head" |
-      awk -v bot="$bot_email" '$2 != bot || $3 != bot {print $1}') ||
-    [ -n "$human_commits" ] ||
-    ! python3 "$(dirname "$0")/update-github.py" push "$arm_branch" "$expected_head"; then
-    echo "::error::Cannot verify the current App-owned head of $arm_pr; preserving $arm_branch without changing auto-merge."
+  if ! human_commits=$(git log --format='%H %ae %ce' "$base_head..$expected_head" |
+    awk -v bot="$bot_email" '$2 != bot || $3 != bot {print $1}') ||
+    [ -n "$human_commits" ]; then
+    echo "::error::Cannot verify bot commit identities for $arm_pr; preserving $arm_branch without changing auto-merge."
     return 1
   fi
+  # GitHub can acknowledge a new PR before its activity row is queryable.
+  # Re-read only an unavailable PR view or an empty activity result. Any
+  # observed wrong identity, base, head, or pusher fails immediately.
+  for attempt in 1 2 3 4 5; do
+    reason=""
+    if ! current_pr=$(gh pr view "$arm_pr" --json author,autoMergeRequest,baseRefName,headRefName,headRefOid,headRepository,isCrossRepository); then
+      reason="PR view unavailable"
+    elif ! jq -e --arg branch "$arm_branch" --arg repo "$GITHUB_REPOSITORY" --arg base "$BRANCH_NAME" \
+      '.isCrossRepository == false and .headRepository.nameWithOwner == $repo
+       and .baseRefName == $base and .headRefName == $branch
+       and (.author.login == "app/nix-agentic-tools-bot" or .author.login == "nix-agentic-tools-bot[bot]")
+       and ((.autoMergeRequest == null) or
+         (.autoMergeRequest | type == "object" and (.enabledAt | type == "string")))' \
+      <<<"$current_pr" >/dev/null; then
+      echo "::error::PR identity or auto-merge metadata changed for $arm_pr; preserving $arm_branch without changing auto-merge."
+      return 1
+    elif ! jq -e --arg head "$expected_head" '.headRefOid == $head' <<<"$current_pr" >/dev/null; then
+      echo "::error::PR head changed for $arm_pr; preserving $arm_branch without changing auto-merge."
+      return 1
+    else
+      push_status=0
+      python3 "$(dirname "$0")/update-github.py" push "$arm_branch" "$expected_head" || push_status=$?
+      case "$push_status" in
+      0) break ;;
+      3) reason="App push activity unavailable" ;;
+      *)
+        echo "::error::App push activity does not verify $expected_head for $arm_pr; preserving $arm_branch without changing auto-merge."
+        return 1
+        ;;
+      esac
+    fi
+    if [ "$attempt" -eq 5 ]; then
+      echo "::error::$reason after $attempt reads for $arm_pr; preserving $arm_branch without changing auto-merge."
+      return 1
+    fi
+    echo "::warning::$reason for $arm_pr (read $attempt/5); retrying before auto-merge."
+    sleep 2
+  done
   if jq -e '.autoMergeRequest != null' <<<"$current_pr" >/dev/null; then
     echo "Auto-merge already armed for $arm_branch ($arm_pr)"
     return 0
   fi
+  # A human can disable auto-merge while the metadata recheck waits. Honor
+  # that latest intent before attempting a new enable.
+  retry_status=0
+  python3 "$(dirname "$0")/update-github.py" auto-merge-retry "${arm_pr##*/}" || retry_status=$?
+  case "$retry_status" in
+  0) ;;
+  2)
+    echo "Retaining explicit human auto-merge disable on $arm_pr ($arm_branch)."
+    return 0
+    ;;
+  *)
+    echo "::error::Could not classify the latest auto-merge event on $arm_pr ($arm_branch)."
+    return 1
+    ;;
+  esac
   if gh pr merge "$arm_pr" --squash --auto --match-head-commit "$expected_head"; then
     echo "Auto-merge armed (squash) for $arm_branch ($arm_pr)"
   else
