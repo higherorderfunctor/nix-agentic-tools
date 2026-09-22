@@ -754,6 +754,7 @@
           "typeExpression": "string",
           "type": "string"
         },
+        "optional": true,
         "project": false
       },
       "llmEndpoint": {
@@ -908,6 +909,7 @@
             }
           }
         },
+        "optional": true,
         "project": false
       },
       "telemetry": {
@@ -935,6 +937,7 @@
             "type": "string"
           }
         },
+        "optional": true,
         "project": false
       },
       "teleport": {
@@ -954,6 +957,7 @@
             }
           }
         },
+        "optional": true,
         "project": false
       }
     },
@@ -1614,7 +1618,8 @@
             "typeExpression": "number",
             "type": "number"
           }
-        }
+        },
+        "optional": true
       },
       "followUpMode": {
         "source": "pi",
@@ -1645,7 +1650,8 @@
       "hidePhaseChanges": {
         "source": "kimchi",
         "typeExpression": "boolean",
-        "type": "boolean"
+        "type": "boolean",
+        "optional": true
       },
       "hideThinkingBlock": {
         "source": "pi",
@@ -1723,7 +1729,8 @@
           "typeExpression": "object"
         },
         "type": "object",
-        "typeExpression": "Record<string, ModelCustomMetadata>"
+        "typeExpression": "Record<string, ModelCustomMetadata>",
+        "optional": true
       },
       "modelRoles": {
         "source": "kimchi",
@@ -1771,7 +1778,8 @@
             "type": "union",
             "description": "Code review model(s)."
           }
-        }
+        },
+        "optional": true
       },
       "modelThinkingLevels": {
         "source": "pi",
@@ -1782,7 +1790,8 @@
       "multiModel": {
         "source": "kimchi",
         "typeExpression": "boolean",
-        "type": "boolean"
+        "type": "boolean",
+        "optional": true
       },
       "npmCommand": {
         "source": "pi",
@@ -1822,7 +1831,8 @@
         "additionalProperties": {
           "typeExpression": "boolean",
           "type": "boolean"
-        }
+        },
+        "optional": true
       },
       "retry": {
         "source": "pi",
@@ -1851,7 +1861,8 @@
       "shellProfileApiKeyMigrationDismissed": {
         "source": "kimchi",
         "typeExpression": "boolean",
-        "type": "boolean"
+        "type": "boolean",
+        "optional": true
       },
       "showCacheMissNotices": {
         "source": "pi",
@@ -1902,7 +1913,8 @@
             "typeExpression": "string",
             "type": "string"
           }
-        }
+        },
+        "optional": true
       },
       "steeringMode": {
         "source": "pi",
