@@ -8,6 +8,13 @@
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
   inherit (import ../../packages/kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringContent;
+
+  # `aiCommon.contentFileEntry` returns the delivery record wrapped in
+  # `lib.mkDefault`, so a consumer can override what a factory contributed.
+  # These assertions are about the arbitrated CONTENT, not the override
+  # priority carrying it, so unwrap before comparing. Comparing the wrapper
+  # directly would make every assertion below depend on the priority value.
+  entryContent = entry: entry.content.content;
 in {
   checks = {
     module-context-content-record-rejects-two-sources = mkTest "context-content-record-rejects-two-sources" (!(builtins.tryEval (let
@@ -85,7 +92,11 @@ in {
         rule.source
         == ../../lib/ai/types.nix
         && rule.text == "Consumer rule."
-        && aiCommon.contentFileEntry rule == {text = "Consumer rule.";}
+        && entryContent (aiCommon.contentFileEntry rule)
+        == {
+          enable = true;
+          text = "Consumer rule.";
+        }
     );
 
     module-rule-disable-omits-every-runtime-output = mkTest "rule-disable-omits-every-runtime-output" (
@@ -192,7 +203,11 @@ in {
         value.text
         == "Consumer text."
         && aiCommon.hasContent value
-        && aiCommon.contentFileEntry value == {text = "Consumer text.";}
+        && entryContent (aiCommon.contentFileEntry value)
+        == {
+          enable = true;
+          text = "Consumer text.";
+        }
     );
 
     module-rule-rejects-empty-content = mkTest "rule-rejects-empty-content" (!(builtins.tryEval (let
