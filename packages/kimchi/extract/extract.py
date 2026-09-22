@@ -108,7 +108,11 @@ CONFIG_KEYS: dict[str, dict[str, Any]] = {
     "api_key": {"aliasFor": "apiKey", "type": "string", "project": True},
     "deviceId": {"type": "string", "project": True},
     "device_id": {"aliasFor": "deviceId", "type": "string", "project": True},
-    "gitTokens": {"type": "object", "project": False},
+    "gitTokens": {
+        "additionalProperties": {"type": "string"},
+        "project": False,
+        "type": "object",
+    },
     "llmEndpoint": {"type": "string", "project": True},
     "maxToolResultChars": {
         "inert": True,
@@ -163,7 +167,14 @@ CONFIG_KEYS: dict[str, dict[str, Any]] = {
         "properties": {"enabled": {"type": "boolean"}},
     },
     "skillPaths": {"items": {"type": "string"}, "project": True, "type": "array"},
-    "surveys": {"project": False, "type": "object"},
+    "surveys": {
+        "additionalProperties": {
+            "properties": {"seenAt": {"type": "string"}},
+            "type": "object",
+        },
+        "project": False,
+        "type": "object",
+    },
     "telemetry": {
         "project": False,
         "type": "object",
@@ -184,6 +195,58 @@ CONFIG_KEYS: dict[str, dict[str, Any]] = {
             }
         },
     },
+}
+
+
+CONFIG_SHAPE_ANCHORS: dict[str, tuple[str, ...]] = {
+    "apiKey": ('typeof parsed.apiKey === "string"',),
+    "api_key": ('typeof parsed.api_key === "string"',),
+    "deviceId": ('typeof parsed.deviceId === "string"',),
+    "device_id": ('typeof parsed.device_id === "string"',),
+    "gitTokens": (
+        'tokens && typeof tokens === "object" && !Array.isArray(tokens)',
+        'typeof token === "string" && token.length > 0',
+    ),
+    "llmEndpoint": ('typeof parsed.llmEndpoint === "string"',),
+    "maxToolResultChars": ('typeof parsed.maxToolResultChars === "number"',),
+    "mcpSearch": (
+        's.strategy === "bm25" || s.strategy === "regex"',
+        'typeof s.bm25K1 === "number"',
+        'typeof s.bm25B === "number"',
+        'typeof s.fieldWeights.name === "number"',
+        'typeof s.fieldWeights.description === "number"',
+        'typeof s.fieldWeights.schemaKey === "number"',
+    ),
+    "mcpSearchLimit": ('typeof parsed.mcpSearchLimit === "number"',),
+    "migrationState": (
+        'parsed.migrationState === "done" || parsed.migrationState === "skip-forever"',
+    ),
+    "onboarding": (
+        'typeof raw.sessionModeWizardSeenAt === "string"',
+        'typeof raw.hideSessionModeDialog === "boolean"',
+        'typeof raw.teleportHelpSeenAt === "string"',
+        'typeof raw.studioOnboardingSeenAt === "string"',
+    ),
+    "preferences": ('typeof raw.hideTips === "boolean"',),
+    "redaction": ('typeof rd.enabled === "boolean"',),
+    "skillPaths": (
+        'Array.isArray(parsed.skillPaths)',
+        'typeof p === "string"',
+    ),
+    "surveys": (
+        'typeof surveys !== "object" || Array.isArray(surveys)',
+        'typeof seenAt === "string" && seenAt.length > 0',
+    ),
+    "telemetry": (
+        'typeof t.enabled === "boolean"',
+        'typeof t.endpoint === "string"',
+        'typeof t.metricsEndpoint === "string"',
+        'typeof t.headers === "object" && !Array.isArray(t.headers)',
+    ),
+    "teleport": (
+        'const enabled = parsed?.teleport?.compactHint?.enabled',
+        'typeof enabled === "boolean"',
+    ),
 }
 
 
@@ -235,6 +298,62 @@ KIMCHI_HARNESS_KEYS: dict[str, dict[str, Any]] = {
         },
     },
     "themeAdaptive": {"type": "boolean"},
+}
+
+
+KIMCHI_HARNESS_SHAPE_ANCHORS: dict[str, tuple[str, ...]] = {
+    "fermentV2": (
+        'readConfigSetting("fermentV2", isPlainObject)',
+        "if (isBoolean(raw.autoResume))",
+        "if (isPositiveInteger(raw.maxUnchangedContinuations))",
+        "if (isPositiveInteger(raw.maxConsecutiveErrors))",
+        "if (isPositiveInteger(raw.defaultTokenBudget))",
+        "if (isPositiveInteger(raw.evaluationTimeoutMs))",
+    ),
+    "hidePhaseChanges": (
+        'readConfigSetting("hidePhaseChanges", (value) => typeof value === "boolean", false)',
+    ),
+    "modelMetadata": (
+        'Type.Literal("light")',
+        'Type.Literal("standard")',
+        'Type.Literal("heavy")',
+        "description: Type.Optional(Type.String())",
+        "vision: Type.Optional(Type.Boolean())",
+        "reasoning: Type.Optional(Type.Boolean())",
+    ),
+    "modelRoles": (
+        "export interface ModelRoles",
+        "orchestrator: string",
+        "planner: RoleModelAssignment",
+        "builder: RoleModelAssignment",
+        "reviewer: RoleModelAssignment",
+        "explorer: RoleModelAssignment",
+        "researcher: RoleModelAssignment",
+        "judge: RoleModelAssignment",
+        "compactor?: string",
+        "export type RoleModelAssignment = string | string[]",
+    ),
+    "multiModel": (
+        'readConfigSetting("multiModel", (value) => typeof value === "boolean")',
+    ),
+    "resources": (
+        "resources: Partial<Record<ResourceId, boolean>>",
+        "export type ResourceId = `${ResourceKind}.${string}`",
+    ),
+    "shellProfileApiKeyMigrationDismissed": (
+        'const DISMISSED_SETTING = "shellProfileApiKeyMigrationDismissed"',
+        'typeof value === "boolean"',
+    ),
+    "statusLine": (
+        'const STATUS_LINE_KEY = "statusLine"',
+        "export type StatusLineConfig = { pinned: StatusLineElementId[] }",
+        'typeof statusLine === "object"',
+        'typeof cmd !== "string" || cmd.length === 0',
+    ),
+    "themeAdaptive": (
+        "themeAdaptive?: boolean",
+        "return settings.themeAdaptive !== false",
+    ),
 }
 
 
@@ -326,6 +445,29 @@ ENVIRONMENT_METADATA: dict[str, dict[str, Any]] = {
 }
 
 
+INDIRECT_ENV_OWNERS: dict[str, tuple[str, ...]] = {
+    "KIMCHI_ACTIVE_FERMENT": ("kimchi",),
+    "KIMCHI_DISABLE_BUILTIN_PROVIDERS": ("pi",),
+    "KIMCHI_MCP_E2E_KEYRING_DIR": ("kimchi",),
+    "KIMCHI_PARENT_SESSION_ID": ("kimchi",),
+    "KIMCHI_PERMISSIONS": ("kimchi",),
+    "KIMCHI_PROXY_HELPER": ("kimchi",),
+    "KIMCHI_STREAM_IDLE_TIMEOUT_MS": ("kimchi",),
+    "PI_CACHE_RETENTION": ("pi",),
+    "PI_CODING_AGENT_DIR": ("pi",),
+    "PI_CODING_AGENT_SESSION_DIR": ("pi",),
+    "PI_HYPERLINKS": ("pi",),
+    "PI_IMAGE_PROTOCOL": ("pi",),
+    "PI_OAUTH_CALLBACK_HOST": ("pi",),
+    "PI_TRUE_COLOR": ("pi",),
+    "PI_TUI_DEBUG": ("pi",),
+    "PI_TUI_DEBUG_REDRAW": ("pi",),
+    "PI_TUI_ESC_TIMEOUT": ("pi",),
+    "PI_TUI_NO_CLEAR_SCROLLBACK": ("pi",),
+    "PI_TUI_WRITE_LOG": ("pi",),
+}
+
+
 def discover_config_keys(config_source: str) -> set[str]:
     keys = set(re.findall(r"\bparsed\??\.([A-Za-z_$][A-Za-z0-9_$]*)", config_source))
     keys.update(
@@ -342,6 +484,40 @@ def discover_config_keys(config_source: str) -> set[str]:
     return keys
 
 
+def require_shape_anchors(
+    surface: str, source: str, anchors_by_key: dict[str, tuple[str, ...]]
+) -> None:
+    normalized = " ".join(source.split())
+    missing: dict[str, list[str]] = {}
+    for key, anchors in anchors_by_key.items():
+        absent = [anchor for anchor in anchors if " ".join(anchor.split()) not in normalized]
+        if absent:
+            missing[key] = absent
+    if missing:
+        fail(f"{surface} validation shape changed: {missing!r}")
+
+
+def discover_project_config_keys(config_source: str) -> set[str]:
+    merge = balanced_body(config_source, "const extras =", "{", "}")
+    canonical = set(
+        re.findall(
+            r"^\s*([A-Za-z_$][A-Za-z0-9_$]*):\s*projectExtras\.\1\b",
+            merge,
+            re.MULTILINE,
+        )
+    )
+    if "mcpSearch: { ...globalExtras.mcpSearch, ...projectExtras.mcpSearch }" in " ".join(
+        merge.split()
+    ):
+        canonical.add("mcpSearch")
+    aliases = {
+        key
+        for key, descriptor in CONFIG_KEYS.items()
+        if descriptor.get("aliasFor") in canonical
+    }
+    return canonical | aliases
+
+
 def extract_config(kimchi_root: Path) -> dict[str, Any]:
     source = read(kimchi_root / "src/config.ts")
     discovered = discover_config_keys(source)
@@ -355,11 +531,23 @@ def extract_config(kimchi_root: Path) -> dict[str, Any]:
             "config.json key census changed; "
             f"new={sorted(discovered - expected)!r}, missing={sorted(expected - discovered)!r}"
         )
+    if set(CONFIG_SHAPE_ANCHORS) != expected:
+        fail("internal config shape anchors do not cover the complete key census")
+    require_shape_anchors("config.json", source, CONFIG_SHAPE_ANCHORS)
+    project_keys = discover_project_config_keys(source)
+    declared_project_keys = {
+        key for key, descriptor in CONFIG_KEYS.items() if descriptor["project"]
+    }
+    if project_keys != declared_project_keys:
+        fail(
+            "config.json project-tier behavior changed; "
+            f"source={sorted(project_keys)!r}, declared={sorted(declared_project_keys)!r}"
+        )
     return {
         "keys": dict(sorted(CONFIG_KEYS.items())),
         "projectTier": {
             "gatedByProjectTrust": True,
-            "honoredKeys": sorted(key for key, value in CONFIG_KEYS.items() if value["project"]),
+            "honoredKeys": sorted(project_keys),
         },
     }
 
@@ -408,6 +596,13 @@ def extract_harness(kimchi_root: Path, pi_root: Path) -> dict[str, Any]:
     overlap = set(base_keys) & set(KIMCHI_HARNESS_KEYS)
     if overlap:
         fail(f"Kimchi harness additions now overlap pi Settings: {sorted(overlap)!r}")
+    if set(KIMCHI_HARNESS_SHAPE_ANCHORS) != set(KIMCHI_HARNESS_KEYS):
+        fail("internal harness shape anchors do not cover the complete Kimchi key census")
+    require_shape_anchors(
+        "harness/settings.json Kimchi additions",
+        production,
+        KIMCHI_HARNESS_SHAPE_ANCHORS,
+    )
     keys = {
         **{key: {"source": "pi", **value} for key, value in base_keys.items()},
         **{key: {"source": "kimchi", **value} for key, value in KIMCHI_HARNESS_KEYS.items()},
@@ -436,6 +631,12 @@ def extract_kimchi_cli_options(source: str) -> dict[str, dict[str, Any]]:
         description = json.loads(f'"{description_match.group(1)}"')
         short_match = re.search(r'short:\s*"([^"]+)"', fragment)
         placeholder_match = re.search(r'placeholder:\s*"([^"]+)"', fragment)
+        value_name = placeholder_match.group(1) if placeholder_match else None
+        if value_name and (
+            (value_name.startswith("<") and value_name.endswith(">"))
+            or (value_name.startswith("[") and value_name.endswith("]"))
+        ):
+            value_name = value_name[1:-1]
         names = [f"--{name}"]
         if short_match:
             names.append(f"-{short_match.group(1)}")
@@ -445,7 +646,7 @@ def extract_kimchi_cli_options(source: str) -> dict[str, dict[str, Any]]:
             "names": names,
             "optionalValue": bool(re.search(r"optional:\s*true", fragment)),
             "origin": ["kimchi"],
-            "valueName": placeholder_match.group(1) if placeholder_match else None,
+            "valueName": value_name,
         }
     if len(options) < 20:
         fail(f"Kimchi CLI option census collapsed to {len(options)} entries")
@@ -609,32 +810,12 @@ def discover_literal_env_reads(paths: list[Path]) -> set[str]:
 def extract_environment(kimchi_root: Path, pi_root: Path) -> dict[str, Any]:
     kimchi_paths = production_sources(kimchi_root / "src", ".ts", {"node_modules"})
     pi_paths = production_sources(pi_root / "dist", ".js", {"bundle"})
-    discovered = discover_literal_env_reads(kimchi_paths + pi_paths)
-
-    # These are read through named constants, generated names, bundled provider/TUI
-    # code, or Kimchi's checked-in dependency patches rather than a literal
-    # process.env.NAME access in the two primary source trees.
-    indirect = {
-        "KIMCHI_ACTIVE_FERMENT",
-        "KIMCHI_DISABLE_BUILTIN_PROVIDERS",
-        "KIMCHI_MCP_E2E_KEYRING_DIR",
-        "KIMCHI_PARENT_SESSION_ID",
-        "KIMCHI_PERMISSIONS",
-        "KIMCHI_PROXY_HELPER",
-        "KIMCHI_STREAM_IDLE_TIMEOUT_MS",
-        "PI_CACHE_RETENTION",
-        "PI_CODING_AGENT_SESSION_DIR",
-        "PI_HYPERLINKS",
-        "PI_IMAGE_PROTOCOL",
-        "PI_OAUTH_CALLBACK_HOST",
-        "PI_TRUE_COLOR",
-        "PI_TUI_DEBUG",
-        "PI_TUI_DEBUG_REDRAW",
-        "PI_TUI_ESC_TIMEOUT",
-        "PI_TUI_NO_CLEAR_SCROLLBACK",
-        "PI_TUI_WRITE_LOG",
+    patch_paths = production_sources(kimchi_root / "patches", ".patch", set())
+    reads_by_runtime = {
+        "kimchi": discover_literal_env_reads(kimchi_paths),
+        "pi": discover_literal_env_reads(pi_paths + patch_paths),
     }
-    discovered.update(indirect)
+    discovered = set().union(*reads_by_runtime.values(), INDIRECT_ENV_OWNERS)
 
     expected = set(ENVIRONMENT_METADATA)
     unknown = discovered - expected
@@ -644,14 +825,13 @@ def extract_environment(kimchi_root: Path, pi_root: Path) -> dict[str, Any]:
 
     variables = {}
     for name, metadata in sorted(ENVIRONMENT_METADATA.items()):
+        readers = {
+            runtime for runtime, reads in reads_by_runtime.items() if name in reads
+        }
+        readers.update(INDIRECT_ENV_OWNERS.get(name, ()))
         variables[name] = {
             "consumerOverridable": True,
-            "readBy": sorted(
-                runtime
-                for runtime, paths in (("kimchi", kimchi_paths), ("pi", pi_paths))
-                if any(name in read(path) for path in paths)
-            )
-            or (["kimchi"] if name.startswith("KIMCHI_") else ["pi"]),
+            "readBy": sorted(readers),
             **metadata,
         }
     return {"variables": variables}
