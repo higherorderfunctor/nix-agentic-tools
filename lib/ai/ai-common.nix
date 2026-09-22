@@ -39,7 +39,6 @@
       then value.source != null
       else value.text != ""
     );
-  ruleIsValid = hasContent;
   mkContentModule = {
     defaultFilename ? null,
     enableDefault ? false,
@@ -153,18 +152,6 @@ in {
 
   contentModule = mkContentModule {};
   optionalContentModule = mkContentModule {};
-  validateOptionalContent = value:
-    if !(value.enable or true) || hasContent value
-    then value
-    else throw "Context must set `text` or `source` when enabled";
-  validateRules = rules:
-    lib.mapAttrs (name: rule:
-      if !(rule.enable or true) || ruleIsValid rule
-      then rule
-      else
-        throw
-        "Rule `${name}` must set `text` or `source`")
-    rules;
   runtimeContextModule = defaultFilename:
     mkContentModule {inherit defaultFilename;};
 

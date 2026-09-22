@@ -40,7 +40,6 @@ in {
                 options.context = lib.mkOption {
                   type = aiCommon.optionalContentModule;
                   default = {};
-                  apply = aiCommon.validateOptionalContent;
                 };
               }
               {context.text = "first writer";}
@@ -54,7 +53,6 @@ in {
                 options.rules = lib.mkOption {
                   type = lib.types.attrsOf aiCommon.ruleModule;
                   default = {};
-                  apply = aiCommon.validateRules;
                 };
               }
               {rules.same.text = "first writer";}
@@ -76,7 +74,6 @@ in {
               options.rules = lib.mkOption {
                 type = lib.types.attrsOf aiCommon.ruleModule;
                 default = {};
-                apply = aiCommon.validateRules;
               };
             }
             {rules.example.source = lib.mkDefault ../../lib/ai/types.nix;}
@@ -132,6 +129,31 @@ in {
         && devenvFiles ? ".github/instructions/active.instructions.md"
     );
 
+    module-disabled-empty-context-omits-output = mkTest "disabled-empty-context-omits-output" (
+      let
+        empty = evalDevenv {
+          ai.copilot = {
+            context.enable = false;
+            enable = true;
+          };
+        };
+        withContent = evalDevenv {
+          ai.copilot = {
+            context = {
+              enable = false;
+              text = "Disabled content remains inspectable.";
+            };
+            enable = true;
+          };
+        };
+      in
+        empty.config.ai.copilot.context.text
+        == ""
+        && !(empty.config.files ? ".github/copilot-instructions.md")
+        && withContent.config.ai.copilot.context.text == "Disabled content remains inspectable."
+        && !(withContent.config.files ? ".github/copilot-instructions.md")
+    );
+
     module-text-source-force-empty-disables = mkTest "text-source-force-empty-disables" (
       let
         aiTypes = import ../../lib/ai/types.nix {inherit lib;};
@@ -181,7 +203,6 @@ in {
             options.rules = lib.mkOption {
               type = lib.types.attrsOf aiCommon.ruleModule;
               default = {};
-              apply = aiCommon.validateRules;
             };
           }
           {rules.example = {};}

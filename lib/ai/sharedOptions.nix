@@ -141,7 +141,6 @@ in {
       # An empty record is the unset value; explicit content auto-enables it.
       type = aiCommon.optionalContentModule;
       default = {};
-      apply = aiCommon.validateOptionalContent;
       description = ''
         Cross-app context fanned out to Claude, Codex, Kiro, Kimchi, and the
         Copilot devenv backend; Copilot Home Manager intentionally degrades.
@@ -150,8 +149,9 @@ in {
         targets; definitions at the same priority conflict. Runtime-specific
         context appends after this root content in the runtime's single
         always-on file; same-priority `text` definitions concatenate in module
-        order. Set `enable = false` to omit this context. Its `filename`
-        controls that native artifact.
+        order. Enabled context must resolve to non-empty `text` or a `source`.
+        Set `enable = false` to omit this context. Its `filename` controls that
+        native artifact.
       '';
       example = lib.literalExpression ''{ source = ./ai-context.md; }'';
     };
@@ -175,7 +175,6 @@ in {
     rules = lib.mkOption {
       type = lib.types.attrsOf aiCommon.ruleModule;
       default = {};
-      apply = aiCommon.validateRules;
       description = ''
         Cross-app modular rule files fanned out to every capable enabled AI app.
         Each attribute becomes one file in the ecosystem's native rules
@@ -193,7 +192,8 @@ in {
         `source` definitions at different module priorities resolve to the
         higher-priority definition whichever field it targets; definitions at
         the same priority conflict. Same-priority `text` definitions concatenate
-        in module order. Kiro's native `inclusion` override exists only on
+        in module order. Enabled rules must resolve to non-empty `text` or a
+        `source`. Kiro's native `inclusion` override exists only on
         `ai.kiro.rules`.
       '';
       example = lib.literalExpression ''

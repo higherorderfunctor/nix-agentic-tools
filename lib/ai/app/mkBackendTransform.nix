@@ -279,7 +279,6 @@ in {
       context = lib.mkOption {
         type = aiCommon.runtimeContextModule (appRecord.contextFilename or (throw "${appRecord.name}: supportedPools includes context but the app record has no contextFilename"));
         default = {};
-        apply = aiCommon.validateOptionalContent;
         description =
           appRecord.contextDescription or ''
             ${appRecord.name}-specific context appended after `ai.context` in
@@ -287,8 +286,9 @@ in {
             When `text` and `source` are defined at different module priorities,
             the higher-priority definition supplies the content whichever field
             it targets; definitions at the same priority conflict. Same-priority
-            `text` definitions concatenate in module order. Set `enable = false`
-            to omit this context. `filename` controls the native artifact name.
+            `text` definitions concatenate in module order. Enabled context must
+            resolve to non-empty `text` or a `source`. Set `enable = false` to
+            omit this context. `filename` controls the native artifact name.
           '';
       };
     }
@@ -296,12 +296,12 @@ in {
       rules = lib.mkOption {
         type = lib.types.attrsOf (appRecord.ruleModule or aiCommon.ruleModule);
         default = {};
-        apply = aiCommon.validateRules;
         description =
           appRecord.rulesDescription or ''
             ${appRecord.name}-specific rules. Entries replace top-level ai.rules
             at the same key; set `enable = false` to suppress an inherited rule.
             Same-priority `text` definitions concatenate in module order.
+            Enabled rules must resolve to non-empty `text` or a `source`.
           '';
       };
       rulesDir = lib.mkOption {

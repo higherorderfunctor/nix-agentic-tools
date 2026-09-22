@@ -1,7 +1,8 @@
 # Delegate sizing package
 
 > **Last verified:** 2026-09-21 — instruction presets use inner
-> `defaultContent`, while shared text/source types auto-enable consumer content.
+> `defaultContent`, while shared text/source types auto-enable non-empty
+> consumer content and reject enabled empty records.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,
@@ -31,6 +32,10 @@ enables it, just like a brand-new key. Consumer entries must NOT use `mkPreset`:
 normal-priority content is what triggers auto-enable. Attribute-key renames live
 in `lib/when-to-delegate-renames.nix`; old-key definitions merge into the new
 key and warn until consumers update their configuration.
+
+An empty consumer `text` value does not auto-enable a default-disabled entry.
+Required entries and optional entries enabled explicitly or by default must
+resolve to non-empty `text` or a `source` path.
 
 Instruction presets live in `lib/presets.nix` and use
 `lib.ai.types.optionalTextSource` with `enableDefault = true`. The presets pass

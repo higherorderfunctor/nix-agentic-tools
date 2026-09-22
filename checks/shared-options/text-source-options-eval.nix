@@ -86,6 +86,20 @@
     description = "entry prose";
     enableDefault = true;
   }) [{entries.example.source = lib.mkDefault source;}];
+  enabledEmpty = evaluate [{entries.example.enable = true;}];
+  enabledEmptyFailed = !(builtins.tryEval (builtins.deepSeq enabledEmpty.config.entries.example true)).success;
+  requiredEmpty = evaluate [];
+  requiredEmptyFailed = !(builtins.tryEval (builtins.deepSeq requiredEmpty.config.required true)).success;
+  emptyOverridesDefaultSource = evaluateWith (aiTypes.optionalTextSource {
+    defaultContent.source = source;
+    description = "entry prose";
+    enableDefault = true;
+  }) [{entries.example.text = "";}];
+  emptyOverridesDefaultSourceFailed = !(builtins.tryEval (builtins.deepSeq emptyOverridesDefaultSource.config.entries.example true)).success;
+  disabledEmptyOverridesDefaultSource = evaluateWith (aiTypes.optionalTextSource {
+    defaultContent.source = source;
+    description = "entry prose";
+  }) [{entries.example.text = "";}];
   samePriority = evaluate [
     {
       entries.example = {
@@ -215,6 +229,16 @@
     then throw "lib.ai.types: package source changed enableDefault false"
     else if !packageSourceEnabledByDefault.config.entries.example.enable
     then throw "lib.ai.types: package source changed enableDefault true"
+    else if !enabledEmptyFailed
+    then throw "lib.ai.types: enabled optional text source accepted empty content"
+    else if !requiredEmptyFailed
+    then throw "lib.ai.types: required textSource accepted empty content"
+    else if !emptyOverridesDefaultSourceFailed
+    then throw "lib.ai.types: explicit empty text overrode a default source"
+    else if disabledEmptyOverridesDefaultSource.config.entries.example.enable
+    then throw "lib.ai.types: explicit empty text auto-enabled a default-disabled source"
+    else if disabledEmptyOverridesDefaultSource.config.entries.example.text != ""
+    then throw "lib.ai.types: explicit empty text did not override a default-disabled source"
     else if consumerText.config.entries.example.text != "consumer prose"
     then throw "lib.ai.types: consumer text did not override package source"
     else if defaultText.config.entries.example.text != "packaged prose\n"
@@ -233,6 +257,8 @@
     then throw "lib.ai.types: consumer text did not auto-enable a new entry"
     else if consumerTextDisabled.config.entries.example.enable
     then throw "lib.ai.types: explicit enable false did not override auto-enable"
+    else if consumerTextDisabled.config.entries.example.text != "consumer prose"
+    then throw "lib.ai.types: disabled text source did not preserve content"
     else if unset.config.entries.example.text != ""
     then throw "lib.ai.types: unset text did not retain its empty default"
     else if unset.config.entries.example.enable

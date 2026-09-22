@@ -43,15 +43,21 @@
         text = lib.mkOption {
           type = lib.types.lines;
           default = "";
-          description = "The ${description}.";
-          apply = value:
-            if config.source == null
-            then value
-            else if samePriority
-            then throw "`${lib.showOption options.text.loc}` and `${lib.showOption options.source.loc}` are defined at the same priority. Set only one of these options."
-            else if sourceWins config options
-            then builtins.readFile config.source
-            else value;
+          description = "The ${description}. Enabled or required records need non-empty inline text unless a source supplies the content.";
+          apply = value: let
+            sourceIsEffective = sourceWins config options;
+            effective =
+              if config.source == null
+              then value
+              else if samePriority
+              then throw "`${lib.showOption options.text.loc}` and `${lib.showOption options.source.loc}` are defined at the same priority. Set only one of these options."
+              else if sourceIsEffective
+              then builtins.readFile config.source
+              else value;
+          in
+            if !sourceIsEffective && (config.enable or true) && effective == ""
+            then throw "`${lib.showOption options.text.loc}` must be non-empty when its text source is enabled or required."
+            else effective;
         };
       };
     });
@@ -68,6 +74,10 @@
     ...
   }: let
     contentUsesSource = sourceWins config options;
+    # Merge the priority-filtered definitions before `text.apply`: consulting
+    # config.text here would cycle through config.enable, and source presence
+    # must enable lazily without reading the file.
+    mergedText = lib.mergeDefinitions options.text.loc options.text.type options.text.definitionsWithLocations;
     contentIsExplicit =
       options.text.highestPrio
       < defaultPriority
@@ -75,12 +85,12 @@
     contentIsPresent =
       if contentUsesSource
       then true
-      else config.text != "";
+      else mergedText.mergedValue != "";
   in {
     options.enable = lib.mkOption {
       type = lib.types.bool;
       default = enableDefault;
-      description = "Whether to include ${description}.";
+      description = "Whether to include ${description}. Enabling requires non-empty `text` or a `source`.";
     };
 
     config.enable = lib.mkIf (contentIsExplicit && contentIsPresent) (lib.mkDefault true);
