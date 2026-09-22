@@ -373,6 +373,56 @@ function discoverConfigKeys(sourceFile, checker, ts) {
   return found;
 }
 
+function discoverProjectConfigKeys(declarations, annotations, ts) {
+  const loadConfig = requireDeclaration(
+    declarations,
+    "loadConfig",
+    ts.isFunctionDeclaration,
+  );
+  let merge;
+  function locate(node) {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === "extras" &&
+      node.initializer &&
+      ts.isObjectLiteralExpression(node.initializer)
+    ) {
+      merge = node.initializer;
+    }
+    ts.forEachChild(node, locate);
+  }
+  locate(loadConfig);
+  if (!merge) fail("loadConfig no longer has an object-literal extras merge");
+
+  const canonical = new Set();
+  for (const property of merge.properties) {
+    if (!ts.isPropertyAssignment(property))
+      fail("loadConfig extras merge contains an unsupported member");
+    const name = syntaxName(property.name, ts);
+    let readsProject = false;
+    function inspect(node) {
+      if (
+        ts.isPropertyAccessExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === "projectExtras"
+      ) {
+        readsProject = true;
+      }
+      ts.forEachChild(node, inspect);
+    }
+    inspect(property.initializer);
+    if (readsProject) canonical.add(name);
+  }
+
+  const result = new Set(canonical);
+  for (const [name, annotation] of Object.entries(annotations)) {
+    if (annotation.aliasFor && canonical.has(annotation.aliasFor))
+      result.add(name);
+  }
+  return result;
+}
+
 function extractConfig(sourceFile, declarations, annotations, checker, ts) {
   const readExtras = requireDeclaration(
     declarations,
@@ -470,19 +520,21 @@ function extractConfig(sourceFile, declarations, annotations, checker, ts) {
     fail(
       `config.json key census changed; new=${JSON.stringify(unknown)}, missing=${JSON.stringify(missing)}`,
     );
+  const projectKeys = discoverProjectConfigKeys(declarations, annotations, ts);
   for (const [name, annotation] of Object.entries(annotations)) {
     if (!keys[name])
       fail(`no compiler-derived type for config.json key ${name}`);
-    keys[name] = { ...keys[name], ...annotation };
+    keys[name] = {
+      ...keys[name],
+      ...annotation,
+      project: projectKeys.has(name),
+    };
   }
   return {
     keys: sortObject(keys),
     projectTier: {
       gatedByProjectTrust: true,
-      honoredKeys: Object.entries(annotations)
-        .filter(([, annotation]) => annotation.project)
-        .map(([name]) => name)
-        .sort(),
+      honoredKeys: [...projectKeys].sort(),
     },
   };
 }
