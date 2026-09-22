@@ -45,6 +45,7 @@
       ${ourPkgs.nodejs}/bin/node ${../../../extract/extract.mjs} \
         --annotations ${../../../extract/annotations.json} \
         --kimchi-source ${kimchiSource} \
+        --kimchi-source-url ${lib.escapeShellArg extraction.kimchiSource.url} \
         --kimchi-version ${sources.version} \
         --out "$out" \
         --pi-package ${piPackage} \
@@ -140,6 +141,7 @@ in
         kimchi = kimchiSource;
         pi = piPackage;
       };
+      extractionSourceUrls.kimchi = extraction.kimchiSource.url;
       updateScript = vu.mkUpdateScript {
         sourcesFile = repoPath ../../../sources.json;
 
