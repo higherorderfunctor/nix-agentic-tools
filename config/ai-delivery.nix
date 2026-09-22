@@ -119,6 +119,12 @@
     writerAttr = ["home" "activation" activation];
     probe = declaration;
   };
+  devenvLeaves = entry: target: declaration:
+    (leaves ownRetraction entry target declaration)
+    // {
+      pruneTrigger = "On shell entry, lib/ai/own.py retracts the leaves recorded by the prior generation, reasserts this declaration, and preserves unowned siblings.";
+      writerAttr = ["tasks" entry];
+    };
   wrapper = mode: executable: {
     primitive = "ownWrapper";
     target = "${executable} process environment (store launcher)";
@@ -394,9 +400,16 @@
       };
       kimchi = {
         devenv =
-          (declarative "devenv" ".config/kimchi/config.json")
+          (devenvLeaves "ai:kimchi:config-merge" "$DEVENV_ROOT/.config/kimchi/config.json"
+            (probe ["ai" "kimchi" "nativeSettings"] {
+              llmEndpoint = "https://example.invalid";
+              skillPaths = ["probe"];
+            } {}))
           // {
-            additionalWriters = [(declarative "devenv" ".config/kimchi/harness/settings.json")];
+            additionalWriters = [
+              (devenvLeaves "ai:kimchi:harness-settings-merge" "$DEVENV_ROOT/.config/kimchi/harness/settings.json"
+                (probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {}))
+            ];
           };
         hm =
           (leaves ownRetraction "kimchiConfigMerge" "$HOME/.config/kimchi/config.json"
