@@ -33,27 +33,49 @@
       pkgs.runCommand "kimchi-extracted-harness-guard" {
         nativeBuildInputs = [pkgs.python3];
       } ''
-        cp -r ${extractionSources.kimchi} "$TMPDIR/kimchi-source"
-        chmod -R u+w "$TMPDIR/kimchi-source"
-        substituteInPlace "$TMPDIR/kimchi-source/src/config.ts" \
-          --replace-fail 'const parsed = JSON.parse(raw)' $'const parsed = JSON.parse(raw)\n\t\tvoid parsed.harness'
+        cp -r ${extractionSources.kimchi} "$TMPDIR/collision-source"
+        cp -r ${extractionSources.kimchi} "$TMPDIR/config-shape-source"
+        cp -r ${extractionSources.kimchi} "$TMPDIR/harness-shape-source"
+        chmod -R u+w "$TMPDIR/collision-source" "$TMPDIR/config-shape-source" "$TMPDIR/harness-shape-source"
 
-        if fake_output=$(${pkgs.python3}/bin/python3 ${extractor} \
-            --kimchi-source "$TMPDIR/kimchi-source" \
+        substituteInPlace "$TMPDIR/collision-source/src/config.ts" \
+          --replace-fail 'const parsed = JSON.parse(raw)' $'const parsed = JSON.parse(raw)\n\t\tvoid parsed.harness'
+        substituteInPlace "$TMPDIR/config-shape-source/src/config.ts" \
+          --replace-fail 'typeof parsed.apiKey === "string"' 'typeof parsed.apiKey === "number"'
+        substituteInPlace "$TMPDIR/harness-shape-source/src/extensions/orchestration/model-roles.ts" \
+          --replace-fail 'orchestrator: string' 'orchestrator: number'
+
+        expect_rejection() {
+          label="$1"
+          source="$2"
+          expected="$3"
+          if rejected_output=$(${pkgs.python3}/bin/python3 ${extractor} \
+            --kimchi-source "$source" \
             --kimchi-version ${package.version} \
-            --out "$TMPDIR/fake.json" \
+            --out "$TMPDIR/$label.json" \
             --pi-package ${extractionSources.pi} 2>&1); then
-          echo "FAIL: extraction accepted a top-level config.json harness key" >&2
-          exit 1
-        else
-          fake_status=$?
-        fi
-        expected="kimchi-extract: config.json exposes a top-level 'harness' key; this collides with the reserved harness settings namespace"
-        if [ "$fake_output" != "$expected" ]; then
-          echo "FAIL: collision guard emitted an unexpected diagnostic:" >&2
-          echo "$fake_output" >&2
-          exit 1
-        fi
+            echo "FAIL: extraction accepted the $label mutation" >&2
+            exit 1
+          else
+            rejected_status=$?
+          fi
+          case "$rejected_output" in
+            *"$expected"*) ;;
+            *)
+              echo "FAIL: $label guard emitted an unexpected diagnostic:" >&2
+              echo "$rejected_output" >&2
+              exit 1
+              ;;
+          esac
+          echo "$label (exit $rejected_status): $rejected_output"
+        }
+
+        expect_rejection collision "$TMPDIR/collision-source" \
+          "config.json exposes a top-level 'harness' key" > "$TMPDIR/proof"
+        expect_rejection config-shape "$TMPDIR/config-shape-source" \
+          "config.json validation shape changed" >> "$TMPDIR/proof"
+        expect_rejection harness-shape "$TMPDIR/harness-shape-source" \
+          "harness/settings.json Kimchi additions validation shape changed" >> "$TMPDIR/proof"
 
         ${pkgs.python3}/bin/python3 ${extractor} \
           --kimchi-source ${extractionSources.kimchi} \
@@ -61,7 +83,7 @@
           --out "$TMPDIR/real.json" \
           --pi-package ${extractionSources.pi}
         {
-          echo "fake (exit $fake_status): $fake_output"
+          ${pkgs.coreutils}/bin/cat "$TMPDIR/proof"
           echo "real (exit 0): kimchi-extract: config.json harness guard passed"
         } > "$out"
       '';
