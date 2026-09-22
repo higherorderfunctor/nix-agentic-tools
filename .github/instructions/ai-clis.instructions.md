@@ -53,9 +53,9 @@ An earlier revision of this fragment said flatly that "`configDir`
 look there." That is correct about the devenv default and **false about the HM
 one**, where `configDir` is precisely where the CLI looks. The devenv default is
 gitignored, so the server-side reviewer cannot see it even in principle, and it
-exists solely as a target for CLI wrapper flags. Live repository settings do not
-use `configDir`; they use `<projectDir>/copilot/settings.json` (normally
-`.github/copilot/settings.json`).
+exists solely as a target for CLI wrapper flags. Live repository settings use
+neither `configDir` nor configurable `projectDir`; Copilot discovers the fixed
+`.github/copilot/settings.json` path.
 
 Read a `configDir` cite with the backend attached, or the two collapse into a
 statement that is wrong half the time.
@@ -237,8 +237,8 @@ It is still written, and this is deliberate on three counts:
 
 Settings are no longer part of this limitation. Current Copilot reads
 `.github/copilot/settings.json` as repository configuration, and `effortLevel`
-is explicitly supported there. The devenv backend writes native settings to
-`<projectDir>/copilot/settings.json` and rejects keys outside Copilot's
+is explicitly supported there. The devenv backend writes native settings to the
+fixed `.github/copilot/settings.json` path and rejects keys outside Copilot's
 documented repository-settings allowlist instead of silently writing ignored
 values. Home Manager retains the unrestricted global user-file activation merge.
 The normalized `ai.copilot.settings.reasoningEffort` field lowers to

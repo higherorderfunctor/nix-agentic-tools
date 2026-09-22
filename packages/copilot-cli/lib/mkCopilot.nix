@@ -360,7 +360,8 @@ in
         # `lsp-config.json` is INERT: Copilot does not read it at project scope
         # and offers no flag to inject it (measured, see
         # dev/fragments/ai-clis/copilot-config-delivery.md). Repository settings
-        # are different: they live under `projectDir/copilot/settings.json`.
+        # are different: they live at the fixed native
+        # `.github/copilot/settings.json` path.
         configDir = lib.mkOption {
           type = lib.types.str;
           default = ".config/github-copilot";
@@ -371,7 +372,7 @@ in
 
             Also holds `lsp-config.json`, which Copilot does NOT read at project
             scope and provides no flag to inject. Repository settings use the
-            live `<projectDir>/copilot/settings.json` path instead.
+            fixed live `.github/copilot/settings.json` path instead.
 
             This is NOT the directory github.com's Copilot code review reads —
             that consumes committed files under `projectDir` (`.github`), and
@@ -485,7 +486,7 @@ in
           # HM-style activation scripts, and repository config is declarative,
           # so a static JSON write is the native ownership model here.
           (lib.mkIf (filteredSettings != {}) {
-            files."${cfg.projectDir}/copilot/settings.json".text =
+            files.".github/copilot/settings.json".text =
               builtins.toJSON filteredSettings;
           })
         ];

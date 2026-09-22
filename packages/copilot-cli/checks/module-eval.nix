@@ -195,6 +195,15 @@ in {
             settings.reasoningEffort = "high";
           };
         };
+        customProjectDir = evalDevenv {
+          ai = {
+            copilot = {
+              enable = true;
+              projectDir = ".custom-github";
+            };
+            settings.reasoningEffort = "high";
+          };
+        };
         nulledHm = evalHm {
           ai = {
             copilot = {
@@ -223,6 +232,8 @@ in {
         lib.hasInfix ''"effortLevel":"high"'' hm.config.home.activation.copilotSettingsMerge.text
         && lib.hasInfix ''"effortLevel":"high"'' devenv.config.files.".github/copilot/settings.json".text
         && lib.hasInfix ''"effortLevel":"low"'' overridden.config.files.".github/copilot/settings.json".text
+        && lib.hasInfix ''"effortLevel":"high"'' customProjectDir.config.files.".github/copilot/settings.json".text
+        && !(customProjectDir.config.files ? ".custom-github/copilot/settings.json")
         && !(devenv.config.files ? ".config/github-copilot/settings.json")
         && !(nulledHm.config.home.activation ? copilotSettingsMerge)
         && !(nulledDevenv.config.files ? ".github/copilot/settings.json")
