@@ -18,7 +18,10 @@
         --kimchi-source-url ${pkgs.lib.escapeShellArg extractionSourceUrls.kimchi} \
         --kimchi-version ${package.version} \
         --out ${output} \
+        --pi-agent-core-package ${extractionSources.piAgentCore} \
+        --pi-ai-package ${extractionSources.piAi} \
         --pi-package ${extractionSources.pi} \
+        --pi-tui-package ${extractionSources.piTui} \
         --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js
     '';
   in {
@@ -45,23 +48,35 @@
         nativeBuildInputs = [pkgs.nodejs pkgs.typescript_5];
       } ''
         cp -r ${extractionSources.kimchi} "$TMPDIR/collision-source"
+        cp -r ${extractionSources.kimchi} "$TMPDIR/config-array-shape-source"
+        cp -r ${extractionSources.kimchi} "$TMPDIR/config-nested-shape-source"
         cp -r ${extractionSources.kimchi} "$TMPDIR/config-shape-source"
         cp -r ${extractionSources.kimchi} "$TMPDIR/config-second-shape-source"
+        cp -r ${extractionSources.kimchi} "$TMPDIR/flags-shape-source"
         cp -r ${extractionSources.kimchi} "$TMPDIR/harness-shape-source"
         cp -r ${extractionSources.kimchi} "$TMPDIR/project-tier-source"
         chmod -R u+w \
           "$TMPDIR/collision-source" \
+          "$TMPDIR/config-array-shape-source" \
+          "$TMPDIR/config-nested-shape-source" \
           "$TMPDIR/config-shape-source" \
           "$TMPDIR/config-second-shape-source" \
+          "$TMPDIR/flags-shape-source" \
           "$TMPDIR/harness-shape-source" \
           "$TMPDIR/project-tier-source"
 
         substituteInPlace "$TMPDIR/collision-source/src/config.ts" \
           --replace-fail 'const parsed = JSON.parse(raw)' $'const parsed = JSON.parse(raw)\n\t\tvoid parsed.harness'
+        substituteInPlace "$TMPDIR/config-array-shape-source/src/config.ts" \
+          --replace-fail 'typeof p === "string"' 'typeof p === "number"'
+        substituteInPlace "$TMPDIR/config-nested-shape-source/src/config.ts" \
+          --replace-fail 'typeof t.enabled === "boolean"' 'typeof t.enabled === "string"'
         substituteInPlace "$TMPDIR/config-shape-source/src/config.ts" \
           --replace-fail 'typeof parsed.apiKey === "string"' 'typeof parsed.apiKey === "number"'
         substituteInPlace "$TMPDIR/config-second-shape-source/src/config.ts" \
           --replace-fail 'typeof parsed.llmEndpoint === "string"' 'typeof parsed.llmEndpoint === "number"'
+        substituteInPlace "$TMPDIR/flags-shape-source/src/commands/help.ts" \
+          --replace-fail 'Object.entries(CLI_OPTIONS).map' 'Object.values(CLI_OPTIONS).map'
         substituteInPlace "$TMPDIR/harness-shape-source/src/extensions/orchestration/model-roles.ts" \
           --replace-fail 'orchestrator: string' 'orchestrator: number'
         substituteInPlace "$TMPDIR/project-tier-source/src/config.ts" \
@@ -94,10 +109,16 @@
 
         expect_rejection collision "$TMPDIR/collision-source" \
           "config.json exposes a top-level 'harness' key" > "$TMPDIR/proof"
+        expect_rejection config-array-shape "$TMPDIR/config-array-shape-source" \
+          "config.json validation shape changed" >> "$TMPDIR/proof"
+        expect_rejection config-nested-shape "$TMPDIR/config-nested-shape-source" \
+          "config.json validation shape changed" >> "$TMPDIR/proof"
         expect_rejection config-shape "$TMPDIR/config-shape-source" \
           "config.json validation shape changed" >> "$TMPDIR/proof"
         expect_rejection config-second-shape "$TMPDIR/config-second-shape-source" \
           "config.json validation shape changed" >> "$TMPDIR/proof"
+        expect_rejection flags-shape "$TMPDIR/flags-shape-source" \
+          "KIMCHI_FLAGS is no longer CLI help derived from CLI_OPTIONS" >> "$TMPDIR/proof"
         expect_rejection harness-shape "$TMPDIR/harness-shape-source" \
           "harness/settings.json Kimchi additions validation shape changed" >> "$TMPDIR/proof"
 
