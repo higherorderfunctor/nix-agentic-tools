@@ -1,9 +1,10 @@
 ## Copilot config delivery — two consumers, one product name
 
 > **Last verified:** 2026-09-22 — normalized reasoning effort lowers to the
-> persisted global `effortLevel` key. The unscoped-frontmatter measurement
-> (1.0.79) is retained as the durable record after the normalized-interface plan
-> was retired; it was not re-measured at 1.0.80.
+> persisted `effortLevel` key at both user and repository scope. The
+> unscoped-frontmatter measurement (1.0.79) is retained as the durable record
+> after the normalized-interface plan was retired; it was not re-measured at
+> 1.0.80.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 89dce4c4:dev/fragments/ai-clis/copilot-config-delivery.md`.
@@ -16,13 +17,14 @@
 
 ### The trap: "Copilot" is two different consumers here
 
-This repo uses Copilot in two unrelated ways, and their config surfaces are
-disjoint. Conflating them is the default mistake — it is why the two config
-directories look redundant when they are not.
+This repo uses Copilot in two distinct ways. Their instruction surfaces are
+separate, while the local CLI also reads a documented subset of repository
+settings. Conflating the consumers is the default mistake — it is why the two
+config directories look redundant when they are not.
 
 | consumer                                | reads                                                                                      | committed?        |
 | --------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------- |
-| **copilot-cli** (local agent harness)   | `$HOME/.copilot/*`, plus `--additional-mcp-config`                                         | no — `$HOME`      |
+| **copilot-cli** (local agent harness)   | `$HOME/.copilot/*`, `.github/copilot/settings.json`, plus `--additional-mcp-config`        | mixed             |
 | **github.com Copilot code review** (CI) | `projectDir` = `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md` | **yes, required** |
 
 So: do not "consolidate" the two directories, and do not move reviewer content
@@ -31,8 +33,8 @@ out of `.github/`.
 ### `configDir` names two different directories, one per backend
 
 This is the second trap, and it sits underneath the first.
-`ai.copilot.configDir` is one option NAME with two defaults, and only one of
-them is a directory the CLI reads:
+`ai.copilot.configDir` is one option NAME with two defaults. Home Manager uses
+it as the CLI's user root; devenv uses it only for wrapper-injected files:
 
 | backend      | default                                  | is it the CLI's home?                         |
 | ------------ | ---------------------------------------- | --------------------------------------------- |
@@ -44,7 +46,9 @@ An earlier revision of this fragment said flatly that "`configDir`
 look there." That is correct about the devenv default and **false about the HM
 one**, where `configDir` is precisely where the CLI looks. The devenv default is
 gitignored, so the server-side reviewer cannot see it even in principle, and it
-exists solely as a target for CLI wrapper flags.
+exists solely as a target for CLI wrapper flags. Live repository settings do not
+use `configDir`; they use `<projectDir>/copilot/settings.json` (normally
+`.github/copilot/settings.json`).
 
 Read a `configDir` cite with the backend attached, or the two collapse into a
 statement that is wrong half the time.
@@ -212,26 +216,28 @@ contributes `GIT_SSH_COMMAND` there (devenv has no `programs.git`), so an
 MCP-less devenv project no longer keeps the bare package. Home Manager still
 does, since it states that default in Git's own config instead.
 
-### Why `lsp-config.json` and `settings.json` are written but not delivered
+### Why `lsp-config.json` is written but not delivered
 
-There is no `--additional-lsp-config` and no settings equivalent — the flag
-surface has exactly one config injector. So those two files cannot be delivered
-at project scope at all.
+There is no `--additional-lsp-config`; the flag surface has exactly one config
+injector. So that file cannot be delivered at project scope.
 
-They are still written, and this is deliberate on three counts:
+It is still written, and this is deliberate on three counts:
 
 1. Option-surface parity with the HM module, which the config-parity rule wants.
-2. Zero cost — gitignored, and they become live for free if upstream ever grows
+2. Zero cost — gitignored, and it becomes live for free if upstream ever grows
    project-scope discovery.
 3. Removing them buys nothing a user can observe.
 
-The normalized `ai.copilot.settings.reasoningEffort` field lowers to the native
-`effortLevel` key at `mkDefault` priority. That mapping is live under Home
-Manager, whose global file Copilot reads. Under devenv it is subject to the same
-project-scope delivery limitation as every other setting in this section: the
-file is rendered for backend parity, but Copilot does not read it.
+Settings are no longer part of this limitation. Current Copilot reads
+`.github/copilot/settings.json` as repository configuration, and `effortLevel`
+is explicitly supported there. The devenv backend writes native settings to
+`<projectDir>/copilot/settings.json` and rejects keys outside Copilot's
+documented repository-settings allowlist instead of silently writing ignored
+values. Home Manager retains the unrestricted global user-file activation merge.
+The normalized `ai.copilot.settings.reasoningEffort` field lowers to
+`effortLevel` at `mkDefault` priority in both.
 
-**They are NOT an assertion**, and that is the load-bearing part.
+**The inert LSP file is NOT an assertion**, and that is the load-bearing part.
 `ai.lspServers` is a SHARED pool that fans out to Claude, Copilot and Kiro.
 Asserting on a non-empty pool would hard-fail a devenv project that legitimately
 configures LSP servers for Claude and merely happens to enable Copilot too. The
@@ -241,8 +247,8 @@ asserted.
 
 ### What would change this decision
 
-- Upstream adds project-scope config discovery, or a second injection flag →
-  drop the inert-file caveat and deliver them properly.
+- Upstream adds project-scope LSP discovery, or a second injection flag → drop
+  the inert-file caveat and deliver it properly.
 - Upstream splits auth/session out of `COPILOT_HOME` → the env-var route becomes
   viable and would remove the wrapper.
 - Copilot stops accepting `@`-prefixed paths → the whole delivery mechanism

@@ -1,12 +1,14 @@
 ## Devenv runtimes merge with host config — the reason is auth, not tidiness
 
-> **Last verified:** 2026-09-19 — `ai.codex.profiles` (the whole-file
-> `--profile` layer and its devenv `CODEX_HOME` materializer) was removed as
-> unreachable dead code (see the Settled bullet in
-> `dev/fragments/ai-module/ai-module-fanout.md`). Codex's devenv facet no longer
-> writes into the host config root at all: it now merges project and user config
-> natively, the same shape as Claude and Kiro. Copilot is the only remaining
-> runtime that needs an additive flag instead of native merge.
+> **Last verified:** 2026-09-22 — Copilot now consumes repository settings from
+> `.github/copilot/settings.json` while MCP still uses its additive wrapper
+> flag. `ai.codex.profiles` (the whole-file `--profile` layer and its devenv
+> `CODEX_HOME` materializer) was removed as unreachable dead code (see the
+> Settled bullet in `dev/fragments/ai-module/ai-module-fanout.md`). Codex's
+> devenv facet no longer writes into the host config root at all: it now merges
+> project and user config natively, the same shape as Claude and Kiro. Copilot
+> is the only remaining runtime whose MCP config needs an additive flag instead
+> of native merge.
 >
 > States as one cross-runtime rule what previously had to be inferred by reading
 > three factories side by side: no `ai.*` runtime redirects its config root, on
@@ -66,7 +68,7 @@ different mechanism from the rest.
 | --------- | -------------- | -------------------------------------------------------- | ----------------------------------------------------------- |
 | `claude`  | `~/.claude/`   | `<repo>/.claude/settings.json`, `.mcp.json`, `CLAUDE.md` | native project scope — the CLI merges user + project itself |
 | `codex`   | `~/.codex/`    | `<repo>/.codex/config.toml`                              | native project scope — the CLI merges user + project itself |
-| `copilot` | `~/.copilot/`  | project `mcp-config.json`                                | additive wrapper flag `--additional-mcp-config @<path>`     |
+| `copilot` | `~/.copilot/`  | repository settings + project `mcp-config.json`          | native `.github/copilot/settings.json` + additive MCP flag  |
 | `kiro`    | `~/.kiro/`     | `<repo>/.kiro/{steering,hooks,agents,settings}/`         | native project scope via a repo-relative `configDir`        |
 
 Codex used to be the one that needed explaining: `ai.codex.profiles` had no
