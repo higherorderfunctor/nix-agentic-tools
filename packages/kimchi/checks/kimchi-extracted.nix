@@ -46,11 +46,13 @@
       } ''
         cp -r ${extractionSources.kimchi} "$TMPDIR/collision-source"
         cp -r ${extractionSources.kimchi} "$TMPDIR/config-shape-source"
+        cp -r ${extractionSources.kimchi} "$TMPDIR/config-second-shape-source"
         cp -r ${extractionSources.kimchi} "$TMPDIR/harness-shape-source"
         cp -r ${extractionSources.kimchi} "$TMPDIR/project-tier-source"
         chmod -R u+w \
           "$TMPDIR/collision-source" \
           "$TMPDIR/config-shape-source" \
+          "$TMPDIR/config-second-shape-source" \
           "$TMPDIR/harness-shape-source" \
           "$TMPDIR/project-tier-source"
 
@@ -58,6 +60,8 @@
           --replace-fail 'const parsed = JSON.parse(raw)' $'const parsed = JSON.parse(raw)\n\t\tvoid parsed.harness'
         substituteInPlace "$TMPDIR/config-shape-source/src/config.ts" \
           --replace-fail 'typeof parsed.apiKey === "string"' 'typeof parsed.apiKey === "number"'
+        substituteInPlace "$TMPDIR/config-second-shape-source/src/config.ts" \
+          --replace-fail 'typeof parsed.llmEndpoint === "string"' 'typeof parsed.llmEndpoint === "number"'
         substituteInPlace "$TMPDIR/harness-shape-source/src/extensions/orchestration/model-roles.ts" \
           --replace-fail 'orchestrator: string' 'orchestrator: number'
         substituteInPlace "$TMPDIR/project-tier-source/src/config.ts" \
@@ -91,6 +95,8 @@
         expect_rejection collision "$TMPDIR/collision-source" \
           "config.json exposes a top-level 'harness' key" > "$TMPDIR/proof"
         expect_rejection config-shape "$TMPDIR/config-shape-source" \
+          "config.json validation shape changed" >> "$TMPDIR/proof"
+        expect_rejection config-second-shape "$TMPDIR/config-second-shape-source" \
           "config.json validation shape changed" >> "$TMPDIR/proof"
         expect_rejection harness-shape "$TMPDIR/harness-shape-source" \
           "harness/settings.json Kimchi additions validation shape changed" >> "$TMPDIR/proof"
