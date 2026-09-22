@@ -163,6 +163,12 @@ if sys.argv[1:3] == ['pr', 'list']:
 if sys.argv[1:3] == ['pr', 'view']:
     number = sys.argv[3]
     closed = closed_path(number)
+    first_view = Path(os.environ['RUNNER_TEMP'], 'first-pr-view')
+    if os.environ.get('PR_VIEW_FAIL_ALWAYS') or (os.environ.get('PR_VIEW_FAIL_ONCE') and not first_view.exists()):
+        first_view.touch()
+        sys.exit(1)
+    previously_viewed = first_view.exists()
+    first_view.touch()
     Path(os.environ['RUNNER_TEMP'], 'viewed').touch()
     views_key = 'POST_CLOSE_VIEWS' if closed.exists() and 'POST_CLOSE_VIEWS' in os.environ else 'PR_VIEWS'
     if views_key in os.environ:
@@ -175,6 +181,8 @@ if sys.argv[1:3] == ['pr', 'view']:
         subprocess.check_call(['git', '--git-dir', os.environ['REMOTE'], 'update-ref', 'refs/heads/update/demo', view['headRefOid']])
     if os.environ.get('PR_VIEW_REMOTE_HEAD'):
         view['headRefOid'] = subprocess.check_output(['git', '--git-dir', os.environ['REMOTE'], 'rev-parse', 'refs/heads/update/demo'], text=True).strip()
+    if os.environ.get('PR_VIEW_CHANGED_AFTER_FIRST') and previously_viewed:
+        view['headRefOid'] = os.environ['PR_VIEW_CHANGED_AFTER_FIRST']
     disabled = Path(os.environ['RUNNER_TEMP'], 'auto-merge-disabled').exists()
     enabled_by = os.environ.get('AUTO_MERGE_ENABLED_BY', 'app/nix-agentic-tools-bot')
     if os.environ.get('PR_AUTO_MERGE_RAW'):
@@ -186,6 +194,11 @@ if sys.argv[1:3] == ['pr', 'close']: closed_path(sys.argv[3]).touch()
 if sys.argv[1] == 'api':
     if any(arg.endswith('/activity') for arg in sys.argv):
         ref = next(arg.removeprefix('ref=') for arg in sys.argv if arg.startswith('ref='))
+        first_read = Path(os.environ['RUNNER_TEMP'], 'activity-first-read')
+        if os.environ.get('ACTIVITY_EMPTY_ALWAYS') or (os.environ.get('ACTIVITY_EMPTY_ONCE') and not first_read.exists()):
+            first_read.touch()
+            print('[]')
+            sys.exit(0)
         head = subprocess.check_output(['git', 'rev-parse', 'refs/remotes/origin/' + ref.removeprefix('refs/heads/')], text=True).strip()
         actor = os.environ.get('PUSH_ACTOR', 'nix-agentic-tools-bot[bot]')
         if Path(os.environ['RUNNER_TEMP'], 'viewed').exists():
@@ -224,6 +237,9 @@ if sys.argv[1:3] == ['pr', 'reopen']:
     closed.unlink(missing_ok=True)
 """)
         stub.chmod(0o755)
+        sleep_stub = self.root / "sleep"
+        sleep_stub.write_text("#!/usr/bin/env bash\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\nexit 0\n")
+        sleep_stub.chmod(0o755)
         self.env = dict(os.environ, BRANCH_NAME="main", GITHUB_REPOSITORY="example/example", GH_CALLS=str(self.root / "calls"), PATH=str(self.root) + os.pathsep + os.environ["PATH"], RUNNER_TEMP=str(self.root), UPDATE_BASE_SHA=self.base, UPDATE_TARGET="demo")
         self.env.update(PR_VIEW=json.dumps(dict(self.own_pr(), headRefOid=self.git("rev-parse", "update/demo"))), REMOTE=str(self.remote))
         (self.root / "prepared.json").write_text(json.dumps({"status": "UPDATED"}))
@@ -246,6 +262,53 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         self.assertEqual(self.git("rev-parse", "refs/remotes/origin/update/demo"), self.git("rev-parse", "update/demo"))
         self.assertIn('["pr", "create"', (self.root / "calls").read_text())
         self.assertEqual((self.root / "touched-branches").read_text(), "update/demo\n")
+
+    def test_new_pr_waits_for_matching_app_push_activity_before_arming(self):
+        result = self.publish(ACTIVITY_EMPTY_ONCE="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = (self.root / "calls").read_text()
+        self.assertEqual(calls.count('"ref=refs/heads/update/demo"'), 2)
+        self.assertIn('["pr", "merge"', calls)
+
+    def test_new_pr_does_not_arm_when_app_push_activity_stays_unavailable(self):
+        result = self.publish(ACTIVITY_EMPTY_ALWAYS="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("App push activity unavailable after 5 reads", result.stdout)
+        calls = (self.root / "calls").read_text()
+        self.assertEqual(calls.count('"ref=refs/heads/update/demo"'), 5)
+        self.assertNotIn('["pr", "merge"', calls)
+
+    def test_new_pr_waits_for_first_pr_view(self):
+        result = self.publish(PR_VIEW_FAIL_ONCE="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = (self.root / "calls").read_text()
+        self.assertEqual(calls.count('["pr", "view"'), 2)
+        self.assertIn('["pr", "merge"', calls)
+
+    def test_new_pr_does_not_arm_when_pr_view_stays_unavailable(self):
+        result = self.publish(PR_VIEW_FAIL_ALWAYS="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("PR view unavailable after 5 reads", result.stdout)
+        self.assertNotIn('["pr", "merge"', (self.root / "calls").read_text())
+
+    def test_new_pr_rejects_changed_head_after_wait(self):
+        result = self.publish(ACTIVITY_EMPTY_ONCE="1", PR_VIEW_CHANGED_AFTER_FIRST=self.base)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("PR head changed", result.stdout)
+        self.assertNotIn('["pr", "merge"', (self.root / "calls").read_text())
+
+    def test_new_pr_rejects_human_push_after_wait(self):
+        result = self.publish(ACTIVITY_EMPTY_ONCE="1", ARM_PUSH_ACTOR="human")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("App push activity does not verify", result.stdout)
+        self.assertNotIn('["pr", "merge"', (self.root / "calls").read_text())
+
+    def test_human_auto_merge_disable_during_activity_wait_is_retained(self):
+        disabled = [{"__typename": "AutoMergeDisabledEvent", "actor": {"login": "human"}, "disabler": {"login": "human"}, "reason": None, "reasonCode": None}]
+        result = self.publish(ACTIVITY_EMPTY_ONCE="1", AUTO_MERGE_EVENTS=json.dumps(disabled))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Retaining explicit human auto-merge disable", result.stdout)
+        self.assertNotIn('["pr", "merge"', (self.root / "calls").read_text())
 
     def test_inherited_app_auto_merge_survives_human_push(self):
         self.git("checkout", "update/demo")
@@ -346,6 +409,7 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         self.assertEqual(result.returncode, 0, result.stderr)
         calls = (self.root / "calls").read_text()
         self.assertNotIn('["pr", "merge"', calls)
+        self.assertEqual(sum("timelineItems" in line for line in calls.splitlines()), 1)
         self.assertFalse((self.root / "auto-merge-disabled").exists())
 
     def test_malformed_auto_merge_prior_state_fails_before_mutation(self):

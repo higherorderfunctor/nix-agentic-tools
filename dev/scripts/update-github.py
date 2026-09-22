@@ -217,6 +217,11 @@ def main():
             verified = status == "automatic"
         elif args.command == "push":
             activities = github("--method", "GET", f"repos/{repo}/activity", "-f", "ref=refs/heads/" + args.branch, "-f", "direction=desc", "-F", "per_page=1")
+            # A newly created ref can briefly have no activity row. The
+            # publisher may re-read this case, but a row for another actor,
+            # ref, or SHA is a definite refusal, never a retryable match.
+            if activities == []:
+                return 3
             verified = bot_push(activities, args.branch, args.head)
         else:
             verified = bot_review_threads(repo, args.number, args.allowed)
