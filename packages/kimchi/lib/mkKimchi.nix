@@ -168,9 +168,15 @@
       then ".kimchi"
       else harness;
     userScopeOnlyHarnessSettings = lib.intersectLists userScopeOnlyHarnessSettingKeys (builtins.attrNames filteredHarnessSettings);
-    # A LITERAL at the declaration site, hashed from the config directory so
-    # two configured roots never share ownership records.
-    ledgerFor = name: path: "json-settings/kimchi-${name}-${builtins.hashString "sha256" path}.json";
+    # Home Manager's ledger identity predates project-path delivery and is an
+    # upgrade contract: keep hashing configDir so a new generation retracts
+    # leaves owned before this port. Devenv has no prior Kimchi reconciliation
+    # ledger and keys its new ownership records by the actual project path.
+    ledgerFor = name: path: "json-settings/kimchi-${name}-${builtins.hashString "sha256" (
+      if isDevenv
+      then path
+      else cfg.configDir
+    )}.json";
     # Kimchi rewrites both of its documents while it runs — `/multi-model`
     # and `kimchi resources` write `harness/settings.json` — so the only way
     # to keep both sides' edits is to own the declared leaves inside them.
