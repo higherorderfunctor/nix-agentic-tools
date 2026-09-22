@@ -835,7 +835,7 @@ in
           # Final always-on context enters the runtime file registry before the
           # generic backend sink. This replaces upstream's direct CLAUDE.md
           # writer so generated and consumer-authored files share one override
-          # and tombstone boundary.
+          # and enable/override boundary.
           (lib.mkIf hasMergedContext {
             ai.claude.files.".claude/${cfg.context.filename}" =
               aiCommon.contentFileEntry mergedContext;
@@ -850,6 +850,7 @@ in
             ai.claude.files = lib.mapAttrs' (name: rule:
               lib.nameValuePair ".claude/rules/${name}.md" {
                 content = lib.mkDefault {
+                  enable = true;
                   text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
                     // {
                       text = resolveRuleText rule;
@@ -1024,6 +1025,7 @@ in
             ai.claude.files = lib.mapAttrs' (name: rule:
               lib.nameValuePair ".claude/rules/${name}.md" {
                 content = lib.mkDefault {
+                  enable = true;
                   text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
                     // {
                       text = resolveRuleText rule;

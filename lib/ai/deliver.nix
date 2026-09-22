@@ -11,6 +11,7 @@
   pkgs,
 }: let
   aiCommon = import ./ai-common.nix {inherit lib;};
+  aiTypes = import ./types.nix {inherit lib;};
   deliveryMethod = import ./deliveryMethod.nix {inherit lib;};
   formats = import ./formats.nix {inherit lib pkgs;};
   helpers = import ./hm-helpers.nix {inherit lib;};
@@ -84,9 +85,11 @@ in
           both backends use.
         '');
 
-    # An entry a consumer suppressed with `null` is not a file; everything
-    # below sees live entries only.
-    live = lib.filterAttrs (_path: entry: entry != null) cfg.files;
+    # Disabled text-source records are not files; everything below sees live
+    # entries only. `run` and `value` are independently live alternatives.
+    live = lib.filterAttrs (_path: entry:
+      entry.content.enable || entry.content.run != null || entry.content.value != null)
+    cfg.files;
 
     # The ONE place a method is resolved. Not at type level and not in an
     # `apply`: both would read a sibling option while the option they belong to
@@ -110,13 +113,15 @@ in
         # stays: a reconciled document declares the VALUE it owns leaves of,
         # and that value cannot be recovered from the bytes.
         rendered =
-          if entry.content ? value
+          if entry.content.value != null
           then
             formats.render {
               inherit (entry) format;
               inherit path;
               inherit (entry.content) value;
             }
+          else if entry.content.run != null
+          then {inherit (entry.content) run;}
           else entry.content;
       };
     resolved = lib.mapAttrs resolve live;
@@ -137,9 +142,9 @@ in
     # a program that writes them.
     unitContent = entry:
       (
-        if entry.rendered ? source
+        if aiTypes.textSourceUsesSource entry.rendered
         then {store = entry.rendered.source;}
-        else if entry.rendered ? run
+        else if (entry.rendered.run or null) != null
         then {inherit (entry.rendered) run;}
         else {inherit (entry.rendered) text;}
       )
@@ -168,7 +173,7 @@ in
               else let
                 entry = lib.head claiming;
               in
-                if entry.rendered ? run
+                if (entry.rendered.run or null) != null
                 then unitContent entry
                 else
                   {text = builtins.toJSON entry.content.value;}
@@ -227,7 +232,7 @@ in
             after = bundleAfterEdges writer;
             declared =
               lib.listToAttrs (map (entry: lib.nameValuePair entry.path entry.content.value)
-                (lib.filter (entry: entry.method == "shared" && entry.content ? value) (claimsOf name)));
+                (lib.filter (entry: entry.method == "shared" && entry.content.value != null) (claimsOf name)));
             entryNames = entryNamesFor name writer;
             hasFiles = (config.files or {}) != {};
             python = formats.pythonFor writer.ledgers;
@@ -240,9 +245,11 @@ in
     # owns how it is written, which is the whole point of delegating it.
     sunk = lib.attrValues (bucket "upstream");
     upstreamValue = entry:
-      entry.content.value
-      or entry.content.source
-      or entry.content.text;
+      if entry.content.value != null
+      then entry.content.value
+      else if aiTypes.textSourceUsesSource entry.content
+      then entry.content.source
+      else entry.content.text;
     # Merged into CONSTANT attribute paths: a list of fragments whose length
     # comes from `cfg.activation` forces that option while the module system is
     # still collecting the definitions it is made of.
@@ -309,7 +316,7 @@ in
     # delivered for it here. That is how a surface another module owns — an
     # upstream `programs.<cli>` option, or a document a backend deep-merges —
     # stays IN this runtime's delivery description instead of vanishing from
-    # it, with the same facts, tombstone and override boundary as a file this
+    # it, with the same facts, enable gate and override boundary as a file this
     # layer writes itself.
     #
     # Handed to the adapter one ROOT at a time, because that root is the one
@@ -347,11 +354,11 @@ in
       ++ lib.mapAttrsToList (path: entry: {
         assertion =
           !entry.recursive
-          || (entry.content ? source && (builtins.readFileType entry.content.source) == "directory");
+          || (aiTypes.textSourceUsesSource entry.content && (builtins.readFileType entry.content.source) == "directory");
         message = ''
           ai.${runtime}.files."${path}" sets `recursive`, which delivers the
           leaves of a DIRECTORY, but its content is ${
-            if entry.content ? source
+            if aiTypes.textSourceUsesSource entry.content
             then "a single file"
             else "not a `source` at all"
           }. A single
@@ -390,7 +397,7 @@ in
         '';
       }) (lib.filter (entry: entry.sink != []) sunk)
       ++ lib.mapAttrsToList (path: entry: {
-        assertion = !(entry.content ? run) || lib.elem entry.method owningMethods;
+        assertion = entry.content.run == null || lib.elem entry.method owningMethods;
         message = ''
           ai.${runtime}.files."${path}" carries `content.run`, a body that
           WRITES the file, but resolves to method `${entry.method}`. Only a
@@ -463,7 +470,7 @@ in
       ++ lib.concatMap (
         entry:
           map (ledger: {
-            assertion = entry.content ? value || entry.content ? run;
+            assertion = entry.content.value != null || entry.content.run != null;
             message = ''
               ai.${runtime}.files."${entry.path}" claims ledger
               `${entry.ledger}`, whose codec is `${ledger.codec}`: a document

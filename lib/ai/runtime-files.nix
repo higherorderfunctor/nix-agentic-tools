@@ -5,6 +5,7 @@
 # `apply` that rejects a malformed map before anything reads it, and the
 # lowering of a symlinked entry into the shape both backends' file sinks take.
 {lib}: let
+  aiTypes = import ./types.nix {inherit lib;};
   targetIsNormalized = target: let
     segments = lib.splitString "/" target;
   in
@@ -23,19 +24,20 @@ in rec {
   sinkEntry = entry:
     lib.optionalAttrs (entry.executable != null) {inherit (entry) executable;}
     // lib.optionalAttrs entry.recursive {recursive = true;}
-    // (
-      if entry.content ? source
-      then {inherit (entry.content) source;}
-      else {inherit (entry.content) text;}
-    );
+    // aiTypes.textSourceFile entry.content;
   validateFiles = runtime: files: let
     invalidTargets = builtins.filter (target: !targetIsNormalized target) (builtins.attrNames files);
-    # A live entry with no content is the shape a consumer gets by defining a
-    # SIBLING field on a generated file whose content was contributed as a
-    # whole-entry default: priority discards the generated definition and what
-    # survives has no bytes. Naming it here is what turns that into a
-    # diagnostic instead of a file that silently stops being written.
-    withoutContent = builtins.attrNames (lib.filterAttrs (_target: entry: entry != null && entry.content == null) files);
+    contentKinds = entry:
+      lib.optional entry.content.enable "text or source"
+      ++ lib.optional (entry.content.run != null) "run"
+      ++ lib.optional (entry.content.value != null) "value";
+    malformed = lib.filterAttrs (_target: entry: let
+      count = builtins.length (contentKinds entry);
+    in
+      count
+      > 1
+      || (count == 0 && !entry.content._enableExplicit && !entry.content._textSourceDefined))
+    files;
   in
     if invalidTargets != []
     then
@@ -44,12 +46,13 @@ in rec {
         without absolute roots, empty segments, or `.`/`..` traversal segments;
         invalid target(s): ${lib.concatStringsSep ", " invalidTargets}
       ''
-    else if withoutContent == []
+    else if malformed == {}
     then files
     else
       throw ''
-        ai.${runtime}.files entries must set `content` to one of `source` or
-        `text`; entries without it: ${lib.concatStringsSep ", " withoutContent}
+        ai.${runtime}.files entries must enable exactly one content form:
+        `text`/`source`, `run`, or `value`; invalid entries:
+        ${lib.concatStringsSep ", " (builtins.attrNames malformed)}
       '';
 
   # The shared repository AGENTS.md map lowers through here rather than
@@ -57,5 +60,7 @@ in rec {
   # delivery description, and it has no methods, facts or writers.
   liveFiles = files:
     lib.mapAttrs (_target: sinkEntry)
-    (lib.filterAttrs (_target: entry: entry != null) files);
+    (lib.filterAttrs (_target: entry:
+      entry.content.enable || entry.content.run != null || entry.content.value != null)
+    files);
 }
