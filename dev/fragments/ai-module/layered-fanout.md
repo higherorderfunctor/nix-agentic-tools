@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-20 — owned delivery enforces ledger method, path
-> and format agreement with paired diagnostic controls on both backends.
+> **Last verified:** 2026-09-21 — runtime-native files are named leaves under
+> `ai.<runtime>.native`; owned delivery still enforces ledger agreement.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -179,7 +179,7 @@
   declares the same closed `settings` submodule. Each field resolves root versus
   per-runtime with `resolveOverride`; native lowering remains per-runtime and
   may support only a subset of fields. Runtime-shaped passthrough is separate
-  under `nativeSettings` and is not a normalized pool.
+  under `native.settings` and is not a normalized pool.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over

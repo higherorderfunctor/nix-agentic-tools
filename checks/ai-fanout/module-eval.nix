@@ -169,7 +169,7 @@ in {
           cfg = (evalDevenv (lib.setAttrByPath ["ai" name "enable"] true)).config;
         in
           if name == "claude"
-          then cfg.ai.claude.nativeSettings.env.GIT_SSH_COMMAND
+          then cfg.ai.claude.native.settings.env.GIT_SSH_COMMAND
           else cfg.ai._sandboxSafeSshCommand;
         commands =
           lib.concatMap (name: [
@@ -310,11 +310,11 @@ in {
         config.ai = {
           claude = {
             enable = true;
-            nativeSettings.effortLevel = "medium";
+            native.settings.effortLevel = "medium";
           };
           codex = {
             enable = true;
-            nativeSettings.model_reasoning_effort = null;
+            native.settings.model_reasoning_effort = null;
           };
           settings.reasoningEffort = "high";
         };

@@ -394,7 +394,7 @@ in {
   # ── Settings utilities ──────────────────────────────────────────────
 
   # Closed normalized settings shared by the root and every runtime scope.
-  # Native settings live in each factory's separate `nativeSettings` option.
+  # Native settings live in each factory's separate `native.settings` option.
   normalizedSettingsType = lib.types.submodule {
     options.reasoningEffort = lib.mkOption {
       type = lib.types.nullOr (lib.types.enum ["high" "low" "medium" "xhigh"]);
@@ -402,7 +402,7 @@ in {
       description = ''
         Portable reasoning effort across runtimes that persist the same
         semantic values. Runtime-specific values belong in
-        `ai.<runtime>.nativeSettings`.
+        `ai.<runtime>.native.settings`.
       '';
     };
   };

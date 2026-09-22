@@ -697,7 +697,7 @@ in {
         result = evalHm {
           ai.kiro = {
             enable = true;
-            nativeSettings.chat.defaultModel = "claude-sonnet-4";
+            native.settings.chat.defaultModel = "claude-sonnet-4";
           };
         };
       in
@@ -711,7 +711,7 @@ in {
         result = evalHm {
           ai.kiro = {
             enable = true;
-            nativeSettings.chat.defaultModel = "claude-opus-4.8";
+            native.settings.chat.defaultModel = "claude-opus-4.8";
           };
         };
       in
@@ -724,7 +724,7 @@ in {
         result = evalHm {
           ai.kiro = {
             enable = true;
-            nativeSettings.chat.defaultModel = "some-future-model";
+            native.settings.chat.defaultModel = "some-future-model";
           };
         };
       in
@@ -1166,7 +1166,7 @@ in {
           };
         };
       in
-        ev.config.ai.kiro.nativeSettings.chat.enableWorkflows == true
+        ev.config.ai.kiro.native.settings.chat.enableWorkflows == true
     );
 
     # The implication is a DEFAULT, not a mandate. Without `mkDefault` this would
@@ -1179,11 +1179,11 @@ in {
             enable = true;
             v3 = true;
             unlockedRolloutFeatures = ["workflows"];
-            nativeSettings.chat.enableWorkflows = false;
+            native.settings.chat.enableWorkflows = false;
           };
         };
       in
-        ev.config.ai.kiro.nativeSettings.chat.enableWorkflows == false
+        ev.config.ai.kiro.native.settings.chat.enableWorkflows == false
     );
 
     # Positive control for the two above: without the unlock nothing writes the
@@ -1197,7 +1197,7 @@ in {
           };
         };
       in
-        ev.config.ai.kiro.nativeSettings.chat.enableWorkflows == null
+        ev.config.ai.kiro.native.settings.chat.enableWorkflows == null
     );
 
     # devenv must NOT inherit the implication: it writes the project-local
@@ -1214,7 +1214,7 @@ in {
           };
         };
       in
-        ev.config.ai.kiro.nativeSettings.chat.enableWorkflows
+        ev.config.ai.kiro.native.settings.chat.enableWorkflows
         == null
         && builtins.all (a: a.assertion) ev.config.assertions
     );
@@ -1229,7 +1229,7 @@ in {
         result = evalDevenv {
           ai.kiro = {
             enable = true;
-            nativeSettings.chat.modelDefaults."claude-opus-5".effort = "high";
+            native.settings.chat.modelDefaults."claude-opus-5".effort = "high";
           };
         };
         text = (builtins.head (harness.ownPlan "kiro" "ai:kiro:settings-merge" result).targets).units.text;
@@ -1248,7 +1248,7 @@ in {
         result = evalHm {
           ai.kiro = {
             enable = true;
-            nativeSettings.chat.modelDefaults."claude-opus-5".effort = "high";
+            native.settings.chat.modelDefaults."claude-opus-5".effort = "high";
           };
         };
         declared = (cliDocument result).value;
@@ -1267,7 +1267,7 @@ in {
         result = evalDevenv {
           ai.kiro = {
             enable = true;
-            nativeSettings.chat.enableTangentMode = true;
+            native.settings.chat.enableTangentMode = true;
           };
         };
         text = (builtins.head (harness.ownPlan "kiro" "ai:kiro:settings-merge" result).targets).units.text;
@@ -1286,7 +1286,7 @@ in {
           ai.kiro = {
             enable = true;
             v3 = true;
-            nativeSettings.chat.enableWorkflows = true;
+            native.settings.chat.enableWorkflows = true;
           };
         };
         asserts =
@@ -1304,7 +1304,7 @@ in {
           ai.kiro = {
             enable = true;
             v3 = true;
-            nativeSettings.chat.enableTangentMode = true;
+            native.settings.chat.enableTangentMode = true;
           };
         };
         asserts =
@@ -1323,7 +1323,7 @@ in {
           ai.kiro = {
             enable = true;
             v3 = true;
-            nativeSettings.chat.enableWorkflows = true;
+            native.settings.chat.enableWorkflows = true;
           };
         };
       in
@@ -2813,7 +2813,7 @@ in {
             # which would leave this exercising a config the module declares
             # invalid. The subject of the test — that settings reach the file at
             # all — is unchanged.
-            nativeSettings.chat.enableTangentMode = true;
+            native.settings.chat.enableTangentMode = true;
           };
         };
       in

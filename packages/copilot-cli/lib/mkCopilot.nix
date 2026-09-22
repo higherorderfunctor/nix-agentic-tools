@@ -121,7 +121,7 @@ in
       # integration, telemetry, typed model selection) is tracked in
       # docs/plan.md "Ideal architecture gate → Absorption backlog" under
       # the copilot-cli absorption item.
-      nativeSettings = lib.mkOption {
+      native.settings = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
         description = "Freeform settings merged into ~/.config/github-copilot/settings.json (HM: via activation script; devenv: via static write).";
@@ -330,7 +330,7 @@ in
         }
         {
           ai.copilot.files."${cfg.configDir}/settings.json" = {
-            content.value = cfg.nativeSettings;
+            content.value = cfg.native.settings;
             entry = "copilotSettingsMerge";
             facts.harnessWrites = true;
             format = "json";

@@ -47,7 +47,7 @@
         "ai.codex.hooks"
         "ai.codex.mcpServers"
         "ai.codex.methodFor"
-        "ai.codex.nativeSettings"
+        "ai.codex.native"
         "ai.codex.normalized"
         "ai.codex.package"
         "ai.codex.programs"
@@ -128,6 +128,19 @@
         | join(".")
       ' "${hmJson}" | "$sort" -u > actual-codex-option-roots
       "$diff" -u "${expectedCodexRoots}" actual-codex-option-roots
+
+      # Every runtime owns one native settings file under an ordinary namespace;
+      # Kimchi owns a second harness settings file. The former flat option is a
+      # deliberate clean cut rather than a compatibility alias.
+      ${lib.concatMapStringsSep "\n" (runtime: ''
+          "$jq" --exit-status 'has("ai.${runtime}.native.settings")' "${hmJson}" >/dev/null
+          "$jq" --exit-status 'has("ai.${runtime}.native.settings")' "${devenvJson}" >/dev/null
+          ! "$jq" --exit-status 'has("ai.${runtime}.nativeSettings")' "${hmJson}" >/dev/null
+          ! "$jq" --exit-status 'has("ai.${runtime}.nativeSettings")' "${devenvJson}" >/dev/null
+        '')
+        runtimes}
+      "$jq" --exit-status 'has("ai.kimchi.native.harnessSettings")' "${hmJson}" >/dev/null
+      "$jq" --exit-status 'has("ai.kimchi.native.harnessSettings")' "${devenvJson}" >/dev/null
 
       # Semantic-agent `.instructions` fields and Semble's nested program feature
       # remain valid. Only the normalized root and per-runtime guidance surface

@@ -653,7 +653,7 @@
     | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot) | Same; project-native paths |
     | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same |
     | LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Same; Codex has no native LSP registry |
-    | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.nativeSettings.env` |
+    | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
     | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / `ai.<cli>.shell` (Claude + Codex + Kiro) | Same; takes a package. Copilot and Kimchi are explicit exclusions |
     | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
@@ -691,7 +691,7 @@
       settings.reasoningEffort = "high";
 
       # Runtime-native escape hatch: model identifiers are not portable.
-      codex.nativeSettings.model = "gpt-5.6-sol";
+      codex.native.settings.model = "gpt-5.6-sol";
     };
     ```
 
@@ -704,8 +704,8 @@
     `ai.gitSshConfigWorkaround = false` to manage this yourself.
 
     Codex supports either the legacy `sandbox_mode` model or named permissions
-    through `ai.codex.nativeSettings.default_permissions` and
-    `ai.codex.nativeSettings.permissions`. Do not mix those models in any loaded
+    through `ai.codex.native.settings.default_permissions` and
+    `ai.codex.native.settings.permissions`. Do not mix those models in any loaded
     config layer. Same-named permission tables merge across user and project
     files. The distinct `ai.codex.profiles` option, which would have
     materialized whole extra files selected with `codex --profile`, was
@@ -826,11 +826,11 @@
     Devenv owns `.codex/config.toml` statically because no project-local Codex
     writer has been observed. User-global trust remains outside the project:
     trust the repository once when Codex prompts, or declare
-    `ai.codex.nativeSettings.projects."<absolute-path>".trust_level` through Home Manager.
+    `ai.codex.native.settings.projects."<absolute-path>".trust_level` through Home Manager.
     Devenv rejects that bootstrap-global setting because project config cannot
     grant the trust required to load itself.
 
-    Native-only settings remain under `ai.codex.nativeSettings`. Normalized
+    Native-only settings remain under `ai.codex.native.settings`. Normalized
     settings live under `ai.codex.settings` and narrow `ai.settings` field by
     field. The named whole-file `ai.codex.profiles` layer was removed as
     unreachable — see the sandbox section above for why. Native Starlark

@@ -1358,7 +1358,7 @@ don't get lost:
    For independent keyed pools (`mcpServers`, `skills`, `instructions`) the
    factory uses shape-specific composition. Normalized `settings` resolves each
    nullable field explicitly through `resolveOverride`; runtime-shaped config is
-   separate under `nativeSettings` and uses the module system's native priority
+   separate under `native.settings` and uses the module system's native priority
    merge. Do not reintroduce a recursive attrset merge between those surfaces.
 
 8. **MCP server pattern relationship to existing `services.mcp-servers`**: this

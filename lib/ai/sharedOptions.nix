@@ -238,7 +238,7 @@ in {
         Claude `effortLevel` and Codex `model_reasoning_effort`; the enum is
         their exact persisted semantic intersection. Set a runtime's native
         key, including an explicit null, under
-        `ai.<runtime>.nativeSettings` to arbitrate against the derived default.
+        `ai.<runtime>.native.settings` to arbitrate against the derived default.
         Runtime-specific identifiers and lossy translations are deliberately
         excluded.
       '';
@@ -352,7 +352,7 @@ in {
         Codex itself runs with.
 
         Claude does NOT consume this pool — it has no wrapper here, and
-        `ai.claude.nativeSettings.env` is its native equivalent (upstream writes
+        `ai.claude.native.settings.env` is its native equivalent (upstream writes
         it into `~/.claude/settings.json`).
       '';
     };

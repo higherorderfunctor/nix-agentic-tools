@@ -817,13 +817,13 @@
   # as a rejected key when the real fault was the flattener walking past it;
   # `flattenKiroSettings` stops at a known key, so the written key is now the
   # setting key and the two agree.
-  nativeSettingsDotKeys = cfg:
-    builtins.attrNames (flattenKiroSettings (aiCommon.filterNulls cfg.nativeSettings));
+  nativeSettingKeys = cfg:
+    builtins.attrNames (flattenKiroSettings (aiCommon.filterNulls cfg.native.settings));
 
   # devenv-ONLY. Never add this to `mkAssertions`: under Home Manager these same
   # keys are correct, and asserting there would reject a working config.
   mkDevenvWorkspaceSettingsAssertions = cfg: let
-    written = nativeSettingsDotKeys cfg;
+    written = nativeSettingKeys cfg;
     dropped = builtins.filter (k: !(builtins.elem k workspaceOverridableSettings)) written;
     listed = lib.concatStringsSep ", " dropped;
   in
@@ -831,7 +831,7 @@
       assertion = false;
       message =
         ''
-          ai.kiro: devenv writes `nativeSettings` to the PROJECT-LOCAL
+          ai.kiro: devenv writes `native.settings` to the PROJECT-LOCAL
           ${cfg.configDir}/settings/cli.json, and kiro honors only an allowlist
           of keys there. These keys would be written and then
           silently discarded at runtime: ${listed}
@@ -842,7 +842,7 @@
 
             The pinned kiro honors NO workspace override at all — its TUI has no
             workspace merge — so no key belongs in this file. Set these under
-            home-manager (`ai.kiro.nativeSettings`, which writes the global
+            home-manager (`ai.kiro.native.settings`, which writes the global
             ~/.kiro/settings/cli.json), or with
             `kiro-cli settings <key> <value>`.
           ''
@@ -852,7 +852,7 @@
             ${lib.concatStringsSep ", " workspaceOverridableSettings}
 
             Anything else is global-only: set it under home-manager
-            (`ai.kiro.nativeSettings`, which writes the global
+            (`ai.kiro.native.settings`, which writes the global
             ~/.kiro/settings/cli.json), or with
             `kiro-cli settings <key> <value>`.
 
@@ -871,7 +871,7 @@
   # upstream, so unlocking the feature without it is silently inert — the third
   # such trap on this one option, see the `v3` assertion in `mkAssertions` and
   # packages/kiro-cli/docs/workflow-gating.md. Implied together, `mkDefault` so an explicit
-  # `ai.kiro.nativeSettings.chat.enableWorkflows` still wins.
+  # `ai.kiro.native.settings.chat.enableWorkflows` still wins.
   #
   # HOME MANAGER ONLY, deliberately. The key is absent from
   # `workspaceOverridableSettings`, so contributing it on the devenv backend
@@ -880,7 +880,7 @@
   # never wrote. devenv consumers set it globally; the assertion says so.
   workflowsSettingImplication = cfg:
     lib.mkIf (builtins.elem "workflows" cfg.unlockedRolloutFeatures) {
-      ai.kiro.nativeSettings.chat.enableWorkflows = lib.mkDefault true;
+      ai.kiro.native.settings.chat.enableWorkflows = lib.mkDefault true;
     };
 
   # `null` means auto: the reminder is meaningless without the feature, and the
@@ -1174,9 +1174,9 @@ in
           defaults to false. Under home-manager this module implies that setting via
           `mkDefault` when `workflows` is unlocked, so the pair stays
           consistent and an explicit
-          `nativeSettings.chat.enableWorkflows` still wins. Under devenv the
+          `native.settings.chat.enableWorkflows` still wins. Under devenv the
           setting is global-only and must be set outside the project — see
-          `nativeSettings`.
+          `native.settings`.
         '';
       };
       identity = lib.mkOption {
@@ -1273,7 +1273,7 @@ in
       # Kiro-specific freeform settings with typed subkeys for known
       # knobs. The settings/cli.json delivery writer reconciles these leaves
       # on both backends, retiring Nix leaves and preserving native siblings.
-      nativeSettings = lib.mkOption {
+      native.settings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
           options = {
@@ -1685,7 +1685,7 @@ in
         templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
         inherit (kiroSecrets) urlSecretEnv;
       };
-      flatSettings = flattenKiroSettings (aiCommon.filterNulls cfg.nativeSettings);
+      flatSettings = flattenKiroSettings (aiCommon.filterNulls cfg.native.settings);
       permissionRules = mkPermissionRules cfg;
       sharedRules = lib.filterAttrs (_name: rule:
         rule.matcher == null && ((rule.inclusion or null) == null || rule.inclusion == "always"))
