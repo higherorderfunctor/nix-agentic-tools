@@ -23,12 +23,69 @@
   ...
 }: let
   ourPkgs = pkgs;
-  inherit (ourPkgs) fetchurl lib autoPatchelfHook stdenv;
+  inherit (ourPkgs) autoPatchelfHook fetchurl fetchzip lib stdenv;
   inherit (ourPkgs.stdenv.hostPlatform) system;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
+  extraction = sources.extraction or (throw "kimchi: missing extraction source pins");
   platformSrc = sources.${system} or (throw "kimchi: unsupported system ${system}");
+
+  kimchiSource = fetchzip {
+    inherit (extraction.kimchiSource) hash url;
+  };
+  piPackage = fetchzip {
+    inherit (extraction.piPackage) hash url;
+  };
+
+  extracted =
+    ourPkgs.runCommand "kimchi-extracted.json" {
+      nativeBuildInputs = [ourPkgs.python3];
+    } ''
+      ${ourPkgs.python3}/bin/python3 ${../../../extract/extract.py} \
+        --kimchi-source ${kimchiSource} \
+        --kimchi-version ${sources.version} \
+        --out "$out" \
+        --pi-package ${piPackage}
+    '';
+
+  # The release binary does not contain dependable source metadata. Refresh
+  # both hash-verified source inputs immediately after mkUpdateScript replaces
+  # the platform pins, then regenerate the measured sidecar from those inputs.
+  refreshExtraction = ''
+    kimchi_source_url="https://github.com/getkimchi/kimchi/archive/refs/tags/v$latest.tar.gz"
+    kimchi_source_json=$(${ourPkgs.nix}/bin/nix store prefetch-file --json --unpack "$kimchi_source_url")
+    kimchi_source_hash=$(${ourPkgs.jq}/bin/jq -er '.hash' <<< "$kimchi_source_json")
+    kimchi_source_path=$(${ourPkgs.jq}/bin/jq -er '.storePath' <<< "$kimchi_source_json")
+
+    pi_version=$(${ourPkgs.jq}/bin/jq -er \
+      '.dependencies["@earendil-works/pi-coding-agent"] | strings | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
+      "$kimchi_source_path/package.json")
+    pi_package_url="https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-$pi_version.tgz"
+    pi_package_json=$(${ourPkgs.nix}/bin/nix store prefetch-file --json --unpack "$pi_package_url")
+    pi_package_hash=$(${ourPkgs.jq}/bin/jq -er '.hash' <<< "$pi_package_json")
+
+    extraction_tmp=$(${ourPkgs.coreutils}/bin/mktemp)
+    ${ourPkgs.jq}/bin/jq \
+      --arg kh "$kimchi_source_hash" \
+      --arg ku "$kimchi_source_url" \
+      --arg ph "$pi_package_hash" \
+      --arg pu "$pi_package_url" \
+      --arg pv "$pi_version" \
+      '. + {extraction: {
+        kimchiSource: {hash: $kh, url: $ku},
+        piPackage: {hash: $ph, url: $pu, version: $pv}
+      }}' \
+      ${repoPath ../../../sources.json} > "$extraction_tmp"
+    ${ourPkgs.coreutils}/bin/mv "$extraction_tmp" ${repoPath ../../../sources.json}
+    ${ourPkgs.nix}/bin/nix fmt -- ${repoPath ../../../sources.json}
+
+    ${vu.mkExtractRegen {
+      attr = "kimchi";
+      dest = repoPath ../../../extracted.json;
+      pkgs = ourPkgs;
+    }}
+  '';
 in
   ourPkgs.stdenv.mkDerivation {
     pname = "kimchi";
@@ -76,6 +133,11 @@ in
     '';
 
     passthru = {
+      inherit extracted;
+      extractionSources = {
+        kimchi = kimchiSource;
+        pi = piPackage;
+      };
       updateScript = vu.mkUpdateScript {
         sourcesFile = repoPath ../../../sources.json;
 
@@ -88,6 +150,7 @@ in
           "x86_64-linux" = ver: "https://github.com/getkimchi/kimchi/releases/download/v${ver}/kimchi_linux_amd64.tar.gz";
           "aarch64-darwin" = ver: "https://github.com/getkimchi/kimchi/releases/download/v${ver}/kimchi_darwin_arm64.tar.gz";
         };
+        extraExtract = refreshExtraction;
         pkgs = ourPkgs;
       };
     };
@@ -96,7 +159,7 @@ in
       description = "Kimchi — coding agent CLI powered by Cast AI";
       homepage = "https://github.com/getkimchi/kimchi";
       license = lib.licenses.asl20;
-      platforms = builtins.attrNames (builtins.removeAttrs sources ["version"]);
+      platforms = builtins.attrNames (builtins.removeAttrs sources ["extraction" "version"]);
       mainProgram = "kimchi";
     };
   }
