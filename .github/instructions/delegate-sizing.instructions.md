@@ -7,8 +7,8 @@ applyTo: "packages/delegate-sizing/**"
 
 # Delegate sizing package
 
-> **Last verified:** 2026-09-21 — shared text/source types auto-enable consumer
-> content while package presets remain dormant.
+> **Last verified:** 2026-09-21 — instruction presets use inner
+> `defaultContent`, while shared text/source types auto-enable consumer content.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,
@@ -40,16 +40,19 @@ in `lib/when-to-delegate-renames.nix`; old-key definitions merge into the new
 key and warn until consumers update their configuration.
 
 Instruction presets live in `lib/presets.nix` and use
-`lib.ai.types.optionalTextSource` with `enableDefault = true`. The source
-runtime's settings control its external launch even when its skill is disabled:
-an enabled Codex CLI may still serve Claude delegates without installing its own
-sizing skill. `settings.<block>.enable = false` omits an instruction block; it
-does not remove models from the table. Set `text` directly or use `source` to
-replace a block's package preset. The consumer supplies the omitted instructions
-when needed. Kiro's default external launch is manual-only and pins Luna for
-fixture probes. Before adding Kiro to `extraRuntimes`, override its
-`settings.launch.text` or `.source` with instructions that apply the selected
-model and effort.
+`lib.ai.types.optionalTextSource` with `enableDefault = true`. The presets pass
+through the type's `defaultContent` argument, which contributes inner
+`mkDefault` definitions while the enclosing option keeps an empty default. A
+consumer who sets only `enable = true` therefore retains the package prose. The
+source runtime's settings control its external launch even when its skill is
+disabled: an enabled Codex CLI may still serve Claude delegates without
+installing its own sizing skill. `settings.<block>.enable = false` omits an
+instruction block; it does not remove models from the table. Set `text` directly
+or use `source` to replace a block's package preset. The consumer supplies the
+omitted instructions when needed. Kiro's default external launch is manual-only
+and pins Luna for fixture probes. Before adding Kiro to `extraRuntimes`,
+override its `settings.launch.text` or `.source` with instructions that apply
+the selected model and effort.
 
 Usage helpers are packaged applications with their own runtime closures. The
 Claude helper carries `curl` and `jq`; the Codex helper carries GNU `timeout`,

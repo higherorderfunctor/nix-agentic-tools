@@ -1,7 +1,8 @@
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-09-21 — Markdown context and rules resolve through
-> shared text-source types with `enable` suppression and priority arbitration.
+> shared text-source types with inner `defaultContent`, `enable` suppression and
+> priority arbitration.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -299,12 +300,18 @@ enabled ecosystem whose native model preserves the option's semantics):
   override a package-default `source` and a forced `source` can override
   ordinary `text`; setting both at one priority fails. Same-priority `text`
   definitions concatenate, explicit content auto-enables the record, and
-  `enable = false` omits it. Claude defaults to `CLAUDE.md`; Codex, Kiro, and
-  Kimchi default to `AGENTS.md`; Copilot defaults to `copilot-instructions.md`.
-  Copilot emits normalized context only on devenv because its live surface is
-  the repository consumed by github.com, not copilot-cli's user home. The
-  transform derives structural `hasMergedContext` metadata before composition,
-  so a final-file replacement or tombstone does not read discarded source-backed
+  `enable = false` omits it. Package prose belongs in the text-source factory's
+  `defaultContent` argument, which installs each supplied field as an inner
+  `mkDefault` definition; the enclosing `mkOption` default stays `{}` so a
+  consumer definition cannot discard the package prose or make dormant prose
+  explicit. The shared evaluation check rejects non-empty outer defaults on
+  direct text-source submodule declarations reachable through the repository
+  HM/devenv harnesses. Claude defaults to `CLAUDE.md`; Codex, Kiro, and Kimchi
+  default to `AGENTS.md`; Copilot defaults to `copilot-instructions.md`. Copilot
+  emits normalized context only on devenv because its live surface is the
+  repository consumed by github.com, not copilot-cli's user home. The transform
+  derives structural `hasMergedContext` metadata before composition, so a
+  final-file replacement or tombstone does not read discarded source-backed
   root/runtime context.
 - `ai.rules` — named Markdown rules. Codex appends these alphabetically to its
   AGENTS.md after context with trace comments. `matcher = null` means always-on;

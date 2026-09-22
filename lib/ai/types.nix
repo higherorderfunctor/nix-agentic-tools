@@ -12,8 +12,11 @@
       # shorthand definitions must populate `config` rather than module syntax.
       shorthandOnlyDefinesConfig = true;
     };
-  mkTextSource = {description}:
-    lib.types.submodule ({
+  mkTextSource = {
+    defaultContent ? {},
+    description,
+  }: let
+    baseType = lib.types.submodule ({
       config,
       options,
       ...
@@ -23,6 +26,14 @@
         == options.source.highestPrio;
     in {
       options = {
+        _textSourceType = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          internal = true;
+          readOnly = true;
+          visible = false;
+        };
+
         source = lib.mkOption {
           type = lib.types.nullOr lib.types.path;
           default = null;
@@ -44,6 +55,10 @@
         };
       };
     });
+  in
+    extendSubmodule baseType {
+      config = lib.mapAttrs (_: lib.mkDefault) defaultContent;
+    };
   mkEnableModule = {
     description,
     enableDefault,
@@ -74,10 +89,11 @@ in {
   inherit extendSubmodule;
 
   optionalTextSource = {
+    defaultContent ? {},
     description,
     enableDefault ? false,
   }: let
-    baseType = mkTextSource {inherit description;};
+    baseType = mkTextSource {inherit defaultContent description;};
   in
     extendSubmodule baseType (mkEnableModule {inherit description enableDefault;});
 
