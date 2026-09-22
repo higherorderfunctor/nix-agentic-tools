@@ -1869,6 +1869,10 @@ in {
                   enable = false;
                   text = "This disabled prompt must not be emitted.";
                 };
+                # Enabled with no content is the OTHER way to say "nothing".
+                # It must drop the key too, not emit `""` — a shape the
+                # pre-conversion `nullOr` type could not express.
+                welcomeMessage.enable = true;
                 resources = [
                   {
                     type = "knowledgeBase";
@@ -1890,6 +1894,7 @@ in {
         == "shell"
         && rule.effect == "deny"
         && !(emitted ? prompt)
+        && !(emitted ? welcomeMessage)
         && !(rule ? match)
         && !(rule ? exclude)
         && resource.source == "file:///docs"

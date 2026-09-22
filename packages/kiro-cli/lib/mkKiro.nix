@@ -37,8 +37,13 @@
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
 
+  # An optional text-source lowers to its text, or to null so the renderers'
+  # null-pruning drops the key. Empty text counts as absent: the pre-conversion
+  # options were `nullOr`, where the only way to say "nothing" was `null`, and
+  # `enable = true` with no content says the same thing more clumsily. Emitting
+  # `""` would be a shape the old type could not express.
   enabledTextOrNull = value:
-    if value.enable
+    if value.enable && value.text != ""
     then value.text
     else null;
 
