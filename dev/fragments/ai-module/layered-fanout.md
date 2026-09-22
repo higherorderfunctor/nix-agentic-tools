@@ -84,6 +84,8 @@
   runtime's `context.filename`; `enable = false` omits either record. A
   structural `hasMergedContext` bit gates the generated default without reading
   composed sources; rendered bytes remain lazy until that default survives B7.
+  Repository-local Codex, Kimchi, and Kiro targets contribute to the shared L4
+  owner instead of creating competing runtime writers.
 - **Rule matchers lower only before L4.** `matcher = null` is always-on; a
   non-empty glob list becomes native routing metadata where one exists and
   explicit prose for flat AGENTS.md consumers. In the shared devenv AGENTS.md,
