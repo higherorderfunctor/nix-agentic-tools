@@ -1,8 +1,9 @@
 ## Copilot config delivery — two consumers, one product name
 
-> **Last verified:** 2026-08-16 — the unscoped-frontmatter measurement (1.0.79)
-> is retained as the durable record after the normalized-interface plan was
-> retired; it was not re-measured at 1.0.80.
+> **Last verified:** 2026-09-22 — normalized reasoning effort lowers to the
+> persisted global `effortLevel` key. The unscoped-frontmatter measurement
+> (1.0.79) is retained as the durable record after the normalized-interface plan
+> was retired; it was not re-measured at 1.0.80.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 89dce4c4:dev/fragments/ai-clis/copilot-config-delivery.md`.
@@ -223,6 +224,12 @@ They are still written, and this is deliberate on three counts:
 2. Zero cost — gitignored, and they become live for free if upstream ever grows
    project-scope discovery.
 3. Removing them buys nothing a user can observe.
+
+The normalized `ai.copilot.settings.reasoningEffort` field lowers to the native
+`effortLevel` key at `mkDefault` priority. That mapping is live under Home
+Manager, whose global file Copilot reads. Under devenv it is subject to the same
+project-scope delivery limitation as every other setting in this section: the
+file is rendered for backend parity, but Copilot does not read it.
 
 **They are NOT an assertion**, and that is the load-bearing part.
 `ai.lspServers` is a SHARED pool that fans out to Claude, Copilot and Kiro.

@@ -1,7 +1,8 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-21 — context and rules use shared text-source
-> `enable` gates and arbitrate `text` against `source` by module priority.
+> **Last verified:** 2026-09-22 — normalized settings follow the same capability
+> gate as every other concern; context and rules use shared text-source `enable`
+> gates and arbitrate `text` against `source` by module priority.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -132,8 +133,8 @@
    supported CLI handles it the same way) or in each per-CLI factory (if the
    shape differs).
 3. Add `X` to `supportedPools` only on app records whose callbacks consume it.
-   The uniform normalized `settings` schema is the explicit exception: every
-   runtime declares it, while each field's native lowering may be narrower.
+   This includes normalized `settings`: a runtime without a lossless native
+   lowering does not declare the per-runtime option.
 4. Add L4 routing/rendering into `ai.<runtime>.files` in each supporting per-CLI
    factory's customConfig. Lifecycle-owned non-literal outputs remain explicit
    exceptions rather than bypassing the static map silently.

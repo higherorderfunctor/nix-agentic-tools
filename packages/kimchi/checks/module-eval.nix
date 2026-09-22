@@ -76,6 +76,32 @@ in {
         result.config.files ? ".config/kimchi/harness/settings.json"
     );
 
+    # Kimchi persists the normalized values unchanged at
+    # `defaultThinkingLevel`. Cover both writers and prove a consumer-authored
+    # native value wins over the derived mkDefault.
+    module-kimchi-normalized-reasoning-effort = mkTest "kimchi-normalized-reasoning-effort" (
+      let
+        config.ai = {
+          kimchi.enable = true;
+          settings.reasoningEffort = "high";
+        };
+        hm = evalHm config;
+        devenv = evalDevenv config;
+        overridden = evalDevenv {
+          ai = {
+            kimchi = {
+              enable = true;
+              harnessSettings.defaultThinkingLevel = "low";
+            };
+            settings.reasoningEffort = "high";
+          };
+        };
+      in
+        lib.hasInfix ''"defaultThinkingLevel":"high"'' hm.config.home.activation.kimchiHarnessSettingsMerge.text
+        && lib.hasInfix ''"defaultThinkingLevel":"high"'' devenv.config.files.".config/kimchi/harness/settings.json".text
+        && lib.hasInfix ''"defaultThinkingLevel":"low"'' overridden.config.files.".config/kimchi/harness/settings.json".text
+    );
+
     # The Cast AI key is a runtime credential ({file|helper}); setting
     # apiKey.file must evaluate and must never become a static env var.
     module-kimchi-credential = mkTest "kimchi-credential" (

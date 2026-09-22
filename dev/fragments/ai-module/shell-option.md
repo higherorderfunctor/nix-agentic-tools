@@ -1,9 +1,11 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-08-16 — resolves #877: Kiro's FHS root supplies bash
-> but hides a host zsh, and that does not justify a runtime-specific implicit
-> shell default. `ai.shell` stays null; see below for the standing decision and
-> the override rule it shares with normalized `settings`.
+> **Last verified:** 2026-09-22 — normalized settings now follow the ordinary
+> capability gate: runtimes without a lossless native lowering do not declare
+> the per-runtime pool. Kiro's FHS root supplies bash but hides a host zsh, and
+> that does not justify a runtime-specific implicit shell default. `ai.shell`
+> stays null; see below for the standing decision and the override rule it
+> shares with normalized `settings`.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -31,10 +33,10 @@ it cannot reintroduce the `_module.args` recursion documented against
 
 A same-named native option does not imply normalized-pool support.
 Runtime-shaped passthrough now lives under `nativeSettings`, independently of
-the capability list. Normalized `settings` is the deliberate uniform exception:
-all five runtimes list it so the same closed schema is available at every
-runtime scope, even when a particular field currently has a lossless native
-lowering only for a subset such as Claude and Codex.
+the capability list. Normalized `settings` follows the same rule: only runtimes
+with a lossless native lowering list it. Kiro therefore keeps its native
+per-model effort records but has no `ai.kiro.settings` option for the portable
+global scalar.
 
 ### `ai.shell` deliberately uses null-as-inherit
 

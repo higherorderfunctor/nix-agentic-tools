@@ -7,12 +7,14 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/agent.nix,
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-21 — the shared text-source types carry every
-> authored prose surface, semantic-agent `instructions` and Kiro typed-agent
-> `prompt` included. They arbitrate `text` against `source` by priority, enforce
-> content on enabled and required sources, preserve lazy source-backed emission,
-> take package prose through `defaultContent`, and suppress with
-> `enable = false`.
+> **Last verified:** 2026-09-22 — normalized settings are declared only by
+> runtimes with a lossless native lowering; reasoning effort now reaches Claude,
+> Codex, Copilot, and Kimchi, while Kiro explicitly excludes it. The shared
+> text-source types carry every authored prose surface, semantic-agent
+> `instructions` and Kiro typed-agent `prompt` included. They arbitrate `text`
+> against `source` by priority, enforce content on enabled and required sources,
+> preserve lazy source-backed emission, take package prose through
+> `defaultContent`, and suppress with `enable = false`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -270,12 +272,15 @@ enabled ecosystem whose native model preserves the option's semantics):
   `xhigh` value. Every runtime exposes the same field at
   `ai.<runtime>.settings.reasoningEffort`; a non-null per-runtime value wins for
   only that runtime, while null inherits the root through `resolveOverride`.
-  Claude and Codex lower the resolved value to native `effortLevel` and
-  `model_reasoning_effort`; runtimes without a lossless lowering retain the
-  normalized value without emitting a native key. Values that only one runtime
-  persists remain under that runtime's `nativeSettings`. An explicit native
-  Claude/Codex effort key still has normal option priority over the derived
-  normalized default, and a native null excludes that runtime from emission.
+  Claude, Codex, Copilot, and Kimchi lower the resolved value to native
+  `effortLevel`, `model_reasoning_effort`, `effortLevel`, and
+  `defaultThinkingLevel`, respectively. Kiro exposes effort only inside
+  per-model `chat.modelDefaults` records, so it does not declare the normalized
+  settings pool: choosing a model or applying one effort to every model would be
+  lossy. Values that only one runtime persists remain under that runtime's
+  native settings. An explicit native effort key still has normal option
+  priority over the derived normalized default, and a native null excludes that
+  runtime from emission.
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
   and repository-local `.agents/skills` in devenv; Claude, Copilot, Kimchi, and
@@ -397,7 +402,9 @@ shell resolution. A per-runtime pool write that the runtime cannot consume is
 therefore an unknown-option error. A ROOT pool value stays portable and degrades
 to the neutral value for an incapable runtime.
 
-Kimchi is the sharp example: it supports `context`, `environmentVariables`,
+Kiro's settings exclusion is the scalar example: root `ai.settings` remains
+valid when Kiro is enabled, while `ai.kiro.settings` does not exist. Kimchi is
+the keyed-pool example: it supports `context`, `environmentVariables`,
 `mcpServers`, `settings`, and `skills`, but not `rules`. Consequently root
 `ai.rules` remains valid when Kimchi is enabled, while `ai.kimchi.rules` and
 `ai.kimchi.rulesDir` do not exist. Capability tests pair every eval-failure
@@ -1007,8 +1014,9 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-21 — context and rules use shared text-source
-> `enable` gates and arbitrate `text` against `source` by module priority.
+> **Last verified:** 2026-09-22 — normalized settings follow the same capability
+> gate as every other concern; context and rules use shared text-source `enable`
+> gates and arbitrate `text` against `source` by module priority.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1139,8 +1147,8 @@ path types".
    supported CLI handles it the same way) or in each per-CLI factory (if the
    shape differs).
 3. Add `X` to `supportedPools` only on app records whose callbacks consume it.
-   The uniform normalized `settings` schema is the explicit exception: every
-   runtime declares it, while each field's native lowering may be narrower.
+   This includes normalized `settings`: a runtime without a lossless native
+   lowering does not declare the per-runtime option.
 4. Add L4 routing/rendering into `ai.<runtime>.files` in each supporting per-CLI
    factory's customConfig. Lifecycle-owned non-literal outputs remain explicit
    exceptions rather than bypassing the static map silently.
@@ -1181,10 +1189,12 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-08-16 — resolves #877: Kiro's FHS root supplies bash
-> but hides a host zsh, and that does not justify a runtime-specific implicit
-> shell default. `ai.shell` stays null; see below for the standing decision and
-> the override rule it shares with normalized `settings`.
+> **Last verified:** 2026-09-22 — normalized settings now follow the ordinary
+> capability gate: runtimes without a lossless native lowering do not declare
+> the per-runtime pool. Kiro's FHS root supplies bash but hides a host zsh, and
+> that does not justify a runtime-specific implicit shell default. `ai.shell`
+> stays null; see below for the standing decision and the override rule it
+> shares with normalized `settings`.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -1212,10 +1222,10 @@ it cannot reintroduce the `_module.args` recursion documented against
 
 A same-named native option does not imply normalized-pool support.
 Runtime-shaped passthrough now lives under `nativeSettings`, independently of
-the capability list. Normalized `settings` is the deliberate uniform exception:
-all five runtimes list it so the same closed schema is available at every
-runtime scope, even when a particular field currently has a lossless native
-lowering only for a subset such as Claude and Codex.
+the capability list. Normalized `settings` follows the same rule: only runtimes
+with a lossless native lowering list it. Kiro therefore keeps its native
+per-model effort records but has no `ai.kiro.settings` option for the portable
+global scalar.
 
 ### `ai.shell` deliberately uses null-as-inherit
 

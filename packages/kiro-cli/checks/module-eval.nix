@@ -116,6 +116,31 @@ in {
       && !(evalDevenv {}).config.ai.kiro.enable
     );
 
+    # Kiro has no global persisted effort key: its effort setting is nested
+    # below a selected model. Keep the normalized settings pool absent on both
+    # backends, with Claude as the identical-shape positive control so an
+    # unrelated harness failure cannot make the exclusions pass.
+    module-kiro-settings-pool-excluded = mkTest "kiro-settings-pool-excluded" (
+      let
+        kiroConfig.ai.kiro = {
+          enable = true;
+          settings.reasoningEffort = "high";
+        };
+        claudeConfig.ai.claude = {
+          enable = true;
+          settings.reasoningEffort = "high";
+        };
+        kiroHm = builtins.tryEval (evalHm kiroConfig).config.home.packages;
+        kiroDevenv = builtins.tryEval (evalDevenv kiroConfig).config.packages;
+        claudeHm = builtins.tryEval (evalHm claudeConfig).config.home.packages;
+        claudeDevenv = builtins.tryEval (evalDevenv claudeConfig).config.packages;
+      in
+        !kiroHm.success
+        && !kiroDevenv.success
+        && claudeHm.success
+        && claudeDevenv.success
+    );
+
     # Kiro HM keeps context in the `AGENTS.md` steering entry and emits each keyed
     # rule as `<name>.md` through the common runtime file map.
     module-kiro-hm-context-and-rules = mkTest "kiro-hm-context-and-rules" (

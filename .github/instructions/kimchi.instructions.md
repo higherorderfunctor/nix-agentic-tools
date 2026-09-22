@@ -7,20 +7,23 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-08-16 — normalized context renders into
-> `ai.kimchi.files` before the generic backend sink, so the final
-> `harness/AGENTS.md` is replaceable or suppressible as one whole entry. Full
-> lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> **Last verified:** 2026-09-22 — normalized reasoning effort lowers to
+> `harness/settings.json`'s `defaultThinkingLevel` at default priority, and
+> normalized context renders into `ai.kimchi.files` before the generic backend
+> sink, so the final `harness/AGENTS.md` is replaceable or suppressible as one
+> whole entry. Full lineage:
+> `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
 mutable tree). The HM and devenv modules are thin shims that apply `hmTransform`
 / `devenvTransform` to the record.
 
-The factory consumes Kimchi-shaped JSON from `ai.kimchi.nativeSettings`. The
-closed `ai.kimchi.settings` submodule is the shared normalized surface; a field
-may be present there before Kimchi has a lossless native lowering, in which case
-it remains declarative data rather than being guessed into either native file.
+The factory consumes Kimchi-shaped JSON from `ai.kimchi.nativeSettings` and
+`ai.kimchi.harnessSettings`. The closed `ai.kimchi.settings` submodule is the
+shared normalized surface. Its `reasoningEffort` field lowers losslessly to
+`harnessSettings.defaultThinkingLevel` at `mkDefault` priority, so an explicit
+native harness value wins.
 
 ## Two config trees (the load-bearing fact)
 
@@ -51,7 +54,8 @@ The app record's `supportedPools` is exactly `context`, `environmentVariables`,
 portable agents, LSP, portable hooks, or shell-selection landing key. Those
 per-runtime normalized options are absent; root values for them remain valid and
 silently degrade for Kimchi. `settings` is the uniform closed normalized
-namespace; its current field has no Kimchi-native lowering.
+namespace; its current field lowers to `defaultThinkingLevel` in the mutable
+harness settings tree.
 
 The three keyed pools Kimchi consumes (`environmentVariables`, `mcpServers`, and
 `skills`) follow the shared atomic replacement rule. A Kimchi-specific same-key
