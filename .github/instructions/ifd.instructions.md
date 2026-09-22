@@ -7,8 +7,8 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-09-21 — Kimchi measures its source and exact pi
-> dependency without reading the derivation at evaluation time.
+> **Last verified:** 2026-09-22 — Kimchi measures hash-pinned source and pi
+> declaration inputs without reading the derivation at evaluation time.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -197,12 +197,13 @@ located by CONTENT — never a chunk filename, a minified identifier or a byte
 offset, none of which the macOS and Linux builds of one version agree on. That
 is what lets ONE sidecar be committed for both platforms; the darwin `build` job
 is the only place that claim is ever tested by a build. Kimchi's JavaScript
-extractor reads the hash-pinned release source plus the exact pi npm package
-declared by that release through nixpkgs' pinned TypeScript compiler API. The
-checker supplies declared settings keys and types; syntax-tree queries supply
-CLI and environment access sites. It measures both native settings files, both
-CLI layers, and both environment namespaces without unpacking the Bun executable
-or pattern-matching TypeScript text.
+extractor reads the hash-pinned release source, exact pi npm package, and the
+three pi declaration packages imported by its settings type through nixpkgs'
+pinned TypeScript compiler API. The checker supplies declared settings keys and
+types; syntax-tree queries supply CLI, validation, and environment access sites.
+It measures both native settings files, both CLI layers, and both environment
+namespaces without unpacking the Bun executable or pattern-matching TypeScript
+text.
 
 Reach for a grep only for facts that are genuinely outside the artifact's own
 schema. Two survive in `mkClaudeExtract` for exactly that reason: the launch-pin
