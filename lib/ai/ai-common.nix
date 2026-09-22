@@ -6,48 +6,61 @@
 # - lib/hm-helpers.nix (filterNulls re-export)
 {lib}: let
   aiTypes = import ./types.nix {inherit lib;};
-  contentType = aiTypes.textSource {description = "Markdown content";};
-  contentModules =
-    contentType.getSubModules
-    ++ [
-      ({options, ...}: {
-        options._sourceWins = lib.mkOption {
-          type = lib.types.bool;
-          default = options.source.highestPrio < options.text.highestPrio;
-          description = "Whether source supplies the effective Markdown content.";
-          internal = true;
-          readOnly = true;
-        };
-      })
-    ];
+  contentType = enableDefault:
+    aiTypes.extendSubmodule
+    (aiTypes.optionalTextSource {
+      description = "Markdown content";
+      inherit enableDefault;
+    })
+    ({
+      config,
+      options,
+      ...
+    }: {
+      options._sourceWins = lib.mkOption {
+        type = lib.types.bool;
+        default =
+          config.source
+          != null
+          && options.source.highestPrio < options.text.highestPrio;
+        description = "Whether source supplies the effective Markdown content.";
+        internal = true;
+        readOnly = true;
+      };
+    });
   contentUsesSource = value:
     value._sourceWins or (!(value ? text) && (value.source or null) != null);
   hasContent = value:
     value
     != null
+    && (value.enable or true)
     && (
       if contentUsesSource value
       then value.source != null
       else value.text != ""
     );
   ruleIsValid = hasContent;
-  mkContentModule = {defaultFilename ? null}:
-    lib.types.submoduleWith {
-      modules =
-        contentModules
-        ++ lib.optional (defaultFilename != null) {
-          options.filename = lib.mkOption {
-            type = lib.types.addCheck lib.types.str (value:
-              value
-              != ""
-              && builtins.baseNameOf value == value
-              && value != "."
-              && value != "..");
-            default = defaultFilename;
-            description = "Filename for this runtime's single always-on context artifact.";
-          };
+  mkContentModule = {
+    defaultFilename ? null,
+    enableDefault ? false,
+  }: let
+    baseType = contentType enableDefault;
+  in
+    if defaultFilename == null
+    then baseType
+    else
+      aiTypes.extendSubmodule baseType {
+        options.filename = lib.mkOption {
+          type = lib.types.addCheck lib.types.str (value:
+            value
+            != ""
+            && builtins.baseNameOf value == value
+            && value != "."
+            && value != "..");
+          default = defaultFilename;
+          description = "Filename for this runtime's single always-on context artifact.";
         };
-    };
+      };
 
   kiroInclusionOption = lib.mkOption {
     type = lib.types.nullOr (lib.types.enum ["always" "auto" "fileMatch" "manual"]);
@@ -77,25 +90,19 @@
     '';
   };
   mkRuleModule = {kiroNative ? false}:
-    lib.types.submoduleWith {
-      modules =
-        contentModules
-        ++ [
-          {
-            options =
-              {
-                description = lib.mkOption {
-                  type = lib.types.str;
-                  default = "";
-                  description = "Short description forwarded to runtime renderers.";
-                };
-                matcher = matcherOption;
-              }
-              // lib.optionalAttrs kiroNative {
-                inclusion = kiroInclusionOption;
-              };
-          }
-        ];
+    aiTypes.extendSubmodule (contentType true) {
+      options =
+        {
+          description = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+            description = "Short description forwarded to runtime renderers.";
+          };
+          matcher = matcherOption;
+        }
+        // lib.optionalAttrs kiroNative {
+          inclusion = kiroInclusionOption;
+        };
     };
   # Flatten nested Nix attrsets into dot-notation keys for CLIs that
   # expect flat JSON (e.g., Kiro's cli.json uses `"chat.enableTangentMode"`
@@ -146,10 +153,13 @@ in {
 
   contentModule = mkContentModule {};
   optionalContentModule = mkContentModule {};
-  validateOptionalContent = lib.id;
+  validateOptionalContent = value:
+    if !(value.enable or true) || hasContent value
+    then value
+    else throw "Context must set `text` or `source` when enabled";
   validateRules = rules:
     lib.mapAttrs (name: rule:
-      if rule == null || ruleIsValid rule
+      if !(rule.enable or true) || ruleIsValid rule
       then rule
       else
         throw

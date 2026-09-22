@@ -867,6 +867,20 @@ in {
         && rule.source == ../cli-instructions.md
     );
 
+    module-semble-rule-matcher-keeps-packaged-prose = mkTest "semble-rule-matcher-keeps-packaged-prose" (
+      let
+        evaluated = evalDevenv {
+          ai.kiro.rules.semble.matcher = ["src/**"];
+          ai.kiro.programs.semble.instructions.cli.enable = true;
+        };
+        rule = evaluated.config.ai.kiro.rules.semble;
+      in
+        rule.enable
+        && rule.matcher == ["src/**"]
+        && rule.source == ../cli-instructions.md
+        && lib.hasInfix "Use `semble search`" rule.text
+    );
+
     module-semble-rules-use-native-files = mkTest "semble-rules-use-native-files" (
       let
         nativeConfig = {

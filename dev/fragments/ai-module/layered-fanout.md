@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-21 — context content uses the shared text-source
-> type and arbitrates `text` against `source` by module priority.
+> **Last verified:** 2026-09-21 — context and rules use shared text-source
+> `enable` gates and arbitrate `text` against `source` by module priority.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -16,8 +16,10 @@
                              ▼  fanout via lib.ai.<X>FromDir
 ┌────────────────────────────────────────────────────────────┐
 │ L2: Top-level singles                                      │
-│   ai.<X> = attrsOf (nullOr <itemModule>)                   │
+│   ai.<X> = attrsOf (<itemModule>)                          │
 │   - cross-ecosystem pool                                   │
+│   - nullable pools wrap itemModule in nullOr               │
+│   - rules use itemModule.enable                            │
 └────────────────────────────────────────────────────────────┘
                              │
                              ▼  fanout to each enabled CLI
@@ -29,10 +31,10 @@
                              ▼  fanout via lib.ai.<X>FromDir
 ┌────────────────────────────────────────────────────────────┐
 │ L3: Per-CLI singles                                        │
-│   ai.<cli>.<X> = attrsOf (nullOr <itemModule>)             │
+│   ai.<cli>.<X> = attrsOf (<itemModule>)                    │
 │   - exists only when the app record supports pool X        │
 │   - same-key value atomically replaces L2                  │
-│   - same-key null suppresses the inherited L2 entry        │
+│   - null or itemModule.enable suppresses by pool contract   │
 └────────────────────────────────────────────────────────────┘
                              │
                              ▼  routing + native rendering
@@ -60,10 +62,12 @@
   emits unique active systemd units, while only lowered client entries traverse
   this five-stage pipeline.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
-  entries replace same-key root entries wholesale; null suppresses an inherited
-  entry after the shallow merge. Unsupported root fanout degrades before this
-  boundary and has no L3 option. L1→L2 and L2b→L3 use `mkDefault` so explicit
-  entries within the same layer still win before cross-level composition.
+  entries replace same-key root entries wholesale. Nullable pools use null to
+  suppress an inherited entry after the shallow merge; rules use
+  `enable = false` on the replacement entry. Unsupported root fanout degrades
+  before this boundary and has no L3 option. L1→L2 and L2b→L3 use `mkDefault` so
+  explicit entries within the same layer still win before cross-level
+  composition.
 - **One package owner per key and scope.** Definition-provenance checks reject
   two packages claiming one root key or one per-runtime key. A root key and its
   runtime replacement are different scopes and do not collide.
@@ -75,9 +79,9 @@
   typed `text`/`source` records, not pool entries. The strictly higher-priority
   definition supplies the effective content whichever field it targets; one
   priority setting both fields fails. Their content composes root-first into the
-  runtime's `context.filename`. A structural `hasMergedContext` bit gates the
-  generated default without reading composed sources; rendered bytes remain lazy
-  until that default survives B7.
+  runtime's `context.filename`; `enable = false` omits either record. A
+  structural `hasMergedContext` bit gates the generated default without reading
+  composed sources; rendered bytes remain lazy until that default survives B7.
 - **Rule matchers lower only before L4.** `matcher = null` is always-on; a
   non-empty glob list becomes native routing metadata where one exists and
   explicit prose for flat AGENTS.md consumers. In the shared devenv AGENTS.md,
@@ -107,7 +111,8 @@
   selectors)
 - L2b options (CLI-specific, like Claude's `agentsDir` or `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
-- L2↔L3 replacement/null filtering → transform (`aiCommon.mergePool`)
+- L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus
+  the rule enable filter)
 - managed MCP proxy ownership, validation, and systemd unit aggregation →
   `lib/ai/sharedOptions.nix` + `lib/ai/mcpProxy.nix`
 - per-scope package ownership guard → `checks/module-provenance/helpers.nix`

@@ -47,7 +47,7 @@
               default = false;
             };
             rules = lib.mkOption {
-              type = lib.types.attrsOf (lib.types.nullOr aiCommon.ruleModule);
+              type = lib.types.attrsOf aiCommon.ruleModule;
               default = {};
             };
             skills = lib.mkOption {

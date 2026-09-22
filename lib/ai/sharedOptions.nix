@@ -4,7 +4,8 @@
 # Imported by every mkAiApp module so per-app layers
 # (ai.<name>.mcpServers, etc.) compose with these top-level pools. Scalar
 # defaults allow per-app overrides, lists concatenate, and named attrset pools
-# use shallow per-runtime replacement with null tombstones.
+# use shallow per-runtime replacement. Nullable pools use null tombstones;
+# rules use their entry-local `enable` flag.
 {
   config,
   lib,
@@ -137,8 +138,7 @@ in {
 
   options.ai = {
     context = lib.mkOption {
-      # An empty record is the unset value. Wrapping the checked submodule in
-      # `nullOr` would bypass its outer XOR check during nested merging.
+      # An empty record is the unset value; explicit content auto-enables it.
       type = aiCommon.optionalContentModule;
       default = {};
       apply = aiCommon.validateOptionalContent;
@@ -149,7 +149,9 @@ in {
         the higher-priority definition supplies the content whichever field it
         targets; definitions at the same priority conflict. Runtime-specific
         context appends after this root content in the runtime's single
-        always-on file; its `filename` controls that native artifact.
+        always-on file; same-priority `text` definitions concatenate in module
+        order. Set `enable = false` to omit this context. Its `filename`
+        controls that native artifact.
       '';
       example = lib.literalExpression ''{ source = ./ai-context.md; }'';
     };
@@ -171,7 +173,7 @@ in {
     };
 
     rules = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.nullOr aiCommon.ruleModule);
+      type = lib.types.attrsOf aiCommon.ruleModule;
       default = {};
       apply = aiCommon.validateRules;
       description = ''
@@ -185,12 +187,14 @@ in {
         instead appends rules in key order
         to its single AGENTS.md, translating `matcher` to a prose scope note.
         Kimchi has no rules pool, so root rules silently degrade for it.
-        Per-app entries replace root entries at the same key; null suppresses
-        an inherited rule for that runtime. For each non-null rule, `text` and
+        Per-app entries replace root entries at the same key; set
+        `enable = false` to suppress an inherited rule for that runtime. For
+        each rule, `text` and
         `source` definitions at different module priorities resolve to the
         higher-priority definition whichever field it targets; definitions at
-        the same priority conflict. Kiro's native `inclusion` override exists
-        only on `ai.kiro.rules`.
+        the same priority conflict. Same-priority `text` definitions concatenate
+        in module order. Kiro's native `inclusion` override exists only on
+        `ai.kiro.rules`.
       '';
       example = lib.literalExpression ''
         {

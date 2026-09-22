@@ -91,6 +91,88 @@ in {
         && aiCommon.contentFileEntry rule == {text = "Consumer rule.";}
     );
 
+    module-rule-disable-omits-every-runtime-output = mkTest "rule-disable-omits-every-runtime-output" (
+      let
+        activeMarker = "ACTIVE-RULE-MUST-BE-EMITTED";
+        disabledMarker = "DISABLED-RULE-MUST-NOT-BE-EMITTED";
+        config = {
+          ai = {
+            claude.enable = true;
+            codex.enable = true;
+            copilot.enable = true;
+            kimchi.enable = true;
+            kiro.enable = true;
+            rules.active = {
+              matcher = ["**/*.nix"];
+              text = activeMarker;
+            };
+            rules.disabled = {
+              matcher = ["**/*.nix"];
+              text = disabledMarker;
+            };
+            claude.rules.disabled.enable = false;
+            codex.rules.disabled.enable = false;
+            copilot.rules.disabled.enable = false;
+            kiro.rules.disabled.enable = false;
+          };
+        };
+        hmFiles = (evalHm config).config.home.file;
+        devenvFiles = (evalDevenv config).config.files;
+        outputsAreCorrect = agentsPath: files:
+          files ? ".claude/rules/active.md"
+          && files ? ".kiro/steering/active.md"
+          && lib.hasInfix activeMarker (files.${agentsPath}.text or "")
+          && !(files ? ".claude/rules/disabled.md")
+          && !(files ? ".github/instructions/disabled.instructions.md")
+          && !(files ? ".kiro/steering/disabled.md")
+          && !(lib.hasInfix disabledMarker (files.${agentsPath}.text or ""));
+      in
+        outputsAreCorrect ".codex/AGENTS.md" hmFiles
+        && outputsAreCorrect "AGENTS.md" devenvFiles
+        && devenvFiles ? ".github/instructions/active.instructions.md"
+    );
+
+    module-text-source-force-empty-disables = mkTest "text-source-force-empty-disables" (
+      let
+        aiTypes = import ../../lib/ai/types.nix {inherit lib;};
+        result = lib.evalModules {
+          modules = [
+            {
+              options.value = lib.mkOption {
+                type = aiTypes.optionalTextSource {description = "test content";};
+              };
+            }
+            {value.source = ../../lib/ai/types.nix;}
+            {value.text = lib.mkForce "";}
+          ];
+        };
+      in
+        !result.config.value.enable && result.config.value.text == ""
+    );
+
+    module-null-source-winner-keeps-text = mkTest "null-source-winner-keeps-text" (
+      let
+        aiCommon = import ../../lib/ai/ai-common.nix {inherit lib;};
+        result = lib.evalModules {
+          modules = [
+            {
+              options.value = lib.mkOption {
+                type = aiCommon.optionalContentModule;
+                default = {};
+              };
+            }
+            {value.source = lib.mkForce null;}
+            {value.text = "Consumer text.";}
+          ];
+        };
+        value = result.config.value;
+      in
+        value.text
+        == "Consumer text."
+        && aiCommon.hasContent value
+        && aiCommon.contentFileEntry value == {text = "Consumer text.";}
+    );
+
     module-rule-rejects-empty-content = mkTest "rule-rejects-empty-content" (!(builtins.tryEval (let
       aiCommon = import ../../lib/ai/ai-common.nix {inherit lib;};
       result = lib.evalModules {
@@ -107,6 +189,25 @@ in {
       };
     in
       builtins.deepSeq result.config.rules.example true)).success);
+
+    module-enabled-rule-rejects-empty-content = mkTest "enabled-rule-rejects-empty-content" (
+      let
+        evaluated = evalHm {};
+        ruleOptions = evaluated.options.ai.rules.type.nestedTypes.elemType.getSubOptions [];
+        enableExists = ruleOptions ? enable;
+        contextRejected =
+          !(builtins.tryEval (let
+            result = evalHm {ai.context.enable = true;};
+          in
+            builtins.deepSeq result.config.ai.context true)).success;
+        ruleRejected =
+          !(builtins.tryEval (let
+            result = evalHm {ai.rules.example.enable = true;};
+          in
+            builtins.deepSeq result.config.ai.rules.example true)).success;
+      in
+        enableExists && contextRejected && ruleRejected
+    );
 
     module-single-context-source-does-not-trigger-ifd = mkTest "single-context-source-does-not-trigger-ifd" (
       let

@@ -8,7 +8,8 @@ applyTo: "packages/semble/**"
 # Semble integrations
 
 > **Last verified:** 2026-09-21 — CLI rule content uses leaf defaults so a
-> consumer's higher-priority inline text can override the packaged source.
+> consumer's higher-priority inline text can override the packaged source, and
+> entry-local `enable` suppresses the generated rule.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -157,13 +158,14 @@ one index. Named MCP entries plus Claude and Codex normalized subagents use a
 whole-entry `mkDefault`, so an ordinary consumer value replaces the generated
 record atomically and `null` suppresses it for that runtime. The CLI rule
 instead defaults each content field: a consumer's higher-priority `text`
-overrides the packaged `source`, which remains visible on the resolved rule.
-Disable `ai.<runtime>.programs.semble.instructions.cli` to retract that
-generated rule. Kiro's runtime-native subagent is not a normalized nullable
-pool: consumers can replace the generated entry atomically, but cannot suppress
-it with `null`. Claude and Codex compose the guidance into their single
-always-loaded `CLAUDE.md` and `AGENTS.md` files. Kiro receives the same named
-rule and writes it to `.kiro/steering/semble.md`.
+overrides the packaged `source`, which remains visible on the resolved rule. Set
+`ai.<runtime>.rules.semble.enable = false` to retract it at the normalized pool,
+or disable `ai.<runtime>.programs.semble.instructions.cli` at its package gate.
+Kiro's runtime-native subagent is not a normalized nullable pool: consumers can
+replace the generated entry atomically, but cannot suppress it with `null`.
+Claude and Codex compose the guidance into their single always-loaded
+`CLAUDE.md` and `AGENTS.md` files. Kiro receives the same named rule and writes
+it to `.kiro/steering/semble.md`.
 
 Home Manager fixes the global cache at `${config.xdg.cacheHome}/semble`, even on
 Darwin where Semble's platform default would otherwise be `~/Library/Caches`.

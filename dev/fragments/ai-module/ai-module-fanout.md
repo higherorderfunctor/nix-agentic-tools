@@ -1,8 +1,7 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-21 — Markdown content sources resolve through the
-> shared text-source type, so package defaults and consumer overrides arbitrate
-> by module priority.
+> **Last verified:** 2026-09-21 — Markdown context and rules resolve through
+> shared text-source types with `enable` suppression and priority arbitration.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -298,17 +297,21 @@ enabled ecosystem whose native model preserves the option's semantics):
   when both are present. The strictly higher-priority definition supplies the
   effective content whichever field it targets, so a consumer `text` can
   override a package-default `source` and a forced `source` can override
-  ordinary `text`; setting both at one priority fails. Claude defaults to
-  `CLAUDE.md`; Codex, Kiro, and Kimchi default to `AGENTS.md`; Copilot defaults
-  to `copilot-instructions.md`. Copilot emits normalized context only on devenv
-  because its live surface is the repository consumed by github.com, not
-  copilot-cli's user home. The transform derives structural `hasMergedContext`
-  metadata before composition, so a final-file replacement or tombstone does not
-  read discarded source-backed root/runtime context.
+  ordinary `text`; setting both at one priority fails. Same-priority `text`
+  definitions concatenate, explicit content auto-enables the record, and
+  `enable = false` omits it. Claude defaults to `CLAUDE.md`; Codex, Kiro, and
+  Kimchi default to `AGENTS.md`; Copilot defaults to `copilot-instructions.md`.
+  Copilot emits normalized context only on devenv because its live surface is
+  the repository consumed by github.com, not copilot-cli's user home. The
+  transform derives structural `hasMergedContext` metadata before composition,
+  so a final-file replacement or tombstone does not read discarded source-backed
+  root/runtime context.
 - `ai.rules` — named Markdown rules. Codex appends these alphabetically to its
   AGENTS.md after context with trace comments. `matcher = null` means always-on;
   non-empty glob lists lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot
-  `applyTo`, and a Codex prose scope preamble. Kiro alone retains native
+  `applyTo`, and a Codex prose scope preamble. Rules default enabled; a
+  per-runtime same-key rule with `enable = false` suppresses an inherited root
+  rule. Same-priority `text` definitions concatenate. Kiro alone retains native
   `manual`/`auto` inclusion overrides. After B7 arbitration, a surviving inline
   Codex AGENTS.md must fit `ai.codex.projectDocMaxBytes` (32 KiB by default), or
   evaluation fails with a final-file diagnostic. A replacement or tombstone
@@ -356,8 +359,9 @@ enabled ecosystem whose native model preserves the option's semantics):
 
 Cross-ecosystem scalar defaults and package-generated per-entry fanouts use
 `mkDefault` so explicit values at the same scope take precedence. Keyed pools
-then apply per-runtime replacement/null negation across scopes; context and
-hooks retain their documented composition semantics.
+then apply per-runtime replacement across scopes; nullable pools use null
+negation, while rules use `enable = false`. Context and hooks retain their
+documented composition semantics.
 
 ### Per-pool capability gate
 
@@ -410,10 +414,10 @@ file into the user-global `${configDir}` and devenv writing the project-local
 Every runtime declares `ai.<runtime>.files`; there is deliberately no root
 `ai.files`. Keys are non-empty normalized relative paths interpreted against the
 backend root (HOME for Home Manager, project root for devenv). Each non-null
-entry carries inline `text` or a store-backed `source`, plus optional
-`executable` intent. Generators contribute whole entries with `mkDefault`; an
-ordinary consumer entry replaces the complete generated file, and null
-suppresses it. Divergent same-priority definitions fail rather than
+entry must set exactly one of inline `text` or a store-backed `source`, plus
+optional `executable` intent. Generators contribute whole entries with
+`mkDefault`; an ordinary consumer entry replaces the complete generated file,
+and null suppresses it. Divergent same-priority definitions fail rather than
 field-merging or concatenating.
 
 The graph is one-way: normalized pools compose, runtime routing chooses a
@@ -610,7 +614,8 @@ option's `definitionsWithLocations`. The declaring module is exempt, which lets
 
 Two consequences to know before changing it. Consumer override keys are
 `ai.<runtime>.skills.<name>` and `ai.<runtime>.rules.<name>`; package entries
-use `mkDefault`, so an ordinary per-runtime consumer definition or null wins. A
-same-key root entry remains a portable default and is atomically replaced by the
-package's per-runtime value. Two packages claiming that per-runtime key fail the
+use `mkDefault`, so an ordinary per-runtime consumer definition wins. Null
+retracts a skill; `enable = false` retracts a rule. A same-key root entry
+remains a portable default and is atomically replaced by the package's
+per-runtime value. Two packages claiming that per-runtime key fail the
 package-provenance guard (see `collision-semantics.md`).

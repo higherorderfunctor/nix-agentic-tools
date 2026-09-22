@@ -397,10 +397,10 @@ in {
         && !(devenv.options ? stacked-workflows)
     );
 
-    # ── Normalized keyed-pool null types ────────────────────────────
+    # ── Normalized keyed-pool suppression types ────────────────────
     # The merge contract itself is covered once per pool in factory-eval.nix.
-    # This full-tree check pins the other half: every root declaration and every
-    # supported per-runtime declaration accepts the same null tombstone.
+    # This full-tree check pins the other half: nullable pools accept tombstones,
+    # while rules use their entry-local enable flag at every supported scope.
     module-ai-pool-null-types-hm-devenv = mkTest "ai-pool-null-types-hm-devenv" (
       let
         config.ai = {
@@ -408,21 +408,21 @@ in {
           environmentVariables.removed = null;
           lspServers.removed = null;
           mcpServers.removed = null;
-          rules.removed = null;
+          rules.removed.enable = false;
           skills.removed = null;
 
           claude = {
             agents.removed = null;
             lspServers.removed = null;
             mcpServers.removed = null;
-            rules.removed = null;
+            rules.removed.enable = false;
             skills.removed = null;
           };
           codex = {
             agents.removed = null;
             environmentVariables.removed = null;
             mcpServers.removed = null;
-            rules.removed = null;
+            rules.removed.enable = false;
             skills.removed = null;
           };
           copilot = {
@@ -430,7 +430,7 @@ in {
             environmentVariables.removed = null;
             lspServers.removed = null;
             mcpServers.removed = null;
-            rules.removed = null;
+            rules.removed.enable = false;
             skills.removed = null;
           };
           kimchi.environmentVariables.removed = null;
@@ -438,7 +438,7 @@ in {
             environmentVariables.removed = null;
             lspServers.removed = null;
             mcpServers.removed = null;
-            rules.removed = null;
+            rules.removed.enable = false;
             skills.removed = null;
           };
         };
@@ -449,7 +449,12 @@ in {
           && evaluated.config.ai.codex.environmentVariables.removed == null
           && evaluated.config.ai.copilot.mcpServers.removed == null
           && evaluated.config.ai.kimchi.environmentVariables.removed == null
-          && evaluated.config.ai.kiro.skills.removed == null;
+          && evaluated.config.ai.kiro.skills.removed == null
+          && !evaluated.config.ai.rules.removed.enable
+          && !evaluated.config.ai.claude.rules.removed.enable
+          && !evaluated.config.ai.codex.rules.removed.enable
+          && !evaluated.config.ai.copilot.rules.removed.enable
+          && !evaluated.config.ai.kiro.rules.removed.enable;
       in
         keepsNulls (evalHm config) && keepsNulls (evalDevenv config)
     );

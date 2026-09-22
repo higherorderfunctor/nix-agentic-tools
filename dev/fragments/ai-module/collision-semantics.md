@@ -1,7 +1,7 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-21 — Semble's CLI rule is the deliberate
-> leaf-default exception for text-source priority arbitration.
+> **Last verified:** 2026-09-21 — rules and context use entry-local `enable`
+> suppression, and Semble's CLI rule uses text-source priority arbitration.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -31,7 +31,7 @@ commit.
 | B7  | generated native file ↔ runtime file entry        | file    | Generator uses whole-entry `mkDefault`; ordinary entry replaces, null suppresses, divergent same-priority entries fail. |
 | B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                          |
 | B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                  |
-| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops the entry after the shallow merge.                                                                 |
+| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops a nullable-pool entry; `enable = false` drops a rule after the shallow merge.                      |
 
 B3 is why `//` is correct and `recursiveUpdate` is wrong. B7's unit is the
 complete rendered native file, not a key inside it. Its null is a final-output
@@ -49,8 +49,9 @@ The six normalized keyed pools are:
 - `rules`
 - `skills`
 
-Every root and per-runtime declaration uses `attrsOf (nullOr <valueType>)`. For
-a capable runtime, composition is:
+Five pools use `attrsOf (nullOr <valueType>)`; rules use `attrsOf <ruleModule>`,
+whose entries default `enable = true`. For a capable runtime, nullable-pool
+composition is:
 
 ```nix
 lib.filterAttrs (_: value: value != null) (rootPool // runtimePool)
@@ -63,6 +64,11 @@ This ordering is load-bearing:
 3. a same-key runtime null is a tombstone that suppresses the inherited entry;
 4. null is filtered only after precedence, so it cannot disappear before doing
    that work.
+
+Rules preserve the same shallow `rootPool // runtimePool` precedence, then
+filter entries whose `enable` is false. Filtering after precedence is equally
+load-bearing: a disabled runtime rule must survive long enough to replace and
+suppress its inherited root rule.
 
 Entries are atomic across levels. Records are never recursively merged. A second
 runtime with no same-key entry continues to inherit the root value; keep that
@@ -137,24 +143,28 @@ runtime replacement for two owners.
 Repo modules write `ai.<runtime>.<pool>`, never the root `ai.<pool>`. The root
 level belongs to consumers as the portable default surface. A separate
 `rootPoolViolations` provenance guard enforces that boundary. Per-runtime null
-now lets a consumer undo an inherited root entry, but consumers should not have
-to retract package wiring that silently fanned out beyond the package's runtime
-ownership.
+on nullable pools and `enable = false` on rules let a consumer undo an inherited
+root entry, but consumers should not have to retract package wiring that
+silently fanned out beyond the package's runtime ownership.
 
-Package-generated entries normally use a whole-entry `mkDefault`, so an explicit
-consumer value or null at that same per-runtime key wins through ordinary
-module-system priority before root/runtime composition happens. Do not put
-recursive defaults only on fields below a `nullOr` entry boundary: Nix must
-choose the null or record branch before those leaf priorities can arbitrate, and
-reports the option as both null and non-null instead of honoring the tombstone.
+Package-generated entries in nullable pools normally use a whole-entry
+`mkDefault`, so an explicit consumer value or null at that same per-runtime key
+wins through ordinary module-system priority before root/runtime composition
+happens. Do not put recursive defaults only on fields below those `nullOr` entry
+boundaries: Nix must choose the null or record branch before leaf priorities can
+arbitrate. Rules are the exception: their entries are non-null submodules, and
+`enable = false` retracts an inherited rule after root/runtime replacement. That
+shape lets package rule fields use recursive defaults and arbitrate with
+consumer fields directly.
 
 Within the shared text-source type, `text` and `source` arbitrate as one pair: a
 strictly higher-priority definition wins whichever field it targets, while
 same-priority definitions of both fields fail. Semble's generated CLI rule is
 the deliberate package pattern that relies on this contract: it defaults the
 rule fields so a consumer's inline text can override the packaged source while
-the source remains visible. Its runtime `instructions.cli` feature flag is the
-retraction mechanism; do not use a null tombstone for that generated rule.
+the source remains visible. Consumers can retract that generated rule with
+`ai.<runtime>.rules.semble.enable = false`; its runtime `instructions.cli`
+feature flag remains the package-level gate.
 
 Always-on process defaults such as the sandbox-safe SSH command still use the
 internal callback channel instead of writing a hidden normalized-pool
@@ -181,8 +191,9 @@ and testing their distinct composition contracts.
 ### Implementation
 
 `lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
-filter. `lib/ai/app/mkBackendTransform.nix` calls it once for every supported
-pool and hands only the filtered `merged*` values to package callbacks. For MCP,
+filter for nullable pools. `lib/ai/app/mkBackendTransform.nix` calls it once for
+every supported pool, then additionally filters disabled rules, and hands only
+the surviving `merged*` values to package callbacks. For MCP,
 `lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy declarations at each
 scope while preserving null tombstones; only those client views cross the
 root/runtime merge. `lib/ai/sharedOptions.nix` separately aggregates explicit
@@ -217,16 +228,18 @@ size-checked at eval, avoiding IFD.
 
 ### Adding a normalized pool
 
-1. Declare root and per-runtime values as `attrsOf (nullOr <valueType>)`.
+1. Declare root and per-runtime values as `attrsOf (nullOr <valueType>)`, or use
+   a non-null submodule with an entry-local suppression flag when leaf merging
+   is part of the pool's explicit contract.
 2. Add the capability to each consuming app record's `supportedPools`.
 3. Route root and runtime values through `mergePool` before any translation or
    emission.
 4. Add the pool to `normalizedPoolNames` in
    `checks/module-provenance/helpers.nix` so package ownership is checked at
    root and every runtime scope.
-5. Test null-drop with a second-runtime inheritance control, wholesale same-key
-   replacement, package collision diagnostics via `lib.hasInfix`, and a
-   different-key package control.
+5. Test the pool's suppression value with a second-runtime inheritance control,
+   wholesale same-key replacement, package collision diagnostics via
+   `lib.hasInfix`, and a different-key package control.
 
 ### Debugging
 
@@ -237,7 +250,8 @@ nix eval .#homeConfigurations.<host>.config.ai.<pool>
 nix eval .#homeConfigurations.<host>.config.ai.<runtime>.<pool>
 ```
 
-A runtime null at the key is an intentional deletion. For a package collision,
-the check diagnostic names the exact option path and all contributing module
-files; move one contribution to a distinct key or establish a single package
-owner rather than changing root/runtime precedence.
+A runtime null at a nullable-pool key, or `enable = false` at a rule key, is an
+intentional deletion. For a package collision, the check diagnostic names the
+exact option path and all contributing module files; move one contribution to a
+distinct key or establish a single package owner rather than changing
+root/runtime precedence.
