@@ -3,16 +3,17 @@
 /** Extract Kimchi's settings, CLI, and environment surfaces with TypeScript. */
 
 import { readdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const EXTRACTOR_SCHEMA = 2;
 
-// pi derives this name from mutable host branding at module evaluation time, so
-// importing config.js cannot answer for the Kimchi host without running its
-// entire bootstrap. The AST still proves ENV_SESSION_DIR is used as an actual
-// process.env key; this map records pi's published/default spelling.
+// pi derives these names from mutable host branding at module evaluation time,
+// so importing config.js cannot answer for the Kimchi host without running its
+// entire bootstrap. The AST still proves each constant is used as an actual
+// process.env key; this map records pi's published/default spellings.
 const DYNAMIC_ENVIRONMENT_NAMES = {
+  ENV_AGENT_DIR: "PI_CODING_AGENT_DIR",
   ENV_SESSION_DIR: "PI_CODING_AGENT_SESSION_DIR",
 };
 
@@ -455,6 +456,11 @@ function extractConfig(sourceFile, declarations, annotations, checker, ts) {
     properties: interfaceMembers("TelemetryConfig"),
   };
   delete keys.telemetry.properties.apiKey;
+  for (const property of Object.values(keys.telemetry.properties)) {
+    // readTelemetryConfig independently validates each input member and fills
+    // any absent value from an environment value or runtime default.
+    property.optional = true;
+  }
   keys.surveys = {
     ...keys.surveys,
     optional: true,
@@ -500,26 +506,62 @@ function extractConfig(sourceFile, declarations, annotations, checker, ts) {
   };
 
   const discovered = discoverConfigKeys(sourceFile, checker, ts);
-  let apiKeyStringGuard = false;
+  const validationKinds = new Map();
+  function recordValidation(name, kind) {
+    if (!validationKinds.has(name)) validationKinds.set(name, new Set());
+    validationKinds.get(name).add(kind);
+  }
+  function parsedProperty(node) {
+    return ts.isPropertyAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "parsed"
+      ? node.name.text
+      : undefined;
+  }
   function inspectGuard(node) {
     if (
       ts.isBinaryExpression(node) &&
       node.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken &&
       ts.isTypeOfExpression(node.left) &&
-      ts.isPropertyAccessExpression(node.left.expression) &&
-      node.left.expression.name.text === "apiKey" &&
       ts.isStringLiteralLike(node.right) &&
-      node.right.text === "string"
+      ["boolean", "number", "object", "string"].includes(node.right.text)
     ) {
-      apiKeyStringGuard = true;
+      const name = parsedProperty(node.left.expression);
+      if (name) recordValidation(name, node.right.text);
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === "Array" &&
+      node.expression.name.text === "isArray" &&
+      node.arguments.length === 1
+    ) {
+      const name = parsedProperty(node.arguments[0]);
+      if (name) recordValidation(name, "array");
     }
     ts.forEachChild(node, inspectGuard);
   }
-  inspectGuard(sourceFile);
-  if (!apiKeyStringGuard)
-    fail(
-      "config.json validation shape changed: apiKey is no longer guarded as a string",
-    );
+  inspectGuard(readExtras);
+  for (const [name, descriptor] of Object.entries(extras)) {
+    if (!["array", "number", "string"].includes(descriptor.type)) continue;
+    if (!validationKinds.get(name)?.has(descriptor.type)) {
+      fail(
+        `config.json validation shape changed: ${name} is no longer guarded as a ${descriptor.type}`,
+      );
+    }
+  }
+  for (const [alias, canonical] of [
+    ["api_key", "apiKey"],
+    ["device_id", "deviceId"],
+  ]) {
+    const kind = extras[canonical].type;
+    if (!validationKinds.get(alias)?.has(kind)) {
+      fail(
+        `config.json validation shape changed: ${alias} is no longer guarded as a ${kind}`,
+      );
+    }
+  }
   if (discovered.has("harness")) {
     fail(
       "config.json exposes a top-level 'harness' key; this collides with the reserved harness settings namespace",
@@ -1054,9 +1096,10 @@ function commandNames(sourceFile, ts) {
   return names;
 }
 
-function subcommandFlags(sourceFile, ts) {
+function subcommandFlags(nodes, ts) {
   const names = new Set();
   const declaredNames = new Set();
+  const argumentNames = new Set(["arg", "args"]);
   function add(node) {
     if (!ts.isStringLiteralLike(node)) return;
     let name = node.text;
@@ -1066,12 +1109,35 @@ function subcommandFlags(sourceFile, ts) {
   }
   function isArgumentExpression(node) {
     return (
-      (ts.isIdentifier(node) && ["arg", "args"].includes(node.text)) ||
+      (ts.isIdentifier(node) && argumentNames.has(node.text)) ||
       (ts.isElementAccessExpression(node) &&
         ts.isIdentifier(node.expression) &&
-        node.expression.text === "args")
+        argumentNames.has(node.expression.text))
     );
   }
+  function collectArgumentBindings(node) {
+    if (ts.isVariableDeclaration(node) && node.initializer) {
+      if (
+        ts.isArrayBindingPattern(node.name) &&
+        isArgumentExpression(node.initializer)
+      ) {
+        for (const element of node.name.elements) {
+          if (ts.isBindingElement(element) && ts.isIdentifier(element.name))
+            argumentNames.add(element.name.text);
+        }
+      } else if (
+        ts.isIdentifier(node.name) &&
+        (isArgumentExpression(node.initializer) ||
+          (ts.isCallExpression(node.initializer) &&
+            ts.isPropertyAccessExpression(node.initializer.expression) &&
+            isArgumentExpression(node.initializer.expression.expression)))
+      ) {
+        argumentNames.add(node.name.text);
+      }
+    }
+    ts.forEachChild(node, collectArgumentBindings);
+  }
+  for (const node of nodes) collectArgumentBindings(node);
   function visit(node) {
     if (ts.isBinaryExpression(node)) {
       if (isArgumentExpression(node.left)) add(node.right);
@@ -1091,6 +1157,13 @@ function subcommandFlags(sourceFile, ts) {
       ) {
         add(node.arguments[0]);
       }
+    }
+    if (
+      ts.isCaseClause(node) &&
+      ts.isSwitchStatement(node.parent.parent) &&
+      isArgumentExpression(node.parent.parent.expression)
+    ) {
+      add(node.expression);
     }
     if (
       ts.isVariableDeclaration(node) &&
@@ -1114,17 +1187,62 @@ function subcommandFlags(sourceFile, ts) {
     }
     ts.forEachChild(node, visit);
   }
-  visit(sourceFile);
+  for (const node of nodes) visit(node);
   const result = declaredNames.size ? declaredNames : names;
   return [...result]
     .sort()
     .map((name) => ({ names: [name], scope: "subcommand" }));
 }
 
+function calledCommandHelpers(sourceFile, byPath, ts) {
+  const called = new Set();
+  function findCalls(node) {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression))
+      called.add(node.expression.text);
+    ts.forEachChild(node, findCalls);
+  }
+  findCalls(sourceFile);
+
+  const helpers = [];
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      !statement.moduleSpecifier.text.startsWith("./") ||
+      !statement.importClause?.namedBindings ||
+      !ts.isNamedImports(statement.importClause.namedBindings)
+    ) {
+      continue;
+    }
+    const specifier = statement.moduleSpecifier.text;
+    const typescriptSpecifier = specifier.endsWith(".js")
+      ? `${specifier.slice(0, -3)}.ts`
+      : specifier;
+    const importedPath = resolve(
+      dirname(sourceFile.fileName),
+      typescriptSpecifier,
+    );
+    const importedSource = byPath.get(importedPath);
+    if (!importedSource) continue;
+    for (const element of statement.importClause.namedBindings.elements) {
+      if (!called.has(element.name.text)) continue;
+      const importedName = element.propertyName?.text ?? element.name.text;
+      const declaration = importedSource.statements.find(
+        (candidate) =>
+          ts.isFunctionDeclaration(candidate) &&
+          candidate.name?.text === importedName,
+      );
+      if (declaration) helpers.push(declaration);
+    }
+  }
+  return helpers;
+}
+
 function extractCommands(
   declarations,
   packageManagerSource,
   commandSources,
+  byPath,
   ts,
 ) {
   const kimchi = commandDefinitions(
@@ -1163,7 +1281,10 @@ function extractCommands(
       fail(
         `cannot locate the implementation source for kimchi ${command.name}`,
       );
-    const flags = subcommandFlags(sourceFile, ts);
+    const flags = subcommandFlags(
+      [sourceFile, ...calledCommandHelpers(sourceFile, byPath, ts)],
+      ts,
+    );
     if (flags.length) record.flags = flags;
     commands[`kimchi ${command.name}`] = record;
   }
@@ -1187,6 +1308,7 @@ function extractCli(
   piArgsSource,
   packageManagerSource,
   commandSources,
+  byPath,
   ts,
 ) {
   return {
@@ -1194,6 +1316,7 @@ function extractCli(
       declarations,
       packageManagerSource,
       commandSources,
+      byPath,
       ts,
     ),
     globalFlags: mergeFlags(
@@ -1530,6 +1653,7 @@ async function main() {
           requireSource(join(kimchiRoot, `src/commands/${name}.ts`)),
         ]),
       ),
+      byPath,
       ts,
     ),
     config: extractConfig(

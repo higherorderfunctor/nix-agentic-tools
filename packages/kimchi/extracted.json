@@ -72,7 +72,14 @@
             "reachable": true
           }
         ],
-        "path": ["kimchi", "cursor"]
+        "path": ["kimchi", "cursor"],
+        "flags": [
+          { "names": ["--global"], "scope": "subcommand" },
+          { "names": ["--project"], "scope": "subcommand" },
+          { "names": ["--scope"], "scope": "subcommand" },
+          { "names": ["--scope=global"], "scope": "subcommand" },
+          { "names": ["--scope=project"], "scope": "subcommand" }
+        ]
       },
       "kimchi gsd2": {
         "help": "Install / configure GSD2 with Kimchi",
@@ -82,7 +89,14 @@
             "reachable": true
           }
         ],
-        "path": ["kimchi", "gsd2"]
+        "path": ["kimchi", "gsd2"],
+        "flags": [
+          { "names": ["--global"], "scope": "subcommand" },
+          { "names": ["--project"], "scope": "subcommand" },
+          { "names": ["--scope"], "scope": "subcommand" },
+          { "names": ["--scope=global"], "scope": "subcommand" },
+          { "names": ["--scope=project"], "scope": "subcommand" }
+        ]
       },
       "kimchi install": {
         "implementations": [
@@ -136,7 +150,14 @@
             "reachable": true
           }
         ],
-        "path": ["kimchi", "openclaw"]
+        "path": ["kimchi", "openclaw"],
+        "flags": [
+          { "names": ["--global"], "scope": "subcommand" },
+          { "names": ["--project"], "scope": "subcommand" },
+          { "names": ["--scope"], "scope": "subcommand" },
+          { "names": ["--scope=global"], "scope": "subcommand" },
+          { "names": ["--scope=project"], "scope": "subcommand" }
+        ]
       },
       "kimchi opencode": {
         "help": "Configure OpenCode to use Kimchi (and launch it)",
@@ -146,7 +167,14 @@
             "reachable": true
           }
         ],
-        "path": ["kimchi", "opencode"]
+        "path": ["kimchi", "opencode"],
+        "flags": [
+          { "names": ["--global"], "scope": "subcommand" },
+          { "names": ["--project"], "scope": "subcommand" },
+          { "names": ["--scope"], "scope": "subcommand" },
+          { "names": ["--scope=global"], "scope": "subcommand" },
+          { "names": ["--scope=project"], "scope": "subcommand" }
+        ]
       },
       "kimchi remove": {
         "implementations": [
@@ -165,7 +193,11 @@
             "reachable": true
           }
         ],
-        "path": ["kimchi", "resources"]
+        "path": ["kimchi", "resources"],
+        "flags": [
+          { "names": ["--help"], "scope": "subcommand" },
+          { "names": ["-h"], "scope": "subcommand" }
+        ]
       },
       "kimchi setup": {
         "help": "Run the interactive setup wizard",
@@ -187,10 +219,15 @@
         ],
         "path": ["kimchi", "setup-tools"],
         "flags": [
+          { "names": ["--global"], "scope": "subcommand" },
           {
             "names": ["--inject"],
             "scope": "subcommand"
-          }
+          },
+          { "names": ["--project"], "scope": "subcommand" },
+          { "names": ["--scope"], "scope": "subcommand" },
+          { "names": ["--scope=global"], "scope": "subcommand" },
+          { "names": ["--scope=project"], "scope": "subcommand" }
         ]
       },
       "kimchi uninstall": {
@@ -918,11 +955,13 @@
         "properties": {
           "enabled": {
             "typeExpression": "boolean",
-            "type": "boolean"
+            "type": "boolean",
+            "optional": true
           },
           "endpoint": {
             "typeExpression": "string",
-            "type": "string"
+            "type": "string",
+            "optional": true
           },
           "headers": {
             "typeExpression": "{ [x: string]: string; }",
@@ -930,11 +969,13 @@
             "additionalProperties": {
               "typeExpression": "string",
               "type": "string"
-            }
+            },
+            "optional": true
           },
           "metricsEndpoint": {
             "typeExpression": "string",
-            "type": "string"
+            "type": "string",
+            "optional": true
           }
         },
         "optional": true,
@@ -1200,7 +1241,7 @@
       },
       "PI_CODING_AGENT_DIR": {
         "consumerOverridable": false,
-        "readBy": ["kimchi"],
+        "readBy": ["kimchi", "pi"],
         "controls": "pi agent configuration directory",
         "reason": "entry.ts overwrites it with ~/.config/kimchi/harness"
       },
