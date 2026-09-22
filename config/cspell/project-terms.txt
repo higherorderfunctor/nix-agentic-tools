@@ -9,6 +9,7 @@ agentskills
 agentsmd
 agnix
 aihubmix
+aioptimizer
 anthropics
 APFS
 applyto
@@ -54,6 +55,7 @@ caddyfile
 calen
 cands
 caoff
+castai
 catchable
 catppuccin
 caubut
@@ -73,6 +75,7 @@ codewhisperer
 commondir
 completionist
 configdir
+Consolas
 contentpkgs
 convco
 cooldown
@@ -100,6 +103,7 @@ diffutils
 direntry
 direnv
 direnvrc
+disableable
 disjointness
 docnix
 docsite
@@ -110,6 +114,7 @@ drainedness
 drvs
 dsolve
 dunder
+earendil
 EEXIST
 elicitations
 emnapi
@@ -121,6 +126,7 @@ epid
 epistemics
 esbuild
 etime
+evals
 execpolicy
 execve
 extensionless
@@ -151,6 +157,7 @@ gitbook
 gitdir
 gitfile
 githubcopilot
+gitidentity
 gitref
 gitrevise
 glab
@@ -208,6 +215,7 @@ kanagawa
 kasdirs
 kasid
 keyspace
+kimi
 kiro
 kirocli
 kirodotdev
@@ -248,6 +256,7 @@ mdbook
 mdformat
 memoizer
 memsize
+Menlo
 mergetool
 metacharacter
 misattributes
@@ -255,6 +264,7 @@ miscited
 misordered
 mlen
 modelcontextprotocol
+moderations
 modfmt
 moff
 mojibake
@@ -298,6 +308,7 @@ oneshot
 ONLN
 openat
 openclaw
+opencode
 openhands
 openmemory
 operationalizes
@@ -353,6 +364,7 @@ recognised
 reflog
 reftable
 regen
+rehosted
 reimplementation
 relitigate
 relpath
@@ -360,9 +372,13 @@ remapper
 reparent
 replayable
 repoint
+repointed
+repointing
+repoints
 reprioritize
 repros
 rerere
+rescan
 restager
 revertibility
 revset
@@ -374,6 +390,7 @@ rollup
 rootfs
 rsbuild
 rspack
+rsyncs
 rulesdir
 rumdl
 rustc
@@ -408,6 +425,7 @@ srcs
 sshsign
 starlark
 startswith
+startupcompletedz
 statix
 stdenv
 stopword
@@ -439,6 +457,7 @@ toolsets
 tophat
 toplevel
 tostring
+traceparent
 trailcomma
 treefmt
 tryeval
@@ -450,6 +469,7 @@ ultracode
 unapprove
 unbuildable
 uncacheable
+uncallable
 undimensioned
 undmg
 unexecutable
@@ -481,6 +501,7 @@ usebruno
 userns
 valkey
 vendorhash
+vllm
 watchlist
 webp
 wikilink
