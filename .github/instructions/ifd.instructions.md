@@ -7,8 +7,8 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-09-19 — Oxlint uses a name-only pnpm patch with
-> behavioral verification; version and calendar gates are retired.
+> **Last verified:** 2026-09-21 — Kimchi measures its source and exact pi
+> dependency without reading the derivation at evaluation time.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -168,12 +168,14 @@ minutes later inside `nix-update`.
 
 ### Extracted sidecars are the IFD-free path — and their drift check is not a correctness gate
 
-`mkClaudeExtract`, `mkCodexExtract`, and `mkKiroExtract` in each CLI owner's
-`lib/packaging.nix` probe a packaged binary at BUILD time (`passthru.extracted`)
-and emit a JSON sidecar that is COMMITTED (`packages/<owner>/extracted.json`).
-Modules `builtins.readFile` the committed file, never the derivation, so option
-surfaces derived from a binary cost no IFD. `checks/<pkg>-extracted.nix` then
-compares committed against freshly-built to catch a stale sidecar.
+Each measured package exposes a BUILD-time `passthru.extracted` and emits a JSON
+sidecar that is COMMITTED (`packages/<owner>/extracted.json`). Binary probes use
+`mkClaudeExtract`, `mkCodexExtract`, and `mkKiroExtract`; glab and Kimchi
+instead measure pinned source inputs. Consumers read the committed file, never
+the derivation, so option surfaces derived from it cost no IFD. Kimchi's sidecar
+is measurement only until its option shape is settled.
+`checks/<pkg>-extracted.nix` then compares committed against freshly built
+output to catch a stale sidecar.
 
 Kiro's `models` field is the exception to the binary source: it is derived from
 the committed public documentation snapshot, refreshed by the update job even
@@ -181,8 +183,8 @@ without a CLI release. Its live model list requires authentication and varies by
 account. See `packages/kiro-cli/docs/settings-shape.md` for the source boundary
 and measured exclusions.
 
-**Two of the four are no longer greps, and that is the direction of travel.**
-`glab`'s extract is a Go program compiled against upstream's own
+**Three of the five are no longer binary greps, and that is the direction of
+travel.** `glab`'s extract is a Go program compiled against upstream's own
 `internal/config.KeySchema`, inline in
 `packages/glab/packages/ai/devTools/glab/package.nix`. `mkClaudeExtract` unpacks
 the Bun single-exec's module graph
@@ -194,7 +196,10 @@ than anything this repo recognizes by eye. Everything located by that path is
 located by CONTENT — never a chunk filename, a minified identifier or a byte
 offset, none of which the macOS and Linux builds of one version agree on. That
 is what lets ONE sidecar be committed for both platforms; the darwin `build` job
-is the only place that claim is ever tested by a build.
+is the only place that claim is ever tested by a build. Kimchi's Python
+extractor reads the hash-pinned release source plus the exact pi npm package
+declared by that release. It measures both native settings files, both CLI
+layers, and both environment namespaces without unpacking the Bun executable.
 
 Reach for a grep only for facts that are genuinely outside the artifact's own
 schema. Two survive in `mkClaudeExtract` for exactly that reason: the launch-pin
@@ -221,7 +226,7 @@ bump. Fix the wiring; the file is a symptom.
 **A `passthru.extracted` with no matching `extraExtract` is therefore a LATENT
 bump failure**, not a cosmetic gap: it is guaranteed red the first time the
 version moves, and completely silent before that. glab shipped that way and the
-gap sat invisible from #560 until its first-ever bump (#621). If you add a fifth
+gap sat invisible from #560 until its first-ever bump (#621). If you add another
 extracted package, wire the regeneration in the same commit.
 
 Where it runs, which is what determines when it CANNOT run: `extraExtract` is

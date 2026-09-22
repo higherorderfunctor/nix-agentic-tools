@@ -1,8 +1,7 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-09-19 — Kiro refreshes its public model snapshot
-> outside the binary version check; pinned build identity and consumer guards
-> are preserved.
+> **Last verified:** 2026-09-21 — Kimchi's source-derived sidecar participates
+> in the same self-healing extraction loop as binary-derived sidecars.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -538,7 +537,9 @@ runs `vu.mkExtractRegen` after the hash fixer. Its extract BUILDS `src` and
 producing a schema. `chatgpt-codex` and `claude-code` fetch prebuilt binaries
 and pass `mkExtractRegen` alone. Kiro also fetches a prebuilt binary, but its
 update wrapper refreshes the public model snapshot before regeneration on EVERY
-sweep: model changes do not wait for a binary version bump.
+sweep: model changes do not wait for a binary version bump. Kimchi separately
+pins its release source and exact pi npm dependency, refreshes both after a
+binary version bump, and then runs `mkExtractRegen` against those source trees.
 
 Wiring that regeneration is not optional for an extracted package, and glab
 demonstrates the cost of missing it: it was the one such package that never had
