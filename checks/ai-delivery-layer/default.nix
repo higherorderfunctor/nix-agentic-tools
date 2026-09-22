@@ -407,7 +407,7 @@ in {
           sibling = fact;
         };
         kimchiContext = withSibling {
-          evaluate = evalDevenv;
+          evaluate = evalHm;
           path = ".config/kimchi/harness/AGENTS.md";
           runtime = "kimchi";
           sibling = fact;
