@@ -7,13 +7,13 @@ applyTo: "lib/ai/ai-common.nix,packages/kiro-cli/lib/packaging.nix,packages/kiro
 
 ## Kiro settings: a flat format with object values, and where the key stops
 
-> **Last verified:** 2026-09-19 — model suggestions join the extracted sidecar
-> from a public documentation snapshot, independently of CLI releases.
+> **Last verified:** 2026-09-21 — Kiro's native settings file is exposed as
+> `ai.kiro.native.settings`; model suggestions still use the public snapshot.
 
 ### Model suggestions are a public catalog, not an account entitlement list
 
-`nativeSettings.chat.defaultModel` reads `extracted.json.models` as a soft enum.
-Any string remains accepted. The model field is derived from
+`native.settings.chat.defaultModel` reads `extracted.json.models` as a soft
+enum. Any string remains accepted. The model field is derived from
 `model-catalog.json`, a snapshot of the names in
 [Kiro's public comparison table](https://kiro.dev/docs/models.md). The other
 extracted fields still come from the pinned binary.
@@ -55,8 +55,8 @@ establish a complete suggestion list.
 ### Flat settings and object values
 
 `~/.kiro/settings/cli.json` is FLAT: its keys are dotted strings, not nested
-objects. `nativeSettings` lets you write the nested Nix that reads naturally and
-`flattenKiroSettings` lowers it:
+objects. `native.settings` lets you write the nested Nix that reads naturally
+and `flattenKiroSettings` lowers it:
 
 ```nix
 { mcp.loadedBefore = true; chat.enableTangentMode = true; }

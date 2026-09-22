@@ -201,7 +201,7 @@ The ai module fans out TWO kinds of configuration:
   rejects the configuration instead of silently losing the grant. Direct payload
   packages may declare `passthru.kiroFhsSandbox = false`; the overlay does this
   for darwin and pre-split nixpkgs.
-- `ai.codex.nativeSettings` — typed stable keys plus a TOML-compatible native
+- `ai.codex.native.settings` — typed stable keys plus a TOML-compatible native
   freeform tail. Its model defaults to `gpt-6-astra` and reasoning effort to
   `xhigh` on both backends. Explicit native values override these defaults;
   normalized reasoning effort also overrides the native option default. Setting
@@ -253,13 +253,13 @@ The ai module fans out TWO kinds of configuration:
   the two other required native fields. `instructions.source` reads a packaged
   file into that text. Reserved core fields cannot be redefined in `codex`.
   Global concurrency, model/effort defaults, and interruption behavior live in
-  the typed `ai.codex.nativeSettings.agents` table.
+  the typed `ai.codex.native.settings.agents` table.
 - `ai.codex.hooks.<Event>` — Codex-native matcher groups and command handlers,
   appended after portable `ai.hooks` groups and emitted in adjacent
   `hooks.json`. Typed native additions include `commandWindows`,
   `statusMessage`, and `additionalContextLimit`; a JSON-compatible tail remains
   for forward compatibility. Typed hooks cannot coexist with inline
-  `ai.codex.nativeSettings.hooks` at one layer because Codex loads both
+  `ai.codex.native.settings.hooks` at one layer because Codex loads both
   additively and warns rather than applying normal config precedence. Nix
   ownership does not make these native-policy hooks: Codex still requires
   `/hooks` review and hash-based trust before user/project handlers run.
@@ -280,7 +280,7 @@ enabled ecosystem whose native model preserves the option's semantics):
   Claude and Codex lower the resolved value to native `effortLevel` and
   `model_reasoning_effort`; runtimes without a lossless lowering retain the
   normalized value without emitting a native key. Values that only one runtime
-  persists remain under that runtime's `nativeSettings`. An explicit native
+  persists remain under that runtime's `native.settings`. An explicit native
   Claude/Codex effort key still has normal option priority over the derived
   normalized default, and a native null excludes that runtime from emission.
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
@@ -362,7 +362,7 @@ enabled ecosystem whose native model preserves the option's semantics):
   case to native snake case. Literal `httpHeaders` are store-visible;
   `envHttpHeaders` and `bearerTokenEnvVar` name environment variables so secret
   values never enter generated TOML. Direct
-  `ai.codex.nativeSettings.mcp_servers` cannot be combined with either typed
+  `ai.codex.native.settings.mcp_servers` cannot be combined with either typed
   pool because their table ownership would be ambiguous. Credential-injecting
   `proxy.enable` entries lower at their declaration scope before pool merging: a
   used top-level declaration owns one shared managed proxy and only its
@@ -379,7 +379,7 @@ enabled ecosystem whose native model preserves the option's semantics):
   joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
   is a different thing and still is — that filters what SPAWNED commands
   inherit, while this pool configures the CLI process itself. Claude is the one
-  exclusion: it has no wrapper here, and `ai.claude.nativeSettings.env` is its
+  exclusion: it has no wrapper here, and `ai.claude.native.settings.env` is its
   native equivalent.
 
   **Never reach for Home Manager session variables or devenv `env` to deliver a
@@ -1288,7 +1288,7 @@ path types".
   declares the same closed `settings` submodule. Each field resolves root versus
   per-runtime with `resolveOverride`; native lowering remains per-runtime and
   may support only a subset of fields. Runtime-shaped passthrough is separate
-  under `nativeSettings` and is not a normalized pool.
+  under `native.settings` and is not a normalized pool.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over
@@ -1422,8 +1422,8 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-19 — the supported fold defaults ordinary
-> normalized options consumed by one runtime delivery transformer.
+> **Last verified:** 2026-09-21 — runtime-shaped settings live at
+> `ai.<runtime>.native.settings`, outside the normalized capability fold.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -1450,7 +1450,7 @@ it cannot reintroduce the `_module.args` recursion documented against
 `proxyIsSupported`.
 
 A same-named native option does not imply normalized-pool support.
-Runtime-shaped passthrough now lives under `nativeSettings`, independently of
+Runtime-shaped passthrough now lives under `native.settings`, independently of
 the capability list. Normalized `settings` is the deliberate uniform exception:
 all five runtimes list it so the same closed schema is available at every
 runtime scope, even when a particular field currently has a lossless native
@@ -1473,9 +1473,9 @@ Normalized settings use that helper per field. For example,
 `ai.claude.settings.reasoningEffort = "low"` overrides a root
 `ai.settings.reasoningEffort = "high"` for Claude only; Codex still inherits
 `"high"`. A null runtime value inherits the root. This is distinct from
-`nativeSettings`, which carries runtime-shaped passthrough and typed-native keys
-and participates in native option-priority rules only after normalized values
-have been resolved.
+`native.settings`, which carries runtime-shaped passthrough and typed-native
+keys and participates in native option-priority rules only after normalized
+values have been resolved.
 
 `lib.ai.program.mkProgram` applies the same rule to every leaf of a program
 specification. Root declarations retain their ordinary types and defaults;
@@ -1494,13 +1494,13 @@ feature default without replacing unrelated leaves.
 only when `shell` appears in the app record's `supportedPools`. There is no
 sibling shell-specific capability flag.
 
-| runtime | knob                       | delivery                               |
-| ------- | -------------------------- | -------------------------------------- |
-| Claude  | `CLAUDE_CODE_SHELL`        | `nativeSettings.env` → `settings.json` |
-| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`               |
-| Kiro    | `SHELL` (own process env)  | launcher wrapper `export`              |
-| Copilot | **unknown — verified gap** | excluded                               |
-| Kimchi  | unassessed                 | excluded                               |
+| runtime | knob                       | delivery                                |
+| ------- | -------------------------- | --------------------------------------- |
+| Claude  | `CLAUDE_CODE_SHELL`        | `native.settings.env` → `settings.json` |
+| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`                |
+| Kiro    | `SHELL` (own process env)  | launcher wrapper `export`               |
+| Copilot | **unknown — verified gap** | excluded                                |
+| Kimchi  | unassessed                 | excluded                                |
 
 Four runtimes were asked for; five go through `mkAiApp`. Kimchi is easy to miss
 because the issue that requested this never mentioned it.
@@ -1597,7 +1597,7 @@ three runtimes demonstrably do not perform.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it
-  has no wrapper here and `nativeSettings.env` is its native equivalent.
+  has no wrapper here and `native.settings.env` is its native equivalent.
 - **One precedence rule, everywhere: module defaults merge UNDER the consumer's
   `environmentVariables`, so an explicit entry wins.** Codex briefly did the
   reverse — typed option last, on the reasoning that the typed surface is more

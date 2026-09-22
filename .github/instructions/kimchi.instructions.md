@@ -7,9 +7,9 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-19 — one delivery transformer serves both backends;
-> backend config callbacks and document compatibility helpers are removed. Full
-> lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> **Last verified:** 2026-09-21 — Kimchi's two native settings files are named
+> leaves under `ai.kimchi.native`. Full lineage:
+> `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -23,7 +23,7 @@ lands. Backend config callbacks are rejected; the public backend selectors share
 one implementation directly. Kimchi needs no backend split in its delivery
 description.
 
-The factory consumes Kimchi-shaped JSON from `ai.kimchi.nativeSettings`. The
+The factory consumes Kimchi-shaped JSON from `ai.kimchi.native.settings`. The
 closed `ai.kimchi.settings` submodule is the shared normalized surface; a field
 may be present there before Kimchi has a lossless native lowering, in which case
 it remains declarative data rather than being guessed into either native file.

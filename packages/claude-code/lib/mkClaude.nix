@@ -30,16 +30,16 @@
     permission, it does not oblige you to delegate.
   '';
 
-  # The `nativeSettings` option surface: one option per path in the packaged
+  # The `native.settings` option surface: one option per path in the packaged
   # binary's own settings schema, merged with the hand-authored exceptions.
   # `.report` is what packages/claude-code/checks/claude-settings-schema.nix asserts on, so an
   # exception aimed at a key the binary no longer declares fails CI rather than
   # sitting here unnoticed.
-  nativeSettingsSurface = import ./nativeSettingsOptions.nix {
+  nativeFileSurface = import ./nativeOptions.nix {
     inherit extracted lib pkgs;
   };
 
-  # Guard for the freeform `nativeSettings` tail: every key the packaged
+  # Guard for the freeform `native.settings` tail: every key the packaged
   # binary's own extracted settings schema does not declare is a hard failure
   # unless `allowUnrecognizedSettings` names it. Claude ignores an unknown
   # settings key SILENTLY, so without this a misspelling looks applied and does
@@ -55,17 +55,17 @@
   #
   # `cfg.package.version` is read ONLY inside message strings, so a passing
   # assertion never forces the package (and never triggers overlay IFD).
-  nativeSettingsAssertions = cfg:
+  nativeFileAssertions = cfg:
     unrecognizedSettings.mkAssertions {
       declared = extracted.settings or null;
       # The tree actually written — identical to the HM
-      # `settings = aiCommon.filterNulls cfg.nativeSettings` write below.
+      # `settings = aiCommon.filterNulls cfg.native.settings` write below.
       # Filtering FIRST is load-bearing: a typed sub-option sitting at its
       # `null` default would otherwise report itself the day upstream renames
       # that key, for every consumer, including ones who never set it.
-      settings = aiCommon.filterNulls cfg.nativeSettings;
+      settings = aiCommon.filterNulls cfg.native.settings;
       allowed = cfg.allowUnrecognizedSettings;
-      optionPath = "ai.claude.nativeSettings";
+      optionPath = "ai.claude.native.settings";
       allowOptionPath = "ai.claude.allowUnrecognizedSettings";
       version = cfg.package.version or null;
       # Keys THIS MODULE writes are reported against the option that writes
@@ -214,9 +214,9 @@
   # pool cannot implement this option and a typed one is needed.
   #
   # `env` is not a normalized settings key — it rides the native freeform
-  # JSON tail — so this composes with a consumer's other `nativeSettings.env` entries rather
+  # JSON tail — so this composes with a consumer's other `native.settings.env` entries rather
   # than replacing the attrset. mkDefault keeps an explicit
-  # `ai.claude.nativeSettings.env.CLAUDE_CODE_SHELL` winning over the option.
+  # `ai.claude.native.settings.env.CLAUDE_CODE_SHELL` winning over the option.
   #
   # NOTE for anyone debugging a shell that did not take effect: Claude
   # SILENTLY falls back when the path is not executable — no warning, exit
@@ -231,7 +231,7 @@
   # into settings.json. Both the typed shell and the module-contributed
   # sandbox-safe SSH command ride it.
   #
-  # mkDefault keeps an explicit `ai.claude.nativeSettings.env.<KEY>` winning, which
+  # mkDefault keeps an explicit `ai.claude.native.settings.env.<KEY>` winning, which
   # is the same precedence the wrapper harnesses get by merging module
   # defaults UNDER the consumer's pool.
   shellSettings = {
@@ -240,11 +240,11 @@
   }:
     lib.mkMerge [
       (lib.mkIf (resolvedShell != null) {
-        ai.claude.nativeSettings.env.CLAUDE_CODE_SHELL =
+        ai.claude.native.settings.env.CLAUDE_CODE_SHELL =
           lib.mkDefault (lib.getExe resolvedShell);
       })
       {
-        ai.claude.nativeSettings.env =
+        ai.claude.native.settings.env =
           lib.mapAttrs (_: lib.mkDefault) moduleEnvironmentVariables;
       }
     ];
@@ -304,12 +304,12 @@ in
           }
         '';
       };
-      nativeSettings = lib.mkOption {
+      native.settings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
           # Generated from the packaged binary's own settings schema, merged
-          # with the hand-authored exceptions — see nativeSettingsOptions.nix.
-          inherit (nativeSettingsSurface) options;
+          # with the hand-authored exceptions — see nativeOptions.nix.
+          inherit (nativeFileSurface) options;
         };
         default = {};
         description = ''
@@ -336,10 +336,10 @@ in
         default = [];
         example = ["someBrandNewKey"];
         description = ''
-          Dotted paths under `nativeSettings` that may be written even though
+          Dotted paths under `native.settings` that may be written even though
           the packaged claude-code binary does not declare them.
 
-          The freeform tail of `nativeSettings` exists so a key upstream ships
+          The freeform tail of `native.settings` exists so a key upstream ships
           today is settable today. Its cost is that a TYPO is shaped exactly
           like a brand-new key — and Claude ignores an unknown settings key
           silently, so a misspelling looks applied and does nothing. Every key
@@ -348,7 +348,7 @@ in
           HARD FAILURE unless it is listed here:
 
           ```nix
-          ai.claude.nativeSettings.someBrandNewKey = true;
+          ai.claude.native.settings.someBrandNewKey = true;
           ai.claude.allowUnrecognizedSettings = ["someBrandNewKey"];
           ```
 
@@ -392,7 +392,7 @@ in
           (that is `settings.workflowKeywordTriggerEnabled`, orthogonal).
           When true, writes `settings.ultracode = true` (⚠ see caveat) and
           `settings.enableWorkflows = true` via mkDefault, so an explicit
-          `ai.claude.nativeSettings.*` still wins. Does NOT set effortLevel —
+          `ai.claude.native.settings.*` still wins. Does NOT set effortLevel —
           ultracode implies xhigh unconditionally.
 
           ⚠ CAVEAT: the `ultracode` settings key is UNDOCUMENTED and
@@ -728,14 +728,14 @@ in
       };
       # MCP belongs in .mcp.json, never the project settings document. Hooks
       # keep their separate contribution so the legacy and typed maps append.
-      gapSettings = aiCommon.filterNulls (removeAttrs cfg.nativeSettings ["hooks" "mcpServers"]);
+      gapSettings = aiCommon.filterNulls (removeAttrs cfg.native.settings ["hooks" "mcpServers"]);
     in
       lib.mkMerge [
-        # Unrecognized-key guard for the freeform nativeSettings tail. One
-        # builder, both backends — see nativeSettingsAssertions.
-        {assertions = nativeSettingsAssertions cfg;}
+        # Unrecognized-key guard for the freeform native.settings tail. One
+        # builder, both backends — see nativeFileAssertions.
+        {assertions = nativeFileAssertions cfg;}
         (lib.mkIf (resolvedSettings.reasoningEffort != null) {
-          ai.claude.nativeSettings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
+          ai.claude.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
         })
         (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
         # L2b → L3: expand `ai.claude.agentsDir` into per-CLI
@@ -770,19 +770,19 @@ in
         # Meta option: ultracode on at every launch. Writes the
         # (undocumented, officially session-only) `ultracode` key plus the
         # `enableWorkflows` master toggle via mkDefault so an explicit
-        # `ai.claude.nativeSettings.*` still wins. This is the single place the
+        # `ai.claude.native.settings.*` still wins. This is the single place the
         # off-label `ultracode` key is written (its risk is disclosed in the
         # ultracodeOnLaunch description). No effortLevel — ultracode implies
         # xhigh. No workflowKeywordTriggerEnabled — orthogonal per-turn key.
         (lib.mkIf cfg.ultracodeOnLaunch {
-          ai.claude.nativeSettings = {
+          ai.claude.native.settings = {
             ultracode = lib.mkDefault true;
             enableWorkflows = lib.mkDefault true;
           };
         })
         # Declare the sink once: list-valued sink paths concatenate if each
         # content contribution repeats them, producing a nested option path.
-        (lib.mkIf (isHm || effectiveHooks != {} || gapSettings != {} || (cfg.nativeSettings.hooks != null && cfg.nativeSettings.hooks != {})) {
+        (lib.mkIf (isHm || effectiveHooks != {} || gapSettings != {} || (cfg.native.settings.hooks != null && cfg.native.settings.hooks != {})) {
           ai.claude.files.".claude/settings.json" = {
             format = "json";
             method = "upstream";
@@ -830,7 +830,7 @@ in
             (lib.mapAttrs aiCommon.mkClaudeLspConfig mergedLspServers))
           (hmSurface ".claude/skills/claude-code-home-manager/.mcp.json" "mcpServers"
             (lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers))
-          (settings (aiCommon.filterNulls cfg.nativeSettings))
+          (settings (aiCommon.filterNulls cfg.native.settings))
           (lib.mkIf (mergedServers != {}) (settings {
             env.ENABLE_LSP_TOOL = lib.mkDefault "1";
           }))
@@ -875,8 +875,8 @@ in
           }
           # Test the value: hooks is a declared nullable option, so an
           # attribute fallback would still pass null to the JSON merge.
-          (lib.mkIf (cfg.nativeSettings.hooks != null && cfg.nativeSettings.hooks != {})
-            (settings {hooks = cfg.nativeSettings.hooks;}))
+          (lib.mkIf (cfg.native.settings.hooks != null && cfg.native.settings.hooks != {})
+            (settings {hooks = cfg.native.settings.hooks;}))
           (lib.mkIf (gapSettings != {}) (settings gapSettings))
           # Preserve the established project layout for script bodies and
           # skill leaves. These remain native symlink entries, with no shared

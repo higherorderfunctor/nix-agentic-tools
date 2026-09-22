@@ -44,7 +44,7 @@
     pruneTrigger = "none; switching the profile/shell selects a new store launcher with the current environment.";
   };
   mcpProbe = ecosystem: probe ["ai" ecosystem "mcpServers"] {probe.command = "true";} {};
-  settingsProbe = ecosystem: probe ["ai" ecosystem "nativeSettings"] {model = "probe";} {};
+  settingsProbe = ecosystem: probe ["ai" ecosystem "native" "settings"] {model = "probe";} {};
   hookProbe = probe ["ai" "kiro" "hooksJson"] {probe = ''{"event":"pre-commit"}'';} {};
   ownRetraction = mode: "On ${retractionMoment mode}, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
   # The same program with the other container, for a target whose units are
@@ -64,10 +64,10 @@
       if ecosystem == "kiro"
       then [["ai" "kiro" "permissions"]]
       else if builtins.elem ecosystem ["claude" "codex"]
-      then [["ai" ecosystem "nativeSettings" "permissions"]]
+      then [["ai" ecosystem "native" "settings" "permissions"]]
       else []
     else if surface == "settings"
-    then [["ai" ecosystem "nativeSettings"]] ++ lib.optional (ecosystem == "kimchi") ["ai" "kimchi" "harnessSettings"]
+    then [["ai" ecosystem "native" "settings"]] ++ lib.optional (ecosystem == "kimchi") ["ai" "kimchi" "native" "harnessSettings"]
     else if ecosystem == "kiro" && builtins.elem surface ["agents" "hooks"]
     then [["ai" "kiro" surface] ["ai" "kiro" "${surface}Dir"]] ++ lib.optional (surface == "hooks") ["ai" "kiro" "hooksJson"]
     else [["ai" surface] ["ai" ecosystem surface]];
@@ -87,7 +87,7 @@
       copilot = {hm = absent "Home Manager context is deliberately inert: the .github context surface is project-scoped.";};
     };
     environmentVariables = {
-      claude = both (absent "Claude excludes the environmentVariables pool; nativeSettings.env is delivered through settings instead.");
+      claude = both (absent "Claude excludes the environmentVariables pool; native.settings.env is delivered through settings instead.");
       codex = lib.genAttrs modes (mode: wrapper mode "codex");
       copilot = lib.genAttrs modes (mode: wrapper mode "copilot");
       kimchi = lib.genAttrs modes (mode: wrapper mode "kimchi");
@@ -96,7 +96,7 @@
     hooks = {
       claude = {hm = (delegated "hm" "settings" "$HOME/.claude/settings.json (hooks)") // {additionalWriters = [(delegated "hm" "hooks" "$HOME/.claude/hooks/<name>")];};};
       copilot = both (absent "Copilot's supportedPools excludes hooks and no native hook writer exists.");
-      kimchi = both (absent "Kimchi's supportedPools excludes hooks; harnessSettings resource toggles are settings, not hook definitions.");
+      kimchi = both (absent "Kimchi's supportedPools excludes hooks; native.harnessSettings resource toggles are settings, not hook definitions.");
     };
     lspServers = {
       claude = {
@@ -114,7 +114,7 @@
     };
     permissions = {
       claude = {hm = delegated "hm" "settings" "$HOME/.claude/settings.json (permissions)";};
-      copilot = both (absent "No permissions option or translation exists; arbitrary nativeSettings keys do not establish a permissions contract.");
+      copilot = both (absent "No permissions option or translation exists; arbitrary native.settings keys do not establish a permissions contract.");
       kimchi = both (absent "No permissions option or translation exists.");
       kiro = {devenv = absent "Kiro reads permissions only from ~/.kiro/settings/ (global) or ~/.kiro/workspace-roots/<hash>/, never a project .kiro/, so a devenv-written permissions.yaml would never be read (packages/kiro-cli/lib/mkKiro.nix:1524-1528, the comment establishing those read paths above the permissions option). Agent-local permission records remain part of agents.";};
     };
@@ -176,21 +176,21 @@
           (throw "ai-delivery: Kiro MCP needs an independent strategy probe") (builtins.attrNames mcpConditions);
       }
     else if row.surface == "permissions"
-    then probe ["ai" "codex" "nativeSettings" "permissions"] {probe.network.enabled = false;} {}
+    then probe ["ai" "codex" "native" "settings" "permissions"] {probe.network.enabled = false;} {}
     else if row.ecosystem == "claude"
     then probe ["ai" "claude" "unpinLaunchEffort"] {probe = true;} {}
     else if row.ecosystem == "kimchi"
     then
       if lib.hasSuffix "/harness/settings.json" row.target
-      then probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {}
+      then probe ["ai" "kimchi" "native" "harnessSettings"] {resources.probe = true;} {}
       else
-        probe ["ai" "kimchi" "nativeSettings"] {
+        probe ["ai" "kimchi" "native" "settings"] {
           llmEndpoint = "https://example.invalid";
           skillPaths = ["probe"];
         } {}
     else if row.ecosystem == "kiro"
     then
-      probe ["ai" "kiro" "nativeSettings"]
+      probe ["ai" "kiro" "native" "settings"]
       (
         if row.mode == "hm"
         then {chat.defaultModel = "probe";}

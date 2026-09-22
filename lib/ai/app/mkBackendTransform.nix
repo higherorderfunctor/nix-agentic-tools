@@ -107,7 +107,7 @@
 
   # Normalized settings narrow the root one field at a time. This is a
   # translation input only: factories render supported fields into their
-  # nativeSettings option at mkDefault priority, and native option merging
+  # native.settings option at mkDefault priority, and native option merging
   # arbitrates against consumer-authored values.
   resolvedSettings =
     if supportsPool "settings"
@@ -466,7 +466,7 @@ in {
           the matching `ai.settings` default for this runtime; null inherits
           the root value. Supported fields translate into native keys at
           `mkDefault` priority. Set the corresponding key under
-          `ai.${appRecord.name}.nativeSettings`, including an explicit null,
+          `ai.${appRecord.name}.native.settings`, including an explicit null,
           to arbitrate against the derived value.
         '';
       };

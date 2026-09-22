@@ -29,7 +29,7 @@
     evalHm {
       ai.codex = {
         enable = true;
-        nativeSettings = {
+        native.settings = {
           model = "generated-model";
           model_reasoning_effort = "xhigh";
         };

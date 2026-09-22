@@ -180,7 +180,7 @@ in {
       let
         result = evalHm {
           ai.copilot.enable = true;
-          ai.copilot.nativeSettings.model = "gpt-4";
+          ai.copilot.native.settings.model = "gpt-4";
         };
       in
         lib.hasInfix "--phase all" result.config.home.activation.copilotSettingsMerge.text
