@@ -7,8 +7,9 @@ applyTo: "lib/ai/hm-helpers.nix,lib/ai/mkSkillPackageModule.nix,packages/chatgpt
 
 ## ai.skills Fanout Delegation Pattern
 
-> **Last verified:** 2026-09-19 — skill-package callbacks receive the runtime
-> being written, so one factory import can render different content per runtime.
+> **Last verified:** 2026-09-21 — Kimchi's Layout B directory is
+> backend-specific: Home Manager uses the user harness, while devenv uses
+> Kimchi's native project root.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -21,13 +22,13 @@ its scanner discovers Layout A, where the skill directory itself is a symlink.
 
 ### Backend pattern
 
-| Branch  | HM route                           | Native directory  | Layout |
-| ------- | ---------------------------------- | ----------------- | ------ |
-| Claude  | `programs.claude-code.skills`      | `.claude/skills`  | B      |
-| Codex   | `mkSkillDirectoryEntries` directly | `.agents/skills`  | A      |
-| Copilot | `mkSkillEntries` directly          | `.copilot/skills` | B      |
-| Kimchi  | `mkSkillEntries` directly          | `harness/skills`  | B      |
-| Kiro    | `programs.kiro-cli.skills`         | `.kiro/skills`    | B      |
+| Branch  | HM route                           | Native directories                           | Layout |
+| ------- | ---------------------------------- | -------------------------------------------- | ------ |
+| Claude  | `programs.claude-code.skills`      | `.claude/skills`                             | B      |
+| Codex   | `mkSkillDirectoryEntries` directly | `.agents/skills`                             | A      |
+| Copilot | `mkSkillEntries` directly          | `.copilot/skills`                            | B      |
+| Kimchi  | `mkSkillEntries` directly          | HM `harness/skills`; devenv `.kimchi/skills` | B      |
+| Kiro    | `programs.kiro-cli.skills`         | `.kiro/skills`                               | B      |
 
 Codex 0.147.0 was probed with both shapes: a whole-directory symlink appeared in
 `skills/list`, while a real directory whose `SKILL.md` was a symlink did not.
@@ -85,6 +86,10 @@ that require Layout B use `mkDevenvSkillEntries`, which enumerates each leaf at
 evaluation time and preserves nested relative paths. Codex instead relies on
 devenv's identity behavior: one directory source creates the exact Layout A link
 its scanner requires at project-root `.agents/skills/<name>`.
+
+Kimchi passes `.kimchi` to `mkDevenvSkillEntries`, producing the native project
+directory `.kimchi/skills/<name>`. Home Manager instead passes the user harness
+root to `mkSkillEntries`, producing `<configDir>/harness/skills/<name>`.
 
 ### Skill-package program gating
 
