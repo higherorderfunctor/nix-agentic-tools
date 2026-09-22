@@ -204,6 +204,7 @@ inspectable
 ints
 isaacphi
 isready
+iterm
 jandedobbeleer
 journalctl
 journaled
