@@ -7,7 +7,7 @@
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
     package = self.packages.${system}.kimchi;
-    inherit (package.passthru) extracted extractionSources;
+    inherit (package.passthru) extracted extractionSources extractionSourceUrls;
     committed = ../extracted.json;
     extractor = ../extract/extract.mjs;
 
@@ -15,6 +15,7 @@
       ${pkgs.nodejs}/bin/node ${extractor} \
         --annotations ${../extract/annotations.json} \
         --kimchi-source ${source} \
+        --kimchi-source-url ${pkgs.lib.escapeShellArg extractionSourceUrls.kimchi} \
         --kimchi-version ${package.version} \
         --out ${output} \
         --pi-package ${extractionSources.pi} \

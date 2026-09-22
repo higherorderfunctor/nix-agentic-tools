@@ -32,6 +32,7 @@ function parseArguments(argv) {
   for (const name of [
     "annotations",
     "kimchi-source",
+    "kimchi-source-url",
     "kimchi-version",
     "out",
     "pi-package",
@@ -774,6 +775,7 @@ function extractHarness(declarations, settingsManagerSource, checker, ts) {
     checker,
     ts,
   );
+  additions.statusLine.properties.command.optional = true;
   const overlap = Object.keys(additions).filter((name) => baseKeys[name]);
   if (overlap.length)
     fail(
@@ -1479,6 +1481,20 @@ async function main() {
     await readFile(join(kimchiRoot, "package.json"), "utf8"),
   );
   const piVersion = piPackage.version;
+  const expectedKimchiSourceUrl = new URL(
+    `https://github.com/getkimchi/kimchi/archive/refs/tags/v${args["kimchi-version"]}.tar.gz`,
+  );
+  let kimchiSourceUrl;
+  try {
+    kimchiSourceUrl = new URL(args["kimchi-source-url"]);
+  } catch {
+    fail("--kimchi-source-url is not a valid URL");
+  }
+  if (kimchiSourceUrl.href !== expectedKimchiSourceUrl.href) {
+    fail(
+      `Kimchi source URL ${JSON.stringify(kimchiSourceUrl.href)} does not match --kimchi-version ${JSON.stringify(args["kimchi-version"])}`,
+    );
+  }
   if (
     kimchiPackage.dependencies?.["@earendil-works/pi-coding-agent"] !==
     piVersion
