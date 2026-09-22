@@ -37,13 +37,13 @@
         source = lib.mkOption {
           type = lib.types.nullOr lib.types.path;
           default = null;
-          description = "A file whose contents become ${description}.";
+          description = "A file whose contents become ${description}. The higher-priority definition of `source` or `text` supplies the content; defining both at the same priority is an error.";
         };
 
         text = lib.mkOption {
           type = lib.types.lines;
           default = "";
-          description = "The ${description}. Enabled or required records need non-empty inline text unless a source supplies the content.";
+          description = "The inline ${description}. The higher-priority definition of `text` or `source` supplies the content; defining both at the same priority is an error. Enabled or required records need non-empty inline text unless a source supplies the content.";
           apply = value: let
             sourceIsEffective = sourceWins config options;
             effective =
@@ -90,7 +90,7 @@
     options.enable = lib.mkOption {
       type = lib.types.bool;
       default = enableDefault;
-      description = "Whether to include ${description}. Enabling requires non-empty `text` or a `source`.";
+      description = "Whether to include ${description}. Content supplied through non-empty `text` or a `source` at consumer priority enables it automatically; setting `enable = false` omits it while retaining that content. An enabled or required text source without content is an evaluation error.";
     };
 
     config.enable = lib.mkIf (contentIsExplicit && contentIsPresent) (lib.mkDefault true);
