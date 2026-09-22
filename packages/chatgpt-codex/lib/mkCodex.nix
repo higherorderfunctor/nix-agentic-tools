@@ -749,15 +749,15 @@
                 lib.filterAttrs (_: value: value != null) (
                   handler
                   // {
-                    # Empty text counts as absent, as it does for every other
-                    # converted optional scalar: `filterAttrs` then drops the
-                    # key rather than emitting `""`.
+                    # Keep the presence guard for portable handlers that omit
+                    # this Codex-only typed field. The shared type rejects
+                    # enabled empty text, so this lowering only checks whether
+                    # it is enabled.
                     statusMessage =
                       if
                         handler
                         ? statusMessage
                         && handler.statusMessage.enable
-                        && handler.statusMessage.text != ""
                       then handler.statusMessage.text
                       else null;
                   }

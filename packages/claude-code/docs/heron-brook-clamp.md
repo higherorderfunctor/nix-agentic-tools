@@ -1,7 +1,7 @@
 ## heron_brook Delegation Clamp — the opt-in mitigation
 
-> **Last verified:** 2026-09-21 — the shared optional text-source shape
-> auto-enables custom prose while preserving an explicit disabled override.
+> **Last verified:** 2026-09-21 — `defaultContent` supplies dormant packaged
+> prose while the shared type rejects enabled empty content.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 3510a5db:packages/claude-code/docs/heron-brook-clamp.md`.
@@ -115,11 +115,12 @@ list-merges with consumer entries;
 `module-claude-delegation-clamp-composes-with-consumer-hook` pins that down.
 
 The default prose follows the same rule inside
-`ai.claude.delegationClampMitigation`: it is a `lib.mkDefault` definition in the
-shared optional-text-source submodule, not `default = { text = <prose>; };` on
-the outer option. Otherwise the common `delegationClampMitigation.enable = true`
-definition would discard the complete outer default, leave `text = ""`, and
-install an enabled mitigation that injects nothing. Default-priority prose does
+`ai.claude.delegationClampMitigation`: the shared optional-text-source type's
+`defaultContent` parameter installs it as a `lib.mkDefault` submodule
+definition, rather than using `default = { text = <prose>; };` on the outer
+option. Otherwise the common `delegationClampMitigation.enable = true`
+definition would discard the complete outer default, leave `text = ""`, and the
+shared type would reject the enabled empty value. Default-priority prose does
 not auto-enable; explicit `text` or `source` content does, and an explicit
 source wins over the prose.
 

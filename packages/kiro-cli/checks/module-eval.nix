@@ -1869,10 +1869,6 @@ in {
                   enable = false;
                   text = "This disabled prompt must not be emitted.";
                 };
-                # Enabled with no content is the OTHER way to say "nothing".
-                # It must drop the key too, not emit `""` — a shape the
-                # pre-conversion `nullOr` type could not express.
-                welcomeMessage.enable = true;
                 resources = [
                   {
                     type = "knowledgeBase";
@@ -1901,6 +1897,23 @@ in {
         && !(resource ? include)
         && !(resource ? exclude)
         && !(resource ? name)
+    );
+
+    # Enabled optional text must carry content. Force the typed agent record so
+    # the shared scalar text-source validation runs during module evaluation.
+    module-kiro-typed-agent-enabled-empty-welcome-message-rejected = mkTest "kiro-typed-agent-enabled-empty-welcome-message-rejected" (
+      let
+        attempt = builtins.tryEval (let
+          result = evalHm {
+            ai.kiro = {
+              enable = true;
+              agents.empty-welcome.welcomeMessage.enable = true;
+            };
+          };
+        in
+          builtins.deepSeq result.config.ai.kiro.agents.empty-welcome.welcomeMessage true);
+      in
+        !attempt.success
     );
 
     # An explicit `name` overrides the attr-key default — Kiro keys the agent on

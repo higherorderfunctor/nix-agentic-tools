@@ -491,18 +491,10 @@ in
         '';
       };
       delegationClampMitigation = lib.mkOption {
-        type = lib.types.submoduleWith {
-          modules =
-            (aiTypes.optionalTextSource {
-              description = "the standing request injected as user-side context";
-              enableDefault = false;
-            })
-            .getSubModules
-            ++ [
-              {
-                config.text = lib.mkDefault delegationClampMitigationDefaultProse;
-              }
-            ];
+        type = aiTypes.optionalTextSource {
+          defaultContent.text = delegationClampMitigationDefaultProse;
+          description = "the standing request injected as user-side context";
+          enableDefault = false;
         };
         default = {};
         defaultText = lib.literalExpression (lib.generators.toPretty {} {

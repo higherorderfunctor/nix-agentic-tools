@@ -37,13 +37,11 @@
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
 
-  # An optional text-source lowers to its text, or to null so the renderers'
-  # null-pruning drops the key. Empty text counts as absent: the pre-conversion
-  # options were `nullOr`, where the only way to say "nothing" was `null`, and
-  # `enable = true` with no content says the same thing more clumsily. Emitting
-  # `""` would be a shape the old type could not express.
+  # An optional text source lowers to its text when enabled, or to null so the
+  # renderers' null-pruning drops the key. The shared type rejects enabled empty
+  # text, so this consumer only decides whether the value is enabled.
   enabledTextOrNull = value:
-    if value.enable && value.text != ""
+    if value.enable
     then value.text
     else null;
 
@@ -1280,9 +1278,10 @@ in
         };
         text = lib.mkOption {
           type = aiTypes.textSource {
+            defaultContent.text = workflowReminder.defaultText;
             description = "the reminder appended to model context on each turn";
           };
-          default.text = workflowReminder.defaultText;
+          default = {};
           defaultText = lib.literalExpression ''
             { text = <a short pointer at the workflow contract>; }
           '';
