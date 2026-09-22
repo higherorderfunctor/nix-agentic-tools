@@ -35,6 +35,7 @@
     mergedEnvironmentVariables,
     moduleEnvironmentVariables ? {},
     mergedContext,
+    requiredProjectRoot ? null,
   }: let
     contextEntry = aiCommon.contentFileEntry mergedContext;
 
@@ -61,11 +62,24 @@
       then mcpLib.mkCredentialsSnippet pkgs {apiKey.envVar = "KIMCHI_API_KEY";} {inherit (cfg) apiKey;}
       else "";
 
+    # Kimchi resolves project config, MCP servers, and harness settings from
+    # process.cwd() exactly. Changing cwd in the wrapper would also change the
+    # directory seen by Kimchi's tools, so fail before launch when devenv owns
+    # any of those files and the operator starts below the project root.
+    exactCwdGuard = lib.optionalString (requiredProjectRoot != null) ''
+      kimchi_project_root=${lib.escapeShellArg requiredProjectRoot}
+      if [ "$(${pkgs.coreutils}/bin/realpath -- "$PWD")" != "$(${pkgs.coreutils}/bin/realpath -- "$kimchi_project_root")" ]; then
+        printf '%s\n' "Kimchi project files are configured at $kimchi_project_root; run kimchi from that devenv root." >&2
+        exit 1
+      fi
+    '';
+
     # wrapProgram args: `--set` for non-secret env, `--run` for the
     # runtime secret export. Joined with a single space on the continued
     # line — never a backslash-newline, which breaks multi-arg wrapping.
     wrapArgs =
       lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") effectiveEnvVars
+      ++ lib.optional (exactCwdGuard != "") "--run ${lib.escapeShellArg exactCwdGuard}"
       ++ lib.optional (credSnippet != "") "--run ${lib.escapeShellArg credSnippet}";
 
     wrappedPackage = pkgs.symlinkJoin {
@@ -86,12 +100,9 @@
       then wrappedPackage
       else cfg.package;
   };
-  # Both backends install the same prepared wrapper (env + the runtime secret,
-  # which is cat'd at launch so it never enters the store). Handed to the
-  # shared transform's `installPackage` hook, which owns the `home.packages` /
-  # `packages` lowering. The second `mkPrep` application re-evaluates (Nix caches
-  # thunks, not function applications at distinct call sites) but
-  # yields the identical derivation, so it adds no build.
+  # Home Manager installs the shared prepared wrapper (env + the runtime
+  # secret, which is cat'd at launch so it never enters the store). Handed to
+  # the shared transform's `installPackage` hook, which owns `home.packages`.
   kimchiInstallPackage = {
     cfg,
     mergedContext,
@@ -100,6 +111,33 @@
     ...
   }:
     (mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;}).package;
+
+  # Devenv adds an exact-cwd launch guard when it owns a surface Kimchi resolves
+  # directly under process.cwd(). Context and skills walk ancestors, but the
+  # typed native settings currently include a default skillPaths entry, so an
+  # enabled devenv Kimchi always owns project config and receives this guard.
+  kimchiDevenvInstallPackage = {
+    cfg,
+    config,
+    mergedContext,
+    mergedEnvironmentVariables,
+    mergedServers,
+    moduleEnvironmentVariables,
+    ...
+  }: let
+    hasExactCwdProjectFiles =
+      aiCommon.filterNulls cfg.nativeSettings
+      != {}
+      || aiCommon.filterNulls cfg.harnessSettings != {}
+      || mergedServers != {};
+  in
+    (mkPrep {
+      inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;
+      requiredProjectRoot =
+        if hasExactCwdProjectFiles
+        then config.devenv.root
+        else null;
+    }).package;
 in
   lib.ai.app.mkAiApp {
     # Carried as DATA, not a module argument — see mkAiApp.nix.
@@ -305,7 +343,7 @@ in
     };
 
     devenv = {
-      installPackage = kimchiInstallPackage;
+      installPackage = kimchiDevenvInstallPackage;
       options = {};
       config = {
         cfg,

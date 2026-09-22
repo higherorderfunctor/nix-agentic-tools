@@ -7,11 +7,11 @@ applyTo: "devenv.nix,packages/chatgpt-codex/lib/mkCodex.nix,packages/claude-code
 
 ## Devenv runtimes merge with host config — the reason is auth, not tidiness
 
-> **Last verified:** 2026-09-21 (commit pending — Kimchi's devenv facet now
-> writes the native project paths instead of a HOME-shaped subtree). Kimchi
-> keeps reading user config, and its `configDir` remains a Home Manager output
-> option (the pinned runtime discovers only its default). Copilot is the only
-> runtime that needs an additive flag instead of native project merge.
+> **Last verified:** 2026-09-21 (commit pending — Kimchi's devenv facet writes
+> native project paths and guards the three exact-cwd readers). Kimchi keeps
+> reading user config, and its `configDir` remains a Home Manager output option
+> (the pinned runtime discovers only its default). Copilot is the only runtime
+> that needs an additive flag instead of native project merge.
 >
 > States as one cross-runtime rule what previously had to be inferred by reading
 > three factories side by side: no `ai.*` runtime redirects its config root, on
@@ -108,6 +108,16 @@ project cannot grant itself trust.
 Project-root `AGENTS.md` is the upstream exception. Kimchi's prompt-enrichment
 extension directly walks ancestor context files without consulting the project
 scope gate, so do not claim that file is inert before trust.
+
+Kimchi also has two different path lookup modes. Project config, MCP servers,
+and harness settings resolve only below the process's exact working directory;
+project context and skills walk ancestors. When devenv delivers any exact-cwd
+surface, the Kimchi wrapper therefore rejects launches below the devenv root
+instead of silently missing the file. It deliberately does not change cwd, which
+would change the directory seen by Kimchi's tools. Context and skills themselves
+walk ancestors, but the typed native settings include a default
+`skillPaths = []`; every enabled devenv Kimchi therefore currently owns project
+config and its wrapper is root-only.
 
 ### What would change this decision
 

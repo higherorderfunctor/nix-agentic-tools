@@ -317,13 +317,13 @@ instruction building.
 
 ### Kimchi project delivery
 
-| Pool                     | devenv delivery                        | Boundary                                                                    |
-| ------------------------ | -------------------------------------- | --------------------------------------------------------------------------- |
-| Context                  | root `AGENTS.md`                       | Available without project trust                                             |
-| MCP servers              | `.kimchi/mcp.json`                     | Requires project trust                                                      |
-| Kimchi settings          | `.kimchi/config.json`                  | Requires project trust                                                      |
-| Skills                   | `.kimchi/skills`                       | Requires project trust                                                      |
-| Project harness settings | `.config/kimchi/harness/settings.json` | Requires project trust; user-scope-only keys are rejected during evaluation |
+| Pool                     | devenv delivery                        | Boundary                                                                                                    |
+| ------------------------ | -------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Context                  | root `AGENTS.md`                       | Available without project trust; reader walks ancestors, but the wrapper remains root-only                  |
+| MCP servers              | `.kimchi/mcp.json`                     | Requires project trust and launch from the devenv root                                                      |
+| Kimchi settings          | `.kimchi/config.json`                  | Requires project trust and launch from the devenv root                                                      |
+| Skills                   | `.kimchi/skills`                       | Requires project trust; reader walks ancestors, but the wrapper remains root-only                           |
+| Project harness settings | `.config/kimchi/harness/settings.json` | Requires project trust and launch from the devenv root; user-scope-only keys are rejected during evaluation |
 
 devenv cannot deliver Kimchi's user-scope-only harness settings:
 `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`, `modelMetadata`,
@@ -332,6 +332,15 @@ or `statusLine`. Set those with Home Manager, or configure them inside Kimchi so
 it writes its user-global files. Home Manager activation-merges `config.json`
 and `harness/settings.json` because Kimchi writes both at runtime; making either
 a read-only store symlink would break those writes.
+
+Kimchi resolves project settings, MCP servers, and harness settings only under
+its exact working directory. When devenv delivers any of those files, its
+wrapper rejects launches below the devenv root instead of silently ignoring
+them. It does not change directories because that would also change the working
+directory seen by Kimchi's tools. Context and skills themselves walk ancestors,
+but the typed Kimchi settings include a default `skillPaths = []`, so every
+enabled devenv Kimchi currently delivers project config and its wrapper is
+root-only.
 
 Trust gates every project-scope reader except root `AGENTS.md`, so a devenv-only
 setup initially supplies instructions and nothing else. Grant trust by answering

@@ -19,6 +19,24 @@
     shellProfileApiKeyMigrationDismissed = true;
     statusLine.pinned = ["model"];
   };
+  kimchiStub = pkgs.writeShellScriptBin "kimchi" ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+  '';
+  exactCwdProjectRoot = pkgs.runCommand "kimchi-exact-cwd-project-root" {} ''
+    mkdir -p "$out/subdir"
+  '';
+
+  mkDevenvKimchiPackage = extraConfig:
+    builtins.head
+    (evalDevenv (lib.recursiveUpdate {
+        devenv.root = toString exactCwdProjectRoot;
+        ai.kimchi = {
+          enable = true;
+          package = kimchiStub;
+        };
+      }
+      extraConfig)).config.packages;
 
   # lib.evalModules exposes assertions as data; the real HM/devenv callers
   # reject failed entries. Reproduce that boundary so every negative control
@@ -185,6 +203,43 @@ in {
         && !(files ? ".pi/settings.json")
         && !(lib.any (lib.hasPrefix "custom/kimchi") (builtins.attrNames files))
     );
+
+    # Kimchi resolves these three project files from process.cwd() exactly,
+    # unlike context and skills, which walk ancestors. Exercise every
+    # exact-cwd configuration shape against a real wrapped binary. The typed
+    # native settings include default skillPaths, so every enabled devenv
+    # Kimchi currently owns project config and must reject descendant launches.
+    module-kimchi-devenv-exact-cwd-guard = let
+      guardedPackages = [
+        (mkDevenvKimchiPackage {
+          ai.kimchi.nativeSettings.telemetry.enabled = false;
+        })
+        (mkDevenvKimchiPackage {
+          ai.kimchi.harnessSettings.hideThinkingBlock = true;
+        })
+        (mkDevenvKimchiPackage {
+          ai.mcpServers.example = {
+            package = pkgs.hello;
+            type = "stdio";
+          };
+        })
+      ];
+    in
+      pkgs.runCommand "module-test-kimchi-devenv-exact-cwd-guard" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
+        for kimchi_bin in ${lib.concatMapStringsSep " " (package: "${package}/bin/kimchi") guardedPackages}; do
+          (cd ${exactCwdProjectRoot} && "$kimchi_bin")
+          if (cd ${exactCwdProjectRoot}/subdir && "$kimchi_bin" 2>"$TMPDIR/guard.stderr"); then
+            echo "Kimchi exact-cwd guard did not reject a descendant launch" >&2
+            exit 1
+          fi
+          grep -F "Kimchi project files are configured at ${exactCwdProjectRoot}; run kimchi from that devenv root." "$TMPDIR/guard.stderr"
+        done
+
+        echo PASS > "$out"
+      '';
 
     # The Cast AI key is a runtime credential ({file|helper}); setting
     # apiKey.file must evaluate and must never become a static env var.

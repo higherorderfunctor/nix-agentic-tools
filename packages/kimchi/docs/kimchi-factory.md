@@ -1,8 +1,8 @@
 # Kimchi factory (mkKimchi)
 
 > **Last verified:** 2026-09-21 (commit pending — devenv rejects settings that
-> Kimchi reads only from user scope while lowering project-capable pools to the
-> paths Kimchi discovers). Home Manager context renders into `ai.kimchi.files`
+> Kimchi reads only from user scope and guards files Kimchi resolves from its
+> exact working directory). Home Manager context renders into `ai.kimchi.files`
 > before the generic backend sink; devenv contributes directly to the shared
 > repository `AGENTS.md` owner. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
@@ -32,6 +32,16 @@ control devenv project paths. The backend split is:
 | skills           | `<configDir>/harness/skills/<name>` | `.kimchi/skills/<name>`                |
 | Kimchi settings  | `<configDir>/config.json`           | `.kimchi/config.json`                  |
 | harness settings | `<configDir>/harness/settings.json` | `.config/kimchi/harness/settings.json` |
+
+Project Kimchi settings, MCP servers, and harness settings are exact-cwd
+readers: Kimchi checks those paths only under `process.cwd()`. When devenv
+delivers any of the three, its wrapper rejects launches below the devenv root
+with an actionable message. It does not silently change directories, because
+that would also change the working directory seen by Kimchi's tools. Context and
+skills themselves walk ancestors, but the typed Kimchi settings include a
+default `skillPaths = []`, so every enabled devenv Kimchi currently delivers
+project config and the wrapper is root-only. Locked by
+`module-kimchi-devenv-exact-cwd-guard`.
 
 The project harness directory is deliberately its own factory value. pi 0.85.1
 derives `CONFIG_DIR_NAME` from Kimchi's packaged
