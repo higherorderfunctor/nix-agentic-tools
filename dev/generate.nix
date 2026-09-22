@@ -657,6 +657,33 @@
     | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / `ai.<cli>.shell` (Claude + Codex + Kiro) | Same; takes a package. Copilot and Kimchi are explicit exclusions |
     | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
+    ### Kimchi project delivery
+
+    | Pool | devenv delivery | Boundary |
+    | ---- | --------------- | -------- |
+    | Context | root `AGENTS.md` | Available without project trust; reader walks ancestors, but the wrapper remains root-only |
+    | MCP servers | `.kimchi/mcp.json` | Requires project trust and launch from the devenv root |
+    | Kimchi settings | `.kimchi/config.json` | Requires project trust and launch from the devenv root |
+    | Skills | `.kimchi/skills` | Requires project trust; nearest ancestor wins, but the wrapper remains root-only |
+    | Project harness settings | `.config/kimchi/harness/settings.json` | Requires project trust and launch from the devenv root; user-scope-only keys are rejected during evaluation |
+
+    devenv rejects Kimchi's user-scope-only harness settings:
+    `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`, `modelMetadata`,
+    `modelRoles`, `multiModel`, `resources`,
+    `shellProfileApiKeyMigrationDismissed`, and `statusLine`. Set those with Home
+    Manager or through Kimchi itself. Both backends reconcile `config.json` and
+    `harness/settings.json` by owned leaf because Kimchi writes them at runtime.
+
+    Project settings, MCP servers, and harness settings resolve under the exact
+    working directory. The devenv wrapper rejects descendant launches instead
+    of silently missing them. Context and skills walk ancestors, but the typed
+    Kimchi settings include a default `skillPaths = []`, so every enabled
+    devenv Kimchi currently delivers project config and remains root-only.
+
+    Trust gates every project-scope reader except root `AGENTS.md`. Grant trust
+    interactively, set user-scope `defaultProjectTrust = "always"`, or pass
+    `--approve` for CLI and TUI runs. ACP resolves trust separately.
+
     ## Configuration
 
     <details>
