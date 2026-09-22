@@ -31,12 +31,15 @@
   extraction = sources.extraction or (throw "kimchi: missing extraction source pins");
   platformSrc = sources.${system} or (throw "kimchi: unsupported system ${system}");
 
-  kimchiSource = fetchzip {
-    inherit (extraction.kimchiSource) hash url;
-  };
-  piPackage = fetchzip {
-    inherit (extraction.piPackage) hash url;
-  };
+  fetchExtraction = source:
+    fetchzip {
+      inherit (source) hash url;
+    };
+  kimchiSource = fetchExtraction extraction.kimchiSource;
+  piAgentCorePackage = fetchExtraction extraction.piAgentCorePackage;
+  piAiPackage = fetchExtraction extraction.piAiPackage;
+  piPackage = fetchExtraction extraction.piPackage;
+  piTuiPackage = fetchExtraction extraction.piTuiPackage;
 
   extracted =
     ourPkgs.runCommand "kimchi-extracted.json" {
@@ -48,7 +51,10 @@
         --kimchi-source-url ${lib.escapeShellArg extraction.kimchiSource.url} \
         --kimchi-version ${sources.version} \
         --out "$out" \
+        --pi-agent-core-package ${piAgentCorePackage} \
+        --pi-ai-package ${piAiPackage} \
         --pi-package ${piPackage} \
+        --pi-tui-package ${piTuiPackage} \
         --typescript ${ourPkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js
     '';
 
@@ -67,17 +73,52 @@
     pi_package_url="https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-$pi_version.tgz"
     pi_package_json=$(${ourPkgs.nix}/bin/nix store prefetch-file --json --unpack "$pi_package_url")
     pi_package_hash=$(${ourPkgs.jq}/bin/jq -er '.hash' <<< "$pi_package_json")
+    pi_package_path=$(${ourPkgs.jq}/bin/jq -er '.storePath' <<< "$pi_package_json")
+
+    prefetch_pi_dependency() {
+      local dependency_name="$1"
+      local variable_prefix="$2"
+      local dependency_version
+      local dependency_url
+      local dependency_json
+      local dependency_hash
+      dependency_version=$(${ourPkgs.jq}/bin/jq -er \
+        --arg name "@earendil-works/$dependency_name" \
+        '.dependencies[$name] | strings | ltrimstr("^") | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
+        "$pi_package_path/package.json")
+      dependency_url="https://registry.npmjs.org/@earendil-works/$dependency_name/-/$dependency_name-$dependency_version.tgz"
+      dependency_json=$(${ourPkgs.nix}/bin/nix store prefetch-file --json --unpack "$dependency_url")
+      dependency_hash=$(${ourPkgs.jq}/bin/jq -er '.hash' <<< "$dependency_json")
+      printf -v "''${variable_prefix}_hash" '%s' "$dependency_hash"
+      printf -v "''${variable_prefix}_url" '%s' "$dependency_url"
+      printf -v "''${variable_prefix}_version" '%s' "$dependency_version"
+    }
+    prefetch_pi_dependency pi-agent-core pi_agent_core
+    prefetch_pi_dependency pi-ai pi_ai
+    prefetch_pi_dependency pi-tui pi_tui
 
     extraction_tmp=$(${ourPkgs.coreutils}/bin/mktemp)
     ${ourPkgs.jq}/bin/jq \
       --arg kh "$kimchi_source_hash" \
       --arg ku "$kimchi_source_url" \
+      --arg pach "$pi_agent_core_hash" \
+      --arg pacu "$pi_agent_core_url" \
+      --arg pacv "$pi_agent_core_version" \
+      --arg paih "$pi_ai_hash" \
+      --arg paiu "$pi_ai_url" \
+      --arg paiv "$pi_ai_version" \
       --arg ph "$pi_package_hash" \
       --arg pu "$pi_package_url" \
       --arg pv "$pi_version" \
+      --arg pth "$pi_tui_hash" \
+      --arg ptu "$pi_tui_url" \
+      --arg ptv "$pi_tui_version" \
       '. + {extraction: {
         kimchiSource: {hash: $kh, url: $ku},
-        piPackage: {hash: $ph, url: $pu, version: $pv}
+        piAgentCorePackage: {hash: $pach, url: $pacu, version: $pacv},
+        piAiPackage: {hash: $paih, url: $paiu, version: $paiv},
+        piPackage: {hash: $ph, url: $pu, version: $pv},
+        piTuiPackage: {hash: $pth, url: $ptu, version: $ptv}
       }}' \
       ${repoPath ../../../sources.json} > "$extraction_tmp"
     ${ourPkgs.coreutils}/bin/mv "$extraction_tmp" ${repoPath ../../../sources.json}
@@ -140,6 +181,9 @@ in
       extractionSources = {
         kimchi = kimchiSource;
         pi = piPackage;
+        piAgentCore = piAgentCorePackage;
+        piAi = piAiPackage;
+        piTui = piTuiPackage;
       };
       extractionSourceUrls.kimchi = extraction.kimchiSource.url;
       updateScript = vu.mkUpdateScript {
