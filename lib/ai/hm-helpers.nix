@@ -178,27 +178,53 @@ in rec {
   }: let
     parentDir = builtins.dirOf configFile;
   in
-    # scopedActivation: `set -eu` here happens to match what home-manager
-    # already sets, so today the leak is benign — but it is a leak, and the
-    # rule is structural, not a bet on the current flag set staying identical.
     aiCommon.scopedActivation ''
-      set -eu
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       TARGET_DIR="$HOME/${parentDir}"
       CONFIG_FILE="$HOME/${configFile}"
       ${coreutils}/bin/mkdir -p "$TARGET_DIR"
       NIX_SETTINGS=$(${coreutils}/bin/mktemp)
+      TMP=""
+      trap '${coreutils}/bin/rm -f -- "$NIX_SETTINGS" "$TMP"' EXIT
+      TMP=$(${coreutils}/bin/mktemp "$CONFIG_FILE.activation.XXXXXX")
       ${coreutils}/bin/cat > "$NIX_SETTINGS" <<'NAT_SETTINGS_EOF'
       ${settingsJson}
       NAT_SETTINGS_EOF
-      if [ ! -f "$CONFIG_FILE" ]; then
-        ${coreutils}/bin/cp "$NIX_SETTINGS" "$CONFIG_FILE"
-      else
-        TMP=$(${coreutils}/bin/mktemp)
-        ${jq} -s '.[0] * .[1]' "$CONFIG_FILE" "$NIX_SETTINGS" > "$TMP"
-        ${coreutils}/bin/mv "$TMP" "$CONFIG_FILE"
+
+      settings_identity() {
+        if [ -e "$CONFIG_FILE" ] || [ -L "$CONFIG_FILE" ]; then
+          # Hash content: a runtime may rename a sibling over this path with
+          # the same mtime (and size), so mtime alone misses lost updates.
+          ${coreutils}/bin/sha256sum -- "$CONFIG_FILE"
+        else
+          printf 'missing\n'
+        fi
+      }
+
+      COMMITTED=false
+      for ATTEMPT in 1 2 3; do
+        BEFORE=$(settings_identity)
+        if [ "$BEFORE" = missing ]; then
+          ${coreutils}/bin/cp "$NIX_SETTINGS" "$TMP"
+        else
+          ${jq} -s '.[0] * .[1]' "$CONFIG_FILE" "$NIX_SETTINGS" > "$TMP"
+        fi
+        ${coreutils}/bin/chmod ${mode} "$TMP"
+        # Optimistic compare-and-swap: re-merge on a detected runtime write.
+        # This narrows, but cannot eliminate, the check-to-rename window for
+        # writers that do not participate in a shared locking protocol.
+        AFTER=$(settings_identity)
+        if [ "$BEFORE" = "$AFTER" ]; then
+          ${coreutils}/bin/mv -- "$TMP" "$CONFIG_FILE"
+          COMMITTED=true
+          break
+        fi
+      done
+      if [ "$COMMITTED" = false ]; then
+        echo "settings activation: $CONFIG_FILE changed during all $ATTEMPT attempts; refusing to overwrite concurrent runtime changes; retry activation" >&2
+        false
       fi
-      ${coreutils}/bin/rm -f "$NIX_SETTINGS"
-      ${coreutils}/bin/chmod ${mode} "$CONFIG_FILE"
     '';
 
   # Reconcile Nix-declared TOML leaves into a runtime-writable file without

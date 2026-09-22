@@ -24,6 +24,30 @@
       // extra));
 
   defaultBody = mkScript {};
+  # Interpose at jq's return: its output already contains the old runtime
+  # values, but activation has not renamed that output over the destination.
+  racingJq = pkgs.writeShellScript "activation-racing-jq" ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    ${pkgs.jq}/bin/jq "$@"
+    count=0
+    if [ -f "$HOME/writes" ]; then
+      count=$(${pkgs.coreutils}/bin/cat "$HOME/writes")
+    fi
+    if [ "$count" -eq 0 ] || [ "$RACE_MODE" = repeated ]; then
+      count=$((count + 1))
+      target="$HOME/.natcreds/config.json"
+      sibling=$(${pkgs.coreutils}/bin/mktemp "$target.writer.XXXXXX")
+      printf '{"deviceId":"device-%s","gitTokens":{"host":"token-%s"}}' \
+        "$count" "$count" > "$sibling"
+      # Same size and timestamp, different content and inode: this models a
+      # runtime's sibling-temp rename and discriminates against mtime alone.
+      ${pkgs.coreutils}/bin/touch -r "$target" "$sibling"
+      ${pkgs.coreutils}/bin/mv "$sibling" "$target"
+      printf '%s' "$count" > "$HOME/writes"
+    fi
+  '';
+  racingBody = mkScript {jq = "${racingJq}";};
   wideBody = mkScript {mode = "0644";};
 in {
   checks.ai-activation-settings-mode =
@@ -69,6 +93,39 @@ in {
       h3="$PWD/h3"; mkdir -p "$h3"
       HOME="$h3" ${pkgs.bash}/bin/bash ${wideBody}
       assert_mode "$h3" 644 "explicit mode must be honoured"
+
+      # 4. One racing write must survive a successful retry. Continuous
+      #    writes must exhaust the bound loudly without replacing runtime data.
+      for race in once repeated; do
+        race_home="$PWD/race-$race"
+        mkdir -p "$race_home/.natcreds"
+        printf '{"deviceId":"device-0","gitTokens":{"host":"token-0"}}' \
+          > "$race_home/.natcreds/config.json"
+        chmod 600 "$race_home/.natcreds/config.json"
+        status=0
+        HOME="$race_home" RACE_MODE="$race" \
+          timeout 10 ${pkgs.bash}/bin/bash ${racingBody} \
+          > "$race_home/activation.log" 2>&1 || status=$?
+        writes=$(cat "$race_home/writes")
+        if ! jq -e --arg value "$writes" \
+          '.deviceId == ("device-" + $value) and .gitTokens.host == ("token-" + $value)' \
+          "$race_home/.natcreds/config.json" > /dev/null; then
+          echo "FAIL [$race race]: activation lost the concurrent deviceId/gitTokens write" >&2
+          false
+        fi
+        assert_mode "$race_home" 600 "$race race"
+        if [ "$race" = once ]; then
+          test "$status" -eq 0
+          jq -e '.declared == "from-nix"' "$race_home/.natcreds/config.json" > /dev/null
+        else
+          test "$status" -eq 1
+          test "$writes" -eq 3
+          expected="settings activation: $race_home/.natcreds/config.json changed during all 3 attempts; refusing to overwrite concurrent runtime changes; retry activation"
+          test "$(cat "$race_home/activation.log")" = "$expected"
+          jq -e 'has("declared") | not' "$race_home/.natcreds/config.json" > /dev/null
+        fi
+        test -z "$(find "$race_home/.natcreds" -name 'config.json.activation.*' -print)"
+      done
 
       touch "$out"
     '';
