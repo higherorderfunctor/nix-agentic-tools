@@ -17,7 +17,10 @@
   cfg = config.ai.${runtime};
   supports = pool: builtins.elem pool (appRecord.supportedPools or []);
   get = path: lib.attrByPath path null config;
-  live = pool: lib.filterAttrs (_: value: value != null) pool;
+  live = surface: pool:
+    lib.filterAttrs
+    (_: value: value != null && (surface != "rules" || value.enable != false))
+    pool;
   nonEmpty = value:
     if value == null
     then false
@@ -32,7 +35,7 @@
     else true;
   keyed = ["agents" "environmentVariables" "lspServers" "mcpServers" "rules" "skills"];
   rootRemaining = surface:
-    builtins.removeAttrs (live (config.ai.${surface} or {}))
+    builtins.removeAttrs (live surface (config.ai.${surface} or {}))
     (
       if supports surface
       then builtins.attrNames (cfg.${surface} or {})
@@ -57,7 +60,7 @@
         if builtins.length path == 2
         then rootRemaining surface
         else
-          live (
+          live surface (
             if value == null
             then {}
             else value
@@ -102,7 +105,7 @@
       })
       (
         if supports pool
-        then live (cfg.${pool} or {})
+        then live pool (cfg.${pool} or {})
         else {}
       ));
   fieldWarning = entry: field: reason:

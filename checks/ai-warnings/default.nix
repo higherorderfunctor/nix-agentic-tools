@@ -379,14 +379,14 @@ in {
       evaluate "hm" {
         ai.copilot = {
           enable = true;
-          rules.probe = null;
+          rules.probe.enable = false;
         };
         ai.rules.probe.text = "probe";
       }
       == []
       && evaluate "hm" {
         ai.kimchi.enable = true;
-        ai.rules.probe = null;
+        ai.rules.probe.enable = false;
       }
       == []
       && evaluate "hm" {
