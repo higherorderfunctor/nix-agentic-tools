@@ -132,6 +132,8 @@
     GIT_SSH_COMMAND = sandboxSshCommand;
   };
 
+  stripTextSourceInternals = value:
+    removeAttrs value ["_sourceWins" "_textSourceType"];
   contextValues = [config.ai.context cfg.context];
   # Presence must stay structural. `composeContent` reads source-backed bytes
   # when two values compose, so using `mergedContext != null` as a generator
@@ -145,20 +147,34 @@
     if supportsPool "context"
     then aiCommon.composeContent contextValues
     else null;
+  # A submodule value includes its computed read-only fields. When that value
+  # becomes the default of the public normalized option, its type recomputes
+  # those fields; carrying them across would define each read-only option twice.
+  normalizedContext =
+    if mergedContext == null
+    then null
+    else removeAttrs (stripTextSourceInternals mergedContext) ["filename"];
   topHooks =
     if supportsPool "hooks"
     then config.ai.hooks
     else {};
 
+  normalizedAgents = lib.mapAttrs (_: value:
+    if agent.isSemantic value
+    then value // {instructions = stripTextSourceInternals value.instructions;}
+    else value)
+  mergedAgents;
+  normalizedRules = lib.mapAttrs (_: stripTextSourceInternals) mergedRules;
+
   # A whole-pool option default disappears when a consumer adds just one key.
   # Keep these folds as per-key definitions, so ordinary additions preserve
   # unrelated entries while a whole-pool mkForce still replaces everything.
   normalizedKeyedPools = {
-    agents = mergedAgents;
+    agents = normalizedAgents;
     environmentVariables = mergedEnvironmentVariables;
     lspServers = mergedLspServers;
     mcpServers = mergedServers;
-    rules = mergedRules;
+    rules = normalizedRules;
     skills = mergedSkills;
   };
   normalizedPools = {
@@ -166,7 +182,7 @@
       type = lib.types.attrsOf agent.agentType;
     };
     context = {
-      default = mergedContext;
+      default = normalizedContext;
       type = lib.types.nullOr aiCommon.optionalContentModule;
     };
     environmentVariables = {
