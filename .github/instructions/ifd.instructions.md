@@ -196,10 +196,13 @@ than anything this repo recognizes by eye. Everything located by that path is
 located by CONTENT — never a chunk filename, a minified identifier or a byte
 offset, none of which the macOS and Linux builds of one version agree on. That
 is what lets ONE sidecar be committed for both platforms; the darwin `build` job
-is the only place that claim is ever tested by a build. Kimchi's Python
+is the only place that claim is ever tested by a build. Kimchi's JavaScript
 extractor reads the hash-pinned release source plus the exact pi npm package
-declared by that release. It measures both native settings files, both CLI
-layers, and both environment namespaces without unpacking the Bun executable.
+declared by that release through nixpkgs' pinned TypeScript compiler API. The
+checker supplies declared settings keys and types; syntax-tree queries supply
+CLI and environment access sites. It measures both native settings files, both
+CLI layers, and both environment namespaces without unpacking the Bun executable
+or pattern-matching TypeScript text.
 
 Reach for a grep only for facts that are genuinely outside the artifact's own
 schema. Two survive in `mkClaudeExtract` for exactly that reason: the launch-pin

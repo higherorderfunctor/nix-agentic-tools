@@ -1,8 +1,8 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-21 — the source-derived schema measures both native
-> settings files without changing the existing module surface. Full lineage:
-> `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> **Last verified:** 2026-09-21 — the TypeScript compiler API measures both
+> native settings files without changing the existing module surface. Full
+> lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -16,10 +16,12 @@ it remains declarative data rather than being guessed into either native file.
 
 `packages/kimchi/extracted.json` measures the two native settings surfaces, the
 Kimchi and pi CLI layers, and the `KIMCHI_*` / `PI_*` environment namespaces. It
-is deliberately not consumed by this factory yet: the nesting of the two native
-settings files is an open option-shape decision. The committed sidecar is stable
-input to that later decision, not an implicit change to `nativeSettings`,
-`harnessSettings`, or the shared normalized settings pool.
+uses the TypeScript compiler's checker for declared keys and types and syntax
+tree queries for CLI and environment access sites. It is deliberately not
+consumed by this factory yet: the nesting of the two native settings files is an
+open option-shape decision. The committed sidecar is stable input to that later
+decision, not an implicit change to `nativeSettings`, `harnessSettings`, or the
+shared normalized settings pool.
 
 ## Two config trees (the load-bearing fact)
 
