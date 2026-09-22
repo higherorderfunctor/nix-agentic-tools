@@ -161,7 +161,7 @@ in {
         && devenvConfig.ai.claude.files ? ".claude/rules/scoped.md"
         && devenvConfig.ai.copilot.files ? ".github/copilot-instructions.md"
         && devenvConfig.ai.copilot.files ? ".github/instructions/scoped.instructions.md"
-        && devenvConfig.ai.kimchi.files ? ".config/kimchi/harness/AGENTS.md"
+        && devenvConfig.ai.internal.agentsMd ? "AGENTS.md"
         && devenvConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
         && devenvConfig.ai.internal.files ? "AGENTS.md"
         && devenvConfig.ai.internal.files."AGENTS.md".content.text == devenvConfig.files."AGENTS.md".text
@@ -174,6 +174,7 @@ in {
           ai = {
             codex.enable = true;
             context.text = "GENERATED-SHARED-CONTEXT";
+            kimchi.enable = true;
             kiro.enable = true;
           };
         };
@@ -184,13 +185,19 @@ in {
           ai.kiro.files."AGENTS.md" = null;
         });
         deduplicated = evalDevenv (lib.recursiveUpdate base {
-          ai.codex.files."AGENTS.md".content.text = "SHARED-CONSUMER";
-          ai.kiro.files."AGENTS.md".content.text = "SHARED-CONSUMER";
+          ai = {
+            codex.files."AGENTS.md".content.text = "SHARED-CONSUMER";
+            kimchi.files."AGENTS.md".content.text = "SHARED-CONSUMER";
+            kiro.files."AGENTS.md".content.text = "SHARED-CONSUMER";
+          };
         });
         divergent = builtins.tryEval (let
           evaluated = evalDevenv (lib.recursiveUpdate base {
-            ai.codex.files."AGENTS.md".content.text = "CODEX-CONSUMER";
-            ai.kiro.files."AGENTS.md".content.text = "KIRO-CONSUMER";
+            ai = {
+              codex.files."AGENTS.md".content.text = "OTHER-CONSUMER";
+              kimchi.files."AGENTS.md".content.text = "KIMCHI-CONSUMER";
+              kiro.files."AGENTS.md".content.text = "OTHER-CONSUMER";
+            };
           });
         in
           builtins.deepSeq evaluated.config.ai.internal.files."AGENTS.md" true);
@@ -220,6 +227,16 @@ in {
             };
           };
         evaluations = [
+          (withDormantEntry {
+            activeRuntime = "codex";
+            dormantRuntime = "kimchi";
+            entry.content.text = "DORMANT-KIMCHI";
+          })
+          (withDormantEntry {
+            activeRuntime = "kimchi";
+            dormantRuntime = "codex";
+            entry = null;
+          })
           (withDormantEntry {
             activeRuntime = "codex";
             dormantRuntime = "kiro";
@@ -459,7 +476,7 @@ in {
             kimchi = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".config/kimchi/harness/AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
+              files."AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
             };
           };
         };
@@ -469,7 +486,7 @@ in {
         && devenvClaude.config.files.".claude/CLAUDE.md".text == "CLAUDE-REPLACEMENT"
         && devenvCopilot.config.files.".github/copilot-instructions.md".text == "COPILOT-REPLACEMENT"
         && hmKimchi.config.home.file.".config/kimchi/harness/AGENTS.md".text == "KIMCHI-REPLACEMENT"
-        && devenvKimchi.config.files.".config/kimchi/harness/AGENTS.md".text == "KIMCHI-REPLACEMENT"
+        && devenvKimchi.config.files."AGENTS.md".text == "KIMCHI-REPLACEMENT"
     );
   };
 }

@@ -481,12 +481,12 @@ delivery router (`lib/ai/deliver.nix`) plus one adapter per backend
 `home.file`, `home.activation`, devenv `files`, `tasks` or `enterTest`. Claude
 context/rules, Codex user AGENTS.md, Copilot's repository context/instructions,
 Kimchi harness AGENTS.md, and Kiro Home Manager context/steering all use the
-runtime maps. Repository-local Codex/Kiro AGENTS.md retains one
+runtime maps. Repository-local Codex/Kimchi/Kiro AGENTS.md retains one
 divergence-checking owner and enters the same architecture through hidden
-`ai.internal.files`, never through competing runtime writers. Public Codex/Kiro
-entries for a shared target arbitrate inside that owner before its single native
-sink: equal entries deduplicate, divergence fails, an ordinary entry replaces
-the generated default, and null suppresses it.
+`ai.internal.files`, never through competing runtime writers. Public
+Codex/Kimchi/Kiro entries for a shared target arbitrate inside that owner before
+its single native sink: equal entries deduplicate, divergence fails, an ordinary
+entry replaces the generated default, and null suppresses it.
 
 It is a delivery description, not a universal file abstraction. Secret-bearing
 values and runtime state keep their existing typed lifecycle owners, and a

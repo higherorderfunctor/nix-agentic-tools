@@ -239,11 +239,11 @@ Package callbacks may render entries into the runtime map but must not read that
 map to define normalized inputs; keeping the edge one-way is what makes the
 module fixed point evaluable.
 
-Repository-local Codex/Kiro `AGENTS.md` is the shared-target exception, not a B7
-exception. `sharedAgentsMd.nix` admits applicable public entries from enabled
-runtimes into its hidden final map before the one native sink; a disabled
-runtime's declared map remains inert. The generated composition is a lazy
-default there, so ordinary replacements and null tombstones arbitrate at B7
+Repository-local Codex/Kimchi/Kiro `AGENTS.md` is the shared-target exception,
+not a B7 exception. `sharedAgentsMd.nix` admits applicable public entries from
+enabled runtimes into its hidden final map before the one native sink; a
+disabled runtime's declared map remains inert. The generated composition is a
+lazy default there, so ordinary replacements and null tombstones arbitrate at B7
 without reading discarded source-backed generator content; equal runtime entries
 deduplicate and divergent ones fail. Size guards read only the surviving inline
 final entry. A surviving store-backed `source` remains lazy and is not

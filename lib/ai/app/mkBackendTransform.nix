@@ -178,12 +178,13 @@
   };
   customConfig = backendConfigFn callbackArgs;
   migrationConfig = migrationConfigFn callbackArgs;
-  # Repository AGENTS.md targets have one cross-runtime owner. Codex and Kiro
-  # public file entries for those paths arbitrate inside sharedAgentsMd.nix;
+  # Repository AGENTS.md targets have one cross-runtime owner. Codex, Kimchi,
+  # and Kiro public file entries for those paths arbitrate inside
+  # sharedAgentsMd.nix;
   # letting their ordinary sinks lower the same target independently would
   # bypass whole-entry replacement and null tombstones at B7.
   sharedAgentsMdTargets =
-    if backend == "devenv" && builtins.elem appRecord.name ["codex" "kiro"]
+    if backend == "devenv" && builtins.elem appRecord.name ["codex" "kimchi" "kiro"]
     then
       builtins.attrNames (
         lib.attrByPath ["ai" "internal" "agentsMd"] {} config
