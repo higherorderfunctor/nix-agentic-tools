@@ -3180,7 +3180,7 @@ in {
             };
             files = {
               ".kiro/steering/AGENTS.md".content.text = "CONSUMER-CONTEXT.";
-              ".kiro/steering/symlinked.md" = null;
+              ".kiro/steering/symlinked.md".content.enable = false;
             };
           };
         };
@@ -3512,8 +3512,8 @@ in {
         entry
         != null
         && entry.text != null
-        # The tag is the exclusion: a text entry has no `source` attribute.
-        && !(entry ? source)
+        # Unified content records retain the inactive source arm as null.
+        && entry.source == null
         && lib.hasInfix "Inline content" entry.text
     );
 
@@ -3531,9 +3531,8 @@ in {
         entry
         != null
         && entry.text != null
-        # The tag itself is the exclusion now: a baked path carries `text` and
-        # no `source` attribute at all.
-        && !(entry ? source)
+        # The source was baked into text; the inactive arm remains null.
+        && entry.source == null
         && lib.hasInfix "Alpha steering body" entry.text
     );
 
