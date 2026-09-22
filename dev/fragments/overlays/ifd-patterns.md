@@ -1,7 +1,6 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-09-22 — Kiro settings extraction validates its
-> materialized TUI registry and workspace merge with AST checks.
+> **Last verified:** 2026-09-22 — Kiro settings extraction validates its materialized TUI registry and workspace merge with AST checks; Kimchi measures hash-pinned source and pi declaration inputs without reading the derivation at evaluation time.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -161,12 +160,14 @@ minutes later inside `nix-update`.
 
 ### Extracted sidecars are the IFD-free path — and their drift check is not a correctness gate
 
-`mkClaudeExtract`, `mkCodexExtract`, and `mkKiroExtract` in each CLI owner's
-`lib/packaging.nix` probe a packaged binary at BUILD time (`passthru.extracted`)
-and emit a JSON sidecar that is COMMITTED (`packages/<owner>/extracted.json`).
-Modules `builtins.readFile` the committed file, never the derivation, so option
-surfaces derived from a binary cost no IFD. `checks/<pkg>-extracted.nix` then
-compares committed against freshly-built to catch a stale sidecar.
+Each measured package exposes a BUILD-time `passthru.extracted` and emits a JSON
+sidecar that is COMMITTED (`packages/<owner>/extracted.json`). Binary probes use
+`mkClaudeExtract`, `mkCodexExtract`, and `mkKiroExtract`; glab and Kimchi
+instead measure pinned source inputs. Consumers read the committed file, never
+the derivation, so option surfaces derived from it cost no IFD. Kimchi's sidecar
+is measurement only until its option shape is settled.
+`checks/<pkg>-extracted.nix` then compares committed against freshly built
+output to catch a stale sidecar.
 
 Kiro's `models` field is the exception to the binary source: it is derived from
 the committed public documentation snapshot, refreshed by the update job even
@@ -174,8 +175,8 @@ without a CLI release. Its live model list requires authentication and varies by
 account. See `packages/kiro-cli/docs/settings-shape.md` for the source boundary
 and measured exclusions.
 
-**Two of the four are no longer greps, and that is the direction of travel.**
-`glab`'s extract is a Go program compiled against upstream's own
+**Three of the five are no longer binary greps, and that is the direction of
+travel.** `glab`'s extract is a Go program compiled against upstream's own
 `internal/config.KeySchema`, inline in
 `packages/glab/packages/ai/devTools/glab/package.nix`. `mkClaudeExtract` unpacks
 the Bun single-exec's module graph
@@ -187,7 +188,10 @@ than anything this repo recognizes by eye. Everything located by that path is
 located by CONTENT — never a chunk filename, a minified identifier or a byte
 offset, none of which the macOS and Linux builds of one version agree on. That
 is what lets ONE sidecar be committed for both platforms; the darwin `build` job
-is the only place that claim is ever tested by a build.
+is the only place that claim is ever tested by a build. Kimchi's Python
+extractor reads the hash-pinned release source plus the exact pi npm package
+declared by that release. It measures both native settings files, both CLI
+layers, and both environment namespaces without unpacking the Bun executable.
 
 Reach for a grep only for facts that are genuinely outside the artifact's own
 schema. Two survive in `mkClaudeExtract` for exactly that reason: the launch-pin
@@ -214,7 +218,7 @@ bump. Fix the wiring; the file is a symptom.
 **A `passthru.extracted` with no matching `extraExtract` is therefore a LATENT
 bump failure**, not a cosmetic gap: it is guaranteed red the first time the
 version moves, and completely silent before that. glab shipped that way and the
-gap sat invisible from #560 until its first-ever bump (#621). If you add a fifth
+gap sat invisible from #560 until its first-ever bump (#621). If you add another
 extracted package, wire the regeneration in the same commit.
 
 Where it runs, which is what determines when it CANNOT run: `extraExtract` is
@@ -285,24 +289,43 @@ allowance: releases before 0.149.0 require `untrusted`, while 0.149.0 and newer
 reject it, matching upstream's explicit removal. When you add a key or category,
 add its shape assertion in the same commit.
 
-#### Kiro settings must come from the shipped TUI source
+#### But sometimes an empty capture is the ANSWER, not a dead anchor
 
-Kiro 2.23.0 stopped exposing its TUI JavaScript as plaintext in the chat
-executable. An ELF byte scan therefore lost the registry even though the
-registry still exists in the compressed source materialized on first launch. The
-extractor requires a sandboxed Nix build with fake KAS and isolated state; CI
-explicitly enables and checks the sandbox on both platforms. It checks the
-materialized SHA-256, then parses the actual source. HOME/XDG isolation alone is
-insufficient: native credential discovery can reach host facilities outside
-those directories.
+The rule above says a non-empty guard is worthless. It does not say every
+extractor must demand a non-empty result, and kiro's
+`workspaceOverridableSettings` is the case that separates the two.
 
-The TypeScript AST probe requires one settings registry and either a candidate
-workspace allowlist with a merge that consults that very set, or neither set nor
-merge. It evaluates their validated expressions and the selected merge helper
-with inert loaders in an isolated JavaScript VM. The paired absence yields `[]`,
-as it did for versions before 2.21.1 with no workspace merge. A one-sided
-absence or an ambiguous set fails: an unreadable allowlist would reject
-legitimate workspace settings.
+That field lists the `cli.json` keys a project-local settings file may override.
+The mechanism is NEW in kiro-cli 2.21.1: measured across the store, 2.18.1,
+2.19.0, 2.20.2 and 2.21.0 carry no such set and no workspace-merge code at all,
+so for those releases the honest answer is "this kiro honors no workspace
+override" — an empty list, not a failure. Hard-failing there would wedge the
+update pipeline the first time upstream reverted a release-old mechanism, which
+is a merge-blocking liability rather than a signal.
+
+So when a captured category can legitimately be absent, assert on the thing that
+proves the probe COULD have answered, and let the category itself be empty:
+
+- kiro's probe fails if the bundle's `SCREAMING -> "dotted.key"` settings
+  registry has no `CHAT_DEFAULT_MODEL` entry. That registry is what the members
+  resolve through, so its absence means the JS payload is not what we think it
+  is and "no allowlist" would be a guess.
+- It fails on MORE than one candidate set (ambiguous — the extract describes
+  one), mirroring `kiroLocateChatScript`'s own ambiguity refusal.
+- It fails on a member that resolves to nothing or to two different keys. A
+  PARTIAL allowlist is worse than none here, because the module uses it to
+  REJECT keys: a short list rejects settings kiro actually honors.
+
+The distinction to keep is the same one the locator draws between a location
+failure and a content failure. "Upstream does not have this" and "we can no
+longer tell what upstream has" are different findings, and an extractor that
+collapses them into one empty list is the dead-anchor failure wearing a
+different hat.
+
+One consumer-side consequence, worth stating because it is where the empty case
+actually lands: an empty allowlist makes EVERY key invalid at that scope, so the
+assertion that reads it must say "this kiro honors no workspace override at all"
+rather than listing the allowed keys and printing nothing.
 
 #### An anchor can lose its TYPE information without losing its match
 
