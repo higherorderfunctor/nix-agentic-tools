@@ -112,9 +112,9 @@
   # An entry is removed when its factory stops writing sinks directly, and the
   # check fails in BOTH directions — a new writer anywhere under
   # `packages/*/lib/` fails it, and so does an entry the scan can no longer
-  # reproduce. The list is empty when the migration is done, and then this
-  # capstone replaces this transitional census when the list would become
-  # empty; an explicit guard below makes that handoff self-retiring.
+  # reproduce. The capstone replaces this transitional census before the list
+  # would become empty; an explicit guard below makes that handoff
+  # self-retiring.
   #
   # What the scan CANNOT see is a bundle a helper returns —
   # `lib.mkMerge [(helpers.mkOwnedDocument …)]` writes `home.activation`,
