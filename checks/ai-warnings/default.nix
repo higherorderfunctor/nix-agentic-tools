@@ -219,7 +219,7 @@
           trigger = "UserPromptSubmit";
           action = {
             type = "agent";
-            prompt = "probe";
+            prompt = {text = "probe";};
           };
           timeout = 1;
         };
@@ -232,7 +232,7 @@
           trigger = "UserPromptSubmit";
           action = {
             type = "agent";
-            prompt = "probe";
+            prompt = {text = "probe";};
             command = "true";
           };
         };
@@ -245,7 +245,7 @@
           trigger = "UserPromptSubmit";
           action = {
             command = "true";
-            prompt = "probe";
+            prompt = {text = "probe";};
           };
         };
         suffix = ".action.prompt";
