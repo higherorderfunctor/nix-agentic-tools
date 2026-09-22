@@ -1,64 +1,35 @@
 {
   "config": {
-    "apiKey": {
-      "project": true
-    },
+    "apiKey": {},
     "api_key": {
-      "aliasFor": "apiKey",
-      "project": true
+      "aliasFor": "apiKey"
     },
-    "deviceId": {
-      "project": true
-    },
+    "deviceId": {},
     "device_id": {
-      "aliasFor": "deviceId",
-      "project": true
+      "aliasFor": "deviceId"
     },
-    "gitTokens": {
-      "project": false
-    },
-    "llmEndpoint": {
-      "project": true
-    },
+    "gitTokens": {},
+    "llmEndpoint": {},
     "maxToolResultChars": {
       "inert": true,
-      "project": true,
       "warning": "read only to detect obsolete configuration; it has no runtime effect"
     },
     "mcpSearch": {
       "inert": true,
-      "project": true,
       "warning": "read only to detect obsolete configuration; it has no runtime effect"
     },
     "mcpSearchLimit": {
       "inert": true,
-      "project": true,
       "warning": "read only to detect obsolete configuration; it has no runtime effect"
     },
-    "migrationState": {
-      "project": true
-    },
-    "onboarding": {
-      "project": false
-    },
-    "preferences": {
-      "project": false
-    },
-    "redaction": {
-      "project": true
-    },
-    "skillPaths": {
-      "project": true
-    },
-    "surveys": {
-      "project": false
-    },
-    "telemetry": {
-      "project": false
-    },
-    "teleport": {
-      "project": false
-    }
+    "migrationState": {},
+    "onboarding": {},
+    "preferences": {},
+    "redaction": {},
+    "skillPaths": {},
+    "surveys": {},
+    "telemetry": {},
+    "teleport": {}
   },
   "environment": {
     "KIMCHI_ACTIVE_FERMENT": {
@@ -119,13 +90,13 @@
       "consumerOverridable": true,
       "controls": "ferment stale-lock age"
     },
-    "KIMCHI_INFRA_BREAKER_THRESHOLD": {
-      "consumerOverridable": true,
-      "controls": "infrastructure circuit-breaker failure threshold"
-    },
     "KIMCHI_IDE_LOCKFILE_DIR": {
       "consumerOverridable": true,
       "controls": "IDE lock-file directory"
+    },
+    "KIMCHI_INFRA_BREAKER_THRESHOLD": {
+      "consumerOverridable": true,
+      "controls": "infrastructure circuit-breaker failure threshold"
     },
     "KIMCHI_LSP_BINARIES": {
       "consumerOverridable": true,

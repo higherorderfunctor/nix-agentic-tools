@@ -46,7 +46,12 @@
         cp -r ${extractionSources.kimchi} "$TMPDIR/collision-source"
         cp -r ${extractionSources.kimchi} "$TMPDIR/config-shape-source"
         cp -r ${extractionSources.kimchi} "$TMPDIR/harness-shape-source"
-        chmod -R u+w "$TMPDIR/collision-source" "$TMPDIR/config-shape-source" "$TMPDIR/harness-shape-source"
+        cp -r ${extractionSources.kimchi} "$TMPDIR/project-tier-source"
+        chmod -R u+w \
+          "$TMPDIR/collision-source" \
+          "$TMPDIR/config-shape-source" \
+          "$TMPDIR/harness-shape-source" \
+          "$TMPDIR/project-tier-source"
 
         substituteInPlace "$TMPDIR/collision-source/src/config.ts" \
           --replace-fail 'const parsed = JSON.parse(raw)' $'const parsed = JSON.parse(raw)\n\t\tvoid parsed.harness'
@@ -54,6 +59,8 @@
           --replace-fail 'typeof parsed.apiKey === "string"' 'typeof parsed.apiKey === "number"'
         substituteInPlace "$TMPDIR/harness-shape-source/src/extensions/orchestration/model-roles.ts" \
           --replace-fail 'orchestrator: string' 'orchestrator: number'
+        substituteInPlace "$TMPDIR/project-tier-source/src/config.ts" \
+          --replace-fail 'apiKey: projectExtras.apiKey ?? globalExtras.apiKey' 'apiKey: globalExtras.apiKey'
 
         expect_rejection() {
           label="$1"
@@ -88,6 +95,16 @@
           "harness/settings.json Kimchi additions validation shape changed" >> "$TMPDIR/proof"
 
         ${runExtractor extractionSources.kimchi ''"$TMPDIR/real.json"''}
+        ${runExtractor ''"$TMPDIR/project-tier-source"'' ''"$TMPDIR/project-tier.json"''}
+        if ${pkgs.jq}/bin/jq -e \
+          '(.config.projectTier.honoredKeys | index("apiKey") == null and index("api_key") == null) and
+           (.config.keys.apiKey.project == false and .config.keys.api_key.project == false)' \
+          "$TMPDIR/project-tier.json" > /dev/null; then
+          echo "project-tier (exit 0): removing projectExtras.apiKey removed apiKey and api_key" >> "$TMPDIR/proof"
+        else
+          echo "FAIL: project-tier mutation did not change compiler-derived project keys" >&2
+          exit 1
+        fi
         {
           ${pkgs.coreutils}/bin/cat "$TMPDIR/proof"
           echo "real (exit 0): kimchi-extract: config.json harness guard passed"
