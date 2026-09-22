@@ -66,6 +66,7 @@ in {
         matcher = ["**/*.root"];
       };
       runtimeValue.text = "runtime";
+      suppressionValue.enable = false;
       checkRoot = value:
         value.text == "root" && value.matcher == ["**/*.root"];
       checkRuntime = value:

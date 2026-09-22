@@ -73,11 +73,16 @@ in
       Copilot-specific context appended after `ai.context`. Devenv writes it
       beneath `ai.copilot.projectDir` for github.com's reviewer; Home Manager
       declares the same option for schema parity but treats it as a no-op.
-      Set exactly one of `text` or `source`; `filename` controls the artifact name.
+      When `text` and `source` are defined at different module priorities, the
+      higher-priority definition supplies the content whichever field it targets;
+      definitions at the same priority conflict. Same-priority `text` definitions
+      concatenate in module order. Set `enable = false` to omit this context.
+      `filename` controls the artifact name.
     '';
     rulesDescription = ''
       Copilot-specific rules replace top-level `ai.rules` entries at the same
-      key; null suppresses an inherited rule.
+      key; set `enable = false` to suppress an inherited rule. Same-priority
+      `text` definitions concatenate in module order.
       Devenv writes them beneath `ai.copilot.projectDir` for github.com's reviewer;
       Home Manager declares the same option for schema parity but treats it as a
       no-op.

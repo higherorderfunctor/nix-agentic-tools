@@ -48,10 +48,11 @@ args @ {
     settings = lib.mapAttrs (name: preset:
       lib.mkOption {
         type = aiTypes.optionalTextSource {
+          defaultContent = preset;
           description = "the ${runtime} ${name} instruction block";
           enableDefault = true;
         };
-        default = preset;
+        default = {};
         description = "${runtime} ${name} instruction block. Set text or source to replace the package preset. launch is used when this runtime is an external delegate in another runtime's skill.";
       })
     presets.${runtime};

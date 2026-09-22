@@ -6,6 +6,7 @@
   ...
 }: let
   inherit (import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) mkTest;
+  inherit (harness) evalDevenv evalHm;
   aiTypes = import ../../lib/ai/types.nix {inherit lib;};
   source = builtins.toFile "text-source-options-source" "packaged prose\n";
 
@@ -27,6 +28,57 @@
     };
   evaluate = evaluateWith (aiTypes.optionalTextSource {description = "entry prose";});
 
+  defaultContentType = aiTypes.optionalTextSource {
+    defaultContent.text = "package prose";
+    description = "defaulted prose";
+  };
+  evaluateDefaultContent = modules:
+    lib.evalModules {
+      modules =
+        [
+          {
+            options.value = lib.mkOption {
+              type = defaultContentType;
+              default = {};
+            };
+          }
+        ]
+        ++ modules;
+    };
+  defaultContentUnset = evaluateDefaultContent [];
+  defaultContentEnabled = evaluateDefaultContent [{value.enable = true;}];
+  defaultContentSource = evaluateDefaultContent [{value.source = source;}];
+  requiredDefaultContent =
+    (lib.evalModules {
+      modules = [
+        {
+          options.value = lib.mkOption {
+            type = aiTypes.textSource {
+              defaultContent.text = "required package prose";
+              description = "required defaulted prose";
+            };
+            default = {};
+          };
+        }
+      ];
+    }).config.value;
+
+  forcedSource = evaluate [
+    {
+      entries.example = {
+        source = lib.mkForce source;
+        text = "consumer prose";
+      };
+    }
+  ];
+  defaultText = evaluate [
+    {
+      entries.example = {
+        inherit source;
+        text = lib.mkDefault "default prose";
+      };
+    }
+  ];
   packageSource = evaluate [
     {entries.example.source = lib.mkDefault source;}
   ];
@@ -34,6 +86,20 @@
     description = "entry prose";
     enableDefault = true;
   }) [{entries.example.source = lib.mkDefault source;}];
+  enabledEmpty = evaluate [{entries.example.enable = true;}];
+  enabledEmptyFailed = !(builtins.tryEval (builtins.deepSeq enabledEmpty.config.entries.example true)).success;
+  requiredEmpty = evaluate [];
+  requiredEmptyFailed = !(builtins.tryEval (builtins.deepSeq requiredEmpty.config.required true)).success;
+  emptyOverridesDefaultSource = evaluateWith (aiTypes.optionalTextSource {
+    defaultContent.source = source;
+    description = "entry prose";
+    enableDefault = true;
+  }) [{entries.example.text = "";}];
+  emptyOverridesDefaultSourceFailed = !(builtins.tryEval (builtins.deepSeq emptyOverridesDefaultSource.config.entries.example true)).success;
+  disabledEmptyOverridesDefaultSource = evaluateWith (aiTypes.optionalTextSource {
+    defaultContent.source = source;
+    description = "entry prose";
+  }) [{entries.example.text = "";}];
   samePriority = evaluate [
     {
       entries.example = {
@@ -71,15 +137,112 @@
   samePriorityFailed = !(builtins.tryEval (builtins.deepSeq samePriority.config.entries true)).success;
   unset = evaluate [{entries.example = {};}];
 
+  invalidTextSourceDefaults = path: declarations:
+    lib.concatLists (lib.mapAttrsToList (name: declaration: let
+      optionPath = path ++ [name];
+    in
+      if declaration._type or null == "option"
+      then let
+        subOptions = declaration.type.getSubOptions optionPath;
+        isDirectTextSource =
+          declaration.type.name
+          == "submodule"
+          && subOptions ? _textSourceType;
+      in
+        lib.optional (isDirectTextSource && (declaration.default or {}) != {}) optionPath
+        ++ invalidTextSourceDefaults optionPath (builtins.removeAttrs subOptions ["_module"])
+      else if builtins.isAttrs declaration
+      then invalidTextSourceDefaults optionPath declaration
+      else [])
+    (builtins.removeAttrs declarations ["_module"]));
+  checkTextSourceDefaults = evaluated: let
+    invalid = invalidTextSourceDefaults [] evaluated.options;
+  in
+    if invalid == []
+    then true
+    else throw "text-source options must install package defaults with defaultContent, not a non-empty outer mkOption default: ${lib.concatMapStringsSep ", " lib.showOption invalid}";
+  badDeclaration = type:
+    lib.evalModules {
+      modules = [
+        {
+          options.value = lib.mkOption {
+            inherit type;
+            default = {text = "bad outer default";};
+          };
+        }
+      ];
+    };
+  badDirect = badDeclaration (aiTypes.optionalTextSource {
+    defaultContent.text = "package prose";
+    description = "bad direct declaration";
+  });
+  badRequired = badDeclaration (aiTypes.textSource {description = "bad required declaration";});
+  badExtended = badDeclaration (aiTypes.extendSubmodule
+    (aiTypes.optionalTextSource {description = "bad extended declaration";})
+    {options.extra = lib.mkOption {type = lib.types.bool;};});
+  badReimported = badDeclaration (lib.types.submodule {
+    imports = (aiTypes.optionalTextSource {description = "bad reimported declaration";}).getSubModules;
+  });
+  badDirectRejected = !(builtins.tryEval (checkTextSourceDefaults badDirect)).success;
+  badRequiredRejected = !(builtins.tryEval (checkTextSourceDefaults badRequired)).success;
+  badExtendedRejected = !(builtins.tryEval (checkTextSourceDefaults badExtended)).success;
+  badReimportedRejected = !(builtins.tryEval (checkTextSourceDefaults badReimported)).success;
+
+  # This repository guard covers direct text-source submodule declarations
+  # reachable through the aggregate Home Manager and devenv harness imports,
+  # including submodules nested below container options. It deliberately does
+  # not reject defaults on a wrapping type itself (such as attrsOf or nullOr),
+  # because pool-level container defaults are valid. It also cannot inspect
+  # downstream consumers or custom module sets that the harnesses do not import.
+  realDeclarationsAccepted =
+    checkTextSourceDefaults (evalHm {})
+    && checkTextSourceDefaults (evalDevenv {});
+
   contract =
-    if packageSource.config.entries.example.text != "packaged prose\n"
+    if !badDirectRejected
+    then throw "lib.ai.types: outer default guard accepted a direct text-source declaration"
+    else if !badRequiredRejected
+    then throw "lib.ai.types: outer default guard accepted a textSource declaration"
+    else if !badExtendedRejected
+    then throw "lib.ai.types: outer default guard accepted an extended text-source declaration"
+    else if !badReimportedRejected
+    then throw "lib.ai.types: outer default guard accepted a reimported text-source declaration"
+    else if !realDeclarationsAccepted
+    then throw "lib.ai.types: outer default guard rejected a repository declaration"
+    else if defaultContentUnset.config.value.enable
+    then throw "lib.ai.types: default content unexpectedly enabled an unset option"
+    else if defaultContentUnset.config.value.text != "package prose"
+    then throw "lib.ai.types: unset option lost its default content"
+    else if !defaultContentEnabled.config.value.enable
+    then throw "lib.ai.types: explicit enable did not enable default content"
+    else if defaultContentEnabled.config.value.text != "package prose"
+    then throw "lib.ai.types: explicit enable lost the default content"
+    else if defaultContentSource.config.value.text != "packaged prose\n"
+    then throw "lib.ai.types: consumer source did not override default content"
+    else if requiredDefaultContent.text != "required package prose"
+    then throw "lib.ai.types: textSource did not install default content"
+    else if forcedSource.config.entries.example.text != "packaged prose\n"
+    then throw "lib.ai.types: forced source did not override ordinary text"
+    else if packageSource.config.entries.example.text != "packaged prose\n"
     then throw "lib.ai.types: package source did not derive text"
     else if packageSource.config.entries.example.enable
     then throw "lib.ai.types: package source changed enableDefault false"
     else if !packageSourceEnabledByDefault.config.entries.example.enable
     then throw "lib.ai.types: package source changed enableDefault true"
+    else if !enabledEmptyFailed
+    then throw "lib.ai.types: enabled optional text source accepted empty content"
+    else if !requiredEmptyFailed
+    then throw "lib.ai.types: required textSource accepted empty content"
+    else if !emptyOverridesDefaultSourceFailed
+    then throw "lib.ai.types: explicit empty text overrode a default source"
+    else if disabledEmptyOverridesDefaultSource.config.entries.example.enable
+    then throw "lib.ai.types: explicit empty text auto-enabled a default-disabled source"
+    else if disabledEmptyOverridesDefaultSource.config.entries.example.text != ""
+    then throw "lib.ai.types: explicit empty text did not override a default-disabled source"
     else if consumerText.config.entries.example.text != "consumer prose"
     then throw "lib.ai.types: consumer text did not override package source"
+    else if defaultText.config.entries.example.text != "packaged prose\n"
+    then throw "lib.ai.types: ordinary source did not override default text"
     else if !consumerText.config.entries.example.enable
     then throw "lib.ai.types: consumer override did not auto-enable entry"
     else if consumerSourceNull.config.entries.example.text != ""
@@ -94,6 +257,8 @@
     then throw "lib.ai.types: consumer text did not auto-enable a new entry"
     else if consumerTextDisabled.config.entries.example.enable
     then throw "lib.ai.types: explicit enable false did not override auto-enable"
+    else if consumerTextDisabled.config.entries.example.text != "consumer prose"
+    then throw "lib.ai.types: disabled text source did not preserve content"
     else if unset.config.entries.example.text != ""
     then throw "lib.ai.types: unset text did not retain its empty default"
     else if unset.config.entries.example.enable

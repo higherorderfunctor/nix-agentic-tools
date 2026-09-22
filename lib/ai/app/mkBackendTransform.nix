@@ -58,8 +58,8 @@
   cfg = config.ai.${appRecord.name};
   supportedPools = appRecord.supportedPools or [];
   supportsPool = poolName: builtins.elem poolName supportedPools;
-  # Per-runtime entries replace root entries atomically. Null is a tombstone
-  # filtered after precedence, so it suppresses a root entry at the same key.
+  # Per-runtime entries replace root entries atomically. For nullable pools,
+  # null is filtered after precedence so it suppresses a same-key root entry.
   mergePool = poolName: topPool: cliPool:
     if supportsPool poolName
     then aiCommon.mergePool {inherit topPool cliPool;}
@@ -67,7 +67,9 @@
   mergedAgents = mergePool "agents" config.ai.agents (cfg.agents or {});
   mergedEnvironmentVariables = mergePool "environmentVariables" config.ai.environmentVariables (cfg.environmentVariables or {});
   mergedLspServers = mergePool "lspServers" config.ai.lspServers (cfg.lspServers or {});
-  mergedRules = mergePool "rules" config.ai.rules cfg.rules;
+  # Suppression applies after runtime entries replace root entries so a
+  # runtime-local `enable = false` can retract an inherited root rule.
+  mergedRules = lib.filterAttrs (_: aiCommon.hasContent) (mergePool "rules" config.ai.rules cfg.rules);
   # Proxy ownership is resolved at the declaration scope BEFORE fanout.
   # Top-level declarations contribute only their lowered credential-free
   # client entries here; sharedOptions.nix emits their one managed unit.
@@ -135,11 +137,7 @@
   # arbitration.
   hasMergedContext =
     if supportsPool "context"
-    then
-      lib.any (value:
-        aiCommon.hasContent value
-        && ((value.text or null) == null || value.text != ""))
-      contextValues
+    then lib.any aiCommon.hasContent contextValues
     else false;
   mergedContext =
     if supportsPool "context"
@@ -219,9 +217,10 @@ in {
         description = ''
           Final static files owned by ${appRecord.name}, keyed by a path relative
           to the active backend root (HOME for Home Manager, project root for
-          devenv). Set exactly one of `text` or `source`; `null` suppresses a
-          generated default. Generated entries use whole-file `mkDefault`
-          priority, so an ordinary consumer entry replaces the complete file.
+          devenv). Each non-null entry must set exactly one of inline `text` or a
+          store-backed `source`; `null` suppresses a generated default. Generated
+          entries use whole-file `mkDefault` priority, so an ordinary consumer
+          entry replaces the complete file.
         '';
       };
       package = lib.mkOption {
@@ -280,22 +279,30 @@ in {
       context = lib.mkOption {
         type = aiCommon.runtimeContextModule (appRecord.contextFilename or (throw "${appRecord.name}: supportedPools includes context but the app record has no contextFilename"));
         default = {};
-        apply = aiCommon.validateOptionalContent;
         description =
           appRecord.contextDescription or ''
             ${appRecord.name}-specific context appended after `ai.context` in
             the runtime's single always-on `${appRecord.contextFilename}` file.
-            Set exactly one of `text` or `source`; `filename` controls the native
-            artifact name.
+            When `text` and `source` are defined at different module priorities,
+            the higher-priority definition supplies the content whichever field
+            it targets; definitions at the same priority conflict. Same-priority
+            `text` definitions concatenate in module order. Enabled context must
+            resolve to non-empty `text` or a `source`. Set `enable = false` to
+            omit this context. `filename` controls the native artifact name.
           '';
       };
     }
     // lib.optionalAttrs (supportsPool "rules") {
       rules = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr (appRecord.ruleModule or aiCommon.ruleModule));
+        type = lib.types.attrsOf (appRecord.ruleModule or aiCommon.ruleModule);
         default = {};
-        apply = aiCommon.validateRules;
-        description = appRecord.rulesDescription or "${appRecord.name}-specific rules. Entries replace top-level ai.rules at the same key; null suppresses an inherited rule.";
+        description =
+          appRecord.rulesDescription or ''
+            ${appRecord.name}-specific rules. Entries replace top-level ai.rules
+            at the same key; set `enable = false` to suppress an inherited rule.
+            Same-priority `text` definitions concatenate in module order.
+            Enabled rules must resolve to non-empty `text` or a `source`.
+          '';
       };
       rulesDir = lib.mkOption {
         type = lib.types.nullOr aiCommon.dirOptionType;

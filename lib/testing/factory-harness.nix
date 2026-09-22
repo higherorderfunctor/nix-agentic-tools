@@ -104,6 +104,7 @@
     poolName,
     rootValue,
     runtimeValue,
+    suppressionValue ? null,
     checkRoot,
     checkRuntime,
   }: let
@@ -169,7 +170,7 @@
             ${runtimeA} = {
               enable = true;
               ${poolName} = {
-                removed = null;
+                removed = suppressionValue;
                 replaced = runtimeValue;
               };
             };
