@@ -101,12 +101,12 @@
     ${ourPkgs.jq}/bin/jq \
       --arg kh "$kimchi_source_hash" \
       --arg ku "$kimchi_source_url" \
-      --arg pach "$pi_agent_core_hash" \
-      --arg pacu "$pi_agent_core_url" \
-      --arg pacv "$pi_agent_core_version" \
-      --arg paih "$pi_ai_hash" \
-      --arg paiu "$pi_ai_url" \
-      --arg paiv "$pi_ai_version" \
+      --arg pi_agent_core_hash "$pi_agent_core_hash" \
+      --arg pi_agent_core_url "$pi_agent_core_url" \
+      --arg pi_agent_core_version "$pi_agent_core_version" \
+      --arg pi_ai_hash "$pi_ai_hash" \
+      --arg pi_ai_url "$pi_ai_url" \
+      --arg pi_ai_version "$pi_ai_version" \
       --arg ph "$pi_package_hash" \
       --arg pu "$pi_package_url" \
       --arg pv "$pi_version" \
@@ -115,8 +115,8 @@
       --arg ptv "$pi_tui_version" \
       '. + {extraction: {
         kimchiSource: {hash: $kh, url: $ku},
-        piAgentCorePackage: {hash: $pach, url: $pacu, version: $pacv},
-        piAiPackage: {hash: $paih, url: $paiu, version: $paiv},
+        piAgentCorePackage: {hash: $pi_agent_core_hash, url: $pi_agent_core_url, version: $pi_agent_core_version},
+        piAiPackage: {hash: $pi_ai_hash, url: $pi_ai_url, version: $pi_ai_version},
         piPackage: {hash: $ph, url: $pu, version: $pv},
         piTuiPackage: {hash: $pth, url: $ptu, version: $ptv}
       }}' \
