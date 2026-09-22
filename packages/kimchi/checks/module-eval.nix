@@ -179,6 +179,26 @@ in {
         && lib.hasPrefix "json-settings/kimchi-harness-settings-" (hmHarnessDocument evaluated).ledger
     );
 
+    # Upgrade contract: generations before project-path delivery keyed both HM
+    # ledgers by configDir. Changing either identity strands removed leaves in
+    # the user files because the reconciler sees only the newly named ledger.
+    module-kimchi-hm-ledger-identity = mkTest "kimchi-hm-ledger-identity" (
+      let
+        configDir = "custom/kimchi";
+        evaluated = evalHm {
+          ai.kimchi = {
+            inherit configDir;
+            enable = true;
+          };
+        };
+        suffix = builtins.hashString "sha256" configDir;
+      in
+        (hmConfigDocument evaluated).ledger
+        == "json-settings/kimchi-config-${suffix}.json"
+        && (hmHarnessDocument evaluated).ledger
+        == "json-settings/kimchi-harness-settings-${suffix}.json"
+    );
+
     # native.harnessSettings render to harness/settings.json (mutable-state tree).
     module-kimchi-harness-settings = mkTest "kimchi-harness-settings" (
       let
