@@ -148,8 +148,8 @@
       # remain valid. Only the normalized root and per-runtime guidance surface
       # was retired.
       ${lib.concatMapStringsSep "\n" (name: ''
-          ! "$jq" --exit-status --arg name "${name}" 'has($name)' "${hmJson}" >/dev/null
-          ! "$jq" --exit-status --arg name "${name}" 'has($name)' "${devenvJson}" >/dev/null
+          "$jq" --exit-status --arg name "${name}" 'has($name) | not' "${hmJson}" >/dev/null
+          "$jq" --exit-status --arg name "${name}" 'has($name) | not' "${devenvJson}" >/dev/null
         '')
         (["ai.instructions"] ++ map (runtime: "ai.${runtime}.instructions") runtimes)}
 
@@ -159,10 +159,10 @@
       # can read what a reconciler's store plan will assert — it is a check
       # seam, never an ownership surface a consumer may declare.
       ${lib.concatMapStringsSep "\n" (name: ''
-          ! "$grep" -Fq '${name}' "${hmJson}"
-          ! "$grep" -Fq '${name}' "${devenvJson}"
-          ! "$grep" -Fq '${name}' "${docs.hmOptionsDoc.optionsCommonMark}"
-          ! "$grep" -Fq '${name}' "${docs.devenvOptionsDoc.optionsCommonMark}"
+          if "$grep" -Fq '${name}' "${hmJson}"; then exit 1; fi
+          if "$grep" -Fq '${name}' "${devenvJson}"; then exit 1; fi
+          if "$grep" -Fq '${name}' "${docs.hmOptionsDoc.optionsCommonMark}"; then exit 1; fi
+          if "$grep" -Fq '${name}' "${docs.devenvOptionsDoc.optionsCommonMark}"; then exit 1; fi
         '')
         ["_integration_writable_roots" "_ownPlans"]}
 
