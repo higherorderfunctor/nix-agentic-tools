@@ -36,7 +36,10 @@ function parseArguments(argv) {
     "kimchi-source-url",
     "kimchi-version",
     "out",
+    "pi-agent-core-package",
+    "pi-ai-package",
     "pi-package",
+    "pi-tui-package",
     "typescript",
   ]) {
     if (!result[name]) fail(`missing --${name}`);
@@ -425,6 +428,127 @@ function discoverProjectConfigKeys(declarations, annotations, ts) {
   return result;
 }
 
+function runtimeValidationKinds(node, ts, initialAliases = {}) {
+  const aliases = new Map(
+    Object.entries(initialAliases).map(([name, path]) => [name, path]),
+  );
+  function unwrap(expression) {
+    while (
+      ts.isAsExpression(expression) ||
+      ts.isNonNullExpression(expression) ||
+      ts.isParenthesizedExpression(expression) ||
+      ts.isSatisfiesExpression(expression)
+    ) {
+      expression = expression.expression;
+    }
+    return expression;
+  }
+  function pathFor(expression) {
+    expression = unwrap(expression);
+    if (ts.isIdentifier(expression)) return aliases.get(expression.text);
+    if (ts.isPropertyAccessExpression(expression)) {
+      const parent = pathFor(expression.expression);
+      if (parent) return [...parent, expression.name.text];
+    }
+    return undefined;
+  }
+  function collectAliases(current) {
+    if (
+      ts.isVariableDeclaration(current) &&
+      ts.isIdentifier(current.name) &&
+      current.initializer
+    ) {
+      const path = pathFor(current.initializer);
+      if (path) aliases.set(current.name.text, path);
+    }
+    if (
+      ts.isCallExpression(current) &&
+      ts.isPropertyAccessExpression(current.expression) &&
+      current.expression.name.text === "every"
+    ) {
+      const path = pathFor(current.expression.expression);
+      const callback = current.arguments[0];
+      const parameter =
+        callback &&
+        (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)) &&
+        callback.parameters[0]?.name;
+      if (path && parameter && ts.isIdentifier(parameter))
+        aliases.set(parameter.text, [...path, "[]"]);
+    }
+    ts.forEachChild(current, collectAliases);
+  }
+  collectAliases(node);
+
+  const found = new Map();
+  function record(path, kind) {
+    const key = path.join(".");
+    if (!found.has(key)) found.set(key, new Set());
+    found.get(key).add(kind);
+  }
+  function visit(current) {
+    if (ts.isBinaryExpression(current)) {
+      for (const [typed, literal] of [
+        [current.left, current.right],
+        [current.right, current.left],
+      ]) {
+        if (
+          ts.isTypeOfExpression(typed) &&
+          ts.isStringLiteralLike(literal) &&
+          ["boolean", "number", "object", "string"].includes(literal.text)
+        ) {
+          const path = pathFor(typed.expression);
+          if (path) record(path, literal.text);
+        }
+      }
+    }
+    if (
+      ts.isCallExpression(current) &&
+      ts.isPropertyAccessExpression(current.expression) &&
+      ts.isIdentifier(current.expression.expression) &&
+      current.expression.expression.text === "Array" &&
+      current.expression.name.text === "isArray" &&
+      current.arguments.length === 1
+    ) {
+      const path = pathFor(current.arguments[0]);
+      if (path) record(path, "array");
+    }
+    ts.forEachChild(current, visit);
+  }
+  visit(node);
+  return found;
+}
+
+function validateRuntimeDescriptor(
+  name,
+  descriptor,
+  validationKinds,
+  path = [name],
+) {
+  const key = path.join(".");
+  if (
+    ["array", "boolean", "number", "object", "string"].includes(descriptor.type)
+  ) {
+    if (!validationKinds.get(key)?.has(descriptor.type)) {
+      fail(
+        `config.json validation shape changed: ${key} is no longer guarded as a ${descriptor.type}`,
+      );
+    }
+  }
+  if (descriptor.type === "array" && descriptor.items) {
+    validateRuntimeDescriptor(name, descriptor.items, validationKinds, [
+      ...path,
+      "[]",
+    ]);
+  }
+  for (const [property, child] of Object.entries(descriptor.properties ?? {})) {
+    if (child.type !== "enum" && child.type !== "union")
+      validateRuntimeDescriptor(name, child, validationKinds, [
+        ...path,
+        property,
+      ]);
+  }
+}
+
 function extractConfig(sourceFile, declarations, annotations, checker, ts) {
   const readExtras = requireDeclaration(
     declarations,
@@ -506,61 +630,39 @@ function extractConfig(sourceFile, declarations, annotations, checker, ts) {
   };
 
   const discovered = discoverConfigKeys(sourceFile, checker, ts);
-  const validationKinds = new Map();
-  function recordValidation(name, kind) {
-    if (!validationKinds.has(name)) validationKinds.set(name, new Set());
-    validationKinds.get(name).add(kind);
-  }
-  function parsedProperty(node) {
-    return ts.isPropertyAccessExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "parsed"
-      ? node.name.text
-      : undefined;
-  }
-  function inspectGuard(node) {
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken &&
-      ts.isTypeOfExpression(node.left) &&
-      ts.isStringLiteralLike(node.right) &&
-      ["boolean", "number", "object", "string"].includes(node.right.text)
-    ) {
-      const name = parsedProperty(node.left.expression);
-      if (name) recordValidation(name, node.right.text);
-    }
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression) &&
-      node.expression.expression.text === "Array" &&
-      node.expression.name.text === "isArray" &&
-      node.arguments.length === 1
-    ) {
-      const name = parsedProperty(node.arguments[0]);
-      if (name) recordValidation(name, "array");
-    }
-    ts.forEachChild(node, inspectGuard);
-  }
-  inspectGuard(readExtras);
+  const extrasValidation = runtimeValidationKinds(readExtras, ts, {
+    parsed: [],
+  });
   for (const [name, descriptor] of Object.entries(extras)) {
-    if (!["array", "number", "string"].includes(descriptor.type)) continue;
-    if (!validationKinds.get(name)?.has(descriptor.type)) {
-      fail(
-        `config.json validation shape changed: ${name} is no longer guarded as a ${descriptor.type}`,
-      );
-    }
+    if (["migrationState", "onboarding", "preferences"].includes(name))
+      continue;
+    validateRuntimeDescriptor(name, descriptor, extrasValidation);
   }
   for (const [alias, canonical] of [
     ["api_key", "apiKey"],
     ["device_id", "deviceId"],
   ]) {
     const kind = extras[canonical].type;
-    if (!validationKinds.get(alias)?.has(kind)) {
+    if (!extrasValidation.get(alias)?.has(kind)) {
       fail(
         `config.json validation shape changed: ${alias} is no longer guarded as a ${kind}`,
       );
     }
+  }
+  for (const [name, functionName, root] of [
+    ["onboarding", "parseOnboardingConfig", "value"],
+    ["preferences", "parsePreferencesConfig", "value"],
+    ["telemetry", "readTelemetryConfig", "parsed"],
+  ]) {
+    const parser = requireDeclaration(
+      declarations,
+      functionName,
+      ts.isFunctionDeclaration,
+    );
+    const validation = runtimeValidationKinds(parser, ts, {
+      [root]: name === "telemetry" ? [] : [name],
+    });
+    validateRuntimeDescriptor(name, keys[name], validation);
   }
   if (discovered.has("harness")) {
     fail(
@@ -692,6 +794,12 @@ function extractHarness(declarations, settingsManagerSource, checker, ts) {
     ts.isInterfaceDeclaration,
   );
   const baseKeys = membersOfDeclaration(settings, checker, ts);
+  baseKeys.modelThinkingLevels = membersOfDeclaration(
+    settings,
+    checker,
+    ts,
+    true,
+  ).modelThinkingLevels;
   const defaultProjectTrust = extractDefaultProjectTrust(
     settingsManagerSource,
     declarations,
@@ -806,6 +914,13 @@ function extractHarness(declarations, settingsManagerSource, checker, ts) {
   // Kimchi's harness settings readers accept an absent top-level key and
   // either return undefined or apply a fallback; none is required in the file.
   for (const descriptor of Object.values(additions)) descriptor.optional = true;
+  // These declarations describe the normalized values after parser defaults.
+  // Their persisted input objects accept every child independently.
+  for (const name of ["fermentV2", "modelRoles"]) {
+    for (const property of Object.values(additions[name].properties))
+      property.optional = true;
+  }
+  additions.statusLine.properties.pinned.optional = true;
   if (additions.modelRoles.properties.orchestrator?.type !== "string") {
     fail(
       "harness/settings.json Kimchi additions validation shape changed: modelRoles.orchestrator is no longer a string",
@@ -826,6 +941,12 @@ function extractHarness(declarations, settingsManagerSource, checker, ts) {
   const keys = {};
   for (const [name, descriptor] of Object.entries(baseKeys))
     keys[name] = { source: "pi", ...descriptor };
+  for (const [name, descriptor] of Object.entries(baseKeys)) {
+    if (descriptor.type === "named")
+      fail(`pi harness setting ${name} has an unresolved named type`);
+  }
+  if (!baseKeys.modelThinkingLevels.additionalProperties)
+    fail("pi modelThinkingLevels value type was not resolved");
   for (const [name, descriptor] of Object.entries(additions))
     keys[name] = { source: "kimchi", ...descriptor };
   return {
@@ -1556,6 +1677,11 @@ async function main() {
   );
   const kimchiRoot = resolve(args["kimchi-source"]);
   const piRoot = resolve(args["pi-package"]);
+  const piTypePackages = {
+    "@earendil-works/pi-agent-core": resolve(args["pi-agent-core-package"]),
+    "@earendil-works/pi-ai": resolve(args["pi-ai-package"]),
+    "@earendil-works/pi-tui": resolve(args["pi-tui-package"]),
+  };
   const kimchiPaths = await filesUnder(join(kimchiRoot, "src"), {
     excludedDirectories: new Set(["__mocks__", "node_modules"]),
     file: (path) => path.endsWith(".ts") && !path.endsWith(".test.ts"),
@@ -1575,10 +1701,17 @@ async function main() {
     options: {
       allowJs: true,
       allowSyntheticDefaultImports: true,
+      baseUrl: "/",
       checkJs: false,
       module: ts.ModuleKind.NodeNext,
       moduleResolution: ts.ModuleResolutionKind.NodeNext,
       noEmit: true,
+      paths: Object.fromEntries(
+        Object.entries(piTypePackages).map(([name, root]) => [
+          name,
+          [join(root, "dist/index.d.ts")],
+        ]),
+      ),
       skipLibCheck: true,
       target: ts.ScriptTarget.ESNext,
     },
@@ -1604,6 +1737,20 @@ async function main() {
     await readFile(join(kimchiRoot, "package.json"), "utf8"),
   );
   const piVersion = piPackage.version;
+  for (const [name, root] of Object.entries(piTypePackages)) {
+    const dependencyPackage = JSON.parse(
+      await readFile(join(root, "package.json"), "utf8"),
+    );
+    const requested = piPackage.dependencies?.[name];
+    const expectedVersion = requested?.startsWith("^")
+      ? requested.slice(1)
+      : requested;
+    if (!expectedVersion || dependencyPackage.version !== expectedVersion) {
+      fail(
+        `pi requests ${name} ${JSON.stringify(requested)}, but the supplied declaration package is ${JSON.stringify(dependencyPackage.version)}`,
+      );
+    }
+  }
   const expectedKimchiSourceUrl = new URL(
     `https://github.com/getkimchi/kimchi/archive/refs/tags/v${args["kimchi-version"]}.tar.gz`,
   );
