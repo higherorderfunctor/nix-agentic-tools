@@ -135,12 +135,14 @@
       ${lib.concatMapStringsSep "\n" (runtime: ''
           "$jq" --exit-status 'has("ai.${runtime}.native.settings")' "${hmJson}" >/dev/null
           "$jq" --exit-status 'has("ai.${runtime}.native.settings")' "${devenvJson}" >/dev/null
-          ! "$jq" --exit-status 'has("ai.${runtime}.nativeSettings")' "${hmJson}" >/dev/null
-          ! "$jq" --exit-status 'has("ai.${runtime}.nativeSettings")' "${devenvJson}" >/dev/null
+          "$jq" --exit-status 'has("ai.${runtime}.nativeSettings") | not' "${hmJson}" >/dev/null
+          "$jq" --exit-status 'has("ai.${runtime}.nativeSettings") | not' "${devenvJson}" >/dev/null
         '')
         runtimes}
       "$jq" --exit-status 'has("ai.kimchi.native.harnessSettings")' "${hmJson}" >/dev/null
       "$jq" --exit-status 'has("ai.kimchi.native.harnessSettings")' "${devenvJson}" >/dev/null
+      "$jq" --exit-status 'has("ai.kimchi.harnessSettings") | not' "${hmJson}" >/dev/null
+      "$jq" --exit-status 'has("ai.kimchi.harnessSettings") | not' "${devenvJson}" >/dev/null
 
       # Semantic-agent `.instructions` fields and Semble's nested program feature
       # remain valid. Only the normalized root and per-runtime guidance surface
