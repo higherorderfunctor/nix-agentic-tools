@@ -8,8 +8,8 @@
 #   ~/.config/kimchi/config.json       — account/CLI settings
 #   ~/.config/kimchi/harness/          — agent runtime (settings.json, mcp.json,
 #                                         AGENTS.md, skills/)
-# The harness tree is mutable at runtime; HM uses activation merge for
-# harness/settings.json and static symlink writes for the rest.
+# Both backends reconcile config.json and harness/settings.json by leaf;
+# the remaining files are immutable and symlink-readable.
 {
   lib,
   pkgs,
@@ -19,9 +19,8 @@
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   mcpLib = import ../../../lib/mcp.nix {inherit lib;};
 
-  # Shared per-backend data prep. hm.config and devenv.config derive the
-  # same settings/env/context values from the merged inputs the
-  # transform injects — compute them once here instead of duplicating.
+  # The delivery function and package hook need the same settings, env and
+  # context values from merged inputs; prepare them once.
   mkPrep = {
     cfg,
     mergedEnvironmentVariables,
@@ -92,6 +91,117 @@
     ...
   }:
     (mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;}).package;
+  # One delivery description for both backends. The two former callback bodies
+  # were near-duplicates: they differed only in which native sink each wrote,
+  # which is exactly the decision the delivery layer now makes from the
+  # consumer facts below.
+  kimchiDelivery = {
+    cfg,
+    hasMergedContext,
+    mergedContext,
+    mergedEnvironmentVariables,
+    mergedServers,
+    mergedSkills,
+    moduleEnvironmentVariables,
+    ...
+  }: let
+    prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
+    inherit (prep) contextEntry filteredHarnessSettings filteredSettings;
+    harness = "${cfg.configDir}/harness";
+    # A LITERAL at the declaration site, hashed from the config directory so
+    # two configured roots never share ownership records.
+    ledgerFor = name: "json-settings/kimchi-${name}-${builtins.hashString "sha256" cfg.configDir}.json";
+    # Kimchi rewrites both of its documents while it runs — `/multi-model`
+    # and `kimchi resources` write `harness/settings.json` — so the only way
+    # to keep both sides' edits is to own the declared leaves inside them.
+    # A reconciled document is declared even when it has no leaves at all:
+    # an empty declaration RETIRES whatever the previous generation owned,
+    # which is the whole reason the writer is an identity rather than a
+    # product of the files that happen to exist, on either backend.
+    document = {
+      entry,
+      ledger,
+      path,
+      value,
+    }: {
+      ai.kimchi.files.${path} = {
+        inherit entry ledger;
+        content.value = value;
+        facts.harnessWrites = true;
+        format = "json";
+      };
+    };
+  in
+    lib.mkMerge [
+      # Two writers, two entry names — deliberately NOT one bundle of two
+      # targets: nothing orders these against each other, and each name is a
+      # consumer-visible ordering contract.
+      {
+        ai.kimchi.activation = {
+          kimchiConfigMerge = {
+            # Devenv requires a namespace; HM ordering names stay stable.
+            entry = {
+              devenv = "ai:kimchi:config-merge";
+              hm = "kimchiConfigMerge";
+            };
+            ledgers.${ledgerFor "config"} = {
+              codec = "json";
+              path = "${cfg.configDir}/config.json";
+            };
+          };
+          kimchiHarnessSettingsMerge = {
+            entry = {
+              devenv = "ai:kimchi:harness-settings-merge";
+              hm = "kimchiHarnessSettingsMerge";
+            };
+            ledgers.${ledgerFor "harness-settings"} = {
+              codec = "json";
+              path = "${harness}/settings.json";
+            };
+          };
+        };
+      }
+
+      (document {
+        entry = "kimchiConfigMerge";
+        ledger = ledgerFor "config";
+        path = "${cfg.configDir}/config.json";
+        value = filteredSettings;
+      })
+
+      (document {
+        entry = "kimchiHarnessSettingsMerge";
+        ledger = ledgerFor "harness-settings";
+        path = "${harness}/settings.json";
+        value = filteredHarnessSettings;
+      })
+
+      # harness/mcp.json — Claude-compatible format. Kimchi reads it and
+      # never writes it, and follows a store symlink to it, so both facts
+      # are the defaults and neither is stated.
+      (lib.mkIf (mergedServers != {}) {
+        ai.kimchi.files."${harness}/mcp.json" = {
+          content.value = {
+            mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+          };
+          format = "json";
+        };
+      })
+
+      # harness/AGENTS.md — orientation context.
+      (lib.mkIf hasMergedContext {
+        ai.kimchi.files."${harness}/${cfg.context.filename}" = contextEntry;
+      })
+
+      # harness/skills/ — one entry per skill tree; Home Manager expands the
+      # directory and the router expands it for devenv.
+      (lib.mkIf (mergedSkills != {}) {
+        ai.kimchi.files = helpers.mkSkillFiles {
+          configDir = harness;
+          skills = mergedSkills;
+        };
+      })
+    ];
 in
   lib.ai.app.mkRuntime {
     # Carried as DATA, not a module argument — see mkRuntime.nix.
@@ -157,9 +267,9 @@ in
         };
         default = {};
         description = ''
-          Settings written to <configDir>/config.json (HM: activation merge;
-          devenv: static write). API key should be injected via environment
-          variable, not here.
+          Settings reconciled by leaf in <configDir>/config.json on HM activation
+          or devenv shell entry, preserving unowned settings. API key should
+          be injected via environment variable, not here.
         '';
       };
 
@@ -194,9 +304,9 @@ in
         };
         default = {};
         description = ''
-          Settings written to <configDir>/harness/settings.json (HM: activation
-          merge; devenv: static write). Kimchi mutates this at runtime, so HM
-          merges declarative values on top of the existing file.
+          Settings reconciled by leaf in <configDir>/harness/settings.json on
+          HM activation or devenv shell entry. Kimchi mutates this at runtime,
+          so both backends preserve unowned settings and retract retired leaves.
         '';
       };
 
@@ -226,122 +336,12 @@ in
       };
     };
 
-    hm = {
-      installPackage = kimchiInstallPackage;
-      options = {};
-      config = {
-        cfg,
-        mergedServers,
-        mergedSkills,
-        mergedEnvironmentVariables,
-        moduleEnvironmentVariables,
-        mergedContext,
-        hasMergedContext,
-        ...
-      }: let
-        prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
-        inherit (prep) contextEntry filteredSettings filteredHarnessSettings;
-      in
-        lib.mkMerge [
-          # Reconcile config.json even when settings become empty: retract
-          # recorded Nix leaves and preserve externally managed native siblings.
-          # An empty first generation leaves the file untouched.
-          #
-          # Two documents, two bundles, two activation entries — deliberately
-          # not one bundle of two targets. Nothing orders these against each
-          # other, and each entry name is a consumer-visible contract.
-          (helpers.mkOwnedDocument {
-            entry = "kimchiConfigMerge";
-            ledger = "json-settings/kimchi-config-${builtins.hashString "sha256" cfg.configDir}.json";
-            path = "${cfg.configDir}/config.json";
-            python = pkgs.python3;
-            runtime = "kimchi";
-            value = filteredSettings;
-            inherit pkgs;
-          })
-
-          # Kimchi writes harness/settings.json at runtime. Keep its unowned
-          # leaves and retract retired Nix settings even for an empty declaration;
-          # without prior ownership, empty settings leave the file untouched.
-          (helpers.mkOwnedDocument {
-            entry = "kimchiHarnessSettingsMerge";
-            ledger = "json-settings/kimchi-harness-settings-${builtins.hashString "sha256" cfg.configDir}.json";
-            path = "${cfg.configDir}/harness/settings.json";
-            python = pkgs.python3;
-            runtime = "kimchi";
-            value = filteredHarnessSettings;
-            inherit pkgs;
-          })
-
-          # harness/mcp.json — Claude-compatible format.
-          (lib.mkIf (mergedServers != {}) {
-            home.file."${cfg.configDir}/harness/mcp.json".text = builtins.toJSON {
-              mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
-            };
-          })
-
-          # harness/AGENTS.md — orientation context.
-          (lib.mkIf hasMergedContext {
-            ai.kimchi.files."${cfg.configDir}/harness/${cfg.context.filename}" = contextEntry;
-          })
-
-          # harness/skills/ — Layout B: one delivery entry per skill tree,
-          # expanded by Home Manager natively and by the router for devenv.
-          (lib.mkIf (mergedSkills != {}) {
-            ai.kimchi.files = helpers.mkSkillFiles {
-              configDir = "${cfg.configDir}/harness";
-              skills = mergedSkills;
-            };
-          })
-        ];
-    };
-
     devenv = {
+      config = kimchiDelivery;
       installPackage = kimchiInstallPackage;
-      options = {};
-      config = {
-        cfg,
-        mergedServers,
-        mergedSkills,
-        mergedEnvironmentVariables,
-        moduleEnvironmentVariables,
-        mergedContext,
-        hasMergedContext,
-        ...
-      }: let
-        prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
-        inherit (prep) contextEntry filteredSettings filteredHarnessSettings;
-      in
-        lib.mkMerge [
-          # config.json static write.
-          (lib.mkIf (filteredSettings != {}) {
-            files."${cfg.configDir}/config.json".text = builtins.toJSON filteredSettings;
-          })
-
-          # harness/settings.json static write.
-          (lib.mkIf (filteredHarnessSettings != {}) {
-            files."${cfg.configDir}/harness/settings.json".text = builtins.toJSON filteredHarnessSettings;
-          })
-
-          # harness/mcp.json.
-          (lib.mkIf (mergedServers != {}) {
-            files."${cfg.configDir}/harness/mcp.json".text = builtins.toJSON {
-              mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
-            };
-          })
-
-          # harness/AGENTS.md.
-          (lib.mkIf hasMergedContext {
-            ai.kimchi.files."${cfg.configDir}/harness/${cfg.context.filename}" = contextEntry;
-          })
-
-          # harness/skills/ — devenv recursive walk.
-          (lib.mkIf (mergedSkills != {}) {
-            ai.kimchi.files = helpers.mkSkillFiles {
-              configDir = "${cfg.configDir}/harness";
-              skills = mergedSkills;
-            };
-          })
-        ];
+    };
+    hm = {
+      config = kimchiDelivery;
+      installPackage = kimchiInstallPackage;
     };
   }
