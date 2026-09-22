@@ -12,7 +12,8 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/agent.nix,
 > `prompt` included. They arbitrate `text` against `source` by priority, enforce
 > content on enabled and required sources, preserve lazy source-backed emission,
 > take package prose through `defaultContent`, and suppress with
-> `enable = false`.
+> `enable = false`. Shared repository `AGENTS.md` ownership includes generated
+> and consumer-only Codex, Kimchi, and Kiro targets.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -451,12 +452,12 @@ target, the target renderer emits final bytes into `ai.<runtime>.files`, and the
 shared backend transform lowers surviving entries to `home.file` or devenv
 `files`. Claude context/rules, Codex user AGENTS.md, Copilot's repository
 context/instructions, Kimchi harness AGENTS.md, and Kiro Home Manager
-context/steering all use the runtime maps. Repository-local Codex/Kiro AGENTS.md
-retains one divergence-checking owner and enters the same architecture through
-hidden `ai.internal.files`, never through competing runtime writers. Public
-Codex/Kiro entries for a shared target arbitrate inside that owner before its
-single native sink: equal entries deduplicate, divergence fails, an ordinary
-entry replaces the generated default, and null suppresses it.
+context/steering all use the runtime maps. Repository-local Codex/Kimchi/Kiro
+AGENTS.md retains one divergence-checking owner and enters the same architecture
+through hidden `ai.internal.files`, never through competing runtime writers.
+Public Codex/Kimchi/Kiro entries for a shared target arbitrate inside that owner
+before its single native sink: equal entries deduplicate, divergence fails, an
+ordinary entry replaces the generated default, and null suppresses it.
 
 This is a static literal seam, not a universal file abstraction. Secret-bearing
 or merge/reconciliation-owned settings, agents, skills, hooks, and runtime state
@@ -651,7 +652,9 @@ package-provenance guard (see `collision-semantics.md`).
 ## ai.\* Pool Composition and Collision Semantics
 
 > **Last verified:** 2026-09-21 — rules and context use entry-local `enable`
-> suppression, and Semble's CLI rule uses text-source priority arbitration.
+> suppression, Semble's CLI rule uses text-source priority arbitration, and
+> shared repository `AGENTS.md` ownership covers consumer-only final-file
+> entries.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -866,15 +869,18 @@ null filtering, and backend lowering. Package callbacks may render entries into
 the runtime map but must not read that map to define normalized inputs; keeping
 the edge one-way is what makes the module fixed point evaluable.
 
-Repository-local Codex/Kiro `AGENTS.md` is the shared-target exception, not a B7
-exception. `sharedAgentsMd.nix` admits applicable public entries from enabled
-runtimes into its hidden final map before the one native sink; a disabled
-runtime's declared map remains inert. The generated composition is a lazy
-default there, so ordinary replacements and null tombstones arbitrate at B7
+Repository-local Codex/Kimchi/Kiro `AGENTS.md` is the shared-target exception,
+not a B7 exception. `sharedAgentsMd.nix` admits applicable public entries from
+enabled runtimes into its hidden final map before the one native sink; a
+disabled runtime's declared map remains inert. The generated composition is a
+lazy default there, so ordinary replacements and null tombstones arbitrate at B7
 without reading discarded source-backed generator content; equal runtime entries
 deduplicate and divergent ones fail. Size guards read only the surviving inline
 final entry. A surviving store-backed `source` remains lazy and is not
-size-checked at eval, avoiding IFD.
+size-checked at eval, avoiding IFD. An enabled runtime's public entry at its
+context filename registers the shared target even when no normalized context or
+rules generated content, so consumer-only replacements and tombstones cannot
+bypass the owner through the ordinary runtime sink.
 
 ### Adding a normalized pool
 

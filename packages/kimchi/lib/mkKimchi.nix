@@ -4,12 +4,12 @@
 # Backend-specific module functions are produced by applying
 # `hmTransform` (HM) or `devenvTransform` (devenv) to this record.
 #
-# Kimchi has TWO config trees:
-#   ~/.config/kimchi/config.json       — account/CLI settings
-#   ~/.config/kimchi/harness/          — agent runtime (settings.json, mcp.json,
-#                                         AGENTS.md, skills/)
-# The harness tree is mutable at runtime; HM uses activation merge for
-# harness/settings.json and static symlink writes for the rest.
+# Kimchi has distinct user and project config namespaces. Home Manager writes
+# ~/.config/kimchi/{config.json,harness/}; devenv writes only Kimchi's native
+# project paths under the repository root. The user harness tree is mutable at
+# runtime, so HM uses activation merge for harness/settings.json and static
+# symlink writes for the rest. Project harness settings use Kimchi's fixed pi
+# config directory, not the consumer's user-global configDir.
 {
   lib,
   pkgs,
@@ -18,6 +18,13 @@
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   mcpLib = import ../../../lib/mcp.nix {inherit lib;};
+
+  # pi 0.85.1 dist/config.js:403 derives CONFIG_DIR_NAME from Kimchi's
+  # package.json piConfig.configDir. That fixed project namespace is independent
+  # of ai.kimchi.configDir, which selects the Home Manager output root. The
+  # pinned binary discovers only that option's default user-global location.
+  projectHarnessDir = ".config/kimchi/harness";
+  projectContextFilename = "AGENTS.md";
 
   # Shared per-backend data prep. hm.config and devenv.config derive the
   # same settings/env/context values from the merged inputs the
@@ -97,7 +104,14 @@ in
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "kimchi";
-    contextFilename = "AGENTS.md";
+    contextFilename = projectContextFilename;
+    contextDescription = ''
+      Kimchi-specific context appended after `ai.context`. Home Manager emits
+      the configured filename under its harness directory, although pinned
+      Kimchi discovers only `AGENTS.md` there unless the package is overridden
+      compatibly. Devenv always writes project-root `AGENTS.md`, independent of
+      this filename, because that is Kimchi's project context surface.
+    '';
     supportedPools = [
       "context"
       "environmentVariables"
@@ -114,7 +128,11 @@ in
       configDir = lib.mkOption {
         type = lib.types.str;
         default = ".config/kimchi";
-        description = "Config directory relative to HOME / devenv root.";
+        description = ''
+          Home Manager output directory relative to HOME. Kimchi 1.1.27
+          discovers only the default location; a non-default value requires a
+          compatible package override. Devenv uses Kimchi's fixed project paths.
+        '';
       };
 
       nativeSettings = lib.mkOption {
@@ -157,9 +175,9 @@ in
         };
         default = {};
         description = ''
-          Settings written to <configDir>/config.json (HM: activation merge;
-          devenv: static write). API key should be injected via environment
-          variable, not here.
+          Kimchi settings written to <configDir>/config.json by Home Manager or
+          .kimchi/config.json by devenv. API key should be injected via an
+          environment variable, not here.
         '';
       };
 
@@ -194,9 +212,11 @@ in
         };
         default = {};
         description = ''
-          Settings written to <configDir>/harness/settings.json (HM: activation
-          merge; devenv: static write). Kimchi mutates this at runtime, so HM
-          merges declarative values on top of the existing file.
+          Harness settings merged into <configDir>/harness/settings.json by Home
+          Manager or written to .config/kimchi/harness/settings.json by devenv.
+          The project path is fixed by Kimchi and does not follow configDir.
+          Kimchi mutates the user file at runtime, so Home Manager merges
+          declarative values on top of the existing file.
         '';
       };
 
@@ -297,34 +317,44 @@ in
         ...
       }: let
         prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
-        inherit (prep) contextEntry filteredSettings filteredHarnessSettings;
+        inherit (prep) filteredSettings filteredHarnessSettings;
       in
         lib.mkMerge [
-          # config.json static write.
+          # Project-scoped Kimchi configuration below is ignored until the
+          # project is explicitly or persistently trusted. For unattended runs,
+          # set harnessSettings.defaultProjectTrust = "always" in USER scope
+          # through Home Manager; a project cannot grant itself trust. Kimchi's
+          # direct AGENTS.md discovery is currently the exception to this gate.
+
+          # Project config is a fixed Kimchi namespace, independent of the
+          # HOME-relative configDir used by Home Manager.
           (lib.mkIf (filteredSettings != {}) {
-            files."${cfg.configDir}/config.json".text = builtins.toJSON filteredSettings;
+            files.".kimchi/config.json".text = builtins.toJSON filteredSettings;
           })
 
-          # harness/settings.json static write.
+          # Project harness settings follow pi's fixed CONFIG_DIR_NAME.
           (lib.mkIf (filteredHarnessSettings != {}) {
-            files."${cfg.configDir}/harness/settings.json".text = builtins.toJSON filteredHarnessSettings;
+            files."${projectHarnessDir}/settings.json".text = builtins.toJSON filteredHarnessSettings;
           })
 
-          # harness/mcp.json.
+          # Exact-cwd project MCP config.
           (lib.mkIf (mergedServers != {}) {
-            files."${cfg.configDir}/harness/mcp.json".text = builtins.toJSON {
+            files.".kimchi/mcp.json".text = builtins.toJSON {
               mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
             };
           })
 
-          # harness/AGENTS.md.
+          # Project context lives at the repository root.
           (lib.mkIf hasMergedContext {
-            ai.kimchi.files."${cfg.configDir}/harness/${cfg.context.filename}" = lib.mkDefault contextEntry;
+            ai.internal.agentsMd.${projectContextFilename} = {
+              context = aiCommon.readContent mergedContext;
+              hasContent = true;
+            };
           })
 
-          # harness/skills/ — devenv recursive walk.
+          # Nearest-ancestor project skills — devenv recursive walk.
           (lib.mkIf (mergedSkills != {}) {
-            files = helpers.mkDevenvSkillEntries "${cfg.configDir}/harness" mergedSkills;
+            files = helpers.mkDevenvSkillEntries ".kimchi" mergedSkills;
           })
         ];
     };

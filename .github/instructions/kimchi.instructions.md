@@ -7,10 +7,12 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-08-16 — normalized context renders into
-> `ai.kimchi.files` before the generic backend sink, so the final
-> `harness/AGENTS.md` is replaceable or suppressible as one whole entry. Full
-> lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> **Last verified:** 2026-09-21 (commit pending — Home Manager retains Kimchi's
+> user paths while devenv lowers each pool to the project path Kimchi discovers,
+> including pi's fixed project harness directory). Home Manager context renders
+> into `ai.kimchi.files` before the generic backend sink; devenv contributes
+> directly to the shared repository `AGENTS.md` owner. Full lineage:
+> `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -22,27 +24,65 @@ closed `ai.kimchi.settings` submodule is the shared normalized surface; a field
 may be present there before Kimchi has a lossless native lowering, in which case
 it remains declarative data rather than being guessed into either native file.
 
-## Two config trees (the load-bearing fact)
+## User and project paths (the load-bearing fact)
 
-Kimchi splits config across two roots under `<configDir>` (default
-`.config/kimchi`):
+`ai.kimchi.configDir` controls the Home Manager output root (default
+`.config/kimchi`). The pinned Kimchi 1.1.27 binary hard-codes that default for
+its global config and harness, so a non-default value requires a compatible
+package override; the option alone does not relocate the runtime. It does not
+control devenv project paths. The backend split is:
 
-- `config.json` — account/CLI settings (`telemetry`, `llmEndpoint`,
-  `skillPaths`, `preferences`). Ordinary **nested** JSON.
-- `harness/` — agent runtime: `settings.json` (`modelRoles`, `resources`),
-  `mcp.json`, `AGENTS.md`, `skills/`.
+| pool             | Home Manager user path              | devenv project path                    |
+| ---------------- | ----------------------------------- | -------------------------------------- |
+| context          | `<configDir>/harness/AGENTS.md`     | root `AGENTS.md`                       |
+| MCP servers      | `<configDir>/harness/mcp.json`      | `.kimchi/mcp.json`                     |
+| skills           | `<configDir>/harness/skills/<name>` | `.kimchi/skills/<name>`                |
+| Kimchi settings  | `<configDir>/config.json`           | `.kimchi/config.json`                  |
+| harness settings | `<configDir>/harness/settings.json` | `.config/kimchi/harness/settings.json` |
+
+The project harness directory is deliberately its own factory value. pi 0.85.1
+derives `CONFIG_DIR_NAME` from Kimchi's packaged
+`piConfig.configDir = ".config/kimchi/harness"`; its project settings watcher
+resolves `<cwd>/<CONFIG_DIR_NAME>/settings.json`. This baked project namespace
+does not follow `ai.kimchi.configDir`, which controls only Home Manager output.
+Setting `configDir = ".config/foo"` therefore leaves the devenv harness target
+unchanged (and needs a compatible package override before pinned Kimchi will
+read the relocated user files).
+
+Kimchi settings are ordinary **nested** JSON (`telemetry`, `llmEndpoint`,
+`skillPaths`, `preferences`). The user harness contains runtime settings
+(`modelRoles`, `resources`), MCP, context, and skills.
 
 The `harness/` tree is **mutable at runtime** — Kimchi rewrites `settings.json`
 (`/multi-model`, `kimchi resources`) and downloads vendor content into it. So
-`config.json` and `harness/settings.json` go through
-`helpers.mkSettingsActivationScript` (jq `.[0] * .[1]` merge) on HM and a static
-write on devenv — never a raw symlink-to-store. Immutable artifacts ultimately
-use static `home.file` / `files.*`, but normalized context first renders into
-the final `ai.kimchi.files` map and only then reaches that generic sink. This
-makes `harness/AGENTS.md` a whole-entry consumer replacement/tombstone point;
-`mcp.json` and skills retain their existing typed owners. When both root and
-Kimchi-specific context are configured, their bodies concatenate root-first;
-`ai.kimchi.context.filename` controls the artifact name.
+the two user settings files go through `helpers.mkSettingsActivationScript` (jq
+`.[0] * .[1]` merge) on Home Manager, never a raw symlink-to-store. Devenv's
+Kimchi settings are a static project write. Immutable artifacts ultimately use
+static `home.file` / `files.*`. Home Manager context first renders into the
+final `ai.kimchi.files` map and only then reaches that generic sink. Devenv
+generated context and any public Kimchi replacement or tombstone instead join
+the single repository `AGENTS.md` owner shared with Codex and Kiro, preventing
+competing native writers when several runtimes are enabled. The backend-native
+context path remains a whole-entry consumer replacement/tombstone point; MCP and
+skills retain their existing typed owners. When both root and Kimchi-specific
+context are configured, their bodies concatenate root-first. Home Manager emits
+the configured `ai.kimchi.context.filename`, but pinned Kimchi's global loader
+discovers only `AGENTS.md`, so a custom value needs a compatible package
+override. Devenv always writes `AGENTS.md`, the only project context filename
+Kimchi discovers.
+
+Kimchi's project config, MCP, skills, and harness settings remain inert until
+project trust is established. Interactive trust is persisted in the user's
+harness `trust.json`; headless and ACP sessions honor that decision or the
+user-global `defaultProjectTrust`. A project cannot grant itself trust. The
+`harnessSettings` JSON submodule has a freeform tail, so a Home Manager consumer
+can already set `ai.kimchi.harnessSettings.defaultProjectTrust = "always";` to
+write the user-scope setting; this PR does not add a new option.
+
+Root `AGENTS.md` is the upstream exception: Kimchi's prompt-enrichment extension
+currently walks ancestor context files directly without consulting
+`isProjectScopeAllowed`. Do not describe that file as trust-gated unless
+upstream adds the missing check.
 
 ## Normalized pool capability boundary
 
@@ -95,9 +135,10 @@ devenv stay at parity by construction. Locked by `module-kimchi-wrapper-builds`.
 
 `defaults.outputPath = null` and
 `transformers.markdown = lib.ai.transformers.agentsmd`: Kimchi takes a flat,
-always-injected `harness/AGENTS.md` (orientation tier, like Codex). It has
-**no** path-scoped steering (no Claude `rules/` or Kiro `steering/` equivalent),
-so the scoped-fragment transforms do not apply to it.
+always-injected user `harness/AGENTS.md` or project-root `AGENTS.md`
+(orientation tier, like Codex). It has **no** path-scoped steering (no Claude
+`rules/` or Kiro `steering/` equivalent), so the scoped-fragment transforms do
+not apply to it.
 
 ## Shared prep
 

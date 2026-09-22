@@ -2,7 +2,7 @@
 # AGENTS.md-standard runtimes. Runtime factories contribute named context/rule
 # units; this module renders each filename once after the module system has
 # deduplicated equal definitions and rejected divergent definitions for a key.
-# Applicable public final-file entries from enabled Codex/Kiro runtimes
+# Applicable public final-file entries from enabled Codex/Kimchi/Kiro runtimes
 # arbitrate here too, before the single native sink, so replacement and
 # tombstones cannot bypass ownership or their runtime's sole enable gate.
 {
@@ -103,7 +103,31 @@
       '';
     })
     config.ai.internal.agentsMd;
-  sharedRuntimeNames = ["codex" "kiro"];
+  # Main uses this explicit registry, so Kimchi must be listed here. The open
+  # layered-library chain tip derives participation from enable/files/methodFor;
+  # resolve that rebase conflict by taking the tip form and dropping this edit.
+  sharedRuntimeNames = ["codex" "kimchi" "kiro"];
+  sharedTargetDefinitions = map (runtime: let
+    enabled = lib.attrByPath ["ai" runtime "enable"] false config;
+    files = lib.attrByPath ["ai" runtime "files"] {} config;
+    # Kimchi's configurable filename is a Home Manager concern; its devenv
+    # project-context target is fixed because upstream discovers AGENTS.md.
+    contextFilename =
+      if runtime == "kimchi"
+      then "AGENTS.md"
+      else lib.attrByPath ["ai" runtime "context" "filename"] null config;
+  in
+    lib.mkIf (
+      enabled
+      && contextFilename != null
+      && builtins.hasAttr contextFilename files
+    ) {
+      # Register consumer-only targets even when no normalized context/rules
+      # generated a composition. Otherwise the ordinary runtime sink would
+      # bypass shared replacement/tombstone arbitration for this path.
+      ai.internal.agentsMd.${contextFilename} = {};
+    })
+  sharedRuntimeNames;
   sharedOverrideDefinitions = map (runtime: let
     enabled = lib.attrByPath ["ai" runtime "enable"] false config;
     files = lib.attrByPath ["ai" runtime "files"] {} config;
@@ -152,6 +176,7 @@ in {
         files = runtimeFiles.liveFiles config.ai.internal.files;
       })
     ]
+    ++ sharedTargetDefinitions
     ++ sharedOverrideDefinitions
   ));
 }

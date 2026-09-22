@@ -151,7 +151,7 @@ in {
         && devenvConfig.ai.claude.files ? ".claude/rules/scoped.md"
         && devenvConfig.ai.copilot.files ? ".github/copilot-instructions.md"
         && devenvConfig.ai.copilot.files ? ".github/instructions/scoped.instructions.md"
-        && devenvConfig.ai.kimchi.files ? ".config/kimchi/harness/AGENTS.md"
+        && devenvConfig.ai.internal.agentsMd ? "AGENTS.md"
         && devenvConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
         && devenvConfig.ai.internal.files ? "AGENTS.md"
         && devenvConfig.ai.internal.files."AGENTS.md".text == devenvConfig.files."AGENTS.md".text
@@ -184,6 +184,47 @@ in {
           });
         in
           builtins.deepSeq evaluated.config.ai.internal.files."AGENTS.md" true);
+        consumerOnly = evalDevenv {
+          ai = {
+            codex = {
+              enable = true;
+              files."AGENTS.md".text = "CONSUMER-ONLY";
+            };
+            kimchi = {
+              enable = true;
+              files."AGENTS.md".text = "CONSUMER-ONLY";
+            };
+          };
+        };
+        kimchiConsumerOnly = evalDevenv {
+          ai.kimchi = {
+            enable = true;
+            context.filename = "custom.md";
+            files."AGENTS.md".text = "KIMCHI-CONSUMER-ONLY";
+          };
+        };
+        consumerOnlySuppressed = evalDevenv {
+          ai.kimchi = {
+            enable = true;
+            context.filename = "custom.md";
+            files."AGENTS.md" = null;
+          };
+        };
+        consumerOnlyDivergent = builtins.tryEval (let
+          evaluated = evalDevenv {
+            ai = {
+              codex = {
+                enable = true;
+                files."AGENTS.md".text = "CONSUMER-ONLY";
+              };
+              kimchi = {
+                enable = true;
+                files."AGENTS.md" = null;
+              };
+            };
+          };
+        in
+          builtins.deepSeq evaluated.config.ai.internal.files."AGENTS.md" true);
       in
         replaced.config.ai.internal.files."AGENTS.md".text
         == "CONSUMER-REPLACEMENT"
@@ -193,6 +234,16 @@ in {
         && deduplicated.config.ai.internal.files."AGENTS.md".text == "SHARED-CONSUMER"
         && deduplicated.config.files."AGENTS.md".text == "SHARED-CONSUMER"
         && !divergent.success
+        && consumerOnly.config.ai.internal.agentsMd ? "AGENTS.md"
+        && consumerOnly.config.ai.internal.files."AGENTS.md".text == "CONSUMER-ONLY"
+        && consumerOnly.config.files."AGENTS.md".text == "CONSUMER-ONLY"
+        && kimchiConsumerOnly.config.ai.internal.agentsMd ? "AGENTS.md"
+        && kimchiConsumerOnly.config.ai.internal.files."AGENTS.md".text == "KIMCHI-CONSUMER-ONLY"
+        && kimchiConsumerOnly.config.files."AGENTS.md".text == "KIMCHI-CONSUMER-ONLY"
+        && consumerOnlySuppressed.config.ai.internal.agentsMd ? "AGENTS.md"
+        && consumerOnlySuppressed.config.ai.internal.files."AGENTS.md" == null
+        && !(consumerOnlySuppressed.config.files ? "AGENTS.md")
+        && !consumerOnlyDivergent.success
     );
 
     module-runtime-files-shared-agentsmd-ignores-disabled-runtime = mkTest "runtime-files-shared-agentsmd-ignores-disabled-runtime" (
@@ -449,7 +500,7 @@ in {
             kimchi = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".config/kimchi/harness/AGENTS.md".text = "KIMCHI-REPLACEMENT";
+              files."AGENTS.md".text = "KIMCHI-REPLACEMENT";
             };
           };
         };
@@ -459,7 +510,7 @@ in {
         && devenvClaude.config.files.".claude/CLAUDE.md".text == "CLAUDE-REPLACEMENT"
         && devenvCopilot.config.files.".github/copilot-instructions.md".text == "COPILOT-REPLACEMENT"
         && hmKimchi.config.home.file.".config/kimchi/harness/AGENTS.md".text == "KIMCHI-REPLACEMENT"
-        && devenvKimchi.config.files.".config/kimchi/harness/AGENTS.md".text == "KIMCHI-REPLACEMENT"
+        && devenvKimchi.config.files."AGENTS.md".text == "KIMCHI-REPLACEMENT"
     );
   };
 }

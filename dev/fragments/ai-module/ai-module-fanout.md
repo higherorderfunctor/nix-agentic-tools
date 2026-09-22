@@ -5,7 +5,8 @@
 > `prompt` included. They arbitrate `text` against `source` by priority, enforce
 > content on enabled and required sources, preserve lazy source-backed emission,
 > take package prose through `defaultContent`, and suppress with
-> `enable = false`.
+> `enable = false`. Shared repository `AGENTS.md` ownership includes generated
+> and consumer-only Codex, Kimchi, and Kiro targets.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -444,12 +445,12 @@ target, the target renderer emits final bytes into `ai.<runtime>.files`, and the
 shared backend transform lowers surviving entries to `home.file` or devenv
 `files`. Claude context/rules, Codex user AGENTS.md, Copilot's repository
 context/instructions, Kimchi harness AGENTS.md, and Kiro Home Manager
-context/steering all use the runtime maps. Repository-local Codex/Kiro AGENTS.md
-retains one divergence-checking owner and enters the same architecture through
-hidden `ai.internal.files`, never through competing runtime writers. Public
-Codex/Kiro entries for a shared target arbitrate inside that owner before its
-single native sink: equal entries deduplicate, divergence fails, an ordinary
-entry replaces the generated default, and null suppresses it.
+context/steering all use the runtime maps. Repository-local Codex/Kimchi/Kiro
+AGENTS.md retains one divergence-checking owner and enters the same architecture
+through hidden `ai.internal.files`, never through competing runtime writers.
+Public Codex/Kimchi/Kiro entries for a shared target arbitrate inside that owner
+before its single native sink: equal entries deduplicate, divergence fails, an
+ordinary entry replaces the generated default, and null suppresses it.
 
 This is a static literal seam, not a universal file abstraction. Secret-bearing
 or merge/reconciliation-owned settings, agents, skills, hooks, and runtime state

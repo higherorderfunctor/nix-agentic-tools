@@ -27,7 +27,7 @@ in {
       in
         hm.config.home.file.".config/kimchi/harness/AGENTS.md".text
         == expected
-        && devenv.config.files.".config/kimchi/harness/AGENTS.md".text == expected
+        && devenv.config.files."AGENTS.md".text == expected
     );
     # ── Kimchi (mkAiApp factory participant) ──────────────────────────
     module-kimchi-default-disabled = mkTest "kimchi-default-disabled" (!(evalHm {}).config.ai.kimchi.enable);
@@ -44,7 +44,7 @@ in {
             nativeSettings.telemetry.enabled = false;
           };
         };
-        text = result.config.files.".config/kimchi/config.json".text;
+        text = result.config.files.".kimchi/config.json".text;
       in
         lib.hasInfix ''"telemetry":{"enabled":false}'' text
         && !lib.hasInfix "telemetry.enabled" text
@@ -63,17 +63,54 @@ in {
         result.config.home.activation ? kimchiConfigMerge
     );
 
-    # harnessSettings render to harness/settings.json (mutable-state tree).
-    module-kimchi-harness-settings = mkTest "kimchi-harness-settings" (
+    # Project files must use the exact paths Kimchi discovers. A custom
+    # user-global configDir must not redirect devenv back into a HOME-shaped
+    # project subtree.
+    module-kimchi-devenv-project-paths = mkTest "kimchi-devenv-project-paths" (
+      let
+        result = evalDevenv {
+          ai = {
+            context.text = "Project context.";
+            kimchi = {
+              configDir = "custom/kimchi";
+              context.filename = "custom.md";
+              enable = true;
+              nativeSettings.telemetry.enabled = false;
+            };
+            mcpServers.example = {
+              package = pkgs.hello;
+              type = "stdio";
+            };
+            skills.example = ../../claude-code/checks/fixtures/claude-skills/skill-a;
+          };
+        };
+        files = result.config.files;
+      in
+        files ? ".kimchi/config.json"
+        && files ? ".kimchi/mcp.json"
+        && files ? ".kimchi/skills/example/SKILL.md"
+        && files ? "AGENTS.md"
+        && !(files ? "custom.md")
+        && !(lib.any (lib.hasPrefix "custom/kimchi") (builtins.attrNames files))
+    );
+
+    # pi's CONFIG_DIR_NAME comes from Kimchi's package metadata, so project
+    # harness settings use its fixed path rather than .pi or the user configDir.
+    module-kimchi-harness-settings-devenv-project-path = mkTest "kimchi-harness-settings-devenv-project-path" (
       let
         result = evalDevenv {
           ai.kimchi = {
+            configDir = "custom/kimchi";
             enable = true;
             harnessSettings.resources."tools.web_search" = true;
           };
         };
+        files = result.config.files;
+        text = files.".config/kimchi/harness/settings.json".text;
       in
-        result.config.files ? ".config/kimchi/harness/settings.json"
+        lib.hasInfix ''"tools.web_search":true'' text
+        && !(files ? ".pi/settings.json")
+        && !(lib.any (lib.hasPrefix "custom/kimchi") (builtins.attrNames files))
     );
 
     # The Cast AI key is a runtime credential ({file|helper}); setting
