@@ -159,7 +159,7 @@ in {
         samples = {
           agents = {
             description = "probe";
-            instructions = "probe";
+            instructions.text = "probe";
           };
           environmentVariables = "probe";
           lspServers.command = "probe";
