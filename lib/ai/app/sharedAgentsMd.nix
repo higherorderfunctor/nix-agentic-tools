@@ -103,9 +103,7 @@
       '';
     })
     config.ai.internal.agentsMd;
-  # Main uses this explicit registry, so Kimchi must be listed here. The open
-  # layered-library chain tip derives participation from enable/files/methodFor;
-  # resolve that rebase conflict by taking the tip form and dropping this edit.
+  # Runtimes whose repository AGENTS.md targets share one final-file owner.
   sharedRuntimeNames = ["codex" "kimchi" "kiro"];
   sharedTargetDefinitions = map (runtime: let
     enabled = lib.attrByPath ["ai" runtime "enable"] false config;

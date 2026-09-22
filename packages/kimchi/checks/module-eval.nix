@@ -226,9 +226,6 @@ in {
       ];
     in
       pkgs.runCommand "module-test-kimchi-devenv-exact-cwd-guard" {} ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-
         for kimchi_bin in ${lib.concatMapStringsSep " " (package: "${package}/bin/kimchi") guardedPackages}; do
           (cd ${exactCwdProjectRoot} && "$kimchi_bin")
           if (cd ${exactCwdProjectRoot}/subdir && "$kimchi_bin" 2>"$TMPDIR/guard.stderr"); then
