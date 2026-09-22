@@ -1012,6 +1012,29 @@ in {
         && hasClampHook (settingsHooks.PreCompact or [])
     );
 
+    # An explicit false beats content's automatic enablement. This lets consumers
+    # stage custom prose without either hook appearing in settings.json until they
+    # deliberately activate the mitigation.
+    module-claude-hm-delegation-clamp-custom-text-explicitly-disabled = mkTest "claude-hm-delegation-clamp-custom-text-explicitly-disabled" (
+      let
+        result = evalHm {
+          ai.claude = {
+            enable = true;
+            delegationClampMitigation = {
+              enable = false;
+              text = "custom prose";
+            };
+          };
+        };
+        clamp = result.config.ai.claude.delegationClampMitigation;
+        settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
+      in
+        !clamp.enable
+        && clamp.text == "custom prose"
+        && (settingsHooks.UserPromptSubmit or []) == []
+        && (settingsHooks.PreCompact or []) == []
+    );
+
     # A source definition has the same auto-enable behavior, and its contents beat
     # the default-priority inline prose supplied by the submodule definition.
     module-claude-hm-delegation-clamp-source-auto-enables = mkTest "claude-hm-delegation-clamp-source-auto-enables" (

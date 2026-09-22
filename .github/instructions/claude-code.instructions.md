@@ -98,8 +98,8 @@ Three things follow, and each of them is a trap if you assume the old shape:
 
 ## heron_brook Delegation Clamp — the opt-in mitigation
 
-> **Last verified:** 2026-09-21 — the renamed mitigation now uses the shared
-> optional text-source shape and its standard enable switch.
+> **Last verified:** 2026-09-21 — the shared optional text-source shape
+> auto-enables custom prose while preserving an explicit disabled override.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 3510a5db:packages/claude-code/docs/heron-brook-clamp.md`.
@@ -129,10 +129,13 @@ disables it, and it **never appears in the transcript** — so a session with
 delegation suppressed looks identical to a normal one. It also contradicts
 `ai.claude.ultracodeOnLaunch`, which asks for the opposite.
 
-Set `ai.claude.delegationClampMitigation.enable = true` to enable it. Override
-the request with `delegationClampMitigation.text`, or package it in a file with
-`delegationClampMitigation.source`. Defining either content option also enables
-the mitigation automatically.
+With no content defined, the mitigation is off and its packaged prose remains
+dormant. Set `ai.claude.delegationClampMitigation.enable = true` to install both
+hooks with that packaged prose. Defining `delegationClampMitigation.text` (or
+packaging the request in `delegationClampMitigation.source`) automatically
+enables the mitigation and installs both hooks with the custom prose. To stage
+custom prose without activating it, define the content and explicitly set
+`delegationClampMitigation.enable = false`; neither hook is then installed.
 
 ### Why the mitigation is user-side context, not a patch
 

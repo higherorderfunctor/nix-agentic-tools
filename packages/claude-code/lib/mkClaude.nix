@@ -511,7 +511,12 @@ in
         });
         description = ''
           Counteract Claude Code's undocumented `heron_brook` delegation clamp. Off by
-          default.
+          default means off when you define no content: the packaged prose remains
+          available but dormant. Setting `enable = true` installs both hooks with that
+          packaged prose. Defining custom `text` (or `source`) automatically sets
+          `enable = true` and installs both hooks with the custom prose. To stage custom
+          prose without activating the mitigation, define the content and explicitly set
+          `enable = false`; neither hook is then installed.
 
           Claude Code injects a system-prompt section instructing the model not to call
           the Agent tool and not to use workflows or deep research "unless the user
