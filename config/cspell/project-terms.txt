@@ -110,6 +110,7 @@ drainedness
 drvs
 dsolve
 dunder
+earendil
 EEXIST
 elicitations
 emnapi
@@ -197,6 +198,7 @@ inspectable
 ints
 isaacphi
 isready
+iterm
 jandedobbeleer
 journalctl
 journaled
@@ -298,6 +300,7 @@ oneshot
 ONLN
 openat
 openclaw
+opencode
 openhands
 openmemory
 operationalizes
