@@ -118,7 +118,7 @@ in
     # Full strict mode is required here: stdenv does not set every flag (#909).
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
-    mkdir -p "$out"
-    install -m 644 ${pkgs.writeText "SKILL.md" text} "$out/SKILL.md"
-    ln -s ${docs} "$out/snapshot"
+    ${pkgs.coreutils}/bin/mkdir -p "$out"
+    ${pkgs.coreutils}/bin/install -m 644 ${pkgs.writeText "SKILL.md" text} "$out/SKILL.md"
+    ${pkgs.coreutils}/bin/ln -s ${docs} "$out/snapshot"
   ''
