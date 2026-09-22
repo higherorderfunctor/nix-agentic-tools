@@ -182,11 +182,6 @@
         value.probe.command = "probe";
       }
       {
-        runtime = "kimchi";
-        path = ["ai" "kimchi" "native" "harnessSettings"];
-        value.resources.probe = true;
-      }
-      {
         runtime = "kiro";
         path = ["ai" "kiro" "rules" "probe"];
         value = {
