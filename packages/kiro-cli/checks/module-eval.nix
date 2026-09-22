@@ -3166,8 +3166,8 @@ in {
         && lib.elem "devenv:files" filesTask.before
     );
 
-    # Consumer definitions replace generated defaults as whole entries; null is
-    # a tombstone removed before the backend sink.
+    # Consumer content replaces generated defaults; `enable = false` suppresses
+    # that content before the backend sink.
     module-kiro-steering-consumer-override-and-tombstone = mkTest "kiro-steering-consumer-override-and-tombstone" (
       let
         cfg = {
