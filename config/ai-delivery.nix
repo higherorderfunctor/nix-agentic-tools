@@ -226,7 +226,7 @@
         devenv = declarative "devenv" ".github/copilot-instructions.md";
         hm = absent "Home Manager context is deliberately inert: the .github context surface is project-scoped.";
       };
-      kimchi = paths ".config/kimchi/harness/AGENTS.md" ".config/kimchi/harness/AGENTS.md";
+      kimchi = paths ".config/kimchi/harness/AGENTS.md" "AGENTS.md";
       kiro = lib.genAttrs modes (mode:
         (declarative mode (
           if mode == "hm"
@@ -314,7 +314,7 @@
         hm = codexConfig // {probe = mcpProbe "codex";};
       };
       copilot = paths ".copilot/mcp-config.json" ".config/github-copilot/mcp-config.json";
-      kimchi = paths ".config/kimchi/harness/mcp.json" ".config/kimchi/harness/mcp.json";
+      kimchi = paths ".config/kimchi/harness/mcp.json" ".kimchi/mcp.json";
       kiro = lib.genAttrs modes kiroMcp;
     };
     permissions = {
@@ -400,7 +400,7 @@
       };
       kimchi = {
         devenv =
-          (devenvLeaves "ai:kimchi:config-merge" "$DEVENV_ROOT/.config/kimchi/config.json"
+          (devenvLeaves "ai:kimchi:config-merge" "$DEVENV_ROOT/.kimchi/config.json"
             (probe ["ai" "kimchi" "nativeSettings"] {
               llmEndpoint = "https://example.invalid";
               skillPaths = ["probe"];
@@ -408,8 +408,9 @@
           // {
             additionalWriters = [
               (devenvLeaves "ai:kimchi:harness-settings-merge" "$DEVENV_ROOT/.config/kimchi/harness/settings.json"
-                (probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {}))
+                (probe ["ai" "kimchi" "harnessSettings"] {hideThinkingBlock = true;} {}))
             ];
+            deliveryConstraint = "User-scope-only harness setting keys fail module assertions; project-capable keys reconcile into the fixed project harness path.";
           };
         hm =
           (leaves ownRetraction "kimchiConfigMerge" "$HOME/.config/kimchi/config.json"
@@ -442,7 +443,7 @@
       };
       codex = paths ".agents/skills/<name>" ".agents/skills/<name>";
       copilot = paths ".copilot/skills/<name>" ".github/skills/<name>/<leaf>";
-      kimchi = paths ".config/kimchi/harness/skills/<name>" ".config/kimchi/harness/skills/<name>/<leaf>";
+      kimchi = paths ".config/kimchi/harness/skills/<name>" ".kimchi/skills/<name>/<leaf>";
       kiro = paths ".kiro/skills/<name>" ".kiro/skills/<name>/<leaf>";
     };
   };
@@ -483,9 +484,6 @@
       lib.concatMap (ecosystem:
         lib.mapAttrsToList (mode: writer:
           writer
-          // lib.optionalAttrs (ecosystem == "kimchi" && mode == "devenv" && builtins.elem surface ["context" "mcpServers" "settings" "skills"]) {
-            deliveryGap = "Kimchi reads its HOME config directory; these project-local files have no discovery or additive launcher flag.";
-          }
           // {
             inherit ecosystem mode surface;
             evidence = source packages.${ecosystem};

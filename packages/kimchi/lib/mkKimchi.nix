@@ -4,12 +4,11 @@
 # Backend-specific module functions are produced by applying
 # `hmTransform` (HM) or `devenvTransform` (devenv) to this record.
 #
-# Kimchi has TWO config trees:
-#   ~/.config/kimchi/config.json       — account/CLI settings
-#   ~/.config/kimchi/harness/          — agent runtime (settings.json, mcp.json,
-#                                         AGENTS.md, skills/)
-# Both backends reconcile config.json and harness/settings.json by leaf;
-# the remaining files are immutable and symlink-readable.
+# Kimchi has distinct user and project config namespaces. Home Manager writes
+# ~/.config/kimchi/{config.json,harness/}; devenv writes only Kimchi's native
+# project paths under the repository root. Both backends reconcile the two
+# mutable JSON documents by leaf; the remaining files are immutable and
+# symlink-readable.
 {
   lib,
   pkgs,
@@ -18,6 +17,13 @@
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   mcpLib = import ../../../lib/mcp.nix {inherit lib;};
+  userScopeOnlyHarnessSettingKeys = import ./user-scope-only-harness-settings.nix;
+
+  # pi 0.85.1 derives CONFIG_DIR_NAME from Kimchi's packaged piConfig.configDir.
+  # That fixed project namespace is independent of ai.kimchi.configDir, which
+  # selects the Home Manager output root.
+  projectHarnessDir = ".config/kimchi/harness";
+  projectContextFilename = "AGENTS.md";
 
   # The delivery function and package hook need the same settings, env and
   # context values from merged inputs; prepare them once.
@@ -26,6 +32,7 @@
     mergedEnvironmentVariables,
     moduleEnvironmentVariables ? {},
     mergedContext,
+    requiredProjectRoot ? null,
   }: let
     contextEntry = aiCommon.contentFileEntry mergedContext;
 
@@ -52,11 +59,23 @@
       then mcpLib.mkCredentialsSnippet pkgs {apiKey.envVar = "KIMCHI_API_KEY";} {inherit (cfg) apiKey;}
       else "";
 
+    # Kimchi resolves project config, MCP servers, and harness settings from
+    # process.cwd() exactly. Changing cwd here would also change the directory
+    # seen by Kimchi's tools, so reject descendant launches instead.
+    exactCwdGuard = lib.optionalString (requiredProjectRoot != null) ''
+      kimchi_project_root=${lib.escapeShellArg requiredProjectRoot}
+      if [ "$(${pkgs.coreutils}/bin/realpath -- "$PWD")" != "$(${pkgs.coreutils}/bin/realpath -- "$kimchi_project_root")" ]; then
+        printf '%s\n' "Kimchi project files are configured at $kimchi_project_root; run kimchi from that devenv root." >&2
+        exit 1
+      fi
+    '';
+
     # wrapProgram args: `--set` for non-secret env, `--run` for the
     # runtime secret export. Joined with a single space on the continued
     # line — never a backslash-newline, which breaks multi-arg wrapping.
     wrapArgs =
       lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") effectiveEnvVars
+      ++ lib.optional (exactCwdGuard != "") "--run ${lib.escapeShellArg exactCwdGuard}"
       ++ lib.optional (credSnippet != "") "--run ${lib.escapeShellArg credSnippet}";
 
     wrappedPackage = pkgs.symlinkJoin {
@@ -91,11 +110,34 @@
     ...
   }:
     (mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;}).package;
+
+  kimchiDevenvInstallPackage = {
+    cfg,
+    config,
+    mergedContext,
+    mergedEnvironmentVariables,
+    mergedServers,
+    moduleEnvironmentVariables,
+    ...
+  }: let
+    hasExactCwdProjectFiles =
+      aiCommon.filterNulls cfg.nativeSettings
+      != {}
+      || aiCommon.filterNulls cfg.harnessSettings != {}
+      || mergedServers != {};
+  in
+    (mkPrep {
+      inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;
+      requiredProjectRoot =
+        if hasExactCwdProjectFiles
+        then config.devenv.root
+        else null;
+    }).package;
   # One delivery description for both backends. The two former callback bodies
   # were near-duplicates: they differed only in which native sink each wrote,
   # which is exactly the decision the delivery layer now makes from the
   # consumer facts below.
-  kimchiDelivery = {
+  kimchiDelivery = backend: {
     cfg,
     hasMergedContext,
     mergedContext,
@@ -107,10 +149,28 @@
   }: let
     prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
     inherit (prep) contextEntry filteredHarnessSettings filteredSettings;
-    harness = "${cfg.configDir}/harness";
+    isDevenv = backend == "devenv";
+    configPath =
+      if isDevenv
+      then ".kimchi/config.json"
+      else "${cfg.configDir}/config.json";
+    harness =
+      if isDevenv
+      then projectHarnessDir
+      else "${cfg.configDir}/harness";
+    harnessSettingsPath = "${harness}/settings.json";
+    mcpPath =
+      if isDevenv
+      then ".kimchi/mcp.json"
+      else "${harness}/mcp.json";
+    skillRoot =
+      if isDevenv
+      then ".kimchi"
+      else harness;
+    userScopeOnlyHarnessSettings = lib.intersectLists userScopeOnlyHarnessSettingKeys (builtins.attrNames filteredHarnessSettings);
     # A LITERAL at the declaration site, hashed from the config directory so
     # two configured roots never share ownership records.
-    ledgerFor = name: "json-settings/kimchi-${name}-${builtins.hashString "sha256" cfg.configDir}.json";
+    ledgerFor = name: path: "json-settings/kimchi-${name}-${builtins.hashString "sha256" path}.json";
     # Kimchi rewrites both of its documents while it runs — `/multi-model`
     # and `kimchi resources` write `harness/settings.json` — so the only way
     # to keep both sides' edits is to own the declared leaves inside them.
@@ -137,6 +197,14 @@
       # targets: nothing orders these against each other, and each name is a
       # consumer-visible ordering contract.
       {
+        assertions = lib.optional isDevenv {
+          assertion = userScopeOnlyHarnessSettings == [];
+          message = ''
+            ai.kimchi.harnessSettings contains settings Kimchi reads only from user scope: ${lib.concatStringsSep ", " userScopeOnlyHarnessSettings}.
+            Under devenv, either set with HM, or configure inside the harness so it writes to user global.
+            Home Manager delivers these declaratively by reconciling config.json and harness/settings.json; a /nix/store symlink would break Kimchi's runtime writes. Configuring inside Kimchi persists the decision or setting in its user-global harness files.
+          '';
+        };
         ai.kimchi.activation = {
           kimchiConfigMerge = {
             # Devenv requires a namespace; HM ordering names stay stable.
@@ -144,9 +212,9 @@
               devenv = "ai:kimchi:config-merge";
               hm = "kimchiConfigMerge";
             };
-            ledgers.${ledgerFor "config"} = {
+            ledgers.${ledgerFor "config" configPath} = {
               codec = "json";
-              path = "${cfg.configDir}/config.json";
+              path = configPath;
             };
           };
           kimchiHarnessSettingsMerge = {
@@ -154,9 +222,9 @@
               devenv = "ai:kimchi:harness-settings-merge";
               hm = "kimchiHarnessSettingsMerge";
             };
-            ledgers.${ledgerFor "harness-settings"} = {
+            ledgers.${ledgerFor "harness-settings" harnessSettingsPath} = {
               codec = "json";
-              path = "${harness}/settings.json";
+              path = harnessSettingsPath;
             };
           };
         };
@@ -164,15 +232,15 @@
 
       (document {
         entry = "kimchiConfigMerge";
-        ledger = ledgerFor "config";
-        path = "${cfg.configDir}/config.json";
+        ledger = ledgerFor "config" configPath;
+        path = configPath;
         value = filteredSettings;
       })
 
       (document {
         entry = "kimchiHarnessSettingsMerge";
-        ledger = ledgerFor "harness-settings";
-        path = "${harness}/settings.json";
+        ledger = ledgerFor "harness-settings" harnessSettingsPath;
+        path = harnessSettingsPath;
         value = filteredHarnessSettings;
       })
 
@@ -180,7 +248,7 @@
       # never writes it, and follows a store symlink to it, so both facts
       # are the defaults and neither is stated.
       (lib.mkIf (mergedServers != {}) {
-        ai.kimchi.files."${harness}/mcp.json" = {
+        ai.kimchi.files.${mcpPath} = {
           content.value = {
             mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
           };
@@ -188,16 +256,26 @@
         };
       })
 
-      # harness/AGENTS.md — orientation context.
-      (lib.mkIf hasMergedContext {
-        ai.kimchi.files."${harness}/${cfg.context.filename}" = contextEntry;
-      })
+      # User harness context stays runtime-owned. Project context joins the one
+      # shared repository AGENTS.md owner used by Codex and Kiro.
+      (lib.mkIf hasMergedContext (
+        if isDevenv
+        then {
+          ai.internal.agentsMd.${projectContextFilename} = {
+            context = aiCommon.readContent mergedContext;
+            hasContent = true;
+          };
+        }
+        else {
+          ai.kimchi.files."${harness}/${cfg.context.filename}" = contextEntry;
+        }
+      ))
 
       # harness/skills/ — one entry per skill tree; Home Manager expands the
       # directory and the router expands it for devenv.
       (lib.mkIf (mergedSkills != {}) {
         ai.kimchi.files = helpers.mkSkillFiles {
-          configDir = harness;
+          configDir = skillRoot;
           skills = mergedSkills;
         };
       })
@@ -207,7 +285,13 @@ in
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "kimchi";
-    contextFilename = "AGENTS.md";
+    contextFilename = projectContextFilename;
+    contextDescription = ''
+      Kimchi-specific context appended after `ai.context`. Home Manager emits
+      the configured filename under its harness directory, although pinned
+      Kimchi discovers only `AGENTS.md` there unless the package is overridden
+      compatibly. Devenv always writes project-root `AGENTS.md`.
+    '';
     supportedPools = [
       "context"
       "environmentVariables"
@@ -224,7 +308,11 @@ in
       configDir = lib.mkOption {
         type = lib.types.str;
         default = ".config/kimchi";
-        description = "Config directory relative to HOME / devenv root.";
+        description = ''
+          Home Manager output directory relative to HOME. The pinned Kimchi
+          discovers only the default location; a non-default value requires a
+          compatible package override. Devenv uses fixed project paths.
+        '';
       };
 
       nativeSettings = lib.mkOption {
@@ -267,9 +355,9 @@ in
         };
         default = {};
         description = ''
-          Settings reconciled by leaf in <configDir>/config.json on HM activation
-          or devenv shell entry, preserving unowned settings. API key should
-          be injected via environment variable, not here.
+          Kimchi settings reconciled by leaf in <configDir>/config.json on Home
+          Manager activation or .kimchi/config.json on devenv shell entry. API
+          keys should be injected through the environment instead.
         '';
       };
 
@@ -304,9 +392,11 @@ in
         };
         default = {};
         description = ''
-          Settings reconciled by leaf in <configDir>/harness/settings.json on
-          HM activation or devenv shell entry. Kimchi mutates this at runtime,
-          so both backends preserve unowned settings and retract retired leaves.
+          Harness settings reconciled by leaf in
+          <configDir>/harness/settings.json on Home Manager activation or
+          .config/kimchi/harness/settings.json on devenv shell entry. Kimchi
+          mutates the user file at runtime, so both backends preserve unowned
+          settings and retract retired leaves.
         '';
       };
 
@@ -337,11 +427,11 @@ in
     };
 
     devenv = {
-      config = kimchiDelivery;
-      installPackage = kimchiInstallPackage;
+      config = kimchiDelivery "devenv";
+      installPackage = kimchiDevenvInstallPackage;
     };
     hm = {
-      config = kimchiDelivery;
+      config = kimchiDelivery "hm";
       installPackage = kimchiInstallPackage;
     };
   }
