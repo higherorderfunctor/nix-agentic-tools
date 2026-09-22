@@ -15,6 +15,7 @@
   mkTextSource = {
     defaultContent ? {},
     description,
+    textType ? lib.types.lines,
   }: let
     baseType = lib.types.submodule ({
       config,
@@ -34,6 +35,15 @@
           visible = false;
         };
 
+        _sourceWins = lib.mkOption {
+          type = lib.types.bool;
+          default = sourceWins config options;
+          description = "Whether source supplies the effective text-source content.";
+          internal = true;
+          readOnly = true;
+          visible = false;
+        };
+
         source = lib.mkOption {
           type = lib.types.nullOr lib.types.path;
           default = null;
@@ -41,7 +51,7 @@
         };
 
         text = lib.mkOption {
-          type = lib.types.lines;
+          type = textType;
           default = "";
           description = "The inline ${description}. The higher-priority definition of `text` or `source` supplies the content; defining both at the same priority is an error. Enabled or required records need non-empty inline text unless a source supplies the content.";
           apply = value: let
@@ -82,28 +92,58 @@
       options.text.highestPrio
       < defaultPriority
       || options.source.highestPrio < defaultPriority;
+    contentIsDefined =
+      options.text.highestPrio
+      <= defaultPriority
+      || options.source.highestPrio <= defaultPriority;
     contentIsPresent =
       if contentUsesSource
       then true
       else mergedText.mergedValue != "";
   in {
-    options.enable = lib.mkOption {
-      type = lib.types.bool;
-      default = enableDefault;
-      description = "Whether to include ${description}. Content supplied through non-empty `text` or a `source` at consumer priority enables it automatically; setting `enable = false` omits it while retaining that content. An enabled or required text source without content is an evaluation error.";
+    options = {
+      _enableExplicit = lib.mkOption {
+        type = lib.types.bool;
+        default = options.enable.highestPrio < defaultPriority;
+        internal = true;
+        readOnly = true;
+        visible = false;
+      };
+      _textSourceDefined = lib.mkOption {
+        type = lib.types.bool;
+        default = contentIsDefined;
+        internal = true;
+        readOnly = true;
+        visible = false;
+      };
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = enableDefault;
+        description = "Whether to include ${description}. Content supplied through non-empty `text` or a `source` at consumer priority enables it automatically; setting `enable = false` omits it while retaining that content. An enabled or required text source without content is an evaluation error.";
+      };
     };
 
     config.enable = lib.mkIf (contentIsExplicit && contentIsPresent) (lib.mkDefault true);
   };
+  textSourceUsesSource = value:
+    value._sourceWins or (!(value ? text) && (value.source or null) != null);
 in {
   inherit extendSubmodule;
+
+  inherit textSourceUsesSource;
+
+  textSourceFile = value:
+    if textSourceUsesSource value
+    then {inherit (value) source;}
+    else {inherit (value) text;};
 
   optionalTextSource = {
     defaultContent ? {},
     description,
     enableDefault ? false,
+    textType ? lib.types.lines,
   }: let
-    baseType = mkTextSource {inherit defaultContent description;};
+    baseType = mkTextSource {inherit defaultContent description textType;};
   in
     extendSubmodule baseType (mkEnableModule {inherit description enableDefault;});
 

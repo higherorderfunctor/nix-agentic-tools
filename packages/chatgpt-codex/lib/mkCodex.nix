@@ -781,9 +781,9 @@
     finalEntry,
   }: let
     finalText =
-      if finalEntry == null
+      if finalEntry == null || !finalEntry.content.enable || aiTypes.textSourceUsesSource finalEntry.content
       then null
-      else (finalEntry.content or {}).text or null;
+      else finalEntry.content.text;
     renderedBytes =
       if finalText == null
       then 0
@@ -791,7 +791,7 @@
   in {
     # Store-backed sources stay lazy: reading a derivation output here would
     # introduce IFD. Inline generated/replacement content is checked after B7
-    # arbitration; tombstones and source entries do not force discarded text.
+    # arbitration; disabled and source entries do not force discarded text.
     assertion = finalText == null || renderedBytes <= cfg.projectDocMaxBytes;
     message = ''
       Codex AGENTS.md renders to ${toString renderedBytes} bytes, exceeding
@@ -974,23 +974,26 @@ in
         files = lib.mkMerge [
           (lib.mkIf hasAgentsMdContent {
             # The ONE generated entry whose priority stays on the whole entry
-            # rather than moving onto `content`. Deciding between "a file" and
-            # "no file" reads the COMPOSED body, and the body may come from a
-            # store source a consumer has already replaced — a replaced entry
-            # must never build it. A `mkDefault` wrapper defers that read until
-            # after `filterOverrides` has decided whether this definition
-            # survives at all; a definition whose value is an `if` on the body
-            # forces it the moment anything looks at the entry.
-            #
-            # The cost is the trap the rest of this migration removes: a
-            # consumer who defines only a SIBLING field here discards the
-            # generated content and gets a diagnostic from `validateFiles`
-            # naming the entry. Restate the content, or tombstone and declare
-            # the file.
+            # rather than moving onto `content`. Deciding between enabled and
+            # empty generated content reads the COMPOSED body, and the body may
+            # come from a store source a consumer has already replaced. The
+            # `mkDefault` wrapper lets priority filtering discard that source
+            # unread. A consumer defining only a sibling field therefore must
+            # also restate content; validation diagnoses an empty survivor.
             ${agentsMdTarget} = lib.mkDefault (
               if agentsMd == ""
-              then null
-              else {content.text = agentsMd;}
+              then {
+                content = {
+                  enable = false;
+                  text = agentsMd;
+                };
+              }
+              else {
+                content = {
+                  enable = true;
+                  text = agentsMd;
+                };
+              }
             );
           })
           # Codex discovers a skill when the skill DIRECTORY is itself a
