@@ -1,20 +1,28 @@
+# Routes a check body through `pkgs.writeShellApplication` so shellcheck runs in
+# its checkPhase: a body carrying a lint violation then FAILS TO BUILD instead of
+# shipping inert. `runCommand` gets neither the lint nor `nounset` (issue #909).
 {pkgs}: name: {
   runtimeInputs ? [],
   text,
   ...
 } @ args: let
+  # Single source of truth for the house strict-mode flags, the `shopt` line and
+  # the repo-wide opt-in shellcheck set. Read from here rather than restating
+  # them — a copy here would be a second definition that drifts, and a check
+  # helper that lints more weakly than the corpus scanner is the one call site
+  # where that drift is least visible.
+  shellStrict = import ../config/shell-strict.nix;
+
   script = pkgs.writeShellApplication (
     {
-      # The house strict-mode standard requires errtrace and functrace in
-      # addition to writeShellApplication's three default shell options.
-      bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+      inherit (shellStrict) bashOptions;
+      extraShellCheckFlags = shellStrict.shellcheckFlags;
     }
     // builtins.removeAttrs args ["runtimeInputs" "text"]
     // {
       inherit name runtimeInputs;
-      # inherit_errexit is a shopt and must be enabled separately.
       text = ''
-        shopt -s inherit_errexit 2>/dev/null || :
+        ${shellStrict.shoptHeader}
         # The outer runCommand exports out; require that inherited contract.
         : "''${out:?}"
         ${text}
