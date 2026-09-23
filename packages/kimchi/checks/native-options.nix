@@ -47,6 +47,9 @@
       typeExpression = "string | number";
     };
   });
+  withUserScopeTheme = surfaceFor (lib.recursiveUpdate committed {
+    harness.keys.theme.project = false;
+  });
   withConsumedInertKey = surfaceFor (lib.recursiveUpdate committed {
     config.keys.mcpSearchLimit.inert = false;
   });
@@ -167,9 +170,16 @@
       == []
       && real.report.staleNotes == []
       && real.report.staleRefinements == []
-      && withoutModelRoles.report.staleRefinements == ["harnessSettings.modelRoles"]
-      # The hand-kept user-scope harness list names only keys Kimchi reads.
-      && lib.all (key: real.harnessSettingsOptions ? ${key}) (import ../lib/user-scope-only-harness-settings.nix);
+      && withoutModelRoles.report.staleRefinements == ["harnessSettings.modelRoles"];
+
+    # The devenv rejection list is the sidecar's per-key scope, including the
+    # Kimchi-read markers and pi's global-only keys a hand list once missed.
+    user-scope-harness-follows-the-sidecar =
+      lib.all (key: lib.elem key real.userScopeHarnessKeys) ["autoDefaultApplied" "defaultProjectTrust" "httpProxy" "lastTerminalWarnings" "modelRoles"]
+      && !(lib.elem "defaultThinkingLevel" real.userScopeHarnessKeys)
+      && !(lib.elem "theme" real.userScopeHarnessKeys)
+      && lib.elem "theme" withUserScopeTheme.userScopeHarnessKeys
+      && lib.all (key: real.harnessSettingsOptions ? ${key}) real.userScopeHarnessKeys;
 
     # The sidecar's derived inert flag, not a hand list, removes the option.
     inert-keys-follow-the-sidecar =

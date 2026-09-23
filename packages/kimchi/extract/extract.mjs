@@ -1128,11 +1128,51 @@ function referencedInterfaces(root, checker, ts) {
   return found;
 }
 
+// Which scope pi reads each Settings key from. SettingsManager deep-merges the
+// project file over the global one into `this.settings`; a key read through
+// that merge honors a project harness settings.json. A key read only through
+// `this.globalSettings` or `getGlobalSettings()` (project trust, the HTTP
+// proxy) ignores it. A key the extractor sees no read of stops the extraction
+// rather than defaulting either way.
+function piSettingsScopes(names, piSources, ts) {
+  const merged = new Set();
+  const global = new Set();
+  const isThisMember = (node, member) =>
+    ts.isPropertyAccessExpression(node) &&
+    node.expression.kind === ts.SyntaxKind.ThisKeyword &&
+    node.name.text === member;
+  for (const sourceFile of piSources) {
+    function visit(node) {
+      if (ts.isPropertyAccessExpression(node) && !isWriteOnly(node, ts)) {
+        const object = unwrapExpression(node.expression, ts);
+        const name = node.name.text;
+        if (isThisMember(object, "settings")) merged.add(name);
+        if (
+          isThisMember(object, "globalSettings") ||
+          (ts.isCallExpression(object) &&
+            ts.isPropertyAccessExpression(object.expression) &&
+            object.expression.name.text === "getGlobalSettings")
+        )
+          global.add(name);
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(sourceFile);
+  }
+  const unread = names.filter((name) => !merged.has(name) && !global.has(name));
+  if (unread.length)
+    fail(
+      `pi reads Settings keys ${JSON.stringify(unread.sort())} in no way the extractor recognizes, so their scope is unknown`,
+    );
+  return new Map(names.map((name) => [name, merged.has(name)]));
+}
+
 function extractHarness(
   declarations,
   configSource,
   settingsManagerSource,
   settingsDeclarationSource,
+  piSources,
   configTsHarnessReads,
   checker,
   ts,
@@ -1313,16 +1353,21 @@ function extractHarness(
       `Kimchi harness additions now overlap pi Settings: ${JSON.stringify(overlap.sort())}`,
     );
   const keys = {};
+  const piProject = piSettingsScopes(Object.keys(baseKeys), piSources, ts);
   for (const [name, descriptor] of Object.entries(baseKeys))
-    keys[name] = { source: "pi", ...descriptor };
+    keys[name] = { source: "pi", ...descriptor, project: piProject.get(name) };
   for (const [name, descriptor] of Object.entries(baseKeys)) {
     if (descriptor.type === "named")
       fail(`pi harness setting ${name} has an unresolved named type`);
   }
   if (!baseKeys.modelThinkingLevels.additionalProperties)
     fail("pi modelThinkingLevels value type was not resolved");
+  // Kimchi reads its additions itself, from the user harness file only
+  // (config/settings.ts, config.ts readAutoDefaultApplied, the model-metadata
+  // and terminal-warning readers all resolve ~/.config/kimchi/harness), never
+  // through pi's project-merging SettingsManager, which does not type them.
   for (const [name, descriptor] of Object.entries(additions))
-    keys[name] = { source: "kimchi", ...descriptor };
+    keys[name] = { source: "kimchi", ...descriptor, project: false };
   const unknownHarnessReads = [...configTsHarnessReads]
     .filter((name) => !keys[name])
     .sort();
@@ -1334,7 +1379,6 @@ function extractHarness(
   return {
     definitions: sortObject(definitions),
     keys: sortObject(keys),
-    projectTier: { gatedByProjectTrust: true, supported: true },
   };
 }
 
@@ -2063,6 +2107,11 @@ async function main() {
       configSource,
       requireSource(join(piRoot, "dist/core/settings-manager.js")),
       requireSource(join(piRoot, "dist/core/settings-manager.d.ts")),
+      sourceFiles.filter(
+        (sourceFile) =>
+          piPaths.includes(sourceFile.fileName) &&
+          sourceFile.fileName.endsWith(".js"),
+      ),
       configTsReads.harness,
       checker,
       ts,

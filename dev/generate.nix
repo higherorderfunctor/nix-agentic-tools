@@ -233,6 +233,12 @@
 
   mkInlineCodeList = values:
     lib.concatMapStringsSep ", " (value: "`${value}`") values;
+  # Read from Kimchi's extracted sidecar, the same list devenv rejects.
+  kimchiUserScopeHarnessKeys =
+    (import ../packages/kimchi/lib/extracted.nix {
+      inherit lib pkgs;
+      extracted = builtins.fromJSON (builtins.readFile ../packages/kimchi/extracted.json);
+    }).userScopeHarnessKeys;
   mkSourceLinks = package:
     lib.concatMapStringsSep ", " (entry: let
       path = (normalizeDevFragmentSource package entry).repoRelative;
@@ -671,9 +677,7 @@
     | Hooks | `.kimchi/hooks.json` | Requires project trust and launch from the devenv root; PermissionRequest is not a Kimchi event and is left out. Home Manager has no user-scope hook file it can own, so shared `ai.hooks` do not reach Kimchi there (silently) and `ai.kimchi.hooks` warns |
 
     devenv rejects Kimchi's user-scope-only harness settings:
-    `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`, `modelMetadata`,
-    `modelRoles`, `multiModel`, `resources`,
-    `shellProfileApiKeyMigrationDismissed`, and `statusLine`. Set those with Home
+    ${mkInlineCodeList kimchiUserScopeHarnessKeys}. Set those with Home
     Manager or through Kimchi itself. Both backends reconcile `config.json`,
     `harness/settings.json`, `mcp.json` and `permissions.json` by owned leaf
     because Kimchi writes them at runtime.

@@ -810,37 +810,43 @@
         "source": "pi",
         "typeExpression": "number",
         "type": "number",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "autoDefaultApplied": {
         "source": "kimchi",
         "typeExpression": "boolean",
         "type": "boolean",
-        "optional": true
+        "optional": true,
+        "project": false
       },
       "branchSummary": {
         "source": "pi",
         "typeExpression": "BranchSummarySettings",
         "type": "object",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "collapseChangelog": {
         "source": "pi",
         "typeExpression": "boolean",
         "type": "boolean",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "compaction": {
         "source": "pi",
         "typeExpression": "CompactionSettings",
         "type": "object",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "defaultModel": {
         "source": "pi",
         "typeExpression": "string",
         "type": "string",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "defaultProjectTrust": {
         "source": "pi",
@@ -848,75 +854,87 @@
         "type": "enum",
         "enum": ["ask", "always", "never"],
         "optional": true,
-        "default": "ask"
+        "default": "ask",
+        "project": false
       },
       "defaultProvider": {
         "source": "pi",
         "typeExpression": "string",
         "type": "string",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "defaultThinkingLevel": {
         "source": "pi",
         "typeExpression": "\"off\" | \"minimal\" | \"low\" | \"medium\" | \"high\" | \"xhigh\" | \"max\"",
         "type": "enum",
         "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "defaultTools": {
         "source": "pi",
         "typeExpression": "string[]",
         "type": "array",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "doubleEscapeAction": {
         "source": "pi",
         "typeExpression": "\"fork\" | \"tree\" | \"none\"",
         "type": "enum",
         "enum": ["fork", "tree", "none"],
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "editorPaddingX": {
         "source": "pi",
         "typeExpression": "number",
         "type": "number",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "enableAnalytics": {
         "source": "pi",
         "typeExpression": "boolean",
         "type": "boolean",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "enabledModels": {
         "source": "pi",
         "typeExpression": "string[]",
         "type": "array",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "enableInstallTelemetry": {
         "source": "pi",
         "typeExpression": "boolean",
         "type": "boolean",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "enableSkillCommands": {
         "source": "pi",
         "typeExpression": "boolean",
         "type": "boolean",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "extensions": {
         "source": "pi",
         "typeExpression": "string[]",
         "type": "array",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "externalEditor": {
         "source": "pi",
         "typeExpression": "string",
         "type": "string",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "fermentV2": {
         "source": "kimchi",
@@ -949,70 +967,81 @@
             "optional": true
           }
         },
-        "optional": true
+        "optional": true,
+        "project": false
       },
       "followUpMode": {
         "source": "pi",
         "typeExpression": "\"all\" | \"one-at-a-time\"",
         "type": "enum",
         "enum": ["all", "one-at-a-time"],
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "fullscreenCopyOnSelect": {
         "source": "pi",
         "typeExpression": "boolean",
         "type": "boolean",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "fullscreenExitOutput": {
         "source": "pi",
         "typeExpression": "\"transcript\" | \"resume-hint\"",
         "type": "enum",
         "enum": ["transcript", "resume-hint"],
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "fullscreenScrollbar": {
         "source": "pi",
         "typeExpression": "\"auto\" | \"always\" | \"hidden\"",
         "type": "enum",
         "enum": ["auto", "always", "hidden"],
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "hidePhaseChanges": {
         "source": "kimchi",
         "typeExpression": "boolean",
         "type": "boolean",
-        "optional": true
+        "optional": true,
+        "project": false
       },
       "hideThinkingBlock": {
         "source": "pi",
         "typeExpression": "boolean",
         "type": "boolean",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "httpIdleTimeoutMs": {
         "source": "pi",
         "typeExpression": "number",
         "type": "number",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "httpProxy": {
         "source": "pi",
         "typeExpression": "string",
         "type": "string",
-        "optional": true
+        "optional": true,
+        "project": false
       },
       "images": {
         "source": "pi",
         "typeExpression": "ImageSettings",
         "type": "object",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "lastChangelogVersion": {
         "source": "pi",
         "typeExpression": "string",
         "type": "string",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "lastTerminalWarnings": {
         "source": "kimchi",
@@ -1022,13 +1051,15 @@
           "typeExpression": "string",
           "type": "string"
         },
-        "optional": true
+        "optional": true,
+        "project": false
       },
       "markdown": {
         "source": "pi",
         "typeExpression": "MarkdownSettings",
         "type": "object",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "modelMetadata": {
         "source": "kimchi",
@@ -1061,7 +1092,8 @@
         },
         "type": "object",
         "typeExpression": "Record<string, ModelCustomMetadata>",
-        "optional": true
+        "optional": true,
+        "project": false
       },
       "modelRoles": {
         "source": "kimchi",
@@ -1117,7 +1149,8 @@
             "optional": true
           }
         },
-        "optional": true
+        "optional": true,
+        "project": false
       },
       "modelThinkingLevels": {
         "source": "pi",
@@ -1128,44 +1161,51 @@
           "type": "enum",
           "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
         },
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "multiModel": {
         "source": "kimchi",
         "typeExpression": "boolean",
         "type": "boolean",
-        "optional": true
+        "optional": true,
+        "project": false
       },
       "npmCommand": {
         "source": "pi",
         "typeExpression": "string[]",
         "type": "array",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "outputPad": {
         "source": "pi",
         "typeExpression": "0 | 1",
         "type": "enum",
         "enum": [0, 1],
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "packages": {
         "source": "pi",
         "typeExpression": "PackageSource[]",
         "type": "array",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "prompts": {
         "source": "pi",
         "typeExpression": "string[]",
         "type": "array",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "quietStartup": {
         "source": "pi",
         "typeExpression": "boolean",
         "type": "boolean",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "resources": {
         "source": "kimchi",
@@ -1175,55 +1215,64 @@
           "typeExpression": "boolean",
           "type": "boolean"
         },
-        "optional": true
+        "optional": true,
+        "project": false
       },
       "retry": {
         "source": "pi",
         "typeExpression": "RetrySettings",
         "type": "object",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "sessionDir": {
         "source": "pi",
         "typeExpression": "string",
         "type": "string",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "shellCommandPrefix": {
         "source": "pi",
         "typeExpression": "string",
         "type": "string",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "shellPath": {
         "source": "pi",
         "typeExpression": "string",
         "type": "string",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "shellProfileApiKeyMigrationDismissed": {
         "source": "kimchi",
         "typeExpression": "boolean",
         "type": "boolean",
-        "optional": true
+        "optional": true,
+        "project": false
       },
       "showCacheMissNotices": {
         "source": "pi",
         "typeExpression": "boolean",
         "type": "boolean",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "showHardwareCursor": {
         "source": "pi",
         "typeExpression": "boolean",
         "type": "boolean",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "skills": {
         "source": "pi",
         "typeExpression": "string[]",
         "type": "array",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "statusLine": {
         "source": "kimchi",
@@ -1259,82 +1308,90 @@
             "optional": true
           }
         },
-        "optional": true
+        "optional": true,
+        "project": false
       },
       "steeringMode": {
         "source": "pi",
         "typeExpression": "\"all\" | \"one-at-a-time\"",
         "type": "enum",
         "enum": ["all", "one-at-a-time"],
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "terminal": {
         "source": "pi",
         "typeExpression": "TerminalSettings",
         "type": "object",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "theme": {
         "source": "pi",
         "typeExpression": "string",
         "type": "string",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "themes": {
         "source": "pi",
         "typeExpression": "string[]",
         "type": "array",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "thinkingBudgets": {
         "source": "pi",
         "typeExpression": "ThinkingBudgetsSettings",
         "type": "object",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "trackingId": {
         "source": "pi",
         "typeExpression": "string",
         "type": "string",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "transport": {
         "source": "pi",
         "typeExpression": "\"sse\" | \"websocket\" | \"websocket-cached\" | \"auto\"",
         "type": "enum",
         "enum": ["sse", "websocket", "websocket-cached", "auto"],
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "treeFilterMode": {
         "source": "pi",
         "typeExpression": "\"all\" | \"default\" | \"no-tools\" | \"user-only\" | \"labeled-only\"",
         "type": "enum",
         "enum": ["all", "default", "no-tools", "user-only", "labeled-only"],
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "tuiMode": {
         "source": "pi",
         "typeExpression": "\"regular\" | \"fullscreen\"",
         "type": "enum",
         "enum": ["regular", "fullscreen"],
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "warnings": {
         "source": "pi",
         "typeExpression": "WarningSettings",
         "type": "object",
-        "optional": true
+        "optional": true,
+        "project": true
       },
       "websocketConnectTimeoutMs": {
         "source": "pi",
         "typeExpression": "number",
         "type": "number",
-        "optional": true
+        "optional": true,
+        "project": true
       }
-    },
-    "projectTier": {
-      "gatedByProjectTrust": true,
-      "supported": true
     }
   },
   "provenance": {

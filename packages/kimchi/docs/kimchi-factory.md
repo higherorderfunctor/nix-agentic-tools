@@ -5,14 +5,14 @@
 > `extracted.json` by `lib/extracted.nix`; devenv rejects user-scope
 > `config.json` keys and both backends reject environment variables Kimchi
 > overwrites, both read from the sidecar, and the overwrite and inert flags are
-> derived from the sources, and declarations resolve by reference or fail on
-> ambiguity; the builder entry point is `lib.ai.app.mkRuntime`. Home Manager
-> keeps Kimchi's user paths and devenv its project paths; the mutable JSON
-> documents (`config.json`, harness `settings.json`, `mcp.json`,
-> `permissions.json`, and HM-only `trust.json`) reconcile by leaf through the
-> shared delivery router; agents are owned writable copies; portable hooks reach
-> `.kimchi/hooks.json` on devenv only; the trust writer takes pi's
-> `trust.json.lock`. Full lineage:
+> derived from the sources, as is each harness key's project scope, and
+> declarations resolve by reference or fail on ambiguity; the builder entry
+> point is `lib.ai.app.mkRuntime`. Home Manager keeps Kimchi's user paths and
+> devenv its project paths; the mutable JSON documents (`config.json`, harness
+> `settings.json`, `mcp.json`, `permissions.json`, and HM-only `trust.json`)
+> reconcile by leaf through the shared delivery router; agents are owned
+> writable copies; portable hooks reach `.kimchi/hooks.json` on devenv only; the
+> trust writer takes pi's `trust.json.lock`. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -250,17 +250,19 @@ writes only inside the project. Locked by `module-kimchi-project-trust` and
 `module-kimchi-project-trust-runtime`, which runs the real writer against a
 symlinked fixture, a held lock and a stale one.
 
-The devenv module rejects every `native.harnessSettings` key Kimchi reads only
-from user scope: `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`,
-`modelMetadata`, `modelRoles`, `multiModel`, `resources`,
-`shellProfileApiKeyMigrationDismissed`, and `statusLine`. The sidecar's
-`harness.projectTier` carries no per-key scope, so this list stays hand-kept in
-`lib/user-scope-only-harness-settings.nix`. It likewise rejects every
-`native.settings` key whose sidecar `project` flag is false (`gitTokens`,
-`onboarding`, `preferences`, `surveys`, `telemetry`, `teleport` in 1.1.30). Set
-these with Home Manager or through Kimchi itself. Home Manager and devenv
-reconcile the mutable JSON documents by owned leaf, preserving runtime-written
-siblings.
+The devenv module rejects every `native.harnessSettings` key whose sidecar
+`project` flag is false, the list `userScopeHarnessKeys` in `lib/extracted.nix`.
+The extractor derives the flag: a pi key honors the project file only if pi
+reads it through SettingsManager's merged `this.settings`, so keys read only
+through `this.globalSettings` or `getGlobalSettings()` (`defaultProjectTrust`,
+`httpProxy` in pi 0.85.1) are user scope, and a key it sees read neither way
+stops the extraction. Every Kimchi addition is user scope, because Kimchi reads
+them itself from `~/.config/kimchi/harness/settings.json`, never through pi's
+merged manager. It likewise rejects every `native.settings` key whose sidecar
+`project` flag is false (`gitTokens`, `onboarding`, `preferences`, `surveys`,
+`telemetry`, `teleport` in 1.1.30). Set these with Home Manager or through
+Kimchi itself. Home Manager and devenv reconcile the mutable JSON documents by
+owned leaf, preserving runtime-written siblings.
 
 ## Agents: owned, writable copies
 

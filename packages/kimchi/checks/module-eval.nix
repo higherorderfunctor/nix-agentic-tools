@@ -14,11 +14,20 @@
   projectHarnessDocument = kimchiDocument ".config/kimchi/harness/settings.json";
   projectMcpDocument = kimchiDocument ".kimchi/mcp.json";
   hmMcpDocument = evaluated: kimchiDocument "${evaluated.config.ai.kimchi.configDir}/harness/mcp.json" evaluated;
-  userScopeOnlyHarnessSettingKeys = import ../lib/user-scope-only-harness-settings.nix;
+  # The keys come from the sidecar; each needs a sample value here, so a key
+  # that becomes user-scope fails evaluation until someone adds one.
+  userScopeOnlyHarnessSettingKeys =
+    (import ../lib/extracted.nix {
+      inherit lib pkgs;
+      extracted = builtins.fromJSON (builtins.readFile ../extracted.json);
+    }).userScopeHarnessKeys;
   userScopeOnlyHarnessSettingValues = {
+    autoDefaultApplied = true;
     defaultProjectTrust = "always";
     fermentV2.autoResume = true;
     hidePhaseChanges = true;
+    httpProxy = "http://proxy.invalid:3128";
+    lastTerminalWarnings.kitty = "0.35.0";
     modelMetadata.example.description = "Example model";
     modelRoles.builder = "provider/model";
     multiModel = true;
@@ -87,7 +96,8 @@
         rejected = evalDevenv {
           ai.kimchi = {
             enable = true;
-            native.harnessSettings = lib.setAttrByPath [key] userScopeOnlyHarnessSettingValues.${key};
+            native.harnessSettings = lib.setAttrByPath [key] (userScopeOnlyHarnessSettingValues.${key}
+              or (throw "packages/kimchi/checks/module-eval.nix: add a sample value for the user-scope harness key ${key}"));
           };
         };
         failed = builtins.filter (entry: !entry.assertion) rejected.config.assertions;
