@@ -1,11 +1,13 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-23 — Claude devenv delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; Claude and Kimchi choose
-> an agent's `source` by Home Manager's `isPathLike`. File content at
-> `mkDefault` enables its entry; `content.enable = false` suppresses every
-> content form. The builder entry point is `lib.ai.app.mkRuntime`. Native file
-> settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-09-23 — Claude, Codex, Copilot and Kiro describe
+> delivery once through `mkRuntime`'s record-level `config`; Kimchi reaches the
+> same delivery layer from its per-backend callbacks. Claude devenv delivers
+> `ai.agents` and `ai.claude.agentsDir` to `.claude/agents/<name>.md`; Claude
+> and Kimchi choose an agent's `source` by Home Manager's `isPathLike`. File
+> content at `mkDefault` enables its entry; `content.enable = false` suppresses
+> every content form. The builder entry point is `lib.ai.app.mkRuntime`. Native
+> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). A root request nothing per-runtime can withdraw
 > (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
 > owned writable copies and portable hooks reach its project `hooks.json` on
