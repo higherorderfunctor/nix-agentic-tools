@@ -291,15 +291,14 @@
     }: {
       ai.kimchi.files.${path} = {
         inherit entry ledger;
-        # `value` or `run` IS the content form for this entry, so the
-        # text/source form must be off: an entry may enable exactly one.
+        # `value` or `run` IS the content form for this entry. The text/source
+        # form stays off because nothing defines it; `enable` is deliberately
+        # NOT stated, since a defined `content.enable = false` suppresses the
+        # whole entry, `run` and `value` included (runtime-files.nix isLive).
         content =
-          {enable = false;}
-          // (
-            if run != null
-            then {inherit run;}
-            else {inherit value;}
-          );
+          if run != null
+          then {inherit run;}
+          else {inherit value;};
         facts.harnessWrites = true;
         format = "json";
       };
