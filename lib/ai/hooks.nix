@@ -56,17 +56,33 @@
     "UserPromptSubmit"
   ];
 
-  hooksType = lib.types.submodule {
-    options = lib.genAttrs portableEvents (event:
-      lib.mkOption {
-        type = lib.types.listOf portableMatcherBlockType;
-        default = [];
-        description = "Portable ${event} matcher groups.";
-      });
-  };
+  # One matcher-group list per event. A runtime whose native event set is not
+  # the portable one (Kimchi's is wider) declares its own option from the same
+  # block type, so both lower through `render` below.
+  mkHooksType = events:
+    lib.types.submodule {
+      options = lib.genAttrs events (event:
+        lib.mkOption {
+          type = lib.types.listOf portableMatcherBlockType;
+          default = [];
+          description = "${event} matcher groups.";
+        });
+    };
+
+  hooksType = mkHooksType portableEvents;
 
   merge = shared: native:
     lib.zipAttrsWith (_event: lists: lib.concatLists lists) [shared native];
+
+  # Typed event map → the Claude-shaped `hooks` JSON object that Claude's
+  # settings.json and Kimchi's .kimchi/hooks.json both read. Per handler,
+  # `filterAttrs (v != null)` drops a null timeout and keeps `type` plus any
+  # freeform tail (Claude's http url, prompt, …). Per block, a null matcher is
+  # omitted, because no-matcher events take none.
+  render = lib.mapAttrs (_event:
+    map (block:
+      lib.optionalAttrs (block.matcher != null) {inherit (block) matcher;}
+      // {hooks = map (lib.filterAttrs (_: value: value != null)) block.hooks;}));
 in {
-  inherit commandType hooksType merge packageToCommand portableEvents;
+  inherit commandType hooksType merge mkHooksType packageToCommand portableEvents render;
 }

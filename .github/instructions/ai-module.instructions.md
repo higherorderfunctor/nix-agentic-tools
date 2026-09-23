@@ -7,9 +7,10 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/adapters/*
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-22 — reasoning effort lowers to Claude, Codex, and
-> Kimchi; authored prose and final delivery share one priority-aware text-source
-> record with enable semantics.
+> **Last verified:** 2026-09-23 — portable hooks also reach Kimchi's project
+> `hooks.json` on devenv; reasoning effort lowers to Claude, Codex, and Kimchi;
+> authored prose and final delivery share one priority-aware text-source record
+> with enable semantics.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -304,8 +305,12 @@ enabled ecosystem whose native model preserves the option's semantics):
   subset understood by both runtimes. Non-portable events fail with a diagnostic
   and belong under `ai.claude.hooks` or `ai.codex.hooks`. Command packages with
   a `meta.mainProgram` or conventional `pname` resolve to their package
-  executable; bare-file derivations remain direct output paths. Kiro's v3
-  trigger records remain native-only.
+  executable; bare-file derivations remain direct output paths. Kimchi reads the
+  same Claude shape from a trusted project's `.kimchi/hooks.json`, so devenv
+  writes shared plus `ai.kimchi.hooks` groups there; PermissionRequest is not a
+  Kimchi event and is left out with a warning. Kimchi has no user-scope
+  lifecycle file, so its Home Manager row is an explicit, warned exclusion.
+  Kiro's v3 trigger records remain native-only.
 - `ai.context` — a typed `text`/`source` global baseline. Each runtime has the
   same content record plus `filename`; root content precedes runtime content
   when both are present. The strictly higher-priority definition supplies the

@@ -309,7 +309,7 @@ instruction building.
 | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
 | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex) | Same |
 | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot) | Same; project-native paths |
-| Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same |
+| Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
 | LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Same; Codex has no native LSP registry |
 | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
 | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / `ai.<cli>.shell` (Claude + Codex + Kiro) | Same; takes a package. Copilot and Kimchi are explicit exclusions |
@@ -317,13 +317,14 @@ instruction building.
 
 ### Kimchi project delivery
 
-| Pool                     | devenv delivery                        | Boundary                                                                                                    |
-| ------------------------ | -------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Context                  | root `AGENTS.md`                       | Available without project trust; reader walks ancestors, but the wrapper remains root-only                  |
-| MCP servers              | `.kimchi/mcp.json`                     | Requires project trust and launch from the devenv root                                                      |
-| Kimchi settings          | `.kimchi/config.json`                  | Requires project trust and launch from the devenv root                                                      |
-| Skills                   | `.kimchi/skills`                       | Requires project trust; nearest ancestor wins, but the wrapper remains root-only                            |
-| Project harness settings | `.config/kimchi/harness/settings.json` | Requires project trust and launch from the devenv root; user-scope-only keys are rejected during evaluation |
+| Pool                     | devenv delivery                        | Boundary                                                                                                                                                                           |
+| ------------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Context                  | root `AGENTS.md`                       | Available without project trust; reader walks ancestors, but the wrapper remains root-only                                                                                         |
+| MCP servers              | `.kimchi/mcp.json`                     | Requires project trust and launch from the devenv root                                                                                                                             |
+| Kimchi settings          | `.kimchi/config.json`                  | Requires project trust and launch from the devenv root                                                                                                                             |
+| Skills                   | `.kimchi/skills`                       | Requires project trust; nearest ancestor wins, but the wrapper remains root-only                                                                                                   |
+| Project harness settings | `.config/kimchi/harness/settings.json` | Requires project trust and launch from the devenv root; user-scope-only keys are rejected during evaluation                                                                        |
+| Hooks                    | `.kimchi/hooks.json`                   | Requires project trust and launch from the devenv root; PermissionRequest is not a Kimchi event and is left out with a warning. Home Manager has no user-scope hook file and warns |
 
 devenv rejects Kimchi's user-scope-only harness settings: `defaultProjectTrust`,
 `fermentV2`, `hidePhaseChanges`, `modelMetadata`, `modelRoles`, `multiModel`,
@@ -332,10 +333,10 @@ with Home Manager or through Kimchi itself. Both backends reconcile
 `config.json`, `harness/settings.json` and `mcp.json` by owned leaf because
 Kimchi writes them at runtime.
 
-Project settings, MCP servers, and harness settings resolve under the exact
-working directory. The devenv wrapper rejects descendant launches instead of
-silently missing them. Context and skills walk ancestors, so a devenv that
-declares none of the three leaves the launch directory unrestricted.
+Project settings, MCP servers, harness settings, and hooks resolve under the
+exact working directory. The devenv wrapper rejects descendant launches instead
+of silently missing them. Context and skills walk ancestors, so a devenv that
+declares none of the exact-cwd files leaves the launch directory unrestricted.
 `skillPaths` defaults to unset: Kimchi reads the project list in place of the
 user's global one, so only an explicit list, empty included, replaces it.
 

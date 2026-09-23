@@ -136,23 +136,11 @@
     };
   };
   # Shared lowering (both backends): typed event map → settings.json `hooks`
-  # JSON. Per handler: `filterAttrs (v != null)` drops null command/timeout and
-  # keeps `type` + the freeform tail (http url, prompt, …). Per block: omit a
-  # null matcher (settings.json has no matcher for no-matcher events). Same-event
+  # JSON, through the one renderer Kimchi's hooks.json also uses. Same-event
   # lists concat across module writers (formats.json merge), so this composes
   # with the legacy `settings.hooks` escape hatch and, on devenv, with the
   # git-hooks-run entry — never clobbers.
-  hooksToSettings = hooksAttr:
-    lib.mapAttrs (
-      _event: blocks:
-        map (
-          block:
-            (lib.optionalAttrs (block.matcher != null) {inherit (block) matcher;})
-            // {hooks = map (h: lib.filterAttrs (_: v: v != null) h) block.hooks;}
-        )
-        blocks
-    )
-    hooksAttr;
+  hooksToSettings = sharedHooks.render;
 
   # heron_brook delegation clamp — the opt-in mitigation's hook pair.
   #
