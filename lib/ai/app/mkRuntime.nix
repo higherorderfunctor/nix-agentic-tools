@@ -1,6 +1,6 @@
-# Generic AI-app factory (backend-agnostic record producer).
+# Generic AI runtime factory (backend-agnostic record producer).
 #
-# Returns a pure data record describing an AI app. Backend-specific
+# Returns a pure data record describing an AI runtime, not a module. Backend-specific
 # module functions are produced by applying `hmTransform` or
 # `devenvTransform` to the record.
 #

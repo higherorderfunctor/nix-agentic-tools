@@ -7,7 +7,7 @@
   ai = import ../ai {inherit lib;};
   aiCommon = import ../ai/ai-common.nix {inherit lib;};
 
-  # Stub HM option types so mkAiApp's baseline home.file render
+  # Stub HM option types so mkRuntime's baseline home.file render
   # (introduced when the render pipeline was wired) can write to
   # home.file.* without importing home-manager. Mirrors the
   # hmStubs pattern in lib/testing/module-harness.nix.
@@ -75,7 +75,7 @@
   };
 
   mkProxyTestRecord = name:
-    ai.app.mkAiApp {
+    ai.app.mkRuntime {
       inherit name pkgs;
       supportedPools = ["mcpServers"];
       transformers.markdown = ai.transformers.claude;
@@ -134,7 +134,7 @@
     runtimeA = "pool-a-${poolName}";
     runtimeB = "pool-b-${poolName}";
     mkRecord = name:
-      ai.app.mkAiApp {
+      ai.app.mkRuntime {
         inherit name;
         supportedPools = [poolName];
         transformers.markdown = ai.transformers.claude;

@@ -64,8 +64,8 @@
       environmentVariables = moduleEnvironmentVariables // mergedEnvironmentVariables;
     };
 in
-  lib.ai.app.mkAiApp {
-    # Carried as DATA, not a module argument — see mkAiApp.nix.
+  lib.ai.app.mkRuntime {
+    # Carried as DATA, not a module argument — see mkRuntime.nix.
     inherit pkgs;
     name = "copilot";
     contextFilename = "copilot-instructions.md";

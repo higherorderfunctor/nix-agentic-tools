@@ -783,7 +783,7 @@ non-deprecated set the user actually selects):
 - [ ] **Step 2: Add eval-pure reads to the top of `mkClaude.nix`**
 
 `packages/claude-code/lib/mkClaude.nix` currently goes straight into
-`lib.ai.app.mkAiApp { … }`. Wrap it in a `let` that reads the committed source
+`lib.ai.app.mkRuntime { … }`. Wrap it in a `let` that reads the committed source
 JSONs (IFD-free — git-tracked files, never derivation outputs):
 
 ```nix
@@ -799,13 +799,13 @@ JSONs (IFD-free — git-tracked files, never derivation outputs):
   knownClaudeModels =
     builtins.fromJSON (builtins.readFile ../models.json);
 in
-  lib.ai.app.mkAiApp {
+  lib.ai.app.mkRuntime {
     name = "claude";
     # … rest unchanged …
 ```
 
-(Close the `let` by ensuring the final `}` of `mkAiApp { … }` ends the file with
-no trailing change.)
+(Close the `let` by ensuring the final `}` of `mkRuntime { … }` ends the file
+with no trailing change.)
 
 - [ ] **Step 3: Replace the `settings` option with a typed submodule**
 
@@ -1145,7 +1145,7 @@ probe-confirmed available):
 
 - [ ] **Step 2: Read the list in `mkKiro.nix`**
 
-Wrap the `lib.ai.app.mkAiApp { … }` in a `let` (mirroring Task 4 Step 2):
+Wrap the `lib.ai.app.mkRuntime { … }` in a `let` (mirroring Task 4 Step 2):
 
 ```nix
 {
@@ -1156,7 +1156,7 @@ Wrap the `lib.ai.app.mkAiApp { … }` in a `let` (mirroring Task 4 Step 2):
   # Eval-pure read of the committed source list (no IFD).
   knownKiroModels = builtins.fromJSON (builtins.readFile ../models.json);
 in
-  lib.ai.app.mkAiApp {
+  lib.ai.app.mkRuntime {
     name = "kiro";
     # … rest unchanged …
 ```

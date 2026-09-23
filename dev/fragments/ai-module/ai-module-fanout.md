@@ -1,7 +1,8 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-22 — native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-09-23 — the builder entry point is
+> `lib.ai.app.mkRuntime`, renamed from its old app name. Native file settings
+> live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Authored prose and final delivery share one
 > priority-aware text-source record with enable semantics.
 >
@@ -554,7 +555,7 @@ trees. A value set in the HM-imported copy of a module is visible only to HM's
 eval. Devenv's eval has a completely separate `config.ai.skills` (etc.) that
 doesn't see the HM contribution.
 
-**Consequence for package modules outside `mkAiApp`** (including the
+**Consequence for package modules outside `mkRuntime`** (including the
 `mkSkillPackageModule` consumers): when a package contributes to `ai.skills` /
 `ai.rules` / etc., the contribution MUST happen in the module's appropriate
 backend sibling. If the content is HM-scope (personal user config), put it in
@@ -563,10 +564,10 @@ Contributing in one and expecting the other to pick it up will silently fail —
 the contribution just doesn't land in the other eval. A program option tree can
 make enablement structural without changing that per-evaluation ownership.
 
-This is a different discipline from the AI CLI factories (`mkAiApp`), which have
-structural `hm = { config = …; }` / `devenv = { config = …; }` blocks that force
-per-backend separation by construction. Plain modules have no such guardrail —
-authors must decide scope consciously.
+This is a different discipline from the AI CLI factories (`mkRuntime`), which
+have structural `hm = { config = …; }` / `devenv = { config = …; }` blocks that
+force per-backend separation by construction. Plain modules have no such
+guardrail — authors must decide scope consciously.
 
 Portable program integrations use `lib.ai.program.mkProgram`. One specification
 declares the program name, its runtime capability set, and its nested option

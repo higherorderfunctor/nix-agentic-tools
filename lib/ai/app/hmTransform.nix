@@ -1,6 +1,6 @@
 # HM backend transformer.
 #
-# Takes a backend-agnostic app record produced by `mkAiApp` and
+# Takes a backend-agnostic app record produced by `mkRuntime` and
 # returns a home-manager module function that writes the appropriate
 # `home.file.*` / `home.activation.*` / `programs.*` attributes for
 # the HM backend.

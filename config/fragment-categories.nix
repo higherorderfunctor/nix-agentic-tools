@@ -106,7 +106,7 @@ _: {
         # migration exception documented by the fanout fragments.
         "lib/ai/own.nix"
         "lib/ai/own.py"
-        # Portable program option-tree factory. Like `mkAiApp`, it declares
+        # Portable program option-tree factory. Like `mkRuntime`, it declares
         # capability-gated runtime paths and resolves root/runtime values.
         "lib/ai/program.nix"
         # Final B7 static-file registry and generic backend lowering.
