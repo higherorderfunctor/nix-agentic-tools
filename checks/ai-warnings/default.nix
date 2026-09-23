@@ -257,7 +257,19 @@
         path = ["ai" runtime "settings" "reasoningEffort"];
         value = "high";
       }
-    ]) ["copilot" "kimchi" "kiro"];
+    ]) ["copilot" "kiro"];
+  # Runtimes that lower reasoning effort natively must stay silent about it on
+  # both backends: a warning there would claim a gap the factory closes.
+  loweredEffortSilent = lib.all (mode:
+    lib.all (runtime:
+      lib.all (path:
+        evaluate mode (lib.recursiveUpdate {ai.${runtime}.enable = true;} (lib.setAttrByPath path "high"))
+        == [])
+      [
+        ["ai" "settings" "reasoningEffort"]
+        ["ai" runtime "settings" "reasoningEffort"]
+      ])
+    ["kimchi"]) ["devenv" "hm"];
   casePass = case: let
     mode = case.mode or "devenv";
     input = lib.setAttrByPath case.path case.value;
@@ -344,6 +356,7 @@ in {
     ai-warnings-delivery = harness.mkTest "ai-warnings-delivery" (
       lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
       && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
+      && lib.assertMsg loweredEffortSilent "a runtime that lowers reasoning effort natively still warns about it"
     );
     ai-warnings-mcp-assertions = harness.mkTest "ai-warnings-mcp-assertions" (
       let

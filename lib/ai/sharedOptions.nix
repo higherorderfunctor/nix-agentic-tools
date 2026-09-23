@@ -243,10 +243,11 @@ in {
         Typed settings whose values preserve the same meaning across multiple
         AI runtimes. Each `ai.<runtime>.settings` field narrows this root
         default when non-null. The current `reasoningEffort` field lowers to
-        Claude `effortLevel` and Codex `model_reasoning_effort`; the enum is
-        their exact persisted semantic intersection. Set a runtime's native
-        key, including an explicit null, under
-        `ai.<runtime>.nativeSettings` to arbitrate against the derived default.
+        Claude `effortLevel`, Codex `model_reasoning_effort` and Kimchi
+        `defaultThinkingLevel`; the enum is their exact persisted semantic
+        intersection. Set a runtime's native key, including an explicit null,
+        under `ai.<runtime>.nativeSettings` (Kimchi: `harnessSettings`) to
+        arbitrate against the derived default.
         Runtime-specific identifiers and lossy translations are deliberately
         excluded.
       '';
