@@ -246,20 +246,32 @@ in
         else if aiTypes.textSourceUsesSource entry.content
         then "source"
         else "text";
+      # The FIELD's own option, not `content.${field}` of each raw content
+      # definition. Its definitions have had their top-level properties
+      # discharged and priority-filtered, so `content.value = mkForce {…}`,
+      # `mkDefault {…}` or `mkIf c {…}` arrives as the value it wraps. The raw
+      # field would get a second override wrapped around the first; the host
+      # strips only the outer one, and the inner property lands in the
+      # document as literal `_type`/`priority`/`content` keys.
+      fieldOption = contentOption.valueMeta.configuration.options.${field};
+      # The content option's filter left only definitions at its winning
+      # priority and stripped that wrapper before the submodule saw them, so
+      # the field option cannot report it. Outer wins, as when the module
+      # system pushes a property down an attribute path: a non-default content
+      # priority is every survivor's, and otherwise the field's own is.
+      priority =
+        if contentOption.highestPrio == lib.modules.defaultOverridePriority
+        then fieldOption.highestPrio
+        else contentOption.highestPrio;
     in
       # Moving the evaluated VALUE makes defaults ordinary definitions in the
       # host module: a generated `mkDefault` leaf would then conflict with a
       # consumer's own definition of it, and `mkBefore`/`mkAfter` list order
-      # would be lost. Alias the surviving content definitions instead, which
-      # keeps both content-level priority and the nested leaf/list properties
-      # for the host option's own merge.
+      # would be lost. Alias the surviving field definitions instead, which
+      # keeps the entry's priority and the nested leaf/list properties for the
+      # host option's own merge.
       builtins.seq entry.content.${field} (
-        lib.modules.mkAliasAndWrapDefsWithPriority lib.id (contentOption
-          // {
-            definitions =
-              map (content: content.${field})
-              (lib.filter (content: content ? ${field}) contentOption.definitions);
-          })
+        lib.modules.mkAliasAndWrapDefsWithPriority lib.id (fieldOption // {highestPrio = priority;})
       );
     # Merged into CONSTANT attribute paths: a list of fragments whose length
     # comes from `cfg.activation` forces that option while the module system is

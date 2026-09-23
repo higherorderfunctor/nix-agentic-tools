@@ -13,7 +13,7 @@
 > owned writable copies and portable hooks reach its project `hooks.json` on
 > devenv. Reasoning effort lowers to Claude, Codex, and Kimchi; authored prose
 > and final delivery share one priority-aware text-source record with enable
-> semantics.
+> semantics. Upstream delegation aliases the content field's own definitions.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -541,14 +541,21 @@ It is a delivery description, not a universal file abstraction. Secret-bearing
 files use `content.run` in an owned writer, runtime state keeps its typed
 lifecycle owners, and a surface another module owns is DESCRIBED here —
 `method = "upstream"` plus the `sink` that owns it — rather than written here.
-The router aliases the surviving content definitions, including their
-priorities, instead of copying the merged value: copying strips `mkDefault` and
-breaks ordinary upstream overrides. The suppressible entry type preserves
-submodule option metadata for that alias. Definitions combine through `mkMerge`
-below each adapter's literal hosted root, so the host retains its own deep-merge
-and list-ordering semantics. Dynamic top-level roots remain forbidden because
-they recurse during option collection. Skills go through the map now: one entry
-per tree, expanded by Home Manager natively and walked by the router for devenv.
+The router aliases the surviving definitions of the content FIELD
+(`content.value`, `.source` or `.text`), including their priorities, instead of
+copying the merged value: copying strips `mkDefault` and breaks ordinary
+upstream overrides. It reads them from the field's own option, whose merge has
+already discharged a property wrapped around the field
+(`content.value = mkForce {…}`, `mkIf c {…}`). Taking `content.${field}` from
+the raw content definitions instead nests that property inside the alias's
+override, and the host writes it into the document as literal
+`_type`/`priority`/`content` keys. A non-default priority on the whole `content`
+wins over the field's. The suppressible entry type preserves submodule option
+metadata for that alias. Definitions combine through `mkMerge` below each
+adapter's literal hosted root, so the host retains its own deep-merge and
+list-ordering semantics. Dynamic top-level roots remain forbidden because they
+recurse during option collection. Skills go through the map now: one entry per
+tree, expanded by Home Manager natively and walked by the router for devenv.
 Kiro steering uses ordinary symlinks after live 2.18.1 spikes confirmed startup
 discovery and same-session replacement reload in both global and project
 layouts; Kiro hooks stay real-file reconciled (`lib/ai/own.nix`, a `dir` target)
