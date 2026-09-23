@@ -4,14 +4,14 @@
 > `native.harnessSettings` are closed option trees generated from
 > `extracted.json` by `lib/extracted.nix`; devenv rejects user-scope
 > `config.json` keys and both backends reject environment variables Kimchi
-> overwrites, both read from the sidecar; the builder entry point is
-> `lib.ai.app.mkRuntime`. Home Manager keeps Kimchi's user paths and devenv its
-> project paths; the mutable JSON documents (`config.json`, harness
-> `settings.json`, `mcp.json`, `permissions.json`, and HM-only `trust.json`)
-> reconcile by leaf through the shared delivery router; agents are owned
-> writable copies, copied from a store-path string as from a path; portable
-> hooks reach `.kimchi/hooks.json` on devenv only; the trust writer takes pi's
-> `trust.json.lock`. Full lineage:
+> overwrites, both read from the sidecar, and the overwrite flag is derived from
+> `src/entry.ts`; the builder entry point is `lib.ai.app.mkRuntime`. Home
+> Manager keeps Kimchi's user paths and devenv its project paths; the mutable
+> JSON documents (`config.json`, harness `settings.json`, `mcp.json`,
+> `permissions.json`, and HM-only `trust.json`) reconcile by leaf through the
+> shared delivery router; agents are owned writable copies, copied from a
+> store-path string as from a path; portable hooks reach `.kimchi/hooks.json` on
+> devenv only; the trust writer takes pi's `trust.json.lock`. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -61,24 +61,31 @@ The sidecar also drives two rejections and one lookup. Devenv rejects
 `native.settings` keys whose `project` flag is false, because Kimchi merges only
 its project-honored keys from `.kimchi/config.json`. Both backends reject an
 environment variable the sidecar marks not `consumerOverridable`, because
-Kimchi's entry point overwrites it before anything reads it. Every variable the
+Kimchi's entry point overwrites it before anything reads it. That flag is
+derived, not annotated: the extractor walks `src/entry.ts`'s top-level
+statements in order and marks a variable fixed when a statement assigns it on
+every path and no earlier statement reads it, counting what a callee handed
+`process.env` reads from it. `PI_CODING_AGENT_DIR` is assigned too, but read and
+preserved first, so it stays settable. The analysis fails instead of guessing
+when a module entry.ts statically imports reads the same name, or when an
+assignment follows entry.ts's first `await` or `import()`. Every variable the
 factory sets itself (`KIMCHI_API_KEY`, `KIMCHI_NO_UPDATE_CHECK`,
 `KIMCHI_TELEMETRY_ENABLED`) goes through `environmentName`, which fails
-evaluation if the pinned Kimchi no longer reads it.
+evaluation if the pinned Kimchi no longer reads it or starts overwriting it.
 
-Every resolved environment name is either published from an annotation or
-listed, with a reason, under `environmentIgnored` in `extract/annotations.json`;
-pi's own names follow Kimchi's `piConfig.name`
-(`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_` default). The extractor uses
-the TypeScript compiler's checker for declared keys and types and syntax tree
-queries for environment access sites, while config queries cross-check compiler
-types against top-level, nested, and array-element runtime validation guards.
-Three additional hash-pinned pi declaration packages resolve the settings type's
-external imports; unresolved named leaves fail extraction. The extractor also
-checks that the hash-pinned source URL names the same release tag recorded in
-provenance; Kimchi's source `package.json` intentionally retains the `0.0.0`
-development placeholder. It no longer extracts the CLI: the wrapper passes no
-flags, so that surface had no reader.
+Every resolved environment name is either published from an annotation (a
+`controls` description and nothing else) or listed, with a reason, under
+`environmentIgnored` in `extract/annotations.json`; pi's own names follow
+Kimchi's `piConfig.name` (`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_`
+default). The extractor uses the TypeScript compiler's checker for declared keys
+and types and syntax tree queries for environment access sites, while config
+queries cross-check compiler types against top-level, nested, and array-element
+runtime validation guards. Three additional hash-pinned pi declaration packages
+resolve the settings type's external imports; unresolved named leaves fail
+extraction. The extractor also checks that the hash-pinned source URL names the
+same release tag recorded in provenance; Kimchi's source `package.json`
+intentionally retains the `0.0.0` development placeholder. It no longer extracts
+the CLI: the wrapper passes no flags, so that surface had no reader.
 
 ## User and project paths (the load-bearing fact)
 
