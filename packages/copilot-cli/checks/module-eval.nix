@@ -680,6 +680,32 @@ in {
         && lib.hasInfix "Reviewer" (agentFile.text or "")
     );
 
+    # A store-path STRING is a file, not Markdown: a flake input's
+    # "${src}/agent.md", or an agentsDir given as a string (whose entries are
+    # then strings too). Both backends must deliver the file's contents, not a
+    # file whose body is the literal /nix/store path.
+    module-copilot-store-string-agent-both-backends = mkTest "copilot-store-string-agent-both-backends" (
+      let
+        fixtureDir = "${../../claude-code/checks/fixtures/claude-agents}";
+        expected = builtins.readFile ../../claude-code/checks/fixtures/claude-agents/agent-one.md;
+        config.ai.copilot = {
+          enable = true;
+          agents.store-string = "${fixtureDir}/agent-one.md";
+          agentsDir = {
+            path = fixtureDir;
+            filter = name: name == "agent-one.md";
+          };
+        };
+        hmFiles = (evalHm config).config.home.file;
+        devenvFiles = (evalDevenv config).config.files;
+        delivered = file: (file.text or null) == expected;
+      in
+        delivered hmFiles.".copilot/agents/store-string.md"
+        && delivered hmFiles.".copilot/agents/agent-one.md"
+        && delivered devenvFiles.".github/agents/store-string.agent.md"
+        && delivered devenvFiles.".github/agents/agent-one.agent.md"
+    );
+
     # Copilot parity (HM side).
     module-copilot-agentsdir-path-form = mkTest "copilot-agentsdir-path-form" (
       let
