@@ -57,11 +57,13 @@ scaffolding sitting next to a newer mechanism.
 ## The two mechanisms key on opposite things
 
 The two columns below are not like-for-like in time, so the frame is named in
-each heading rather than left implied. While a shell is live, direnv reloads at
-the next prompt and `devenv hook` does nothing whatsoever — it has no in-shell
-refresh point to compare against. Its only moment is exiting and re-entering,
-where devenv's eval cache decides. So read every row as: what direnv does at
-your next prompt, versus what `devenv hook` does the next time you re-enter.
+each heading rather than left implied. While a shell is live, direnv's only
+refresh point is the next prompt, and `devenv hook` has none at all — nothing it
+could notice, so nothing to compare against in-frame. Its only moment is exiting
+and re-entering, where devenv's eval cache decides. Whether a given change
+actually triggers anything at that point is what the table answers, and the
+answers differ per row. So read every row as: what direnv does at your next
+prompt, versus what `devenv hook` does the next time you re-enter.
 
 | Event                          | direnv, at the next prompt | `devenv hook`, at re-entry |
 | ------------------------------ | -------------------------- | -------------------------- |
