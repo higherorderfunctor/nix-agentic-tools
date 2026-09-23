@@ -7,8 +7,9 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/adapters/*
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-22 — native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-09-23 — the builder entry point is
+> `lib.ai.app.mkRuntime`, renamed from its old app name. Native file settings
+> live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Authored prose and final delivery share one
 > priority-aware text-source record with enable semantics.
 >
@@ -561,7 +562,7 @@ trees. A value set in the HM-imported copy of a module is visible only to HM's
 eval. Devenv's eval has a completely separate `config.ai.skills` (etc.) that
 doesn't see the HM contribution.
 
-**Consequence for package modules outside `mkAiApp`** (including the
+**Consequence for package modules outside `mkRuntime`** (including the
 `mkSkillPackageModule` consumers): when a package contributes to `ai.skills` /
 `ai.rules` / etc., the contribution MUST happen in the module's appropriate
 backend sibling. If the content is HM-scope (personal user config), put it in
@@ -570,10 +571,10 @@ Contributing in one and expecting the other to pick it up will silently fail —
 the contribution just doesn't land in the other eval. A program option tree can
 make enablement structural without changing that per-evaluation ownership.
 
-This is a different discipline from the AI CLI factories (`mkAiApp`), which have
-structural `hm = { config = …; }` / `devenv = { config = …; }` blocks that force
-per-backend separation by construction. Plain modules have no such guardrail —
-authors must decide scope consciously.
+This is a different discipline from the AI CLI factories (`mkRuntime`), which
+have structural `hm = { config = …; }` / `devenv = { config = …; }` blocks that
+force per-backend separation by construction. Plain modules have no such
+guardrail — authors must decide scope consciously.
 
 Portable program integrations use `lib.ai.program.mkProgram`. One specification
 declares the program name, its runtime capability set, and its nested option
@@ -698,9 +699,11 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-21 — rules and context use entry-local `enable`
-> suppression, and Semble's CLI rule uses text-source priority arbitration.
-> Delivery entries default `content` alone; `null` absorbs at equal priority.
+> **Last verified:** 2026-09-23 — the builder entry point is
+> `lib.ai.app.mkRuntime`, renamed from its old app name. Rules and context use
+> entry-local `enable` suppression, and Semble's CLI rule uses text-source
+> priority arbitration. Delivery entries default `content` alone; `null` absorbs
+> at equal priority.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -802,7 +805,7 @@ claim the same managed-proxy identity. A top-level owner inherited by no enabled
 capable runtime is not materialized. The shared owner aggregator dynamically
 discovers every runtime option subtree carrying the internal normalized-MCP
 capability marker. Do not infer capability from the `mcpServers` name alone: the
-generic public `mkAiApp` factory permits an unrelated same-named native option
+generic public `mkRuntime` factory permits an unrelated same-named native option
 when the normalized pool is unsupported.
 
 ### Package ownership rule
@@ -1254,8 +1257,9 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-22 — native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-09-23 — the builder entry point is
+> `lib.ai.app.mkRuntime`, renamed from its old app name. Native file settings
+> live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Resolves #877: Kiro's FHS root supplies bash but
 > hides a host zsh, and that does not justify a runtime-specific implicit shell
 > default. `ai.shell` stays null; see below for the standing decision and the
@@ -1265,7 +1269,7 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ### One record is the capability source
 
-Every `mkAiApp` record declares the normalized pools its runtime exposes in
+Every `mkRuntime` record declares the normalized pools its runtime exposes in
 `supportedPools`. `mkBackendTransform.nix` reads that build-time list in four
 places:
 
@@ -1338,8 +1342,8 @@ sibling shell-specific capability flag.
 | Copilot | **unknown — verified gap** | excluded                                |
 | Kimchi  | unassessed                 | excluded                                |
 
-Four runtimes were asked for; five go through `mkAiApp`. Kimchi is easy to miss
-because the issue that requested this never mentioned it.
+Four runtimes were asked for; five go through `mkRuntime`. Kimchi is easy to
+miss because the issue that requested this never mentioned it.
 
 ### Kiro's FHS root does not change the shell default
 

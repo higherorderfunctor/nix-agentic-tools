@@ -13,7 +13,7 @@ in {
     # entry alongside a loaded claude module without type conflicts. It
     # does NOT verify the claude module's internal mergedServers fanout
     # computation — that's covered in checks/ai-factory/factory-eval.nix via the
-    # factory-mkAiApp-fanout-* tests.
+    # factory-mkRuntime-fanout-* tests.
     module-context7-shared-mcp-pool-accepted = mkTest "context7-shared-mcp-pool-accepted" (
       let
         evaluated = evalHm {

@@ -163,7 +163,7 @@
      - Require all hook verification to be manual HITL
      => REC: Option 2: nix flake check covers the deterministic command-action majority hermetically (validate-at-stop pattern); agent-action + live-injection go to an env-gated app/task using the kiro-memory-hitl
 
-===== section_05.json : SECTION_SCHEMA: Typed per-event hook options inside the mkAiApp factory (Claude  =====
+===== section_05.json : SECTION_SCHEMA: Typed per-event hook options inside the mkRuntime factory (Claude  =====
 -- KEY CLAIMS --
   [LB high] HM upstream `programs.claude-code.hooks` is `attrsOf lines` = executable SCRIPT FILES only (no event/matcher); the event→matcher→handler wiring exists only inside the fully-freeform `settings.hooks` J  (src: nix-community/home-manager modules/programs/claude-code/options.nix (ref e3dea8e): hooks m)
   [LB high] devenv `claude.code.hooks` is a NAMED-RECORD submodule `{enable,name,hookType(enum17),matcher,command}` (Kiro-like), and devenv emits only `{type:"command",command}` grouped by hookType — command-only  (src: cachix/devenv src/modules/integrations/claude.nix (ref 5f1cf17): hookSubmodule, buildHooks)

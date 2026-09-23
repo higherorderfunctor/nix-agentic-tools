@@ -1,14 +1,15 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-22 — native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-09-23 — the builder entry point is
+> `lib.ai.app.mkRuntime`, renamed from its old app name. Native file settings
+> live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Both runtime-writable documents reconcile their
 > owned leaves through `lib/ai/own.py`, one bundle and one activation entry
 > each, and the context entry defaults its `content` option rather than the
 > whole entry. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
-`packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
+`packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
 mutable tree). The HM and devenv modules are thin shims that apply `hmTransform`
 / `devenvTransform` to the record.

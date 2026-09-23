@@ -1,7 +1,8 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-22 — native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-09-23 — the builder entry point is
+> `lib.ai.app.mkRuntime`, renamed from its old app name. Native file settings
+> live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Resolves #877: Kiro's FHS root supplies bash but
 > hides a host zsh, and that does not justify a runtime-specific implicit shell
 > default. `ai.shell` stays null; see below for the standing decision and the
@@ -11,7 +12,7 @@
 
 ### One record is the capability source
 
-Every `mkAiApp` record declares the normalized pools its runtime exposes in
+Every `mkRuntime` record declares the normalized pools its runtime exposes in
 `supportedPools`. `mkBackendTransform.nix` reads that build-time list in four
 places:
 
@@ -84,8 +85,8 @@ sibling shell-specific capability flag.
 | Copilot | **unknown — verified gap** | excluded                                |
 | Kimchi  | unassessed                 | excluded                                |
 
-Four runtimes were asked for; five go through `mkAiApp`. Kimchi is easy to miss
-because the issue that requested this never mentioned it.
+Four runtimes were asked for; five go through `mkRuntime`. Kimchi is easy to
+miss because the issue that requested this never mentioned it.
 
 ### Kiro's FHS root does not change the shell default
 

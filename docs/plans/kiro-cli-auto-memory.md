@@ -1049,9 +1049,9 @@ failed the user.
 From the config-parity remap (`packages/kiro-cli/…`):
 
 - kiro's HM + devenv modules are **co-located under the package** (not a
-  top-level `modules/`). One `mkAiApp` record in `mkKiro.nix` is projected into
-  both backends by `lib/ai/app/{hmTransform,devenvTransform}.nix`; options in
-  its `options` block appear in both automatically → **parity is largely
+  top-level `modules/`). One `mkRuntime` record in `mkKiro.nix` is projected
+  into both backends by `lib/ai/app/{hmTransform,devenvTransform}.nix`; options
+  in its `options` block appear in both automatically → **parity is largely
   structural-by-construction**. `hm.config` vs `devenv.config` do the
   per-backend on-disk emission (the only hand-written parity risk).
 - **HOOKS, STEERING, MCP each already have full HM + devenv + lib emission — no
