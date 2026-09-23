@@ -180,6 +180,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Run without the shared background server, even if it is already running",
+            "names": ["--no-daemon"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Print help (see a summary with '-h')",
             "names": ["--help", "-h"],
             "valueName": null
@@ -211,6 +219,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Connect the TUI to a remote app server endpoint. Accepted forms: `ws://host:port`, `wss://host:port`, `unix://`, or `unix://PATH`.",
             "names": ["--remote"],
             "valueName": "ADDR"
@@ -219,8 +235,8 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
             "valueName": "FEATURE"
           },
           {
@@ -238,14 +254,6 @@
             "help": "Use this directory for new tasks on a remote server",
             "names": ["--cd", "-C"],
             "valueName": "DIR"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
-            "names": ["--disable"],
-            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
@@ -698,9 +706,25 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Copy and pin this CLI package",
+            "names": ["--from-cli"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
             "names": ["--enable"],
             "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Confirm replacing the daemon package without an interactive prompt",
+            "names": ["--yes", "-y"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -719,7 +743,7 @@
             "valueName": null
           }
         ],
-        "help": "Update the standalone installation and restart the managed daemon (may interrupt work)",
+        "help": "Update the daemon package (may interrupt running work)",
         "path": ["codex", "app-server", "daemon", "update"]
       },
       "codex app-server daemon version": {
@@ -1878,17 +1902,17 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Emit a redacted machine-readable report",
-            "names": ["--json"],
-            "valueName": null
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
-            "names": ["--enable"],
-            "valueName": "FEATURE"
+            "help": "Emit a redacted machine-readable report",
+            "names": ["--json"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3291,6 +3315,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Run without the shared background server, even if it is already running",
+            "names": ["--no-daemon"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Print help (see a summary with '-h')",
             "names": ["--help", "-h"],
             "valueName": null
@@ -3683,9 +3715,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Comma-separated list of OAuth scopes to request",
-            "names": ["--scopes"],
-            "valueName": "SCOPE,SCOPE"
+            "help": "Print the authorization URL and accept the callback URL without opening a browser",
+            "names": ["--no-browser"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3696,12 +3728,12 @@
             "valueName": "FEATURE"
           },
           {
-            "acceptedValues": ["auto", "cimd", "dcr"],
+            "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "OAuth client-registration strategy for this login only",
-            "names": ["--oauth-client-registration"],
-            "valueName": "AUTO|CIMD|DCR"
+            "help": "Comma-separated list of OAuth scopes to request",
+            "names": ["--scopes"],
+            "valueName": "SCOPE,SCOPE"
           },
           {
             "acceptedValues": [],
@@ -3710,6 +3742,14 @@
             "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
             "names": ["--disable"],
             "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": ["auto", "cimd", "dcr"],
+            "conflicts": [],
+            "default": null,
+            "help": "OAuth client-registration strategy for this login only",
+            "names": ["--oauth-client-registration"],
+            "valueName": "AUTO|CIMD|DCR"
           },
           {
             "acceptedValues": [],
@@ -4905,6 +4945,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Run without the shared background server, even if it is already running",
+            "names": ["--no-daemon"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Print help (see a summary with '-h')",
             "names": ["--help", "-h"],
             "valueName": null
@@ -5475,6 +5523,14 @@
         "acceptedValues": [],
         "conflicts": [],
         "default": null,
+        "help": "Run without the shared background server, even if it is already running",
+        "names": ["--no-daemon"],
+        "valueName": null
+      },
+      {
+        "acceptedValues": [],
+        "conflicts": [],
+        "default": null,
         "help": "Print help (see a summary with '-h')",
         "names": ["--help", "-h"],
         "valueName": null
@@ -5494,6 +5550,16 @@
     "probeValidatedKeys": []
   },
   "features": [
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "agent_message_board"
+    },
+    {
+      "default": false,
+      "maturity": "experimental",
+      "name": "analytics_plan_history"
+    },
     {
       "default": false,
       "maturity": "under development",
@@ -5646,6 +5712,11 @@
     },
     {
       "default": false,
+      "maturity": "experimental",
+      "name": "daemon_auto_start"
+    },
+    {
+      "default": false,
       "maturity": "under development",
       "name": "default_mode_request_user_input"
     },
@@ -5731,7 +5802,7 @@
     },
     {
       "default": false,
-      "maturity": "under development",
+      "maturity": "removed",
       "name": "guardian_ext"
     },
     {
@@ -5740,8 +5811,8 @@
       "name": "guardian_node_repl_transcript_images"
     },
     {
-      "default": false,
-      "maturity": "under development",
+      "default": true,
+      "maturity": "stable",
       "name": "guardian_reuse_parent_compaction"
     },
     {
@@ -5872,11 +5943,16 @@
     {
       "default": false,
       "maturity": "under development",
+      "name": "nonfatal_clock_read_errors"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
       "name": "omit_app_server_notification_media"
     },
     {
-      "default": true,
-      "maturity": "stable",
+      "default": false,
+      "maturity": "removed",
       "name": "personality"
     },
     {
@@ -5910,8 +5986,8 @@
       "name": "psp"
     },
     {
-      "default": false,
-      "maturity": "experimental",
+      "default": true,
+      "maturity": "stable",
       "name": "realtime_conversation"
     },
     {
@@ -6005,6 +6081,11 @@
       "name": "send_async_message"
     },
     {
+      "default": false,
+      "maturity": "under development",
+      "name": "send_message_to_user_async"
+    },
+    {
       "default": true,
       "maturity": "stable",
       "name": "shell_snapshot"
@@ -6071,6 +6152,11 @@
     },
     {
       "default": true,
+      "maturity": "stable",
+      "name": "system_proxy_fallback"
+    },
+    {
+      "default": true,
       "maturity": "removed",
       "name": "terminal_resize_reflow"
     },
@@ -6106,7 +6192,7 @@
     },
     {
       "default": false,
-      "maturity": "under development",
+      "maturity": "deprecated",
       "name": "transcript_v2"
     },
     {
@@ -6165,6 +6251,11 @@
       "name": "use_linux_sandbox_bwrap"
     },
     {
+      "default": false,
+      "maturity": "under development",
+      "name": "use_xaa"
+    },
+    {
       "default": true,
       "maturity": "stable",
       "name": "view_image"
@@ -6195,8 +6286,8 @@
       "name": "workspace_owner_usage_nudge"
     },
     {
-      "default": false,
-      "maturity": "experimental",
+      "default": true,
+      "maturity": "stable",
       "name": "worktrees"
     },
     {
@@ -6262,7 +6353,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.155.1",
+    "codexVersion": "0.156.0",
     "extractorSchema": 1
   }
 }
