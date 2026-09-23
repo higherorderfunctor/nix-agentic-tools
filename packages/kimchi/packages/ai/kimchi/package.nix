@@ -45,8 +45,10 @@
     ourPkgs.runCommand "kimchi-extracted.json" {
       nativeBuildInputs = [ourPkgs.nodejs ourPkgs.typescript_5];
     } ''
+      ${ourPkgs.yq-go}/bin/yq -o=json '.' ${kimchiSource}/pnpm-lock.yaml > kimchi-lock.json
       ${ourPkgs.nodejs}/bin/node ${../../../extract/extract.mjs} \
         --annotations ${../../../extract/annotations.json} \
+        --kimchi-lock kimchi-lock.json \
         --kimchi-source ${kimchiSource} \
         --kimchi-source-url ${lib.escapeShellArg extraction.kimchiSource.url} \
         --kimchi-version ${sources.version} \
@@ -73,7 +75,13 @@
     pi_package_url="https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-$pi_version.tgz"
     pi_package_json=$(${ourPkgs.nix}/bin/nix store prefetch-file --json --unpack "$pi_package_url")
     pi_package_hash=$(${ourPkgs.jq}/bin/jq -er '.hash' <<< "$pi_package_json")
-    pi_package_path=$(${ourPkgs.jq}/bin/jq -er '.storePath' <<< "$pi_package_json")
+
+    # pi's declaration packages at the versions Kimchi's lockfile resolves
+    # pi's dependencies to, which is what the release binary bundles.
+    kimchi_lock_json=$(${ourPkgs.yq-go}/bin/yq -o=json '.' "$kimchi_source_path/pnpm-lock.yaml")
+    pi_reference=$(${ourPkgs.jq}/bin/jq -er \
+      '.importers["."].dependencies["@earendil-works/pi-coding-agent"].version | strings' \
+      <<< "$kimchi_lock_json")
 
     prefetch_pi_dependency() {
       local dependency_name="$1"
@@ -83,9 +91,10 @@
       local dependency_json
       local dependency_hash
       dependency_version=$(${ourPkgs.jq}/bin/jq -er \
+        --arg reference "@earendil-works/pi-coding-agent@$pi_reference" \
         --arg name "@earendil-works/$dependency_name" \
-        '.dependencies[$name] | strings | ltrimstr("^") | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
-        "$pi_package_path/package.json")
+        '.snapshots[$reference].dependencies[$name] | strings | sub("\\(.*$"; "") | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
+        <<< "$kimchi_lock_json")
       dependency_url="https://registry.npmjs.org/@earendil-works/$dependency_name/-/$dependency_name-$dependency_version.tgz"
       dependency_json=$(${ourPkgs.nix}/bin/nix store prefetch-file --json --unpack "$dependency_url")
       dependency_hash=$(${ourPkgs.jq}/bin/jq -er '.hash' <<< "$dependency_json")

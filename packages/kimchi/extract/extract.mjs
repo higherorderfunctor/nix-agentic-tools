@@ -23,6 +23,7 @@ function parseArguments(argv) {
   }
   for (const name of [
     "annotations",
+    "kimchi-lock",
     "kimchi-source",
     "kimchi-source-url",
     "kimchi-version",
@@ -2145,17 +2146,29 @@ async function main() {
     await readFile(join(kimchiRoot, "package.json"), "utf8"),
   );
   const piVersion = piPackage.version;
+  // The declaration packages must be the versions the shipped binary bundles:
+  // what Kimchi's pnpm-lock.yaml (converted to JSON) resolves pi's own
+  // dependencies to, not the floor of pi's caret ranges.
+  const lock = JSON.parse(await readFile(resolve(args["kimchi-lock"]), "utf8"));
+  const bareVersion = (reference) => reference?.split("(")[0];
+  const piReference =
+    lock.importers?.["."]?.dependencies?.["@earendil-works/pi-coding-agent"]
+      ?.version;
+  if (bareVersion(piReference) !== piVersion)
+    fail(
+      `Kimchi's pnpm-lock.yaml resolves pi to ${JSON.stringify(bareVersion(piReference))}, but the supplied pi source is ${JSON.stringify(piVersion)}`,
+    );
+  const piSnapshot =
+    lock.snapshots?.[`@earendil-works/pi-coding-agent@${piReference}`] ??
+    fail(`Kimchi's pnpm-lock.yaml has no snapshot for pi ${piReference}`);
   for (const [name, root] of Object.entries(piTypePackages)) {
     const dependencyPackage = JSON.parse(
       await readFile(join(root, "package.json"), "utf8"),
     );
-    const requested = piPackage.dependencies?.[name];
-    const expectedVersion = requested?.startsWith("^")
-      ? requested.slice(1)
-      : requested;
-    if (!expectedVersion || dependencyPackage.version !== expectedVersion) {
+    const locked = bareVersion(piSnapshot.dependencies?.[name]);
+    if (!locked || dependencyPackage.version !== locked) {
       fail(
-        `pi requests ${name} ${JSON.stringify(requested)}, but the supplied declaration package is ${JSON.stringify(dependencyPackage.version)}`,
+        `Kimchi's pnpm-lock.yaml resolves pi's ${name} to ${JSON.stringify(locked)}, but the supplied declaration package is ${JSON.stringify(dependencyPackage.version)}`,
       );
     }
   }

@@ -1,4 +1,5 @@
 # Drift and collision checks for Kimchi's two source-derived settings surfaces.
+# cspell:ignore odwyer
 {
   pkgs,
   self,
@@ -12,8 +13,10 @@
     extractor = ../extract/extract.mjs;
 
     runExtractor = source: output: pi: ''
+      ${pkgs.yq-go}/bin/yq -o=json '.' ${source}/pnpm-lock.yaml > "$TMPDIR/kimchi-lock.json"
       ${pkgs.nodejs}/bin/node ${extractor} \
         --annotations ${../extract/annotations.json} \
+        --kimchi-lock "$TMPDIR/kimchi-lock.json" \
         --kimchi-source ${source} \
         --kimchi-source-url ${pkgs.lib.escapeShellArg extractionSourceUrls.kimchi} \
         --kimchi-version ${package.version} \
@@ -91,6 +94,10 @@
           'readConfigSetting("multiModel"' 'readConfigSetting(String(Date.now())'
         mutant "$kimchi" helper-unknown-key src/extensions/tags.ts \
           'readConfigSetting("hidePhaseChanges"' 'readConfigSetting("hidePhaseChangesProbe"'
+        # The pi snapshot's own pi-tui entry, the only one followed by photon-node.
+        mutant "$kimchi" lockfile-drift pnpm-lock.yaml \
+          $'      \x27@earendil-works/pi-tui\x27: 0.85.1(patch_hash=1bc60a0766129acb8da6087526636e59a9ed127bf278e6adb2247b42b6e38c12)\n      \x27@silvia-odwyer/photon-node\x27' \
+          $'      \x27@earendil-works/pi-tui\x27: 0.85.2(patch_hash=1bc60a0766129acb8da6087526636e59a9ed127bf278e6adb2247b42b6e38c12)\n      \x27@silvia-odwyer/photon-node\x27'
         mutant "$kimchi" inert-consumed src/config.ts \
           'export function getAgentConfigDir(): string {' $'export function getAgentConfigDir(): string {\n\tvoid loadConfig().maxToolResultChars'
         mutant "$kimchi" environment-app-name package.json \
@@ -175,6 +182,8 @@
           'passes a non-constant key to readConfigSetting' >> "$TMPDIR/proof"
         expect_rejection helper-unknown-key "$TMPDIR/helper-unknown-key-source" \
           'that are neither pi Settings nor Kimchi additions: ["hidePhaseChangesProbe"]' >> "$TMPDIR/proof"
+        expect_rejection lockfile-drift "$TMPDIR/lockfile-drift-source" \
+          "Kimchi's pnpm-lock.yaml resolves pi's @earendil-works/pi-tui to \"0.85.2\"" >> "$TMPDIR/proof"
         expect_rejection pi-scope-unread "$kimchi" \
           'pi reads Settings keys ["httpProxy"] in no way the extractor recognizes' "$TMPDIR/pi-scope-unread-source" >> "$TMPDIR/proof"
         expect_rejection entry-imported-read "$TMPDIR/entry-imported-read-source" \
