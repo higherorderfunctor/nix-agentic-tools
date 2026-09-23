@@ -436,7 +436,10 @@ def two_phase(fixture):
 
     fixture.own(drained, "--phase", "all")
     assert not whole.exists() and not leaves.exists()
-    assert json.loads(document.read_text()) == {}
+    # Every byte of it was ours, so the drain removes the file instead of
+    # leaving `{}`: some readers (Kimchi's permissions) treat an existing empty
+    # object as a declaration of their defaults.
+    assert not document.exists(), "a drained document left an empty object behind"
     print("PASS two_phase: prune deleted without rewriting, write finished the drain")
 
 
@@ -890,6 +893,26 @@ def lazy_toml(fixture):
     assert '[projects."/repo"]' in drained and 'trust_level = "trusted"' in drained, drained
     assert not fixture.ledger("toml-settings/codex.toml.json").exists()
     print("PASS lazy_toml: TOML leaves set and retracted, native table untouched")
+
+    # A drain that empties the document removes it, but only when nothing but
+    # an empty document would be written back: a comment the user added to an
+    # otherwise empty TOML file survives serialization and keeps the file.
+    for name, seed in (("ours.toml", None), ("commented.toml", "# mine\n")):
+        path = fixture.root / name
+        if seed is not None:
+            path.write_text(seed)
+        ledger = f"toml-settings/{name}.json"
+        fixture.own({"targets": [doc_target({"text": json.dumps({"ours": 1})}, codec="toml", path=name, ledger=ledger)]},
+                    python=TOOLS["tomlPython"])
+        assert "ours = 1" in path.read_text(), path.read_text()
+        fixture.own({"targets": [doc_target({}, codec="toml", path=name, ledger=ledger)]},
+                    python=TOOLS["tomlPython"])
+        if seed is None:
+            assert not path.exists(), "a drained TOML document that was all ours stayed behind"
+        else:
+            body = path.read_text()
+            assert "# mine" in body and "ours" not in body, body
+    print("PASS lazy_toml: an emptied drain removes the file unless a user comment remains")
 
     # The import is lazy: the same interpreter that just ran every JSON and
     # dir case cannot even import tomlkit, so a JSON caller's closure has no
