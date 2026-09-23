@@ -6,9 +6,9 @@
 #
 # Kimchi has distinct user and project config namespaces. Home Manager writes
 # ~/.config/kimchi/{config.json,harness/}; devenv writes only Kimchi's native
-# project paths under the repository root. Both backends reconcile the two
-# mutable JSON documents by leaf; the remaining files are immutable and
-# symlink-readable.
+# project paths under the repository root. Both backends reconcile the three
+# mutable JSON documents (config.json, harness settings, mcp.json) by leaf; the
+# remaining files are immutable and symlink-readable.
 {
   lib,
   pkgs,
@@ -178,9 +178,10 @@
       then path
       else cfg.configDir
     )}.json";
-    # Kimchi rewrites both of its documents while it runs — `/multi-model`
-    # and `kimchi resources` write `harness/settings.json` — so the only way
-    # to keep both sides' edits is to own the declared leaves inside them.
+    # Kimchi rewrites all three of its JSON documents while it runs —
+    # `/multi-model` and `kimchi resources` write `harness/settings.json`, and
+    # MCP edits rename a temporary over `mcp.json` (see below) — so the only
+    # way to keep both sides' edits is to own the declared leaves inside them.
     # A reconciled document is declared even when it has no leaves at all:
     # an empty declaration RETIRES whatever the previous generation owned,
     # which is the whole reason the writer is an identity rather than a
@@ -205,9 +206,9 @@
     };
   in
     lib.mkMerge [
-      # Two writers, two entry names — deliberately NOT one bundle of two
-      # targets: nothing orders these against each other, and each name is a
-      # consumer-visible ordering contract.
+      # Three writers, three entry names — deliberately NOT one bundle of
+      # several targets: nothing orders these against each other, and each
+      # name is a consumer-visible ordering contract.
       {
         assertions = lib.optional isDevenv {
           assertion = userScopeOnlyHarnessSettings == [];
@@ -239,6 +240,16 @@
               path = harnessSettingsPath;
             };
           };
+          kimchiMcpMerge = {
+            entry = {
+              devenv = "ai:kimchi:mcp-merge";
+              hm = "kimchiMcpMerge";
+            };
+            ledgers.${ledgerFor "mcp" mcpPath} = {
+              codec = "json";
+              path = mcpPath;
+            };
+          };
         };
       }
 
@@ -264,19 +275,21 @@
         value = filteredHarnessSettings;
       })
 
-      # harness/mcp.json — Claude-compatible format. Kimchi reads it and
-      # never writes it, and follows a store symlink to it, so both facts
-      # are the defaults and neither is stated.
-      (lib.mkIf (mergedServers != {}) {
-        ai.kimchi.files.${mcpPath} = {
-          # Structured value, so the text/source form stays disabled.
-          content = {
-            enable = false;
-            value = {
-              mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
-            };
-          };
-          format = "json";
+      # mcp.json — Claude-compatible format, and harness-written. Kimchi
+      # 1.1.30 writes the user file from its first-run migration
+      # (src/setup-wizard.ts:117-137) and ACP import
+      # (src/modes/acp/ext-methods/import-apply.ts:289, via src/config/json.ts:154-159), and `/mcp
+      # enable|disable` writes the project file through its patched
+      # pi-mcp-adapter 2.34.0 (config.ts:1142-1147). Every one of them renames a
+      # temporary over the path, which silently replaces a store symlink, so
+      # the declared servers are owned by leaf: a migrated server or a
+      # `disabled` toggle is an unowned sibling the reconciler keeps.
+      (document {
+        entry = "kimchiMcpMerge";
+        ledger = ledgerFor "mcp" mcpPath;
+        path = mcpPath;
+        value = lib.optionalAttrs (mergedServers != {}) {
+          mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
         };
       })
 
