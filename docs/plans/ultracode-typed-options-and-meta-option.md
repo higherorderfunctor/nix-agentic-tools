@@ -220,7 +220,7 @@ workflowKeywordTriggerEnabled = lib.mkOption {
 ```
 
 Identity-map is preserved (VERIFIED): HM projection
-`settings = aiCommon.filterNulls cfg.nativeSettings;` (mkClaude.nix:284;
+`settings = aiCommon.filterNulls cfg.native.settings;` (mkClaude.nix:284;
 `filterNulls` at lib/ai/ai-common.nix:247-257) strips nulls so upstream sees
 only explicitly-set bools — the same JSON shape settings.json already accepts
 via the freeformType. `docs/plan.md:189`'s warning is about replacing the
@@ -242,7 +242,7 @@ ultracodeOnLaunch = lib.mkEnableOption
 
 # in BOTH hm.config and devenv.config projections:
 config = lib.mkIf cfg.ultracodeOnLaunch {
-  ai.claude.nativeSettings = {
+  ai.claude.native.settings = {
     ultracode       = lib.mkDefault true;   # ⚠ UNDOCUMENTED key (§3); freeform passthrough
     enableWorkflows = lib.mkDefault true;   # documented-ish (/config); ensures workflow half on
   };
@@ -252,7 +252,7 @@ config = lib.mkIf cfg.ultracodeOnLaunch {
 - The option's `description` MUST carry the §3 caveat: undocumented + officially
   session-only + `verified on claude-code 2.1.197`. This is where the risk is
   disclosed to consumers (only the meta option writes `ultracode`).
-- `mkDefault` lets an explicit `ai.claude.nativeSettings.*` win.
+- `mkDefault` lets an explicit `ai.claude.native.settings.*` win.
 - Does NOT set `effortLevel` (ultracode implies xhigh — §3 Q5) or
   `workflowKeywordTriggerEnabled` (orthogonal per-turn concern).
 - No `/effort` EACCES risk: HM writes the key statically at build time — there
@@ -269,10 +269,10 @@ config = lib.mkIf cfg.ultracodeOnLaunch {
   - meta option → shared options block (model on `unpinLaunchEffort` :85-99);
     config fan-out in hm.config (cfg at :220) and devenv.config (cfg at :363)
   - HM identity-map already routes settings:
-    `settings = filterNulls cfg.nativeSettings` at :284 — **no change needed**
+    `settings = filterNulls cfg.native.settings` at :284 — **no change needed**
 - **devenv parity = AUTOMATIC, zero new code (VERIFIED).** The shared settings
   submodule feeds the devenv gap-write:
-  `gapSettings = filterNulls (removeAttrs cfg.nativeSettings ["hooks" "mcpServers"])`
+  `gapSettings = filterNulls (removeAttrs cfg.native.settings ["hooks" "mcpServers"])`
   (:392-396) → `files.".claude/settings.json".json = gapSettings` (:423-425).
   The new keys aren't hooks/mcpServers, so they flow straight through — exactly
   where effortLevel/model already land (proof: checks/module-eval.nix:448-461).
@@ -297,7 +297,7 @@ config = lib.mkIf cfg.ultracodeOnLaunch {
 ## 6. Config parity checklist (AGENTS.md "Config Parity")
 
 - [x] HM:
-      `ai.claude.nativeSettings.{enableWorkflows,ultracode,workflowKeywordTriggerEnabled}` +
+      `ai.claude.native.settings.{enableWorkflows,ultracode,workflowKeywordTriggerEnabled}` +
       `ai.claude.ultracodeOnLaunch`
 - [x] devenv: same — automatic via shared submodule + gap-write (add a test to
       prove it)

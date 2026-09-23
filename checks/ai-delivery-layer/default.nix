@@ -64,14 +64,14 @@
   # `chat.defaultModel` is in the pinned workspace allowlist, so devenv writes
   # it too.
   native = {
-    claude.nativeSettings.model = "SNAPSHOT-NATIVE";
-    codex.nativeSettings.model = "SNAPSHOT-NATIVE";
-    copilot.nativeSettings.model = "SNAPSHOT-NATIVE";
+    claude.native.settings.model = "SNAPSHOT-NATIVE";
+    codex.native.settings.model = "SNAPSHOT-NATIVE";
+    copilot.native.settings.model = "SNAPSHOT-NATIVE";
     kimchi = {
-      harnessSettings.resources.SNAPSHOT-NATIVE = true;
-      nativeSettings.llmEndpoint = "SNAPSHOT-NATIVE";
+      native.harnessSettings.resources.SNAPSHOT-NATIVE = true;
+      native.settings.llmEndpoint = "SNAPSHOT-NATIVE";
     };
-    kiro.nativeSettings.chat.defaultModel = "SNAPSHOT-NATIVE";
+    kiro.native.settings.chat.defaultModel = "SNAPSHOT-NATIVE";
   };
   snapshotConfig = runtimes: {
     ai = pools // lib.genAttrs runtimes (runtime: {enable = true;} // native.${runtime});

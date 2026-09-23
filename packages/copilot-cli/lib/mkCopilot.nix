@@ -127,7 +127,7 @@ in
       # integration, telemetry, typed model selection) is tracked in
       # docs/plan.md "Ideal architecture gate → Absorption backlog" under
       # the copilot-cli absorption item.
-      nativeSettings = lib.mkOption {
+      native.settings = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
         description = "Freeform settings merged into ~/.config/github-copilot/settings.json (HM: via activation script; devenv: via static write).";
@@ -291,7 +291,7 @@ in
             path = "${cfg.configDir}/settings.json";
             python = pkgs.python3;
             runtime = "copilot";
-            value = cfg.nativeSettings;
+            value = cfg.native.settings;
             inherit pkgs;
           })
         ];
@@ -455,7 +455,7 @@ in
           # non-empty requests receive the delivery policy's eval warning.
           {
             files."${cfg.configDir}/settings.json".text =
-              builtins.toJSON cfg.nativeSettings;
+              builtins.toJSON cfg.native.settings;
           }
         ];
     };

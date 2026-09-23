@@ -22,9 +22,9 @@
 # entry of its own, only `modelPricing.overrides.*.input` — so the tree walk
 # synthesizes them.
 #
-# Consumed by packages/claude-code/lib/nativeSettingsOptions.nix, which merges
+# Consumed by packages/claude-code/lib/nativeOptions.nix, which merges
 # `.options` with the hand-authored exceptions and hands the result to
-# mkClaude.nix's `nativeSettings`, already declared as
+# mkClaude.nix's `native.settings`, already declared as
 #   lib.types.submodule { freeformType = (pkgs.formats.json {}).type; options = …; }
 # so generated options slot straight into that existing structure. Nothing else
 # should call `generate` — a second call site is a second exception table.
@@ -169,11 +169,11 @@ in rec {
   # A plain attrset, not a builder: no row needs build-time data any more. A
   # future one that does (a model list, a version) turns this into a function
   # again, and there is exactly one call site to follow —
-  # nativeSettingsOptions.nix.
+  # nativeOptions.nix.
   #
   # Two rows that used to live here are gone on purpose — do not restore either:
   #
-  #   * `model` is hand-declared in nativeSettingsOptions.nix and named in
+  #   * `model` is hand-declared in nativeOptions.nix and named in
   #     `externalPaths`, so a row here would be INERT (`report.shadowedOverrides`
   #     exists to say so). One definition, not two.
   #   * `permissions.defaultMode` used to widen the emitted enum with "manual".

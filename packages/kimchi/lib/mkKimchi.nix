@@ -71,8 +71,8 @@
     };
   in {
     inherit contextEntry;
-    filteredSettings = aiCommon.filterNulls cfg.nativeSettings;
-    filteredHarnessSettings = aiCommon.filterNulls cfg.harnessSettings;
+    filteredSettings = aiCommon.filterNulls cfg.native.settings;
+    filteredHarnessSettings = aiCommon.filterNulls cfg.native.harnessSettings;
     package =
       if wrapArgs != []
       then wrappedPackage
@@ -117,7 +117,7 @@ in
         description = "Config directory relative to HOME / devenv root.";
       };
 
-      nativeSettings = lib.mkOption {
+      native.settings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
           options = {
@@ -163,7 +163,7 @@ in
         '';
       };
 
-      harnessSettings = lib.mkOption {
+      native.harnessSettings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
           options = {

@@ -45,7 +45,7 @@ in {
         result = evalDevenv {
           ai.kimchi = {
             enable = true;
-            nativeSettings.telemetry.enabled = false;
+            native.settings.telemetry.enabled = false;
           };
         };
         text = result.config.files.".config/kimchi/config.json".text;
@@ -60,7 +60,7 @@ in {
         result = evalHm {
           ai.kimchi = {
             enable = true;
-            nativeSettings.telemetry.enabled = false;
+            native.settings.telemetry.enabled = false;
           };
         };
       in
@@ -75,8 +75,8 @@ in {
     # plan. The ledger prefixes are the live migration contract every
     # previously written ownership record hangs off.
     #
-    # The values are NOT asserted empty here. `nativeSettings` and
-    # `harnessSettings` are submodules with defaulted sub-options, so an
+    # The values are NOT asserted empty here. `native.settings` and
+    # `native.harnessSettings` are submodules with defaulted sub-options, so an
     # undeclared Kimchi still owns `telemetry.enabled` and friends; that is
     # pre-existing and `filterNulls` is deliberately shallow.
     module-kimchi-hm-empty-settings-emits-writers = mkTest "kimchi-hm-empty-settings-emits-writers" (
@@ -90,13 +90,13 @@ in {
         && lib.hasPrefix "json-settings/kimchi-harness-settings-" (harnessDocument evaluated).ledger
     );
 
-    # harnessSettings render to harness/settings.json (mutable-state tree).
+    # native.harnessSettings render to harness/settings.json (mutable-state tree).
     module-kimchi-harness-settings = mkTest "kimchi-harness-settings" (
       let
         result = evalDevenv {
           ai.kimchi = {
             enable = true;
-            harnessSettings.resources."tools.web_search" = true;
+            native.harnessSettings.resources."tools.web_search" = true;
           };
         };
       in

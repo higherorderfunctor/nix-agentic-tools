@@ -6,7 +6,7 @@
 #
 # WHY THIS EXISTS
 #
-# `ai.<runtime>.nativeSettings` carries a freeform JSON tail on purpose: a key
+# `ai.<runtime>.native.settings` carries a freeform JSON tail on purpose: a key
 # upstream ships today must be settable today, without waiting for a typed
 # option. The cost of that tail is that a TYPO is indistinguishable from a
 # brand-new key — both are "some attr the module does not model" — and Claude
@@ -262,7 +262,7 @@ in rec {
   #   declared    sidecar `settings` record, or null when the sidecar predates
   #               settings extraction (see the "no schema" assertion below)
   #   settings    the settings tree actually written — pass
-  #               `filterNulls cfg.nativeSettings`, not the raw option, so a
+  #               `filterNulls cfg.native.settings`, not the raw option, so a
   #               typed option whose default is null never reports itself
   #   allowed     cfg.allowUnrecognizedSettings
   #   optionPath / allowOptionPath   fully-qualified option names, for messages

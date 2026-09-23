@@ -1,7 +1,7 @@
 # Fixture suite for the kiro workspace-settings allowlist extractor.
 #
 # The extractor's GUARDS are the entire safety story for a merge-blocking
-# assertion: `mkDevenvWorkspaceSettingsAssertions` rejects any nativeSettings
+# assertion: `mkDevenvWorkspaceSettingsAssertions` rejects any native.settings
 # key outside the list this script produces, so an under-capture does not
 # degrade gracefully — it rejects settings kiro actually honors. The drift
 # check (./kiro-cli-extracted.nix) only ever exercises ONE input, the pinned

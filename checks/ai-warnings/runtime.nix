@@ -9,7 +9,7 @@
     ai.codex = {
       enable = true;
       files."probe".content.text = "probe";
-      nativeSettings.model = "probe";
+      native.settings.model = "probe";
     };
     ai.kiro = {
       configDir = ".custom-kiro";
