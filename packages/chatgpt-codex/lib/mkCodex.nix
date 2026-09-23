@@ -678,6 +678,36 @@
   # own `rules/default.rules` beside them, which a directory claim would delete.
   execpolicyLedger = "materialize/codex-execpolicy.manifest";
   execpolicyWriter = "materialize-codex-execpolicy-write";
+  # Project config has a fixed native root; configDir customizes the user
+  # layer only. Keep agents, hooks and execpolicy beside their config.
+  nativeDirFor = backend: cfg:
+    if backend == "hm"
+    then cfg.configDir
+    else ".codex";
+  # The copies are ledger-owned, and nothing but this writer retracts them.
+  # Declared outside the enable gate, and whether or not any rule is, so both
+  # N→0 and the generation that DISABLES Codex drain what the previous one
+  # wrote: an `allow` policy must not outlive its declaration for a codex
+  # still on PATH. While disabled the adapter hands the writer no files, so it
+  # only removes what the ledger recorded.
+  codexExecpolicyWriterConfig = {
+    backend,
+    cfg,
+    ...
+  }: {
+    ai.codex.activation.${execpolicyWriter} = {
+      entry = {
+        devenv = "ai:codex:materialize-execpolicy";
+        hm = execpolicyWriter;
+      };
+      ledgers.${execpolicyLedger} = {
+        codec = "dir";
+        path = "${nativeDirFor backend cfg}/rules";
+      };
+      pruneEntry.hm = "materialize-codex-execpolicy-prune";
+      runWhenDisabled = true;
+    };
+  };
   mkExecpolicyEntries = prefix:
     lib.mapAttrs' (name: content:
       lib.nameValuePair "${prefix}/rules/${name}.rules" {
@@ -929,8 +959,14 @@ in
       };
     };
 
-    devenv.installPackage = codexInstallPackage;
-    hm.installPackage = codexInstallPackage;
+    devenv = {
+      installPackage = codexInstallPackage;
+      migrationConfig = codexExecpolicyWriterConfig;
+    };
+    hm = {
+      installPackage = codexInstallPackage;
+      migrationConfig = codexExecpolicyWriterConfig;
+    };
     config = {
       backend,
       cfg,
@@ -946,12 +982,7 @@ in
       ...
     }: let
       isHm = backend == "hm";
-      # Project config has a fixed native root; configDir customizes the user
-      # layer only. Keep agents, hooks and execpolicy beside their config.
-      nativeDir =
-        if isHm
-        then cfg.configDir
-        else ".codex";
+      nativeDir = nativeDirFor backend cfg;
       configFile = "${nativeDir}/config.toml";
       # The TOML ledger directory and name are a live migration contract: every
       # ownership record written since this file stopped being a store symlink
@@ -1119,21 +1150,6 @@ in
               before = ["linkCheck"];
             }
           );
-        }
-
-        # Declared whether or not any rule is, so N→0 retracts the last copies.
-        {
-          ai.codex.activation.${execpolicyWriter} = {
-            entry = {
-              devenv = "ai:codex:materialize-execpolicy";
-              hm = execpolicyWriter;
-            };
-            ledgers.${execpolicyLedger} = {
-              codec = "dir";
-              path = "${nativeDir}/rules";
-            };
-            pruneEntry.hm = "materialize-codex-execpolicy-prune";
-          };
         }
 
         (lib.optionalAttrs isHm {
