@@ -327,10 +327,12 @@ in {
         by every runtime. Per-runtime hook maps append after these shared
         matcher groups. Kimchi reads the same shape from a trusted project's
         `.kimchi/hooks.json` and has no PermissionRequest event, so that event
-        is left out for it with a warning; Kimchi has no user-scope lifecycle
-        file, so Home Manager delivers nothing to it and warns. Kiro is
-        excluded because its v3 trigger schema is not semantically
-        interchangeable.
+        is left out for it. Kimchi has no user-scope lifecycle file Home
+        Manager can own, so Home Manager delivers nothing to it; its opt-in
+        Claude Code hook adapter reads `~/.claude/settings.json` instead. Both
+        exclusions are silent: a shared pool has no per-runtime remedy, so a
+        warning would repeat on every activation. Kiro is excluded because its
+        v3 trigger schema is not semantically interchangeable.
       '';
     };
 

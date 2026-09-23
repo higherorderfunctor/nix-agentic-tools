@@ -668,7 +668,7 @@
     | Project harness settings | `.config/kimchi/harness/settings.json` | Requires project trust and launch from the devenv root; user-scope-only keys are rejected during evaluation |
     | Agents | `.kimchi/agents/<name>.md` | Requires project trust and launch from the devenv root; each file is an owned, writable copy that Kimchi's /agents commands may edit until the next shell entry restores it |
     | Permissions | `.kimchi/permissions.json` | Requires project trust and launch from the devenv root; declared keys reconcile by leaf |
-    | Hooks | `.kimchi/hooks.json` | Requires project trust and launch from the devenv root; PermissionRequest is not a Kimchi event and is left out with a warning. Home Manager has no user-scope hook file and warns |
+    | Hooks | `.kimchi/hooks.json` | Requires project trust and launch from the devenv root; PermissionRequest is not a Kimchi event and is left out. Home Manager has no user-scope hook file it can own, so shared `ai.hooks` do not reach Kimchi there (silently) and `ai.kimchi.hooks` warns |
 
     devenv rejects Kimchi's user-scope-only harness settings:
     `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`, `modelMetadata`,
