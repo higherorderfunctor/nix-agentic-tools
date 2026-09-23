@@ -112,11 +112,11 @@ plus an error body = it ran and produced nothing.
 arrive as `state: COMMENTED` with zero threads — every mechanical signal reads
 "reviewed, nothing found".
 
-## Re-requesting
+## Requesting a review
 
-Only ever after a significant change since the last run (the orientation
-fragment defines significant). Request the review through REST with the real
-reviewer login:
+The FIRST request is the agent's election, once the work is dev-complete; after
+that, only following a significant change since the last run. The orientation
+fragment owns both rules. Request through REST with the real reviewer login:
 
 ```bash
 gh api --method POST "repos/OWNER/REPO/pulls/N/requested_reviewers" \

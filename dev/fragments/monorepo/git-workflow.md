@@ -1,7 +1,7 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-09-20 — follow-ups amend the PR whose scope they
-> belong to.
+> **Last verified:** 2026-09-23 — PRs open as DRAFT and the agent elects the
+> Copilot review once, when the work is dev-complete.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -54,9 +54,10 @@ gh api "repos/OWNER/REPO/rulesets/<id>" \
 `allow_squash_merge` true, `allow_merge_commit` and `allow_rebase_merge` false.
 The ruleset's own `allowed_merge_methods` still lists all three, so changing it
 there changes nothing. Copilot review comes from a separate ruleset rule
-(`Copilot review for default branch`) that _requests_ a review **once per PR,
-when it becomes ready** — not on every push (see the trigger model below): it is
-neither a required approval nor a required status check.
+(`Copilot review for default branch`) that _requests_ a review once per PR on
+the draft → ready transition. PRs here open as draft and stay there, so that
+trigger never fires and **the request is yours**. It is neither a required
+approval nor a required status check.
 
 **But it can now block a merge indirectly**, and that is deliberate. Since
 threads must be resolved, an unaddressed Copilot comment holds the PR — a bot
@@ -89,19 +90,25 @@ On every push, including the first:
 Only report back when the PR is green and reviewed, or when something needs a
 decision that is genuinely the operator's.
 
-### Copilot reviews once, automatically. Do not trigger the first one
+### You ELECT the Copilot review. Request it once, when dev-complete
 
-The ruleset requests it when the PR **becomes ready for review** — which covers
-a PR opened non-draft as well as a draft flipped later. It is automatic. Do not
-request it by hand, and do not treat an absent run on a fresh push as a missed
-trigger: pushes never trigger a review, so absent is the resting state.
+Nothing arrives on its own. PRs open as draft, so the ruleset's ready-transition
+trigger never fires, and a push never fires one. You request the review
+yourself, once, when the work is dev-complete — unprompted, without the operator
+clicking it. That prompting is the annoyance this removes.
 
-**Re-request only after a significant change since the last run.** New scope, a
-mechanism the previous review never saw, an approach rewritten rather than
+Request it through REST — the `pr-review-loop` skill carries the call. There is
+no GraphQL mutation, and any doc calling that endpoint a no-op is wrong. **Inert
+until 2026-10-01**: the account has no Copilot credits, so the request fires
+nothing and the substitute below is what runs. Elect anyway — the habit is what
+stops "open as draft" degrading into "never reviewed".
+
+**Request AGAIN only after a significant change since the last run.** New scope,
+a mechanism the previous review never saw, an approach rewritten rather than
 corrected. Applying the review's own findings is NOT a significant change, and
 neither is rewording, reformatting or renaming. There is no round count to spend
-down — there is one question, asked each time: is there materially new code to
-review? Every review after the first is a paid manual request.
+down, just one question each time: is there materially new code to review? Every
+request is paid.
 
 Read BOTH buckets. The inline threads gate the merge; the review body carries a
 suppressed block that creates no thread and that a heading grep will silently
@@ -111,10 +118,10 @@ round that did not happen, are in the `pr-review-loop` skill.
 
 ### When Copilot does not review, a SEPARATE agent does
 
-Triggers, any of them: the review errored, the account is out of quota, the PR
-never left draft, or `git diff --stat <last-reviewed-sha>...HEAD` shows a change
-that would earn a re-request under the test above — a new file or mechanism, or
-an approach rewritten rather than corrected.
+Triggers, any of them: the review errored, the account is out of quota, or
+`git diff --stat <last-reviewed-sha>...HEAD` shows a change that would earn a
+re-request under the test above — a new file or mechanism, or an approach
+rewritten rather than corrected.
 
 **You cannot review your own diff.** Reading it back produces agreement, because
 the reasoning that wrote the code is the reasoning evaluating it. Dispatch a
@@ -123,8 +130,8 @@ rather than evidence and that its author cannot be deferred to. One independent
 reviewer is the default. Report what was dismissed as well as what was fixed.
 
 This is not a fallback for one outage. It is the standing substitute whenever
-the automatic review did not happen, and github.com Copilot fails on this repo
-often enough that it is the common case, not the rare one.
+the Copilot review did not happen, and between the credit outage and github.com
+Copilot's failure rate here, that is the common case. Draft never defers it.
 
 ### Escalating past one reviewer: prosecute, defend, judge
 
@@ -150,9 +157,9 @@ rather than adjudicating it yourself.
 
 **Scope, deliberately narrow:**
 
-- Only for changes going to `main`. A draft PR, or a long-lived experiment
-  branch where the design is not settled yet, forgoes it — if it is a draft, it
-  is not ready for this.
+- Only for work headed to `main` whose design is settled. Every PR here is a
+  draft, so draft state is not the signal; a long-lived experiment branch whose
+  design is still moving forgoes it.
 - **Local runtimes only, always.** Never hand this to github.com Copilot: it
   cannot be given a model or an effort level, and the cost belongs where those
   controls exist.
@@ -268,29 +275,23 @@ silently resolves one level too deep, into
    it is not the intended shape.
 
 3. **Push at the first commit** — not at the end — so the branch is a continuous
-   off-machine backup. Open the PR **ready (non-draft) as soon as the work is
-   dev-complete**: becoming ready for review is the _only_ thing that
-   automatically requests a Copilot review, so a draft that is actually ready
-   silently skips review and a later flip is what fires it. Reserve **draft**
-   for genuine WIP, or when you explicitly want to preview the branch in GitHub
-   without review. Draft and ready PRs both get full CI here.
+   off-machine backup. **Open the PR as a DRAFT.** The operator's review is a
+   self-review stage before the work would go to another human; iteration toward
+   merge-ready is expected. Draft and ready PRs both get full CI here, so
+   staying in draft gives up nothing.
 
-   Corollary worth internalizing: that one automatic review is the only free
-   one, so **flip to ready when the branch is worth reviewing** — not
-   mid-refactor, where it is spent on code you are about to replace.
+4. Keep pushing as work lands. When it is dev-complete, **request the Copilot
+   review yourself**, once (see above).
 
-4. Keep pushing as work lands. Flip draft → ready the moment it is dev-complete
-   so review can start.
-
-5. **The moment the PR is open and non-draft, run the Copilot review loop on
-   your own initiative.** Nobody has to ask. Poll for the review on the head
-   commit, read BOTH buckets, fix what is real, reply, resolve each gating
-   thread, re-request, verify — the sections above say how. Handing back a
-   freshly-opened PR with an unread review is an incomplete task, not a
-   checkpoint: it makes the operator notice the review, chase it, and hand it
-   back to you, when you are the one still holding the context to act on it.
-   STARTING the loop needs no permission. It is ONE round; going beyond that
-   needs a significant change in reviewed scope, or the operator's say-so.
+5. **The moment you have requested that review, run the loop on your own
+   initiative.** Nobody has to ask. Poll for the review on the head commit, read
+   BOTH buckets, fix what is real, reply, resolve each gating thread, verify —
+   the sections above say how. Handing a PR back with an unread review is an
+   incomplete task, not a checkpoint: it makes the operator notice the review,
+   chase it, and hand it back to you, when you are the one still holding the
+   context to act on it. STARTING the loop needs no permission. It is ONE round;
+   going beyond that needs a significant change in reviewed scope, or the
+   operator's say-so.
 
 6. Merges are squash merges. The operator performs them for **human** PRs; the
    bot's `update/*` PRs land themselves (next section).
