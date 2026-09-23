@@ -35,6 +35,16 @@
 
   isSemantic = value: builtins.isAttrs value && value ? description && value ? instructions;
 
+  # Home Manager's `lib.hm.strings.isPathLike`, which upstream
+  # `programs.claude-code` uses to choose `source` over `text`: a path, a
+  # string under the store, or a derivation. A backend that writes an agent
+  # itself must decide the same way, or a store-path string such as a flake
+  # input's `"${src}/agent.md"` lands as a file containing that path.
+  isPathLike = value:
+    builtins.isPath value
+    || (builtins.isString value && lib.hasPrefix "${builtins.storeDir}/" value)
+    || lib.isDerivation value;
+
   renderMarkdown = {
     includeName,
     name,
@@ -58,7 +68,7 @@
       inherit name;
     };
 in {
-  inherit isSemantic mkSemanticAgentType renderCodex semanticAgentType;
+  inherit isPathLike isSemantic mkSemanticAgentType renderCodex semanticAgentType;
 
   agentType = lib.types.either (lib.types.either lib.types.lines lib.types.path) semanticAgentType;
 

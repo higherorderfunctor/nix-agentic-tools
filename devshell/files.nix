@@ -15,6 +15,7 @@
     aiTypes.extendSubmodule
     (aiTypes.optionalTextSource {
       description = "project file content";
+      enableOnMkDefault = true;
       textType = lib.types.str;
     })
     ({
@@ -43,6 +44,9 @@
     });
 
   enabledFiles = lib.filterAttrs (_: file: file.enable) config.files;
+  # An entry that is neither enabled nor switched off would silently
+  # materialize nothing; empty `text` is not content.
+  emptyFiles = builtins.attrNames (lib.filterAttrs (_: file: !file.enable && !file._enableDefined) config.files);
 
   # Generate the shell hook that materializes files
   materializeHook = lib.concatStringsSep "\n" (lib.mapAttrsToList (name: file: ''
@@ -90,8 +94,18 @@ in {
     '';
   };
 
-  config.shellHook = lib.mkAfter ''
-    ${cleanupHook}
-    ${materializeHook}
-  '';
+  config.shellHook =
+    if emptyFiles == []
+    then
+      lib.mkAfter ''
+        ${cleanupHook}
+        ${materializeHook}
+      ''
+    else
+      throw ''
+        files entries must carry non-empty `text` or a `source`. Empty `text`
+        is not content: spell an empty file as a `source`, or omit the entry
+        with `enable = false`. Invalid entries:
+        ${lib.concatStringsSep ", " emptyFiles}
+      '';
 }

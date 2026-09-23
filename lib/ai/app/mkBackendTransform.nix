@@ -281,8 +281,8 @@ in {
           devenv), and described rather than lowered: each entry says what
           bytes it carries, the consumer facts that decide how it lands, and
           which writer owns it if it is not a symlink. Setting
-          `content.enable = false` suppresses generated text/source bytes while
-          retaining the record for inspection and later overrides.
+          `content.enable = false` omits the file whatever supplies its bytes,
+          while retaining the record for inspection and later overrides.
 
           Generated `content.text` and `content.source` are contributed at
           `mkDefault` priority with every sibling field at ordinary priority,
