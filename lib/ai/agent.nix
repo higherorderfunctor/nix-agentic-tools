@@ -78,6 +78,15 @@ in {
       inherit name value;
     };
 
+  # Kimchi names an agent by its filename and reads no `name:` key
+  # (src/extensions/agents/personas/custom-agents.ts:52). A non-semantic value
+  # is returned unchanged, so a path stays a path for the caller to deliver.
+  renderKimchi = name: value:
+    renderMarkdown {
+      includeName = false;
+      inherit name value;
+    };
+
   renderCopilot = name: value:
     if !isSemantic value && builtins.isPath value
     then resolveText value
