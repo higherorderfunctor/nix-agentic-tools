@@ -1,13 +1,11 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-23 — Claude devenv delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`, choosing `source` by Home
-> Manager's `isPathLike`. File content at `mkDefault` enables its entry;
-> `content.enable = false` suppresses every content form. The builder entry
-> point is `lib.ai.app.mkRuntime`. Native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). Authored prose and final delivery share one
-> priority-aware text-source record with enable semantics.
+> **Last verified:** 2026-09-23 — Claude, Codex, Copilot and Kiro describe
+> delivery once through `mkRuntime`'s record-level `config`; Kimchi keeps its
+> per-backend callbacks until its port. Claude devenv delivers `ai.agents` and
+> `ai.claude.agentsDir` to `.claude/agents/<name>.md`. File content at
+> `mkDefault` enables its entry; `content.enable = false` suppresses every
+> content form. Native file settings live under `ai.<runtime>.native`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
