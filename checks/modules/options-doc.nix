@@ -86,6 +86,7 @@
     ];
     sharedDescriptionsThatMustDiscussKimchi = [
       "ai.context"
+      "ai.hooks"
       "ai.mcpServers"
       "ai.rules"
       "ai.skills"
