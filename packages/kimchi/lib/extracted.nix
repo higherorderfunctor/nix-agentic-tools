@@ -94,13 +94,17 @@
     '';
   };
 
-  # Keys with no native option at all, derived: an alias spelling of another
-  # key, and a key Kimchi reads only to warn about obsolete configuration.
+  # Keys with no native option at all: an alias spelling of another key (the
+  # one hand annotation left on config keys), and an inert key. The extractor
+  # marks a key inert only when upstream tags its KimchiConfig member
+  # @deprecated and no Kimchi code consumes it; config.ts still parses it and
+  # warns that it is obsolete. A release that consumes it again clears the
+  # flag, and the key becomes an option.
   derivedExclusion = node:
     if node ? aliasFor
     then "an alias of `${node.aliasFor}`; set that key instead"
     else if node.inert or false
-    then node.warning or "inert"
+    then "deprecated upstream and consumed by nothing (Kimchi only warns that it is obsolete): ${node.deprecated}"
     else null;
 
   scalarTypes = {
