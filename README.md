@@ -326,19 +326,20 @@ instruction building.
 | Skills                   | `.kimchi/skills`                       | Requires project trust; nearest ancestor wins, but the wrapper remains root-only                                                                                                   |
 | Project harness settings | `.config/kimchi/harness/settings.json` | Requires project trust and launch from the devenv root; user-scope-only keys are rejected during evaluation                                                                        |
 | Agents                   | `.kimchi/agents/<name>.md`             | Requires project trust and launch from the devenv root; each file is an owned, writable copy that Kimchi's /agents commands may edit until the next shell entry restores it        |
+| Permissions              | `.kimchi/permissions.json`             | Requires project trust and launch from the devenv root; declared keys reconcile by leaf                                                                                            |
 | Hooks                    | `.kimchi/hooks.json`                   | Requires project trust and launch from the devenv root; PermissionRequest is not a Kimchi event and is left out with a warning. Home Manager has no user-scope hook file and warns |
 
 devenv rejects Kimchi's user-scope-only harness settings: `defaultProjectTrust`,
 `fermentV2`, `hidePhaseChanges`, `modelMetadata`, `modelRoles`, `multiModel`,
 `resources`, `shellProfileApiKeyMigrationDismissed`, and `statusLine`. Set those
 with Home Manager or through Kimchi itself. Both backends reconcile
-`config.json`, `harness/settings.json` and `mcp.json` by owned leaf because
-Kimchi writes them at runtime.
+`config.json`, `harness/settings.json`, `mcp.json` and `permissions.json` by
+owned leaf because Kimchi writes them at runtime.
 
-Project settings, MCP servers, harness settings, agents, and hooks resolve under
-the exact working directory. The devenv wrapper rejects descendant launches
-instead of silently missing them. Context and skills walk ancestors, so a devenv
-that declares none of the exact-cwd files leaves the launch directory
+Project settings, MCP servers, harness settings, permissions, agents, and hooks
+resolve under the exact working directory. The devenv wrapper rejects descendant
+launches instead of silently missing them. Context and skills walk ancestors, so
+a devenv that declares none of the exact-cwd files leaves the launch directory
 unrestricted. `skillPaths` defaults to unset: Kimchi reads the project list in
 place of the user's global one, so only an explicit list, empty included,
 replaces it.
