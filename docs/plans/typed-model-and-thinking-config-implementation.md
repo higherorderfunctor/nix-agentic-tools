@@ -1536,8 +1536,8 @@ route through the `/stack-*` skills (AGENTS.md "Skill Routing").
 **Executed 2026-06-18** as a supervisor-worker-verifier run (one worker subagent
 per task, supervisor-verified, committed via the `/stack-*` skills). All 7 tasks
 landed and the full `nix flake check` is green. The stack was then rebased onto
-the latest `origin/refactor/ai-factory-architecture` (which had merged
-`update claude-code` to 2.1.181); commits 3–4 were amended to adapt:
+the latest origin (which had merged `update claude-code` to 2.1.181); commits
+3–4 were amended to adapt:
 
 - `mkClaudeExtract` is now minifier-variable-agnostic — 2.1.159 emitted the
   effort validator as `effortLevel:y.enum(…)`, 2.1.181 as

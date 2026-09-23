@@ -1,7 +1,6 @@
 # Update pipeline: transitive-hash gap
 
 > **Status:** open. Documented 2026-05-20 to resume in a future session.
-> **Branch context:** `refactor/ai-factory-architecture`.
 >
 > **Superseded in part, 2026-09-09.** This document's remedy — "run the build in
 > the bot job and let `report_held_back` catch every failure" — bundled two
@@ -532,7 +531,7 @@ Real fixes pending:
 
 ## How to resume
 
-State on `refactor/ai-factory-architecture` as of 2026-05-20 late evening:
+State as of 2026-05-20 late evening:
 
 1. ~~Gap 4 content fix~~ — commit `51a8429`.
 2. ~~Gap 4 structural guard~~ — commit `1d864d3`.

@@ -2,7 +2,7 @@
 
 > Status: SUPERSEDED by the CORRECTION below. The original `agentEngine`/`mode`
 > design targeted the wrong parser surface and was reverted to a `v3` boolean.
-> Branch: refactor/ai-factory-architecture. Date: 2026-06-18.
+> Date: 2026-06-18.
 >
 > The sections from "What the flags actually are" through the original Tasks
 > below are kept for history but describe the chat-subcommand surface, NOT the

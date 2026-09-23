@@ -1,9 +1,8 @@
 # CI darwin failure + update-pipeline timeout
 
-> Branch: `refactor/ai-factory-architecture`. Diagnosis 2026-06-02. Trigger: the
-> batch of dependency PRs merged ~15:24–15:32 on 2026-06-01 (esp. `nixpkgs`
-> #193, `d233902…` → `64c08a7…`). Two independent failure modes, one shared
-> trigger.
+> Diagnosis 2026-06-02. Trigger: the batch of dependency PRs merged ~15:24–15:32
+> on 2026-06-01 (esp. `nixpkgs` #193, `d233902…` → `64c08a7…`). Two independent
+> failure modes, one shared trigger.
 
 ## Symptom
 

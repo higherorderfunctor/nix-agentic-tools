@@ -25,19 +25,17 @@ bash.
 ## Global Constraints
 
 - **Where the docs live vs. where the work happens.** This plan and its
-  companion spec are canonical in the **main checkout** on
-  `refactor/ai-factory-architecture`:
+  companion spec are canonical in the **main checkout**:
   - plan —
     `/home/caubut/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-impl-plan.md`
   - spec —
     `/home/caubut/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-design.md`
 
   **All code changes happen in the worktree** at
-  `/home/caubut/Documents/projects/nix-agentic-tools-worktrees/agent-primitive-labs`
-  (branch `refactor/agent-primitive-labs`). Do not copy the docs into the
-  worktree — they are read from the absolute paths above and updated in place
-  there. Step-tick updates and any spec corrections go to the main-checkout
-  copies.
+  `/home/caubut/Documents/projects/nix-agentic-tools-worktrees/agent-primitive-labs`.
+  Do not copy the docs into the worktree — they are read from the absolute paths
+  above and updated in place there. Step-tick updates and any spec corrections
+  go to the main-checkout copies.
 
 - **Companion spec:** read it before starting. Every empirical claim below is
   verified there; do not re-derive.

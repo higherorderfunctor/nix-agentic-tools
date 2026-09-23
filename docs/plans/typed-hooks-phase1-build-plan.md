@@ -8,8 +8,7 @@
 > see `build-typed-hook-surface.md` (esp. its `⚑ CROSS-SESSION MERGE CONTEXT`);
 > the deep design is in `typed-hooks-across-clis-assessment.md`.
 
-> Branch `refactor/ai-factory-architecture`. Plan-of-record for the **autonomous
-> Phase-1** track chosen 2026-07-20. Parent:
+> Plan-of-record for the **autonomous Phase-1** track chosen 2026-07-20. Parent:
 > `typed-hooks-across-clis-assessment.md` (§8 architecture, §9 verification, §10
 > drift, §13 decisions, §14 phasing). Decisions **D1–D10 confirmed as
 > recommended**. Do **not** commit code until asked; `nixos-config` + the live

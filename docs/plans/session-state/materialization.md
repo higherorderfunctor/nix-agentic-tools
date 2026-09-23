@@ -22,8 +22,7 @@ attrset, not a hard-coded copy.
 
 ## 2. Where everything is
 
-Main checkout, branch `refactor/ai-factory-architecture`. Committed alongside
-the peer sessions' state docs (see §3):
+Main checkout. Committed alongside the peer sessions' state docs (see §3):
 
 | Path                                                      | What                                               |
 | --------------------------------------------------------- | -------------------------------------------------- |

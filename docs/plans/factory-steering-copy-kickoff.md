@@ -2,7 +2,7 @@
 
 Created 2026-07-21 as the handoff from the session that landed `f12aa5f1`
 (repo-local single-mechanism materialization) and `88f1fc8b` (comment
-corrections). Branch: `refactor/ai-factory-architecture`.
+corrections).
 
 **This is a decision brief, not an implementation task.** The previous session
 deliberately stopped short of converting the factory. What is wanted first is a

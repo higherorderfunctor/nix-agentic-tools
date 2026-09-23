@@ -35,9 +35,8 @@ Your working rules for this task, in priority order:
    current code, and the replacement. Do not refactor surrounding code, rename
    things, or "improve" adjacent lines.
 
-Deliverable: a 4-commit stack (optionally submitted as stacked PRs against
-`refactor/ai-factory-architecture`) implementing Tasks 1–4, pushed so CI can
-verify it.
+Deliverable: a 4-commit stack (optionally submitted as stacked PRs) implementing
+Tasks 1–4, pushed so CI can verify it.
 
 ---
 
@@ -499,10 +498,10 @@ maintainer's audit.
 
 ## Submit
 
-- [ ] Push the 4-commit stack with `stack-submit` (stacked PRs against
-      `refactor/ai-factory-architecture` are fine; a single branch carrying the
-      4 commits is also acceptable). CI (`ci.yml`, `pull_request` event) then
-      builds and verifies on both `x86_64-linux` and `aarch64-darwin`.
+- [ ] Push the 4-commit stack with `stack-submit` (stacked PRs are fine; a
+      single branch carrying the 4 commits is also acceptable). CI (`ci.yml`,
+      `pull_request` event) then builds and verifies on both `x86_64-linux` and
+      `aarch64-darwin`.
 - [ ] Do **not** merge anything. The maintainer reviews the stack and CI.
 
 ## Success criteria

@@ -1,8 +1,7 @@
 # Kiro V3 permissions — mirror Kiro surface + translate under v3
 
 > Status: IMPLEMENTED (permissions). Agents/hooks HELD (greenfield breadcrumbs
-> left in `mkKiro.nix`). Branch: refactor/ai-factory-architecture. Date:
-> 2026-06-18 (impl 2026-06-19).
+> left in `mkKiro.nix`). Date: 2026-06-18 (impl 2026-06-19).
 >
 > Landed: `permissions` option + `mkPermissionRules` translator + write to
 > `<configDir>/settings/permissions.yaml` (real YAML via `pkgs.formats.yaml`) in

@@ -1,7 +1,6 @@
 # Agent-Primitive Labs — Design
 
-Status: draft, awaiting review Date: 2026-07-20 Branch:
-`refactor/ai-factory-architecture`
+Status: draft, awaiting review Date: 2026-07-20
 
 ## 1. Purpose
 

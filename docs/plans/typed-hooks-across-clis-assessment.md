@@ -1,15 +1,14 @@
 # Typed Hooks Across Claude Code & Kiro CLI — Lay-of-the-Land Assessment
 
 > **Status:** research / lay-of-the-land only. No design committed, no code
-> written. **Date:** 2026-07-20 · **Branch:** `refactor/ai-factory-architecture`
-> **Triage status:** decisions triaged (§13) and hermetic facts confirmed; all
-> `[U]` / version-contingent facts (§12 Qs 1–4) are **pending a one-time live
-> probe — verify once implemented**. This is a plan of record, not
-> verified-in-production truth. **Primary-source hardening pass (2026-07-20b):**
-> the full Claude I/O contract for the PoC events (stdin, JSON output, exit
-> codes, decision fields, timeouts, matchers) is now pinned to a hashed raw
-> `code.claude.com/docs/en/hooks.md` snapshot + the anthropics reference impl,
-> and the four named GitHub issues were re-read. See
+> written. **Date:** 2026-07-20 **Triage status:** decisions triaged (§13) and
+> hermetic facts confirmed; all `[U]` / version-contingent facts (§12 Qs 1–4)
+> are **pending a one-time live probe — verify once implemented**. This is a
+> plan of record, not verified-in-production truth. **Primary-source hardening
+> pass (2026-07-20b):** the full Claude I/O contract for the PoC events (stdin,
+> JSON output, exit codes, decision fields, timeouts, matchers) is now pinned to
+> a hashed raw `code.claude.com/docs/en/hooks.md` snapshot + the anthropics
+> reference impl, and the four named GitHub issues were re-read. See
 > **[§18](#18-primary-source-hardening-pass-2026-07-20b)** for the upgrade
 > ledger and `docs/plans/typed-hooks-research/primary-source-hardening.md` for
 > the citation store. Net: several §4 facts moved to firmly-cited `[C]`; the

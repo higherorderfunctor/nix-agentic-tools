@@ -1,10 +1,10 @@
 # Assessment: prek PostToolUse hook is noisy AND invisible to the agent
 
 > Status: **ASSESSMENT ONLY — not planned, not implemented.** Picked up for
-> diagnosis 2026-06-22 on branch `refactor/ai-factory-architecture` after seeing
-> repeated `PostToolUse:Edit hook error` lines in the Claude Code session. Root
-> cause is fully understood (below). Fix direction is NOT decided — several
-> options with real trade-offs are listed; choose in a fresh session.
+> diagnosis 2026-06-22 after seeing repeated `PostToolUse:Edit hook error` lines
+> in the Claude Code session. Root cause is fully understood (below). Fix
+> direction is NOT decided — several options with real trade-offs are listed;
+> choose in a fresh session.
 >
 > No code was changed during this assessment.
 

@@ -24,9 +24,8 @@ hooks) + #433 (real-file delivery, tui/v3 parity, captured fixture). See memory
 - **Phase:** P1 (design + skeleton the surface) — first net-new unit **u1 done +
   committed**.
 - **Class:** `mid_batch`, **PARKED** by operator pending a 3-session unify.
-- **Committed:** `0222a0eb` on branch `feat/kiro-hook-colocation` (pushed to
-  origin) — the Kiro per-record `file` co-location mechanism + module-eval
-  golden + fragment maintenance.
+- **Committed:** `0222a0eb` (pushed to origin) — the Kiro per-record `file`
+  co-location mechanism + module-eval golden + fragment maintenance.
 - **PR: NOT created** — blocked by a base divergence (below). Do not create it
   or force-push until the base is reconciled.
 - **Next action:** on resume, rebase `0222a0eb` onto the **reconciled**
@@ -76,8 +75,7 @@ each other.
 > regen), `f12aa5f1` (materialize); the pre-rewrite hashes below resolve as
 > loose objects but are NOT ancestors of HEAD.
 
-The local `refactor/ai-factory-architecture` checkout **diverged from origin at
-`010dbe15`**:
+The local checkout **diverged from origin at `010dbe15`**:
 
 - **origin has, local lacks (9 merged PRs):** `#433` (real-file HM hook delivery
   — the exact code #1 rewrote), `#424`, `#414`–`#423`, docs.
@@ -171,8 +169,7 @@ off `hooksJson`) and P4 (retire `hooksJson`).
 1. Read `state.json` (authoritative) + `journal.ndjson` at the state root above.
 2. **Prerequisite:** local↔origin reconciled by session #1 (`oi-base-divergence`
    cleared).
-3. Rebase `0222a0eb` onto the reconciled integration base (origin
-   `refactor/ai-factory-architecture`, which has `#433`).
+3. Rebase `0222a0eb` onto the reconciled integration base.
 4. **Adapt the golden** `module-kiro-hooks-typed-colocation` to `#433`'s
    `home.activation` HM delivery (assert the activation-script content,
    mirroring how `#433` verifies HM hooks — see the existing `module-kiro-*`
@@ -180,8 +177,7 @@ off `hooksJson`) and P4 (retire `hooksJson`).
    `#433`'s version.
 5. Re-verify the kiro hook checks single-job
    (`nix build --max-jobs 1 .#checks.<sys>.module-kiro-*`).
-6. Open the squash PR into `refactor/ai-factory-architecture`; then
-   `oi-regen-instructions`.
+6. Open the squash PR; then `oi-regen-instructions`.
 
 ## CONSTRAINTS (also in `state.json.ecosystem.execution_constraints`)
 
