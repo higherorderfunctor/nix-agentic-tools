@@ -9,16 +9,16 @@
   inherit (harness) aiStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm mkTest ownPlan tomlFormat;
   # Execpolicy rules are read-only copies on both backends, so their bytes are
   # in the copy writer's plan, keyed by file name, not in home.file / files.
-  execpolicyUnits = evaluated:
-    (lib.head
-      (ownPlan "codex" (
-          if evaluated.config ? home
-          then "materialize-codex-execpolicy-write"
-          else "ai:codex:materialize-execpolicy"
-        )
-        evaluated)
-    .targets)
-    .units;
+  execpolicyTarget = evaluated:
+    lib.head
+    (ownPlan "codex" (
+        if evaluated.config ? home
+        then "materialize-codex-execpolicy-write"
+        else "ai:codex:materialize-execpolicy"
+      )
+      evaluated)
+    .targets;
+  execpolicyUnits = evaluated: (execpolicyTarget evaluated).units;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) codexExtracted codexSettingsActivation hmCodexSettings;
 in {
   checks = {
@@ -1258,25 +1258,31 @@ in {
           execpolicyRules.probe = ''prefix_rule(pattern = ["git", "status"])'';
         };
         emptied.ai.codex.enable = true;
+        # Disabling Codex while a rule is still declared: nothing but this
+        # writer retracts a copy, so it has to survive the disable.
+        disabled = lib.recursiveUpdate populated {ai.codex.enable = false;};
         copies = evaluate: let
           evaluated = evaluate populated;
           files = evaluated.config.home.file or evaluated.config.files;
-          target =
-            lib.head
-            (ownPlan "codex" (
-                if evaluated.config ? home
-                then "materialize-codex-execpolicy-write"
-                else "ai:codex:materialize-execpolicy"
-              )
-              evaluated)
-          .targets;
+          target = execpolicyTarget evaluated;
+          off = evaluate disabled;
+          offTarget = execpolicyTarget off;
         in
           target.codec
           == "dir"
           && lib.hasSuffix "/rules" target.path
           && lib.attrNames target.units == ["probe.rules"]
           && !(files ? ".codex/rules/probe.rules")
-          && (execpolicyUnits (evaluate emptied)) == {};
+          && (execpolicyUnits (evaluate emptied)) == {}
+          # Disabled: the same ledger, no units, so only retraction runs.
+          && offTarget.units == {}
+          && offTarget.ledger == target.ledger
+          && offTarget.path == target.path
+          && (
+            if off.config ? home
+            then lib.all (entry: off.config.home.activation ? ${entry}) ["materialize-codex-execpolicy-prune" "materialize-codex-execpolicy-write"]
+            else off.config.tasks ? "ai:codex:materialize-execpolicy"
+          );
       in
         copies evalHm && copies evalDevenv
     );

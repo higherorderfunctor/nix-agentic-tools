@@ -6,7 +6,8 @@
 > `ai.claude.agentsDir` to `.claude/agents/<name>.md`. File content at
 > `mkDefault` enables its entry; `content.enable = false` suppresses every
 > content form. Native file settings live under `ai.<runtime>.native`. Upstream
-> delegation aliases the content field's own definitions.
+> delegation aliases the content field's own definitions. Ledger-owned copies
+> whose files nothing else retracts opt into `runWhenDisabled`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -110,12 +111,16 @@ The one bounded exception is an `activation` writer with
 and only writers with that explicit opt-in; ordinary command and owned writers
 remain gated. An opted-in owned writer therefore receives empty targets, so
 ordinary retraction removes only what the previous generation's ledger recorded
-and then drops the ledger. It cannot emit product files while disabled. Kiro's
-one-shot steering-copy retirement is the current sole caller, and on Home
-Manager it is a PAIR of entries: the prune phase deletes the real files before
-`checkLinkTargets`, the write phase unlinks the drained ledger. It derives the
-old target from the current `configDir`, so a custom directory must remain
-unchanged for that retirement generation; change or remove it only after one
+and then drops the ledger. It cannot emit product files while disabled. The
+callers are writers whose files nothing else retracts: Claude's devenv rules
+copies, Codex's execpolicy copies, and Kiro's one-shot steering-copy retirement.
+A ledger-owned copy outlives a disable unless its writer opts in, because Home
+Manager's generation diff and `devenv:files:cleanup` only remove links. On Home
+Manager a directory writer is a PAIR of entries: the prune phase deletes the
+real files before `checkLinkTargets`, the write phase unlinks the drained
+ledger. Kiro's retirement and Codex's Home Manager writer derive the target from
+the current `configDir`, so a custom directory must remain unchanged for the
+generation that disables or retires; change or remove it only after one
 activation/shell entry has drained the old ledger.
 
 ### Why there's no master switch

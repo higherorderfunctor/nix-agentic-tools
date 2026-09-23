@@ -339,6 +339,7 @@ in {
         devenv = evalDevenv config;
         hm = evalHm config;
         emptied = evalDevenv {ai.claude.enable = true;};
+        disabled = evalDevenv (lib.recursiveUpdate config {ai.claude.enable = false;});
         target = evaluated: lib.head (ownPlan "claude" "ai:claude:materialize-rules" evaluated).targets;
       in
         (target devenv).path
@@ -350,6 +351,12 @@ in {
         # N→0 keeps the writer, whose empty target retracts the last copies.
         && (target emptied).units == {}
         && emptied.config.tasks ? "ai:claude:materialize-rules"
+        # So does disabling Claude: nothing else retracts a copy, and a copy
+        # left behind is still loaded by any claude on PATH.
+        && (target disabled).units == {}
+        && (target disabled).ledger == (target devenv).ledger
+        && disabled.config.tasks ? "ai:claude:materialize-rules"
+        && !(disabled.config.files ? ".claude/rules/probe.md")
         && lib.hasInfix "PROBE-RULE" hm.config.home.file.".claude/rules/probe.md".text
     );
 
