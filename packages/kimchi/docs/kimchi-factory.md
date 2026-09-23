@@ -38,9 +38,13 @@ the uniform consequence of any project harness setting, and the only way to
 deliver effort at project scope.
 
 `packages/kimchi/extracted.json` measures the two native settings surfaces, the
-Kimchi and pi CLI layers, and the `KIMCHI_*` / `PI_*` environment namespaces. It
-uses the TypeScript compiler's checker for declared keys and types and syntax
-tree queries for CLI and environment access sites. CLI queries follow
+Kimchi and pi CLI layers, and the environment variables Kimchi and pi read.
+Every resolved environment name is either published from an annotation or
+listed, with a reason, under `environmentIgnored` in `extract/annotations.json`;
+pi's own names follow Kimchi's `piConfig.name`
+(`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_` default). It uses the
+TypeScript compiler's checker for declared keys and types and syntax tree
+queries for CLI and environment access sites. CLI queries follow
 argument-derived switch cases and called imported helpers, while config queries
 cross-check compiler types against top-level, nested, and array-element runtime
 validation guards. Three additional hash-pinned pi declaration packages resolve
