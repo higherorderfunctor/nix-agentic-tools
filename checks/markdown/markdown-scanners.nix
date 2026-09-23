@@ -13,9 +13,10 @@
 # whose dirname is /nix/store itself, so there is no importable package
 # without this step. The `-` → `_` rename is forced: `split-code-spans` is
 # not a legal Python module name, and it is why a traceback names
-# `split_code_spans.py` while the source file has a hyphen. The fixture
-# runner also falls back to loading the hyphenated files by path, so it
-# stays runnable straight from a checkout — see its `_load`.
+# `split_code_spans.py` while the source file has a hyphen. Both the
+# doubled-word scanner and its fixture runner fall back to loading the
+# hyphenated files by path, so each stays runnable straight from a
+# checkout — see the `_load` in either.
 {pkgs, ...}:
 pkgs.runCommandLocal "markdown-scanners" {} ''
   ${pkgs.coreutils}/bin/mkdir -p "$out"

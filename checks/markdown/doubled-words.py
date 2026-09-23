@@ -224,10 +224,61 @@ rather than fixed speculatively. If one ever appears and repeats a word,
 suppress that file and fix the stripper.
 """
 
+import importlib
+import importlib.util
 import re
 import sys
+from pathlib import Path
 
-from split_code_spans import code_spans, no_files, strip_code_blocks
+
+def _load(module, filename):
+    """Import MODULE, falling back to FILENAME beside this script.
+
+    Why it is needed: the checks assemble the scanners into one store
+    directory under legal Python module names (see ./markdown-scanners.nix),
+    where the plain import below works. A checkout has the same code under
+    its real, hyphen-bearing filenames, which are not importable at all.
+    `split-code-spans` is not a legal module name, so that rename is
+    deliberate and is NOT a defect to fix here — supporting both layouts is,
+    and it is what makes this runnable by hand:
+
+        python3 checks/markdown/doubled-words.py some-file.md
+
+    Load order matters: the import below is a plain one, so split_code_spans
+    has to be in sys.modules under that name first, which is what the
+    assignment inside does.
+
+    THE DUPLICATE IN ./doubled-words-fixtures.py IS DELIBERATE; keep the two
+    in step. Settled — do not relitigate, and in particular do not restate
+    the reason this change first wrote down, which was FALSE: "a shared
+    loader cannot be loaded by the mechanism it provides". `_bootstrap` is
+    already a legal module name, so a plain `import _bootstrap` resolves in
+    BOTH layouts — sys.path[0] is the entrypoint's own directory, the store
+    directory under the check and checks/markdown/ for a by-hand run.
+    Measured both ways.
+
+    The shared form is also SMALLER, necessarily: this nine-line body is
+    written twice across the two scanners and would be written once. It is
+    declined for two reasons that are not about size. It needs a fourth
+    file copied into ./markdown-scanners.nix's store directory, and that
+    assembly is deliberately untouched here. And a scanner carrying its own
+    bootstrap stays runnable on its own. That is the whole trade: two copies
+    to keep in step, against one more file in the assembly. If you are
+    editing that assembly anyway, extracting this is the better shape.
+    """
+    try:
+        return importlib.import_module(module)
+    except ModuleNotFoundError:
+        spec = importlib.util.spec_from_file_location(module, Path(__file__).with_name(filename))
+        loaded = importlib.util.module_from_spec(spec)
+        sys.modules[module] = loaded
+        spec.loader.exec_module(loaded)
+        return loaded
+
+
+_load("split_code_spans", "split-code-spans.py")
+
+from split_code_spans import code_spans, no_files, strip_code_blocks  # noqa: E402
 
 # Blanked regions are filled with this rather than with spaces. A space
 # would let the words on either side of a code span become adjacent and
