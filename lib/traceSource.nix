@@ -83,14 +83,23 @@
 # the hook. The mechanism says it is redundant too, but that is inference.
 #
 # So the module's remaining justification is direnv SPECIFICALLY, and
-# migrating to `devenv hook` ends that justification: the module and its one
-# call site can be deleted when the migration happens. Confirm by ABLATION,
-# and ablate FIRST — remove this module and its call site, THEN make a
-# content-only edit to a file under `packages/stacked-workflows/references/`
-# and check whether the environment picks it up. Running that check with the
-# module still in place cannot distinguish "the hook catches this" from
-# "`registerTrackedInputs` put the path there". If it is caught without the
-# module, the deletion stands; if not, restore it.
+# migrating to `devenv hook` ends that justification: the module and everything
+# that reaches it can be deleted when the migration happens. That is more than
+# one call site — as of 2026-09-23 it is TWO invocations
+# (`referencesTrackedInputs`, `skillsTrackedInputs`) plus the `traceSource`
+# argument in
+# `packages/stacked-workflows/packages/stacked-workflows-content/package.nix`,
+# the wiring in `lib/facets/repository.nix`, and this module's own regression
+# tests in `checks/trace-source/`. Re-derive that list rather than trusting it:
+# `rg -n 'traceSource|registerTrackedInputs' -g '*.nix'`.
+#
+# Confirm by ABLATION, and ablate FIRST — remove the module and every one of
+# those, THEN make a content-only edit to a file under
+# `packages/stacked-workflows/references/` and check whether the environment
+# picks it up. Running that check with the module still in place cannot
+# distinguish "the hook catches this" from "`registerTrackedInputs` put the
+# path there". If it is caught without the module, the deletion stands; if
+# not, restore it.
 #
 # The migration itself is the operator's call and is NOT made here. It carries
 # a cost they are weighing: no in-shell reload at all, and a 15-20s cold
