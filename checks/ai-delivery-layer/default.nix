@@ -65,6 +65,60 @@
         && lib.all (assertion: assertion.assertion) cfg.assertions
     ) [evalHm evalDevenv];
 
+  # A runtime whose every entry is delegated to a host `files.<name>.json`
+  # option with the host's real JSON type: the general harness's `anything`
+  # stub cannot concatenate lists. `entries` are `ai.probe.files` records,
+  # each sunk into `settings.json`; `host` is the host's own definition.
+  upstreamHost = entries: host: let
+    deliveryOptions = import ../../lib/ai/delivery-options.nix {inherit lib;};
+    adapter = import ../../lib/ai/adapters/devenv.nix {inherit lib pkgs;};
+  in
+    (lib.evalModules {
+      modules = [
+        ({
+          config,
+          options,
+          ...
+        }: {
+          options = {
+            ai.probe = {
+              _ownPlans = lib.mkOption {type = lib.types.attrsOf lib.types.anything;};
+              activation = lib.mkOption {
+                type = deliveryOptions.writerMapType;
+                default = {};
+              };
+              files = lib.mkOption {type = deliveryOptions.fileMapType;};
+              methodFor = lib.mkOption {
+                type = lib.types.functionTo lib.types.str;
+                default = deliveryMethod.byRule;
+              };
+            };
+            assertions = lib.mkOption {type = lib.types.listOf lib.types.anything;};
+            files = lib.mkOption {
+              type = lib.types.attrsOf (lib.types.submodule {
+                options.json = lib.mkOption {inherit (pkgs.formats.json {}) type;};
+              });
+            };
+          };
+          config = adapter {
+            inherit config options;
+            cfg = config.ai.probe;
+            runtime = "probe";
+          };
+        })
+        {
+          ai.probe.files = lib.mapAttrs (_: entry:
+            entry
+            // {
+              method = "upstream";
+              sink = ["files" "settings.json" "json"];
+            })
+          entries;
+        }
+        (lib.optionalAttrs (host != {}) {files."settings.json".json = host;})
+      ];
+    }).config;
+
   # ── The delivered-surface snapshot ──────────────────────────────────
   # Everything the delivery layer puts on disk, rendered as sorted text. It is
   # not an assertion: it is the EVIDENCE that a refactor of the layer changed
@@ -1394,76 +1448,53 @@ in {
         })
     );
 
-    # Use the host's real JSON type: the general harness's `anything` stub
-    # cannot concatenate lists. Definitions must reach this type with their
-    # priorities and ordering intact, even when two entries share a sink.
+    # Definitions must reach the host's type with their priorities and
+    # ordering intact, even when two entries share a sink.
     module-delivery-upstream-preserves-host-merge = mkTest "delivery-upstream-preserves-host-merge" (
       let
-        deliveryOptions = import ../../lib/ai/delivery-options.nix {inherit lib;};
-        adapter = import ../../lib/ai/adapters/devenv.nix {inherit lib pkgs;};
-        evaluated = lib.evalModules {
-          modules = [
-            ({
-              config,
-              options,
-              ...
-            }: {
-              options = {
-                ai.probe = {
-                  _ownPlans = lib.mkOption {type = lib.types.attrsOf lib.types.anything;};
-                  activation = lib.mkOption {
-                    type = deliveryOptions.writerMapType;
-                    default = {};
-                  };
-                  files = lib.mkOption {type = deliveryOptions.fileMapType;};
-                  methodFor = lib.mkOption {
-                    type = lib.types.functionTo lib.types.str;
-                    default = deliveryMethod.byRule;
-                  };
-                };
-                assertions = lib.mkOption {type = lib.types.listOf lib.types.anything;};
-                files = lib.mkOption {
-                  type = lib.types.attrsOf (lib.types.submodule {
-                    options.json = lib.mkOption {inherit (pkgs.formats.json {}) type;};
-                  });
-                };
-              };
-              config = adapter {
-                inherit config options;
-                cfg = config.ai.probe;
-                runtime = "probe";
-              };
-            })
-            {
-              ai.probe.files = {
-                "first.json" = {
-                  content.value = {
-                    defaultLeaf = lib.mkDefault "generated";
-                    list = lib.mkBefore ["first"];
-                  };
-                  method = "upstream";
-                  sink = ["files" "settings.json" "json"];
-                };
-                "second.json" = {
-                  content.value.list = lib.mkAfter ["last"];
-                  method = "upstream";
-                  sink = ["files" "settings.json" "json"];
-                };
-              };
-              files."settings.json".json = {
-                defaultLeaf = "consumer";
-                list = ["middle"];
-              };
-            }
-          ];
-        };
+        evaluated =
+          upstreamHost {
+            "first.json".content.value = {
+              defaultLeaf = lib.mkDefault "generated";
+              list = lib.mkBefore ["first"];
+            };
+            "second.json".content.value.list = lib.mkAfter ["last"];
+          } {
+            defaultLeaf = "consumer";
+            list = ["middle"];
+          };
       in
-        evaluated.config.files."settings.json".json
+        evaluated.files."settings.json".json
         == {
           defaultLeaf = "consumer";
           list = ["first" "middle" "last"];
         }
-        && lib.all (a: a.assertion) evaluated.config.assertions
+        && lib.all (a: a.assertion) evaluated.assertions
+    );
+
+    # A property wrapped around the FIELD — not a leaf inside it, and not the
+    # whole `content` — is the entry's own, and must reach the host as that
+    # entry's priority or condition. Forwarded raw, the host strips one
+    # override and merges the inner property as an ordinary attrset: the
+    # document gains `_type`/`priority`/`content` keys, the settings nest
+    # under `content`, and `mkIf false` still delivers.
+    module-delivery-upstream-discharges-field-properties = mkTest "delivery-upstream-discharges-field-properties" (
+      let
+        sole = value: host: (upstreamHost {"probe.json".content.value = value;} host).files."settings.json".json;
+        consumer.leaf = "consumer";
+      in
+        sole (lib.mkForce {leaf = "forced";}) {}
+        == {leaf = "forced";}
+        && sole (lib.mkDefault {leaf = "generated";}) {} == {leaf = "generated";}
+        && sole (lib.mkIf true {leaf = "kept";}) {} == {leaf = "kept";}
+        && sole (lib.mkMerge [(lib.mkIf false {dropped = true;}) {leaf = "kept";}]) {} == {leaf = "kept";}
+        # The priority survives as the entry's, against the host's own
+        # ordinary definition, in both directions.
+        && sole (lib.mkForce {leaf = "forced";}) consumer == {leaf = "forced";}
+        && sole (lib.mkDefault {leaf = "generated";}) consumer == consumer
+        # A property on the whole content still reaches the host.
+        && (upstreamHost {"probe.json".content = lib.mkDefault {value.leaf = "generated";};} consumer).files."settings.json".json
+        == consumer
     );
 
     # What the adapter puts in `tasks` is exactly the runtime's writers, and
