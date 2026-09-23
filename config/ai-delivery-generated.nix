@@ -713,13 +713,13 @@
     {
       ecosystem = "copilot";
       mode = "devenv";
-      primitive = "ownLeaves";
-      pruneTrigger = "On shell entry, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
       surface = "settings";
       target = "$DEVENV_ROOT/.config/github-copilot/settings.json";
       writerAttr = [
-        "tasks"
-        "ai:copilot:settings-merge"
+        "files"
+        ".config/github-copilot/settings.json"
       ];
     }
     {
