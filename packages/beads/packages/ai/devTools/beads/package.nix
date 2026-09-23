@@ -141,18 +141,28 @@ in
     # no `/usr/bin/env`, so the hook fails before exercising Beads' worktree
     # path assertion. Preserve nixpkgs' existing skip regex and extend it at
     # the one anchored seam; fail evaluation if that upstream shape moves.
+    # Newer nixpkgs also skips this test, so do not add it twice.
     checkFlags = let
       inherited = prev.checkFlags or [];
+      skippedTest = "TestInstallHooksBeads_WorktreeAccess";
+      # Count every Go spelling, including a flag whose regex is the next arg.
+      isSkipFlag = flag:
+        lib.elem flag ["-skip" "--skip" "-test.skip" "--test.skip"]
+        || lib.any (prefix: lib.hasPrefix prefix flag) ["-skip=" "--skip=" "-test.skip=" "--test.skip="];
+      skipFlags = builtins.filter isSkipFlag inherited;
       extendSkip = flag:
-        if lib.hasPrefix "-skip=^(" flag && lib.hasSuffix ")$" flag
-        then "${lib.removeSuffix ")$" flag}|TestInstallHooksBeads_WorktreeAccess)$"
+        if lib.hasPrefix "-skip=^(" flag
+        then
+          if lib.elem skippedTest (lib.splitString "|" (lib.removeSuffix ")$" (lib.removePrefix "-skip=^(" flag)))
+          then flag
+          else "${lib.removeSuffix ")$" flag}|${skippedTest})$"
         else flag;
     in
       if
-        builtins.length inherited
+        builtins.length skipFlags
         == 1
-        && lib.hasPrefix "-skip=^(" (builtins.head inherited)
-        && lib.hasSuffix ")$" (builtins.head inherited)
+        && lib.hasPrefix "-skip=^(" (builtins.head skipFlags)
+        && lib.hasSuffix ")$" (builtins.head skipFlags)
       then map extendSkip inherited
       else throw "beads: nixpkgs checkFlags no longer has the expected single anchored skip regex";
 
